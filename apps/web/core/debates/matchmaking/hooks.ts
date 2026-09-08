@@ -12,8 +12,6 @@ import {
   blockDebateUser,
   createDebateRequest,
   dismissDebateRequest,
-  joinDebateQueue,
-  leaveDebateQueue,
   listDebateBlocks,
   listDebatePeople,
   listDebateRequests,
@@ -150,120 +148,6 @@ export function useDebateBlocks(enabled: boolean) {
     queryFn: ({ signal }) => listDebateBlocks(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
   });
-}
-
-/**
- * Readiness for one claim. A position is an on-chain claim response, so the hub can only turn
- * readiness on (the server requires an indexed active response) or off — it never sends a side.
- * Both directions are the plain queue endpoints, keyed per claim so cards can pass their own space.
- */
-/**
- * Every cached family that carries `viewer_debate_ready`, so the switch moves in whichever surface
- * the viewer is looking at. `['debates', 'claims']` is the per-space family the rematch picker
- * reads; leaving it out left that toggle unmoved until the settle refetch landed.
- */
-const READINESS_FAMILIES = (accountKey: string | null) =>
-  [
-    debateQueryKeys.matchmakingClaimsRoot(accountKey),
-    debateQueryKeys.matches(accountKey),
-    ['debates', 'claims'],
-  ] as const;
-
-export function useClaimReadiness() {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  return useMutation({
-    mutationFn: ({ spaceId, claimId, ready }: { spaceId: string; claimId: string; ready: boolean }) =>
-      ready
-        ? joinDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey)
-        : leaveDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey),
-    // The switch moves now rather than a round trip and a refetch later, mirroring the
-    // availability switch in the panel header.
-    onMutate: async ({ spaceId, claimId, ready }) => {
-      const families = READINESS_FAMILIES(accountKey);
-      await Promise.all(families.map(queryKey => queryClient.cancelQueries({ queryKey })));
-      for (const queryKey of families) {
-        queryClient.setQueriesData({ queryKey }, (current: unknown) =>
-          patchClaimReadiness(current, spaceId, claimId, ready)
-        );
-      }
-    },
-    // Undo just this claim rather than restoring a snapshot of both families: every card holds its
-    // own copy of this mutation, so a snapshot rollback would also revert a toggle on another claim
-    // and any gateway refetch that landed in between.
-    onError: (_error, { spaceId, claimId, ready }) => {
-      for (const queryKey of READINESS_FAMILIES(accountKey)) {
-        queryClient.setQueriesData({ queryKey }, (current: unknown) =>
-          patchClaimReadiness(current, spaceId, claimId, !ready)
-        );
-      }
-    },
-    // Readiness changes who is matchable, so let the server re-sort — but only the families it
-    // actually affects, rather than every debate query.
-    onSettled: () => {
-      for (const queryKey of [
-        debateQueryKeys.matchmakingClaimsRoot(accountKey),
-        debateQueryKeys.matches(accountKey),
-        debateQueryKeys.activity(accountKey),
-        ['debates', 'claims'] as const,
-      ]) {
-        void queryClient.invalidateQueries({ queryKey });
-      }
-    },
-  });
-}
-
-/**
- * Flips `viewer_debate_ready` on one claim wherever it appears, in both the flat matches response
- * and the paged claims response. Anything else is returned untouched.
- *
- * Readiness is per (space, claim): geo-chat keys it on `(public_dao_space_id, claim_entity_id)`,
- * and the Claims tab is cross-space, so the same claim entity can hold two rows with different
- * readiness. Matching on the entity alone would move both switches for one round trip.
- */
-function patchClaimReadiness(data: unknown, spaceId: string, claimId: string, ready: boolean): unknown {
-  const patchOne = <T extends { claim: { space_id: string; claim_entity_id: string }; viewer_debate_ready: boolean }>(
-    entry: T
-  ) =>
-    entry.claim.claim_entity_id === claimId && entry.claim.space_id === spaceId
-      ? { ...entry, viewer_debate_ready: ready }
-      : entry;
-
-  if (!data || typeof data !== 'object') return data;
-
-  // The per-space family (`DebateClaimsResponse`) keys the ids on the entry itself rather than
-  // nesting them under `claim`, so it needs its own matcher.
-  const patchFlat = <T extends { space_id: string; claim_entity_id: string; viewer_debate_ready: boolean }>(
-    entry: T
-  ) =>
-    entry.claim_entity_id === claimId && entry.space_id === spaceId ? { ...entry, viewer_debate_ready: ready } : entry;
-
-  if ('matches' in data && Array.isArray(data.matches)) {
-    return { ...data, matches: data.matches.map(patchOne) };
-  }
-
-  if ('claims' in data && Array.isArray(data.claims)) {
-    return {
-      ...data,
-      claims: data.claims.map((entry: unknown) =>
-        entry && typeof entry === 'object' && 'claim_entity_id' in entry ? patchFlat(entry as never) : entry
-      ),
-    };
-  }
-
-  if ('pages' in data && Array.isArray(data.pages)) {
-    return {
-      ...data,
-      pages: data.pages.map((page: unknown) =>
-        page && typeof page === 'object' && 'claims' in page && Array.isArray(page.claims)
-          ? { ...page, claims: page.claims.map(patchOne) }
-          : page
-      ),
-    };
-  }
-
-  return data;
 }
 
 export function useCreateDebateRequest() {

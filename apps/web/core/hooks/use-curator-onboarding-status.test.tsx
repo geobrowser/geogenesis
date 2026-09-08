@@ -11,7 +11,9 @@ const mocks = vi.hoisted(() => ({
   isFetched: true,
   memberSpaces: [] as Array<{ type: string }>,
   hasRsvp: false,
-  hasVote: false,
+  /** Keyed by vote kind, so a test can answer curation and claim positions separately. */
+  hasVoteOfKind: new Map<number, boolean>(),
+  hasDebateParticipation: false,
   entitiesByType: new Map<string, boolean>(),
 }));
 
@@ -21,7 +23,9 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
 
 vi.mock('~/core/io/queries', () => ({
   getSpacesWhereMember: () => Effect.succeed(mocks.memberSpaces),
-  getUserHasEntityVote: () => Effect.succeed(mocks.hasVote),
+  getUserHasVoteOfKind: (_userId: string, voteKinds: readonly number[]) =>
+    Effect.succeed(voteKinds.some(kind => mocks.hasVoteOfKind.get(kind) === true)),
+  getUserHasDebateParticipation: () => Effect.succeed(mocks.hasDebateParticipation),
   getAllEntities: ({ typeId }: { typeId: string }) =>
     Effect.succeed({ entities: mocks.entitiesByType.get(typeId) ? [{ id: 'e1' }] : [] }),
 }));
@@ -29,6 +33,9 @@ vi.mock('~/core/io/queries', () => ({
 const { useCuratorOnboardingStatus } = await import('./use-curator-onboarding-status');
 const { RANK_TYPE_ID } = await import('~/core/ranking-block-ids');
 const { COMMENT_TYPE_ID } = await import('~/core/comment-ids');
+const { VOTE_TYPE_ID } = await import('~/core/debates/ontology');
+const { CURATOR_ONBOARDING_STEPS, VISIBLE_CURATOR_ONBOARDING_STEPS } =
+  await import('~/core/explore/curator-onboarding-steps');
 
 function wrapper({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -40,7 +47,8 @@ beforeEach(() => {
   mocks.isFetched = true;
   mocks.memberSpaces = [];
   mocks.hasRsvp = false;
-  mocks.hasVote = false;
+  mocks.hasVoteOfKind = new Map();
+  mocks.hasDebateParticipation = false;
   mocks.entitiesByType = new Map();
   vi.stubGlobal(
     'fetch',
@@ -50,12 +58,14 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-function completeEverything() {
+/** Every step the card shows, and nothing hidden — which has to be enough to reach 100%. */
+function completeEveryVisibleStep() {
   mocks.memberSpaces = [{ type: 'DAO' }];
-  mocks.hasRsvp = true;
-  mocks.hasVote = true;
+  // Kind 1 only: a claim position is visible, an entity upvote is not.
+  mocks.hasVoteOfKind = new Map([[1, true]]);
+  mocks.hasDebateParticipation = true;
   mocks.entitiesByType = new Map([
-    [RANK_TYPE_ID, true],
+    [VOTE_TYPE_ID, true],
     [COMMENT_TYPE_ID, true],
   ]);
 }
@@ -73,7 +83,7 @@ describe('useCuratorOnboardingStatus', () => {
 
   // Reports done rather than hiding: the section folds itself down and keeps showing 100%.
   it('reports every step done, and stays visible', async () => {
-    completeEverything();
+    completeEveryVisibleStep();
 
     const { result } = renderHook(() => useCuratorOnboardingStatus(), { wrapper });
 
@@ -84,7 +94,7 @@ describe('useCuratorOnboardingStatus', () => {
 
   // Completion reads all-false until the query settles, so nothing downstream may act on it yet.
   it('is not complete while the answer is still unknown', () => {
-    completeEverything();
+    completeEveryVisibleStep();
 
     const { result } = renderHook(() => useCuratorOnboardingStatus(), { wrapper });
 
@@ -94,10 +104,84 @@ describe('useCuratorOnboardingStatus', () => {
 
   it('stays hidden without a personal space, complete or not', async () => {
     mocks.personalSpaceId = null;
-    completeEverything();
+    completeEveryVisibleStep();
 
     const { result } = renderHook(() => useCuratorOnboardingStatus(), { wrapper });
 
     await waitFor(() => expect(result.current.isVisible).toBe(false));
+  });
+
+  // GEO-2800. Hidden steps keep their tracking and lose their vote in the total.
+  describe('hidden steps', () => {
+    it('reaches 100% on the visible steps alone, with the hidden ones untouched', async () => {
+      completeEveryVisibleStep();
+
+      const { result } = renderHook(() => useCuratorOnboardingStatus(), { wrapper });
+
+      await waitFor(() => expect(result.current.progressPercent).toBe(100));
+      expect(result.current.totalCount).toBe(VISIBLE_CURATOR_ONBOARDING_STEPS.length);
+      // The point of the exercise: no hidden step was completed, and 100% arrived anyway.
+      expect(result.current.completion['rsvp-community-call']).toBe(false);
+      expect(result.current.completion['submit-ranking']).toBe(false);
+      expect(result.current.completion['vote-entity']).toBe(false);
+    });
+
+    it('still records a hidden step someone has already finished', async () => {
+      // Nothing is lost while they are hidden, so unhiding them later restores real progress
+      // rather than asking people to redo what they did.
+      completeEveryVisibleStep();
+      mocks.hasRsvp = true;
+      mocks.entitiesByType.set(RANK_TYPE_ID, true);
+      mocks.hasVoteOfKind.set(0, true);
+
+      const { result } = renderHook(() => useCuratorOnboardingStatus(), { wrapper });
+
+      await waitFor(() => expect(result.current.completion['rsvp-community-call']).toBe(true));
+      expect(result.current.completion['submit-ranking']).toBe(true);
+      expect(result.current.completion['vote-entity']).toBe(true);
+      // And they still do not inflate the count past the steps on screen.
+      expect(result.current.completedCount).toBe(VISIBLE_CURATOR_ONBOARDING_STEPS.length);
+    });
+
+    it('keeps hidden steps in the list so their tracking survives', () => {
+      const hidden = ['rsvp-community-call', 'submit-ranking', 'vote-entity'];
+
+      expect(CURATOR_ONBOARDING_STEPS.map(step => step.id)).toEqual(expect.arrayContaining(hidden));
+      for (const id of hidden) {
+        expect(VISIBLE_CURATOR_ONBOARDING_STEPS.map(step => step.id)).not.toContain(id);
+      }
+    });
+  });
+
+  // The two live in one `user_votes` table separated only by kind, and the query behind the voting
+  // step used to pass no kind at all — so a claim answer ticked it. With a claim step beside it,
+  // that would credit one action as two.
+  describe('claim positions and entity votes are different actions', () => {
+    it('does not tick the voting step for someone who only answered a claim', async () => {
+      mocks.hasVoteOfKind = new Map([[1, true]]);
+
+      const { result } = renderHook(() => useCuratorOnboardingStatus(), { wrapper });
+
+      await waitFor(() => expect(result.current.completion['claim-position']).toBe(true));
+      expect(result.current.completion['vote-entity']).toBe(false);
+    });
+
+    it('does not tick the claim step for someone who only upvoted an entity', async () => {
+      mocks.hasVoteOfKind = new Map([[0, true]]);
+
+      const { result } = renderHook(() => useCuratorOnboardingStatus(), { wrapper });
+
+      await waitFor(() => expect(result.current.completion['vote-entity']).toBe(true));
+      expect(result.current.completion['claim-position']).toBe(false);
+    });
+
+    it('counts a veracity answer as a position, the same as a stance one', async () => {
+      // Verify/dispute is kind 2 and agree/disagree is kind 1; the ticket names both.
+      mocks.hasVoteOfKind = new Map([[2, true]]);
+
+      const { result } = renderHook(() => useCuratorOnboardingStatus(), { wrapper });
+
+      await waitFor(() => expect(result.current.completion['claim-position']).toBe(true));
+    });
   });
 });

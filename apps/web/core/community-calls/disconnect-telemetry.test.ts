@@ -13,6 +13,7 @@ const CONTEXT = {
   roomName: 'space-1::call-1::1772130000000',
   occurrenceStart: 1772130000000,
   role: 'participant' as const,
+  participantIdentity: 'participant-a',
 };
 
 afterEach(() => {
@@ -25,6 +26,14 @@ function reportedTags(): Record<string, unknown> | null {
   if (calls.length === 0) return null;
   expect(calls).toHaveLength(1);
   return calls[0][0].tags ?? {};
+}
+
+/** The `extra` payload of the single reported event, or null if nothing was reported. */
+function reportedExtra(): Record<string, unknown> | null {
+  const calls = vi.mocked(reportEvent).mock.calls;
+  if (calls.length === 0) return null;
+  expect(calls).toHaveLength(1);
+  return calls[0][0].extra ?? {};
 }
 
 describe('disconnectReasonName', () => {
@@ -134,5 +143,19 @@ describe('reportCallDisconnect', () => {
   it('distinguishes viewers from participants', () => {
     reportCallDisconnect({ ...CONTEXT, role: 'viewer' }, { outcome: 'gave_up', reason: undefined });
     expect(reportedTags()).toMatchObject({ role: 'viewer', reason: 'NOT_REPORTED' });
+  });
+});
+
+// Without these two, an episode says a drop happened but nothing about whose or how
+// widespread — which is the only question the module was built to answer.
+describe('drop attribution', () => {
+  it("tags the participant so a room's episodes can be grouped by person", () => {
+    reportCallDisconnect(CONTEXT, { outcome: 'recovered', reason: undefined });
+    expect(reportedTags()).toMatchObject({ participantIdentity: 'participant-a' });
+  });
+
+  it('carries the room size the episode opened with', () => {
+    reportCallDisconnect(CONTEXT, { outcome: 'gave_up', reason: undefined, participantCount: 7 });
+    expect(reportedExtra()).toMatchObject({ participantCount: 7 });
   });
 });

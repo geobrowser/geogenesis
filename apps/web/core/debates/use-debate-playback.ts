@@ -29,6 +29,26 @@ type PlaybackUrls = {
 const feedMutedAtom = atom(true);
 
 /**
+ * Drift thresholds for keeping the two recordings in step (GEO-2828).
+ *
+ * The old code had one threshold — 0.18s — and one response, a hard seek. On MediaRecorder WebM
+ * with no Cues a seek is a parse walk, so correcting ordinary drift that way cost more than the
+ * drift did and provoked the next correction: 105 seeks in a single 210s playback.
+ */
+/** Below this, the pair is in step and the rate is left alone. */
+const SYNC_NUDGE_DRIFT_SECONDS = 0.18;
+/** Above this the gap is too wide to close by rate alone, so it is worth one seek. */
+const SYNC_SEEK_DRIFT_SECONDS = 0.75;
+/** How far off 1 the nudge goes. 3% converges 0.18s inside ~6s and is inaudible. */
+const SYNC_NUDGE_RATE = 0.03;
+/** Floor between hard seeks, so a seek that itself causes drift cannot start a storm. */
+const MIN_SYNC_SEEK_INTERVAL_MS = 2_000;
+/** No forward progress for this long, while unpaused, counts as stalled rather than slow. */
+const STALL_AFTER_MS = 500;
+/** Progress smaller than this is float noise on `currentTime`, not playback. */
+const STALL_EPSILON_SECONDS = 0.001;
+
+/**
  * Drives the two synchronized debater recordings for a single debate: loads the
  * per-slot playback URLs, keeps the videos in lockstep, tracks the active turn
  * (for the countdown + subtitles), and exposes play/pause/seek/replay controls.
@@ -52,6 +72,9 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const slot1VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const slot2VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const pendingSeekSecondsRef = React.useRef<number | null>(null);
+  /** Slot 1's last forward progress, for telling "stalled" apart from "merely not paused". */
+  const primaryProgressRef = React.useRef<{ seconds: number; at: number } | null>(null);
+  const lastSyncSeekAtRef = React.useRef(0);
   const getRecordingPlaybackUrlRef = React.useRef(recordingUrlMutation.mutateAsync);
 
   const turnDurations = React.useMemo(
@@ -141,6 +164,11 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       if (!primaryVideo || !secondaryVideo) return false;
       primaryVideo.currentTime = Math.max(0, playhead - offsets.slot1);
       secondaryVideo.currentTime = Math.max(0, playhead - offsets.slot2);
+      // A deliberate seek resets both the nudge and the stall watch: the pair is aligned by
+      // construction here, and slot 1's `currentTime` has just jumped, which is not progress.
+      secondaryVideo.playbackRate = 1;
+      primaryProgressRef.current = null;
+      lastSyncSeekAtRef.current = Date.now();
       return true;
     },
     [offsets.slot1, offsets.slot2]
@@ -161,15 +189,61 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
 
     // Lock slot 2 to slot 1, offset by the gap between when the two recordings started, so
     // neither debater's audio drifts ahead of the other.
+    //
+    // Two things make this harder than it looks, and getting either wrong is visible as a
+    // glitching video (GEO-2828).
+    //
+    // **A stalled slot 1 must not be a seek target.** `paused` stays false while a video
+    // starves for data, so "not paused" does not mean "advancing". When slot 1 stalled — it is
+    // the larger file, so it starves first — its `currentTime` froze, drift crossed the
+    // threshold, and slot 2 was dragged *back* to the frozen position, played forward a second,
+    // and was dragged back again. That is the reported "same 1 second over and over", and it
+    // sustains itself for as long as slot 1 is starved.
+    //
+    // **Small drift must not be corrected by seeking.** These are MediaRecorder WebM files with
+    // one cluster of unknown size and no Cues, so every seek is a parse walk rather than an
+    // index lookup — expensive enough to cause the drift that triggers the next one. Measured
+    // on a 210s debate before this change: 105 programmatic seeks, 103 of them on slot 2. Drift
+    // reaches the old 0.18s threshold in about two seconds of playback, so it could never
+    // settle. Nudging the rate absorbs ordinary drift without touching the demuxer; a seek is
+    // kept for a gap too large to close that way.
     const syncDelta = offsets.slot2 - offsets.slot1;
-    if (
-      primaryVideo &&
-      secondaryVideo &&
-      !primaryVideo.paused &&
-      !secondaryVideo.seeking &&
-      Math.abs(secondaryVideo.currentTime - (primaryVideo.currentTime - syncDelta)) > 0.18
-    ) {
-      secondaryVideo.currentTime = Math.max(0, primaryVideo.currentTime - syncDelta);
+    const now = Date.now();
+
+    if (primaryVideo) {
+      const progress = primaryProgressRef.current;
+      if (!progress || primaryVideo.currentTime > progress.seconds + STALL_EPSILON_SECONDS) {
+        primaryProgressRef.current = { seconds: primaryVideo.currentTime, at: now };
+      }
+    } else {
+      primaryProgressRef.current = null;
+    }
+
+    // `readyState` is the direct signal and the clock is the corroborating one: a video can sit
+    // at HAVE_ENOUGH_DATA and still not advance if the decoder is wedged.
+    const primaryStalled =
+      !primaryVideo ||
+      primaryVideo.readyState < HTMLMediaElement.HAVE_FUTURE_DATA ||
+      (primaryProgressRef.current !== null && now - primaryProgressRef.current.at > STALL_AFTER_MS);
+
+    if (primaryVideo && secondaryVideo && !primaryVideo.paused && !secondaryVideo.seeking && !primaryStalled) {
+      const drift = secondaryVideo.currentTime - (primaryVideo.currentTime - syncDelta);
+      const absDrift = Math.abs(drift);
+
+      if (absDrift > SYNC_SEEK_DRIFT_SECONDS && now - lastSyncSeekAtRef.current > MIN_SYNC_SEEK_INTERVAL_MS) {
+        secondaryVideo.currentTime = Math.max(0, primaryVideo.currentTime - syncDelta);
+        secondaryVideo.playbackRate = 1;
+        lastSyncSeekAtRef.current = now;
+      } else if (absDrift > SYNC_NUDGE_DRIFT_SECONDS) {
+        // Small enough that a rate change closes it within a few seconds, and far enough from 1
+        // to actually converge. Pitch shift at 3% is not audible.
+        secondaryVideo.playbackRate = drift > 0 ? 1 - SYNC_NUDGE_RATE : 1 + SYNC_NUDGE_RATE;
+      } else if (secondaryVideo.playbackRate !== 1) {
+        secondaryVideo.playbackRate = 1;
+      }
+    } else if (secondaryVideo && secondaryVideo.playbackRate !== 1) {
+      // Never leave a nudge running once the pair is no longer being kept in step.
+      secondaryVideo.playbackRate = 1;
     }
 
     // Keep both videos in the same play/pause state. If the browser pauses one

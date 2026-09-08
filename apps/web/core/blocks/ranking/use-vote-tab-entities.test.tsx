@@ -59,7 +59,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/blocks/data/use-data-block', () => ({
-  useDataBlock: () => ({ filterState: [], filterMode: 'AND', spaceId: '44444444-4444-4444-4444-444444444444' }),
+  useDataBlock: () => ({ filterState: [], modesByColumn: {}, spaceId: '44444444-4444-4444-4444-444444444444' }),
   filterStateToWhere: () => ({ types: [{ is: 'type-id' }] }),
 }));
 

@@ -24,6 +24,7 @@ function summary(overrides: Partial<ClaimResponseSummary> = {}): ClaimResponseSu
     isViewerResponseLoading: false,
     hasCounts: true,
     viewerDirection: null,
+    indexedViewerDirection: null,
     viewerSpaceId: null,
     ...overrides,
   };

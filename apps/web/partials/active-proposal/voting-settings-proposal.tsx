@@ -108,7 +108,24 @@ function buildRows(
     );
   }
 
+  // An access-control change, so it belongs in front of a voter rather than only in the calldata.
+  // Guarded like the five above: absent means the proposal did not report it, not that it is off.
+  if (details.disableFastPathForNewMembers !== undefined) {
+    rows.push(
+      makeRow(
+        'Fast path for new members',
+        current ? formatFastPathForNewMembers(current.disableFastPathForNewMembers) : null,
+        formatFastPathForNewMembers(details.disableFastPathForNewMembers)
+      )
+    );
+  }
+
   return rows;
+}
+
+/** Phrased as what it grants, matching the switch in governance settings. */
+function formatFastPathForNewMembers(disabled: boolean): string {
+  return disabled ? 'Off' : 'On';
 }
 
 function makeRow(label: string, current: string | null, proposed: string): Row {

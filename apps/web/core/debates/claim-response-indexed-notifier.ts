@@ -10,11 +10,38 @@ import { type DebateResponseKind, type GetPrivyIdentityToken, notifyClaimRespons
 import { refreshRematchClaimBatches, rematchClaimBatchesWithClaim } from './rematch-claims-query-key';
 
 const MAX_NOTIFIED_RUNS = 256;
-type IndexedClaimResponse = NonNullable<ReturnType<typeof claimResponseIndexedEvent>>;
+
+/**
+ * Every query whose answer a position write changes, as key prefixes (GEO-2814).
+ *
+ * These are the three sources the Request debate control reads geo-chat's copy of the position
+ * from — Explore's per-space claims, the hub's Claims tab, and the hub's Matches tab. They ask the
+ * same question of the same service and are keyed independently, so a refresh has to name all
+ * three. Prefixes, because the full keys carry a claim-id batch and a filter set respectively,
+ * neither of which is reconstructable from a notification.
+ *
+ * `matches` is included because a new position can create or dissolve a match outright, not merely
+ * change how one renders.
+ */
+function readinessQueryPrefixes(accountKey: string, spaceId: string) {
+  return [
+    // Explore cards and the claim page: ['debates', 'claims', spaceId, claimIds, accountKey]
+    ['debates', 'claims', spaceId],
+    // Hub Claims tab: ['debates', 'account', accountKey, 'matchmaking-claims', filters]
+    ['debates', 'account', accountKey, 'matchmaking-claims'],
+    // Hub Matches tab: ['debates', 'account', accountKey, 'matches']
+    ['debates', 'account', accountKey, 'matches'],
+  ] as const;
+}
+/** Fields shared by pending and indexed response notifications. */
+type NotifiableClaimResponse = Pick<
+  NonNullable<ReturnType<typeof pendingClaimResponse>>,
+  'entityId' | 'position' | 'responseKind' | 'spaceId'
+>;
 type InterruptedNotification = {
   accountKey: string;
   notificationKey: string;
-  response: IndexedClaimResponse;
+  response: NotifiableClaimResponse;
 };
 
 export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: unknown) {
@@ -52,7 +79,7 @@ export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: un
  * should disappear as fast as clicking one on.
  */
 export function pendingClaimResponse(queryKey: readonly unknown[], data: unknown) {
-  const [scope, , entityId, spaceId, responseKind] = queryKey;
+  const [scope, personalSpaceId, entityId, spaceId, responseKind] = queryKey;
   const indexingState = data as EntityResponseIndexingState | undefined;
   if (
     scope !== 'entity-response-indexing' ||
@@ -67,6 +94,10 @@ export function pendingClaimResponse(queryKey: readonly unknown[], data: unknown
       indexingState.pending.expectedResponse === null ? null : indexingState.pending.expectedResponse === 'positive',
     responseKind: responseKind as DebateResponseKind,
     spaceId: String(spaceId),
+    /** Whose write this is, so a reader can attribute the row without assuming the current viewer. */
+    personalSpaceId: String(personalSpaceId),
+    /** Used to distinguish confirmed responses from rolled-back responses. */
+    status: indexingState.status,
   };
 }
 
@@ -90,7 +121,7 @@ export function useClaimResponseIndexedNotifier(
       notifiedRunOrder.current = notifiedRunOrder.current.filter(key => key !== notificationKey);
     };
 
-    const startNotification = (notificationKey: string, response: IndexedClaimResponse) => {
+    const startNotification = (notificationKey: string, response: NotifiableClaimResponse) => {
       if (notifiedRuns.current.has(notificationKey)) return;
 
       notifiedRuns.current.add(notificationKey);
@@ -112,8 +143,11 @@ export function useClaimResponseIndexedNotifier(
         controller.signal
       )
         .catch(error => {
+          // Swallowed so `.finally` still runs and the promise never rejects unhandled. This used
+          // to invalidate the claims query as a fallback; the refresh below now covers that key on
+          // every path, so a second one here would only make "the notification failed" and "the
+          // notification succeeded" indistinguishable at the cache (GEO-2814).
           if (isAbortError(error)) return;
-          return queryClient.invalidateQueries({ queryKey: ['debates', 'claims', response.spaceId] });
         })
         .finally(() => {
           notificationControllers.delete(controller);
@@ -125,14 +159,48 @@ export function useClaimResponseIndexedNotifier(
           // until something unrelated happened to refetch. Asking again once the notification has
           // settled is the only refresh guaranteed to postdate it.
           void refreshRematchClaimBatches(queryClient, rematchClaimBatchesWithClaim(accountKey, response.entityId));
+
+          // GEO-2814. The rematch picker was the only surface refreshed here, so every *other*
+          // Request debate control converged on geo-chat's new answer by luck — whenever its own
+          // query happened to refetch next. Explore asks per card behind `nearViewport`, so
+          // scrolling refetches it constantly and its button opened first; the hub asks once per
+          // tab and sat on a stale answer, which is the reported inconsistency.
+          //
+          // The same argument as the rematch refresh above applies to all of them: this is the
+          // only refresh guaranteed to postdate the notification, so it is where they belong.
+          // Invalidated by prefix rather than by exact key because the claims queries are keyed by
+          // claim-id batch and the hub's by filter set — neither is reconstructable from here.
+          for (const queryKey of readinessQueryPrefixes(accountKey, response.spaceId)) {
+            void queryClient.invalidateQueries({ queryKey });
+          }
         });
     };
 
     const unsubscribe = queryClient.getQueryCache().subscribe(event => {
       if (event.type !== 'updated' || event.action.type !== 'success') return;
-      const response = claimResponseIndexedEvent(event.query.queryKey, event.query.state.data);
-      if (!response) return;
-      startNotification(`${event.query.queryHash}:${response.runId}`, response);
+      const queryHash = event.query.queryHash;
+
+      const indexed = claimResponseIndexedEvent(event.query.queryKey, event.query.state.data);
+      if (indexed) {
+        // Still sent once the chain confirms, and it is not redundant: this is the reconciliation
+        // half. If the in-flight notification below reported a position the write never landed,
+        // this one carries the truth and geo-chat converges on it.
+        startNotification(`${queryHash}:${indexed.runId}`, indexed);
+        return;
+      }
+
+      // GEO-2784. Tell geo-chat the moment the write starts rather than when it finishes.
+      // `web.write.entity_response` is p50 9.9s / p95 48.6s, and geo-chat used to refuse an
+      // unindexed position outright (409 `claim_response_not_indexed`), so nobody could be offered
+      // a debate against a position for ~10s after the click. geo-chat is now the authority on
+      // readiness and takes the report immediately.
+      //
+      // Keyed separately from the indexed notification so both fire: this one makes the opposite
+      // side's Request debate appear at once, that one reconciles it. Keyed on the position too,
+      // so toggling a side off and on again is reported rather than swallowed as a duplicate.
+      const pending = pendingClaimResponse(event.query.queryKey, event.query.state.data);
+      if (!pending) return;
+      startNotification(`${queryHash}:pending:${String(pending.position)}`, pending);
     });
 
     for (const [notificationKey, interrupted] of interruptedNotifications.current) {

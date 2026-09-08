@@ -836,10 +836,42 @@ export const claimResponseSummariesQuery = graphql(/* GraphQL */ `
   }
 `);
 
-export const userHasEntityVoteQuery = graphql(/* GraphQL */ `
-  query UserHasEntityVote($userId: UUID!) {
-    userVotes(condition: { userId: $userId }, first: 1) {
+/**
+ * Has this user cast a vote of any of these kinds?
+ *
+ * Kinds are the discriminator, not an afterthought: `user_votes` holds curation (an entity upvote,
+ * kind 0) beside stance and veracity (a position on a claim, kinds 1 and 2). This query used to
+ * take no kind at all, which made "has voted" true for someone who had only ever answered a claim —
+ * fine while the onboarding checklist had a single voting step, wrong the moment it had two
+ * (GEO-2800).
+ */
+export const userHasVoteOfKindQuery = graphql(/* GraphQL */ `
+  query UserHasVoteOfKind($userId: UUID!, $voteKinds: [Int!]) {
+    userVotes(filter: { userId: { is: $userId }, voteKind: { in: $voteKinds } }, first: 1) {
       userId
+    }
+  }
+`);
+
+/**
+ * Is this personal space on either side of a published debate?
+ *
+ * Publishing a debate relates it to each participant's personal space entity through Supported by
+ * or Opposed by, so a relation of either type pointing at the space is the participation — and the
+ * relation only exists once the debate is published, which is the other half of what the checklist
+ * asks.
+ *
+ * GEO-2732 has since landed, so a debate published today *also* carries a side-agnostic Participants
+ * relation that says this more directly. Reading that one instead would be a regression rather than
+ * a simplification: on testnet, 43 of the 55 debates carrying a side relation predate it and have no
+ * Participants relation at all, so the checklist would stop crediting participation in most of the
+ * debates that exist. These two cover both eras, and every participant gets one of them — the
+ * publish flow writes a side for each — so nothing is missed by not reading the third.
+ */
+export const userDebateParticipationQuery = graphql(/* GraphQL */ `
+  query UserDebateParticipation($personalSpaceId: UUID!, $sidePropertyIds: [UUID!]) {
+    relations(filter: { toEntityId: { is: $personalSpaceId }, typeId: { in: $sidePropertyIds } }, first: 1) {
+      id
     }
   }
 `);

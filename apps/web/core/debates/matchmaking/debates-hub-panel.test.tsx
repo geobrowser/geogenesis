@@ -50,7 +50,6 @@ vi.mock('./hooks', () => ({
   }),
   useMatchmakingClaims: () => ({ data: undefined, isLoading: false, error: null, hasNextPage: false }),
   useMatchmakingMatches: () => ({ data: { matches: [] }, isLoading: false, error: null }),
-  useClaimReadiness: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useCreateDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useWithdrawDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useAcceptDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
