@@ -121,7 +121,9 @@ describe('EditProfileDialog', () => {
     it('locks the fields and names the wait rather than closing', () => {
       renderDialog();
 
-      expect(screen.getByText(/This usually takes about 10 seconds/)).toBeInTheDocument();
+      // The wait takes over the footer's one line rather than adding a second.
+      expect(screen.getByText('Publishing to your space. This usually takes about 10 seconds.')).toBeInTheDocument();
+      expect(screen.queryByText('Saving publishes to your space.')).not.toBeInTheDocument();
       expect(nameField()).toBeDisabled();
       expect(descriptionField()).toBeDisabled();
       expect(saveButton()).toBeDisabled();

@@ -123,6 +123,14 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     onOpenChange(false);
   };
 
+  const footerNote = isUnavailable
+    ? 'We couldn’t find your profile to edit. Try reloading the page.'
+    : isPublishing
+      ? 'Publishing to your space. This usually takes about 10 seconds.'
+      : hasFailed
+        ? 'Nothing was published.'
+        : 'Saving publishes to your space.';
+
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!canSave) return;
@@ -218,29 +226,10 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
               </label>
             </div>
 
-            {isPublishing && (
-              <div className="mt-5 px-5">
-                <p className="text-metadata text-grey-04">
-                  Publishing to your space. This usually takes about 10 seconds.
-                </p>
-                {/* Indeterminate — the write gives no progress to report, and a fake
-                    percentage would be worse than none. */}
-                <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-divider">
-                  <div className="h-full w-1/3 animate-pulse rounded-full bg-ctaPrimary" />
-                </div>
-              </div>
-            )}
-
             <footer className="mt-5 flex items-center justify-between gap-3 border-t border-grey-02 px-5 py-4">
-              {/* Save is dead without a resolvable profile entity, so say why
-                  rather than leaving a button that does nothing. */}
-              <p className={cx('text-footnote', isUnavailable ? 'text-red-01' : 'text-grey-04')}>
-                {isUnavailable
-                  ? 'We couldn’t find your profile to edit. Try reloading the page.'
-                  : hasFailed
-                    ? 'Nothing was published.'
-                    : 'Saving publishes to your space.'}
-              </p>
+              {/* One line, carrying whatever the modal currently owes the reader:
+                  why Save is dead, how long the wait is, or what a failure cost. */}
+              <p className={cx('text-footnote', isUnavailable ? 'text-red-01' : 'text-grey-04')}>{footerNote}</p>
               <div className="flex items-center gap-2">
                 <Button type="button" variant="secondary" onClick={close}>
                   {isPublishing ? 'Close' : 'Cancel'}
