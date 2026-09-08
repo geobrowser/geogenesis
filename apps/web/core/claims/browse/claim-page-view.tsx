@@ -236,7 +236,8 @@ function ClaimPositionSection({
         activeDebate={row?.active_debate}
         variant="block"
         // The offer rests on the side set by the pills directly above it, so it moves when they do.
-        viewerPosition={control.viewerPosition}
+        // `undefined` while the reads are out, so "not known yet" cannot read as "holds none".
+        viewerPosition={isResponseKindResolved && isViewerResponseResolved ? control.viewerPosition : undefined}
         className="mt-2"
       />
     </section>

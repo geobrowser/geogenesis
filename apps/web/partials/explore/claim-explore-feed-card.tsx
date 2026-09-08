@@ -191,7 +191,8 @@ export function ClaimExploreFeedCard({
               spaceId={item.spaceId}
               activeDebate={row?.active_debate}
               enabled={nearViewport}
-              viewerPosition={control.viewerPosition}
+              // `undefined` while the reads are out, so "not known yet" cannot read as "holds none".
+              viewerPosition={isResponseKindResolved && isViewerResponseResolved ? control.viewerPosition : undefined}
               className="ml-auto"
             />
           }

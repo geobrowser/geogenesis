@@ -30,8 +30,14 @@ const mocks = vi.hoisted(() => ({
   request: vi.fn(),
   summaryPositive: 0,
   summaryNegative: 0,
-  /** The on-chain read of the viewer's own side, which the card falls back to (GEO-2823). */
-  summaryViewerDirection: null as 'positive' | 'negative' | null,
+  /**
+   * The viewer's own side from the *indexed* read, which the card falls back to (GEO-2823).
+   *
+   * Kept separate from `mocks.indexing` on purpose: the real `viewerDirection` folds the in-flight
+   * snapshot in, and that is exactly why the card reads `indexedViewerDirection` instead. Mirroring
+   * that here is what lets a test set one without implying the other.
+   */
+  summaryIndexedViewerDirection: null as 'positive' | 'negative' | null,
   spaceId: '019fedae-72b6-7ab2-927a-df044d57c566',
   viewerSpaceId: 'personal-space',
   /** Whether each render of the card's summary read was enabled, in order. */
@@ -84,7 +90,13 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
         isLoading: false,
         isViewerResponseLoading: false,
         hasCounts: true,
-        viewerDirection: mocks.summaryViewerDirection,
+        // Mirrors the hook: `viewerDirection` is the in-flight snapshot where there is one, the
+        // indexed read otherwise. A mock that let the two drift is how the card's fallback ended up
+        // reading its own optimism back.
+        viewerDirection: mocks.indexing.pending
+          ? mocks.indexing.pending.expectedResponse
+          : mocks.summaryIndexedViewerDirection,
+        indexedViewerDirection: mocks.summaryIndexedViewerDirection,
         viewerSpaceId: null,
       }
     ),
@@ -213,7 +225,7 @@ beforeEach(() => {
   mocks.request.mockReset();
   mocks.summaryPositive = 0;
   mocks.summaryNegative = 0;
-  mocks.summaryViewerDirection = null;
+  mocks.summaryIndexedViewerDirection = null;
   mocks.viewerSpaceId = 'personal-space';
   mocks.summaryEnabled = [];
 });
@@ -321,7 +333,8 @@ describe('position avatar stack', () => {
     });
 
     // A match cannot be made for a viewer holding no side, so a match reported alongside one is the
-    // list being stale.
+    // list being stale. `null` is an answer here — geo-chat's row says "no position" — and it
+    // contradicts a match made for Agree.
     it('makes no offer on a claim the viewer has not answered', () => {
       mocks.match = { id: 'match-1', viewer_position: true };
       renderCard(
@@ -329,6 +342,26 @@ describe('position avatar stack', () => {
       );
 
       expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    });
+
+    /**
+     * The other half of that, and the one worth being careful about: a card that has not yet
+     * resolved the viewer's side is not a card reporting they hold none. Withdrawing the offer on
+     * silence hides an action the server would accept, which is the direction #2376 reverted a
+     * different check for — so `answersReady: false` passes `undefined`, not `null`.
+     */
+    it('leaves the offer alone while the viewer’s side is still unresolved', () => {
+      mocks.match = { id: 'match-1', viewer_position: true };
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ viewer_response: null })}
+          answersReady={false}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
     });
   });
 
@@ -354,7 +387,7 @@ describe('position avatar stack', () => {
      * disappeared about ten seconds later while the explore card went on showing it.
      */
     it('keeps the viewer on their side when geo-chat has no answer yet', () => {
-      mocks.summaryViewerDirection = 'positive';
+      mocks.summaryIndexedViewerDirection = 'positive';
       renderCard(
         <MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness({ viewer_response: null })} />
       );
@@ -366,7 +399,7 @@ describe('position avatar stack', () => {
 
     it('offers the debate on that side too, rather than waiting on geo-chat alone', () => {
       mocks.match = { id: 'match-1', viewer_position: true };
-      mocks.summaryViewerDirection = 'positive';
+      mocks.summaryIndexedViewerDirection = 'positive';
       renderCard(
         <MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness({ viewer_response: null })} />
       );
@@ -377,7 +410,7 @@ describe('position avatar stack', () => {
     // geo-chat wins where it has an answer: it is the source the request is validated against, and
     // the chain read is only standing in for a silence.
     it('prefers geo-chat’s answer over the chain’s', () => {
-      mocks.summaryViewerDirection = 'positive';
+      mocks.summaryIndexedViewerDirection = 'positive';
       renderCard(
         <MatchmakingClaimCard
           claim={claim}
@@ -396,7 +429,7 @@ describe('position avatar stack', () => {
      * the side the graph says they hold (GEO-2807).
      */
     it('substitutes nothing where the host cannot say what geo-chat holds', () => {
-      mocks.summaryViewerDirection = 'positive';
+      mocks.summaryIndexedViewerDirection = 'positive';
       renderCard(
         <MatchmakingClaimCard
           claim={claim}
@@ -554,12 +587,9 @@ describe('position avatar stack', () => {
     const agree = screen.getByRole('button', { name: /^Agree/ });
     // Two faces is the stack's cap, and the viewer takes the first of them.
     expect(within(agree).getAllByTestId('avatar')).toHaveLength(2);
-    // Three people present, two shown. The count follows the faces rather than being left at the
-    // server's two, which would have claimed a remainder of zero behind three of them.
-    expect(within(agree).getByText('+1')).toBeInTheDocument();
-    // `total_count` is the on-chain total and already counts the viewer's own response, so it is
-    // not bumped a second time.
-    expect(within(agree).queryByText('+3')).toBeNull();
+    // No badge: `serverPosition` names this side, so the count already includes the viewer and
+    // nothing is added. `participants` being capped means its silence is not evidence either way.
+    expect(within(agree).queryByText(/^\+/)).toBeNull();
   });
 });
 

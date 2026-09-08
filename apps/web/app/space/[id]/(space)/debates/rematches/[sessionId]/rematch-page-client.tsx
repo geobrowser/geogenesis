@@ -1573,6 +1573,11 @@ function RematchClaimCard({
       // graph's, and correcting them against an answer nobody gave takes the viewer off the side
       // the graph says they hold (GEO-2807).
       viewerResponseUnknown={chatPosition === undefined}
+      // No second source for the viewer's side here. `viewerResponseUnknown` above covers geo-chat
+      // having no row at all; this also covers a row reporting "no position", where filling the gap
+      // from the indexed response would highlight a side the viewer has withdrawn while the footer
+      // below — which reads `chatPosition` raw — went on refusing the request.
+      reconcileWithIndexedResponse={false}
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
       // rematch behind, so open it beside the picker instead.
       onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}

@@ -234,11 +234,10 @@ describe('withViewerPosition', () => {
 
     const agree = on(sides, true);
     expect(agree.participants.map(p => p.profile_space_id)).toEqual([VIEWER_SPACE, OTHER_SPACE]);
-    // The presence count follows the list it describes, so the badge cannot claim a remainder of
-    // zero behind two faces.
-    expect(agree.present_count).toBe(3);
-    // The on-chain total already counts the viewer's own response — `serverPosition` says so — so
-    // it is not bumped a second time.
+    // Neither count moves: `serverPosition` names this side, so both already count the viewer.
+    // `participants` is a capped preview, so its silence is not evidence the count excludes them —
+    // guessing from it over-counts a side whose preview merely ran out.
+    expect(agree.present_count).toBe(2);
     expect(agree.total_count).toBe(5);
   });
 

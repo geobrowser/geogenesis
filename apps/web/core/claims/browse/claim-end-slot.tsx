@@ -49,15 +49,21 @@ export function ClaimEndSlot({
   claimId: string;
   spaceId: string;
   /**
-   * The side the viewer holds, as this client knows it right now. `null` for no side.
+   * The side the viewer holds: a boolean, `null` for "holds none", `undefined` for "not known yet".
+   *
+   * Three values rather than two, because collapsing the last two is what makes this check either
+   * useless or harmful. Withdrawing on "holds none" is the point — clearing your position has to
+   * take the offer resting on it away. Withdrawing on "not known yet" hides an offer the server
+   * would accept, on a card whose reads have simply not landed, which is the direction #2376
+   * reverted a different check for.
    *
    * Not the position check #2354 added and #2376 took back out. That one compared the local side
    * against geo-chat's copy and waited for them to agree, which is a wait this endpoint never needed
    * — see the note above the match check. This never waits on geo-chat at all: it reads the side the
-   * *match* was already computed for, which is in hand, and asks whether it is still the side the
-   * reader is on.
+   * *match* was already computed for, which is in hand, and asks whether it contradicts the side the
+   * reader is on. Silence is not a contradiction.
    */
-  viewerPosition: boolean | null;
+  viewerPosition: boolean | null | undefined;
   /**
    * The live debate on this claim.
    *
@@ -130,8 +136,12 @@ export function ClaimEndSlot({
   //
   // Hiding rather than disabling: a greyed button still says a debate is on offer here. On a side
   // the reader has stepped off, there is none to make.
+  //
+  // Only a positive contradiction withdraws it. Both readings have to be known and they have to
+  // disagree — an unknown local side, or a match that names none, leaves the offer alone.
   const matchedSide = match ? (match.viewer_response?.position ?? match.viewer_position) : null;
-  const matchesViewerSide = viewerPosition !== null && matchedSide === viewerPosition;
+  const contradictsViewerSide =
+    matchedSide !== null && matchedSide !== undefined && viewerPosition !== undefined && matchedSide !== viewerPosition;
 
   // A match is otherwise derived from the same `debate_claim_readiness` rows
   // `create_debate_request_as` reads, so nothing further about the position belongs here — a check
@@ -141,7 +151,7 @@ export function ClaimEndSlot({
   // `validation_failed_at IS NULL` / `last_validated_at IS NOT NULL` predicates and its
   // attempted-recipient exclusion, so a failed validation sweep or an already-tried opponent still
   // draws a live button. Which is why the refusal below is rendered rather than swallowed.
-  if (match && matchesViewerSide) {
+  if (match && !contradictsViewerSide) {
     return (
       <span className={cx('flex flex-col gap-1', variant === 'block' ? 'w-full' : 'shrink-0 items-end', className)}>
         <button

@@ -76,6 +76,20 @@ export type ClaimResponseSummary = {
    * two sides has to make the same adjustment, or the number moves while the face stays put.
    */
   viewerDirection: ActiveResponseDirection | null;
+  /**
+   * The same side, from the indexed read alone — no optimistic snapshot folded in.
+   *
+   * {@link viewerDirection} is `pending ? pending.expectedResponse : indexed`, which makes it an
+   * echo of the client's own in-flight write whenever one exists. That is right for the counts,
+   * which have to move with the face. It is wrong for anything asking the *independent* question
+   * "what does a source other than this client say the viewer holds" — comparing an expectation
+   * against an echo of itself is trivially true, and a surface that retires its optimism on that
+   * answer retires it before anything confirmed it.
+   *
+   * Null while the read is in flight as well as for a settled "no side"; pair it with
+   * {@link isViewerResponseLoading} to tell those apart.
+   */
+  indexedViewerDirection: ActiveResponseDirection | null;
   viewerSpaceId: string | null;
 };
 
@@ -120,7 +134,7 @@ export function summarizeClaimResponses(
   negative: number
 ): Omit<
   ClaimResponseSummary,
-  'isLoading' | 'isViewerResponseLoading' | 'hasCounts' | 'viewerDirection' | 'viewerSpaceId'
+  'isLoading' | 'isViewerResponseLoading' | 'hasCounts' | 'viewerDirection' | 'indexedViewerDirection' | 'viewerSpaceId'
 > {
   const total = positive + negative;
   const percent = total > 0 ? Math.round((100 * positive) / total) : null;
@@ -286,6 +300,7 @@ export function useClaimResponseSummary(
       // not to find out.
       hasCounts: false,
       viewerDirection: null,
+      indexedViewerDirection: null,
       // Who the viewer is, not what they answered — safe to report, and the avatars need it to
       // place the viewer once there is something to place.
       viewerSpaceId: personalSpaceId ?? null,
@@ -325,6 +340,7 @@ export function useClaimResponseSummary(
       ? !responseBatch.ready || awaitingViewerResponse
       : isPersonalSpaceLoading || awaitingViewerResponse,
     viewerDirection: activeDirection ?? null,
+    indexedViewerDirection: indexedDirection ?? null,
     viewerSpaceId: personalSpaceId ?? null,
   };
 }
