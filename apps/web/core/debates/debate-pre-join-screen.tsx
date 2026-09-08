@@ -7,32 +7,44 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call-layout';
-import type { DebateParticipantSummary, ParticipantSlot } from '~/core/debates/api';
+import type { DebateParticipant } from '~/core/debates/api';
 import type { MediaDeviceOption, PreJoinMediaState } from '~/core/debates/media-session';
 
-import { Avatar } from '~/design-system/avatar';
 import { Check } from '~/design-system/icons/check';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { AudioSettings, MobileSettingsSheet } from './audio-settings';
+import { DebateRecordingStatusPill } from './debate-recording-status-pill';
 import { CameraIcon, LeaveIcon, MicrophoneIcon, RecordingCircleButton } from './debate-room-controls';
+import { DebateVideoTile } from './debate-video-tile';
 import { DeviceOptionGroup } from './device-option-group';
 import { MicrophoneLevelMeter } from './microphone-level-meter';
 import { useScrollLock } from './use-scroll-lock';
 
-export type DebatePreScreenParticipant = DebateParticipantSummary & {
-  participant_slot: ParticipantSlot;
-};
+export type DebatePreScreenRemotePresence = 'absent' | 'present' | 'left';
 
+/**
+ * The pre-debate screen. GEO-2819 turned it from a solo mirror into a live two-way call: both
+ * debaters are in the LiveKit room from the moment they grant the camera, so the introductions
+ * users said they wanted have somewhere to happen. Nothing here is recorded — the pill says so,
+ * in the position the debate room repeats it — and the debate starts only once both press ready.
+ *
+ * Deliberately the same geometry as the room: two stacked tiles, same order rule, same widths.
+ * The transition into the debate then changes the chrome and leaves the layout alone.
+ */
 export function DebatePreScreen({
   claim,
   participants,
   currentUserId,
   localReady,
   remoteReady,
-  localVideoRef,
+  setLocalVideoElement,
+  setRemoteMediaElement,
+  remoteVideoReady,
+  remotePresence,
+  capturing,
   previewStream,
   previewState,
   previewBusy,
@@ -49,17 +61,28 @@ export function DebatePreScreen({
   onAudioOutputChange,
   onVideoInputChange,
   onRetryMedia,
+  mediaError,
+  audioMuted,
+  videoEnabled,
+  onToggleAudioMuted,
+  onToggleVideoEnabled,
+  canRetryConnection,
+  onRetryConnection,
   readyBusy,
   onReady,
   onLeave,
   leaveDisabled,
 }: {
   claim: string;
-  participants: DebatePreScreenParticipant[];
+  participants: DebateParticipant[];
   currentUserId: string | null;
   localReady: boolean;
   remoteReady: boolean;
-  localVideoRef: React.RefObject<HTMLVideoElement | null>;
+  setLocalVideoElement: (video: HTMLVideoElement | null) => void;
+  setRemoteMediaElement: (host: HTMLDivElement | null) => void;
+  remoteVideoReady: boolean;
+  remotePresence: DebatePreScreenRemotePresence;
+  capturing: boolean;
   previewStream: MediaStream | null;
   previewState: PreJoinMediaState;
   previewBusy: boolean;
@@ -76,6 +99,14 @@ export function DebatePreScreen({
   onAudioOutputChange: (deviceId: string) => void;
   onVideoInputChange: (deviceId: string) => void;
   onRetryMedia: () => void;
+  /** Why the camera or microphone is unavailable, as distinct from a room-connection failure. */
+  mediaError: string | null;
+  audioMuted: boolean;
+  videoEnabled: boolean;
+  onToggleAudioMuted: () => void;
+  onToggleVideoEnabled: () => void;
+  canRetryConnection: boolean;
+  onRetryConnection: () => void;
   readyBusy: boolean;
   onReady: () => void;
   onLeave: () => void;
@@ -92,19 +123,74 @@ export function DebatePreScreen({
     sortedParticipants.find(participant => participant.user_id !== localParticipant?.user_id) ??
     sortedParticipants[1] ??
     null;
+  const remoteName = remoteParticipant
+    ? remoteParticipant.display_name || remoteParticipant.profile_space_id
+    : 'the other speaker';
   const mediaReady = previewState === 'ready';
   const selectedCameraLabel =
     videoInputDevices.find(device => device.deviceId === selectedVideoInputId)?.label ?? 'Camera';
 
   useScrollLock();
 
-  React.useEffect(() => {
-    const video = localVideoRef.current;
-    if (!video || !mediaReady) return;
-    video.srcObject = previewStream;
-    video.muted = true;
-    if (previewStream) void video.play().catch(() => undefined);
-  }, [localVideoRef, mediaReady, previewStream]);
+  const localTile = (
+    <DebateVideoTile
+      key="local"
+      participantPosition={localParticipant?.position ?? null}
+      positionLabel={localParticipant?.position_label ?? null}
+      active={false}
+      // Permission is reported inside the tile rather than in place of the layout. Replacing the
+      // screen meant the opponent — and their readiness — vanished for whoever was slowest to
+      // grant, and everything jumped position the moment they did.
+      overlayText={
+        mediaReady
+          ? videoEnabled
+            ? null
+            : 'Camera off'
+          : previewState === 'requesting'
+            ? 'Requesting camera and mic…'
+            : mediaError
+      }
+      // Everything the unready states say is a sentence rather than a label.
+      overlayCompact={!mediaReady}
+      inactiveIndicatorId="local"
+      showMutedIndicator={audioMuted}
+      badge={localReady ? <PreScreenReadyBadge /> : null}
+    >
+      <video ref={setLocalVideoElement} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
+    </DebateVideoTile>
+  );
+
+  const remoteTile = (
+    <DebateVideoTile
+      key="remote"
+      participantPosition={remoteParticipant?.position ?? null}
+      positionLabel={remoteParticipant?.position_label ?? null}
+      active={false}
+      // Presence and video are separate facts here. "Still joining" is the state the issue asks
+      // for — the other side has not granted their camera yet — and it reads very differently
+      // from someone who was here and walked away.
+      overlayText={
+        remotePresence === 'left'
+          ? `${remoteName} left. They can come back at any time.`
+          : remotePresence === 'absent'
+            ? `Waiting for ${remoteName} to join…`
+            : remoteVideoReady
+              ? null
+              : 'Waiting for video'
+      }
+      overlayCompact={remotePresence !== 'present'}
+      inactiveIndicatorId="remote"
+      badge={remoteReady ? <PreScreenReadyBadge /> : null}
+    >
+      <div
+        ref={setRemoteMediaElement}
+        className="h-full w-full bg-grey-01 [&>audio]:hidden [&>video]:h-full [&>video]:w-full [&>video]:bg-grey-01 [&>video]:object-cover"
+      />
+    </DebateVideoTile>
+  );
+
+  // The room's ordering rule, so neither tile moves when the debate starts.
+  const orderedTiles = localParticipant?.position === false ? [remoteTile, localTile] : [localTile, remoteTile];
 
   return (
     <div
@@ -113,31 +199,48 @@ export function DebatePreScreen({
       aria-label="Debate readiness"
       className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text"
     >
-      <section className="mx-auto flex min-h-dvh w-full max-w-[920px] flex-col items-center justify-center px-5 py-6 text-center md:justify-start">
-        <Text as="p" variant="cardEntityTitle" color="grey-04">
-          Debate
-        </Text>
-        <h1 className="mt-3 max-w-[870px] text-[2.5rem] leading-[1.05] font-semibold text-text md:max-w-[560px] md:text-[2rem]">
+      <DebateRecordingStatusPill recording={capturing} />
+
+      <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-2 py-8 sm:px-5">
+        <h1 className="mb-2 max-w-[390px] text-center text-[1.375rem] leading-[1.1] font-semibold text-text">
           {claim}
         </h1>
+        <Text as="p" variant="metadata" color="grey-04" className="mb-5 max-w-[390px] text-center">
+          Say hello first — this part isn&apos;t recorded. Recording starts when you are both ready.
+        </Text>
 
-        <div className="mt-10 w-full max-w-[272px]">
-          <PreScreenOpponent
-            participant={remoteParticipant}
-            label={
-              remoteParticipant ? remoteParticipant.display_name || remoteParticipant.profile_space_id : 'Other speaker'
-            }
-            ready={remoteReady}
-          />
-        </div>
+        <div className="grid w-full gap-2">{orderedTiles}</div>
 
-        {mediaReady ? (
-          <div className="mt-3 w-full max-w-[272px] rounded-lg border border-grey-02 bg-white p-3">
-            <div className="relative aspect-[4/3] w-full overflow-hidden rounded bg-grey-01">
-              <video ref={localVideoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
+        {!mediaReady && previewState !== 'requesting' && (
+          <button
+            type="button"
+            onClick={onRetryMedia}
+            className="mt-3 inline-flex min-h-9 items-center justify-center rounded-full bg-text px-4 text-button text-white hover:bg-text/90"
+          >
+            {previewState === 'denied' ? 'Allow access' : 'Try again'}
+          </button>
+        )}
+
+        {mediaReady && (
+          <div className="mt-3 w-full rounded-lg border border-grey-02 bg-white p-3">
+            <div className="flex gap-[6px]">
+              <PreScreenToggle
+                ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
+                pressed={audioMuted}
+                onClick={onToggleAudioMuted}
+              >
+                <MicrophoneIcon muted={audioMuted} />
+              </PreScreenToggle>
+              <PreScreenToggle
+                ariaLabel={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
+                pressed={!videoEnabled}
+                onClick={onToggleVideoEnabled}
+              >
+                <CameraIcon disabled={!videoEnabled} />
+              </PreScreenToggle>
             </div>
 
-            <div className="mt-3 flex flex-col gap-[6px]">
+            <div className="mt-[6px] flex flex-col gap-[6px]">
               {isMobile ? (
                 <>
                   <PreScreenSettingsTrigger
@@ -199,14 +302,23 @@ export function DebatePreScreen({
               <MicrophoneLevelMeter stream={previewStream} />
             </div>
           </div>
-        ) : (
-          <PreScreenMediaUnavailable state={previewState} message={error} onRetry={onRetryMedia} />
         )}
 
-        {mediaReady && error && (
-          <Text as="p" variant="metadata" color="red-01" className="mt-3">
-            {error}
-          </Text>
+        {error && (
+          <div className="mt-3 flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white px-4 py-3">
+            <Text as="p" variant="metadata" color="red-01">
+              {error}
+            </Text>
+            {canRetryConnection && (
+              <button
+                type="button"
+                onClick={onRetryConnection}
+                className="inline-flex min-h-8 shrink-0 items-center justify-center rounded-full bg-text px-4 text-button text-white hover:bg-text/90"
+              >
+                Reconnect
+              </button>
+            )}
+          </div>
         )}
 
         {mediaReady && (
@@ -214,13 +326,19 @@ export function DebatePreScreen({
             type="button"
             onClick={onReady}
             disabled={readyBusy || localReady || previewBusy}
-            className="mt-3 flex min-h-11 w-full max-w-[272px] items-center justify-center rounded-full bg-text px-5 text-button text-white transition-colors hover:bg-text/90 disabled:opacity-50"
+            className="mt-3 flex min-h-11 w-full items-center justify-center rounded-full bg-text px-5 text-button text-white transition-colors hover:bg-text/90 disabled:opacity-50"
           >
-            {localReady ? 'Waiting...' : readyBusy ? 'Saving...' : "I'm ready"}
+            {localReady
+              ? `Waiting for ${remoteName}…`
+              : readyBusy
+                ? 'Saving...'
+                : remoteReady
+                  ? "I'm ready too"
+                  : "I'm ready"}
           </button>
         )}
 
-        <div className="mt-5">
+        <div className="mt-5 flex w-full justify-end">
           <RecordingCircleButton
             ariaLabel="Leave debate"
             title="Leave debate"
@@ -230,7 +348,7 @@ export function DebatePreScreen({
             <LeaveIcon />
           </RecordingCircleButton>
         </div>
-      </section>
+      </main>
 
       {isMobile && (
         <>
@@ -270,6 +388,48 @@ export function DebatePreScreen({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Readiness, stated and left alone. The issue flags that telling someone their opponent is ready
+ * can hurry them into starting before they want to, so this is a fact on a tile rather than a
+ * prompt, a countdown or a nudge anywhere near the button.
+ */
+function PreScreenReadyBadge() {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-green px-3 py-1.5 text-metadata leading-none text-text">
+      <Check />
+      Ready
+    </span>
+  );
+}
+
+function PreScreenToggle({
+  ariaLabel,
+  pressed,
+  onClick,
+  children,
+}: {
+  ariaLabel: string;
+  pressed: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      aria-pressed={pressed}
+      onClick={onClick}
+      className={cx(
+        'flex min-h-9 flex-1 items-center justify-center rounded-full border transition outline-none',
+        pressed ? 'border-text bg-grey-01 text-text' : 'border-grey-02 bg-white text-text hover:border-grey-04',
+        'focus-visible:border-text focus-visible:ring-1 focus-visible:ring-text'
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -375,74 +535,6 @@ function SharedPreviewVideo({ stream }: { stream: MediaStream | null }) {
   return (
     <div className="aspect-[4/3] w-full overflow-hidden rounded-lg bg-grey-01">
       <video ref={videoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
-    </div>
-  );
-}
-
-function PreScreenMediaUnavailable({
-  state,
-  message,
-  onRetry,
-}: {
-  state: Exclude<PreJoinMediaState, 'ready'>;
-  message: string | null;
-  onRetry: () => void;
-}) {
-  const requesting = state === 'requesting';
-  return (
-    <div className="mt-3 w-full max-w-[272px] rounded-lg border border-grey-02 bg-white p-3">
-      <div className="grid aspect-[4/3] w-full place-items-center rounded bg-grey-01 text-grey-04">
-        <CameraIcon disabled />
-      </div>
-      <Text as="p" variant="metadata" color="text" className="mx-auto mt-3 max-w-[220px]">
-        {requesting ? 'Requesting access to your camera and microphone…' : message}
-      </Text>
-      {!requesting && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-3 inline-flex min-h-8 items-center justify-center rounded-full bg-text px-4 text-button text-white hover:bg-text/90"
-        >
-          {state === 'denied' ? 'Allow access' : 'Try again'}
-        </button>
-      )}
-    </div>
-  );
-}
-
-function PreScreenOpponent({
-  participant,
-  label,
-  ready,
-}: {
-  participant: DebatePreScreenParticipant | null;
-  label: string;
-  ready: boolean;
-}) {
-  return (
-    <div className="flex min-h-[52px] w-full items-center justify-between gap-4 rounded-lg border border-grey-02 bg-white px-3">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="h-5 w-5 shrink-0 overflow-hidden rounded-full">
-          <Avatar
-            avatarUrl={participant?.avatar_cid ?? null}
-            value={participant?.profile_space_id ?? label}
-            alt={label}
-            size={20}
-          />
-        </span>
-        <Text as="div" variant="metadata" color="text" className="min-w-0 truncate text-left">
-          {label}
-        </Text>
-      </div>
-      <span
-        className={cx(
-          'inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-metadata leading-none',
-          ready ? 'bg-green text-text' : 'bg-grey-01 text-grey-04'
-        )}
-      >
-        {ready && <Check />}
-        {ready ? 'Ready' : 'Waiting...'}
-      </span>
     </div>
   );
 }
