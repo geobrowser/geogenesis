@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { DebateRow, type DebateSide, type WinnerShare, relationTargets } from '~/core/claims/browse/claim-debates';
+import { CursorPager } from '~/core/claims/browse/use-cursor-pages';
 import { useDebateKeyframes } from '~/core/claims/browse/use-debate-keyframes';
 import {
   DEBATE_CLAIMS_PROPERTY_ID,
@@ -21,6 +22,8 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { ALL_FILTER, PersonDebateFilters } from './person-debate-filters';
+
+const DEBATES_PAGE_SIZE = 5;
 
 /**
  * Every debate the person argued, either side.
@@ -59,12 +62,6 @@ export function PersonDebatesCollection({
     return map;
   }, [debates]);
 
-  const participantSpaceIds = React.useMemo(
-    () => [...new Set([...sidesByDebateId.values()].flat().map(side => side.spaceId))],
-    [sidesByDebateId]
-  );
-  const { profilesBySpaceId } = useProfilesBySpaceIds(participantSpaceIds, participantSpaceIds.length > 0);
-
   // How each debate's sides are labelled — Agree/Disagree or Verify/Dispute — read from the axis the
   // person answered the argued claim on.
   const { data: positions } = usePersonPositions(personId);
@@ -83,12 +80,11 @@ export function PersonDebatesCollection({
     return map;
   }, [debates, responseKindByClaimId]);
 
-  const keyframeByDebateId = useDebateKeyframes(debates);
-
   // Space and Topic filters, matching the Claims collection. Space is the debate's own resolved
   // space; Topic is the argued claim's topics, reused from `usePersonClaims`' cache.
   const [selectedSpace, setSelectedSpace] = React.useState(ALL_FILTER);
   const [selectedTopic, setSelectedTopic] = React.useState(ALL_FILTER);
+  const [pageIndex, setPageIndex] = React.useState(0);
 
   const { topicsByClaimHex } = usePersonClaims(personId);
 
@@ -126,6 +122,30 @@ export function PersonDebatesCollection({
     [debates, spaceByDebateId, topicsByDebateId, selectedSpace, selectedTopic]
   );
 
+  const lastPageIndex = Math.max(0, Math.ceil(visible.length / DEBATES_PAGE_SIZE) - 1);
+  const currentPageIndex = Math.min(pageIndex, lastPageIndex);
+  const page = React.useMemo(
+    () => visible.slice(currentPageIndex * DEBATES_PAGE_SIZE, (currentPageIndex + 1) * DEBATES_PAGE_SIZE),
+    [currentPageIndex, visible]
+  );
+  const hasNextPage = currentPageIndex < lastPageIndex;
+
+  const selectSpace = React.useCallback((spaceId: string) => {
+    setSelectedSpace(spaceId);
+    setPageIndex(0);
+  }, []);
+  const selectTopic = React.useCallback((topicId: string) => {
+    setSelectedTopic(topicId);
+    setPageIndex(0);
+  }, []);
+
+  const participantSpaceIds = React.useMemo(
+    () => [...new Set(page.flatMap(debate => (sidesByDebateId.get(debate.id) ?? []).map(side => side.spaceId)))],
+    [page, sidesByDebateId]
+  );
+  const { profilesBySpaceId } = useProfilesBySpaceIds(participantSpaceIds, participantSpaceIds.length > 0);
+  const keyframeByDebateId = useDebateKeyframes(page);
+
   if (debateIds.length === 0) {
     if (debatesQuery.isLoading) return <Skeleton className="h-[120px] w-full rounded-lg" />;
     return null;
@@ -143,8 +163,8 @@ export function PersonDebatesCollection({
           topics={topics}
           selectedSpace={selectedSpace}
           selectedTopic={selectedTopic}
-          onSelectSpace={setSelectedSpace}
-          onSelectTopic={setSelectedTopic}
+          onSelectSpace={selectSpace}
+          onSelectTopic={selectTopic}
         />
       </div>
 
@@ -153,22 +173,31 @@ export function PersonDebatesCollection({
           No debates match these filters.
         </Text>
       ) : (
-        <ul className="m-0 flex list-none flex-col gap-2 p-0">
-          {visible.map(debate => (
-            <li key={debate.id}>
-              <DebateRow
-                debate={debate}
-                spaceId={spaceByDebateId.get(debate.id) ?? personId}
-                sides={sidesByDebateId.get(debate.id) ?? []}
-                profilesBySpaceId={profilesBySpaceId}
-                winnerShare={winnerShares.get(uuidToHex(debate.id)) ?? null}
-                keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
-                responseKind={responseKindByDebateId.get(debate.id) ?? 'stance'}
-                highlightedSpaceId={personId}
-              />
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
+            {page.map(debate => (
+              <li key={debate.id}>
+                <DebateRow
+                  debate={debate}
+                  spaceId={spaceByDebateId.get(debate.id) ?? personId}
+                  sides={sidesByDebateId.get(debate.id) ?? []}
+                  profilesBySpaceId={profilesBySpaceId}
+                  winnerShare={winnerShares.get(uuidToHex(debate.id)) ?? null}
+                  keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
+                  responseKind={responseKindByDebateId.get(debate.id) ?? 'stance'}
+                  highlightedSpaceId={personId}
+                />
+              </li>
+            ))}
+          </ul>
+          <CursorPager
+            isFirstPage={currentPageIndex === 0}
+            hasNextPage={hasNextPage}
+            isLoading={false}
+            onPrevious={() => setPageIndex(Math.max(0, currentPageIndex - 1))}
+            onNext={() => setPageIndex(Math.min(lastPageIndex, currentPageIndex + 1))}
+          />
+        </>
       )}
     </section>
   );
