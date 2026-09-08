@@ -10,7 +10,7 @@ import { EditProfileDialog } from './edit-profile-dialog';
 
 const mocks = vi.hoisted(() => ({
   publish: vi.fn(),
-  discard: vi.fn(),
+  reset: vi.fn(),
   canEdit: true,
   status: 'idle' as EditProfileStatus,
   errorMessage: null as string | null,
@@ -32,7 +32,7 @@ vi.mock('~/core/hooks/use-edit-profile', () => ({
     status: mocks.status,
     errorMessage: mocks.errorMessage,
     publish: mocks.publish,
-    discard: mocks.discard,
+    reset: mocks.reset,
   }),
 }));
 
@@ -47,7 +47,7 @@ const saveButton = () => screen.getByRole('button', { name: /Save profile|Publis
 
 beforeEach(() => {
   mocks.publish.mockReset();
-  mocks.discard.mockReset();
+  mocks.reset.mockReset();
   mocks.canEdit = true;
   mocks.status = 'idle';
   mocks.errorMessage = null;
@@ -141,7 +141,7 @@ describe('EditProfileDialog', () => {
       await userEvent.click(closeButtons[1]);
 
       expect(onOpenChange).toHaveBeenCalledWith(false);
-      expect(mocks.discard).not.toHaveBeenCalled();
+      expect(mocks.reset).not.toHaveBeenCalled();
     });
   });
 
@@ -169,7 +169,7 @@ describe('EditProfileDialog', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-      expect(mocks.discard).toHaveBeenCalled();
+      expect(mocks.reset).toHaveBeenCalled();
     });
   });
 
@@ -179,6 +179,27 @@ describe('EditProfileDialog', () => {
 
     expect(screen.getByText('We couldn’t find your profile to edit. Try reloading the page.')).toBeInTheDocument();
     expect(saveButton()).toBeDisabled();
+  });
+
+  // The hook outlives the close, so a status left on 'published' would make this
+  // effect fire again on the next open and shut the modal instantly.
+  it('resets the hook when it closes itself after a success, so it can reopen', () => {
+    mocks.status = 'published';
+    const { onOpenChange } = renderDialog();
+
+    expect(mocks.reset).toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  // The publish the user walked away from still lands. Clearing only while open
+  // would leave the status on 'published' and shut the modal on the next open.
+  it('clears a success that arrives after the user already closed it', () => {
+    mocks.status = 'published';
+    const onOpenChange = vi.fn();
+    render(<EditProfileDialog open={false} onOpenChange={onOpenChange} />);
+
+    expect(mocks.reset).toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
   });
 
   it('rejects a dropped file the picker’s accept filter would never have allowed', async () => {

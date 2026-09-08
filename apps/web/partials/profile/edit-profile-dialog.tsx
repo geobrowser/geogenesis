@@ -11,6 +11,7 @@ import { type ProfileImageEdit, useEditProfile } from '~/core/hooks/use-edit-pro
 import { Button, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 import { Warning } from '~/design-system/icons/warning';
+import { Input, inputStyles } from '~/design-system/input';
 
 import { ProfileImageField } from './profile-image-field';
 
@@ -39,7 +40,7 @@ type Props = {
  * hand-off to the status bar rather than a cancel.
  */
 export function EditProfileDialog({ open, onOpenChange }: Props) {
-  const { canEdit, isLoading, current, status, errorMessage, publish, discard } = useEditProfile({ isOpen: open });
+  const { canEdit, isLoading, current, status, errorMessage, publish, reset } = useEditProfile({ isOpen: open });
 
   const [name, setName] = React.useState('');
   const [description, setDescription] = React.useState('');
@@ -74,11 +75,18 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   }, []);
 
   // A finished publish is the one case where the modal closes itself.
+  //
+  // The clearing is not conditional on being open. The hook outlives the close —
+  // the navbar keeps it mounted so a publish the user walked away from still
+  // lands — so a success that arrives after they closed would otherwise leave the
+  // status on 'published', and this effect would shut the modal on sight the next
+  // time they opened it.
   React.useEffect(() => {
-    if (status !== 'published' || !open) return;
+    if (status !== 'published') return;
     resetForm();
-    onOpenChange(false);
-  }, [status, open, onOpenChange, resetForm]);
+    reset();
+    if (open) onOpenChange(false);
+  }, [status, open, onOpenChange, resetForm, reset]);
 
   const setImage = (kind: 'banner' | 'avatar', next: ImageState) => {
     const setter = kind === 'banner' ? setBanner : setAvatar;
@@ -102,11 +110,18 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
 
   const hasFailed = status === 'error';
   const isUnavailable = !canEdit && !isLoading;
+
+  // Compared the way they are published — trimmed, and with a removal of an image
+  // that was never set counting as no change. Otherwise Save offers to publish an
+  // edit that resolves to no ops, which the SDK rejects as "Nothing to publish".
+  const changesImage = (state: ImageState, currentUrl: string | undefined) =>
+    state.edit.kind === 'replaced' || (state.edit.kind === 'removed' && Boolean(currentUrl));
+
   const hasChanges =
-    name !== current.name ||
-    description !== current.description ||
-    banner.edit.kind !== 'unchanged' ||
-    avatar.edit.kind !== 'unchanged';
+    name.trim() !== current.name ||
+    description.trim() !== current.description ||
+    changesImage(banner, current.bannerUrl) ||
+    changesImage(avatar, current.avatarUrl);
 
   // A failed save has already written its rows to the local store, so the entity
   // now reads back the edit and `hasChanges` goes false. Retry has to stay live
@@ -117,7 +132,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     // Closing mid-publish hands off to the status bar; it does not cancel the
     // write, and the staged edit stays put so the retry there can re-send it.
     if (!isPublishing) {
-      discard();
+      reset();
       resetForm();
     }
     onOpenChange(false);
@@ -197,7 +212,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
             <div className="flex flex-col gap-4 px-5 pt-5">
               <label className="flex flex-col gap-1.5">
                 <span className="text-metadataMedium text-grey-04">Name</span>
-                <input
+                <Input
                   value={name}
                   onChange={event => {
                     isPristineRef.current = false;
@@ -205,7 +220,6 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   }}
                   disabled={isPublishing}
                   placeholder="Your name"
-                  className="w-full appearance-none rounded px-[10px] py-[9px] text-input text-text shadow-inner shadow-grey-02 outline-hidden transition-all duration-150 placeholder:text-grey-03 hover:shadow-text focus:shadow-inner-lg focus:shadow-text disabled:cursor-not-allowed disabled:bg-divider disabled:text-grey-03 disabled:hover:shadow-grey-02"
                 />
               </label>
 
@@ -220,7 +234,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   disabled={isPublishing}
                   rows={3}
                   placeholder="A sentence about who you are and what you work on."
-                  className="w-full resize-none appearance-none rounded px-[10px] py-[9px] text-input text-text shadow-inner shadow-grey-02 outline-hidden transition-all duration-150 placeholder:text-grey-03 hover:shadow-text focus:shadow-inner-lg focus:shadow-text disabled:cursor-not-allowed disabled:bg-divider disabled:text-grey-03 disabled:hover:shadow-grey-02"
+                  className={cx(inputStyles(), 'resize-none')}
                 />
                 <span className="text-footnote text-grey-04">Shown under your name across Geo.</span>
               </label>

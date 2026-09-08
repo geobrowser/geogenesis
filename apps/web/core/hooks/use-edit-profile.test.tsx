@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ID } from '~/core/id';
 import type { Relation, Value } from '~/core/types';
 
 import { useEditProfile } from './use-edit-profile';
@@ -116,6 +117,20 @@ function relation(overrides: Partial<Relation>): Relation {
 }
 
 const UNCHANGED = { kind: 'unchanged' } as const;
+
+/** The value id `stage` derives for a property, so fixtures can be found by it. */
+const valueId = (propertyId: string) => ID.createValueId({ entityId: ENTITY_ID, propertyId, spaceId: SPACE_ID });
+
+/** A local row the staging pass would have written, so it survives the collection. */
+const stagedValue = (propertyId: string) =>
+  ({
+    id: valueId(propertyId),
+    entity: { id: ENTITY_ID },
+    property: { id: propertyId },
+    spaceId: SPACE_ID,
+    isLocal: true,
+    hasBeenPublished: false,
+  }) as unknown as Value;
 
 const draft = (overrides: Partial<Parameters<ReturnType<typeof useEditProfile>['publish']>[0]> = {}) => ({
   name: 'Preston',
@@ -252,6 +267,7 @@ describe('useEditProfile', () => {
   });
 
   it('retries the same staged edit without uploading the file a second time', async () => {
+    mocks.storeRelations = [relation({ id: 'new-relation' })];
     mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
 
     const { result } = renderHook(() => useEditProfile({ isOpen: true }));
@@ -272,7 +288,9 @@ describe('useEditProfile', () => {
     expect(mocks.makeProposal).toHaveBeenCalledTimes(2);
   });
 
-  it('clears the global publish error while the modal is still showing its own', async () => {
+  // The fields stay live in the error state, so Retry after an edit is a new edit.
+  it('re-stages when the draft changed since the failed attempt', async () => {
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
     mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
 
     const { result } = renderHook(() => useEditProfile({ isOpen: true }));
@@ -280,20 +298,52 @@ describe('useEditProfile', () => {
     await act(async () => {
       await result.current.publish(draft({ name: 'Preston M' }));
     });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston Mantel' }));
+    });
+
+    // The stale rows go back before the corrected ones are written, and the
+    // publish carries the name the user actually has on screen.
+    expect(mocks.clearLocalChangesByIds).toHaveBeenCalled();
+    expect(mocks.setValue).toHaveBeenLastCalledWith(expect.objectContaining({ value: 'Preston Mantel' }));
+  });
+
+  it('clears the global publish error while the modal is still showing its own', async () => {
+    // usePublish calls onError *before* dispatching the error, so the suppression
+    // has to run after both — this is the ordering that made the old one a no-op.
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+
+    const { result, rerender } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    mocks.reviewState = 'publish-error';
+    rerender();
 
     expect(mocks.dispatch).toHaveBeenCalledWith({ type: 'SET_REVIEW_STATE', payload: 'idle' });
   });
 
   it('leaves the global error alone once the modal has been closed', async () => {
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
     mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
 
-    const { result } = renderHook(({ isOpen }) => useEditProfile({ isOpen }), {
+    const { result, rerender } = renderHook(({ isOpen }) => useEditProfile({ isOpen }), {
       initialProps: { isOpen: false },
     });
 
     await act(async () => {
       await result.current.publish(draft({ name: 'Preston M' }));
     });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    mocks.reviewState = 'publish-error';
+    rerender({ isOpen: false });
 
     // The status bar is the hand-off; it has to keep the failure it is showing.
     expect(mocks.dispatch).not.toHaveBeenCalled();
@@ -353,16 +403,7 @@ describe('useEditProfile', () => {
   });
 
   it('rolls the staged rows back out of the local store when the edit is abandoned', async () => {
-    mocks.storeValues = [
-      {
-        id: 'staged-value',
-        entity: { id: ENTITY_ID },
-        spaceId: SPACE_ID,
-        isLocal: true,
-        property: { id: SystemIds.NAME_PROPERTY },
-      } as unknown as Value,
-    ];
-    mocks.storeRelations = [relation({ id: 'staged-relation' })];
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
     mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
 
     const { result } = renderHook(() => useEditProfile({ isOpen: true }));
@@ -372,19 +413,114 @@ describe('useEditProfile', () => {
     });
     await waitFor(() => expect(result.current.status).toBe('error'));
 
-    act(() => result.current.discard());
+    act(() => result.current.reset());
 
     expect(mocks.clearLocalChangesByIds).toHaveBeenCalledWith({
       spaceId: SPACE_ID,
-      valueIds: ['staged-value'],
-      relationIds: ['staged-relation'],
+      valueIds: [valueId(SystemIds.NAME_PROPERTY)],
+      relationIds: [],
     });
     expect(result.current.status).toBe('idle');
+  });
+
+  // Only this modal's rows. An unrelated pending edit on the same entity must not
+  // ride along on the publish, nor be rolled back when this one is abandoned.
+  it('leaves a pending edit made elsewhere on the entity out of the publish', async () => {
+    const ours = stagedValue(SystemIds.NAME_PROPERTY);
+    const theirs = {
+      id: 'someone-elses-row',
+      entity: { id: ENTITY_ID },
+      property: { id: 'unrelated-property' },
+      spaceId: SPACE_ID,
+      isLocal: true,
+      hasBeenPublished: false,
+    } as unknown as Value;
+    mocks.storeValues = [ours, theirs];
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }));
+    });
+
+    expect(mocks.makeProposal).toHaveBeenCalledWith(expect.objectContaining({ values: [ours] }));
+  });
+
+  it('rolls back the rows already written when an upload fails midway', async () => {
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
+    mocks.createAndLink.mockRejectedValueOnce(new Error('IPFS is down'));
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+    const file = new File([''], 'banner.png', { type: 'image/png' });
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M', banner: { kind: 'replaced', file } }));
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    // The name value landed before the upload threw. Left behind it becomes a
+    // pending edit on the personal space for a save that never happened.
+    expect(mocks.clearLocalChangesByIds).toHaveBeenCalledWith(
+      expect.objectContaining({ valueIds: [valueId(SystemIds.NAME_PROPERTY)] })
+    );
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+  });
+
+  it('settles an edit that resolves to nothing instead of publishing an empty proposal', async () => {
+    // Removing an image that was never set stages no rows; usePublish would
+    // reject that with its generic "Nothing to publish".
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ banner: { kind: 'removed' } }));
+    });
+
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('published');
+  });
+
+  it('clears its status after a success so the modal can be opened again', async () => {
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
+    mocks.makeProposal.mockImplementationOnce(async ({ onSuccess }: { onSuccess: () => void }) => onSuccess());
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('published'));
+
+    act(() => result.current.reset());
+
+    // A status stuck on 'published' makes the dialog's auto-close effect fire on
+    // the next open, shutting it instantly for the rest of the session.
+    expect(result.current.status).toBe('idle');
+    // Nothing staged is left to undo.
+    expect(mocks.clearLocalChangesByIds).not.toHaveBeenCalled();
+  });
+
+  it('ignores a publish-complete left over from an earlier publish', async () => {
+    // The review state lingers on 'publish-complete' for 3s after any publish in
+    // the app. Settling on the value rather than the transition marked a save that
+    // had only just started as already succeeded.
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
+    mocks.reviewState = 'publish-complete';
+    mocks.makeProposal.mockImplementationOnce(() => new Promise(() => {}));
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    act(() => {
+      void result.current.publish(draft({ name: 'Preston M' }));
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('publishing'));
+    expect(result.current.status).toBe('publishing');
   });
 
   it('settles on the review state rather than waiting out the success animation', async () => {
     // makeProposal resolves ~3s after the write lands. The modal cannot keep
     // saying "about 10 seconds" through that window.
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
     mocks.makeProposal.mockImplementationOnce(() => new Promise(() => {}));
 
     const { result, rerender } = renderHook(() => useEditProfile({ isOpen: true }));

@@ -12,6 +12,7 @@ import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { ID } from '~/core/id';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
@@ -38,12 +39,18 @@ export type ProfileDraft = {
 
 export type EditProfileStatus = 'idle' | 'publishing' | 'error' | 'published';
 
+/** Ids of the local rows this modal wrote, so exactly those can be rolled back. */
+type StagedRows = { valueIds: Set<string>; relationIds: Set<string> };
+
 /** The local rows one save produced, kept so Retry re-sends them without re-uploading. */
 type StagedEdit = {
   values: Value[];
   relations: Relation[];
   /** ipfs:// URL of the newly uploaded avatar, or '' when the avatar was removed. */
   nextAvatarUrl: string | null;
+  rows: StagedRows;
+  /** The draft these rows came from, so Retry can tell a re-send from a new edit. */
+  draft: ProfileDraft;
 };
 
 const IMAGE_PROPERTIES = {
@@ -89,11 +96,6 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
   const stagedRef = React.useRef<StagedEdit | null>(null);
 
-  // The dialog owns "open"; the publish continues after it closes, so the error
-  // handler reads the live value rather than closing over a stale one.
-  const isOpenRef = React.useRef(isOpen);
-  isOpenRef.current = isOpen;
-
   // Relations are read imperatively during save, after the awaited uploads, so a
   // ref keeps them current without making `stage` depend on every render.
   const entityRelationsRef = React.useRef<Relation[]>(entity.relations);
@@ -115,118 +117,141 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
     [entity.name, entity.description, bannerUrl, avatarUrl, profile?.name, profile?.avatarUrl]
   );
 
+  const rollback = React.useCallback(
+    (rows: StagedRows) => {
+      if (!spaceId) return;
+      store.clearLocalChangesByIds({
+        spaceId,
+        valueIds: [...rows.valueIds],
+        relationIds: [...rows.relationIds],
+      });
+    },
+    [spaceId]
+  );
+
   const stage = React.useCallback(
     async (draft: ProfileDraft): Promise<StagedEdit> => {
-      // Every entity whose rows this edit touches. Used to scope the collection
-      // below so we publish this edit rather than everything pending in the space.
-      const touchedEntityIds = new Set<string>([entityId]);
+      // Row ids this modal wrote, tracked as it goes so a failed upload can undo
+      // the writes that already landed. Scoping the collection below to these —
+      // rather than to everything unpublished on the person entity — keeps an
+      // unrelated pending edit from riding along on the publish, and from being
+      // rolled back when this one is abandoned.
+      const written: StagedRows = { valueIds: new Set(), relationIds: new Set() };
+      // Freshly minted image entities are ours by definition, so their rows can be
+      // swept by entity id without that risk.
+      const imageEntityIds = new Set<string>();
       let nextAvatarUrl: string | null = null;
 
-      if (draft.name !== current.name) {
+      const setValue = (propertyId: string, propertyName: string, value: string) => {
+        const id = ID.createValueId({ entityId, propertyId, spaceId });
         storage.values.set({
+          id,
           entity: { id: entityId, name: draft.name },
-          property: { id: SystemIds.NAME_PROPERTY, name: 'Name', dataType: 'TEXT', renderableType: 'TEXT' },
+          property: { id: propertyId, name: propertyName, dataType: 'TEXT', renderableType: 'TEXT' },
           spaceId,
-          value: draft.name,
+          value,
         });
-      }
+        written.valueIds.add(id);
+      };
 
-      if (draft.description !== current.description) {
-        if (draft.description === '') {
-          const existing = getValues({
-            selector: v =>
-              v.entity.id === entityId && v.property.id === SystemIds.DESCRIPTION_PROPERTY && v.spaceId === spaceId,
-          });
-          storage.values.deleteMany(existing);
-        } else {
-          storage.values.set({
-            entity: { id: entityId, name: draft.name },
-            property: {
-              id: SystemIds.DESCRIPTION_PROPERTY,
-              name: 'Description',
-              dataType: 'TEXT',
-              renderableType: 'TEXT',
-            },
+      try {
+        if (draft.name !== current.name) {
+          setValue(SystemIds.NAME_PROPERTY, 'Name', draft.name);
+        }
+
+        if (draft.description !== current.description) {
+          if (draft.description === '') {
+            const existing = getValues({
+              selector: v =>
+                v.entity.id === entityId && v.property.id === SystemIds.DESCRIPTION_PROPERTY && v.spaceId === spaceId,
+            });
+            storage.values.deleteMany(existing);
+            existing.forEach(v => written.valueIds.add(v.id));
+          } else {
+            setValue(SystemIds.DESCRIPTION_PROPERTY, 'Description', draft.description);
+          }
+        }
+
+        for (const kind of ['banner', 'avatar'] as const) {
+          const edit = draft[kind];
+          if (edit.kind === 'unchanged') continue;
+
+          const property = IMAGE_PROPERTIES[kind];
+
+          // Replace and remove both start by dropping the existing edge. The publish
+          // layer cascades the orphaned image entity for cover/avatar relations.
+          const existing = entityRelationsRef.current.filter(
+            relation => relation.type.id === property.id && relation.fromEntity.id === entityId
+          );
+          storage.relations.deleteMany(existing);
+          existing.forEach(r => written.relationIds.add(r.id));
+
+          if (edit.kind === 'removed') {
+            // Only report a cleared avatar to the navbar when there was one to clear.
+            if (kind === 'avatar' && existing.length > 0) nextAvatarUrl = '';
+            continue;
+          }
+
+          const { imageId, relationId } = await storage.images.createAndLink({
+            file: edit.file,
+            fromEntityId: entityId,
+            fromEntityName: draft.name,
+            relationPropertyId: property.id,
+            relationPropertyName: property.name,
             spaceId,
-            value: draft.description,
           });
+
+          imageEntityIds.add(imageId);
+          written.relationIds.add(relationId);
+
+          if (kind === 'avatar') {
+            nextAvatarUrl = findMediaUrlValue(getValues({ selector: v => v.entity.id === imageId })) ?? null;
+          }
         }
+      } catch (error) {
+        // The name value and the deleted relations are already in the store. Left
+        // there they become pending edits on the personal space for a save that
+        // never happened.
+        rollback({ valueIds: written.valueIds, relationIds: written.relationIds });
+        throw error;
       }
 
-      for (const kind of ['banner', 'avatar'] as const) {
-        const edit = draft[kind];
-        if (edit.kind === 'unchanged') continue;
+      const isLocalUnpublished = (row: { spaceId: string; isLocal?: boolean; hasBeenPublished?: boolean }) =>
+        row.spaceId === spaceId && row.isLocal === true && row.hasBeenPublished !== true;
 
-        const property = IMAGE_PROPERTIES[kind];
-
-        // Replace and remove both start by dropping the existing edge. The publish
-        // layer cascades the orphaned image entity for cover/avatar relations.
-        const existing = entityRelationsRef.current.filter(
-          relation => relation.type.id === property.id && relation.fromEntity.id === entityId
-        );
-        storage.relations.deleteMany(existing);
-
-        if (edit.kind === 'removed') {
-          if (kind === 'avatar') nextAvatarUrl = '';
-          continue;
-        }
-
-        const { imageId } = await storage.images.createAndLink({
-          file: edit.file,
-          fromEntityId: entityId,
-          fromEntityName: draft.name,
-          relationPropertyId: property.id,
-          relationPropertyName: property.name,
-          spaceId,
-        });
-
-        touchedEntityIds.add(imageId);
-
-        if (kind === 'avatar') {
-          nextAvatarUrl = findMediaUrlValue(getValues({ selector: v => v.entity.id === imageId })) ?? null;
-        }
-      }
-
-      const isOurs = (relation: Relation) =>
-        touchedEntityIds.has(relation.fromEntity.id) || touchedEntityIds.has(relation.entityId);
+      const values = getValues({
+        includeDeleted: true,
+        selector: v => isLocalUnpublished(v) && (written.valueIds.has(v.id) || imageEntityIds.has(v.entity.id)),
+      });
+      const relations = getRelations({
+        includeDeleted: true,
+        selector: r => isLocalUnpublished(r) && (written.relationIds.has(r.id) || imageEntityIds.has(r.fromEntity.id)),
+      });
 
       return {
-        values: getValues({
-          includeDeleted: true,
-          selector: v =>
-            v.spaceId === spaceId &&
-            v.isLocal === true &&
-            v.hasBeenPublished !== true &&
-            touchedEntityIds.has(v.entity.id),
-        }),
-        relations: getRelations({
-          includeDeleted: true,
-          selector: r => r.spaceId === spaceId && r.isLocal === true && r.hasBeenPublished !== true && isOurs(r),
-        }),
+        values,
+        relations,
         nextAvatarUrl,
+        rows: { valueIds: new Set(values.map(v => v.id)), relationIds: new Set(relations.map(r => r.id)) },
+        draft,
       };
     },
-    [current.description, current.name, entityId, spaceId, storage]
+    [current.description, current.name, entityId, rollback, spaceId, storage]
   );
 
   /**
-   * Drop the local rows this modal staged, restoring the entity to its synced
-   * state. Called when the user walks away from a failed save so the personal
-   * space isn't left carrying an edit they abandoned.
+   * Return to idle, undoing anything still staged. Used both when the user walks
+   * away from a failed save — so the personal space isn't left carrying an edit
+   * they abandoned — and after a successful one, where there is nothing left to
+   * undo but the status still has to clear for the modal to reopen.
    */
-  const discard = React.useCallback(() => {
+  const reset = React.useCallback(() => {
     const staged = stagedRef.current;
     stagedRef.current = null;
     setStatus('idle');
     setErrorMessage(null);
-    if (!staged || !spaceId) return;
-
-    store.clearLocalChangesByIds({
-      spaceId,
-      valueIds: staged.values.map(v => v.id),
-      relationIds: staged.relations.map(r => r.id),
-    });
-  }, [spaceId]);
+    if (staged) rollback(staged.rows);
+  }, [rollback]);
 
   const settleSuccess = React.useCallback(() => {
     const staged = stagedRef.current;
@@ -245,22 +270,49 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   // it holds its success state on screen first. The modal cannot keep saying
   // "about 10 seconds" through that window, so completion is taken from the
   // review state the publish dispatches, and `onSuccess` below is the backstop.
+  //
+  // Only a transition counts. That state lingers for the same three seconds after
+  // *any* publish in the app, so a save started inside that window would otherwise
+  // be settled as succeeded before it had run.
+  const previousReviewState = React.useRef(statusBarState.reviewState);
   React.useEffect(() => {
+    const previous = previousReviewState.current;
+    previousReviewState.current = statusBarState.reviewState;
+
     if (status !== 'publishing') return;
-    if (statusBarState.reviewState !== 'publish-complete') return;
+    if (statusBarState.reviewState !== 'publish-complete' || previous === 'publish-complete') return;
     settleSuccess();
   }, [settleSuccess, status, statusBarState.reviewState]);
+
+  // `usePublish` calls `onError` *before* dispatching the error, so clearing the
+  // global copy from inside that callback is overwritten a line later. An effect
+  // runs after both. While this modal is open it owns the failure — including
+  // Retry — and two stacked error dialogs would offer two independent retries;
+  // once it is closed the status bar is the hand-off and keeps its own.
+  React.useEffect(() => {
+    if (status !== 'error' || !isOpen) return;
+    if (statusBarState.reviewState !== 'publish-error') return;
+    dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+  }, [dispatch, isOpen, status, statusBarState.reviewState]);
 
   const publish = React.useCallback(
     async (draft: ProfileDraft) => {
       if (!canEdit) return;
+
+      // Retry re-sends the staged rows so the uploads inside only run once — but
+      // only while it is still the same edit. The fields stay live in the error
+      // state, so a draft the user has since changed has to be re-staged, or
+      // Retry would publish what they just edited away from and report success.
+      if (stagedRef.current && !isSameDraft(stagedRef.current.draft, draft)) {
+        rollback(stagedRef.current.rows);
+        stagedRef.current = null;
+      }
 
       setStatus('publishing');
       setErrorMessage(null);
 
       if (!stagedRef.current) {
         try {
-          // Retry re-sends this same edit, so the uploads inside only ever run once.
           stagedRef.current = await stage(draft);
         } catch (error) {
           console.error('[edit-profile] failed to stage profile edit', error);
@@ -272,6 +324,15 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
       const staged = stagedRef.current;
 
+      // Some edits resolve to nothing to write — removing an image that was never
+      // set, or a change that trims away to the value already there. Publishing
+      // them earns the SDK's generic "Nothing to publish" error for what is really
+      // a no-op, so settle them as done instead.
+      if (staged.values.length === 0 && staged.relations.length === 0) {
+        settleSuccess();
+        return;
+      }
+
       await makeProposal({
         values: staged.values,
         relations: staged.relations,
@@ -281,16 +342,10 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         onError: () => {
           setStatus('error');
           setErrorMessage('Couldn’t publish your profile. Your changes are still here — try again.');
-
-          // The global status bar renders publish errors as its own full-screen
-          // modal. While this one is open it owns the failure — including Retry —
-          // so clear the global copy rather than stacking two error dialogs. Once
-          // the modal is closed the status bar is the hand-off and keeps it.
-          if (isOpenRef.current) dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
         },
       });
     },
-    [canEdit, dispatch, makeProposal, settleSuccess, spaceId, stage]
+    [canEdit, makeProposal, rollback, settleSuccess, spaceId, stage]
   );
 
   return {
@@ -302,6 +357,18 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
     status,
     errorMessage,
     publish,
-    discard,
+    reset,
   };
+}
+
+function isSameDraft(a: ProfileDraft, b: ProfileDraft) {
+  const sameImage = (x: ProfileImageEdit, y: ProfileImageEdit) =>
+    x.kind === y.kind && (x.kind !== 'replaced' || x.file === (y as { file: File }).file);
+
+  return (
+    a.name === b.name &&
+    a.description === b.description &&
+    sameImage(a.banner, b.banner) &&
+    sameImage(a.avatar, b.avatar)
+  );
 }
