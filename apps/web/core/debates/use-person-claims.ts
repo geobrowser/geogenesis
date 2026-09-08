@@ -77,9 +77,9 @@ export function usePersonClaims(personId: string): PersonClaimsData {
 }
 
 /** Distinct topics across the person's claims, sorted by name — the topic filter's options. */
-export function personTopics(topicsByClaimHex: Map<string, PersonClaimTopic[]>): PersonClaimTopic[] {
+export function personTopics(topicsByEntityId: Map<string, PersonClaimTopic[]>): PersonClaimTopic[] {
   const seen = new Map<string, PersonClaimTopic>();
-  for (const topics of topicsByClaimHex.values()) {
+  for (const topics of topicsByEntityId.values()) {
     for (const topic of topics) {
       const key = uuidToHex(topic.id);
       if (!seen.has(key)) seen.set(key, topic);
