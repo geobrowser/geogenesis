@@ -18,6 +18,7 @@ import {
   decodeExploreCardEntity,
 } from './explore-card-item';
 import { EXPLORE_ENTITY_NAME_PROPERTY_ID, EXPLORE_PAGE_SIZE } from './explore-constants';
+import { CLAIMS_REQUIRE_DEBATE_TAG_FILTER } from './explore-debate-tag-filter';
 import { EXPLORE_DIVERSITY_WINDOW_SIZE, applyDiversityCap, exploreItemTypeKey } from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
@@ -130,11 +131,13 @@ function buildFeedFilter(args: {
   time: ExploreTime;
   typeIds?: readonly string[];
   requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
   includeEntityScopeInFilter?: boolean;
 }): EntityFilter {
   const t = timeThresholdSec(args.time);
   return {
     ...FEED_EXCLUDED_RELATIONS_FILTER,
+    ...(args.requireDebateTagOnClaims ? CLAIMS_REQUIRE_DEBATE_TAG_FILTER : {}),
     ...(args.includeEntityScopeInFilter
       ? {
           spaceIds: { overlaps: [...args.spaceIds] },
@@ -164,6 +167,7 @@ async function fetchExploreEntitiesPage(args: {
   orderBy: EntitiesOrderBy[];
   typeIds?: readonly string[];
   requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
 }): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
@@ -190,6 +194,7 @@ async function fetchTopEntitiesPage(args: {
   after: string | null;
   typeIds?: readonly string[];
   requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
 }): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
@@ -216,11 +221,16 @@ async function fetchTopEntitiesPage(args: {
 
 // "Best" sort: the Phase A ranked feed via `entitiesRankedForFeedConnection`.
 //
-// Unlike the other two this passes no `filter`. Candidate generation inside
-// `entities_ranked_for_feed` already enforces every clause `buildFeedFilter` builds —
-// name presence, system entities, excluded block types — and takes space, type and
-// recency as its own arguments. See explore-best-document for why sending them twice is
-// not merely redundant.
+// Unlike the other two this sends no `buildFeedFilter`. Candidate generation inside
+// `entities_ranked_for_feed` already enforces every clause it builds — name presence,
+// system entities, excluded block types — and takes space, type and recency as its own
+// arguments. See explore-best-document for why sending them twice is not merely
+// redundant.
+//
+// The debate-tag clause is the one thing that connection does not already know about, so
+// it is the only `filter` this sort ever sends (GEO-2835). It could not be applied to the
+// rows here instead: the tag is not part of the card selection, and a page that dropped
+// most of its claims after the fact would serve short pages and page unevenly.
 //
 // `requireName` is therefore not honoured here: an entity with no name is never a
 // candidate, server-side, and cannot be opted back in. Nothing passes
@@ -234,6 +244,7 @@ async function fetchBestEntitiesPage(args: {
   time: ExploreTime;
   limit: number;
   after: string | null;
+  requireDebateTagOnClaims?: boolean;
 }): Promise<ExploreEntitiesPageResponse> {
   const t = timeThresholdSec(args.time);
   return Effect.runPromise(
@@ -256,6 +267,9 @@ async function fetchBestEntitiesPage(args: {
         // are 1.7x and 2.3x slower with the argument rather than 135x, and they have no
         // equivalent cliff, so New and Top keep filtering server-side where it is exact.
         createdAfter: t != null ? String(t) : undefined,
+        // Left undefined when the caller does not ask for the tag gate, so the sort keeps its
+        // no-filter fast path unless there is a clause the connection genuinely does not know.
+        filter: args.requireDebateTagOnClaims ? CLAIMS_REQUIRE_DEBATE_TAG_FILTER : undefined,
         spaceIdsForLists: args.spaceIds,
       },
     })
@@ -294,6 +308,13 @@ export async function fetchExploreFeed(args: {
   typeIds?: readonly string[];
   /** If true (default), filter out entities with null or empty `name`. */
   requireName?: boolean;
+  /**
+   * If true, a Claim reaches the feed only if it carries the `Debate` tag (GEO-2835). Every other
+   * type is unaffected. Off by default, and off for the one caller that is not Explore: a space's
+   * activity feed is a log of what has been edited there, and a claim nobody has curated yet is
+   * precisely the kind of edit it exists to show.
+   */
+  requireDebateTagOnClaims?: boolean;
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
   const wanted = args.spaceFilterIds === null ? null : new Set(args.spaceFilterIds.map(normId));
@@ -368,6 +389,7 @@ export async function fetchExploreFeed(args: {
           time: args.time,
           limit: windowSize,
           after,
+          requireDebateTagOnClaims: args.requireDebateTagOnClaims,
         })
       : args.sort === 'top'
         ? await fetchTopEntitiesPage({
@@ -377,6 +399,7 @@ export async function fetchExploreFeed(args: {
             after,
             typeIds: args.typeIds,
             requireName: args.requireName,
+            requireDebateTagOnClaims: args.requireDebateTagOnClaims,
           })
         : await fetchExploreEntitiesPage({
             spaceIds: baseIds,
@@ -386,6 +409,7 @@ export async function fetchExploreFeed(args: {
             orderBy: [EntitiesOrderBy.CreatedAtDesc],
             typeIds: args.typeIds,
             requireName: args.requireName,
+            requireDebateTagOnClaims: args.requireDebateTagOnClaims,
           });
 
   const allRows = buildExploreFeedRows(page.entities, allowed, memberOrEditorSet);
