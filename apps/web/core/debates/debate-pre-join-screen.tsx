@@ -16,7 +16,6 @@ import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { AudioSettings, MobileSettingsSheet } from './audio-settings';
-import { DebateRecordingStatusPill } from './debate-recording-status-pill';
 import { CameraIcon, LeaveIcon, MicrophoneIcon, RecordingCircleButton } from './debate-room-controls';
 import { DebateVideoTile } from './debate-video-tile';
 import { DeviceOptionGroup } from './device-option-group';
@@ -44,10 +43,11 @@ export function DebatePreScreen({
   setRemoteMediaElement,
   remoteVideoReady,
   remotePresence,
-  capturing,
+  remoteCameraOff,
   previewStream,
   previewState,
   previewBusy,
+  switchingDevice,
   error,
   audioInputDevices,
   audioOutputDevices,
@@ -68,6 +68,8 @@ export function DebatePreScreen({
   onToggleVideoEnabled,
   canRetryConnection,
   onRetryConnection,
+  canTakeOverConnection,
+  onTakeOverConnection,
   readyBusy,
   onReady,
   onLeave,
@@ -82,10 +84,12 @@ export function DebatePreScreen({
   setRemoteMediaElement: (host: HTMLDivElement | null) => void;
   remoteVideoReady: boolean;
   remotePresence: DebatePreScreenRemotePresence;
-  capturing: boolean;
+  remoteCameraOff: boolean;
   previewStream: MediaStream | null;
   previewState: PreJoinMediaState;
   previewBusy: boolean;
+  /** A camera or microphone swap is in flight, so the tile has no stream to show meanwhile. */
+  switchingDevice: boolean;
   error: string | null;
   audioInputDevices: MediaDeviceOption[];
   audioOutputDevices: MediaDeviceOption[];
@@ -107,6 +111,9 @@ export function DebatePreScreen({
   onToggleVideoEnabled: () => void;
   canRetryConnection: boolean;
   onRetryConnection: () => void;
+  /** Another tab or device holds this debate and this one can claim it back. */
+  canTakeOverConnection: boolean;
+  onTakeOverConnection: () => void;
   readyBusy: boolean;
   onReady: () => void;
   onLeave: () => void;
@@ -132,6 +139,12 @@ export function DebatePreScreen({
 
   useScrollLock();
 
+  // The intro and the debate room are two `aria-modal` dialogs that replace each other, and the
+  // swap is triggered by the *other* participant — so without this, focus silently falls to
+  // `body` at the moment the recorded debate begins.
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => dialogRef.current?.focus(), []);
+
   const localTile = (
     <DebateVideoTile
       key="local"
@@ -143,16 +156,19 @@ export function DebatePreScreen({
       // grant, and everything jumped position the moment they did.
       overlayText={
         mediaReady
-          ? videoEnabled
-            ? null
-            : 'Camera off'
+          ? switchingDevice
+            ? 'Switching device…'
+            : videoEnabled
+              ? null
+              : 'Camera off'
           : previewState === 'requesting'
             ? 'Requesting camera and mic…'
             : mediaError
       }
       // Everything the unready states say is a sentence rather than a label.
-      overlayCompact={!mediaReady}
+      overlayCompact={!mediaReady || switchingDevice}
       inactiveIndicatorId="local"
+      tileLabel="You"
       showMutedIndicator={audioMuted}
       badge={localReady ? <PreScreenReadyBadge /> : null}
     >
@@ -171,15 +187,18 @@ export function DebatePreScreen({
       // from someone who was here and walked away.
       overlayText={
         remotePresence === 'left'
-          ? `${remoteName} left. They can come back at any time.`
+          ? `${remoteName} left the room.`
           : remotePresence === 'absent'
             ? `Waiting for ${remoteName} to join…`
-            : remoteVideoReady
-              ? null
-              : 'Waiting for video'
+            : !remoteVideoReady
+              ? 'Waiting for video'
+              : remoteCameraOff
+                ? `${remoteName} turned their camera off`
+                : null
       }
       overlayCompact={remotePresence !== 'present'}
       inactiveIndicatorId="remote"
+      tileLabel={remoteName}
       badge={remoteReady ? <PreScreenReadyBadge /> : null}
     >
       <div
@@ -194,14 +213,15 @@ export function DebatePreScreen({
 
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-label="Debate readiness"
-      className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text"
+      className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text outline-none"
     >
-      <DebateRecordingStatusPill recording={capturing} />
-
-      <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-2 py-8 sm:px-5">
+      {/* `pt-16` clears the fixed recording pill, which is centred over the top of both screens. */}
+      <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-2 pt-16 pb-8 sm:px-5">
         <h1 className="mb-2 max-w-[390px] text-center text-[1.375rem] leading-[1.1] font-semibold text-text">
           {claim}
         </h1>
@@ -224,18 +244,10 @@ export function DebatePreScreen({
         {mediaReady && (
           <div className="mt-3 w-full rounded-lg border border-grey-02 bg-white p-3">
             <div className="flex gap-[6px]">
-              <PreScreenToggle
-                ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
-                pressed={audioMuted}
-                onClick={onToggleAudioMuted}
-              >
+              <PreScreenToggle ariaLabel="Mute microphone" pressed={audioMuted} onClick={onToggleAudioMuted}>
                 <MicrophoneIcon muted={audioMuted} />
               </PreScreenToggle>
-              <PreScreenToggle
-                ariaLabel={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
-                pressed={!videoEnabled}
-                onClick={onToggleVideoEnabled}
-              >
+              <PreScreenToggle ariaLabel="Turn camera off" pressed={!videoEnabled} onClick={onToggleVideoEnabled}>
                 <CameraIcon disabled={!videoEnabled} />
               </PreScreenToggle>
             </div>
@@ -309,13 +321,13 @@ export function DebatePreScreen({
             <Text as="p" variant="metadata" color="red-01">
               {error}
             </Text>
-            {canRetryConnection && (
+            {(canTakeOverConnection || canRetryConnection) && (
               <button
                 type="button"
-                onClick={onRetryConnection}
+                onClick={canTakeOverConnection ? onTakeOverConnection : onRetryConnection}
                 className="inline-flex min-h-8 shrink-0 items-center justify-center rounded-full bg-text px-4 text-button text-white hover:bg-text/90"
               >
-                Reconnect
+                {canTakeOverConnection ? 'Continue here' : 'Reconnect'}
               </button>
             )}
           </div>

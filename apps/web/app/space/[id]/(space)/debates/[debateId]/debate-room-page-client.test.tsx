@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 
@@ -42,6 +42,8 @@ const mocks = vi.hoisted(() => ({
   roomConnect: vi.fn(),
   roomConstruct: vi.fn(),
   roomSwitchActiveDevice: vi.fn(),
+  roomRemoteParticipants: new Map<string, unknown>(),
+  roomLocalParticipant: { publishTrack: (...args: unknown[]) => mocks.publishTrack(...args) },
   roomDisconnect: vi.fn(),
   publishTrack: vi.fn(),
   supportsAudioOutputSelection: vi.fn(),
@@ -164,14 +166,13 @@ vi.mock('livekit-client', () => ({
       mocks.roomConstruct(options);
     }
 
-    localParticipant = {
-      publishTrack: mocks.publishTrack,
-    };
+    localParticipant = mocks.roomLocalParticipant;
 
     on = mocks.roomOn;
     connect = mocks.roomConnect;
     disconnect = mocks.roomDisconnect;
     switchActiveDevice = mocks.roomSwitchActiveDevice;
+    remoteParticipants = mocks.roomRemoteParticipants;
   },
   supportsAudioOutputSelection: mocks.supportsAudioOutputSelection,
   RoomEvent: {
@@ -179,6 +180,8 @@ vi.mock('livekit-client', () => ({
     TrackUnsubscribed: 'trackUnsubscribed',
     ParticipantConnected: 'participantConnected',
     ParticipantDisconnected: 'participantDisconnected',
+    TrackMuted: 'trackMuted',
+    TrackUnmuted: 'trackUnmuted',
     Reconnecting: 'reconnecting',
     Reconnected: 'reconnected',
     Disconnected: 'disconnected',
@@ -200,9 +203,9 @@ vi.mock('@livekit/krisp-noise-filter', () => ({
   KrispNoiseFilter: mocks.krispNoiseFilter,
 }));
 
-function emitRoomEvent(event: string, payload?: unknown) {
+function emitRoomEvent(event: string, ...payload: unknown[]) {
   for (const [registeredEvent, callback] of mocks.roomOn.mock.calls) {
-    if (registeredEvent === event) callback(payload);
+    if (registeredEvent === event) callback(...payload);
   }
 }
 
@@ -328,6 +331,7 @@ beforeEach(() => {
   mocks.roomOn.mockReset();
   mocks.roomSwitchActiveDevice.mockReset();
   mocks.roomSwitchActiveDevice.mockResolvedValue(true);
+  mocks.roomRemoteParticipants = new Map();
   mocks.capture.mockReset();
   // Tests run as an unfocused tab by default so the auto-takeover-on-focus effect stays quiet;
   // focused-tab scenarios opt in per test.
@@ -665,13 +669,65 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText('Recording')).not.toBeInTheDocument();
   });
 
+  // `installRecordingMocks` matters: without it `MediaRecorder` is undefined in jsdom and
+  // `startLocalRecorder` returns on its first line, so this asserted nothing. The debate is also
+  // given a recording window, leaving the status gate as the only thing holding capture back.
   it('never starts the recorder during the intro', async () => {
-    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    installRecordingMocks();
+    mocks.debate = {
+      ...readyDebate({ localReady: false, remoteReady: false }),
+      preflight_ends_at: '2026-07-02T00:00:05.000Z',
+    };
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText('Not recording')).toBeInTheDocument());
     expect(mocks.mediaRecorderConstruct).not.toHaveBeenCalled();
+    expect(mocks.mediaRecorderStart).not.toHaveBeenCalled();
+  });
+
+  it('shows the opponent as present when they were already in the room', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.roomRemoteParticipants = new Map([['user-b', {}]]);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Waiting for Bri to join…')).not.toBeInTheDocument());
+    expect(await screen.findByText('Waiting for video')).toBeInTheDocument();
+  });
+
+  it('explains a remote camera that has been turned off', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    const remoteVideo = document.createElement('video');
+    act(() => emitRoomEvent('trackSubscribed', { kind: 'video', attach: () => remoteVideo, detach: () => [remoteVideo] }));
+
+    act(() => emitRoomEvent('trackMuted', { kind: 'video' }, {}));
+    expect(await screen.findByText('Bri turned their camera off')).toBeInTheDocument();
+
+    act(() => emitRoomEvent('trackUnmuted', { kind: 'video' }, {}));
+    await waitFor(() => expect(screen.queryByText('Bri turned their camera off')).not.toBeInTheDocument());
+  });
+
+  // Your own camera toggle fires the same events; reading only the first argument reported it as
+  // the opponent's.
+  it('does not report the local camera toggle as the opponent turning theirs off', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    const remoteVideo = document.createElement('video');
+    act(() => emitRoomEvent('trackSubscribed', { kind: 'video', attach: () => remoteVideo, detach: () => [remoteVideo] }));
+
+    act(() => emitRoomEvent('trackMuted', { kind: 'video' }, mocks.roomLocalParticipant));
+
+    await waitFor(() => expect(screen.queryByText('Bri turned their camera off')).not.toBeInTheDocument());
   });
 
   it('shows the opponent as still joining until they reach the room', async () => {
@@ -687,7 +743,7 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByText('Waiting for video')).toBeInTheDocument();
 
     act(() => emitRoomEvent('participantDisconnected', {}));
-    expect(await screen.findByText('Bri left. They can come back at any time.')).toBeInTheDocument();
+    expect(await screen.findByText('Bri left the room.')).toBeInTheDocument();
   });
 
   it('blocks readiness while the combined camera and microphone request is pending', async () => {
@@ -1136,7 +1192,8 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(screen.getByText('Ready')).toBeInTheDocument();
+    expect(within(debateVideoTile('remote')).getByText('Ready')).toBeInTheDocument();
+    expect(within(debateVideoTile('local')).queryByText('Ready')).not.toBeInTheDocument();
     expect(await screen.findByRole('button', { name: "I'm ready too" })).toBeEnabled();
   });
 
@@ -1146,7 +1203,8 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByRole('button', { name: 'Waiting for Bri…' })).toBeDisabled();
-    expect(screen.getByText('Ready')).toBeInTheDocument();
+    expect(within(debateVideoTile('local')).getByText('Ready')).toBeInTheDocument();
+    expect(within(debateVideoTile('remote')).queryByText('Ready')).not.toBeInTheDocument();
   });
 
   // The intro screen and the debate room own different media elements, and the status flip swaps
@@ -1215,10 +1273,14 @@ describe('DebateRoomPageClient', () => {
 
     await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
-    await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
+    const microphone = screen.getByRole('button', { name: 'Mute microphone' });
+    expect(microphone).toHaveAttribute('aria-pressed', 'false');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+    fireEvent.click(microphone);
+    await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
+    expect(microphone).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(microphone);
     await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
   });
 
@@ -1235,8 +1297,95 @@ describe('DebateRoomPageClient', () => {
 
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
     // The stale session is let go of first, or LiveKit evicts the new one on duplicate identity.
-    expect(mocks.roomDisconnect).toHaveBeenCalled();
+    expect(mocks.roomDisconnect.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.roomConnect.mock.invocationCallOrder[1]
+    );
+    // And it settles: the guard that stops this reconnecting on every countdown tick.
+    await new Promise(resolve => setTimeout(resolve, 60));
+    expect(mocks.roomConnect).toHaveBeenCalledTimes(2);
     expect(mocks.markJoinedMutateAsync).not.toHaveBeenCalled();
+  });
+
+  // The budget is spent across the whole connecting window, not per invocation. Depending on the
+  // mutation object made this callback new on every render, and the 500ms countdown tick then
+  // restarted the series twice a second — dozens of requests, one of which can land after the
+  // connecting deadline and cancel the debate from the client side.
+  it('gives up on /joined after a fixed number of attempts rather than once per render', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mocks.markJoinedMutateAsync.mockRejectedValue(new Error('nope'));
+      mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+      mocks.debate = {
+        ...readyDebate({ localReady: true, remoteReady: true }),
+        status: 'connecting',
+        connecting_started_at: '2099-07-02T00:00:00.000Z',
+        connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+      };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+
+      expect(mocks.markJoinedMutateAsync).toHaveBeenCalledTimes(3);
+      expect(await screen.findByText(/Could not tell the server you are here/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('recovers when a /joined attempt fails and the next succeeds', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mocks.markJoinedMutateAsync.mockRejectedValueOnce(new Error('nope'));
+      mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+      mocks.debate = {
+        ...readyDebate({ localReady: true, remoteReady: true }),
+        status: 'connecting',
+        connecting_started_at: '2099-07-02T00:00:00.000Z',
+        connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+      };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+
+      expect(mocks.markJoinedMutateAsync).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText(/Could not tell the server you are here/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The intro can now lose an ownership race, which it never could before — and adding `ready` to
+  // the takeover statuses suppresses the full-screen "already open in another tab" fallback, so
+  // the intro has to carry the affordance itself.
+  it('offers a way back when another tab holds the debate during the intro', async () => {
+    // Unfocused on purpose: a focused tab reclaims by itself, and this is about the case that has
+    // no automatic rescue. Left to the ambient value this passed alone and hung under load.
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('This debate is already open in another tab.')).toBeInTheDocument();
+    const continueHere = await screen.findByRole('button', { name: 'Continue here' });
+
+    mocks.ownershipRequestTakeover.mockResolvedValue(true);
+    fireEvent.click(continueHere);
+
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalled());
   });
 
   it('marks the local participant ready from the pre-screen', async () => {

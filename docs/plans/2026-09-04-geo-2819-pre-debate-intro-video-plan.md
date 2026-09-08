@@ -49,8 +49,11 @@ debate on exactly as it does today.
    rather than an empty frame.
 4. Each side hits **I'm ready**; when the second lands, the server flips to `connecting`, the
    client fires `/joined` on the connection it already holds, and the debate proceeds.
-5. A persistent status pill sits in the same position on both screens: neutral **Not recording**
-   during the intro, red **Recording** once capture actually starts.
+5. A status pill sits in the same position on both screens: neutral **Not recording** during the
+   intro, red **Recording** once capture actually starts. It is rendered once, above both screens,
+   and positioned `fixed` — an `absolute` child of these scroll containers scrolled out of view
+   before the reader reached the ready button, and remounting it per screen meant its live region
+   was never announced at the transition.
 
 ## Steps
 
@@ -143,9 +146,14 @@ in both `DebatePreScreen` and `DebateRecordingModal`.
 
 Drive it off what the recorder is actually doing rather than off inferred status: add a
 `capturing` state set `true` in the `MediaRecorder` `start` listener (line 665, next to the
-existing `markCapturingRef.current()`) and `false` in `stopLocalRecorder` / `discardLocalRecorder`.
+existing `markCapturingRef.current()`) and `false` in `stopLocalRecorder` / `discardLocalRecorder`
+— **and in the recorder's own `stop` and `error` events**, which is the part that is easy to miss:
+`disconnectRoom` stops the local tracks, the stream goes inactive, and the recorder stops itself
+without going through either function. `capturing` lives on the surface rather than the modal, so
+it survives the unmount and the pill comes back red on the next connection while
+`startLocalRecorder` early-returns and writes nothing.
 
-That makes the pill honest by construction:
+With those, the pill reports:
 
 | Phase              | Pill                        |
 | ------------------ | --------------------------- |
@@ -191,9 +199,10 @@ device choices that used to happen entirely _before_ any connection now happen o
   already holds camera and mic. It does extend how long the tab holds them, since the intro has no
   time limit. Honest read: the bug isn't made worse in kind, but its blast radius grows. Not a
   blocker for this work; worth landing GEO-2688 near it.
-- **One participant never grants permission.** They see `PreScreenMediaUnavailable` as today; the
-  other side sees the "waiting to join" placeholder and can still leave. Unchanged from today
-  except that the wait is now legible.
+- **One participant never grants permission.** The permission state is reported inside their own
+  tile (the old `PreScreenMediaUnavailable` full-screen replacement is gone), so the opponent and
+  their readiness stay visible throughout; the other side sees the "waiting to join" placeholder
+  and can still leave.
 - **Un-ready.** There is no endpoint to clear `ready_at` (`ready_at = COALESCE(ready_at, …)`).
   Out of scope; would need a geo-chat change. If the pressure concern proves real in testing, that
   is the follow-up.
@@ -240,6 +249,32 @@ device choices that used to happen entirely _before_ any connection now happen o
 - `apps/web/app/space/[id]/(space)/debates/[debateId]/debate-room-page-client.tsx`
 - `apps/web/app/space/[id]/(space)/debates/[debateId]/debate-room-page-client.test.tsx`
 - geo-chat: **none** — confirmed by building it this way, not just by reading the handlers.
+
+## Found in review, after the first pass
+
+Four independent reviewers went over the first commit. What they caught, all now fixed:
+
+- **The `/joined` retry budget was not a budget.** `useMutation` returns a new object every render
+  and the countdown re-renders twice a second, so a dependency on it made the callback — and the
+  effect calling it — new every render, restarting the 3-attempt series on every tick. A failing
+  `/joined` became ~25-40 requests, and a late one landing after `connecting_deadline_at` makes the
+  client itself cancel the debate. The budget is now a ref, the mutation is reached through a ref,
+  and giving up surfaces an error instead of failing silently.
+- **A connection conflict during the intro was a dead end.** `ready` became a state where a
+  conflict can happen for the first time, and putting it in `canTakeOverConnection` suppressed the
+  full-screen "already open in another tab" fallback — while the intro screen had no takeover
+  control of its own. For `livekit_duplicate_identity` there was no exit at all. The intro now
+  carries "Continue here".
+- **The pill could get stuck claiming "Recording"** — see the Recording section above.
+- **An intro connection failing after the status advanced lost its post-join recovery**, costing
+  the pair the debate rather than 750ms.
+- **The device-change reconnect raced `ensurePreview`** for the camera, the same two-captures
+  hazard the auto-connect gate exists to prevent; it now waits on `previewBusy`.
+- **Contrast**: white on `red-01` is 3.2:1. Dark text on the red is 5.1:1, matching the dark-on-
+  green Ready badge.
+- **The recorder-during-intro test asserted nothing** — no `MediaRecorder` mock, so
+  `startLocalRecorder` returned on its first line. Both it and the new retry test are now verified
+  to fail against the bugs they cover.
 
 ## Open questions
 

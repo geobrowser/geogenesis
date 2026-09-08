@@ -42,6 +42,7 @@ export function DebateVideoTile({
   inactive = false,
   revealInactive = false,
   inactiveIndicatorId,
+  tileLabel,
   showMutedIndicator = false,
   countdown,
   closingMessage = false,
@@ -64,6 +65,8 @@ export function DebateVideoTile({
   inactive?: boolean;
   revealInactive?: boolean;
   inactiveIndicatorId: 'local' | 'remote';
+  /** Names the tile for assistive technology — otherwise both are unlabelled `section`s. */
+  tileLabel?: string;
   showMutedIndicator?: boolean;
   countdown?: React.ReactNode;
   closingMessage?: boolean;
@@ -76,6 +79,7 @@ export function DebateVideoTile({
 
   return (
     <section
+      aria-label={tileLabel}
       data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
       data-active-speaker={active ? 'true' : 'false'}
       className={cx(
@@ -97,7 +101,9 @@ export function DebateVideoTile({
         {showInactiveIndicator && <MutedMicrophoneIndicator />}
       </div>
       {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
-      {badge && <div className="absolute top-3 right-3 z-30">{badge}</div>}
+      {/* Top-left: the muted indicator and the turn countdown both own the right corner, and
+          "muted and ready" is a very ordinary combination on the intro screen. */}
+      {badge && <div className="absolute top-3 left-3 z-30">{badge}</div>}
 
       {positionLabel && (
         <div className="pointer-events-none absolute bottom-3 left-3 z-20 inline-flex h-4 items-center rounded-full bg-white/60 px-1.5 text-[0.75rem] leading-none text-text">
@@ -164,7 +170,11 @@ export function DebateVideoTile({
       )}
 
       {overlayText && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/60 px-6 backdrop-blur-sm">
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/60 px-6 backdrop-blur-sm"
+        >
           <Text
             color="white"
             variant={overlayCompact ? 'metadata' : 'bodySemibold'}
