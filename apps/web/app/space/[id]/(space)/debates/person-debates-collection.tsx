@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { DebateRow, type DebateSide, type WinnerShare, relationTargets } from '~/core/claims/browse/claim-debates';
+import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import { CursorPager } from '~/core/claims/browse/use-cursor-pages';
 import { useDebateKeyframes } from '~/core/claims/browse/use-debate-keyframes';
 import {
@@ -12,10 +13,11 @@ import {
   DEBATE_TYPE_ID,
 } from '~/core/debates/ontology';
 import { type PersonClaimTopic, personTopics, usePersonClaims } from '~/core/debates/use-person-claims';
-import { usePersonDebates, usePersonPositions } from '~/core/debates/use-person-debate-stats';
+import { usePersonDebates } from '~/core/debates/use-person-debate-stats';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { useQueryEntities } from '~/core/sync/use-store';
+import type { Entity } from '~/core/types';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -39,7 +41,7 @@ export function PersonDebatesCollection({
   const debatesQuery = usePersonDebates(personId);
   const debateIds = React.useMemo(() => (debatesQuery.data ?? []).map(debate => debate.debateId), [debatesQuery.data]);
 
-  const { entities: debates } = useQueryEntities({
+  const { entities: debates, isLoading: isHydratingDebates } = useQueryEntities({
     where: { id: { in: debateIds }, types: [{ id: { equals: DEBATE_TYPE_ID } }] },
     first: Math.max(debateIds.length, 1),
     enabled: debateIds.length > 0,
@@ -62,23 +64,15 @@ export function PersonDebatesCollection({
     return map;
   }, [debates]);
 
-  // How each debate's sides are labelled — Agree/Disagree or Verify/Dispute — read from the axis the
-  // person answered the argued claim on.
-  const { data: positions } = usePersonPositions(personId);
-  const responseKindByClaimId = React.useMemo(() => {
-    const map = new Map<string, 'stance' | 'veracity'>();
-    for (const position of positions ?? []) map.set(uuidToHex(position.claimId), position.responseKind);
-    return map;
-  }, [positions]);
-  const responseKindByDebateId = React.useMemo(() => {
-    const map = new Map<string, 'stance' | 'veracity'>();
+  // The claim each debate argued, read once for the Topic filter and for the side labels below.
+  const claimIdByDebateId = React.useMemo(() => {
+    const map = new Map<string, string>();
     for (const debate of debates) {
       const claimId = relationTargets(debate.relations, DEBATE_CLAIMS_PROPERTY_ID)[0];
-      const kind = claimId ? responseKindByClaimId.get(uuidToHex(claimId)) : undefined;
-      if (kind) map.set(debate.id, kind);
+      if (claimId) map.set(debate.id, claimId);
     }
     return map;
-  }, [debates, responseKindByClaimId]);
+  }, [debates]);
 
   // Space and Topic filters, matching the Claims collection. Space is the debate's own resolved
   // space; Topic is the argued claim's topics, reused from `usePersonClaims`' cache.
@@ -96,13 +90,12 @@ export function PersonDebatesCollection({
 
   const topicsByDebateId = React.useMemo(() => {
     const map = new Map<string, PersonClaimTopic[]>();
-    for (const debate of debates) {
-      const claimId = relationTargets(debate.relations, DEBATE_CLAIMS_PROPERTY_ID)[0];
-      const topics = claimId ? topicsByClaimHex.get(uuidToHex(claimId)) : undefined;
-      if (topics && topics.length > 0) map.set(debate.id, topics);
+    for (const [debateId, claimId] of claimIdByDebateId) {
+      const topics = topicsByClaimHex.get(uuidToHex(claimId));
+      if (topics && topics.length > 0) map.set(debateId, topics);
     }
     return map;
-  }, [debates, topicsByClaimHex]);
+  }, [claimIdByDebateId, topicsByClaimHex]);
 
   const spaceIds = React.useMemo(() => [...new Set(spaceByDebateId.values())], [spaceByDebateId]);
   const topics = React.useMemo(() => personTopics(topicsByDebateId), [topicsByDebateId]);
@@ -146,11 +139,45 @@ export function PersonDebatesCollection({
   const { profilesBySpaceId } = useProfilesBySpaceIds(participantSpaceIds, participantSpaceIds.length > 0);
   const keyframeByDebateId = useDebateKeyframes(page);
 
+  // Hydrate this page's claims for accurate side labels.
+  const pageClaimIds = React.useMemo(
+    () => [...new Set(page.map(debate => claimIdByDebateId.get(debate.id)).filter((id): id is string => Boolean(id)))],
+    [claimIdByDebateId, page]
+  );
+  const { entities: pageClaims, isLoading: arePageClaimsLoading } = useQueryEntities({
+    where: { id: { in: pageClaimIds } },
+    first: pageClaimIds.length || 1,
+    enabled: pageClaimIds.length > 0,
+  });
+  const claimEntityByHex = React.useMemo(() => {
+    const map = new Map<string, Entity>();
+    for (const claim of pageClaims) map.set(uuidToHex(claim.id), claim);
+    return map;
+  }, [pageClaims]);
+
+  // Resolve labels from the claim, even if the person denies their response.
+  const responseKindByDebateId = React.useMemo(() => {
+    const map = new Map<string, 'stance' | 'veracity'>();
+    for (const debate of page) {
+      const claimId = claimIdByDebateId.get(debate.id);
+      const spaceId = spaceByDebateId.get(debate.id);
+      if (!claimId || !spaceId) continue;
+
+      const claimHex = uuidToHex(claimId);
+      const claim = claimEntityByHex.get(claimHex) ?? null;
+      map.set(debate.id, resolveClaimResponseKind(null, claim, spaceId));
+    }
+    return map;
+  }, [claimEntityByHex, claimIdByDebateId, page, spaceByDebateId]);
+
   if (debateIds.length === 0) {
     if (debatesQuery.isLoading) return <Skeleton className="h-[120px] w-full rounded-lg" />;
     return null;
   }
-  if (debates.length === 0) return <Skeleton className="h-[120px] w-full rounded-lg" />;
+
+  if (debates.length === 0) {
+    return isHydratingDebates ? <Skeleton className="h-[120px] w-full rounded-lg" /> : null;
+  }
 
   return (
     <section aria-label="Debates">
@@ -172,6 +199,8 @@ export function PersonDebatesCollection({
         <Text as="p" variant="metadata" color="grey-04">
           No debates match these filters.
         </Text>
+      ) : arePageClaimsLoading ? (
+        <Skeleton className="h-[120px] w-full rounded-lg" />
       ) : (
         <>
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
