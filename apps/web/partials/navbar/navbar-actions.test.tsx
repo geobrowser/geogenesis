@@ -42,8 +42,7 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
 vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => mocks.pendingPersonalSpace,
 }));
-vi.mock('~/core/state/feature-flags', () => ({
-}));
+vi.mock('~/core/state/feature-flags', () => ({}));
 vi.mock('~/core/hooks/use-space-id', () => ({ useSpaceId: () => null }));
 vi.mock('~/core/hooks/use-access-control', () => ({
   useAccessControl: () => ({ canEdit: false, isLoading: false }),
@@ -57,6 +56,11 @@ vi.mock('~/partials/hints/edit-mode-toggle-tip', () => ({
   useEditModeToggleTip: () => ({ open: false, dismiss: vi.fn(), isActive: false }),
 }));
 vi.mock('~/partials/onboarding/dialog', () => ({ avatarAtom: {} }));
+// The real dialog pulls in the whole publish chain (which needs an unmocked
+// jotai). The navbar's job is only to mount it, so assert on that.
+vi.mock('~/partials/profile/edit-profile-dialog', () => ({
+  EditProfileDialog: ({ open }: { open: boolean }) => (open ? <div data-testid="edit-profile-dialog" /> : null),
+}));
 vi.mock('~/core/wallet', () => ({ GeoConnectButton: () => <button>Connect</button> }));
 vi.mock('~/design-system/fallback-image', () => ({
   FallbackImage: ({ value }: { value: string }) => <img src={value} alt="" />,
@@ -167,6 +171,37 @@ describe('NavbarActions profile menu', () => {
     const identityLink = screen.getByRole('link', { name: /0x1234…5678/ });
     expect(identityLink).toHaveAttribute('href', '/space/pending/topic-1');
     expect(within(identityLink).getByText(address, { selector: 'p' })).toBeInTheDocument();
+  });
+
+  it('opens the edit profile modal from the menu, above the sign out divider', async () => {
+    const user = userEvent.setup();
+    render(<NavbarActions />);
+    await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+
+    // Nothing is mounted until it is asked for — a publish outlives the close,
+    // so the dialog stays mounted from here on rather than being remounted.
+    expect(screen.queryByTestId('edit-profile-dialog')).not.toBeInTheDocument();
+
+    const editProfile = screen.getByRole('button', { name: 'Edit profile' });
+    // Sign out keeps its own group below the divider; Edit profile sits above it.
+    expect(editProfile.compareDocumentPosition(screen.getByRole('button', { name: 'Sign out' }))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+
+    await user.click(editProfile);
+
+    expect(screen.getByTestId('edit-profile-dialog')).toBeInTheDocument();
+    // Opening it closes the menu it was launched from.
+    expect(screen.queryByTestId('profile-menu')).not.toBeInTheDocument();
+  });
+
+  it('hides edit profile until a personal space exists to publish into', async () => {
+    mocks.personalSpaceId = null;
+    const user = userEvent.setup();
+    render(<NavbarActions />);
+    await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+
+    expect(screen.queryByRole('button', { name: 'Edit profile' })).not.toBeInTheDocument();
   });
 
   it('leaves sign out working, and no longer offers a second availability switch', async () => {

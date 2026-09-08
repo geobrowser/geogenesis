@@ -30,6 +30,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
+import { EditProfileDialog } from '~/partials/profile/edit-profile-dialog';
 
 import { avatarAtom } from '../onboarding/dialog';
 
@@ -43,6 +44,11 @@ function useUser() {
 
 export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = React.useState(false);
+  // Mounted from the first open onward rather than always: the dialog's hooks read
+  // the person entity, and a publish outlives the close, so unmounting it midway
+  // would drop the success write-back to the navbar avatar.
+  const [hasOpenedEditProfile, setHasOpenedEditProfile] = React.useState(false);
 
   const { isLoading: isUserLoading, profile, address } = useUser();
   const { personalSpaceId } = usePersonalSpaceId();
@@ -105,6 +111,21 @@ export function NavbarActions() {
           href={personalHref}
           onNavigate={() => onOpenChange(false)}
         />
+        {personalSpaceId && (
+          <button
+            type="button"
+            onClick={() => {
+              onOpenChange(false);
+              setHasOpenedEditProfile(true);
+              setIsEditProfileOpen(true);
+            }}
+            className="flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+          >
+            Edit profile
+          </button>
+        )}
+        {/* Sign out keeps its own group below the divider — the destructive action
+            stays alone at the bottom where people expect it. */}
         <div className="border-t border-grey-02">
           <button
             type="button"
@@ -115,6 +136,8 @@ export function NavbarActions() {
           </button>
         </div>
       </Menu>
+
+      {hasOpenedEditProfile && <EditProfileDialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen} />}
     </div>
   );
 }
