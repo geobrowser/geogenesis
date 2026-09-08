@@ -247,6 +247,7 @@ vi.mock('~/core/claims/browse/claim-response-summary', () => ({
     isViewerResponseLoading: true,
     hasCounts: false,
     viewerDirection: null,
+    indexedViewerDirection: null,
     viewerSpaceId: null,
   }),
 }));
@@ -420,6 +421,7 @@ vi.mock('~/core/claims/browse/claim-response-summary', () => ({
     isViewerResponseLoading: true,
     hasCounts: false,
     viewerDirection: null,
+    indexedViewerDirection: null,
     viewerSpaceId: null,
   }),
 }));
