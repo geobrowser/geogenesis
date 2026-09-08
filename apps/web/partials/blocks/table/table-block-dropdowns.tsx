@@ -6,7 +6,10 @@ import cx from 'classnames';
 
 import type { Filter, ModesByColumn } from '~/core/blocks/data/filters';
 import {
+  DropdownSelectionMode,
+  DropdownSelectionModes,
   DropdownSelections,
+  effectiveDropdownMode,
   effectiveDropdownSelection,
   filterDefaultsForColumn,
   toggleDropdownSelection,
@@ -43,7 +46,10 @@ type TableBlockDropdownsProps = {
   baseFilterState: Filter[];
   baseModesByColumn: ModesByColumn;
   selections: DropdownSelections;
+  /** Per-dropdown union/intersection choices (stored per user, like selections). */
+  selectionModes: DropdownSelectionModes;
   updateSelections: (updater: (current: DropdownSelections) => DropdownSelections) => void;
+  setColumnMode: (columnId: string, mode: DropdownSelectionMode | null) => void;
   hydrated: boolean;
   /** COLLECTION blocks: the ordered item ids forming the population; null for query sources. */
   collectionItemIds: string[] | null;
@@ -66,7 +72,9 @@ export function TableBlockDropdowns({
   baseFilterState,
   baseModesByColumn,
   selections,
+  selectionModes,
   updateSelections,
+  setColumnMode,
   hydrated,
   collectionItemIds,
   populationReady,
@@ -94,7 +102,9 @@ export function TableBlockDropdowns({
           baseFilterState={baseFilterState}
           baseModesByColumn={baseModesByColumn}
           selections={selections}
+          selectionModes={selectionModes}
           updateSelections={updateSelections}
+          setColumnMode={setColumnMode}
           hydrated={hydrated}
           facetColumnIds={appliedColumnIds}
           collectionItemIds={collectionItemIds}
@@ -115,7 +125,9 @@ function TableBlockDropdown({
   baseFilterState,
   baseModesByColumn,
   selections,
+  selectionModes,
   updateSelections,
+  setColumnMode,
   hydrated,
   facetColumnIds,
   collectionItemIds,
@@ -143,6 +155,8 @@ function TableBlockDropdown({
   );
   const selected = effectiveDropdownSelection(selections, columnId, filterDefaults);
   const isOverridden = selections[columnId] !== undefined;
+  // Union ('Any') or intersection ('All') of this menu's checked options.
+  const ownMode = effectiveDropdownMode(selectionModes, columnId, filterDefaults, baseModesByColumn);
 
   // Names for the preset values come straight from the resolved filters, so
   // the pill reads correctly before (or without) any fetch.
@@ -179,12 +193,14 @@ function TableBlockDropdown({
 
   // The dropdown's one scope: this property's values across the table's
   // population; the first pages load on their own, the rest on demand.
-  const { options, nameOf, population, isWalking, hasMoreInScope, scopeExhausted, isError, retry, scannedCount } =
+  const { options, nameOf, countPopulation, isWalking, hasMoreInScope, scopeExhausted, isError, retry, scannedCount } =
     useDropdownOptions({
       columnId,
       baseFilterState,
       baseModesByColumn,
       selections,
+      selectionModes,
+      ownMode,
       facetColumnIds,
       collectionItemIds,
       pinned,
@@ -212,11 +228,15 @@ function TableBlockDropdown({
   // Exact counts for just the revealed options, resolving in the background;
   // skipped entirely once the walk's own tally is exact.
   const revealedIds = React.useMemo(() => renderedOptions.map(option => option.id), [renderedOptions]);
+  // Intersection mode makes the walk's tally unusable (it counts the
+  // population WITHOUT this menu's own picks), so counts come from the
+  // server whenever the own picks constrain — even on an exhausted walk.
+  const countsDiverge = ownMode === 'AND' && selected.length > 0;
   const { counts: exactCounts, pendingIds: pendingCountIds } = useExactOptionCounts({
     columnId,
-    population,
+    population: countPopulation,
     optionIds: revealedIds,
-    enabled: open && populationReady && !scopeExhausted,
+    enabled: open && populationReady && (countsDiverge || !scopeExhausted),
   });
   const hasMoreToReveal = visibleCount < visibleOptions.length;
   const revealMore = React.useCallback(() => setVisibleCount(count => count + REVEAL_STEP), []);
@@ -267,6 +287,7 @@ function TableBlockDropdown({
       delete next[columnId];
       return next;
     });
+    setColumnMode(columnId, null);
   };
 
   return (
@@ -317,6 +338,30 @@ function TableBlockDropdown({
             />
           </div>
         )}
+        <div className="flex shrink-0 items-center justify-between gap-2 px-2 pt-2 pb-1">
+          <span className="text-footnote text-grey-04">Show rows matching</span>
+          <div
+            className="flex shrink-0 overflow-hidden rounded border border-grey-02"
+            role="radiogroup"
+            aria-label="Combine checked options"
+          >
+            {(['OR', 'AND'] as const).map(mode => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={ownMode === mode}
+                onClick={() => setColumnMode(columnId, mode)}
+                className={cx(
+                  'px-2 py-0.5 text-footnote transition-colors',
+                  ownMode === mode ? 'bg-grey-02 text-text' : 'bg-white text-grey-04 hover:text-text'
+                )}
+              >
+                {mode === 'OR' ? 'Any' : 'All'}
+              </button>
+            ))}
+          </div>
+        </div>
         <div
           ref={setListEl}
           role="group"
@@ -371,7 +416,7 @@ function TableBlockDropdown({
             // option's own server-side count as it resolves — never a lower
             // bound. A definite zero is shown but inert (bounty-board facet
             // behavior) — unless checked, so it can still be unselected.
-            const count = scopeExhausted ? (option.count ?? 0) : exactCounts.get(option.id);
+            const count = !countsDiverge && scopeExhausted ? (option.count ?? 0) : exactCounts.get(option.id);
             const isInertZero = count === 0 && !checked;
             return (
               <button

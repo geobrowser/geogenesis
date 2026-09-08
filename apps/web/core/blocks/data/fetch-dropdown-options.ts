@@ -410,24 +410,46 @@ async function withCountSlot<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
+/** Count variables for one option against an id-list (collection) population. */
+export function optionCountVariablesForIds(
+  ids: string[],
+  where: WhereCondition,
+  columnId: string,
+  optionId: string
+): OptionCountVariables {
+  const base = populationVariablesForIds(ids, where);
+  const predicate = { relations: { some: { typeId: { is: columnId }, toEntityId: { is: optionId } } } } as EntityFilter;
+  return {
+    filter: { and: [base.filter!, predicate] } as EntityFilter,
+    spaceId: base.spaceId,
+    spaceIds: base.spaceIds,
+    typeId: base.typeId,
+    typeIds: base.typeIds,
+  };
+}
+
 /** The exact number of population rows carrying this option's value. */
 export function fetchExactOptionCount({
   columnId,
   optionId,
-  where,
+  population,
   signal,
 }: {
   columnId: string;
   optionId: string;
-  where: WhereCondition;
+  population: DropdownPopulation;
   signal?: AbortSignal;
 }): Promise<number> {
+  const variables =
+    population.kind === 'ids'
+      ? optionCountVariablesForIds(population.ids, population.where, columnId, optionId)
+      : optionCountVariables(population.where, columnId, optionId);
   return withCountSlot(() =>
     Effect.runPromise(
       graphql({
         query: OPTION_COUNT_DOCUMENT,
         decoder: (result: OptionCountResult) => result.entitiesConnection?.totalCount ?? 0,
-        variables: optionCountVariables(where, columnId, optionId),
+        variables,
         signal,
       })
     )

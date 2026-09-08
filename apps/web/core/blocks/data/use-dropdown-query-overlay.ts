@@ -59,7 +59,13 @@ export function useDropdownQueryOverlay({
   extraPillProperties?: Property[];
 }) {
   const { blocksRelationEntityId, dropdowns: configs, toggleDropdownProperty } = useBlockDropdowns();
-  const { selections, updateSelections, hydrated } = useTableDropdownSelections(blocksRelationEntityId);
+  const {
+    selections,
+    modes: selectionModes,
+    updateSelections,
+    setColumnMode,
+    hydrated,
+  } = useTableDropdownSelections(blocksRelationEntityId);
 
   const supportsDropdowns = sourceSupportsDropdowns(source);
 
@@ -149,9 +155,15 @@ export function useDropdownQueryOverlay({
   const { filterState: queryFilterState, modesByColumn: queryModesByColumn } = React.useMemo(
     () =>
       isActive
-        ? applyDropdownSelectionsToFilters(baseFilterState, baseModesByColumn, selections, appliedColumnIds)
+        ? applyDropdownSelectionsToFilters(
+            baseFilterState,
+            baseModesByColumn,
+            selections,
+            appliedColumnIds,
+            selectionModes
+          )
         : { filterState: baseFilterState, modesByColumn: baseModesByColumn },
-    [isActive, baseFilterState, baseModesByColumn, selections, appliedColumnIds]
+    [isActive, baseFilterState, baseModesByColumn, selections, appliedColumnIds, selectionModes]
   );
 
   return {
@@ -162,7 +174,9 @@ export function useDropdownQueryOverlay({
       configs,
       toggleDropdownProperty,
       selections,
+      selectionModes,
       updateSelections,
+      setColumnMode,
       hydrated,
       appliedColumnIds,
       supportsDropdowns,

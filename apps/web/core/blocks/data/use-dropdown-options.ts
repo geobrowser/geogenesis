@@ -14,7 +14,12 @@ import {
 } from './fetch-dropdown-options';
 import { filterStateToWhere } from './filter-state-to-where';
 import type { Filter, ModesByColumn } from './filters';
-import { type DropdownSelections, applyDropdownSelectionsToFilters } from './table-dropdown-selections';
+import {
+  type DropdownSelectionMode,
+  type DropdownSelectionModes,
+  type DropdownSelections,
+  applyDropdownSelectionsToFilters,
+} from './table-dropdown-selections';
 
 export type { DropdownOption } from './fetch-dropdown-options';
 
@@ -46,6 +51,8 @@ export function useDropdownOptions({
   baseFilterState,
   baseModesByColumn,
   selections,
+  selectionModes,
+  ownMode,
   facetColumnIds,
   collectionItemIds,
   pinned,
@@ -58,6 +65,10 @@ export function useDropdownOptions({
   baseModesByColumn: ModesByColumn;
   /** Personal selections; the ones on OTHER facet columns narrow this population. */
   selections: DropdownSelections;
+  /** Per-dropdown combinators — other columns' modes shape this population like their selections do. */
+  selectionModes: DropdownSelectionModes;
+  /** THIS dropdown's effective combinator; 'AND' makes counts include its own current picks. */
+  ownMode: DropdownSelectionMode;
   /** The overlay's applied columns — the facet dimensions. */
   facetColumnIds: string[];
   /** COLLECTION blocks: the ordered item ids that ARE the population; null for query sources. */
@@ -72,11 +83,47 @@ export function useDropdownOptions({
 }) {
   const population: DropdownPopulation = React.useMemo(() => {
     const otherColumns = facetColumnIds.filter(id => !ID.equals(id, columnId));
-    const overlaid = applyDropdownSelectionsToFilters(baseFilterState, baseModesByColumn, selections, otherColumns);
+    const overlaid = applyDropdownSelectionsToFilters(
+      baseFilterState,
+      baseModesByColumn,
+      selections,
+      otherColumns,
+      selectionModes
+    );
     const withoutColumn = overlaid.filterState.filter(f => !(ID.equals(f.columnId, columnId) && !f.isBacklink));
     const where = filterStateToWhere(withoutColumn, overlaid.modesByColumn);
     return collectionItemIds ? { kind: 'ids', ids: collectionItemIds, where } : { kind: 'query', where };
-  }, [baseFilterState, baseModesByColumn, selections, facetColumnIds, columnId, collectionItemIds]);
+  }, [baseFilterState, baseModesByColumn, selections, selectionModes, facetColumnIds, columnId, collectionItemIds]);
+
+  /**
+   * Where COUNTS are evaluated. In union mode this is the walk population
+   * (own column excluded, so numbers answer "what if I add this"). In
+   * intersection mode the dropdown's OWN current picks constrain too — the
+   * numbers answer "rows if I ALSO require this value", which is what lets
+   * incompatible options gray out at 0. The option LIST always enumerates
+   * from the unconstrained walk so options gray rather than vanish.
+   */
+  const countPopulation: DropdownPopulation = React.useMemo(() => {
+    if (ownMode !== 'AND') return population;
+    const overlaid = applyDropdownSelectionsToFilters(
+      baseFilterState,
+      baseModesByColumn,
+      selections,
+      facetColumnIds,
+      selectionModes
+    );
+    const where = filterStateToWhere(overlaid.filterState, overlaid.modesByColumn);
+    return collectionItemIds ? { kind: 'ids', ids: collectionItemIds, where } : { kind: 'query', where };
+  }, [
+    ownMode,
+    population,
+    baseFilterState,
+    baseModesByColumn,
+    selections,
+    selectionModes,
+    facetColumnIds,
+    collectionItemIds,
+  ]);
 
   const populationKey = React.useMemo(
     () =>
@@ -157,6 +204,7 @@ export function useDropdownOptions({
     options,
     nameOf,
     population,
+    countPopulation,
     isWalking,
     hasMoreInScope,
     scopeExhausted,

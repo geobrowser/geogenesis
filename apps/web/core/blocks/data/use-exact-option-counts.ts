@@ -4,7 +4,7 @@ import { useQueries } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { type DropdownPopulation, fetchExactOptionCount } from './fetch-dropdown-options';
+import { type DropdownPopulation, fetchExactOptionCount, fingerprintIdList } from './fetch-dropdown-options';
 
 /**
  * Exact match counts for the dropdown options currently on screen, one
@@ -13,10 +13,11 @@ import { type DropdownPopulation, fetchExactOptionCount } from './fetch-dropdown
  * at the module's concurrency cap). Results cache per (population, option)
  * for the session, so reopening a menu or re-revealing an option is free.
  *
- * Fires only for `query` populations that have NOT been fully walked: an
- * exhausted walk's tally is already exact, and an id-list (collection)
- * population would repeat its full id list in every count query — its
- * counts come from the tally instead, exact once its walk completes.
+ * Fires when the walk's tally cannot serve: an unexhausted query walk, or
+ * any population whose count semantics diverge from the walk (intersection
+ * mode). Id-list (collection) populations are countable up to 1,000 members
+ * — beyond that each count query would repeat a huge id list, so they fall
+ * back to the tally.
  */
 export function useExactOptionCounts({
   columnId,
@@ -30,15 +31,24 @@ export function useExactOptionCounts({
   optionIds: string[];
   enabled: boolean;
 }) {
-  const isQueryPopulation = population.kind === 'query';
-  const whereKey = React.useMemo(() => JSON.stringify(population.where), [population]);
+  // Id-list (collection) populations are countable too, but every count
+  // query repeats the id list — cap it so a giant collection cannot ship
+  // megabytes per badge.
+  const populationCountable = population.kind === 'query' || population.ids.length <= 1000;
+  const populationKey = React.useMemo(
+    () =>
+      population.kind === 'ids'
+        ? `ids:${fingerprintIdList(population.ids)}:${JSON.stringify(population.where)}`
+        : JSON.stringify(population.where),
+    [population]
+  );
 
   const results = useQueries({
     queries: optionIds.map(optionId => ({
-      queryKey: ['data-block', 'dropdown-option-count', columnId, whereKey, optionId],
+      queryKey: ['data-block', 'dropdown-option-count', columnId, populationKey, optionId],
       queryFn: ({ signal }: { signal?: AbortSignal }) =>
-        fetchExactOptionCount({ columnId, optionId, where: population.where, signal }),
-      enabled: enabled && isQueryPopulation,
+        fetchExactOptionCount({ columnId, optionId, population, signal }),
+      enabled: enabled && populationCountable,
       staleTime: Infinity,
       refetchOnWindowFocus: false,
       retry: 1,
