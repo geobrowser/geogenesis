@@ -277,7 +277,16 @@ export async function fetchExploreFeed(args: {
   browse: BrowseSidebarData;
   sort: ExploreSort;
   time: ExploreTime;
-  spaceFilterId: string | null;
+  /**
+   * The spaces the reader has narrowed to, or `null` for no narrowing at all.
+   *
+   * A list rather than one id since GEO-2789's explore half: the space filter is a multi-select
+   * now, and the reader opens on the spaces they belong to, which is usually more than one. An
+   * *empty* list is not the same as `null` and is not expressible here on purpose — the caller
+   * resolves "nothing ticked" to `null` before this is reached, because a filter matching no space
+   * is a feed with nothing in it rather than an unfiltered one.
+   */
+  spaceFilterIds: string[] | null;
   cursor: string | null;
   walletAddress?: string | null;
   memberOrEditorSpaceIds: string[];
@@ -287,9 +296,8 @@ export async function fetchExploreFeed(args: {
   requireName?: boolean;
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
-  const baseIds = [...new Set([...spaceMeta.keys()].map(normId))].filter(id =>
-    args.spaceFilterId ? id === normId(args.spaceFilterId) : true
-  );
+  const wanted = args.spaceFilterIds === null ? null : new Set(args.spaceFilterIds.map(normId));
+  const baseIds = [...new Set([...spaceMeta.keys()].map(normId))].filter(id => (wanted ? wanted.has(id) : true));
   if (baseIds.length === 0) {
     return { items: [], nextCursor: null };
   }

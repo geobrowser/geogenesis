@@ -50,17 +50,17 @@ import {
   carriesEveryTopic,
   countBy,
   keepSelectableTopics,
-  keepSelectedVisible,
   orderFacetOptions,
   toggleId,
 } from '~/core/debates/matchmaking/topic-facets';
 import { useDebouncedSearch } from '~/core/debates/matchmaking/use-debounced-search';
 import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-selection';
+import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
-import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
+import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
 import {
   type TaggedClaimFilters,
   tagDisplaySpaceId,
@@ -75,7 +75,7 @@ import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
-import { uuidToHex } from '~/core/id/normalize';
+import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { validateEntityId } from '~/core/utils/utils';
@@ -88,10 +88,6 @@ import { Text } from '~/design-system/text';
 import { RematchVoicePill } from './rematch-voice';
 
 const NO_PARTICIPANTS: DebateRematchParticipant[] = [];
-
-function sameId(left: string, right: string) {
-  return uuidToHex(left) === uuidToHex(right);
-}
 
 /**
  * `value` once it has settled, and the last settled value while it is settling again. Before the
@@ -197,7 +193,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     if (!remoteParticipant) return [];
     const ids: string[] = [];
     for (const [claimId, rows] of positions.byClaim) {
-      if (rows.some(row => sameId(row.profileSpaceId, remoteParticipant.profile_space_id))) ids.push(claimId);
+      if (rows.some(row => idEquals(row.profileSpaceId, remoteParticipant.profile_space_id))) ids.push(claimId);
     }
     return ids;
   }, [positions.byClaim, remoteParticipant]);
@@ -235,7 +231,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // whether the source is worth showing. Applying it there emptied both tabs in the ordinary case:
   // a debater's claims live in their personal space, which nobody else is a member of, so the
   // opponent's positions and a curator's page were dropped wholesale on the other side.
-  const { allowlist: spaceAllowlist, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
+  const { allowlist: spaceAllowlist, memberSpaceIds, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
 
   // While it is still resolving there is no telling an allowed space from one the viewer has
   // nothing to do with. Every list waits for it rather than showing the unfiltered set and
@@ -249,7 +245,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // differently, and when this list is unknown — no acceptor configured, a failed lookup — the
   // type test still rules out the case that actually bit us, claims living in a personal space.
   //
-  const { publishableSpaceIds } = useDebatePublishableSpaces();
+  // `isLoading` is read, not discarded. This lookup answers `null` for *unknown* — a load in
+  // flight and a failed one alike — and `isSpaceDebatePublishable` reads null as "don't filter", so
+  // during the load the menu offers spaces it will go on to reject. Only the seed cares about the
+  // difference: everything else is happy to fail open, but a default taken from a provisional menu
+  // is spent on a space the reconciliation then removes, leaving the viewer with no default at all.
+  // After an error `isLoading` is false and the ids stay null, so fail-open is preserved.
+  const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces();
 
   // GEO-2683. Fetched only when Featured is the source on screen — it is one option in a menu, and
   // the other two answer for themselves.
@@ -424,13 +426,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const chatPositionByClaimId = React.useMemo(() => {
     const byClaim = new Map<string, { spaceId: string; position: boolean | null }>();
-    // Every source is a rematch row since #2351 moved paging server-side, and a rematch row lists
-    // each session participant's side — so the viewer's is picked out of `participants`. This used
-    // to also read `viewer_response` off the hub's paged index, which that change removed.
+    // Every source is a rematch row since #2351 moved paging server-side. This used to also read
+    // `viewer_response` off the hub's paged index, which that change removed.
     for (const row of sessionRowsByClaimId.values()) {
+      // `viewer_position` in preference to the viewer's `participants` entry. The latter carries
+      // only what a live knowledge-graph resolution returned, and that resolve sits behind a
+      // timeout on geo-chat's side — when it lapses every `participants` position comes back null,
+      // which this gate reads as "no position held" and uses to disable every Request button on
+      // the page, for everyone, saying nothing. `viewer_position` falls back to the readiness row
+      // geo-chat already holds, so a slow graph costs accuracy at the margin instead of the
+      // whole page.
+      //
+      // Checked against `undefined` rather than with `??`, because `null` is a real answer here —
+      // geo-chat has a row and the viewer holds no position — and only `undefined` means a backend
+      // that predates the field. Collapsing the two would make an old backend look like a
+      // deliberate absence.
+      const viewerParticipant = row.participants.find(side => side.user_id === currentUserId);
       byClaim.set(row.claim.claim_entity_id, {
         spaceId: row.claim.space_id,
-        position: row.participants.find(side => side.user_id === currentUserId)?.position ?? null,
+        position: row.viewer_position !== undefined ? row.viewer_position : (viewerParticipant?.position ?? null),
       });
     }
     return byClaim;
@@ -440,7 +454,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const chatPositionFor = React.useCallback(
     (claimEntityId: string, spaceId: string): boolean | null | undefined => {
       const recorded = chatPositionByClaimId.get(claimEntityId);
-      if (!recorded || !sameId(recorded.spaceId, spaceId)) return undefined;
+      if (!recorded || !idEquals(recorded.spaceId, spaceId)) return undefined;
       return recorded.position;
     },
     [chatPositionByClaimId]
@@ -454,6 +468,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // Every space a claim is named in is looked up, not just the one that currently wins the ranking,
   // because which one wins is the next decision and it needs the types to make it.
+  //
+  // Plus every space the tagged facet offers, which is not the same set and stopped being a subset
+  // when GEO-2798 paged the tag. The rows are one page; the facet counts the whole tag — so a space
+  // whose only tagged claim is on a later page reaches the *menu* without ever reaching this
+  // lookup, and an unresolved type reads as publishable. The menu would then offer a personal
+  // space, which is the one thing this gate exists to exclude, and the one-shot default would be
+  // spent on it and pruned once its page finally arrived. Asking about the ids the menu is built
+  // from is what makes "settled" mean settled; the tag spans a handful of spaces, so it is cheap.
   const candidateSpaceIds = React.useMemo(() => {
     const ids = new Set<string>();
     for (const entity of [
@@ -463,10 +485,28 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     ]) {
       for (const spaceId of claimCandidateSpaceIds(entity)) ids.add(spaceId);
     }
+    for (const space of taggedSpaceFacet.spaces) ids.add(space.id);
     return [...ids];
-  }, [opponentEntitiesQuery.entities, recommendedEntities, taggedCatalog]);
-  const { spacesById: candidateSpaces } = useSpacesByIds(candidateSpaceIds);
+  }, [opponentEntitiesQuery.entities, recommendedEntities, taggedCatalog, taggedSpaceFacet.spaces]);
+  const {
+    spacesById: candidateSpaces,
+    isLoading: candidateSpacesPending,
+    isPlaceholderData: candidateSpacesHeldOver,
+  } = useSpacesByIds(candidateSpaceIds);
   const spaceTypePublishable = React.useMemo(() => debatePublishableSpacePredicate(candidateSpaces), [candidateSpaces]);
+  /**
+   * Whether {@link canPublishDebateIn} can be trusted yet.
+   *
+   * An unresolved type reads as publishable — deliberately, so a slow lookup doesn't empty the
+   * picker — so while this is true the predicate admits spaces it will go on to reject, a personal
+   * space among them. Held-over counts: `useSpacesByIds` answers from the previous id set rather
+   * than blanking, and it knows nothing about an id it was never asked for.
+   *
+   * Named here rather than at the reader, because this is the lookup that decides it. The picker
+   * has a second `useSpacesByIds` for the allowlist, whose pending state `scope.pending` carries;
+   * they are different questions about different ids and neither covers the other.
+   */
+  const publishabilityPending = candidateSpacesPending || candidateSpacesHeldOver;
   const canPublishDebateIn = React.useCallback(
     (spaceId: string | null | undefined) =>
       isSpaceDebatePublishable(spaceId, publishableSpaceIds) && spaceTypePublishable(spaceId),
@@ -501,7 +541,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       // no preference and are unchanged: there the row's space is the authoritative one.
       const recordedRow = sessionRowsByClaimId.get(entity.id);
       const sessionRow =
-        preferred && recordedRow && !sameId(recordedRow.claim.space_id, preferred) ? undefined : recordedRow;
+        preferred && recordedRow && !idEquals(recordedRow.claim.space_id, preferred) ? undefined : recordedRow;
       const responseKind = sessionRow?.response_kind ?? claimResponseKind(entity, homeSpaceId);
       return {
         claim: sessionRow?.claim ?? {
@@ -830,16 +870,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // they are deliberately *not* narrowed by the viewer's allowlist — a debater's own claims live in
   // their personal space, which nobody else has joined. Their spaces have to be in the menu with
   // them or the rows are visible and unfilterable, so those two count from the rows on screen.
-  const facetSpaces = React.useMemo(() => {
-    const offered = graphFiltered
-      ? taggedSpaceFacet.spaces
-          .filter(space => canPublishDebateIn(space.id) && isClaimSpaceAllowed(space.id, spaceAllowlist))
-          .map(space => ({ id: space.id, name: null, count: space.count }))
-      : countBy(claims.map(claim => ({ id: claim.claim.space_id, name: null })));
-    // An absent *selection* comes back at zero, or its checkbox disappears while the trigger goes on
-    // counting it, and it cannot be unticked without clearing every space.
-    return orderFacetOptions(keepSelectedVisible(offered, spaceIds), spaceIds);
-  }, [canPublishDebateIn, claims, graphFiltered, spaceAllowlist, spaceIds, taggedSpaceFacet.spaces]);
+  // What the menu offers before the viewer's own selection is folded back in. Split out because the
+  // default is seeded from exactly this list rather than from the eligible set, which is the wider
+  // and more obvious source.
+  //
+  // Not for the id shapes: those agreed once GEO-2798 normalized the facet's keys, and `normId` and
+  // `uuidToHex` are the same function. It is that this list is the spaces that actually *have*
+  // claims. Seeding from the eligible set would tick a space the viewer belongs to and the tag has
+  // nothing in, landing them on an empty list behind a filter they never set. The cost is a second
+  // request — the list loads unfiltered, then again narrowed — which is the price of not defaulting
+  // to nothing.
+  const offeredSpaces = React.useMemo(
+    () =>
+      graphFiltered
+        ? taggedSpaceFacet.spaces
+            .filter(space => canPublishDebateIn(space.id) && isClaimSpaceAllowed(space.id, spaceAllowlist))
+            .map(space => ({ id: space.id, name: null, count: space.count }))
+        : countBy(claims.map(claim => ({ id: claim.claim.space_id, name: null }))),
+    [canPublishDebateIn, claims, graphFiltered, spaceAllowlist, taggedSpaceFacet.spaces]
+  );
 
   // A space picked while the gates were still passing everything has to be let go once they reject
   // it, or it keeps narrowing every request while every row it returns is dropped.
@@ -901,6 +950,32 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ? positions.isLoading || opponentEntitiesQuery.isLoading || opponentClaimsQuery.isLoading
       : sourceUndecided ||
         (source === 'recommended' ? recommendedLoading || curatedClaimsQuery.isLoading : taggedClaimsSettling));
+
+  // The menu, and the handlers that drive it. Defaults to the spaces the viewer belongs to
+  // (GEO-2789).
+  //
+  // Gated on `tabIsLoading` rather than a hand-listed set of queries. GEO-2798 made this menu a
+  // server facet instead of an accumulation over every row source, so the tab's own composite —
+  // which already waits from the top of each chain, where a disabled lookup reports nothing — is
+  // now the whole answer. `publishabilityPending` is the exception it cannot know about: an
+  // unresolved space type reads as publishable, so the menu can still be offering a space this
+  // page will go on to reject.
+  const { facetSpaces, onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
+    offeredSpaces,
+    spaceIds,
+    setSpaceIds,
+    memberSpaceIds,
+    // Every gate that decides `offeredSpaces`, because the seed is spent on whatever it sees. A
+    // space offered provisionally and rejected a moment later takes the default with it.
+    // `sourceDebateQuery` for the same reason from the other end: the source debate's own claim is
+    // one of the exclusions, so until it lands a row-derived menu can still be counting its space.
+    pending:
+      tabIsLoading ||
+      publishabilityPending ||
+      publishableSpacesLoading ||
+      sourceDebateQuery.isLoading ||
+      (graphFiltered && !taggedSpaceFacet.settled),
+  });
 
   const tabError =
     sessionQuery.error ??
@@ -1012,6 +1087,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     });
   };
 
+  /** The last request failure, and whether the claim it was sent for is still on screen. */
+  const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
+  const requestErrorClaimId = requestError ? createRequest.variables?.claim_id : undefined;
+  const hasClaimId = (claim: DebateRematchClaim) => claim.claim.claim_entity_id === requestErrorClaimId;
+  const requestErrorHasCard =
+    requestErrorClaimId !== undefined &&
+    (showsSections ? visibleSections.some(section => section.claims.some(hasClaimId)) : visibleClaims.some(hasClaimId));
+
   const renderClaimCard = (claim: DebateRematchClaim) => (
     <RematchClaimCard
       key={claim.claim.claim_entity_id}
@@ -1028,6 +1111,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         })
       }
       busy={createRequest.isPending || session?.status === 'request_pending'}
+      // Associate the shared mutation error with the claim that initiated it.
+      requestError={hasClaimId(claim) ? requestError : null}
     />
   );
 
@@ -1109,8 +1194,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           <div className="flex flex-col gap-3">
             <SpaceTopicFilters
               spaceIds={spaceIds}
-              onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
-              onSpacesClear={() => setSpaceIds([])}
+              onSpaceToggle={onSpaceToggle}
+              onSpacesClear={onSpacesClear}
               topicIds={topicIds}
               onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
               onTopicsClear={() => setTopicIds([])}
@@ -1156,15 +1241,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           </div>
         </div>
 
-        {(createRequest.error instanceof Error || leaveSession.error instanceof Error) && (
+        {/* A request error belongs on the card it was sent from; this line is the fallback for when
+            that card is no longer drawn — a tab swap, a search, a filter. Losing the message because
+            the list moved underneath it is how the failure read as silence (GEO-2807). */}
+        {leaveSession.error instanceof Error ? (
           <Text color="red-01" className="mb-4">
-            {createRequest.error instanceof Error
-              ? createRequest.error.message
-              : leaveSession.error instanceof Error
-                ? leaveSession.error.message
-                : null}
+            {leaveSession.error.message}
           </Text>
-        )}
+        ) : requestError && !requestErrorHasCard ? (
+          <div role="alert" className="mb-4">
+            <Text color="red-01">{requestError}</Text>
+          </div>
+        ) : null}
         {session?.request?.status === 'expired' && session.request.cancellation_reason && (
           <Text color="red-01" className="mb-4">
             {rematchCancellationMessage(session.request.cancellation_reason)}
@@ -1195,7 +1283,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   label: 'Clear filters',
                   onClick: () => {
                     setSearch('');
-                    setSpaceIds([]);
+                    // The menu's own clear row, so this counts as choosing the unfiltered list and
+                    // the default cannot put its spaces back.
+                    onSpacesClear();
                     setTopicIds([]);
                   },
                 }
@@ -1324,6 +1414,7 @@ function RematchClaimCard({
   readiness: claimReadiness,
   onRequest,
   busy,
+  requestError,
 }: {
   claim: DebateRematchClaim;
   session: DebateRematchSession | null;
@@ -1334,6 +1425,8 @@ function RematchClaimCard({
   /** True while any readiness lookup is still running or has failed. */
   onRequest: () => void;
   busy: boolean;
+  /** The last request error for this claim. */
+  requestError?: string | null;
 }) {
   const remotePosition = claim.participants.find(side => side.user_id !== currentUserId)?.position ?? null;
 
@@ -1379,7 +1472,8 @@ function RematchClaimCard({
    *
    * Matching the card's threshold is what keeps a card and its own footer describing one moment.
    */
-  const inFlightResponse = optimisticResponse !== undefined ? optimisticResponse : responseIndexing.pending?.expectedResponse;
+  const inFlightResponse =
+    optimisticResponse !== undefined ? optimisticResponse : responseIndexing.pending?.expectedResponse;
 
   const localPosition =
     inFlightResponse === undefined
@@ -1474,6 +1568,11 @@ function RematchClaimCard({
       // lands. Until then `chatPosition` reads as "no position" for someone the summaries
       // may already count, and the card would draw them onto a second side.
       viewerIdentityPending={currentUserId === null}
+      // geo-chat has no row for this claim, which `readiness.viewer_response` below flattens to the
+      // same `null` it uses for "no position". The card needs the difference: its sides here are the
+      // graph's, and correcting them against an answer nobody gave takes the viewer off the side
+      // the graph says they hold (GEO-2807).
+      viewerResponseUnknown={chatPosition === undefined}
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
       // rematch behind, so open it beside the picker instead.
       onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}
@@ -1481,7 +1580,7 @@ function RematchClaimCard({
         // `recently_rejected` too: the note lives in this footer, and it is a standing fact about
         // the claim rather than a state of the offer. Without it a rejected claim the viewer has no
         // position on lost the explanation along with the button.
-        awaitingResponse || canRequest || requesting || claim.recently_rejected ? (
+        awaitingResponse || canRequest || requesting || claim.recently_rejected || requestError ? (
           <div className="mt-3">
             {/* GEO-2697. The wait lives on the control it is blocking. This used to be a separate
                 spinner line rendered *instead* of the button, which left the viewer watching a
@@ -1509,6 +1608,14 @@ function RematchClaimCard({
               <Text as="p" variant="footnote" color="grey-04" className="mt-1">
                 Recently rejected
               </Text>
+            ) : null}
+            {/* Keep request feedback with the claim that initiated the mutation. */}
+            {requestError ? (
+              <div role="alert" className="mt-1">
+                <Text as="p" variant="footnote" color="red-01">
+                  {requestError}
+                </Text>
+              </div>
             ) : null}
           </div>
         ) : null

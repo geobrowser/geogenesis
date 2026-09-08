@@ -1,3 +1,5 @@
+import { reportError } from '~/core/telemetry/logger';
+
 /**
  * Per-EOA send serialization. The kernel client computes the nonce at submit time, so
  * two overlapping sends compute the same nonce and the bundler rejects the second
@@ -38,40 +40,86 @@ export class QueuedSendTimeoutError extends Error {
  */
 export const MAX_QUEUE_WAIT_MS = 120_000;
 
-const NONCE_RETRY_ATTEMPTS = 3;
-const NONCE_RETRY_DELAY_MS = 500;
+/**
+ * Backoff rather than a flat delay, because the thing being waited on is a block, not a
+ * fixed lag. This chain only produces blocks when something happens — that is what
+ * gaia's `chain-keepalive` CronJob exists for, nudging it after 10 minutes idle — so the
+ * gap between a confirmed send and the next block that advances the nonce read is
+ * unbounded in principle and frequently seconds rather than milliseconds. The previous
+ * 3 x 500ms could not span even one slow block.
+ *
+ * Total worst case ~7.5s of waiting. That is deliberately bounded: a send holds its queue
+ * slot for this plus the receipt wait (RECEIPT_DEADLINE_MS = 90s), and the sum must stay
+ * under MAX_QUEUE_WAIT_MS or a queued send behind it is failed as timed-out having never
+ * been submitted. 7.5 + 90 < 120 holds. Raising either value means re-checking that sum.
+ */
+const SUBMISSION_RETRY_DELAYS_MS = [500, 1_000, 2_000, 4_000] as const;
 
-const isInvalidAccountNonceError = (error: unknown): boolean => {
+const RETRYABLE_SUBMISSION_ERROR_NAMES = new Set([
+  // AA25 — the account nonce read (via a plain RPC) lagged the bundler's view.
+  'InvalidAccountNonceError',
+  // AA13/AA23 — EntryPoint rejected the op during simulateValidation. Same cause in
+  // practice on this chain (stale account state at validation time), and reported by two
+  // users on 2026-09-03 as a raw dialog because nothing retried it. See GEO-2810.
+  'UserOperationRejectedByEntryPointError',
+]);
+
+/**
+ * Validation-phase rejections from `eth_sendUserOperation`.
+ *
+ * Every name here MUST be one the bundler can only throw *before* returning a hash. That
+ * is the whole basis for retrying: by the ERC-4337 spec nothing entered the mempool, so a
+ * second attempt cannot duplicate an on-chain op. Adding a name that can also surface
+ * after submission would turn this into the duplicate-publish bug described in
+ * `useSmartAccount` — check that property before extending the set.
+ */
+const isRetryableSubmissionError = (error: unknown): boolean => {
   if (!(error instanceof Error)) return false;
+  const matches = (e: unknown) => RETRYABLE_SUBMISSION_ERROR_NAMES.has((e as Error)?.name);
   const walk = (error as { walk?: (fn: (e: unknown) => boolean) => unknown }).walk;
   if (typeof walk === 'function') {
-    return Boolean(walk.call(error, e => (e as Error)?.name === 'InvalidAccountNonceError'));
+    return Boolean(walk.call(error, matches));
   }
-  return error.name === 'InvalidAccountNonceError';
+  return matches(error);
 };
 
 /**
- * AA25 ("Invalid Smart Account nonce used for User Operation") is a bundler
- * validation-phase rejection thrown from eth_sendUserOperation before any hash is
- * returned — by the ERC-4337 spec, nothing was accepted into the mempool. Retrying is
- * safe for the same reason QueuedSendTimeoutError is safe to retry: never submitted.
- * A short retry absorbs the case where the account's on-chain nonce read (via a
- * separate RPC client from the bundler) lags just behind a just-confirmed prior send
- * on the same key — the next read picks up the advanced nonce.
+ * Retry a bundler *submission* that was rejected during validation.
+ *
+ * A rejection at this phase (AA25, or an EntryPoint `simulateValidation` refusal) comes
+ * from eth_sendUserOperation before any hash is returned — by the ERC-4337 spec nothing
+ * was accepted into the mempool. Retrying is safe for the same reason
+ * QueuedSendTimeoutError is safe to retry: never submitted. The retry absorbs the case
+ * where the account's on-chain state, read via a separate RPC client from the bundler,
+ * lags behind a just-confirmed prior send on the same key.
+ *
+ * **Pass only the submission.** The caller must not include receipt confirmation in
+ * `task`: a confirm-phase failure re-entering this loop would re-send an op that is
+ * already landing. Today's error names cannot come from the confirm phase, so that would
+ * be latent rather than immediate — which is exactly the kind of bug that surfaces months
+ * later as a duplicate publish. The narrow scope is the guard, not the predicate.
+ *
+ * Exhaustion is reported: before this, the only signal these were happening at all was a
+ * user pasting a screenshot (GEO-2810).
  */
-export const withNonceRetry = async <T>(task: () => Promise<T>): Promise<T> => {
+export const withSubmissionRetry = async <T>(task: () => Promise<T>): Promise<T> => {
+  const attempts = SUBMISSION_RETRY_DELAYS_MS.length + 1;
   let lastError: unknown;
-  for (let attempt = 0; attempt < NONCE_RETRY_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     try {
       return await task();
     } catch (error) {
       lastError = error;
-      if (!isInvalidAccountNonceError(error)) throw error;
-      if (attempt < NONCE_RETRY_ATTEMPTS - 1) {
-        await new Promise(resolve => setTimeout(resolve, NONCE_RETRY_DELAY_MS));
+      if (!isRetryableSubmissionError(error)) throw error;
+      if (attempt < attempts - 1) {
+        await new Promise(resolve => setTimeout(resolve, SUBMISSION_RETRY_DELAYS_MS[attempt]));
       }
     }
   }
+  reportError(lastError, {
+    tags: { area: 'smart-account', phase: 'submission', outcome: 'retries-exhausted' },
+    contexts: { retry: { attempts, totalDelayMs: SUBMISSION_RETRY_DELAYS_MS.reduce((a, b) => a + b, 0) } },
+  });
   throw lastError;
 };
 

@@ -105,6 +105,13 @@ export function ClaimEndSlot({
       : 'inline-flex h-5 shrink-0 px-2.5 text-[14px] leading-none'
   );
 
+  // A match is derived from the same `debate_claim_readiness` rows `create_debate_request_as` reads,
+  // so no additional position check belongs here — one against the graph would only be slower.
+  //
+  // Not a guarantee the request will be accepted: the match query omits that endpoint's
+  // `validation_failed_at IS NULL` / `last_validated_at IS NOT NULL` predicates and its
+  // attempted-recipient exclusion, so a failed validation sweep or an already-tried opponent still
+  // draws a live button. Which is why the refusal below is rendered rather than swallowed.
   if (match) {
     return (
       <span className={cx('flex flex-col gap-1', variant === 'block' ? 'w-full' : 'shrink-0 items-end', className)}>

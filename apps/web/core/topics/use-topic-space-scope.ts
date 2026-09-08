@@ -11,10 +11,17 @@ import { validateSpaceId } from '~/core/utils/utils';
  * currently is.
  *
  * The curated set is the same one the debates surfaces already use — featured spaces, plus the
- * spaces the viewer is a member or editor of, plus their own — assembled by
- * `buildClaimSpaceAllowlist`. Reusing it rather than defining a second notion of "spaces that
- * count" is the point: a claim that shows in the debates panel and the same claim on a topic page
- * should not disagree about whether its space exists.
+ * spaces the viewer belongs to — assembled by `buildClaimSpaceAllowlist`. Reusing it rather than
+ * defining a second notion of "spaces that count" is the point: a claim that shows in the debates
+ * panel and the same claim on a topic page should not disagree about whether its space exists.
+ *
+ * "Belongs to" includes a space the viewer has only *requested* to join (GEO-2789). That is wider
+ * than the line `useGlobalSearchSpaceIds` draws off the same lists, and it is deliberate there —
+ * sign-up collects a viewer's spaces before any approval exists, so a new account would otherwise
+ * spend its first minutes looking at a page with none of the spaces it had just chosen. Worth
+ * knowing here because this is the one consumer of the allowlist with no second gate behind it:
+ * the debates surfaces narrow again by whether a debate can be published in a space, and this
+ * does not, so the widening reaches a topic page whole.
  *
  * The route's space is added on top, so a topic opened inside a space always shows that space's
  * content even when it isn't curated. That is the half of this that a viewer would notice

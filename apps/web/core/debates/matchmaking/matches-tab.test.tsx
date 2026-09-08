@@ -12,8 +12,6 @@ import { MatchesTab } from './matches-tab';
 const mocks = vi.hoisted(() => ({
   matches: [] as MatchmakingMatch[],
   outbound: null as unknown,
-  joinMutateAsync: vi.fn(),
-  leaveMutateAsync: vi.fn(),
   createRequestMutate: vi.fn(),
   submitResponse: vi.fn(),
   indexing: { status: 'idle', pending: null, runId: null } as {
@@ -30,9 +28,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../hooks', () => ({
   useDebateActivity: () => ({ data: { outbound_request: null, available_to_debate: mocks.availableToDebate } }),
-  // The readiness switch rides the shared queue-backed machine rather than a one-shot mutation.
-  // Mirrors the real key factory: the readiness machine refetches these families before it
-  // retries a `claim_response_required`.
+  // Mirrors the real key factory: `vi.mock` replaces the whole module, so every query key read
+  // below this needs one here.
   debateQueryKeys: {
     matchmakingClaimsRoot: (accountKey: string | null) =>
       ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
@@ -40,8 +37,6 @@ vi.mock('../hooks', () => ({
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
-  useJoinDebateQueue: () => ({ mutateAsync: mocks.joinMutateAsync, reset: vi.fn(), isPending: false, error: null }),
-  useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutateAsync, isPending: false, error: null }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -158,10 +153,6 @@ function match(overrides: Partial<MatchmakingMatch> = {}): MatchmakingMatch {
 beforeEach(() => {
   mocks.matches = [match()];
   mocks.outbound = null;
-  mocks.joinMutateAsync.mockReset();
-  mocks.joinMutateAsync.mockResolvedValue({ claim: null, match: null });
-  mocks.leaveMutateAsync.mockReset();
-  mocks.leaveMutateAsync.mockResolvedValue({ claim: null, match: null });
   mocks.createRequestMutate.mockReset();
   mocks.submitResponse.mockReset();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
