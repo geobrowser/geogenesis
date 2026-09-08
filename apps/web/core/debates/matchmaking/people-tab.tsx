@@ -17,6 +17,7 @@ import { speakerLabel } from '../playback-utils';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls } from './claims-tab';
+import { DebateHoursNote } from './debate-hours-note';
 import { useDebatePeople, useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
@@ -116,6 +117,9 @@ export function PeopleTab() {
           emptyMessage={
             search.trim() ? 'Nobody available matches that search.' : 'Nobody is available to debate right now.'
           }
+          // Only the nobody-online case. A search that matched nothing is the viewer's own filter,
+          // and pointing them at debate hours would answer a question they didn't ask (GEO-2840).
+          emptyNote={search.trim() ? undefined : <DebateHoursNote />}
           emptyAction={search.trim() ? { label: 'Clear search', onClick: () => setSearch('') } : undefined}
           signInAction={
             onRequireSignIn

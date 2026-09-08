@@ -325,4 +325,24 @@ describe('MatchesTab', () => {
 
     expect(screen.getByRole('button', { name: /Any space/ }).closest('.sticky')).not.toBeNull();
   });
+
+  // GEO-2840.
+  it('adds the debate hours line to the empty state', async () => {
+    mocks.matches = [];
+    render(<MatchesTab onTabChange={vi.fn()} />);
+
+    expect(await screen.findByText(/Matches appear once you/)).toBeInTheDocument();
+    expect(screen.getByText(/Debate hours are every day between|Stay here and you/)).toBeInTheDocument();
+  });
+
+  // Being marked unavailable is a cause the viewer owns and can undo in a click, so the empty list
+  // is already explained. Debate hours would answer a question they are not asking.
+  it('withholds the debate hours line when the viewer is the reason the list is empty', async () => {
+    mocks.matches = [];
+    mocks.availableToDebate = false;
+    render(<MatchesTab onTabChange={vi.fn()} />);
+
+    expect(await screen.findByText(/marked unavailable/)).toBeInTheDocument();
+    expect(screen.queryByText(/Debate hours are every day between|Stay here and you/)).not.toBeInTheDocument();
+  });
 });

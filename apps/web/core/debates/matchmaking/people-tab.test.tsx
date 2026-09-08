@@ -164,6 +164,24 @@ describe('PeopleTab', () => {
     expect(await screen.findByText('Arturas')).toBeInTheDocument();
   });
 
+  // GEO-2840. The debate-hours line belongs to the nobody-online state only; a list the viewer
+  // emptied with their own search is a different problem, and pointing at 9am does not answer it.
+  it('adds the debate hours line when nobody is online, but not when a search emptied the list', async () => {
+    mocks.people = [];
+    render(<PeopleTab />);
+
+    expect(await screen.findByText('Nobody is available to debate right now.')).toBeInTheDocument();
+    expect(screen.getByText(/Debate hours are every day between|Stay here and you/)).toBeInTheDocument();
+
+    cleanup();
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab />);
+    fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'nobody-by-this-name' } });
+
+    expect(await screen.findByText('Nobody available matches that search.')).toBeInTheDocument();
+    expect(screen.queryByText(/Debate hours are every day between|Stay here and you/)).not.toBeInTheDocument();
+  });
+
   it('pins search alongside a sent request rather than in a second sticky', () => {
     // Two stickies would both claim top-0 and overlap; the card is conditional, so search could
     // not be offset by a known height either.

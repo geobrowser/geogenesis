@@ -37,6 +37,7 @@ import {
 } from '../tagged-claims';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
+import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests } from './hooks';
 import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
@@ -654,6 +655,12 @@ export function ClaimsTab() {
                 : 'No claims match these filters.'
               : NOTHING_HERE[filter]
           }
+          // "Debate now" is the only filter here scored on who is online, so it is the only one an
+          // empty list means "nobody is around" for — Featured and All claims are statements about
+          // curation, and My positions is about the viewer. Withheld under a narrowing filter for
+          // the same reason it is on the other tabs: that emptiness has a different cause
+          // (GEO-2840).
+          emptyNote={filter === 'debate_now' && !hasNarrowingFilters ? <DebateHoursNote /> : undefined}
           emptyAction={
             hasFilters
               ? {

@@ -5,6 +5,7 @@ import * as React from 'react';
 import type { MatchmakingMatch } from '../api';
 import { useDebateActivity } from '../hooks';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
+import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
@@ -80,6 +81,10 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
               ? 'You’re marked unavailable, so nobody can be matched with you.'
               : 'Matches appear once you’ve taken a position on a claim and someone holding the opposite position is online and ready too.'
           }
+          // Withheld in the two cases where the empty list has a cause of its own. A space filter
+          // means the viewer excluded the matches, and being marked unavailable means the viewer
+          // excluded themselves — neither is answered by "come back at 9am" (GEO-2840).
+          emptyNote={spaceIds.length === 0 && activity?.available_to_debate !== false ? <DebateHoursNote /> : undefined}
           emptyAction={{ label: 'Browse claims', onClick: () => onTabChange('claims') }}
         >
           <HubCardList>
