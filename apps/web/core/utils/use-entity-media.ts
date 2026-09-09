@@ -47,6 +47,22 @@ export function useVideoUrlFromEntity(videoEntityId: string | undefined, spaceId
   return findMediaUrlValue(videoValues);
 }
 
+/**
+ * True when this entity's relation for `propertyId` survives only as a local
+ * deletion. The fetched fallback in the hooks below is cached for five minutes and
+ * outlives the relation disappearing, so without this a removed image keeps
+ * rendering from that cache — and comes back the next time a view reopens.
+ */
+function useIsLocallyRemoved(entityId: string | undefined, propertyId: string, spaceId: string, hasLive: boolean) {
+  const deleted = useRelation({
+    includeDeleted: true,
+    selector: r =>
+      r.fromEntity.id === entityId && r.type.id === propertyId && r.spaceId === spaceId && r.isDeleted === true,
+  });
+
+  return Boolean(deleted) && !hasLive;
+}
+
 export function useEntityAvatarUrl(entityId: string | undefined, spaceId: string): string | undefined {
   const [fetchedAvatarUrl, setFetchedAvatarUrl] = React.useState<string | undefined>(undefined);
   const cache = useQueryClient();
@@ -57,6 +73,7 @@ export function useEntityAvatarUrl(entityId: string | undefined, spaceId: string
 
   const storeAvatarEntityId = storeAvatarRelation?.toEntity.id;
   const storeImageUrl = useImageUrlFromEntity(storeAvatarEntityId, spaceId);
+  const isRemoved = useIsLocallyRemoved(entityId, ContentIds.AVATAR_PROPERTY, spaceId, Boolean(storeAvatarRelation));
 
   React.useEffect(() => {
     if (!entityId || storeImageUrl) {
@@ -92,6 +109,8 @@ export function useEntityAvatarUrl(entityId: string | undefined, spaceId: string
     fetchAvatar();
   }, [entityId, spaceId, storeImageUrl, cache]);
 
+  if (isRemoved) return undefined;
+
   return storeImageUrl ?? fetchedAvatarUrl;
 }
 
@@ -105,6 +124,7 @@ export function useEntityCoverUrl(entityId: string | undefined, spaceId: string)
 
   const storeCoverEntityId = storeCoverRelation?.toEntity.id;
   const storeImageUrl = useImageUrlFromEntity(storeCoverEntityId, spaceId);
+  const isRemoved = useIsLocallyRemoved(entityId, SystemIds.COVER_PROPERTY, spaceId, Boolean(storeCoverRelation));
 
   React.useEffect(() => {
     if (!entityId || storeImageUrl) {
@@ -139,6 +159,8 @@ export function useEntityCoverUrl(entityId: string | undefined, spaceId: string)
 
     fetchCover();
   }, [entityId, spaceId, storeImageUrl, cache]);
+
+  if (isRemoved) return undefined;
 
   return storeImageUrl ?? fetchedCoverUrl;
 }

@@ -63,6 +63,13 @@ type StagedEdit = {
   rows: StagedRows;
   /** The draft these rows came from, so Retry can tell a re-send from a new edit. */
   draft: ProfileDraft;
+  /**
+   * The entity's values as they stood before this edit touched anything. Held
+   * because `current` reads back through the local store, so once rows are staged
+   * it reports the unpublished edit rather than what is actually published — and
+   * re-staging against it would skip the fields that appear already applied.
+   */
+  baseline: { name: string; description: string };
 };
 
 const IMAGE_PROPERTIES = {
@@ -141,14 +148,21 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // After the clear, not before: `clearLocalChangesByIds` restores the synced
       // baseline for every id it drops, which would win over a snapshot put back
       // first.
-      rows.overwritten.forEach(value => storage.values.set(value));
-      rows.overwrittenRelations.forEach(relation => storage.relations.set(relation));
+      //
+      // A snapshot can itself be a tombstone — someone's pending *deletion* that
+      // this edit wrote over. `set` forces `isDeleted = false`, so putting one back
+      // that way would resurrect the row and destroy the deletion; each snapshot
+      // goes back through the API matching the state it was captured in.
+      rows.overwritten.forEach(value => (value.isDeleted ? storage.values.delete(value) : storage.values.set(value)));
+      rows.overwrittenRelations.forEach(relation =>
+        relation.isDeleted ? storage.relations.delete(relation) : storage.relations.set(relation)
+      );
     },
     [spaceId, storage]
   );
 
   const stage = React.useCallback(
-    async (draft: ProfileDraft): Promise<StagedEdit> => {
+    async (draft: ProfileDraft, baseline: StagedEdit['baseline']): Promise<StagedEdit> => {
       // Row ids this modal wrote, tracked as it goes so a failed upload can undo
       // the writes that already landed. Scoping the collection below to these —
       // rather than to everything unpublished on the person entity — keeps an
@@ -206,11 +220,11 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       };
 
       try {
-        if (draft.name !== current.name) {
+        if (draft.name !== baseline.name) {
           setValue(SystemIds.NAME_PROPERTY, 'Name', draft.name);
         }
 
-        if (draft.description !== current.description) {
+        if (draft.description !== baseline.description) {
           if (draft.description === '') {
             const existing = getValues({
               selector: v =>
@@ -251,9 +265,11 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
           });
           const liveEdges = priorEdges.filter(r => !r.isDeleted);
 
-          // Locally-created edges have no synced baseline, so clearing them on
-          // rollback would erase them outright rather than restore anything.
-          liveEdges.filter(r => r.isLocal === true).forEach(r => written.overwrittenRelations.push(r));
+          // Every pre-existing local edge, tombstones included. A replacement made
+          // through the normal editor is *two* local rows — a tombstone for the old
+          // remote edge and a live replacement — and restoring only the live one
+          // would leave the old edge back alongside it and the deletion lost.
+          priorEdges.filter(r => r.isLocal === true).forEach(r => written.overwrittenRelations.push(r));
 
           storage.relations.deleteMany(liveEdges);
           priorEdges.forEach(r => written.relationIds.add(r.id));
@@ -308,9 +324,10 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
           overwrittenRelations: written.overwrittenRelations,
         },
         draft,
+        baseline,
       };
     },
-    [current.description, current.name, entityId, rollback, spaceId, storage]
+    [entityId, rollback, spaceId, storage]
   );
 
   /**
@@ -375,8 +392,13 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   React.useEffect(() => {
     if (!ownsPendingError.current) return;
     if (statusBarState.reviewState !== 'publish-error') return;
+    // Stay pending while closed rather than consuming the flag here. A failure that
+    // lands after the user walked away reopens the modal (see the dialog), and
+    // consuming it now would leave the global error standing alongside the one the
+    // modal is about to show — two dialogs, two retries that can race each other.
+    if (!isOpen) return;
     ownsPendingError.current = false;
-    if (isOpen) dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+    dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
   }, [dispatch, isOpen, statusBarState.reviewState]);
 
   const publish = React.useCallback(
@@ -387,8 +409,16 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // only while it is still the same edit. The fields stay live in the error
       // state, so a draft the user has since changed has to be re-staged, or
       // Retry would publish what they just edited away from and report success.
-      if (stagedRef.current && !isSameDraft(stagedRef.current.draft, draft)) {
-        rollback(stagedRef.current.rows);
+      //
+      // The baseline carries over from the attempt being replaced. `current` reads
+      // through the local store, so a failed attempt's own rows are in it; re-staging
+      // against that would treat the fields it already wrote as unchanged and quietly
+      // drop them from the retry.
+      const previouslyStaged = stagedRef.current;
+      const baseline = previouslyStaged?.baseline ?? { name: current.name, description: current.description };
+
+      if (previouslyStaged && !isSameDraft(previouslyStaged.draft, draft)) {
+        rollback(previouslyStaged.rows);
         stagedRef.current = null;
       }
 
@@ -398,7 +428,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
       if (!stagedRef.current) {
         try {
-          stagedRef.current = await stage(draft);
+          stagedRef.current = await stage(draft, baseline);
         } catch (error) {
           console.error('[edit-profile] failed to stage profile edit', error);
           setStatus('error');
@@ -431,7 +461,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         },
       });
     },
-    [canEdit, makeProposal, rollback, settleSuccess, spaceId, stage]
+    [canEdit, current.description, current.name, makeProposal, rollback, settleSuccess, spaceId, stage]
   );
 
   return {

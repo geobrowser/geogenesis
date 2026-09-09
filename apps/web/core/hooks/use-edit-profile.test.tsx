@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   createAndLink: vi.fn(),
   deleteRelations: vi.fn(),
   setRelation: vi.fn(),
+  deleteRelation: vi.fn(),
+  deleteValue: vi.fn(),
   deleteValues: vi.fn(),
   setValue: vi.fn(),
   clearLocalChangesByIds: vi.fn(),
@@ -27,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   dispatch: vi.fn(),
   reviewState: 'idle' as string,
   entityName: 'Preston' as string | null,
+  entityDescription: 'Working on debates.' as string | null,
   // Literals, not the consts above: vi.hoisted runs before their initialisers.
   personalEntityId: '3eb17193b0ae44fe9083ce931bc9210e' as string | null,
   profile: { id: '3eb17193b0ae44fe9083ce931bc9210e', name: 'Preston', avatarUrl: null } as {
@@ -68,7 +71,7 @@ vi.mock('~/core/state/status-bar-store', () => ({
 vi.mock('~/core/database/entities', () => ({
   useEntity: () => ({
     name: mocks.entityName,
-    description: 'Working on debates.',
+    description: mocks.entityDescription,
     relations: [],
     isLoading: false,
   }),
@@ -83,8 +86,8 @@ vi.mock('~/core/utils/use-entity-media', () => ({
 vi.mock('~/core/sync/use-mutate', () => ({
   useMutate: () => ({
     storage: {
-      values: { set: mocks.setValue, deleteMany: mocks.deleteValues },
-      relations: { deleteMany: mocks.deleteRelations, set: mocks.setRelation },
+      values: { set: mocks.setValue, deleteMany: mocks.deleteValues, delete: mocks.deleteValue },
+      relations: { deleteMany: mocks.deleteRelations, set: mocks.setRelation, delete: mocks.deleteRelation },
       images: { createAndLink: mocks.createAndLink },
     },
   }),
@@ -146,6 +149,7 @@ beforeEach(() => {
   });
   mocks.reviewState = 'idle';
   mocks.entityName = 'Preston';
+  mocks.entityDescription = 'Working on debates.';
   mocks.personalEntityId = ENTITY_ID;
   mocks.profile = { id: ENTITY_ID, name: 'Preston', avatarUrl: null };
   mocks.storeValues = [];
@@ -536,6 +540,30 @@ describe('useEditProfile', () => {
     expect(mocks.setStoredAvatar).not.toHaveBeenCalled();
   });
 
+  // A failure that lands while closed reopens the modal. Consuming the flag before
+  // that leaves the global error standing next to the one the modal is about to
+  // show — two dialogs, two retries that can race.
+  it('holds the global error until the modal is back on screen to own it', async () => {
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+
+    const { result, rerender } = renderHook(({ isOpen }) => useEditProfile({ isOpen }), {
+      initialProps: { isOpen: false },
+    });
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    mocks.reviewState = 'publish-error';
+    rerender({ isOpen: false });
+    expect(mocks.dispatch).not.toHaveBeenCalled();
+
+    rerender({ isOpen: true });
+    expect(mocks.dispatch).toHaveBeenCalledWith({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+  });
+
   it('leaves an unrelated publish failure showing in the status bar', async () => {
     // Only the error this modal actually caused gets cleared. Suppressing on
     // status alone would swallow someone else's failure that landed while the
@@ -633,6 +661,83 @@ describe('useEditProfile', () => {
     // A locally-created edge has no synced baseline, so clearing it would erase it
     // outright rather than restore anything.
     expect(mocks.setRelation).toHaveBeenCalledWith(pendingEdge);
+  });
+
+  // `store.setValue`/`setRelation` force `isDeleted = false`, so putting a snapshot
+  // back with `set` would resurrect a pending *deletion* this edit wrote over.
+  it('restores an overwritten tombstone as a deletion, not as a live value', async () => {
+    const theirPendingDeletion = {
+      ...stagedValue(SystemIds.NAME_PROPERTY),
+      isDeleted: true,
+      value: 'Name they were deleting',
+    } as Value;
+    mocks.storeValues = [theirPendingDeletion];
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    act(() => result.current.reset());
+
+    expect(mocks.deleteValue).toHaveBeenCalledWith(theirPendingDeletion);
+    expect(mocks.setValue).not.toHaveBeenCalledWith(theirPendingDeletion);
+  });
+
+  // A replacement made in the normal editor is two local rows: a tombstone for the
+  // old remote edge and a live replacement. Restoring only the live one leaves the
+  // old edge back alongside it, with the deletion lost.
+  it('restores both halves of a pending image replacement it wrote over', async () => {
+    const theirTombstone = relation({ id: 'old-remote-edge', isLocal: true, isDeleted: true });
+    const theirReplacement = relation({ id: 'their-replacement', isLocal: true });
+    mocks.storeRelations = [theirTombstone, theirReplacement];
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ banner: { kind: 'removed' } }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    act(() => result.current.reset());
+
+    expect(mocks.setRelation).toHaveBeenCalledWith(theirReplacement);
+    expect(mocks.deleteRelation).toHaveBeenCalledWith(theirTombstone);
+  });
+
+  // `current` reads back through the local store, so a failed attempt's own rows
+  // are in it. Re-staging against that treats the fields it already wrote as
+  // unchanged and silently drops them from the retry.
+  it('re-stages an edited draft against the original baseline, not the failed edit', async () => {
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY), stagedValue(SystemIds.DESCRIPTION_PROPERTY)];
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+
+    const { result, rerender } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'B', description: 'Y' }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    // The store now reports the failed edit, exactly as `useEntity` would.
+    mocks.entityName = 'B';
+    mocks.entityDescription = 'Y';
+    rerender();
+
+    mocks.setValue.mockClear();
+    await act(async () => {
+      await result.current.publish(draft({ name: 'C', description: 'Y' }));
+    });
+
+    // Y still has to be written: it was rolled back with the rest of the attempt,
+    // and remotely the description is still the original.
+    const written = mocks.setValue.mock.calls.map(call => (call[0] as Value).value);
+    expect(written).toContain('C');
+    expect(written).toContain('Y');
   });
 
   it('rolls back an image entity minted before a later upload failed', async () => {
