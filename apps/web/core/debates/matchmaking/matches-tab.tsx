@@ -90,21 +90,21 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
               ? 'You’re marked unavailable, so nobody can be matched with you.'
               : 'Matches appear once you’ve taken a position on a claim and someone holding the opposite position is online and ready too.'
           }
-          // GEO-2840, and withheld in the two cases where the empty list has a cause of its own.
-          // Read off `serverMatches` rather than off the space filter: with nothing to match on at
-          // all, the filter is not what emptied the list, so the test is whether anyone is there
-          // and not whether the viewer has narrowed. Being marked unavailable is the viewer's own
-          // switch, undoable in a click, and "come back at 9am" does not answer it.
+          // GEO-2840. Read off `serverMatches` rather than off the space filter: with nothing to
+          // match on at all, the filter is not what emptied the list, so the test is whether anyone
+          // is there and not whether the viewer has narrowed.
+          //
+          // Deliberately *not* also gated on the viewer's availability, though the message above
+          // branches on it. geo-chat's matches query never reads the viewer's own
+          // `available_to_debate` — it walks their readiness rows and drops a claim only when the
+          // opposite side has nobody available — so an unavailable viewer's empty list is a
+          // nobody-is-online list like anyone else's. Withholding the pointer to debate hours from
+          // them left the one explanation they can act on being one that would not change anything.
+          // Availability gates *sending a request*, which is where the card already says so.
+          //
           // `live` unconditionally: `SIGNED_OUT_TABS` in the panel keeps this tab off the signed-out
           // hub entirely, so every viewer here holds the gateway scope.
-          //
-          // `=== true`, not `!== false`. The skeleton above waits out the loading case, but an
-          // activity request that has exhausted its retries leaves `isLoading` false and `data`
-          // undefined — availability unknown rather than confirmed. Requiring the positive value
-          // withholds the note there instead of guessing the viewer is available.
-          emptyNote={
-            serverMatches.length === 0 && activity?.available_to_debate === true ? <DebateHoursNote live /> : undefined
-          }
+          emptyNote={serverMatches.length === 0 ? <DebateHoursNote live /> : undefined}
           emptyAction={{ label: 'Browse claims', onClick: () => onTabChange('claims') }}
         >
           <HubCardList>

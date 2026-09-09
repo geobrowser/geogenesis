@@ -359,25 +359,27 @@ describe('MatchesTab', () => {
     const { rerender } = render(<MatchesTab onTabChange={vi.fn()} />);
 
     expect(screen.queryByText(/Matches appear once you/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/marked unavailable/)).not.toBeInTheDocument();
 
     mocks.activityLoading = false;
     rerender(<MatchesTab onTabChange={vi.fn()} />);
 
+    // The message is what needed the answer; the note never did. Awaited rather than read
+    // synchronously: the note renders nothing until its own mount effect has run, and here it is
+    // mounting for the first time as the skeleton cross-fades out.
     expect(await screen.findByText(/marked unavailable/)).toBeInTheDocument();
-    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).not.toBeInTheDocument();
+    expect(await screen.findByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
   });
 
-  // An activity request that has run out of retries settles with no data: `isLoading` false,
-  // `available_to_debate` unknown rather than confirmed. The skeleton above cannot wait that out,
-  // so the note has to require the positive answer instead of reading "not false" as "available".
-  it('withholds the debate hours line when the availability answer never arrives', async () => {
+  // The note does not read availability at all, so an activity request that ran out of retries
+  // cannot take it away. Only the message above depends on that answer.
+  it('still shows the debate hours line when the availability answer never arrives', async () => {
     mocks.matches = [];
     mocks.activityErrored = true;
     render(<MatchesTab onTabChange={vi.fn()} />);
 
     expect(await screen.findByText(/Matches appear once you/)).toBeInTheDocument();
-    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
   });
 
   // Only while there is nothing to show. A list with rows renders on the matches alone.
@@ -388,14 +390,17 @@ describe('MatchesTab', () => {
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
   });
 
-  // Being marked unavailable is a cause the viewer owns and can undo in a click, so the empty list
-  // is already explained. Debate hours would answer a question they are not asking.
-  it('withholds the debate hours line when the viewer is the reason the list is empty', async () => {
+  // Being marked unavailable is not why the list is empty: geo-chat's matches query never reads
+  // the viewer's own `available_to_debate`, only the opposite side's — which is also why a viewer
+  // with matches still sees them while unavailable, just with the request button disabled. So an
+  // unavailable viewer's empty list is a nobody-is-online list, and the pointer to debate hours is
+  // the half of the answer they can actually use.
+  it('still shows the debate hours line to a viewer who is marked unavailable', async () => {
     mocks.matches = [];
     mocks.availableToDebate = false;
     render(<MatchesTab onTabChange={vi.fn()} />);
 
     expect(await screen.findByText(/marked unavailable/)).toBeInTheDocument();
-    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
   });
 });
