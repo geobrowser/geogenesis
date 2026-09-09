@@ -34,10 +34,14 @@ type Props = {
  * Edit profile (GEO-2839). Four fields, published straight to the viewer's
  * personal space with no review step.
  *
- * Publishing is what shapes it: the write is slow enough (p50 ~10s) that closing
- * on click would leave people looking at their old avatar with nothing to explain
- * it. So the modal stays open with the fields locked, and closing is an explicit
- * hand-off to the status bar rather than a cancel.
+ * Saving closes it. The write is slow — p50 ~10s, p95 ~48s — and the status bar
+ * carries the whole of that: the image upload, the publish, and the result. A
+ * failure reopens this modal with the draft still in it, so nothing is lost by
+ * getting out of the way in the meantime.
+ *
+ * The publishing state below is still reachable, just no longer the common path:
+ * the modal can be reopened from the menu while a save is still running, and it
+ * locks rather than offering to start a second one.
  */
 export function EditProfileDialog({ open, onOpenChange }: Props) {
   const { canEdit, isHydrated, isLoading, current, status, errorMessage, publish, reset } = useEditProfile({
@@ -160,8 +164,9 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   const canSave = canEdit && isHydrated && !isLoading && (hasChanges || hasFailed) && !isNameMissing && !isPublishing;
 
   const close = () => {
-    // Closing mid-publish hands off to the status bar; it does not cancel the
-    // write, and the staged edit stays put so the retry there can re-send it.
+    // Dismissing during a publish never cancels it, and the staged edit stays put
+    // so a retry can re-send it. Reachable by reopening the modal while a save is
+    // still running — Save itself closes without coming through here.
     if (!isPublishing) {
       reset();
       resetForm();
@@ -180,7 +185,17 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!canSave) return;
+
+    // Save hands straight off to the status bar rather than holding the screen.
+    // The wait runs to ~48s at p95, and the bar already carries all of it — the
+    // image upload, the publish, and "Changes published!" at the end — while a
+    // failure brings this modal back with the work intact. There is nothing left
+    // for a blocking dialog to add to that.
+    //
+    // No `resetForm()` here: the draft has to survive in case the publish fails
+    // and the modal is reopened on it.
     void publish({ name: publishName, description: publishDescription, banner: banner.edit, avatar: avatar.edit });
+    onOpenChange(false);
   };
 
   return (

@@ -132,12 +132,37 @@ describe('EditProfileDialog', () => {
     });
   });
 
+  // The status bar carries the upload, the publish and the result, and a failure
+  // reopens this modal — so there is no reason to hold the screen for ~10s.
+  it('closes on save and lets the status bar carry the publish', async () => {
+    const { onOpenChange } = renderDialog();
+
+    await userEvent.type(nameField(), '!');
+    await userEvent.click(saveButton());
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    // Not a cancel: the staged edit has to survive for the retry path.
+    expect(mocks.reset).not.toHaveBeenCalled();
+  });
+
+  it('keeps the draft on screen when a save closes it, in case the publish fails', async () => {
+    renderDialog();
+
+    await userEvent.clear(descriptionField());
+    await userEvent.paste('Half a thought');
+    await userEvent.click(saveButton());
+
+    // Reopening on failure has to find the work still here.
+    expect(descriptionField()).toHaveValue('Half a thought');
+  });
+
+  // Reachable by reopening the modal from the menu while a save is still running.
   describe('while publishing', () => {
     beforeEach(() => {
       mocks.status = 'publishing';
     });
 
-    it('locks the fields and names the wait rather than closing', () => {
+    it('locks the fields and names the wait rather than offering a second save', () => {
       renderDialog();
 
       // The wait takes over the footer's one line rather than adding a second.
