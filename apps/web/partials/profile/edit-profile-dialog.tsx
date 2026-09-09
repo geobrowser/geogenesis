@@ -156,8 +156,8 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   // Not while the entity is still loading: the profile fallback can already show
   // an avatar, and staging a replacement before the relations arrive would add a
   // second image edge instead of retargeting the one that exists.
-  const canSave =
-    canEdit && isHydrated && !isLoading && (hasChanges || hasFailed) && publishName.trim() !== '' && !isPublishing;
+  const isNameMissing = publishName.trim() === '';
+  const canSave = canEdit && isHydrated && !isLoading && (hasChanges || hasFailed) && !isNameMissing && !isPublishing;
 
   const close = () => {
     // Closing mid-publish hands off to the status bar; it does not cancel the
@@ -260,7 +260,12 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
 
             <div className="flex flex-col gap-4 px-5 pt-5">
               <label className="flex flex-col gap-1.5">
-                <span className="text-metadataMedium text-grey-04">Name</span>
+                <span className="text-metadataMedium text-grey-04">
+                  Name
+                  <span aria-hidden className="pl-0.5 text-red-01">
+                    *
+                  </span>
+                </span>
                 <Input
                   value={name}
                   onChange={event => {
@@ -269,7 +274,19 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   }}
                   disabled={isPublishing}
                   placeholder="Your name"
+                  required
+                  aria-required="true"
+                  aria-invalid={isNameMissing}
+                  aria-describedby={isNameMissing ? 'edit-profile-name-error' : undefined}
                 />
+                {/* Name is the only thing that blocks Save. Without this the button
+                    just sits disabled, which says nothing to anyone and nothing at
+                    all to a screen reader. */}
+                {isNameMissing && (
+                  <span id="edit-profile-name-error" role="alert" className="text-footnote text-red-01">
+                    Name is required.
+                  </span>
+                )}
               </label>
 
               <label className="flex flex-col gap-1.5">

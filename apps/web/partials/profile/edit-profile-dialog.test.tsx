@@ -83,11 +83,25 @@ describe('EditProfileDialog', () => {
     expect(saveButton()).toBeEnabled();
   });
 
-  it('blocks save on a blank name — the one required field', async () => {
+  it('blocks save on a blank name, and says why', async () => {
     renderDialog();
 
     await userEvent.clear(nameField());
+
     expect(saveButton()).toBeDisabled();
+    // A disabled button on its own explains nothing, and nothing at all to a
+    // screen reader.
+    expect(screen.getByRole('alert')).toHaveTextContent('Name is required.');
+    expect(nameField()).toBeInvalid();
+    expect(nameField()).toBeRequired();
+  });
+
+  it('marks the required field before anything is wrong with it', () => {
+    renderDialog();
+
+    expect(nameField()).toBeRequired();
+    expect(nameField()).toBeValid();
+    expect(screen.queryByText('Name is required.')).not.toBeInTheDocument();
   });
 
   // The graph does not cap description length, so neither does the modal — no
