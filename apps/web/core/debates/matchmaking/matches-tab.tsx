@@ -97,8 +97,13 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           // switch, undoable in a click, and "come back at 9am" does not answer it.
           // `live` unconditionally: `SIGNED_OUT_TABS` in the panel keeps this tab off the signed-out
           // hub entirely, so every viewer here holds the gateway scope.
+          //
+          // `=== true`, not `!== false`. The skeleton above waits out the loading case, but an
+          // activity request that has exhausted its retries leaves `isLoading` false and `data`
+          // undefined — availability unknown rather than confirmed. Requiring the positive value
+          // withholds the note there instead of guessing the viewer is available.
           emptyNote={
-            serverMatches.length === 0 && activity?.available_to_debate !== false ? <DebateHoursNote live /> : undefined
+            serverMatches.length === 0 && activity?.available_to_debate === true ? <DebateHoursNote live /> : undefined
           }
           emptyAction={{ label: 'Browse claims', onClick: () => onTabChange('claims') }}
         >

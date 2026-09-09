@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   availableToDebate: true,
   /** Whether the activity query has landed yet. It races the matches query. */
   activityLoading: false,
+  /** A settled activity query with no data — what an exhausted retry looks like. */
+  activityErrored: false,
   /** What the shared summary reports for every claim in the fixture. */
   responseCounts: { positive: 0, negative: 0 },
 }));
@@ -32,7 +34,10 @@ vi.mock('../hooks', () => ({
   useDebateActivity: () => ({
     // Undefined while loading, exactly as react-query reports it — the empty state has to wait for
     // this rather than read `available_to_debate` off nothing.
-    data: mocks.activityLoading ? undefined : { outbound_request: null, available_to_debate: mocks.availableToDebate },
+    data:
+      mocks.activityLoading || mocks.activityErrored
+        ? undefined
+        : { outbound_request: null, available_to_debate: mocks.availableToDebate },
     isLoading: mocks.activityLoading,
   }),
   // Mirrors the real key factory: `vi.mock` replaces the whole module, so every query key read
@@ -168,6 +173,7 @@ beforeEach(() => {
   mocks.isConnected = true;
   mocks.availableToDebate = true;
   mocks.activityLoading = false;
+  mocks.activityErrored = false;
 });
 
 afterEach(cleanup);
@@ -340,7 +346,7 @@ describe('MatchesTab', () => {
     render(<MatchesTab onTabChange={vi.fn()} />);
 
     expect(await screen.findByText(/Matches appear once you/)).toBeInTheDocument();
-    expect(screen.getByText(/Debate hours are every day between|Stay here and you/)).toBeInTheDocument();
+    expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
   });
 
   // `activity` is a second request racing the matches one. Landing second, it used to let the tab
@@ -353,13 +359,25 @@ describe('MatchesTab', () => {
     const { rerender } = render(<MatchesTab onTabChange={vi.fn()} />);
 
     expect(screen.queryByText(/Matches appear once you/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Debate hours are every day between|Stay here and you/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).not.toBeInTheDocument();
 
     mocks.activityLoading = false;
     rerender(<MatchesTab onTabChange={vi.fn()} />);
 
     expect(await screen.findByText(/marked unavailable/)).toBeInTheDocument();
-    expect(screen.queryByText(/Debate hours are every day between|Stay here and you/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).not.toBeInTheDocument();
+  });
+
+  // An activity request that has run out of retries settles with no data: `isLoading` false,
+  // `available_to_debate` unknown rather than confirmed. The skeleton above cannot wait that out,
+  // so the note has to require the positive answer instead of reading "not false" as "available".
+  it('withholds the debate hours line when the availability answer never arrives', async () => {
+    mocks.matches = [];
+    mocks.activityErrored = true;
+    render(<MatchesTab onTabChange={vi.fn()} />);
+
+    expect(await screen.findByText(/Matches appear once you/)).toBeInTheDocument();
+    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).not.toBeInTheDocument();
   });
 
   // Only while there is nothing to show. A list with rows renders on the matches alone.
@@ -378,6 +396,6 @@ describe('MatchesTab', () => {
     render(<MatchesTab onTabChange={vi.fn()} />);
 
     expect(await screen.findByText(/marked unavailable/)).toBeInTheDocument();
-    expect(screen.queryByText(/Debate hours are every day between|Stay here and you/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).not.toBeInTheDocument();
   });
 });

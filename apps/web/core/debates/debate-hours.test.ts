@@ -121,11 +121,11 @@ describe('debateHoursNote', () => {
   // A signed-in list live-updates off `debate.matchmaking_changed`, so "check back later" would
   // send people away from the only place the match can happen.
   it('tells an in-hours viewer on a live list to stay', () => {
-    expect(debateHoursNote(open, { live: true })).toBe('Stay here and you’ll be matched as soon as someone joins.');
+    expect(debateHoursNote(open, { live: true })).toBe('Stay here — this list fills in as people come online.');
   });
 
-  // Signed out on People there is no gateway scope behind the list and no matching to wait for, so
-  // "stay here and you'll be matched" would promise two things that cannot happen.
+  // Signed out on People there is no gateway scope behind the list, so nothing will arrive while
+  // the viewer waits — and they could not be matched from it either.
   it('tells an in-hours viewer on a static list to check back', () => {
     expect(debateHoursNote(open, { live: false })).toBe('Check back in a few minutes to find a debate!');
   });

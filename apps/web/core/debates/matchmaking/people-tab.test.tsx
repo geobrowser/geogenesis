@@ -171,7 +171,7 @@ describe('PeopleTab', () => {
     render(<PeopleTab />);
 
     expect(await screen.findByText('Nobody is available to debate right now.')).toBeInTheDocument();
-    expect(screen.getByText(/Debate hours are every day between|Stay here and you/)).toBeInTheDocument();
+    expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
 
     cleanup();
     mocks.people = [person('user-them', 'Arturas')];
@@ -179,7 +179,7 @@ describe('PeopleTab', () => {
     fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'nobody-by-this-name' } });
 
     expect(await screen.findByText('Nobody available matches that search.')).toBeInTheDocument();
-    expect(screen.queryByText(/Debate hours are every day between|Stay here and you/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).not.toBeInTheDocument();
   });
 
   // Both states are reachable with text in the search box, so the box cannot be what tells them
@@ -192,7 +192,7 @@ describe('PeopleTab', () => {
     fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'artur' } });
 
     expect(await screen.findByText('Nobody is available to debate right now.')).toBeInTheDocument();
-    expect(screen.getByText(/Debate hours are every day between|Stay here and you/)).toBeInTheDocument();
+    expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
     // Clearing a search that excluded nobody would put the same empty list back.
     expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
   });
@@ -227,7 +227,7 @@ describe('PeopleTab', () => {
     try {
       render(<PeopleTab />);
 
-      expect(await screen.findByText('Stay here and you’ll be matched as soon as someone joins.')).toBeInTheDocument();
+      expect(await screen.findByText('Stay here — this list fills in as people come online.')).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

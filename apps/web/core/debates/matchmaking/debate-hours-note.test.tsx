@@ -50,12 +50,11 @@ describe('DebateHoursNote', () => {
   it('tells a viewer inside the window to stay', () => {
     renderAt('2026-09-08T16:30:00Z');
 
-    expect(screen.getByText('Stay here and you’ll be matched as soon as someone joins.')).toBeTruthy();
+    expect(screen.getByText('Stay here — this list fills in as people come online.')).toBeTruthy();
   });
 
   // Signed out on People there is no gateway scope, so the list will not fill itself in while the
-  // viewer waits — and they could not be matched from it anyway. Asking them to stay would promise
-  // both.
+  // viewer waits. "Stay here" would promise exactly the thing that cannot happen.
   it('tells a viewer whose list does not update itself to check back instead', () => {
     renderAt('2026-09-08T16:30:00Z', { live: false });
 
@@ -83,7 +82,7 @@ describe('DebateHoursNote', () => {
     });
 
     expect(screen.queryByText(/Come back then/)).toBeNull();
-    expect(screen.getByText('Stay here and you’ll be matched as soon as someone joins.')).toBeTruthy();
+    expect(screen.getByText('Stay here — this list fills in as people come online.')).toBeTruthy();
   });
 
   it('flips back when the window closes', () => {

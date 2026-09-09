@@ -1662,12 +1662,12 @@ describe('All claims reads the Debate tag', () => {
     render(<ClaimsTab />);
 
     await showAllClaims();
-    expect(screen.queryByText(/Debate hours are every day between|Stay here and you/)).toBeNull();
+    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).toBeNull();
 
     chooseFilter('All claims', 'Debate now');
 
     expect(await screen.findByText('Nobody is ready to debate you on a claim right now.')).toBeInTheDocument();
-    expect(screen.getByText(/Debate hours are every day between|Stay here and you/)).toBeInTheDocument();
+    expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
   });
 });
 

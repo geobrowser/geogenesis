@@ -6,7 +6,7 @@ import { debateHoursNote, debateHoursWindow } from '../debate-hours';
 import { HubMessageNote } from './hub-states';
 
 /**
- * "Debate hours are every day between 5-6pm…" / "Stay here and you'll be matched…", under a hub
+ * "Debate hours are every day between 5-6pm…" / "Stay here — this list fills in…", under a hub
  * tab's own empty message.
  *
  * A component rather than a string the tab computes, for two reasons. It only mounts while an

@@ -80,13 +80,20 @@ export type DebateHoursWindow = {
 
 /** The calendar day `instant` falls on *in `timeZone`*, as `yyyy-MM-dd`. */
 function zonedDay(instant: Date, timeZone: string, dayOffset = 0) {
-  // `en-CA` is ISO-ordered, so this needs no part reassembly.
-  const day = new Intl.DateTimeFormat('en-CA', {
+  // Assembled from parts rather than read off a formatted string. Field order and separators are
+  // locale data, not an API guarantee — and a runtime built against a trimmed ICU serves en-US for
+  // every locale asked of it, so an `en-CA` format call can hand back `09/08/2026`. That string
+  // reaches `fromZonedTime` and comes out an Invalid Date, which would take out the note and its
+  // timer for a configuration that is perfectly valid. Parts are keyed by type, so neither matters.
+  const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(instant);
+  }).formatToParts(instant);
+
+  const partValue = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value ?? '';
+  const day = `${partValue('year').padStart(4, '0')}-${partValue('month')}-${partValue('day')}`;
 
   if (dayOffset === 0) return day;
   // Stepped as UTC midnight so the offset is pure calendar arithmetic — this is a date, not an
@@ -169,12 +176,18 @@ export function formatLocalDebateHours({ start, end }: Pick<DebateHoursWindow, '
  * original "check back" would send viewers away from the one place the match can happen. Signed
  * out there is no socket to carry that, and no matching either, so the same sentence would promise
  * twice over what the page cannot deliver — that viewer gets the ticket's original.
+ *
+ * The live line promises the *list* will fill, not that the viewer will be matched. The ticket
+ * sketched "you'll be matched as soon as someone joins", which is not true on Matches: that
+ * endpoint answers only once the viewer holds a position too, so a viewer with none could watch
+ * the whole hour go by without a row appearing, however many people came online. What every tab
+ * can promise is the one thing `debate.matchmaking_changed` actually delivers.
  */
 export function debateHoursNote(window: DebateHoursWindow, { live }: { live: boolean }) {
   if (!window.isOpen) {
     return `Debate hours are every day between ${formatLocalDebateHours(window)}. Come back then to join a debate!`;
   }
   return live
-    ? 'Stay here and you’ll be matched as soon as someone joins.'
+    ? 'Stay here — this list fills in as people come online.'
     : 'Check back in a few minutes to find a debate!';
 }
