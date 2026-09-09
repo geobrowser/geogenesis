@@ -125,7 +125,11 @@ export function ProfileImageField({ kind, src, disabled = false, onPick, onRemov
         )}
       </div>
 
-      {kind === 'avatar' && (
+      {/* Only once there is a photo. The empty frame is already an "Add a photo"
+          button, and repeating it here put two controls with the same name and the
+          same action next to each other — two tab stops a screen reader cannot
+          tell apart. */}
+      {kind === 'avatar' && resolvedSrc && (
         <div className="flex items-center gap-3 pb-2">
           <button
             type="button"
@@ -133,18 +137,16 @@ export function ProfileImageField({ kind, src, disabled = false, onPick, onRemov
             disabled={disabled}
             className="text-metadataMedium text-ctaPrimary hover:underline disabled:text-grey-03 disabled:no-underline"
           >
-            {resolvedSrc ? 'Replace' : 'Add a photo'}
+            Replace
           </button>
-          {resolvedSrc && (
-            <button
-              type="button"
-              onClick={onRemove}
-              disabled={disabled}
-              className="text-metadataMedium text-grey-04 hover:underline disabled:text-grey-03 disabled:no-underline"
-            >
-              Remove
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onRemove}
+            disabled={disabled}
+            className="text-metadataMedium text-grey-04 hover:underline disabled:text-grey-03 disabled:no-underline"
+          >
+            Remove
+          </button>
         </div>
       )}
 

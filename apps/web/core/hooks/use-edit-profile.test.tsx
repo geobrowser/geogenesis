@@ -564,6 +564,64 @@ describe('useEditProfile', () => {
     expect(mocks.dispatch).toHaveBeenCalledWith({ type: 'SET_REVIEW_STATE', payload: 'idle' });
   });
 
+  // `setAsPublished` leaves published rows in the store as isLocal, and every
+  // restore path forces hasBeenPublished back to false — so snapshotting an
+  // earlier successful edit and putting it back turns finished work into pending
+  // work again.
+  it('does not resurrect an already-published edit when a later one is abandoned', async () => {
+    const alreadyPublished = {
+      ...stagedValue(SystemIds.NAME_PROPERTY),
+      hasBeenPublished: true,
+      value: 'Published earlier this session',
+    } as Value;
+    // Plus one genuinely pending row, so the edit has something to publish and
+    // reaches the failure rather than short-circuiting as a no-op.
+    mocks.storeValues = [alreadyPublished, stagedValue(SystemIds.DESCRIPTION_PROPERTY)];
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M', description: 'Changed too' }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    mocks.setValue.mockClear();
+    act(() => result.current.reset());
+
+    // The pending description row is restored, as it should be. The published name
+    // row is not: clearing it is the whole undo.
+    const restored = mocks.setValue.mock.calls.map(call => (call[0] as Value).value);
+    expect(restored).not.toContain('Published earlier this session');
+  });
+
+  // A declined wallet prompt calls onError but sends the review state to idle, not
+  // publish-error. Leaving the flag armed there means the next unrelated failure is
+  // mistaken for ours and cleared.
+  it('releases error ownership when a rejected prompt settles back to idle', async () => {
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
+    // The publish is in flight, so the review state is mid-write when it fails.
+    mocks.reviewState = 'publishing-contract';
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+
+    const { result, rerender } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    // The rejection path: idle rather than publish-error.
+    mocks.reviewState = 'idle';
+    rerender();
+
+    // Someone else's publish fails later, with this modal still open.
+    mocks.reviewState = 'publish-error';
+    rerender();
+
+    expect(mocks.dispatch).not.toHaveBeenCalled();
+  });
+
   it('leaves an unrelated publish failure showing in the status bar', async () => {
     // Only the error this modal actually caused gets cleared. Suppressing on
     // status alone would swallow someone else's failure that landed while the

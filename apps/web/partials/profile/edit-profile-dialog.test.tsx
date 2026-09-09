@@ -247,6 +247,23 @@ describe('EditProfileDialog', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
+  // The empty frame is already an "Add a photo" button; a second one beside it
+  // gave two tab stops with the same name and the same action.
+  it('offers one way to add a photo when there is none', () => {
+    renderDialog();
+
+    expect(screen.getAllByRole('button', { name: 'Add a photo' })).toHaveLength(1);
+  });
+
+  it('offers Replace and Remove once a photo is set', () => {
+    mocks.current = { ...mocks.current, avatarUrl: 'ipfs://avatar' };
+    renderDialog();
+
+    expect(screen.queryByRole('button', { name: 'Add a photo' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
+  });
+
   it('rejects a dropped file the picker’s accept filter would never have allowed', async () => {
     renderDialog();
 

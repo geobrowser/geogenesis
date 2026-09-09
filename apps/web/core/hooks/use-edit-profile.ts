@@ -179,10 +179,21 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       const imageEntityIds = new Set<string>();
       let nextAvatarUrl: string | null = null;
 
-      /** Remember a local row before this edit replaces or deletes it. */
+      /**
+       * Remember unpublished local work before this edit replaces or deletes it.
+       *
+       * Published rows are deliberately not captured. `setAsPublished` leaves them
+       * in the store as `isLocal` with `hasBeenPublished: true`, and every restore
+       * path forces that flag back to false — so snapshotting an earlier successful
+       * edit and putting it back would resurrect finished work as pending. Clearing
+       * such a row is the whole undo; the synced state already carries it.
+       */
       const snapshot = (id: string) => {
-        const [existingLocal] = getValues({ includeDeleted: true, selector: v => v.id === id && v.isLocal === true });
-        if (existingLocal) written.overwritten.push(existingLocal);
+        const [pendingLocal] = getValues({
+          includeDeleted: true,
+          selector: v => v.id === id && v.isLocal === true && v.hasBeenPublished !== true,
+        });
+        if (pendingLocal) written.overwritten.push(pendingLocal);
       };
 
       const setValue = (propertyId: string, propertyName: string, value: string) => {
@@ -269,7 +280,9 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
           // through the normal editor is *two* local rows — a tombstone for the old
           // remote edge and a live replacement — and restoring only the live one
           // would leave the old edge back alongside it and the deletion lost.
-          priorEdges.filter(r => r.isLocal === true).forEach(r => written.overwrittenRelations.push(r));
+          priorEdges
+            .filter(r => r.isLocal === true && r.hasBeenPublished !== true)
+            .forEach(r => written.overwrittenRelations.push(r));
 
           storage.relations.deleteMany(liveEdges);
           priorEdges.forEach(r => written.relationIds.add(r.id));
@@ -391,6 +404,16 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   // modal sat open. It is consumed by the first 'publish-error' after ours.
   React.useEffect(() => {
     if (!ownsPendingError.current) return;
+
+    // A declined wallet prompt never reaches 'publish-error': `usePublish` calls
+    // `onError` and then sends the review state straight back to idle. Releasing
+    // ownership here too keeps the flag from staying armed for the rest of the
+    // session and swallowing someone else's later failure.
+    if (statusBarState.reviewState === 'idle') {
+      ownsPendingError.current = false;
+      return;
+    }
+
     if (statusBarState.reviewState !== 'publish-error') return;
     // Stay pending while closed rather than consuming the flag here. A failure that
     // lands after the user walked away reopens the modal (see the dialog), and
