@@ -10,7 +10,7 @@ import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
-import { DebateRoomPageClient, isDebateInThankYouPeriod } from './debate-room-page-client';
+import { DebateRoomPageClient, isDebateInThankYouPeriod, upcomingTurnLabel } from './debate-room-page-client';
 
 const mocks = vi.hoisted(() => ({
   prefetchAllowlist: vi.fn(),
@@ -445,6 +445,40 @@ describe('isDebateInThankYouPeriod', () => {
         deadline
       )
     ).toBe(false);
+  });
+});
+
+describe('upcomingTurnLabel', () => {
+  // Only the fields the label reads. The room renders this string verbatim into the count-in
+  // overlay, and the rebuttal branch is covered end to end by the DOM test further down; this
+  // covers the branch a two-round format cannot reach.
+  const countdownAt = (turnIndex: number) =>
+    ({ effectiveStatus: 'in_progress', turnIndex }) as Parameters<typeof upcomingTurnLabel>[1];
+  const debateWith = (turnDurationsMs: number[]) =>
+    ({ turn_durations_ms: turnDurationsMs }) as Parameters<typeof upcomingTurnLabel>[0];
+
+  const threeRounds = debateWith([60_000, 60_000, 45_000, 45_000, 30_000, 30_000]);
+
+  it('names the closing argument when counting into the third round', () => {
+    expect(upcomingTurnLabel(threeRounds, countdownAt(3))).toBe('Closing argument in');
+    expect(upcomingTurnLabel(threeRounds, countdownAt(4))).toBe('Closing argument in');
+  });
+
+  it('still names the rebuttal, which is now the middle round', () => {
+    expect(upcomingTurnLabel(threeRounds, countdownAt(1))).toBe('Rebut in');
+  });
+
+  it('leaves the opening round and the final turn to the generic label', () => {
+    expect(upcomingTurnLabel(threeRounds, countdownAt(0))).toBeNull();
+    // Nothing comes after the last turn, so there is no turn to count into.
+    expect(upcomingTurnLabel(threeRounds, countdownAt(5))).toBeNull();
+  });
+
+  it('reads a debate recorded before the closing round as two rounds', () => {
+    const twoRounds = debateWith([60_000, 60_000, 45_000, 45_000]);
+
+    expect(upcomingTurnLabel(twoRounds, countdownAt(1))).toBe('Rebut in');
+    expect(upcomingTurnLabel(twoRounds, countdownAt(0))).toBeNull();
   });
 });
 
