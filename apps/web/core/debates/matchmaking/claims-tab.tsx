@@ -1023,30 +1023,32 @@ export function ClaimsTab({
             aria-label="Search claims"
           />
 
-          <SpaceTopicFilters
-            spaceIds={spaceIds}
-            onSpaceToggle={onSpaceToggle}
-            onSpacesClear={onSpacesClear}
-            topicIds={topicIds}
-            onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-            onTopicsClear={() => setTopicIds([])}
-            facetSpaces={facetSpaces}
-            facetTopics={facetTopics}
-            countsPending={countsPending}
-            // Lobby passes its own ("Matches only"); Explore draws the one that hides answered claims.
-            // Positions draws neither: it *is* the list of answered claims, so hiding them there
-            // could only empty it — a broken tab rather than a filter — and the state cannot be set
-            // from the one place it must not apply. Nor is it drawn signed out, where the viewer has
-            // no positions for it to hide and it would be a switch with nothing behind it.
-            //
-            trailing={
-              isLobby ? (
-                trailing
-              ) : filter === 'mine' || !authenticated ? null : (
-                <HideMyPositionsSwitch checked={hideMyPositions} onChange={setHideMyPositions} />
-              )
-            }
-          />
+          <div className={workspace ? '@[72rem]/hub:hidden' : undefined}>
+            <SpaceTopicFilters
+              spaceIds={spaceIds}
+              onSpaceToggle={onSpaceToggle}
+              onSpacesClear={onSpacesClear}
+              topicIds={topicIds}
+              onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+              onTopicsClear={() => setTopicIds([])}
+              facetSpaces={facetSpaces}
+              facetTopics={facetTopics}
+              countsPending={countsPending}
+              // Lobby passes its own ("Matches only"); Explore draws the one that hides answered claims.
+              // Positions draws neither: it *is* the list of answered claims, so hiding them there
+              // could only empty it — a broken tab rather than a filter — and the state cannot be set
+              // from the one place it must not apply. Nor is it drawn signed out, where the viewer has
+              // no positions for it to hide and it would be a switch with nothing behind it.
+              //
+              trailing={
+                isLobby ? (
+                  trailing
+                ) : filter === 'mine' || !authenticated ? null : (
+                  <HideMyPositionsSwitch checked={hideMyPositions} onChange={setHideMyPositions} />
+                )
+              }
+            />
+          </div>
         </HubStickyControls>
 
         <div className="flex flex-col gap-3 px-4 py-3">
