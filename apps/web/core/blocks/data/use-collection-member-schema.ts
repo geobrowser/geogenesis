@@ -25,7 +25,13 @@ const MAX_MEMBER_TYPE_PAGES = 20;
  * fingerprint; Power Tools consumes this same hook via the overlay rather
  * than keeping its own loaded-page approximation for the dropdown UI.
  */
-export function useCollectionMemberSchema(collectionItemIds: string[] | null): Property[] {
+export type CollectionMemberSchema = {
+  properties: Property[];
+  /** The distinct types found across the whole membership — canonical-eligibility needs them. */
+  typeIds: string[];
+};
+
+export function useCollectionMemberSchema(collectionItemIds: string[] | null): CollectionMemberSchema {
   const enabled = collectionItemIds !== null && collectionItemIds.length > 0;
   const membershipKey = collectionItemIds ? fingerprintIdList(collectionItemIds) : 'none';
 
@@ -47,12 +53,13 @@ export function useCollectionMemberSchema(collectionItemIds: string[] | null): P
         if (!result.hasNextPage) break;
         after = result.endCursor;
       }
-      if (typeIds.size === 0) return [];
-      return await getSchemaFromTypeIds(
+      if (typeIds.size === 0) return { properties: [], typeIds: [] };
+      const properties = await getSchemaFromTypeIds(
         [...typeIds].map(id => ({ id })),
         undefined,
         { includeAllTypeSpaces: true }
       );
+      return { properties, typeIds: [...typeIds] };
     },
     staleTime: Infinity,
     refetchOnWindowFocus: false,
@@ -62,4 +69,4 @@ export function useCollectionMemberSchema(collectionItemIds: string[] | null): P
   return data ?? EMPTY_SCHEMA;
 }
 
-const EMPTY_SCHEMA: Property[] = [];
+const EMPTY_SCHEMA: CollectionMemberSchema = { properties: [], typeIds: [] };
