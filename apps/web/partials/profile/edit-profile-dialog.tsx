@@ -260,12 +260,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
 
             <div className="flex flex-col gap-4 px-5 pt-5">
               <label className="flex flex-col gap-1.5">
-                <span className="text-metadataMedium text-grey-04">
-                  Name
-                  <span aria-hidden className="pl-0.5 text-red-01">
-                    *
-                  </span>
-                </span>
+                <span className="text-metadataMedium text-grey-04">Name</span>
                 <Input
                   value={name}
                   onChange={event => {
