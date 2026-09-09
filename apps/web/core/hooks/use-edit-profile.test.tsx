@@ -499,27 +499,11 @@ describe('useEditProfile', () => {
     expect(mocks.clearLocalChangesByIds).not.toHaveBeenCalled();
   });
 
-  it('ignores a publish-complete left over from an earlier publish', async () => {
-    // The review state lingers on 'publish-complete' for 3s after any publish in
-    // the app. Settling on the value rather than the transition marked a save that
-    // had only just started as already succeeded.
-    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
-    mocks.reviewState = 'publish-complete';
-    mocks.makeProposal.mockImplementationOnce(() => new Promise(() => {}));
-
-    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
-
-    act(() => {
-      void result.current.publish(draft({ name: 'Preston M' }));
-    });
-
-    await waitFor(() => expect(result.current.status).toBe('publishing'));
-    expect(result.current.status).toBe('publishing');
-  });
-
-  it('settles on the review state rather than waiting out the success animation', async () => {
-    // makeProposal resolves ~3s after the write lands. The modal cannot keep
-    // saying "about 10 seconds" through that window.
+  // The global review state carries no operation identity, so it cannot be used to
+  // settle this publish: another publish reaching 'publish-complete' would drop the
+  // staged rows and update the avatar while the profile write was still running,
+  // leaving nothing to roll back when it then failed.
+  it('does not settle on another publish completing while this one runs', async () => {
     mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
     mocks.makeProposal.mockImplementationOnce(() => new Promise(() => {}));
 
@@ -533,6 +517,65 @@ describe('useEditProfile', () => {
     mocks.reviewState = 'publish-complete';
     rerender();
 
-    await waitFor(() => expect(result.current.status).toBe('published'));
+    expect(result.current.status).toBe('publishing');
+    expect(mocks.setStoredAvatar).not.toHaveBeenCalled();
+  });
+
+  it('leaves an unrelated publish failure showing in the status bar', async () => {
+    // Only the error this modal actually caused gets cleared. Suppressing on
+    // status alone would swallow someone else's failure that landed while the
+    // profile error sat open.
+    const { result, rerender } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    mocks.reviewState = 'publish-error';
+    rerender();
+
+    expect(mocks.dispatch).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('idle');
+  });
+
+  it('restores a pending edit from the normal editor that it had to overwrite', async () => {
+    // Value ids are derived from entity + property + space, so a draft on the same
+    // field shares this modal's id and is replaced by it.
+    const theirDraft = { ...stagedValue(SystemIds.NAME_PROPERTY), value: 'Their unsaved name' } as Value;
+    mocks.storeValues = [theirDraft];
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    act(() => result.current.reset());
+
+    // Rolling back cleared the shared id; without putting the snapshot back, their
+    // unpublished work is gone.
+    expect(mocks.setValue).toHaveBeenLastCalledWith(expect.objectContaining({ value: 'Their unsaved name' }));
+  });
+
+  it('rolls back an image entity minted before a later upload failed', async () => {
+    mocks.storeValues = [
+      { id: 'banner-image-value', entity: { id: 'new-image' }, spaceId: SPACE_ID, isLocal: true } as unknown as Value,
+    ];
+    mocks.storeRelations = [relation({ id: 'new-relation', fromEntity: { id: 'new-image', name: null } })];
+    mocks.createAndLink
+      .mockResolvedValueOnce({ imageId: 'new-image', relationId: 'new-relation' })
+      .mockRejectedValueOnce(new Error('IPFS is down'));
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+    const file = new File([''], 'image.png', { type: 'image/png' });
+
+    await act(async () => {
+      await result.current.publish(draft({ banner: { kind: 'replaced', file }, avatar: { kind: 'replaced', file } }));
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    // The banner's image entity landed before the avatar upload threw. Tracking
+    // only the link relation would strand its values in the store.
+    expect(mocks.clearLocalChangesByIds).toHaveBeenCalledWith(
+      expect.objectContaining({ valueIds: ['banner-image-value'], relationIds: ['new-relation'] })
+    );
   });
 });

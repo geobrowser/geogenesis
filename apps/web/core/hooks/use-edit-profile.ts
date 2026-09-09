@@ -40,7 +40,17 @@ export type ProfileDraft = {
 export type EditProfileStatus = 'idle' | 'publishing' | 'error' | 'published';
 
 /** Ids of the local rows this modal wrote, so exactly those can be rolled back. */
-type StagedRows = { valueIds: Set<string>; relationIds: Set<string> };
+type StagedRows = {
+  valueIds: Set<string>;
+  relationIds: Set<string>;
+  /**
+   * Local rows this edit replaced, put back when it is rolled back. Value ids are
+   * derived from entity + property + space, so a pending draft on the same field
+   * from the normal editor shares an id with ours and is overwritten by it —
+   * rolling back would otherwise delete work this modal never owned.
+   */
+  overwritten: Value[];
+};
 
 /** The local rows one save produced, kept so Retry re-sends them without re-uploading. */
 type StagedEdit = {
@@ -96,6 +106,9 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
   const stagedRef = React.useRef<StagedEdit | null>(null);
 
+  /** Set when this modal's own publish fails; see the suppression effect below. */
+  const ownsPendingError = React.useRef(false);
+
   // Relations are read imperatively during save, after the awaited uploads, so a
   // ref keeps them current without making `stage` depend on every render.
   const entityRelationsRef = React.useRef<Relation[]>(entity.relations);
@@ -125,8 +138,12 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         valueIds: [...rows.valueIds],
         relationIds: [...rows.relationIds],
       });
+      // After the clear, not before: `clearLocalChangesByIds` restores the synced
+      // baseline for every id it drops, which would win over a snapshot put back
+      // first.
+      rows.overwritten.forEach(value => storage.values.set(value));
     },
-    [spaceId]
+    [spaceId, storage]
   );
 
   const stage = React.useCallback(
@@ -136,14 +153,21 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // rather than to everything unpublished on the person entity — keeps an
       // unrelated pending edit from riding along on the publish, and from being
       // rolled back when this one is abandoned.
-      const written: StagedRows = { valueIds: new Set(), relationIds: new Set() };
+      const written: StagedRows = { valueIds: new Set(), relationIds: new Set(), overwritten: [] };
       // Freshly minted image entities are ours by definition, so their rows can be
       // swept by entity id without that risk.
       const imageEntityIds = new Set<string>();
       let nextAvatarUrl: string | null = null;
 
+      /** Remember a local row before this edit replaces or deletes it. */
+      const snapshot = (id: string) => {
+        const [existingLocal] = getValues({ includeDeleted: true, selector: v => v.id === id && v.isLocal === true });
+        if (existingLocal) written.overwritten.push(existingLocal);
+      };
+
       const setValue = (propertyId: string, propertyName: string, value: string) => {
         const id = ID.createValueId({ entityId, propertyId, spaceId });
+        snapshot(id);
         storage.values.set({
           id,
           entity: { id: entityId, name: draft.name },
@@ -152,6 +176,27 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
           value,
         });
         written.valueIds.add(id);
+      };
+
+      // The rows this edit produced, wherever it stopped. Also the catch path's
+      // rollback set: an image entity minted before a later upload failed leaves
+      // values and relations of its own, and tracking only `written` would strand
+      // them in the store.
+      const collect = () => {
+        const isLocalUnpublished = (row: { spaceId: string; isLocal?: boolean; hasBeenPublished?: boolean }) =>
+          row.spaceId === spaceId && row.isLocal === true && row.hasBeenPublished !== true;
+
+        return {
+          values: getValues({
+            includeDeleted: true,
+            selector: v => isLocalUnpublished(v) && (written.valueIds.has(v.id) || imageEntityIds.has(v.entity.id)),
+          }),
+          relations: getRelations({
+            includeDeleted: true,
+            selector: r =>
+              isLocalUnpublished(r) && (written.relationIds.has(r.id) || imageEntityIds.has(r.fromEntity.id)),
+          }),
+        };
       };
 
       try {
@@ -166,7 +211,10 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
                 v.entity.id === entityId && v.property.id === SystemIds.DESCRIPTION_PROPERTY && v.spaceId === spaceId,
             });
             storage.values.deleteMany(existing);
-            existing.forEach(v => written.valueIds.add(v.id));
+            existing.forEach(v => {
+              snapshot(v.id);
+              written.valueIds.add(v.id);
+            });
           } else {
             setValue(SystemIds.DESCRIPTION_PROPERTY, 'Description', draft.description);
           }
@@ -209,30 +257,30 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
           }
         }
       } catch (error) {
-        // The name value and the deleted relations are already in the store. Left
-        // there they become pending edits on the personal space for a save that
-        // never happened.
-        rollback({ valueIds: written.valueIds, relationIds: written.relationIds });
+        // Everything written so far is already in the store — the name value, the
+        // deleted relations, and any image entity minted before the failing
+        // upload. Left there they become pending edits on the personal space for
+        // a save that never happened.
+        const partial = collect();
+        rollback({
+          valueIds: new Set(partial.values.map(v => v.id)),
+          relationIds: new Set(partial.relations.map(r => r.id)),
+          overwritten: written.overwritten,
+        });
         throw error;
       }
 
-      const isLocalUnpublished = (row: { spaceId: string; isLocal?: boolean; hasBeenPublished?: boolean }) =>
-        row.spaceId === spaceId && row.isLocal === true && row.hasBeenPublished !== true;
-
-      const values = getValues({
-        includeDeleted: true,
-        selector: v => isLocalUnpublished(v) && (written.valueIds.has(v.id) || imageEntityIds.has(v.entity.id)),
-      });
-      const relations = getRelations({
-        includeDeleted: true,
-        selector: r => isLocalUnpublished(r) && (written.relationIds.has(r.id) || imageEntityIds.has(r.fromEntity.id)),
-      });
+      const { values, relations } = collect();
 
       return {
         values,
         relations,
         nextAvatarUrl,
-        rows: { valueIds: new Set(values.map(v => v.id)), relationIds: new Set(relations.map(r => r.id)) },
+        rows: {
+          valueIds: new Set(values.map(v => v.id)),
+          relationIds: new Set(relations.map(r => r.id)),
+          overwritten: written.overwritten,
+        },
         draft,
       };
     },
@@ -250,6 +298,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
     stagedRef.current = null;
     setStatus('idle');
     setErrorMessage(null);
+    ownsPendingError.current = false;
     if (staged) rollback(staged.rows);
   }, [rollback]);
 
@@ -266,34 +315,30 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
     void queryClient.invalidateQueries({ queryKey: ['profile', address] });
   }, [address, queryClient, setStoredAvatar]);
 
-  // `makeProposal` resolves about three seconds after the write actually lands —
-  // it holds its success state on screen first. The modal cannot keep saying
-  // "about 10 seconds" through that window, so completion is taken from the
-  // review state the publish dispatches, and `onSuccess` below is the backstop.
-  //
-  // Only a transition counts. That state lingers for the same three seconds after
-  // *any* publish in the app, so a save started inside that window would otherwise
-  // be settled as succeeded before it had run.
-  const previousReviewState = React.useRef(statusBarState.reviewState);
-  React.useEffect(() => {
-    const previous = previousReviewState.current;
-    previousReviewState.current = statusBarState.reviewState;
-
-    if (status !== 'publishing') return;
-    if (statusBarState.reviewState !== 'publish-complete' || previous === 'publish-complete') return;
-    settleSuccess();
-  }, [settleSuccess, status, statusBarState.reviewState]);
+  // Completion comes from `onSuccess` alone. An earlier version read the global
+  // review state to settle three seconds sooner — `makeProposal` holds its success
+  // screen for that long before resolving — but that state carries no operation
+  // identity, so a *different* publish reaching 'publish-complete' would settle
+  // this one: staged rows dropped and the avatar updated while the profile write
+  // was still in flight, with nothing left to roll back when it then failed.
+  // Three seconds of an honest "publishing" is worth more than that.
 
   // `usePublish` calls `onError` *before* dispatching the error, so clearing the
   // global copy from inside that callback is overwritten a line later. An effect
   // runs after both. While this modal is open it owns the failure — including
   // Retry — and two stacked error dialogs would offer two independent retries;
   // once it is closed the status bar is the hand-off and keeps its own.
+  //
+  // The flag is what ties the error being cleared to the one this modal just had.
+  // The review state is global, so suppressing on `status === 'error'` alone would
+  // also swallow an unrelated publish's failure that happened to land while this
+  // modal sat open. It is consumed by the first 'publish-error' after ours.
   React.useEffect(() => {
-    if (status !== 'error' || !isOpen) return;
+    if (!ownsPendingError.current) return;
     if (statusBarState.reviewState !== 'publish-error') return;
-    dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-  }, [dispatch, isOpen, status, statusBarState.reviewState]);
+    ownsPendingError.current = false;
+    if (isOpen) dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+  }, [dispatch, isOpen, statusBarState.reviewState]);
 
   const publish = React.useCallback(
     async (draft: ProfileDraft) => {
@@ -310,6 +355,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
       setStatus('publishing');
       setErrorMessage(null);
+      ownsPendingError.current = false;
 
       if (!stagedRef.current) {
         try {
@@ -340,6 +386,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         name: 'Edit profile',
         onSuccess: settleSuccess,
         onError: () => {
+          ownsPendingError.current = true;
           setStatus('error');
           setErrorMessage('Couldn’t publish your profile. Your changes are still here — try again.');
         },

@@ -48,21 +48,23 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   const [avatar, setAvatar] = React.useState<ImageState>(EMPTY_IMAGE_STATE);
   const [rejection, setRejection] = React.useState<string | null>(null);
 
-  // The entity loads after the dialog opens, so the text fields keep seeding from
-  // it until the user types. Without this, opening before the fetch settles leaves
-  // someone editing two blank fields over a profile that has both.
-  const isPristineRef = React.useRef(true);
+  // The entity loads after the dialog opens, so each text field keeps seeding from
+  // it until the user types in *that* field. Tracked per field, not once for the
+  // form: the name arrives early from the warm profile query while the description
+  // only exists on the entity, so a single flag let someone type a name during
+  // hydration and silently delete a description they never saw.
+  const pristineRef = React.useRef({ name: true, description: true });
 
   const isPublishing = status === 'publishing';
 
   React.useEffect(() => {
-    if (!open || !isPristineRef.current) return;
-    setName(current.name);
-    setDescription(current.description);
+    if (!open) return;
+    if (pristineRef.current.name) setName(current.name);
+    if (pristineRef.current.description) setDescription(current.description);
   }, [open, current.name, current.description]);
 
   const resetForm = React.useCallback(() => {
-    isPristineRef.current = true;
+    pristineRef.current = { name: true, description: true };
     setBanner(previous => {
       if (previous.previewUrl) URL.revokeObjectURL(previous.previewUrl);
       return EMPTY_IMAGE_STATE;
@@ -126,7 +128,11 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   // A failed save has already written its rows to the local store, so the entity
   // now reads back the edit and `hasChanges` goes false. Retry has to stay live
   // regardless — the work is staged, it just hasn't been published.
-  const canSave = canEdit && (hasChanges || hasFailed) && name.trim() !== '' && !isPublishing;
+  //
+  // Not while the entity is still loading: the profile fallback can already show
+  // an avatar, and staging a replacement before the relations arrive would add a
+  // second image edge instead of retargeting the one that exists.
+  const canSave = canEdit && !isLoading && (hasChanges || hasFailed) && name.trim() !== '' && !isPublishing;
 
   const close = () => {
     // Closing mid-publish hands off to the status bar; it does not cancel the
@@ -156,7 +162,17 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     <Root open={open} onOpenChange={next => (next ? onOpenChange(true) : close())}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
-        <Content className="fixed inset-0 z-101 flex items-start justify-center overflow-y-auto focus:outline-hidden">
+        {/* This container spans the viewport and sits above the overlay, so a click
+            on the backdrop lands here rather than "outside" the Radix content —
+            `onPointerDownOutside` never fires. Closing on a click that reached the
+            container itself restores the dismissal the design asks for, while
+            clicks inside the card stop at the form. */}
+        <Content
+          onClick={event => {
+            if (event.target === event.currentTarget) close();
+          }}
+          className="fixed inset-0 z-101 flex items-start justify-center overflow-y-auto focus:outline-hidden"
+        >
           <form
             onSubmit={onSubmit}
             className="my-10 flex w-full max-w-[560px] flex-col rounded-lg border border-grey-02 bg-white shadow-dropdown"
@@ -215,7 +231,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                 <Input
                   value={name}
                   onChange={event => {
-                    isPristineRef.current = false;
+                    pristineRef.current.name = false;
                     setName(event.currentTarget.value);
                   }}
                   disabled={isPublishing}
@@ -228,7 +244,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                 <textarea
                   value={description}
                   onChange={event => {
-                    isPristineRef.current = false;
+                    pristineRef.current.description = false;
                     setDescription(event.currentTarget.value);
                   }}
                   disabled={isPublishing}

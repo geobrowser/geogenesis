@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   publish: vi.fn(),
   reset: vi.fn(),
   canEdit: true,
+  isLoading: false,
   status: 'idle' as EditProfileStatus,
   errorMessage: null as string | null,
   current: {
@@ -25,7 +26,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('~/core/hooks/use-edit-profile', () => ({
   useEditProfile: () => ({
     canEdit: mocks.canEdit,
-    isLoading: false,
+    isLoading: mocks.isLoading,
     entityId: 'entity',
     spaceId: 'space',
     current: mocks.current,
@@ -37,8 +38,8 @@ vi.mock('~/core/hooks/use-edit-profile', () => ({
 }));
 
 function renderDialog(onOpenChange = vi.fn()) {
-  render(<EditProfileDialog open onOpenChange={onOpenChange} />);
-  return { onOpenChange };
+  const { rerender } = render(<EditProfileDialog open onOpenChange={onOpenChange} />);
+  return { onOpenChange, rerender };
 }
 
 const nameField = () => screen.getByPlaceholderText('Your name');
@@ -49,6 +50,7 @@ beforeEach(() => {
   mocks.publish.mockReset();
   mocks.reset.mockReset();
   mocks.canEdit = true;
+  mocks.isLoading = false;
   mocks.status = 'idle';
   mocks.errorMessage = null;
   mocks.current = {
@@ -199,6 +201,49 @@ describe('EditProfileDialog', () => {
     render(<EditProfileDialog open={false} onOpenChange={onOpenChange} />);
 
     expect(mocks.reset).toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  // The name arrives early from the warm profile query; the description only
+  // exists on the entity. One shared pristine flag let a name typed during that
+  // gap freeze the description at '' and delete it on save.
+  it('still seeds the description after the user has typed a name', async () => {
+    mocks.current = { ...mocks.current, description: '' };
+    const { rerender } = renderDialog();
+
+    await userEvent.type(nameField(), '!');
+
+    mocks.current = { ...mocks.current, description: 'Arrived with the entity.' };
+    rerender(<EditProfileDialog open onOpenChange={vi.fn()} />);
+
+    expect(descriptionField()).toHaveValue('Arrived with the entity.');
+  });
+
+  it('holds save until the entity has hydrated', () => {
+    mocks.isLoading = true;
+    mocks.current = { ...mocks.current, name: 'Changed' };
+    renderDialog();
+
+    // The profile fallback can already show an avatar, so a replacement staged
+    // now would add a second image edge rather than retarget the existing one.
+    expect(saveButton()).toBeDisabled();
+  });
+
+  it('closes on a backdrop click', async () => {
+    const { onOpenChange } = renderDialog();
+
+    // The dialog content spans the viewport, so Radix's own outside-click never
+    // fires and the backdrop is this container itself.
+    await userEvent.click(screen.getByRole('dialog'));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('does not close on a click inside the card', async () => {
+    const { onOpenChange } = renderDialog();
+
+    await userEvent.click(nameField());
+
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
