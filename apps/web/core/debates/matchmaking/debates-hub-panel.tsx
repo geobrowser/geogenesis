@@ -349,7 +349,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
             ) : activeTab === 'claims' ? (
               <ClaimsTab />
             ) : (
-              <PeopleTab />
+              <PeopleTab onTabChange={changeTab} />
             )}
           </HubSwap>
         )}

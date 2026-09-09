@@ -1655,6 +1655,23 @@ describe('All claims reads the Debate tag', () => {
 
     expect(screen.getByText('No claims have been tagged for debate yet.')).toBeInTheDocument();
   });
+
+  // GEO-2840. "Debate now" is the only filter on this tab scored on who is online, so it is the
+  // only one whose empty list means "nobody is around" — the other three are statements about
+  // curation or about the viewer's own positions, and debate hours would not explain any of them.
+  it('adds the debate hours line under Debate now, and not under All claims', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [];
+    mocks.claims = [];
+    render(<ClaimsTab />);
+
+    await showAllClaims();
+    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).toBeNull();
+
+    chooseFilter('All claims', 'Debate now');
+
+    expect(await screen.findByText('Nobody is ready to debate you on a claim right now.')).toBeInTheDocument();
+    expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
+  });
 });
 
 // GEO-2653. The menu is the server's topic facet, which describes every claim the current
