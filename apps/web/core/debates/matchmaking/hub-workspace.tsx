@@ -1,7 +1,5 @@
 'use client';
 
-import * as React from 'react';
-
 import { Text } from '~/design-system/text';
 
 import { ClaimsTab } from './claims-tab';

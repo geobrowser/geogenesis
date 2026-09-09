@@ -153,6 +153,12 @@ export type ClaimsTabVariant = 'explore' | 'lobby' | 'positions';
  */
 export type ClaimsLayout = 'panel' | 'workspace';
 
+/**
+ * `workspace`: facet rail + grid; panel menus are the narrow fallback.
+ *
+ * The layouts do not hold their selections apart — the atoms above are keyed by variant, not by
+ * surface — so narrowing in the panel and expanding to the workspace arrives at the same list.
+ */
 const VARIANT_ATOMS = {
   explore: {
     spaceIds: debatesHubExploreSpaceIdsAtom,
@@ -982,19 +988,6 @@ export function ClaimsTab({
   // Every hook above has run, so the cache is filled and the atoms are seeded; there is simply
   // nothing to draw. Placed here rather than early, which would break the rules of hooks.
   if (warm) return null;
-  const facetRail = (
-    <HubFacetRail
-      facetSpaces={facetSpaces}
-      spaceIds={spaceIds}
-      onSpaceToggle={onSpaceToggle}
-      onSpacesClear={onSpacesClear}
-      facetTopics={facetTopics}
-      topicIds={topicIds}
-      onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-      onTopicsClear={() => setTopicIds([])}
-    />
-  );
-
   return (
     <div className={workspace ? 'flex min-w-0 gap-8' : 'flex flex-col'}>
       {workspace && (
@@ -1003,7 +996,16 @@ export function ClaimsTab({
           className="sticky top-[7.5rem] hidden max-h-[calc(100dvh-8.5rem)] w-60 shrink-0 self-start overflow-y-auto @[72rem]/hub:block"
           data-testid="hub-facet-rail"
         >
-          {facetRail}
+          <HubFacetRail
+            facetSpaces={facetSpaces}
+            spaceIds={spaceIds}
+            onSpaceToggle={onSpaceToggle}
+            onSpacesClear={onSpacesClear}
+            facetTopics={facetTopics}
+            topicIds={topicIds}
+            onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+            onTopicsClear={() => setTopicIds([])}
+          />
         </aside>
       )}
       <div className={workspace ? '@container/claims flex min-w-0 flex-1 flex-col' : 'contents'}>
