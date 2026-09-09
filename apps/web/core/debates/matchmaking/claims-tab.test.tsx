@@ -1882,7 +1882,28 @@ describe('topic menu', () => {
     await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID], filter: 'mine' }));
   });
 
-  // The list selector is the same filter bar, dismissed the same way, so it sticks with the rest.
+  // Topics are the other half of what GEO-2850 names, and they have their own atom — so they need
+  // their own case. A regression that reset only the topic atom would pass every other test here.
+  it('keeps a topic selection when the panel is closed and reopened', async () => {
+    mocks.claims = [
+      claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [{ id: 'topic-ai', name: 'AI' }]),
+      claim('claim-plain', 'A claim with no topics', false, false, SPACE_ID),
+    ];
+    const store = createStore();
+    render(<ClaimsTab />, store);
+    await showIndexedClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^AI/ }));
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ topicIds: ['topic-ai'] }));
+
+    cleanup();
+    render(<ClaimsTab />, store);
+
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ topicIds: ['topic-ai'] }));
+  });
+
+  // The list selector is the same filter bar, dismissed the same way, so it sticks with the rest.  // The list selector is the same filter bar, dismissed the same way, so it sticks with the rest.
   it('keeps the chosen list when the panel is closed and reopened', async () => {
     const store = createStore();
     render(<ClaimsTab />, store);

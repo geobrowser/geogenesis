@@ -88,11 +88,19 @@ export const debatesHubClaimsSpaceSeedSpentAtom = atom(false);
 /**
  * Which account the filter state above belongs to, so it is never handed to a different viewer.
  *
- * Session-scoped state outlives the sign-in that changes who is looking. Without this, signing in
- * after touching the filter signed out would carry a spent seed into the new session — and
- * GEO-2834's whole point is that a brand-new account's membership default must land — while
- * switching accounts without a reload would show B the spaces A had picked. Neither was reachable
- * while the selection reset on every mount.
+ * Session-scoped state outlives the sign-in that changes who is looking, so "whose are these" has
+ * to be recorded rather than assumed. Two transitions, and they want opposite answers:
+ *
+ * A viewer signing in is the same person authenticating, and keeps the bar they were just using —
+ * the Claims tab prompts for sign-in from inside its own empty state, so clearing it there would
+ * lose picks made seconds earlier. `owner` being null marks that case, and nothing is reset.
+ *
+ * A different established account is a different viewer, and inherits nothing: without this,
+ * switching accounts without a reload would show B the spaces A had picked. `owner` keeps naming
+ * the last account seen across a sign-out, so B signing in after A signs out is still read as a
+ * handover rather than a first sign-in.
+ *
+ * Neither was reachable while the selection reset on every mount.
  */
 export const debatesHubFiltersOwnerAtom = atom<string | null>(null);
 

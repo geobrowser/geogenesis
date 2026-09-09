@@ -248,7 +248,7 @@ type SurfaceProps = {
 
 function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: SurfaceProps) {
   const { authenticated, ready, accountKey } = useGeoChatAuth();
-  useFilterOwner(accountKey, ready);
+  const filtersReconciled = useFilterOwner(accountKey, ready);
   const tabs = tabsFor(authenticated);
   const activeTab = visibleTab(requestedTab, authenticated);
   const { data: activity } = useDebateActivity(authenticated);
@@ -342,7 +342,12 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         data-debates-hub-scroll
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6"
       >
-        {!ready ? null : (
+        {/* `filtersReconciled` joins the Privy gate rather than becoming a second one: the reset
+            below runs in a passive effect, so the render that first sees a new account still holds
+            the previous one's filter bar. Rendering the tabs then would show B the labels A had
+            picked and fire B's first query with A's space ids, an instant before the effect
+            corrects both. One render, but it is the wrong viewer's data. */}
+        {!ready || !filtersReconciled ? null : (
           <HubSwap activeKey={activeTab}>
             {activeTab === 'requests' ? (
               <RequestsTab />
@@ -432,9 +437,16 @@ function useFilterOwner(accountKey: string | null, ready: boolean) {
   const [owner, setOwner] = useAtom(debatesHubFiltersOwnerAtom);
   const resetFilters = useSetAtom(resetDebatesHubFiltersAtom);
 
+  // Only a handover between two established accounts leaves anything on screen that is not this
+  // viewer's. Every other case — signed out, first sign-in, the same account — keeps the bar it
+  // already has by design, so there is nothing to wait for and the tabs render immediately.
+  const awaitingHandover = ready && accountKey !== null && owner !== null && owner !== accountKey;
+
   React.useEffect(() => {
     if (!ready || accountKey === null || owner === accountKey) return;
     if (owner !== null) resetFilters();
     setOwner(accountKey);
   }, [accountKey, owner, ready, resetFilters, setOwner]);
+
+  return !awaitingHandover;
 }

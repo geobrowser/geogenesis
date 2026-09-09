@@ -225,7 +225,23 @@ describe('DebatesHubPanel', () => {
     expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
   });
 
-  // The same viewer reopening the panel must keep what they picked, which is the whole feature.
+  // The reset is a passive effect, so the render that first sees a different account still holds
+  // the previous one's bar. Showing the tabs then would put A's filter labels in front of B and
+  // fire B's first query with A's space ids.
+  it('does not render a tab holding the previous account’s filters', () => {
+    const store = renderOpen('claims');
+    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+    expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
+
+    mocks.accountKey = 'user-b';
+    store.rerender();
+
+    // Cleared and back on screen in the same commit the handover lands, so nothing of A's is shown.
+    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
+    expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
+  });
+
+  // The same viewer reopening the panel must keep what they picked, which is the whole feature.  // The same viewer reopening the panel must keep what they picked, which is the whole feature.
   it('leaves the filter bar alone for the same account', () => {
     const store = renderOpen('claims');
     store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);

@@ -17,10 +17,13 @@ import { keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets
  *
  * ## When the default applies
  *
- * At most once per mount, on the first render where the viewer's spaces are known and there is
- * something on the menu to draw from. Callers must therefore report loading through `pending`
- * honestly — including whether their *options* have finished arriving, not only their gates —
- * because the seed is spent the moment it fires and a half-built menu spends it badly.
+ * At most once while the marker is armed, on the first render where the viewer's spaces are known
+ * and there is something on the menu to draw from. For an uncontrolled caller that is once per
+ * mount; a caller passing `spent` can re-arm it without remounting, which is what an account
+ * changing under an open surface needs — see "How long once lasts" below. Callers must therefore
+ * report loading through `pending` honestly — including whether their *options* have finished
+ * arriving, not only their gates — because the seed is spent the moment it fires and a half-built
+ * menu spends it badly.
  *
  * Spent on a match rather than on an attempt, which covers two cases that look different and are
  * the same. A settled-empty menu has nothing to default *to*; a menu of spaces the viewer belongs
