@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const analyticsScriptSrc = 'https://geo-any-public.s3.us-east-1.amazonaws.com/ga-3874c92ff7f1.js';
+const analyticsScriptSrc = 'http://localhost:3000/geo-analytics-9bd2328ffe3d.js';
 
 describe('analytics', () => {
   beforeEach(() => {
@@ -34,6 +34,8 @@ describe('analytics', () => {
     const script = document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader="true"]');
 
     expect(script?.src).toBe(analyticsScriptSrc);
+    expect(script?.integrity).toBe('sha256-m9Iyj/490Y9cKmv/7yzKDjadjE9XBmjT+8kEhUwccbg=');
+    expect(script?.crossOrigin).toBe('anonymous');
   });
 
   it('enables production collection for Genesis app routes on www.geobrowser.io', async () => {
