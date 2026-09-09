@@ -17,7 +17,7 @@ import { useStatusBar } from '~/core/state/status-bar-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 import { store } from '~/core/sync/use-sync-engine';
-import type { Relation, Value } from '~/core/types';
+import type { Profile, Relation, Value } from '~/core/types';
 import { findMediaUrlValue, useEntityAvatarUrl, useEntityCoverUrl } from '~/core/utils/use-entity-media';
 
 import { avatarAtom } from '~/partials/onboarding/dialog';
@@ -50,6 +50,8 @@ type StagedRows = {
    * rolling back would otherwise delete work this modal never owned.
    */
   overwritten: Value[];
+  /** Locally-created relations this edit tombstoned; same reasoning as above. */
+  overwrittenRelations: Relation[];
 };
 
 /** The local rows one save produced, kept so Retry re-sends them without re-uploading. */
@@ -89,6 +91,9 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   const queryClient = useQueryClient();
 
   const spaceId = personalSpaceId ?? '';
+  // Matches the key `useGeoProfile` writes under, so the optimistic update below
+  // lands where every profile surface reads.
+  const profileQueryKey = React.useMemo(() => ['profile', address], [address]);
 
   // `space.topicId` is null on plenty of real personal spaces — it was null on
   // the account this was first tested against, which left the modal reading a
@@ -108,11 +113,6 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
   /** Set when this modal's own publish fails; see the suppression effect below. */
   const ownsPendingError = React.useRef(false);
-
-  // Relations are read imperatively during save, after the awaited uploads, so a
-  // ref keeps them current without making `stage` depend on every render.
-  const entityRelationsRef = React.useRef<Relation[]>(entity.relations);
-  entityRelationsRef.current = entity.relations;
 
   const bannerUrl = useEntityCoverUrl(entityId || undefined, spaceId);
   const avatarUrl = useEntityAvatarUrl(entityId || undefined, spaceId);
@@ -142,6 +142,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // baseline for every id it drops, which would win over a snapshot put back
       // first.
       rows.overwritten.forEach(value => storage.values.set(value));
+      rows.overwrittenRelations.forEach(relation => storage.relations.set(relation));
     },
     [spaceId, storage]
   );
@@ -153,7 +154,12 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // rather than to everything unpublished on the person entity — keeps an
       // unrelated pending edit from riding along on the publish, and from being
       // rolled back when this one is abandoned.
-      const written: StagedRows = { valueIds: new Set(), relationIds: new Set(), overwritten: [] };
+      const written: StagedRows = {
+        valueIds: new Set(),
+        relationIds: new Set(),
+        overwritten: [],
+        overwrittenRelations: [],
+      };
       // Freshly minted image entities are ours by definition, so their rows can be
       // swept by entity id without that risk.
       const imageEntityIds = new Set<string>();
@@ -210,11 +216,15 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
               selector: v =>
                 v.entity.id === entityId && v.property.id === SystemIds.DESCRIPTION_PROPERTY && v.spaceId === spaceId,
             });
-            storage.values.deleteMany(existing);
+            // Snapshot first: `deleteMany` replaces the row with an `isLocal`
+            // tombstone, and snapshotting after would capture that instead of the
+            // draft it buried — rollback would then re-save the tombstone as a
+            // fresh unpublished value rather than letting the synced baseline back.
             existing.forEach(v => {
               snapshot(v.id);
               written.valueIds.add(v.id);
             });
+            storage.values.deleteMany(existing);
           } else {
             setValue(SystemIds.DESCRIPTION_PROPERTY, 'Description', draft.description);
           }
@@ -226,17 +236,31 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
           const property = IMAGE_PROPERTIES[kind];
 
-          // Replace and remove both start by dropping the existing edge. The publish
-          // layer cascades the orphaned image entity for cover/avatar relations.
-          const existing = entityRelationsRef.current.filter(
-            relation => relation.type.id === property.id && relation.fromEntity.id === entityId
-          );
-          storage.relations.deleteMany(existing);
-          existing.forEach(r => written.relationIds.add(r.id));
+          // Replace and remove both start by dropping the existing edges. The
+          // publish layer cascades the orphaned image entity for cover/avatar
+          // relations.
+          //
+          // Read from the store with tombstones rather than from `useEntity`,
+          // which hides them. A pending replacement made through the normal editor
+          // leaves the old remote edge as a deleted-but-unpublished row, and
+          // publishing only the edge we can see would add a second remote edge
+          // while that deletion stayed behind.
+          const priorEdges = getRelations({
+            includeDeleted: true,
+            selector: r => r.type.id === property.id && r.fromEntity.id === entityId && r.spaceId === spaceId,
+          });
+          const liveEdges = priorEdges.filter(r => !r.isDeleted);
+
+          // Locally-created edges have no synced baseline, so clearing them on
+          // rollback would erase them outright rather than restore anything.
+          liveEdges.filter(r => r.isLocal === true).forEach(r => written.overwrittenRelations.push(r));
+
+          storage.relations.deleteMany(liveEdges);
+          priorEdges.forEach(r => written.relationIds.add(r.id));
 
           if (edit.kind === 'removed') {
             // Only report a cleared avatar to the navbar when there was one to clear.
-            if (kind === 'avatar' && existing.length > 0) nextAvatarUrl = '';
+            if (kind === 'avatar' && liveEdges.length > 0) nextAvatarUrl = '';
             continue;
           }
 
@@ -266,6 +290,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
           valueIds: new Set(partial.values.map(v => v.id)),
           relationIds: new Set(partial.relations.map(r => r.id)),
           overwritten: written.overwritten,
+          overwrittenRelations: written.overwrittenRelations,
         });
         throw error;
       }
@@ -280,6 +305,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
           valueIds: new Set(values.map(v => v.id)),
           relationIds: new Set(relations.map(r => r.id)),
           overwritten: written.overwritten,
+          overwrittenRelations: written.overwrittenRelations,
         },
         draft,
       };
@@ -308,12 +334,25 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
     stagedRef.current = null;
     setStatus('published');
 
-    // The navbar avatar reads this atom, not the entity. Without the write-back
-    // the old photo survives until a hard refresh, which reads as the save
-    // having silently failed.
+    // Write the result into the profile cache rather than invalidating it. Every
+    // registered surface reads `profile.avatarUrl` — `navbar-actions.tsx:78` falls
+    // back to `avatarAtom` only while a personal space is still being created — and
+    // refetching would ask the indexer for a write it has not caught up with yet,
+    // putting the old photo straight back. The natural refetch replaces this once
+    // the indexer agrees.
+    queryClient.setQueryData(profileQueryKey, (previous: Profile | null | undefined) =>
+      previous
+        ? {
+            ...previous,
+            name: staged.draft.name || previous.name,
+            ...(staged.nextAvatarUrl !== null ? { avatarUrl: staged.nextAvatarUrl || null } : {}),
+          }
+        : previous
+    );
+
+    // Still set for the onboarding path, which reads the atom while the space is pending.
     if (staged.nextAvatarUrl !== null) setStoredAvatar(staged.nextAvatarUrl);
-    void queryClient.invalidateQueries({ queryKey: ['profile', address] });
-  }, [address, queryClient, setStoredAvatar]);
+  }, [profileQueryKey, queryClient, setStoredAvatar]);
 
   // Completion comes from `onSuccess` alone. An earlier version read the global
   // review state to settle three seconds sooner — `makeProposal` holds its success

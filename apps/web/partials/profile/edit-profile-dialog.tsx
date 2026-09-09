@@ -90,6 +90,15 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     if (open) onOpenChange(false);
   }, [status, open, onOpenChange, resetForm, reset]);
 
+  // A failure that lands after the user closed has nowhere else to go. The status
+  // bar's generic publish error carries no Retry — `toUserFacingError` only
+  // supplies one for chunk-load and wallet failures — and the staged edit lives
+  // here, so the modal comes back with the work intact rather than stranding it.
+  React.useEffect(() => {
+    if (status !== 'error' || open) return;
+    onOpenChange(true);
+  }, [status, open, onOpenChange]);
+
   const setImage = (kind: 'banner' | 'avatar', next: ImageState) => {
     const setter = kind === 'banner' ? setBanner : setAvatar;
     setter(previous => {
@@ -187,7 +196,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
             </Description>
 
             {hasFailed && errorMessage && (
-              <div className="mx-5 mb-4 flex items-start gap-2 rounded-lg bg-red-02 p-3">
+              <div role="alert" className="mx-5 mb-4 flex items-start gap-2 rounded-lg bg-red-02 p-3">
                 <div className="text-red-01">
                   <Warning />
                 </div>
@@ -196,7 +205,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
             )}
 
             {rejection && (
-              <div className="mx-5 mb-4 rounded-lg bg-red-02 p-3">
+              <div role="alert" className="mx-5 mb-4 rounded-lg bg-red-02 p-3">
                 <p className="text-metadata text-text">{rejection}</p>
               </div>
             )}

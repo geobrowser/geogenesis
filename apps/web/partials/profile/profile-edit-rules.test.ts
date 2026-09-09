@@ -30,15 +30,17 @@ describe('validateProfileImage', () => {
   it('names the offending size when a file is too large', () => {
     const eightPointTwoMb = Math.round(8.2 * 1024 * 1024);
     expect(validateProfileImage(fakeFile({ type: 'image/jpeg', size: eightPointTwoMb }), 'banner')).toBe(
-      'That file is 8.2 MB. Banners have to be under 5 MB.'
+      'That file is 8.2 MB. Banners have to be 5 MB or less.'
     );
   });
 
+  // The hint says "up to 5 MB" and the validator accepts exactly that, so the
+  // rejection has to agree rather than say "under 5 MB".
   it('accepts a file exactly at the ceiling and rejects one byte over', () => {
     expect(validateProfileImage(fakeFile({ type: 'image/png', size: MAX_PROFILE_IMAGE_BYTES }), 'banner')).toBeNull();
     expect(
       validateProfileImage(fakeFile({ type: 'image/png', size: MAX_PROFILE_IMAGE_BYTES + 1 }), 'banner')
-    ).toContain('have to be under 5 MB');
+    ).toContain('have to be 5 MB or less');
   });
 
   // 5.04 MB rounds to "5.0 MB", which would read as within a 5 MB limit. The
@@ -46,7 +48,7 @@ describe('validateProfileImage', () => {
   it('rounds a just-over file up rather than down to the limit', () => {
     const justOver = MAX_PROFILE_IMAGE_BYTES + 40 * 1024;
     expect(validateProfileImage(fakeFile({ type: 'image/png', size: justOver }), 'avatar')).toBe(
-      'That file is 5.1 MB. Photos have to be under 5 MB.'
+      'That file is 5.1 MB. Photos have to be 5 MB or less.'
     );
   });
 

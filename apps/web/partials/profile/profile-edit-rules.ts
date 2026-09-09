@@ -30,8 +30,7 @@ const IMAGE_NOUN: Record<ProfileImageKind, { singular: string; plural: string }>
 function formatMegabytes(bytes: number) {
   const mb = bytes / (1024 * 1024);
   // Round up, not to nearest: this number only ever appears in a rejection, and
-  // rounding 5.04 down to "5.0 MB" would read as within the 5 MB ceiling it just
-  // failed.
+  // rounding 5.04 down to "5.0 MB" would read as within the ceiling it just failed.
   return `${(Math.ceil(mb * 10) / 10).toFixed(1)} MB`;
 }
 
@@ -48,7 +47,7 @@ export function validateProfileImage(file: File, kind: ProfileImageKind): string
   }
 
   if (file.size > MAX_PROFILE_IMAGE_BYTES) {
-    return `That file is ${formatMegabytes(file.size)}. ${noun.plural} have to be under 5 MB.`;
+    return `That file is ${formatMegabytes(file.size)}. ${noun.plural} have to be 5 MB or less.`;
   }
 
   return null;

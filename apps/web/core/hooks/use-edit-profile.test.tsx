@@ -18,14 +18,14 @@ const mocks = vi.hoisted(() => ({
   makeProposal: vi.fn(),
   createAndLink: vi.fn(),
   deleteRelations: vi.fn(),
+  setRelation: vi.fn(),
   deleteValues: vi.fn(),
   setValue: vi.fn(),
   clearLocalChangesByIds: vi.fn(),
   setStoredAvatar: vi.fn(),
-  invalidateQueries: vi.fn(),
+  setQueryData: vi.fn(),
   dispatch: vi.fn(),
   reviewState: 'idle' as string,
-  entityRelations: [] as Relation[],
   entityName: 'Preston' as string | null,
   // Literals, not the consts above: vi.hoisted runs before their initialisers.
   personalEntityId: '3eb17193b0ae44fe9083ce931bc9210e' as string | null,
@@ -42,7 +42,7 @@ vi.mock('jotai', () => ({ useSetAtom: () => mocks.setStoredAvatar }));
 vi.mock('~/partials/onboarding/dialog', () => ({ avatarAtom: {} }));
 
 vi.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
+  useQueryClient: () => ({ setQueryData: mocks.setQueryData }),
 }));
 
 vi.mock('~/core/hooks/use-smart-account', () => ({
@@ -69,7 +69,7 @@ vi.mock('~/core/database/entities', () => ({
   useEntity: () => ({
     name: mocks.entityName,
     description: 'Working on debates.',
-    relations: mocks.entityRelations,
+    relations: [],
     isLoading: false,
   }),
 }));
@@ -84,7 +84,7 @@ vi.mock('~/core/sync/use-mutate', () => ({
   useMutate: () => ({
     storage: {
       values: { set: mocks.setValue, deleteMany: mocks.deleteValues },
-      relations: { deleteMany: mocks.deleteRelations },
+      relations: { deleteMany: mocks.deleteRelations, set: mocks.setRelation },
       images: { createAndLink: mocks.createAndLink },
     },
   }),
@@ -145,12 +145,20 @@ beforeEach(() => {
     if (typeof value === 'function' && 'mockReset' in value) value.mockReset();
   });
   mocks.reviewState = 'idle';
-  mocks.entityRelations = [];
   mocks.entityName = 'Preston';
   mocks.personalEntityId = ENTITY_ID;
   mocks.profile = { id: ENTITY_ID, name: 'Preston', avatarUrl: null };
   mocks.storeValues = [];
   mocks.storeRelations = [];
+  // Mirror the store: deleting replaces the row with an isLocal tombstone rather
+  // than removing it. Without that the snapshot-ordering test cannot observe the
+  // very thing it is checking.
+  mocks.deleteValues.mockImplementation((values: Value[]) => {
+    const ids = new Set(values.map(v => v.id));
+    mocks.storeValues = mocks.storeValues.map(v =>
+      ids.has(v.id) ? ({ ...v, isLocal: true, isDeleted: true } as Value) : v
+    );
+  });
   mocks.makeProposal.mockResolvedValue(undefined);
   mocks.createAndLink.mockResolvedValue({ imageId: 'new-image', relationId: 'new-relation' });
 });
@@ -201,7 +209,7 @@ describe('resolving the profile entity', () => {
 describe('useEditProfile', () => {
   it('removes an image by deleting its relation, not by writing an empty value', async () => {
     const cover = relation({ id: 'cover-relation' });
-    mocks.entityRelations = [cover];
+    mocks.storeRelations = [cover];
 
     const { result } = renderHook(() => useEditProfile({ isOpen: true }));
 
@@ -217,7 +225,7 @@ describe('useEditProfile', () => {
 
   it('drops the existing relation before linking a replacement', async () => {
     const avatar = relation({ id: 'avatar-relation', type: { id: ContentIds.AVATAR_PROPERTY, name: 'Avatar' } });
-    mocks.entityRelations = [avatar];
+    mocks.storeRelations = [avatar];
 
     const { result } = renderHook(() => useEditProfile({ isOpen: true }));
     const file = new File([''], 'me.png', { type: 'image/png' });
@@ -370,11 +378,18 @@ describe('useEditProfile', () => {
 
     await waitFor(() => expect(result.current.status).toBe('published'));
     expect(mocks.setStoredAvatar).toHaveBeenCalledWith('ipfs://new-avatar');
-    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['profile', ADDRESS] });
+    // Written into the profile cache, not invalidated: every registered surface
+    // reads `profile.avatarUrl`, and refetching would ask the indexer for a write
+    // it has not caught up with and put the old photo straight back.
+    const [key, updater] = mocks.setQueryData.mock.calls.at(-1)!;
+    expect(key).toEqual(['profile', ADDRESS]);
+    expect(updater({ name: 'Preston', avatarUrl: 'ipfs://old-avatar' })).toMatchObject({
+      avatarUrl: 'ipfs://new-avatar',
+    });
   });
 
   it('falls the navbar avatar back to the generated gradient when the photo is removed', async () => {
-    mocks.entityRelations = [
+    mocks.storeRelations = [
       relation({ id: 'avatar-relation', type: { id: ContentIds.AVATAR_PROPERTY, name: 'Avatar' } }),
     ];
     mocks.makeProposal.mockImplementationOnce(async ({ onSuccess }: { onSuccess: () => void }) => onSuccess());
@@ -553,6 +568,71 @@ describe('useEditProfile', () => {
     // Rolling back cleared the shared id; without putting the snapshot back, their
     // unpublished work is gone.
     expect(mocks.setValue).toHaveBeenLastCalledWith(expect.objectContaining({ value: 'Their unsaved name' }));
+  });
+
+  // `deleteMany` replaces the row with an isLocal tombstone, so snapshotting after
+  // it captures the tombstone instead of the draft it buried — and rollback then
+  // re-saves that as a fresh unpublished value rather than letting the synced
+  // baseline back.
+  it('does not resurrect a cleared description as a pending edit on rollback', async () => {
+    const synced = {
+      id: valueId(SystemIds.DESCRIPTION_PROPERTY),
+      entity: { id: ENTITY_ID },
+      property: { id: SystemIds.DESCRIPTION_PROPERTY },
+      spaceId: SPACE_ID,
+      value: 'Working on debates.',
+    } as unknown as Value;
+    mocks.storeValues = [synced];
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ description: '' }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    act(() => result.current.reset());
+
+    // Nothing to restore: the row was synced, so clearing the id is the whole undo.
+    expect(mocks.setValue).not.toHaveBeenCalled();
+  });
+
+  // A pending replacement from the normal editor leaves the old remote edge as a
+  // deleted-but-unpublished row that `useEntity` hides. Publishing only the edge we
+  // can see would add a second remote edge and leave that deletion behind.
+  it('publishes the tombstone of an edge another pending edit already removed', async () => {
+    const tombstone = relation({ id: 'old-remote-edge', isDeleted: true });
+    const pendingEdge = relation({ id: 'their-pending-edge' });
+    mocks.storeRelations = [tombstone, pendingEdge];
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ banner: { kind: 'removed' } }));
+    });
+
+    const [{ relations }] = mocks.makeProposal.mock.calls.at(-1)!;
+    expect(relations.map((r: Relation) => r.id).sort()).toEqual(['old-remote-edge', 'their-pending-edge']);
+  });
+
+  it('restores a locally-created image edge it had to tombstone', async () => {
+    const pendingEdge = relation({ id: 'their-pending-edge', isLocal: true });
+    mocks.storeRelations = [pendingEdge];
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ banner: { kind: 'removed' } }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    act(() => result.current.reset());
+
+    // A locally-created edge has no synced baseline, so clearing it would erase it
+    // outright rather than restore anything.
+    expect(mocks.setRelation).toHaveBeenCalledWith(pendingEdge);
   });
 
   it('rolls back an image entity minted before a later upload failed', async () => {
