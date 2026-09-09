@@ -151,6 +151,62 @@ describe('DebatesHubPanel', () => {
     expect(store.get(debatesHubClaimsFilterAtom)).toBe('featured');
   });
 
+  // Signing in is the same person authenticating. The Claims tab prompts for sign-in from inside
+  // its own empty state, so wiping the bar here would lose picks made seconds earlier on the flow
+  // the tab itself invited — the very complaint GEO-2850 is about.
+  it('keeps the filter bar when a signed-out viewer signs in', () => {
+    mocks.accountKey = null;
+    const store = renderOpen('claims');
+    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+    store.set(debatesHubClaimsFilterAtom, 'all');
+
+    mocks.accountKey = 'user-a';
+    store.rerender();
+
+    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual(['space-a']);
+    expect(store.get(debatesHubClaimsFilterAtom)).toBe('all');
+  });
+
+  // Signed out there were no memberships for the seed to apply, so a viewer arriving with nothing
+  // selected still gets the default GEO-2834 is about once their account exists.
+  it('re-arms the membership default on sign-in when nothing is selected', () => {
+    mocks.accountKey = null;
+    const store = renderOpen('claims');
+    store.set(debatesHubClaimsSpaceSeedSpentAtom, true);
+
+    mocks.accountKey = 'user-a';
+    store.rerender();
+
+    expect(store.get(debatesHubClaimsSpaceSeedSpentAtom)).toBe(false);
+  });
+
+  // But not over a selection they made: re-arming would replace their picks with their memberships.
+  it('leaves the seed spent on sign-in when the viewer has picked spaces', () => {
+    mocks.accountKey = null;
+    const store = renderOpen('claims');
+    store.set(debatesHubClaimsSpaceSeedSpentAtom, true);
+    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+
+    mocks.accountKey = 'user-a';
+    store.rerender();
+
+    expect(store.get(debatesHubClaimsSpaceSeedSpentAtom)).toBe(true);
+  });
+
+  // Signing out must not forget who the state belongs to, or the next viewer to sign in would look
+  // like a first sign-in and inherit it.
+  it('still clears for a different account that signs in after a sign-out', () => {
+    const store = renderOpen('claims');
+    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+
+    mocks.accountKey = null;
+    store.rerender();
+    mocks.accountKey = 'user-b';
+    store.rerender();
+
+    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
+  });
+
   // The same viewer reopening the panel must keep what they picked, which is the whole feature.
   it('leaves the filter bar alone for the same account', () => {
     const store = renderOpen('claims');

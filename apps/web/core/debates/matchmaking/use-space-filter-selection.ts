@@ -84,7 +84,7 @@ export function useMemberSpaceDefault({
   memberSpaceIds,
   availableSpaceIds,
   pending,
-  spent = false,
+  spent,
   onSeed,
   onSpend,
 }: {
@@ -97,11 +97,13 @@ export function useMemberSpaceDefault({
   /**
    * Whether the seed has already been applied or forfeited, from a store that outlives this mount.
    *
-   * Read once, as the initial value of the internal marker. Everything below is unchanged for a
-   * caller that omits it: the seed is then spent per mount, which is the right lifetime whenever
-   * the selection dies with the mount too. A caller whose selection outlives its mount — the hub's
-   * tabs since GEO-2850 — has to say so, or reopening the surface would re-seed a viewer who had
-   * deliberately cleared the filter.
+   * Omitted is *not* the same as `false`. Undefined leaves the marker uncontrolled and spent per
+   * mount, which is the right lifetime whenever the selection dies with the mount too — the
+   * rematch page and the explore feed. A caller whose selection outlives its mount — the hub's
+   * tabs since GEO-2850 — passes it, and then owns the marker in both directions: `true` starts
+   * spent, so reopening the surface cannot re-seed a filter the viewer deliberately cleared, and
+   * flipping back to `false` re-arms a seed on a surface that never unmounted, which is what an
+   * account changing under an open panel needs.
    */
   spent?: boolean;
   /** Called at most once, and only with a non-empty selection. */
@@ -109,7 +111,7 @@ export function useMemberSpaceDefault({
   /** Called when the seed is spent, either way, so a caller holding {@link spent} can record it. */
   onSpend?: () => void;
 }): () => void {
-  const seededRef = React.useRef(spent);
+  const seededRef = React.useRef(spent === true);
   const onSpendRef = React.useRef(onSpend);
   onSpendRef.current = onSpend;
   // Held in a ref so a caller passing an inline function doesn't re-arm the effect on every render.
@@ -117,6 +119,9 @@ export function useMemberSpaceDefault({
   onSeedRef.current = onSeed;
 
   React.useEffect(() => {
+    // Only a controlled caller can re-arm; `undefined` means the marker is this mount's alone, and
+    // treating it as `false` would re-arm the uncontrolled callers on every run of this effect.
+    if (spent === false) seededRef.current = false;
     if (seededRef.current || pending || memberSpaceIds === null) return;
     // An empty menu is not an answer about the viewer, settled or not — see the note above on why
     // this holds the seed rather than spending it.
@@ -138,7 +143,7 @@ export function useMemberSpaceDefault({
     seededRef.current = true;
     onSpendRef.current?.();
     onSeedRef.current(seeded);
-  }, [availableSpaceIds, memberSpaceIds, pending]);
+  }, [availableSpaceIds, memberSpaceIds, pending, spent]);
 
   // Marks the seed as spent without applying it. A ref rather than state: this must take effect
   // for the effect above on the very same tick the viewer acts, and re-rendering to record it

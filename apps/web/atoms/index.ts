@@ -64,8 +64,9 @@ export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
  * way, and losing it on a click-away was the same surprise.
  *
  * The signed-out coercion stays where it is, in the tab. It is a rule about what may be *shown*,
- * not about what the viewer picked — resetting the stored value on sign-out would forget a choice
- * they would get back on signing in again.
+ * not about what the viewer picked, so it leaves this value alone — which is what lets a viewer who
+ * signs in keep the list they had chosen. Changing account is the one thing that clears it; see
+ * {@link debatesHubFiltersOwnerAtom}.
  */
 export type DebatesHubClaimsFilter = MatchmakingClaimsFilter | 'featured';
 export const debatesHubClaimsFilterAtom = atom<DebatesHubClaimsFilter>('featured');

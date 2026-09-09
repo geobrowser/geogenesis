@@ -21,6 +21,63 @@ function seed(initial: Props) {
 }
 
 describe('useMemberSpaceDefault', () => {
+  // GEO-2850. A caller whose selection outlives its mount controls the marker in both directions.
+  describe('a controlled seed marker', () => {
+    function controlled(spent: boolean) {
+      const onSeed = vi.fn();
+      const onSpend = vi.fn();
+      const view = renderHook(
+        (props: Props & { spent: boolean }) => useMemberSpaceDefault({ ...props, onSeed, onSpend }),
+        {
+          initialProps: {
+            memberSpaceIds: new Set([A]),
+            availableSpaceIds: [A, B],
+            pending: false,
+            spent,
+          },
+        }
+      );
+      return { ...view, onSeed, onSpend };
+    }
+
+    it('starts spent, so a surface reopening cannot re-seed a cleared filter', () => {
+      const { onSeed } = controlled(true);
+
+      expect(onSeed).not.toHaveBeenCalled();
+    });
+
+    // The case a mount-scoped marker cannot serve: the account changes under a panel that never
+    // unmounted, and the new viewer is owed their own membership default.
+    it('re-arms when the caller flips it back to false', () => {
+      const view = controlled(true);
+      expect(view.onSeed).not.toHaveBeenCalled();
+
+      view.rerender({ memberSpaceIds: new Set([A]), availableSpaceIds: [A, B], pending: false, spent: false });
+
+      expect(view.onSeed).toHaveBeenCalledWith([A]);
+    });
+
+    it('reports the seed being spent so the caller can record it', () => {
+      const { onSpend } = controlled(false);
+
+      expect(onSpend).toHaveBeenCalled();
+    });
+
+    // Omitting it must stay exactly as it was, for the rematch page and the explore feed: spent per
+    // mount, and never re-armed by a re-render.
+    it('leaves an uncontrolled caller spent for the life of the mount', () => {
+      const onSeed = vi.fn();
+      const view = renderHook((props: Props) => useMemberSpaceDefault({ ...props, onSeed }), {
+        initialProps: { memberSpaceIds: new Set([A]), availableSpaceIds: [A, B], pending: false },
+      });
+      expect(onSeed).toHaveBeenCalledTimes(1);
+
+      view.rerender({ memberSpaceIds: new Set([A]), availableSpaceIds: [A, B, STRANGER], pending: false });
+
+      expect(onSeed).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('selects the spaces the viewer belongs to that are on offer', () => {
     const { onSeed } = seed({
       memberSpaceIds: new Set([A, STRANGER]),

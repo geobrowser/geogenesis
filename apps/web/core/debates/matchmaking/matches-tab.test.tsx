@@ -384,12 +384,30 @@ describe('MatchesTab', () => {
     expect(rows.some(row => row.getAttribute('aria-pressed') === 'true')).toBe(true);
   });
 
-  // The other direction: a fresh session starts unfiltered  // The other direction: a fresh session starts unfiltered, so the atom is not quietly sticky
+  // The other direction: a fresh session starts unfiltered, so the atom is not quietly sticky
   // across viewers or page loads.
   it('starts unfiltered in a new session', () => {
     render(<MatchesTab onTabChange={vi.fn()} />, createStore());
 
     expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
+  });
+
+  // The space filter survives a close and reopen now, so a list it emptied would otherwise be
+  // blamed on having no positions or on nobody being online — and the only action offered was one
+  // that could not help. There are matches; they are just not in the spaces on screen.
+  it('blames the space filter, and offers to clear it, when that is what emptied the list', async () => {
+    const store = createStore();
+    store.set(debatesHubMatchesSpaceIdsAtom, ['019fedae-72b6-7ab2-927a-df044d57c599']);
+    render(<MatchesTab onTabChange={vi.fn()} />, store);
+
+    expect(await screen.findByText('No matches in the spaces you’ve picked.')).toBeInTheDocument();
+    expect(screen.queryByText(/Matches appear once you/)).not.toBeInTheDocument();
+    // Debate hours would be the wrong answer: people are around, the filter is hiding them.
+    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(await screen.findByText('Chips are better than fries')).toBeInTheDocument();
   });
 
   // GEO-2840.

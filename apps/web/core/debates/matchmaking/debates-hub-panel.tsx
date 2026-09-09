@@ -28,7 +28,13 @@ import { RequestsTab } from './requests-tab';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
 import { useUnexpiredRequests } from './use-request-countdown';
-import { type DebatesHubTab, debatesHubFiltersOwnerAtom, resetDebatesHubFiltersAtom } from '~/atoms';
+import {
+  type DebatesHubTab,
+  debatesHubClaimsSpaceIdsAtom,
+  debatesHubClaimsSpaceSeedSpentAtom,
+  debatesHubFiltersOwnerAtom,
+  resetDebatesHubFiltersAtom,
+} from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
@@ -404,22 +410,48 @@ function AvailabilityToggle() {
 }
 
 /**
- * Clears the hub's filter bar when the viewer behind it changes.
+ * Keeps the hub's filter bar attributed to the viewer who set it.
  *
- * The selections are session-scoped (GEO-2850), and a session outlives a sign-in. Compared against
- * a stored owner rather than a mount-time ref, so an account that changed while the hub was closed
- * is caught on the next open rather than missed.
+ * The selections are session-scoped (GEO-2850), and a session outlives a sign-in — so "whose are
+ * these" has to be tracked rather than assumed. Three transitions, and they do not want the same
+ * answer:
  *
- * Held until Privy has resolved: `accountKey` is null before that, and treating it as "signed out"
- * would clear a signed-in viewer's filters every time the hub reopened.
+ * Signing in is the *same person* authenticating, not a new one. The Claims tab offers a sign-in
+ * prompt from inside its own empty state, so wiping the bar there would lose the picks a viewer
+ * made seconds earlier on the flow the tab itself invited — which is the complaint GEO-2850 exists
+ * to fix. Their selection stays. The seed is re-armed instead, and only when nothing is selected:
+ * signed out there were no memberships for it to apply, so a brand-new account still gets the
+ * default GEO-2834 is about, while a viewer who did pick spaces keeps what they picked rather than
+ * having it replaced by their memberships.
+ *
+ * A different account is a different viewer, and inherits nothing.
+ *
+ * Signing *out* changes nothing here. `owner` keeps naming the last account seen, so the next
+ * sign-in is still compared against it — otherwise A could sign out, B sign in, and B be treated
+ * as a first sign-in and handed A's filters.
+ *
+ * Held until Privy has resolved, because `accountKey` is null before that and a null mid-resolve
+ * is not someone signing out.
  */
 function useFilterOwner(accountKey: string | null, ready: boolean) {
   const [owner, setOwner] = useAtom(debatesHubFiltersOwnerAtom);
   const resetFilters = useSetAtom(resetDebatesHubFiltersAtom);
+  const [claimsSpaceIds] = useAtom(debatesHubClaimsSpaceIdsAtom);
+  const setSpaceSeedSpent = useSetAtom(debatesHubClaimsSpaceSeedSpentAtom);
+  // Read through a ref so re-arming is decided by what is selected when the account lands, without
+  // the selection itself re-running this.
+  const claimsSpaceIdsRef = React.useRef(claimsSpaceIds);
+  claimsSpaceIdsRef.current = claimsSpaceIds;
 
   React.useEffect(() => {
-    if (!ready || owner === accountKey) return;
-    resetFilters();
+    if (!ready || accountKey === null || owner === accountKey) return;
+
+    if (owner === null) {
+      if (claimsSpaceIdsRef.current.length === 0) setSpaceSeedSpent(false);
+    } else {
+      resetFilters();
+    }
+
     setOwner(accountKey);
-  }, [accountKey, owner, ready, resetFilters, setOwner]);
+  }, [accountKey, owner, ready, resetFilters, setOwner, setSpaceSeedSpent]);
 }

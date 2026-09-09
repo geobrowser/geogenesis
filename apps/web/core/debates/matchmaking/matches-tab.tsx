@@ -68,6 +68,10 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
     [matches, spaceIds]
   );
 
+  // The viewer's own filter emptied a list that has something in it — the one empty state here
+  // they can undo, and the one `serverMatches.length === 0` is false for.
+  const filteredBySpace = filtered.length === 0 && serverMatches.length > 0;
+
   return (
     <div className="flex flex-col">
       {/* One pinned header rather than a pinned card above scrolling filters: two stickies would
@@ -100,10 +104,15 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           // A match needs three things at once, and the old copy asserted which one was missing
           // without being able to know. Name all of them instead, starting with the half the
           // viewer controls.
+          // The space filter comes first because it is the only one of these the viewer can undo in
+          // a click — and it survives a close and reopen now (GEO-2850), so a list it emptied would
+          // otherwise be blamed on having no positions or on nobody being online.
           emptyMessage={
-            activity?.available_to_debate === false
-              ? 'You’re marked unavailable, so nobody can be matched with you.'
-              : 'Matches appear once you’ve taken a position on a claim and someone holding the opposite position is online and ready too.'
+            filteredBySpace
+              ? 'No matches in the spaces you’ve picked.'
+              : activity?.available_to_debate === false
+                ? 'You’re marked unavailable, so nobody can be matched with you.'
+                : 'Matches appear once you’ve taken a position on a claim and someone holding the opposite position is online and ready too.'
           }
           // GEO-2840. Read off `serverMatches` rather than off the space filter: with nothing to
           // match on at all, the filter is not what emptied the list, so the test is whether anyone
@@ -122,7 +131,13 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           emptyNote={serverMatches.length === 0 ? <DebateHoursNote live /> : undefined}
           // Same label as People's, because it is the same action out of the same dead end. Two
           // names for one button in one panel is a difference that implies something.
-          emptyAction={{ label: 'Explore claims', onClick: () => onTabChange('claims') }}
+          // Clearing the filter is the whole answer when the filter is the cause, and browsing claims
+          // cannot be — there are matches, just not in the spaces on screen.
+          emptyAction={
+            filteredBySpace
+              ? { label: 'Clear filters', onClick: () => setSpaceIds([]) }
+              : { label: 'Explore claims', onClick: () => onTabChange('claims') }
+          }
         >
           <HubCardList>
             {filtered.map(match => (
