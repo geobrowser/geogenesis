@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -11,6 +11,7 @@ import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data'
 import { REQUEST_BRIDGE_TTL_MS, requestedMembershipSpacesAtom } from '~/core/state/requested-membership';
 import { normId } from '~/core/utils/norm-id';
 
+import { REQUESTED_MEMBERSHIP_SETTLE_MS } from './claim-space-allowlist';
 import { isClaimSpaceAllowed } from './claim-space-allowlist';
 import { useClaimSpaceAllowlist } from './use-claim-space-allowlist';
 
@@ -192,6 +193,46 @@ describe('useClaimSpaceAllowlist', () => {
 
     expect(result.current.memberSpaceIds?.has(normId(REQUESTED))).toBe(true);
     expect(result.current.allowlist?.has(normId(REQUESTED))).toBe(true);
+  });
+
+  // Both deadlines are read off a clock sampled during render, and the membership poll — the only
+  // thing reliably re-rendering this hook — stops at the settle deadline. Without a timer of its
+  // own the hook would never observe either boundary passing.
+  it('retires a bridge entry on its TTL with nothing else re-rendering', () => {
+    vi.useFakeTimers();
+    try {
+      mocks.source = { personalSpaceId: PERSONAL, walletAddress: WALLET, keyInput: PERSONAL, isLoading: false };
+      bridgeRequest(REQUESTED, PERSONAL);
+      const { result } = renderWithCache(PERSONAL, sidebarData({ memberOf: [] }));
+
+      expect(result.current.memberSpaceIds?.has(normId(REQUESTED))).toBe(true);
+
+      act(() => void vi.advanceTimersByTime(REQUEST_BRIDGE_TTL_MS + 10));
+
+      expect(result.current.memberSpaceIds?.has(normId(REQUESTED))).toBe(false);
+      expect(result.current.allowlist?.has(normId(REQUESTED))).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The same boundary on the other flag: a request that never lands has to stop holding the
+  // default it gates, or the filter it feeds stays unspent for the rest of the visit.
+  it('stops settling on the deadline with nothing else re-rendering', () => {
+    vi.useFakeTimers();
+    try {
+      mocks.source = { personalSpaceId: PERSONAL, walletAddress: WALLET, keyInput: PERSONAL, isLoading: false };
+      bridgeRequest(REQUESTED, PERSONAL);
+      const { result } = renderWithCache(PERSONAL, sidebarData({ memberOf: [] }));
+
+      expect(result.current.isSettlingMemberships).toBe(true);
+
+      act(() => void vi.advanceTimersByTime(REQUESTED_MEMBERSHIP_SETTLE_MS + 10));
+
+      expect(result.current.isSettlingMemberships).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('picks the cached sidebar up as soon as the account settles', () => {

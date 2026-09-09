@@ -21,6 +21,7 @@ import {
   awaitsRequestedMembership,
   browseSidebarClaimSpaceAllowlist,
   browseSidebarMemberSpaceIds,
+  nextRequestedMembershipDeadline,
 } from './claim-space-allowlist';
 
 /**
@@ -80,6 +81,26 @@ export function useClaimSpaceAllowlist(enabled: boolean = true): {
   const queryEnabled = enabled && !personalSpaceLoading;
 
   const requestedSpaces = useAtomValue(requestedMembershipSpacesAtom);
+
+  // Everything below reads the clock during render, so without this the two bridge deadlines only
+  // take effect when something else happens to re-render. Nothing else reliably does: the poll
+  // below is the main source of renders here and it stops at the settle deadline, so a request that
+  // never landed would hold `isSettlingMemberships` true — and its space in `memberSpaceIds` — for
+  // the rest of the visit, leaving the default it gates unspent. Wake once per deadline instead.
+  const [, observeDeadline] = React.useReducer((n: number) => n + 1, 0);
+  const nextDeadline = nextRequestedMembershipDeadline({
+    requestedSpaces,
+    personalSpaceId,
+    walletAddress,
+    now: Date.now(),
+  });
+  React.useEffect(() => {
+    if (nextDeadline === null) return;
+    // Absolute, so this re-arms only when the deadline itself moves, not on every render. The extra
+    // millisecond keeps an early-firing timer from waking to a boundary that has not passed yet.
+    const timer = setTimeout(observeDeadline, Math.max(0, nextDeadline - Date.now()) + 1);
+    return () => clearTimeout(timer);
+  }, [nextDeadline]);
 
   const { data, isLoading } = useQuery({
     queryKey: browseSidebarDataQueryKey(keyInput),
