@@ -1,6 +1,8 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
+import type { MatchmakingClaimsFilter } from '~/core/debates/api';
+
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
 
 export const editingPropertiesAtom = atom<boolean>(false);
@@ -54,6 +56,20 @@ export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
  * Split per surface because the two menus describe different lists: the Claims facets are the
  * whole tagged corpus, the Matches ones are only what the viewer has a match on.
  */
+/**
+ * Which list the Claims tab is showing. `featured` is the tab's own rather than geo-chat's, which
+ * is why this is not just {@link MatchmakingClaimsFilter} — typed off it so the two cannot drift.
+ *
+ * Persisted with the rest of the filter bar (GEO-2850): it is the same dropdown, dismissed the same
+ * way, and losing it on a click-away was the same surprise.
+ *
+ * The signed-out coercion stays where it is, in the tab. It is a rule about what may be *shown*,
+ * not about what the viewer picked — resetting the stored value on sign-out would forget a choice
+ * they would get back on signing in again.
+ */
+export type DebatesHubClaimsFilter = MatchmakingClaimsFilter | 'featured';
+export const debatesHubClaimsFilterAtom = atom<DebatesHubClaimsFilter>('featured');
+
 export const debatesHubClaimsSpaceIdsAtom = atom<string[]>([]);
 export const debatesHubClaimsTopicIdsAtom = atom<string[]>([]);
 export const debatesHubMatchesSpaceIdsAtom = atom<string[]>([]);

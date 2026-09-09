@@ -1875,11 +1875,26 @@ describe('topic menu', () => {
     await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] }));
 
     // The panel closing and reopening: this tab unmounts and a new one mounts in the same session.
+    // No need to pick the list again — that dropdown persists too, so the tab comes back on it.
     cleanup();
+    render(<ClaimsTab />, store);
+
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID], filter: 'mine' }));
+  });
+
+  // The list selector is the same filter bar, dismissed the same way, so it sticks with the rest.
+  it('keeps the chosen list when the panel is closed and reopened', async () => {
+    const store = createStore();
     render(<ClaimsTab />, store);
     await showIndexedClaims();
 
-    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] }));
+    cleanup();
+    render(<ClaimsTab />, store);
+
+    // Back on "My positions" rather than reset to Featured — the trigger says so, and so does the
+    // query behind it.
+    expect(await screen.findByRole('button', { name: 'My positions' })).toBeInTheDocument();
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ filter: 'mine' }));
   });
 
   // The other half of persisting the selection: a viewer who clears the filter is asking for the
@@ -1902,7 +1917,6 @@ describe('topic menu', () => {
 
     cleanup();
     render(<ClaimsTab />, store);
-    await showIndexedClaims();
     // Open the menu and wait for a real option. That is exactly the seed's own precondition — it
     // is held against a menu with nothing on it — so once a space is offered, the seed has had its
     // chance. Asserting any earlier would pass on the moment *before* a re-seed rather than on its

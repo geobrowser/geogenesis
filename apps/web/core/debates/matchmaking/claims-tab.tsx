@@ -52,6 +52,8 @@ import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { useStableListOrder } from './use-stable-list-order';
 import {
+  type DebatesHubClaimsFilter,
+  debatesHubClaimsFilterAtom,
   debatesHubClaimsSpaceIdsAtom,
   debatesHubClaimsSpaceSeedSpentAtom,
   debatesHubClaimsTopicIdsAtom,
@@ -65,7 +67,7 @@ import {
  * `mine` and `debate_now` stay geo-chat's. Both are viewer-relative and scored on who is available
  * and who this viewer is already pair-blocked with, which is not in the graph at any price.
  */
-type ClaimsTabFilter = MatchmakingClaimsFilter | 'featured';
+type ClaimsTabFilter = DebatesHubClaimsFilter;
 
 // Featured leads: it is where the tab opens, and an option the menu opens on should be the one at
 // the top of it.
@@ -159,7 +161,9 @@ export function ClaimsTab() {
   // Featured is where the tab opens. The whole corpus is the wider net but the shallower one — a
   // curator's pick is a better first thing to put in front of someone than whatever the index
   // ranked highest, and All claims is one option below.
-  const [selectedFilter, setFilter] = React.useState<ClaimsTabFilter>('featured');
+  // Session-scoped like the space and topic selections below, and for the same reason: it is the
+  // same filter bar, dismissed the same way (GEO-2850).
+  const [selectedFilter, setFilter] = useAtom(debatesHubClaimsFilterAtom);
   // Signing out with a viewer-relative filter selected would otherwise leave the tab querying it
   // anonymously and showing a trigger value that is no longer in the menu. Derived rather than
   // reset through an effect so the query, the menu label, the ordering key and the empty state all
