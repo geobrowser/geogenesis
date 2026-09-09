@@ -75,7 +75,18 @@ type StagedEdit = {
    * it reports the unpublished edit rather than what is actually published — and
    * re-staging against it would skip the fields that appear already applied.
    */
-  baseline: { name: string; description: string };
+  baseline: {
+    name: string;
+    description: string;
+    /**
+     * Whether the modal was showing each image before this edit touched anything.
+     * A removal that finds nothing to delete is only a failure if there was
+     * something on screen to remove — otherwise the draft has simply reverted to
+     * how the profile started, which is no change at all.
+     */
+    showedBanner: boolean;
+    showedAvatar: boolean;
+  };
 };
 
 const IMAGE_PROPERTIES = {
@@ -168,25 +179,38 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         staged: Map<string, string | null | undefined>
       ) => staged.has(row.id) && staged.get(row.id) === row.timestamp;
 
-      store.clearLocalChangesByIds({
-        spaceId,
-        valueIds: getValues({ includeDeleted: true, selector: v => isStagedVersion(v, rows.valueIds) }).map(v => v.id),
-        relationIds: getRelations({ includeDeleted: true, selector: r => isStagedVersion(r, rows.relationIds) }).map(
-          r => r.id
-        ),
-      });
+      const clearedValueIds = getValues({
+        includeDeleted: true,
+        selector: v => isStagedVersion(v, rows.valueIds),
+      }).map(v => v.id);
+      const clearedRelationIds = getRelations({
+        includeDeleted: true,
+        selector: r => isStagedVersion(r, rows.relationIds),
+      }).map(r => r.id);
+
+      store.clearLocalChangesByIds({ spaceId, valueIds: clearedValueIds, relationIds: clearedRelationIds });
+
       // After the clear, not before: `clearLocalChangesByIds` restores the synced
       // baseline for every id it drops, which would win over a snapshot put back
       // first.
+      //
+      // And only where the clear actually happened. An id left alone above is one
+      // another editor has since rewritten — putting our snapshot back there would
+      // overwrite that newer draft with the very row we just declined to delete.
       //
       // A snapshot can itself be a tombstone — someone's pending *deletion* that
       // this edit wrote over. `set` forces `isDeleted = false`, so putting one back
       // that way would resurrect the row and destroy the deletion; each snapshot
       // goes back through the API matching the state it was captured in.
-      rows.overwritten.forEach(value => (value.isDeleted ? storage.values.delete(value) : storage.values.set(value)));
-      rows.overwrittenRelations.forEach(relation =>
-        relation.isDeleted ? storage.relations.delete(relation) : storage.relations.set(relation)
-      );
+      const clearedValues = new Set(clearedValueIds);
+      const clearedRelations = new Set(clearedRelationIds);
+
+      rows.overwritten
+        .filter(value => clearedValues.has(value.id))
+        .forEach(value => (value.isDeleted ? storage.values.delete(value) : storage.values.set(value)));
+      rows.overwrittenRelations
+        .filter(relation => clearedRelations.has(relation.id))
+        .forEach(relation => (relation.isDeleted ? storage.relations.delete(relation) : storage.relations.set(relation)));
     },
     [spaceId, storage]
   );
@@ -330,7 +354,13 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
             // edges are scoped to the personal space. Publishing would report
             // success over an image still on screen, so record it and fail instead.
             if (removableEdges.length === 0) {
-              unresolvedRemoval = kind;
+              // Only a failure if the modal had an image on screen to remove. If it
+              // did not, the draft has reverted to the profile's original state —
+              // which happens when a first upload fails and the user changes their
+              // mind — and there is simply nothing to publish for this field.
+              if (kind === 'banner' ? baseline.showedBanner : baseline.showedAvatar) {
+                unresolvedRemoval = kind;
+              }
               continue;
             }
 
@@ -487,7 +517,12 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // against that would treat the fields it already wrote as unchanged and quietly
       // drop them from the retry.
       const previouslyStaged = stagedRef.current;
-      const baseline = previouslyStaged?.baseline ?? { name: current.name, description: current.description };
+      const baseline = previouslyStaged?.baseline ?? {
+        name: current.name,
+        description: current.description,
+        showedBanner: Boolean(current.bannerUrl),
+        showedAvatar: Boolean(current.avatarUrl),
+      };
 
       if (previouslyStaged && !isSameDraft(previouslyStaged.draft, draft)) {
         rollback(previouslyStaged.rows);

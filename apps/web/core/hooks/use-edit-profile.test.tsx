@@ -30,6 +30,8 @@ const mocks = vi.hoisted(() => ({
   reviewState: 'idle' as string,
   entityName: 'Preston' as string | null,
   hydratedEntity: {} as object | null,
+  coverUrl: 'ipfs://old-banner' as string | undefined,
+  avatarUrl: 'ipfs://old-avatar' as string | undefined,
   entityDescription: 'Working on debates.' as string | null,
   // Literals, not the consts above: vi.hoisted runs before their initialisers.
   personalEntityId: '3eb17193b0ae44fe9083ce931bc9210e' as string | null,
@@ -80,8 +82,8 @@ vi.mock('~/core/database/entities', () => ({
 }));
 
 vi.mock('~/core/utils/use-entity-media', () => ({
-  useEntityCoverUrl: () => 'ipfs://old-banner',
-  useEntityAvatarUrl: () => 'ipfs://old-avatar',
+  useEntityCoverUrl: () => mocks.coverUrl,
+  useEntityAvatarUrl: () => mocks.avatarUrl,
   findMediaUrlValue: (values: { value: string }[]) => values.find(v => v.value.startsWith('ipfs://'))?.value,
 }));
 
@@ -157,6 +159,8 @@ beforeEach(() => {
   mocks.entityDescription = 'Working on debates.';
   mocks.personalEntityId = ENTITY_ID;
   mocks.hydratedEntity = {};
+  mocks.coverUrl = 'ipfs://old-banner';
+  mocks.avatarUrl = 'ipfs://old-avatar';
   mocks.profile = { id: ENTITY_ID, spaceId: SPACE_ID, name: 'Preston', avatarUrl: null };
   mocks.storeValues = [];
   mocks.storeRelations = [];
@@ -491,6 +495,55 @@ describe('useEditProfile', () => {
     act(() => result.current.reset());
 
     expect(mocks.clearLocalChangesByIds).toHaveBeenCalledWith(expect.objectContaining({ valueIds: [] }));
+  });
+
+  // A first upload fails, the user changes their mind and switches to Remove. The
+  // rollback takes the staged image back out, so staging finds nothing to delete —
+  // but the draft has only returned to how the profile started.
+  it('treats reverting a failed first upload to Remove as no change, not a failed removal', async () => {
+    mocks.coverUrl = undefined;
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+    const file = new File([''], 'banner.png', { type: 'image/png' });
+    mocks.storeRelations = [relation({ id: 'new-relation' })];
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ banner: { kind: 'replaced', file } }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    mocks.storeRelations = [];
+    await act(async () => {
+      await result.current.publish(draft({ banner: { kind: 'removed' } }));
+    });
+
+    expect(result.current.status).toBe('published');
+    expect(result.current.errorMessage).toBeNull();
+  });
+
+  // An id the version check declined to clear belongs to a newer edit. Putting our
+  // snapshot back there would overwrite the very draft we just protected.
+  it('does not restore a snapshot over a row it declined to clear', async () => {
+    const theirDraft = { ...stagedValue(SystemIds.NAME_PROPERTY), timestamp: 't1', value: 'Their draft' } as Value;
+    mocks.storeValues = [theirDraft];
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    // Replaced again by yet another edit while the publish was in flight.
+    mocks.storeValues = [{ ...theirDraft, timestamp: 't3', value: 'Newer still' } as Value];
+    mocks.setValue.mockClear();
+
+    act(() => result.current.reset());
+
+    expect(mocks.clearLocalChangesByIds).toHaveBeenCalledWith(expect.objectContaining({ valueIds: [] }));
+    expect(mocks.setValue).not.toHaveBeenCalled();
   });
 
   it('leaves a pending edit made elsewhere on the entity out of the publish', async () => {
