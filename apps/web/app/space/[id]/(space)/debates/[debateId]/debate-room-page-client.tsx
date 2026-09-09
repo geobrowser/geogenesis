@@ -33,6 +33,7 @@ import {
   createDebateRoomOwnershipCoordinator,
   debateRoomTabPriority,
 } from '~/core/debates/debate-room-ownership';
+import { debateTurnRole } from '~/core/debates/formats';
 import {
   useAbortDebate,
   useClearDebateActivity,
@@ -2089,9 +2090,7 @@ function DebateRecordingModal({
   const localUpcomingLabel =
     countdown.yieldingSlot && !countdown.preservesExistingCountIn
       ? 'Your turn in'
-      : upcomingTurnIsRebuttal(debate, countdown)
-        ? 'Rebut in'
-        : "You're up in";
+      : (upcomingTurnLabel(debate, countdown) ?? "You're up in");
   const showLocalGo = localTurnGoIsVisible(countdown, localSlot);
   const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot);
   const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
@@ -2656,15 +2655,26 @@ function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | n
   );
 }
 
-function upcomingTurnIsRebuttal(debate: Debate, countdown: DebateCountdown) {
-  if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return false;
+/**
+ * Names the turn you are counting into, when it is one the format gives a distinct purpose.
+ *
+ * `null` falls back to the generic "You're up in". The closing round exists to address the
+ * audience rather than the opponent (GEO-2852), and the countdown is the only moment the room can
+ * say so before someone starts talking — so it says it in full rather than abbreviating.
+ */
+export function upcomingTurnLabel(debate: Debate, countdown: DebateCountdown) {
+  if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return null;
   const nextTurnIndex = countdown.turnIndex + 1;
   const turnCount = debate.turn_durations_ms.length;
-  if (nextTurnIndex >= turnCount) return false;
-  // Mirror format-details.tsx: round 0 is always an opening argument, so a turn is a
-  // rebuttal only when it falls in the last round and that round is not the opening one.
-  const roundIndex = Math.floor(nextTurnIndex / 2);
-  return roundIndex !== 0 && roundIndex === Math.floor((turnCount - 1) / 2);
+  if (nextTurnIndex >= turnCount) return null;
+  switch (debateTurnRole(nextTurnIndex, turnCount)) {
+    case 'rebuttal':
+      return 'Rebut in';
+    case 'closing':
+      return 'Closing argument in';
+    default:
+      return null;
+  }
 }
 
 function debateEndsSoonIsVisible(debate: Debate, countdown: DebateCountdown, localSlot: ParticipantSlot | null) {
