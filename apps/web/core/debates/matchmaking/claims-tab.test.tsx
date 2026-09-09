@@ -594,7 +594,23 @@ async function showAllClaims() {
 const MINE = '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419';
 const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 
+// The semantic-search route is not configured in this environment: it answers `hits: null`, and
+// the search matches words — the behaviour these tests cover. Every other request stays refused,
+// as the setup file has it.
+const refuseNetwork = globalThis.fetch;
+const semanticRouteUnconfigured: typeof fetch = async (input, init) => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+  if (url.includes('/api/debates/claims/semantic-search')) {
+    return new Response(JSON.stringify({ hits: null }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+  return refuseNetwork(input, init);
+};
+
 beforeEach(() => {
+  vi.stubGlobal('fetch', semanticRouteUnconfigured);
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
   mocks.accountKey = 'account-1' as string | null;
@@ -672,7 +688,10 @@ beforeEach(() => {
   } as unknown as typeof ResizeObserver;
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('ClaimsTab', () => {
   // GEO-2684. The list pages forever, so controls left in the scrolling body meant scrolling back

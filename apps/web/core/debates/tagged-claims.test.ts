@@ -12,7 +12,10 @@ import {
   NO_TAGGED_CLAIM_FILTERS,
   TAGGED_CLAIMS_PAGE_SIZE,
   type TaggedClaimFilters,
+  orderBySemanticScore,
   searchTerms,
+  taggedClaimsQueryKey,
+  taggedFacetQueryKey,
   useTaggedClaims,
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
@@ -475,5 +478,78 @@ describe('the facet menus', () => {
     // An error leaves the menu empty while it stops loading. Read as settled, that empty menu says
     // the viewer's picked space no longer exists, and the reconciliation spends their selection.
     expect(result.current.settled).toBe(false);
+  });
+});
+
+describe('a semantic answer to the search', () => {
+  const hits = [
+    { id: 'a2', score: 0.93 },
+    { id: 'a1', score: 0.85 },
+  ];
+
+  it('asks for the claims geo-lens named, and not for the words', async () => {
+    respondWithPages([[node('a1', 'One'), node('a2', 'Two')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'trump affair', semanticHits: hits });
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+
+    const filter = JSON.stringify(sentVariables().filter);
+    expect(filter).toContain('"id":{"in":["a2","a1"]}');
+    expect(filter).not.toContain('includesInsensitive');
+  });
+
+  it('shows them closest first, whatever the server ranked them', async () => {
+    respondWithPages([[node('a1', 'One', { rankingScore: '20' }), node('a2', 'Two', { rankingScore: '10' })]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'trump affair', semanticHits: hits });
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+
+    expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a2', 'a1']);
+  });
+
+  it('asks for nothing when geo-lens named nothing, rather than for the words', async () => {
+    respondWithPages([[]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'art', semanticHits: [] });
+    await waitFor(() => expect(graphqlMock).toHaveBeenCalled());
+
+    const filter = JSON.stringify(sentVariables().filter);
+    expect(filter).toContain('"id":{"in":[]}');
+    expect(filter).not.toContain('includesInsensitive');
+    expect(result.current.claims).toEqual([]);
+  });
+
+  it('is its own query, distinct from the same words matched literally', () => {
+    const words: TaggedClaimFilters = { ...NO_TAGGED_CLAIM_FILTERS, search: 'trump affair' };
+    const semantic: TaggedClaimFilters = { ...words, semanticHits: hits };
+    expect(taggedClaimsQueryKey(TAG, words)).not.toEqual(taggedClaimsQueryKey(TAG, semantic));
+    expect(taggedFacetQueryKey('topics', TAG, words)).not.toEqual(taggedFacetQueryKey('topics', TAG, semantic));
+    expect(taggedFacetQueryKey('spaces', TAG, words)).not.toEqual(taggedFacetQueryKey('spaces', TAG, semantic));
+  });
+
+  it('counts both menus over the named claims too', async () => {
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(decoder({ relationsConnection: { groupedAggregates: [] } }))
+    );
+    renderHook(
+      () => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, search: 'trump', semanticHits: hits }, true),
+      { wrapper }
+    );
+    await waitFor(() => expect(graphqlMock).toHaveBeenCalled());
+    expect(JSON.stringify(sentVariables().fromEntity)).toContain('"id":{"in":["a2","a1"]}');
+  });
+});
+
+describe('orderBySemanticScore', () => {
+  const claim = (id: string) => ({
+    entity: { id, name: id, description: null, spaces: [], values: [], relations: [] },
+    tagSpaceIds: [SPACE],
+    rankingScore: null,
+  });
+
+  it('follows the hits, accepts either id spelling, and keeps unnamed rows last in their own order', () => {
+    const rows = [claim('a1'), claim('zz'), claim('a2'), claim('yy')];
+    const hits = [
+      { id: 'a2', score: 0.9 },
+      { id: 'a1', score: 0.8 },
+    ];
+    expect(orderBySemanticScore(rows, hits).map(row => row.entity.id)).toEqual(['a2', 'a1', 'zz', 'yy']);
   });
 });

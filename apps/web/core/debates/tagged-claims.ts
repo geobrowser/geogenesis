@@ -110,13 +110,16 @@ type TaggedClaimsQuery = {
  * at human speed, so every caller asking for the same tag and filters shares one request for a good
  * while.
  */
-const TAGGED_STALE_TIME = 5 * 60_000;
+export const TAGGED_STALE_TIME = 5 * 60_000;
 
 /** Topic names outlive any one filter click by a long way; they are not what goes stale here. */
 const TOPIC_NAMES_STALE_TIME = 30 * 60_000;
 
 /** Rows per request. Small enough that the first screen is not waiting on the rest of the page. */
 export const TAGGED_CLAIMS_PAGE_SIZE = 50;
+
+/** One claim geo-lens found for the search box, and how close it came. */
+export type SemanticClaimHit = { id: string; score: number };
 
 /** What narrows the list. Every one of these reaches the server. */
 export type TaggedClaimFilters = {
@@ -133,6 +136,15 @@ export type TaggedClaimFilters = {
    * finds, for eight round trips a keystroke. GEO-2806.
    */
   search: string;
+  /**
+   * What `search` resolved to when geo-lens answered it: the claims whose meaning is closest to the
+   * words typed, over this tag, the eligible spaces and the picked topics. Set, the list is these
+   * claims and nothing else — the words themselves are not matched — ordered by how close they
+   * came. Empty is an answer: geo-lens found nothing, so the list shows nothing. `null` (or absent)
+   * is the word-by-word match above, kept for a deployment with no geo-lens to ask; see
+   * `useSemanticTaggedFilters` for why nothing else falls through to it.
+   */
+  semanticHits?: readonly SemanticClaimHit[] | null;
   /** AND, not OR: a claim has to carry every picked topic. */
   topicIds: string[];
   /** OR: any of the picked spaces. Left out of the space facet, which must not narrow by itself. */
@@ -149,6 +161,7 @@ export type TaggedClaimFilters = {
 
 export const NO_TAGGED_CLAIM_FILTERS: TaggedClaimFilters = {
   search: '',
+  semanticHits: null,
   topicIds: [],
   spaceIds: [],
   eligibleSpaceIds: null,
@@ -282,6 +295,16 @@ function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: '
     and.push({ relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: topicId } } } });
   }
 
+  if (filters.semanticHits) {
+    // The search already happened, in geo-lens, over the same tag, spaces and topics as above; what
+    // is left is to fetch the claims it named. The words are deliberately not matched as well — a
+    // claim that means what was typed need not contain it, which is the whole point. An empty
+    // answer is asked for as `in: []`, which the graph answers with nothing, so the list and both
+    // menus empty together.
+    and.push({ id: { in: filters.semanticHits.map(hit => hit.id) } });
+    return { and };
+  }
+
   // One clause per word, ANDed, so the words may appear in any order and with anything between
   // them: as a single phrase, "Trump affair" missed "Allegations of an affair between President
   // Donald Trump…" and "Israel Gaza" missed all six claims about both. A claim containing the whole
@@ -291,6 +314,28 @@ function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: '
   }
 
   return { and };
+}
+
+/** The part of the filters' identity the semantic answer contributes: which claims, in which order. */
+function semanticKey(filters: TaggedClaimFilters): string[] | null {
+  return filters.semanticHits ? filters.semanticHits.map(hit => hit.id) : null;
+}
+
+/**
+ * Semantic hits in their own order — closest first — rather than the ranking the server paged by.
+ *
+ * The server sorts every page by ranking score, which is right for browsing a tag and wrong for a
+ * search: someone who typed a sentence wants the claim that means it at the top, not the one the
+ * feed happens to rank highest among the matches. A claim geo-lens named but the server did not
+ * return (untagged in the meantime) is simply absent; one the server returned but geo-lens did
+ * not name cannot happen, since the ids are the filter.
+ */
+export function orderBySemanticScore(claims: TaggedClaim[], hits: readonly SemanticClaimHit[]): TaggedClaim[] {
+  const rank = new Map(hits.map((hit, index) => [uuidToHex(hit.id), index]));
+  return claims
+    .map((claim, index) => ({ claim, index, rank: rank.get(uuidToHex(claim.entity.id)) ?? Number.MAX_SAFE_INTEGER }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map(entry => entry.claim);
 }
 
 /**
@@ -331,6 +376,7 @@ export const taggedClaimsQueryKey = (tagId: string, filters: TaggedClaimFilters)
     'claims',
     tagId,
     filters.search,
+    semanticKey(filters),
     filters.topicIds,
     filters.spaceIds,
     filters.eligibleSpaceIds,
@@ -345,7 +391,10 @@ const noFetch = async () => undefined;
  * One ranked, filtered page of tagged claims at a time.
  *
  * Ranked by the server, which is Explore's "Best" order — `entities_ranked_for_feed`'s own
- * `ORDER BY ranking_score DESC, entity_id DESC`, unscored claims last. Nothing is sorted here.
+ * `ORDER BY ranking_score DESC, entity_id DESC`, unscored claims last. Nothing is sorted here,
+ * with one exception: a semantic search (`filters.semanticHits`) is shown closest-first, because
+ * its rows were chosen by meaning and the ranking says nothing about that — see
+ * {@link orderBySemanticScore}.
  *
  * Curation moves at human speed, so a page stays fresh for a good while; every caller asking for the
  * same tag and the same filters shares one request.
@@ -380,10 +429,13 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     enabled,
   });
 
-  const claims = React.useMemo(
-    () => query.data?.pages.flatMap(page => page.claims) ?? NO_TAGGED_CLAIMS,
-    [query.data?.pages]
-  );
+  const semanticHits = filters.semanticHits ?? null;
+  const claims = React.useMemo(() => {
+    const rows = query.data?.pages.flatMap(page => page.claims) ?? NO_TAGGED_CLAIMS;
+    // A semantic answer is at most one page (`SEMANTIC_SEARCH_K` is the page size), so re-ordering
+    // the rows in hand is re-ordering the whole list, not one page of a ranked cursor.
+    return semanticHits && rows.length > 0 ? orderBySemanticScore(rows, semanticHits) : rows;
+  }, [query.data?.pages, semanticHits]);
 
   return {
     // Disabled means no answer, not the last one.
@@ -509,6 +561,7 @@ export const taggedFacetQueryKey = (dimension: 'topics' | 'spaces', tagId: strin
     dimension,
     tagId,
     filters.search,
+    semanticKey(filters),
     filters.topicIds,
     // The space facet does not narrow by the picked spaces, so they are not part of its identity.
     dimension === 'spaces' ? null : filters.spaceIds,
