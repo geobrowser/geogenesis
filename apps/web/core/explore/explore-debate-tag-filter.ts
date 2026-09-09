@@ -17,11 +17,23 @@ import type { EntityFilter } from '~/core/gql/graphql';
  * Both halves match on ids rather than names. `Debate` is a tag entity and a type, and the display
  * name of either can be edited by anyone with rights to it; an id cannot.
  *
- * Note what this is *not* scoped by: neither half mentions a space, so a claim tagged in any space
- * passes. The alternative — the tag having to be in one of the spaces the feed is scoped to — is
- * what `tagged-claims` needs, because there the tag's space is what a card is built against. Here
- * the card is built against the entity's own display space and the tag is only a gate, so scoping
- * it would drop claims for the space they were curated in rather than the space they are read in.
+ * The tag half is scoped to the spaces the feed is already reading from, and that scoping is the
+ * whole difference between a curation gate and an open one (GEO-2835 review). Relations carry
+ * their own space, independent of the entity's, so an unscoped clause accepts a `Tags -> Debate`
+ * relation written from *anywhere* — including a personal space nobody else reads. Anyone able to
+ * write to a space of their own could therefore put an arbitrary claim in front of every reader,
+ * provided it already lived in a space they browse. Scoping to the feed's own spaces closes that,
+ * and it costs very little: of 1,311 tag relations on testnet (2026-09-08), zero were applied from
+ * a space the tagged claim does not itself live in, so nothing curated today depends on the
+ * loophole. Measured against the eleven spaces that hold tagged claims, scoping admits the same
+ * 1,308 claims the unscoped clause did — no loss at all for a reader who browses the spaces doing
+ * the curating. It does bite a reader narrowed to fewer: a three-space subset loses 4 of 304 and a
+ * single space 5 of 352, around 1.4%, each a claim living in the space they picked but tagged in
+ * one of the others. That is the price, and it buys the paragraph above.
+ *
+ * It also settles a disagreement this was supposed to end. `taggedEntityFilter` in
+ * `core/debates/tagged-claims` puts `spaceId` on the tag relation too, so an unscoped clause here
+ * meant a claim could pass Explore's gate and still never appear in the claims tab.
  *
  * Measured before relying on it (testnet, 2026-09-08): 1,151 of 326,020 claims carry the tag, so
  * this removes almost every claim from the feed — which is the intent, and worth knowing.
@@ -29,13 +41,16 @@ import type { EntityFilter } from '~/core/gql/graphql';
  * Cost, from paired interleaved A/B through the route — every request the Explore UI can actually
  * issue, ten to thirty pairs each, alternating which arm ran first:
  *
- *   Best (unwindowed)   357ms with, 355ms without
- *   New  (unwindowed)   285ms with, 325ms without
- *   Top  every window   within ±4%, no window worse than noise
+ *   Best (unwindowed)   355ms with, 376ms without — slower in 12 of 30 pairs
+ *   New  (unwindowed)   366ms with, 367ms without — slower in 15 of 30 pairs
+ *   Top  every window   within ±9%, none worse than a coin flip
  *
- * In each the gated arm was the slower one in about half the pairs, which is what a free clause
- * looks like. It is not free everywhere, though, and the exception is worth knowing about before
- * anyone widens the feed:
+ * Fifteen of thirty is exactly a coin flip, which is what a free clause looks like. Ten pairs is
+ * not enough to see that: the same two rows first measured at +15.6% and +29.4%, and both went to
+ * nothing at thirty. Re-measure with enough pairs before believing a delta here.
+ *
+ * It is not free everywhere, though, and the exception is worth knowing about before anyone widens
+ * the feed:
  *
  *   **This clause roughly doubles a query that also carries a `createdAt` window.** Best over the
  *   last year went 462ms -> 939ms and New over the last week 1985ms -> 3356ms, each slower in
@@ -44,14 +59,25 @@ import type { EntityFilter } from '~/core/gql/graphql';
  *   param off entirely, and Top — the one sort that does send a window — is unaffected. Adding
  *   Best or New to that list without re-measuring would make the feed about twice as slow.
  */
-export const CLAIMS_REQUIRE_DEBATE_TAG_FILTER = {
-  or: [
-    // Not a claim. The types *relation*, not the `typeIds` argument, because a filter can only
-    // negate a relation — and this half has to be a negation, or the clause would silently exclude
-    // every news story and debate too.
-    { relations: { none: { typeId: { is: SystemIds.TYPES_PROPERTY }, toEntityId: { is: CLAIM_TYPE_ID } } } },
-    // Or carries the tag. Same property and shape the claims tab filters on, so the two surfaces
-    // agree about what "tagged for debate" means.
-    { relations: { some: { typeId: { is: TAG_PROPERTY_ID }, toEntityId: { is: DEBATE_TAG_ID } } } },
-  ],
-} satisfies EntityFilter;
+export function claimsRequireDebateTagFilter(spaceIds: readonly string[]) {
+  return {
+    or: [
+      // Not a claim. The types *relation*, not the `typeIds` argument, because a filter can only
+      // negate a relation — and this half has to be a negation, or the clause would silently
+      // exclude every news story and debate too.
+      { relations: { none: { typeId: { is: SystemIds.TYPES_PROPERTY }, toEntityId: { is: CLAIM_TYPE_ID } } } },
+      // Or carries the tag, applied from one of the spaces this feed is already scoped to. Same
+      // property, target and space-scoping the claims tab filters on, so the two surfaces agree
+      // about what "tagged for debate" means.
+      {
+        relations: {
+          some: {
+            typeId: { is: TAG_PROPERTY_ID },
+            toEntityId: { is: DEBATE_TAG_ID },
+            spaceId: { in: [...spaceIds] },
+          },
+        },
+      },
+    ],
+  } satisfies EntityFilter;
+}
