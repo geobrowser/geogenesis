@@ -24,9 +24,25 @@ import type { EntityFilter } from '~/core/gql/graphql';
  * it would drop claims for the space they were curated in rather than the space they are read in.
  *
  * Measured before relying on it (testnet, 2026-09-08): 1,151 of 326,020 claims carry the tag, so
- * this removes almost every claim from the feed — which is the intent, and worth knowing. On all
- * three sorts the clause is free or better: New 0.31s with against 0.49s without, Top 0.37s against
- * 0.29s, Best 0.42s against 0.38s, warm.
+ * this removes almost every claim from the feed — which is the intent, and worth knowing.
+ *
+ * Cost, from paired interleaved A/B through the route — every request the Explore UI can actually
+ * issue, ten to thirty pairs each, alternating which arm ran first:
+ *
+ *   Best (unwindowed)   357ms with, 355ms without
+ *   New  (unwindowed)   285ms with, 325ms without
+ *   Top  every window   within ±4%, no window worse than noise
+ *
+ * In each the gated arm was the slower one in about half the pairs, which is what a free clause
+ * looks like. It is not free everywhere, though, and the exception is worth knowing about before
+ * anyone widens the feed:
+ *
+ *   **This clause roughly doubles a query that also carries a `createdAt` window.** Best over the
+ *   last year went 462ms -> 939ms and New over the last week 1985ms -> 3356ms, each slower in
+ *   10 of 10 pairs with no overlap between the two arms' ranges. Nothing reaches that combination
+ *   today: `SORTS_WITH_TIME_RANGE` in `entity-feed` is `['top']`, so Best and New leave the `time`
+ *   param off entirely, and Top — the one sort that does send a window — is unaffected. Adding
+ *   Best or New to that list without re-measuring would make the feed about twice as slow.
  */
 export const CLAIMS_REQUIRE_DEBATE_TAG_FILTER = {
   or: [
