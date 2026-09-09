@@ -136,6 +136,7 @@ const mocks = vi.hoisted(() => ({
   currentUserId: 'user-local' as string | null,
   spaceAllowlist: null as Set<string> | null,
   memberSpaceIds: null as Set<string> | null,
+  isSettlingMemberships: false,
   allowlistLoading: false,
   spaceTypes: {} as Record<string, 'DAO' | 'PERSONAL'>,
   publishableSpaceIds: null as Set<string> | null,
@@ -620,6 +621,7 @@ vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
     // about the member default set it explicitly.
     memberSpaceIds: mocks.memberSpaceIds,
     isLoading: mocks.allowlistLoading,
+    isSettlingMemberships: mocks.isSettlingMemberships,
   }),
 }));
 
@@ -734,6 +736,7 @@ beforeEach(() => {
   mocks.responseIndexingStatus = null;
   mocks.spaceAllowlist = null;
   mocks.memberSpaceIds = null;
+  mocks.isSettlingMemberships = false;
   mocks.allowlistLoading = false;
   mocks.spaceTypes = {};
   mocks.publishableSpaceIds = null;
@@ -2056,6 +2059,29 @@ describe('DebateRematchPageClient', () => {
 
     // The default is still there to spend, and spends it on the space that survived.
     await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
+  });
+
+  // GEO-2834. Same rule as the publishable gate above, applied to the *viewer's* side of the match:
+  // sign-up sends one membership proposal per picked space and they land seconds apart, so the
+  // first non-empty answer is a fraction of what the reader chose — and the seed fires once.
+  it('waits for the rest of their memberships before taking its one default', async () => {
+    // Only the first proposal has been indexed so far.
+    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+    mocks.isSettlingMemberships = true;
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    // Unspent, rather than spent on the one space that happens to have landed.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
+
+    // The rest of what they picked lands.
+    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, ''), SPACE_2.replace(/-/g, '')]);
+    mocks.isSettlingMemberships = false;
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // Seeded with both of theirs, which a seed taken against the partial answer would have missed.
+    await waitFor(() => expect(screen.getByRole('button', { name: /2 spaces/ })).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
   });
 

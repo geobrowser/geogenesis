@@ -70,6 +70,7 @@ const mocks = vi.hoisted(() => ({
   spaceAllowlist: null as Set<string> | null,
   memberSpaceIds: null as Set<string> | null,
   allowlistLoading: false,
+  isSettlingMemberships: false,
   publishableSpaceIds: null as Set<string> | null,
   publishableLoading: false,
   scopeHeldOver: false,
@@ -105,6 +106,7 @@ vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
     // about the member default set it explicitly.
     memberSpaceIds: mocks.memberSpaceIds,
     isLoading: mocks.allowlistLoading,
+    isSettlingMemberships: mocks.isSettlingMemberships,
   }),
 }));
 
@@ -624,6 +626,7 @@ beforeEach(() => {
   mocks.spaceAllowlist = null;
   mocks.memberSpaceIds = null;
   mocks.allowlistLoading = false;
+  mocks.isSettlingMemberships = false;
   // Same shape, same reason: settled-with-no-answer does not filter, which is what every
   // pre-existing case here runs under.
   mocks.publishableSpaceIds = null;
@@ -1652,6 +1655,23 @@ describe('All claims reads the Debate tag', () => {
 
     expect(screen.getByText('No claims have been tagged for debate yet.')).toBeInTheDocument();
   });
+
+  // GEO-2840. "Debate now" is the only filter on this tab scored on who is online, so it is the
+  // only one whose empty list means "nobody is around" — the other three are statements about
+  // curation or about the viewer's own positions, and debate hours would not explain any of them.
+  it('adds the debate hours line under Debate now, and not under All claims', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [];
+    mocks.claims = [];
+    render(<ClaimsTab />);
+
+    await showAllClaims();
+    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).toBeNull();
+
+    chooseFilter('All claims', 'Debate now');
+
+    expect(await screen.findByText('Nobody is ready to debate you on a claim right now.')).toBeInTheDocument();
+    expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
+  });
 });
 
 // GEO-2653. The menu is the server's topic facet, which describes every claim the current
@@ -1900,6 +1920,28 @@ describe('topic menu', () => {
 
     // Seeded with theirs, which a seed taken against the partial list would have missed.
     await waitFor(() => expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull());
+  });
+
+  // GEO-2834. The other half of "the menu has finished arriving": so has the *viewer's* side of it.
+  // Sign-up sends one membership proposal per picked space and they land seconds apart, so the
+  // first non-empty answer is a fraction of what the reader chose — and the seed is spent on it.
+  it('holds the default while more of their memberships are still landing', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.isSettlingMemberships = true;
+    const view = render(<ClaimsTab />);
+    await showIndexedClaims();
+
+    await waitFor(() => expect(mocks.lastQuery).toBeTruthy());
+    expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
+
+    // The rest of what they picked lands.
+    mocks.memberSpaceIds = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.isSettlingMemberships = false;
+    view.rerender(<ClaimsTab />);
+
+    // Both of theirs, which a seed taken against the partial answer would have missed.
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID, OTHER_SPACE_ID] }));
   });
 
   // A default, not a policy: once it has applied, the viewer's own choice stands — including the
