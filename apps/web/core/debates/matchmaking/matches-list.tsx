@@ -52,10 +52,14 @@ import {
 export function MatchesList({
   onTabChange,
   trailing,
+  dense = false,
 }: {
-  onTabChange: (tab: DebatesHubTab) => void;
+  /** Only reached from the empty state's action, so the rail need not pass one. */
+  onTabChange?: (tab: DebatesHubTab) => void;
   /** Lobby's "Matches only" switch, at the end of the filter row. */
   trailing?: React.ReactNode;
+  /** The workspace's live rail (GEO-2726): no chrome, just the list. */
+  dense?: boolean;
 }) {
   // Lobby's one selection, shared with its toggled-off state (GEO-2861) — the toggle narrows the
   // list, and would be a strange place to also change which spaces the viewer had picked.
@@ -230,28 +234,33 @@ export function MatchesList({
       {/* One pinned header rather than a pinned card above scrolling filters: two stickies would
           both claim `top-0` and overlap, and the outbound card is conditional so the filters
           couldn't be offset by a known height. */}
-      <HubStickyControls>
-        {outbound ? <OutboundRequestCard request={outbound} /> : null}
-        <Input
-          withSearchIcon
-          value={search}
-          onChange={event => setSearch(event.currentTarget.value)}
-          placeholder="Search claims"
-          aria-label="Search claims"
-        />
+      {/* The rail is a column beside the list it accompanies, not a surface of its own: three
+          pinned headers stacked in it would all claim `top-0` and overlap. The outbound card is
+          dropped with them because the rail's Requests section above already carries it. */}
+      {!dense && (
+        <HubStickyControls>
+          {outbound ? <OutboundRequestCard request={outbound} /> : null}
+          <Input
+            withSearchIcon
+            value={search}
+            onChange={event => setSearch(event.currentTarget.value)}
+            placeholder="Search claims"
+            aria-label="Search claims"
+          />
 
-        <SpaceTopicFilters
-          spaceIds={spaceIds}
-          onSpaceToggle={onSpaceToggle}
-          onSpacesClear={onSpacesClear}
-          topicIds={topicIds}
-          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-          onTopicsClear={() => setTopicIds([])}
-          facetSpaces={facetSpaces}
-          facetTopics={facetTopics}
-          trailing={trailing}
-        />
-      </HubStickyControls>
+          <SpaceTopicFilters
+            spaceIds={spaceIds}
+            onSpaceToggle={onSpaceToggle}
+            onSpacesClear={onSpacesClear}
+            topicIds={topicIds}
+            onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+            onTopicsClear={() => setTopicIds([])}
+            facetSpaces={facetSpaces}
+            facetTopics={facetTopics}
+            trailing={trailing}
+          />
+        </HubStickyControls>
+      )}
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
@@ -312,7 +321,11 @@ export function MatchesList({
                     setTopicIds([]);
                   },
                 }
-              : { label: 'Explore claims', onClick: () => onTabChange('explore') }
+              : // In the rail there is no tab to change to, and the claims list is already on screen
+                // beside this, so the "somewhere to go" half has nowhere to send anyone.
+                onTabChange
+                ? { label: 'Explore claims', onClick: () => onTabChange('explore') }
+                : undefined
           }
         >
           <HubCardList>
