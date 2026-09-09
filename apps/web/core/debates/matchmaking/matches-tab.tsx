@@ -32,7 +32,7 @@ export function MatchesTab({
   onTabChange,
   dense = false,
 }: {
-  onTabChange: (tab: DebatesHubTab) => void;
+  onTabChange?: (tab: DebatesHubTab) => void;
   dense?: boolean;
 }) {
   // Session-scoped, like the Claims tab's: the hub closes on an outside pointer-down, so a
@@ -149,7 +149,7 @@ export function MatchesTab({
           emptyAction={
             filteredBySpace
               ? { label: 'Clear filters', onClick: () => setSpaceIds([]) }
-              : dense
+              : dense || !onTabChange
                 ? undefined
                 : { label: 'Explore claims', onClick: () => onTabChange('claims') }
           }

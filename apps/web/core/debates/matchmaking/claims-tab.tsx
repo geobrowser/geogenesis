@@ -142,6 +142,10 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
  */
 export type ClaimsLayout = 'panel' | 'workspace';
 
+/**
+ * `workspace`: facet rail + grid; panel menus are the narrow fallback.
+ * Filters are local — layouts do not share search state (a shared atom needs care with effects below).
+ */
 export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) {
   const workspace = layout === 'workspace';
   const queryClient = useQueryClient();
@@ -598,22 +602,6 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
     fetchNextPage: graphSourced ? fetchNextTaggedPage : claimsQuery.fetchNextPage,
   });
 
-  const facetRail = (
-    <HubFacetRail
-      filterOptions={filterOptions}
-      filter={filter}
-      onFilterChange={setFilter}
-      facetSpaces={facetSpaces}
-      spaceIds={spaceIds}
-      onSpaceToggle={onSpaceToggle}
-      onSpacesClear={onSpacesClear}
-      facetTopics={facetTopics}
-      topicIds={topicIds}
-      onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-      onTopicsClear={() => setTopicIds([])}
-    />
-  );
-
   return (
     <div className={workspace ? 'flex min-w-0 gap-8' : 'flex flex-col'}>
       {workspace && (
@@ -622,7 +610,19 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
           className="sticky top-[7.5rem] hidden max-h-[calc(100dvh-8.5rem)] w-60 shrink-0 self-start overflow-y-auto @[72rem]/hub:block"
           data-testid="hub-facet-rail"
         >
-          {facetRail}
+          <HubFacetRail
+            filterOptions={filterOptions}
+            filter={filter}
+            onFilterChange={setFilter}
+            facetSpaces={facetSpaces}
+            spaceIds={spaceIds}
+            onSpaceToggle={onSpaceToggle}
+            onSpacesClear={onSpacesClear}
+            facetTopics={facetTopics}
+            topicIds={topicIds}
+            onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+            onTopicsClear={() => setTopicIds([])}
+          />
         </aside>
       )}
       <div className={workspace ? '@container/claims flex min-w-0 flex-1 flex-col' : 'contents'}>
