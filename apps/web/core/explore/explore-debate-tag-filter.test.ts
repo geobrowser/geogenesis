@@ -31,9 +31,17 @@ describe('the explore debate-tag clause', () => {
   });
 
   it('lets everything that is not a claim through, rather than restricting the whole feed', () => {
-    // The negation is the half that keeps this scoped. Explore is a mixed feed and the tag says
-    // nothing about a news story or a debate; written as `some`, this branch would require every
-    // row in the feed to carry a claim tag and empty it.
+    // The negation is the half that keeps this scoped, and getting it backwards inverts the
+    // feature rather than breaking it loudly. `none` reads "is not a claim", so the clause is
+    // "not a claim, or tagged". With `some` it reads "is a claim", and the clause becomes "is a
+    // claim, or tagged":
+    //
+    //                          none (as written)     some (inverted)
+    //   news story, untagged   passes                excluded
+    //   claim, untagged        excluded              passes
+    //
+    // — every untagged claim back in the feed, and untagged news stories and debates out of it.
+    // Exactly the two things this is supposed to do, both the wrong way round.
     expect(FILTER.or[0]).toEqual({
       relations: { none: { typeId: { is: SystemIds.TYPES_PROPERTY }, toEntityId: { is: CLAIM_TYPE_ID } } },
     });

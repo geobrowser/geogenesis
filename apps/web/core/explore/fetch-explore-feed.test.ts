@@ -1,23 +1,35 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as Effect from 'effect/Effect';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 
 import { NEWS_STORY_TYPE_ID } from './explore-constants';
+import { claimsRequireDebateTagFilter } from './explore-debate-tag-filter';
 
 /**
  * The graph is mocked at `graphql()` — the single boundary every sort's fetcher goes through —
  * so a test can hand the feed an exact sequence of windows. `graphql` resolves to whatever its
  * `decoder` would have produced, which is the page shape below, so the mock returns that directly.
  */
-const windows = vi.hoisted(() => ({ queue: [] as unknown[], calls: 0 }));
+const windows = vi.hoisted(() => ({
+  queue: [] as unknown[],
+  calls: 0,
+  /**
+   * What each call actually asked the graph for. Kept because the interesting half of this module
+   * is what it *sends*: a mock that only feeds rows back cannot tell whether the debate-tag clause
+   * still reaches the query, so every one of these tests would go on passing if the gate silently
+   * stopped being forwarded.
+   */
+  variables: [] as Record<string, unknown>[],
+}));
 
 vi.mock('~/core/io/graphql-client', () => ({
-  graphql: () => {
+  graphql: ({ variables }: { variables: Record<string, unknown> }) => {
     const next = windows.queue[Math.min(windows.calls, windows.queue.length - 1)];
     windows.calls += 1;
+    windows.variables.push(variables);
     return Effect.succeed(next);
   },
 }));
@@ -83,6 +95,44 @@ const feedArgs = {
 beforeEach(() => {
   windows.queue = [];
   windows.calls = 0;
+  windows.variables = [];
+});
+
+/**
+ * The clause has to survive the trip into every sort's query, and each sort composes it
+ * differently — Best sends it as the whole `filter`, while New and Top spread it into the one
+ * `buildFeedFilter` builds. The `or` key is the part that is the gate, so that is what these
+ * compare, and it is the same assertion for all three.
+ *
+ * Worth pinning rather than reading: `buildFeedFilter(args)` picks the flag off the args object it
+ * is handed, so a sort that forgets to pass it through fails silently and completely — the feed
+ * just goes back to serving every claim.
+ */
+describe('the debate-tag clause reaching the query', () => {
+  const sorts = ['best', 'new', 'top'] as const;
+
+  function sentFilter() {
+    return windows.variables[0]?.filter as { or?: unknown } | undefined;
+  }
+
+  it.each(sorts)('is sent for the %s sort when the caller asks for it', async sort => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, sort });
+
+    // Compared against the module that builds it, so the space-scoping travels too: a clause that
+    // arrived unscoped would be an open gate, which is the thing the scoping exists to prevent.
+    expect(sentFilter()?.or).toEqual(claimsRequireDebateTagFilter([SPACE]).or);
+  });
+
+  it.each(sorts)('is absent for the %s sort when it is not asked for', async sort => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, sort, requireDebateTagOnClaims: false });
+
+    // The activity feed shares this fetcher and must keep seeing untagged claims.
+    expect(sentFilter()?.or).toBeUndefined();
+  });
 });
 
 /**
