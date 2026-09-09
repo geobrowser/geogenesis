@@ -94,7 +94,12 @@ export function DebateCoordinator() {
   const pathname = usePathname();
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
   const geoChatAuth = useGeoChatAuth();
-  // Presence, not attention: being available to debate has to survive looking at another window.
+  // Presence, not attention or visibility: being available to debate has to survive looking at
+  // another window *and* having this tab behind a video call (GEO-2849). This is now the
+  // connection-backed signal, so it stays true while the tab is merely hidden.
+  //
+  // The polling gates in `hooks.ts` deliberately did NOT move with it — a hidden tab should stop
+  // refetching even though it is still present. Splitting those two is GEO-2842.
   const debatePresence = useDebatePresence();
   // Exactly one tab: visible *and* focused. See the rematch routing effect below.
   const hasAttention = useDebateAttention();

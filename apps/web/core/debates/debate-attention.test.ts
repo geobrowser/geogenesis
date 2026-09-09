@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createDebateAttentionStore, createDebatePresenceStore } from './debate-attention';
+import {
+  createDebateAttentionStore,
+  createDebateConnectionPresenceStore,
+  createDebateVisibilityStore,
+} from './debate-attention';
 
 describe('debate attention', () => {
   let focused: boolean;
@@ -121,7 +125,7 @@ describe('debate attention', () => {
 describe('debate presence', () => {
   let focused: boolean;
   let visibilityState: DocumentVisibilityState;
-  let store: ReturnType<typeof createDebatePresenceStore>;
+  let store: ReturnType<typeof createDebateVisibilityStore>;
   let unsubscribe: (() => void) | undefined;
 
   beforeEach(() => {
@@ -140,7 +144,7 @@ describe('debate presence', () => {
   });
 
   function subscribe() {
-    store = createDebatePresenceStore(window, document);
+    store = createDebateVisibilityStore(window, document);
     unsubscribe = store.subscribe(vi.fn());
   }
 
@@ -238,5 +242,64 @@ describe('debate presence', () => {
     unsubscribe = store.subscribe(vi.fn());
 
     expect(store.getSnapshot()).toBe(false);
+  });
+});
+
+describe('debate connection presence (GEO-2849)', () => {
+  let visibilityState: DocumentVisibilityState;
+  let store: ReturnType<typeof createDebateConnectionPresenceStore>;
+  let unsubscribe: (() => void) | undefined;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    visibilityState = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibilityState);
+  });
+
+  afterEach(() => {
+    unsubscribe?.();
+    unsubscribe = undefined;
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  function subscribe() {
+    store = createDebateConnectionPresenceStore(window, document);
+    unsubscribe = store.subscribe(vi.fn());
+  }
+
+  // The whole point of the change. On a video call every participant's tab is hidden at once, and
+  // keying presence on visibility made them all vanish from each other's matchmaking. A hidden tab
+  // is still here.
+  it('stays present while the tab is hidden, however long', () => {
+    subscribe();
+    expect(store.getSnapshot()).toBe(true);
+
+    visibilityState = 'hidden';
+    document.dispatchEvent(new Event('visibilitychange'));
+    vi.advanceTimersByTime(60 * 60 * 1000);
+
+    expect(store.getSnapshot()).toBe(true);
+  });
+
+  it('drops on pagehide, which is the real departure signal', () => {
+    subscribe();
+
+    window.dispatchEvent(new Event('pagehide'));
+    expect(store.getSnapshot()).toBe(false);
+  });
+
+  it('comes back on pageshow, so a bfcache restore is not stranded as absent', () => {
+    subscribe();
+    window.dispatchEvent(new Event('pagehide'));
+    expect(store.getSnapshot()).toBe(false);
+
+    window.dispatchEvent(new Event('pageshow'));
+    expect(store.getSnapshot()).toBe(true);
+  });
+
+  it('is present from the first read, before any event fires', () => {
+    subscribe();
+    expect(store.getSnapshot()).toBe(true);
   });
 });
