@@ -57,6 +57,9 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
 
   const isPublishing = status === 'publishing';
 
+  /** Where the current press began; see the backdrop handler below. */
+  const pressStartedOnBackdrop = React.useRef(false);
+
   React.useEffect(() => {
     if (!open) return;
     if (pristineRef.current.name) setName(current.name);
@@ -174,11 +177,19 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
         {/* This container spans the viewport and sits above the overlay, so a click
             on the backdrop lands here rather than "outside" the Radix content —
             `onPointerDownOutside` never fires. Closing on a click that reached the
-            container itself restores the dismissal the design asks for, while
-            clicks inside the card stop at the form. */}
+            container itself restores the dismissal the design asks for.
+            
+            The press has to have *started* on the backdrop too. A click's target is
+            the common ancestor of its pointerdown and pointerup, so drag-selecting
+            text in a field and releasing past the card edge produces a click
+            targeting this container — which would have thrown away everything typed
+            with no confirmation. */}
         <Content
+          onPointerDown={event => {
+            pressStartedOnBackdrop.current = event.target === event.currentTarget;
+          }}
           onClick={event => {
-            if (event.target === event.currentTarget) close();
+            if (event.target === event.currentTarget && pressStartedOnBackdrop.current) close();
           }}
           className="fixed inset-0 z-101 flex items-start justify-center overflow-y-auto focus:outline-hidden"
         >

@@ -485,9 +485,10 @@ describe('useEditProfile', () => {
     expect(mocks.makeProposal).not.toHaveBeenCalled();
   });
 
-  it('settles an edit that resolves to nothing instead of publishing an empty proposal', async () => {
-    // Removing an image that was never set stages no rows; usePublish would
-    // reject that with its generic "Nothing to publish".
+  // `current.*Url` falls back to the profile endpoint, which answers across
+  // spaces, while the edges staging can delete are scoped to the personal space.
+  // Reporting success there closes the modal over an image still on screen.
+  it('fails a removal it cannot carry out rather than reporting it saved', async () => {
     const { result } = renderHook(() => useEditProfile({ isOpen: true }));
 
     await act(async () => {
@@ -495,7 +496,56 @@ describe('useEditProfile', () => {
     });
 
     expect(mocks.makeProposal).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('error');
+    expect(result.current.errorMessage).toContain('Couldn’t find your banner to remove');
+  });
+
+  it('fails the whole edit when a removal cannot be carried out, even if other fields staged', async () => {
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M', avatar: { kind: 'removed' } }));
+    });
+
+    // Publishing the name alone would leave the photo up and call it saved.
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('error');
+    expect(mocks.clearLocalChangesByIds).toHaveBeenCalled();
+  });
+
+  it('settles a draft that matches the entity instead of publishing an empty proposal', async () => {
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft());
+    });
+
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
     expect(result.current.status).toBe('published');
+  });
+
+  // A removal can publish nothing but a tombstone left by another pending edit.
+  // Keying the write-back on a *live* edge skipped the navbar update there.
+  it('tells the navbar the photo is gone even when only a tombstone was published', async () => {
+    mocks.storeRelations = [
+      relation({
+        id: 'old-avatar-edge',
+        type: { id: ContentIds.AVATAR_PROPERTY, name: 'Avatar' },
+        isDeleted: true,
+      }),
+    ];
+    mocks.makeProposal.mockImplementationOnce(async ({ onSuccess }: { onSuccess: () => void }) => onSuccess());
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ avatar: { kind: 'removed' } }));
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('published'));
+    expect(mocks.setStoredAvatar).toHaveBeenCalledWith('');
   });
 
   it('clears its status after a success so the modal can be opened again', async () => {

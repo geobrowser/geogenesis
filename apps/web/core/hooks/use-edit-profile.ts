@@ -21,6 +21,7 @@ import type { Profile, Relation, Value } from '~/core/types';
 import { findMediaUrlValue, useEntityAvatarUrl, useEntityCoverUrl } from '~/core/utils/use-entity-media';
 
 import { avatarAtom } from '~/partials/onboarding/dialog';
+import type { ProfileImageKind } from '~/partials/profile/profile-edit-rules';
 
 export type ProfileImageEdit =
   /** Untouched — whatever is on the entity today stays there. */
@@ -60,6 +61,8 @@ type StagedEdit = {
   relations: Relation[];
   /** ipfs:// URL of the newly uploaded avatar, or '' when the avatar was removed. */
   nextAvatarUrl: string | null;
+  /** Set when a removal found nothing to delete — the edit cannot do what it says. */
+  unresolvedRemoval: ProfileImageKind | null;
   rows: StagedRows;
   /** The draft these rows came from, so Retry can tell a re-send from a new edit. */
   draft: ProfileDraft;
@@ -178,6 +181,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // swept by entity id without that risk.
       const imageEntityIds = new Set<string>();
       let nextAvatarUrl: string | null = null;
+      let unresolvedRemoval: ProfileImageKind | null = null;
 
       /**
        * Remember unpublished local work before this edit replaces or deletes it.
@@ -288,8 +292,20 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
           priorEdges.forEach(r => written.relationIds.add(r.id));
 
           if (edit.kind === 'removed') {
-            // Only report a cleared avatar to the navbar when there was one to clear.
-            if (kind === 'avatar' && liveEdges.length > 0) nextAvatarUrl = '';
+            // Nothing to delete, yet the modal offered the removal — so it was
+            // showing an image this space does not own. `current.*Url` falls back
+            // to the profile endpoint, which answers across spaces, while these
+            // edges are scoped to the personal space. Publishing would report
+            // success over an image still on screen, so record it and fail instead.
+            if (priorEdges.length === 0) {
+              unresolvedRemoval = kind;
+              continue;
+            }
+
+            // Keyed on the property having existed at all, not on a live edge: a
+            // removal can publish nothing but a tombstone left by another pending
+            // edit, and the navbar still needs telling the photo is gone.
+            if (kind === 'avatar') nextAvatarUrl = '';
             continue;
           }
 
@@ -330,6 +346,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         values,
         relations,
         nextAvatarUrl,
+        unresolvedRemoval,
         rows: {
           valueIds: new Set(values.map(v => v.id)),
           relationIds: new Set(relations.map(r => r.id)),
@@ -462,10 +479,29 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
       const staged = stagedRef.current;
 
-      // Some edits resolve to nothing to write — removing an image that was never
-      // set, or a change that trims away to the value already there. Publishing
-      // them earns the SDK's generic "Nothing to publish" error for what is really
-      // a no-op, so settle them as done instead.
+      // A removal the staging pass could not carry out must not be reported as
+      // saved: the image is still there, and closing on "published" tells the user
+      // it is gone. This one is a real failure even when other fields did stage.
+      if (staged.unresolvedRemoval) {
+        console.error('[edit-profile] removal found no relation to delete', {
+          kind: staged.unresolvedRemoval,
+          entityId,
+          spaceId,
+        });
+        rollback(staged.rows);
+        stagedRef.current = null;
+        setStatus('error');
+        setErrorMessage(
+          staged.unresolvedRemoval === 'avatar'
+            ? 'Couldn’t find your photo to remove. Nothing was published.'
+            : 'Couldn’t find your banner to remove. Nothing was published.'
+        );
+        return;
+      }
+
+      // Some edits resolve to nothing to write — a change that trims away to the
+      // value already there. Publishing them earns the SDK's generic "Nothing to
+      // publish" error for what is really a no-op, so settle them as done instead.
       if (staged.values.length === 0 && staged.relations.length === 0) {
         settleSuccess();
         return;
@@ -484,7 +520,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         },
       });
     },
-    [canEdit, current.description, current.name, makeProposal, rollback, settleSuccess, spaceId, stage]
+    [canEdit, current.description, current.name, entityId, makeProposal, rollback, settleSuccess, spaceId, stage]
   );
 
   return {

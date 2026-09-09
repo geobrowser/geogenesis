@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     avatarUrl: 'ipfs://avatar',
   } as { name: string | null; avatarUrl: string | null } | null,
   personalSpaceId: 'personal-space' as string | null,
+  isSmartAccountLoading: false,
   pendingPersonalSpace: { isPending: false, topicId: null as string | null },
   privyUser: {
     id: 'user-a',
@@ -31,7 +32,10 @@ vi.mock('@geogenesis/auth', () => ({
 vi.mock('jotai', () => ({ useAtomValue: () => '' }));
 
 vi.mock('~/core/hooks/use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: { account: { address } }, isLoading: false }),
+  useSmartAccount: () => ({
+    smartAccount: { account: { address } },
+    isLoading: mocks.isSmartAccountLoading,
+  }),
 }));
 vi.mock('~/core/hooks/use-geo-profile', () => ({
   useGeoProfile: () => ({ profile: mocks.profile, isLoading: false }),
@@ -109,6 +113,7 @@ describe('NavbarActions profile menu', () => {
     mocks.logout.mockReset();
     mocks.profile = { name: 'Max', avatarUrl: 'ipfs://avatar' };
     mocks.personalSpaceId = 'personal-space';
+    mocks.isSmartAccountLoading = false;
     mocks.pendingPersonalSpace = { isPending: false, topicId: null };
     mocks.privyUser = {
       id: 'user-a',
@@ -204,6 +209,23 @@ describe('NavbarActions profile menu', () => {
     await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
 
     expect(screen.queryByRole('button', { name: 'Edit profile' })).not.toBeInTheDocument();
+  });
+
+  // A publish outlives the modal closing, and `isUserLoading` can flip back to true
+  // mid-session — the smart-account query key includes the wallet address, so a tab
+  // refocus re-resolves it. Unmounting the dialog there tears down the hook under an
+  // in-flight write and strands its staged rows.
+  it('keeps the edit profile dialog mounted while the account re-resolves', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<NavbarActions />);
+    await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+    await user.click(screen.getByRole('button', { name: 'Edit profile' }));
+    expect(screen.getByTestId('edit-profile-dialog')).toBeInTheDocument();
+
+    mocks.isSmartAccountLoading = true;
+    rerender(<NavbarActions />);
+
+    expect(screen.getByTestId('edit-profile-dialog')).toBeInTheDocument();
   });
 
   it('leaves sign out working, and no longer offers a second availability switch', async () => {

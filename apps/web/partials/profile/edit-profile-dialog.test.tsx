@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -234,7 +234,9 @@ describe('EditProfileDialog', () => {
 
     // The dialog content spans the viewport, so Radix's own outside-click never
     // fires and the backdrop is this container itself.
-    await userEvent.click(screen.getByRole('dialog'));
+    const backdrop = screen.getByRole('dialog');
+    fireEvent.pointerDown(backdrop);
+    fireEvent.click(backdrop);
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
@@ -262,6 +264,25 @@ describe('EditProfileDialog', () => {
     expect(screen.queryByRole('button', { name: 'Add a photo' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Replace' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
+  });
+
+  // A click's target is the common ancestor of its pointerdown and pointerup, so
+  // drag-selecting in a field and releasing past the card edge produced a click on
+  // the backdrop — throwing away everything typed, with no confirmation.
+  it('does not dismiss when a drag started inside the card and ended on the backdrop', async () => {
+    const { onOpenChange } = renderDialog();
+    const backdrop = screen.getByRole('dialog');
+
+    await userEvent.clear(nameField());
+    await userEvent.paste('Half-typed name');
+
+    // The press begins in the field; only the click lands on the backdrop.
+    fireEvent.pointerDown(nameField());
+    fireEvent.click(backdrop);
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(mocks.reset).not.toHaveBeenCalled();
+    expect(nameField()).toHaveValue('Half-typed name');
   });
 
   it('rejects a dropped file the picker’s accept filter would never have allowed', async () => {

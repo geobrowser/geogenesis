@@ -59,17 +59,35 @@ export function NavbarActions() {
   // only trigger the logout.
   const { logout } = useLogout();
 
+  // Rendered alongside every branch below, not just the signed-in one. A publish
+  // outlives the modal closing, and `isUserLoading` can flip back to true
+  // mid-session (the smart-account query key includes the wallet address, so a tab
+  // refocus or Privy re-init re-resolves it). Unmounting the dialog there would
+  // tear down `useEditProfile` under an in-flight write: no avatar write-back, no
+  // reopen on failure, and its staged rows stranded in the personal space.
+  const editProfileDialog = hasOpenedEditProfile ? (
+    <EditProfileDialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen} />
+  ) : null;
+
   if (isUserLoading) {
     return (
-      <div className="flex items-center gap-4">
-        <Skeleton className="h-7 w-[66px]" radius="rounded-full" />
-        <Skeleton className="h-7 w-7" radius="rounded-full" />
-      </div>
+      <>
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-7 w-[66px]" radius="rounded-full" />
+          <Skeleton className="h-7 w-7" radius="rounded-full" />
+        </div>
+        {editProfileDialog}
+      </>
     );
   }
 
   if (!address) {
-    return <GeoConnectButton />;
+    return (
+      <>
+        <GeoConnectButton />
+        {editProfileDialog}
+      </>
+    );
   }
 
   // Optimistic identity: while the personal space is being created in the
@@ -137,7 +155,7 @@ export function NavbarActions() {
         </div>
       </Menu>
 
-      {hasOpenedEditProfile && <EditProfileDialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen} />}
+      {editProfileDialog}
     </div>
   );
 }

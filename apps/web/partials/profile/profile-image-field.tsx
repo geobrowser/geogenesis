@@ -114,7 +114,18 @@ export function ProfileImageField({ kind, src, disabled = false, onPick, onRemov
         {/* An 88px circle is too small to carry two overlay buttons, so the avatar
             puts its pair alongside the frame instead (below). */}
         {resolvedSrc && kind === 'banner' && (
-          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-text/40 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+          <div
+            className={cx(
+              'absolute inset-0 flex items-center justify-center gap-2 bg-text/40 transition-opacity',
+              // Transparent is still hit-testable, and these buttons sit dead centre
+              // of the banner — without this a tap lands on an invisible Remove.
+              'pointer-events-none opacity-0',
+              'group-hover:pointer-events-auto group-hover:opacity-100',
+              'group-focus-within:pointer-events-auto group-focus-within:opacity-100',
+              // Nothing hovers on touch, so there they are simply always shown.
+              '[@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100'
+            )}
+          >
             <OverlayButton onClick={openPicker} disabled={disabled}>
               Replace
             </OverlayButton>
