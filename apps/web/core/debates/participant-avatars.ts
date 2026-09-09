@@ -64,7 +64,16 @@ export function participantAvatarUrl(
  * gateway chain, which is how the graph's avatars render everywhere else in the app.
  */
 export function useParticipantAvatars<T extends ParticipantAvatarSource>(
-  participants: readonly T[]
+  participants: readonly T[],
+  /**
+   * The parent query's own `enabled`. Passed on rather than assumed, because a disabled parent is
+   * not merely idle — `DebatesHubButton` mounts `useDebateRequests(false)` on every page purely to
+   * read the badge count out of a cache someone else fills. Firing a profile lookup for every party
+   * it happens to find there would put requests on the wire from the one caller that deliberately
+   * makes none. `useProfilesBySpaceIds` still serves what is already cached while disabled, so a
+   * surface that has resolved these faces once keeps drawing them.
+   */
+  enabled = true
 ): (participant: T) => T {
   // Keyed on the ids themselves rather than the array's identity: these lists are rebuilt from a
   // query result on every render while the people in them are not.
@@ -73,7 +82,7 @@ export function useParticipantAvatars<T extends ParticipantAvatarSource>(
     .join(',');
 
   const spaceIds = React.useMemo(() => [...new Set(spaceIdKey.split(',').filter(Boolean))], [spaceIdKey]);
-  const { profilesBySpaceId } = useProfilesBySpaceIds(spaceIds, spaceIds.length > 0);
+  const { profilesBySpaceId } = useProfilesBySpaceIds(spaceIds, enabled && spaceIds.length > 0);
 
   return React.useCallback(
     (participant: T) => {

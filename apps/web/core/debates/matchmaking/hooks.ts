@@ -78,8 +78,13 @@ export function useMatchmakingScope(enabled: boolean) {
  * Mirrors `holdWhileSpaceResolves` in `core/debates/hooks`: generic in the result so the whole
  * react-query surface — `isLoading`, `fetchNextPage`, the lot — passes through with its own types
  * rather than being widened by a cast.
+ *
+ * The replacement is typed `T['data']` rather than inferred from its own parameter. Inferring it
+ * gave the compiler two sites to work from, so a value *wider* than the query's data — a `null` the
+ * query never admits — widened the inference to fit instead of failing, and came back typed as the
+ * narrower `T`. Indexing off `T` leaves one source of truth for the shape.
  */
-function withQueryData<T extends { data: D }, D>(query: T, data: D): T {
+function withQueryData<T extends { data: unknown }>(query: T, data: T['data']): T {
   return { ...query, data };
 }
 
@@ -109,7 +114,7 @@ export function useDebatePeople(enabled: boolean) {
   // the profile page renders fine. Resolved here rather than in the rows so every consumer of this
   // list gets it. See `participant-avatars`.
   const people = React.useMemo(() => query.data?.people ?? EMPTY_PEOPLE, [query.data]);
-  const withAvatar = useParticipantAvatars(people);
+  const withAvatar = useParticipantAvatars(people, enabled);
 
   const data = React.useMemo(
     () => (query.data ? { ...query.data, people: people.map(withAvatar) } : query.data),
@@ -158,7 +163,7 @@ export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boo
     [infinite.data]
   );
 
-  const withAvatar = useParticipantAvatars(participants);
+  const withAvatar = useParticipantAvatars(participants, enabled);
 
   const data = React.useMemo(() => {
     if (!infinite.data) return infinite.data;
@@ -218,7 +223,7 @@ export function useDebateRequests(enabled: boolean) {
     return requests.flatMap(request => [request.requester, request.recipient]);
   }, [query.data]);
 
-  const withAvatar = useParticipantAvatars(parties);
+  const withAvatar = useParticipantAvatars(parties, enabled && authenticated);
 
   const data = React.useMemo(() => {
     if (!query.data) return query.data;
