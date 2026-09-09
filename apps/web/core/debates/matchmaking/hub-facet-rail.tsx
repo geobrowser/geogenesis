@@ -165,12 +165,11 @@ function FacetGroup({
           </button>
         )}
       </div>
-      {emptyMessage ? (
+      <div className="flex flex-col">{children}</div>
+      {emptyMessage && (
         <Text as="p" variant="footnote" color="grey-04" className="px-1 py-1">
           {emptyMessage}
         </Text>
-      ) : (
-        <div className="flex flex-col">{children}</div>
       )}
     </section>
   );

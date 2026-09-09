@@ -144,10 +144,14 @@ export function MatchesTab({
           // names for one button in one panel is a difference that implies something.
           // Clearing the filter is the whole answer when the filter is the cause, and browsing claims
           // cannot be — there are matches, just not in the spaces on screen.
+          // Clearing the space picks works anywhere; "Explore claims" does not in the rail, where
+          // `onTabChange` is a no-op and the claims list is already on screen beside this.
           emptyAction={
             filteredBySpace
               ? { label: 'Clear filters', onClick: () => setSpaceIds([]) }
-              : { label: 'Explore claims', onClick: () => onTabChange('claims') }
+              : dense
+                ? undefined
+                : { label: 'Explore claims', onClick: () => onTabChange('claims') }
           }
         >
           <HubCardList>

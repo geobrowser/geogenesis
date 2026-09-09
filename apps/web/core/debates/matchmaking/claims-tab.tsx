@@ -642,25 +642,27 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
             aria-label="Search claims"
           />
 
-          <SpaceTopicFilters
-            spaceIds={spaceIds}
-            onSpaceToggle={onSpaceToggle}
-            onSpacesClear={onSpacesClear}
-            topicIds={topicIds}
-            onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-            onTopicsClear={() => setTopicIds([])}
-            facetSpaces={facetSpaces}
-            facetTopics={facetTopics}
-            countsPending={countsPending}
-            leading={
-              <HubFilterMenu
-                label={filterOptions.find(option => option.value === filter)?.label ?? 'All claims'}
-                options={filterOptions}
-                value={filter}
-                onChange={setFilter}
-              />
-            }
-          />
+          <div className={workspace ? '@[72rem]/hub:hidden' : undefined}>
+            <SpaceTopicFilters
+              spaceIds={spaceIds}
+              onSpaceToggle={onSpaceToggle}
+              onSpacesClear={onSpacesClear}
+              topicIds={topicIds}
+              onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+              onTopicsClear={() => setTopicIds([])}
+              facetSpaces={facetSpaces}
+              facetTopics={facetTopics}
+              countsPending={countsPending}
+              leading={
+                <HubFilterMenu
+                  label={filterOptions.find(option => option.value === filter)?.label ?? 'All claims'}
+                  options={filterOptions}
+                  value={filter}
+                  onChange={setFilter}
+                />
+              }
+            />
+          </div>
         </HubStickyControls>
 
         <div className="flex flex-col gap-3 px-4 py-3">
