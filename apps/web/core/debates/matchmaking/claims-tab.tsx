@@ -40,6 +40,7 @@ import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests } from './hooks';
+import { HubFacetRail } from './hub-facet-rail';
 import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
@@ -139,7 +140,10 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
  * resolves topics itself, because its list comes from the knowledge graph and the index has never
  * seen it.
  */
-export function ClaimsTab() {
+export type ClaimsLayout = 'panel' | 'workspace';
+
+export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) {
+  const workspace = layout === 'workspace';
   const queryClient = useQueryClient();
   const { authenticated, accountKey } = useGeoChatAuth();
   // A signed-out viewer gets Privy rather than a dead pill, the same hook and for the same reason
@@ -594,140 +598,174 @@ export function ClaimsTab() {
     fetchNextPage: graphSourced ? fetchNextTaggedPage : claimsQuery.fetchNextPage,
   });
 
+  const facetRail = (
+    <HubFacetRail
+      filterOptions={filterOptions}
+      filter={filter}
+      onFilterChange={setFilter}
+      facetSpaces={facetSpaces}
+      spaceIds={spaceIds}
+      onSpaceToggle={onSpaceToggle}
+      onSpacesClear={onSpacesClear}
+      facetTopics={facetTopics}
+      topicIds={topicIds}
+      onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+      onTopicsClear={() => setTopicIds([])}
+    />
+  );
+
   return (
-    <div className="flex flex-col">
-      <HubStickyControls>
-        {/* Pinned above the filters, the way the Matches tab pins it. A request sent from here used
+    <div className={workspace ? 'flex min-w-0 gap-8' : 'flex flex-col'}>
+      {workspace && (
+        <aside
+          aria-label="Filters"
+          className="sticky top-[7.5rem] hidden max-h-[calc(100dvh-8.5rem)] w-60 shrink-0 self-start overflow-y-auto @[72rem]/hub:block"
+          data-testid="hub-facet-rail"
+        >
+          {facetRail}
+        </aside>
+      )}
+      <div className={workspace ? '@container/claims flex min-w-0 flex-1 flex-col' : 'contents'}>
+        <HubStickyControls workspaceStickyOffset={workspace}>
+          {/* Pinned above the filters, the way the Matches tab pins it. A request sent from here used
             to vanish the moment it was sent — the card that sent it looks exactly as it did before,
             and the only evidence was on another tab. It rides inside the sticky block rather than
             above it because two stickies would both claim `top-0` and overlap, and this one is
             conditional so the filters could not be offset by a known height. */}
-        {outbound ? <OutboundRequestCard request={outbound} /> : null}
+          {outbound ? <OutboundRequestCard request={outbound} /> : null}
 
-        <Input
-          withSearchIcon
-          value={search}
-          onChange={event => setSearch(event.currentTarget.value)}
-          placeholder="Search claims"
-          aria-label="Search claims"
-        />
+          <Input
+            withSearchIcon
+            value={search}
+            onChange={event => setSearch(event.currentTarget.value)}
+            placeholder="Search claims"
+            aria-label="Search claims"
+          />
 
-        <SpaceTopicFilters
-          spaceIds={spaceIds}
-          onSpaceToggle={onSpaceToggle}
-          onSpacesClear={onSpacesClear}
-          topicIds={topicIds}
-          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-          onTopicsClear={() => setTopicIds([])}
-          facetSpaces={facetSpaces}
-          facetTopics={facetTopics}
-          countsPending={countsPending}
-          leading={
-            <HubFilterMenu
-              label={filterOptions.find(option => option.value === filter)?.label ?? 'All claims'}
-              options={filterOptions}
-              value={filter}
-              onChange={setFilter}
-            />
-          }
-        />
-      </HubStickyControls>
+          <SpaceTopicFilters
+            spaceIds={spaceIds}
+            onSpaceToggle={onSpaceToggle}
+            onSpacesClear={onSpacesClear}
+            topicIds={topicIds}
+            onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+            onTopicsClear={() => setTopicIds([])}
+            facetSpaces={facetSpaces}
+            facetTopics={facetTopics}
+            countsPending={countsPending}
+            leading={
+              <HubFilterMenu
+                label={filterOptions.find(option => option.value === filter)?.label ?? 'All claims'}
+                options={filterOptions}
+                value={filter}
+                onChange={setFilter}
+              />
+            }
+          />
+        </HubStickyControls>
 
-      <div className="flex flex-col gap-3 px-4 py-3">
-        <HubQueryState
-          isLoading={spacesPending || (graphSourced ? taggedLoading : claimsQuery.isLoading)}
-          // The catalog only. It is the list — without it there is nothing to show, and an error is
-          // the honest answer.
-          //
-          // The two lookups behind it are metadata, and their failure is deliberately *not* fatal.
-          // `taggedRows` fans out one request per space in batches of fifty, so across a few hundred
-          // tagged claims a single failing batch would blank a list that renders perfectly well
-          // without it — which is exactly what it did the first time this was tried, in a browser.
-          // The rows come from the catalog; the entity is optional in `taggedEntries`.
-          //
-          // Their consequences are handled where they land instead, and both are pinned by tests:
-          // `facetsSettled` refuses to reconcile against a menu those lookups never filled, so the
-          // viewer's topic selection is not spent, and `taggedKindResolvedFor` keeps a card
-          // unpressable until its vocabulary and the viewer's own side have actually arrived. A
-          // short list beats a blank one; a wrong publish beats neither, and is what those guard.
-          error={graphSourced ? taggedError : claimsQuery.error}
-          // Retries whatever failed, not just the catalog. The error above can come from either of
-          // the two lookups behind the list, and neither is keyed on the catalog — so refetching
-          // only that left the failed dependency untouched and the error state exactly where it
-          // was. Invalidated by key rather than through a `refetch` handed back by those hooks:
-          // both combine their results, and a fresh closure in a `combine` would be a new identity
-          // on every render, which is the one thing those hooks document that they must not be.
-          onRetry={() =>
-            void (graphSourced
-              ? Promise.all([
-                  refetchTagged(),
-                  queryClient.invalidateQueries({ queryKey: CLAIM_ENTITIES_QUERY_PREFIX }),
-                  queryClient.invalidateQueries({ queryKey: DEBATE_CLAIMS_QUERY_PREFIX }),
-                ])
-              : claimsQuery.refetch())
-          }
-          isEmpty={visibleClaims.length === 0}
-          signInAction={
-            onRequireSignIn
-              ? { label: 'Sign in', message: 'Sign in to browse claims to debate.', onClick: onRequireSignIn }
-              : undefined
-          }
-          // What an empty list means depends on where it came from, and the two graph-sourced
-          // filters mean different things by it: Featured says a curator has tagged nothing, All
-          // says nothing carries the Debate tag. Both are statements about curation, not about the
-          // viewer's filters, so they only show when no filter is narrowing anything.
-          emptyMessage={
-            hasNarrowingFilters
-              ? filter === 'featured'
-                ? 'No featured claims match these filters.'
-                : 'No claims match these filters.'
-              : NOTHING_HERE[filter]
-          }
-          // "Debate now" is the only filter here scored on who is online, so it is the only one an
-          // empty list means "nobody is around" for — Featured and All claims are statements about
-          // curation, and My positions is about the viewer. Withheld under a narrowing filter for
-          // the same reason it is on the other tabs: that emptiness has a different cause
-          // (GEO-2840).
-          // `live` unconditionally: `SIGNED_OUT_HIDDEN_FILTERS` takes "Debate now" out of the menu
-          // signed out, so reaching this note at all means holding the gateway scope.
-          emptyNote={filter === 'debate_now' && !hasNarrowingFilters ? <DebateHoursNote live /> : undefined}
-          emptyAction={
-            hasFilters
-              ? {
-                  label: 'Clear filters',
-                  onClick: () => {
-                    setSearch('');
-                    if (!graphSourced) setFilter('all');
-                    // The menu's own clear row, so this counts as choosing the unfiltered list and
-                    // the default cannot put its spaces back.
-                    onSpacesClear();
-                    setTopicIds([]);
-                  },
-                }
-              : undefined
-          }
-        >
-          {/* One list, in the server's order. Splitting out the claims you'd already answered
+        <div className="flex flex-col gap-3 px-4 py-3">
+          <HubQueryState
+            isLoading={spacesPending || (graphSourced ? taggedLoading : claimsQuery.isLoading)}
+            // The catalog only. It is the list — without it there is nothing to show, and an error is
+            // the honest answer.
+            //
+            // The two lookups behind it are metadata, and their failure is deliberately *not* fatal.
+            // `taggedRows` fans out one request per space in batches of fifty, so across a few hundred
+            // tagged claims a single failing batch would blank a list that renders perfectly well
+            // without it — which is exactly what it did the first time this was tried, in a browser.
+            // The rows come from the catalog; the entity is optional in `taggedEntries`.
+            //
+            // Their consequences are handled where they land instead, and both are pinned by tests:
+            // `facetsSettled` refuses to reconcile against a menu those lookups never filled, so the
+            // viewer's topic selection is not spent, and `taggedKindResolvedFor` keeps a card
+            // unpressable until its vocabulary and the viewer's own side have actually arrived. A
+            // short list beats a blank one; a wrong publish beats neither, and is what those guard.
+            error={graphSourced ? taggedError : claimsQuery.error}
+            // Retries whatever failed, not just the catalog. The error above can come from either of
+            // the two lookups behind the list, and neither is keyed on the catalog — so refetching
+            // only that left the failed dependency untouched and the error state exactly where it
+            // was. Invalidated by key rather than through a `refetch` handed back by those hooks:
+            // both combine their results, and a fresh closure in a `combine` would be a new identity
+            // on every render, which is the one thing those hooks document that they must not be.
+            onRetry={() =>
+              void (graphSourced
+                ? Promise.all([
+                    refetchTagged(),
+                    queryClient.invalidateQueries({ queryKey: CLAIM_ENTITIES_QUERY_PREFIX }),
+                    queryClient.invalidateQueries({ queryKey: DEBATE_CLAIMS_QUERY_PREFIX }),
+                  ])
+                : claimsQuery.refetch())
+            }
+            isEmpty={visibleClaims.length === 0}
+            signInAction={
+              onRequireSignIn
+                ? { label: 'Sign in', message: 'Sign in to browse claims to debate.', onClick: onRequireSignIn }
+                : undefined
+            }
+            // What an empty list means depends on where it came from, and the two graph-sourced
+            // filters mean different things by it: Featured says a curator has tagged nothing, All
+            // says nothing carries the Debate tag. Both are statements about curation, not about the
+            // viewer's filters, so they only show when no filter is narrowing anything.
+            emptyMessage={
+              hasNarrowingFilters
+                ? filter === 'featured'
+                  ? 'No featured claims match these filters.'
+                  : 'No claims match these filters.'
+                : NOTHING_HERE[filter]
+            }
+            // "Debate now" is the only filter here scored on who is online, so it is the only one an
+            // empty list means "nobody is around" for — Featured and All claims are statements about
+            // curation, and My positions is about the viewer. Withheld under a narrowing filter for
+            // the same reason it is on the other tabs: that emptiness has a different cause
+            // (GEO-2840).
+            // `live` unconditionally: `SIGNED_OUT_HIDDEN_FILTERS` takes "Debate now" out of the menu
+            // signed out, so reaching this note at all means holding the gateway scope.
+            emptyNote={filter === 'debate_now' && !hasNarrowingFilters ? <DebateHoursNote live /> : undefined}
+            emptyAction={
+              hasFilters
+                ? {
+                    label: 'Clear filters',
+                    onClick: () => {
+                      setSearch('');
+                      if (!graphSourced) setFilter('all');
+                      // The menu's own clear row, so this counts as choosing the unfiltered list and
+                      // the default cannot put its spaces back.
+                      onSpacesClear();
+                      setTopicIds([]);
+                    },
+                  }
+                : undefined
+            }
+          >
+            {/* One list, in the server's order. Splitting out the claims you'd already answered
             re-ranked the tab by something the Position filter in the dropdown already covers, and
             it moved a card between two sections the moment you took a side. */}
-          <HubCardList>
-            {visibleClaims.map(entry => (
-              <MatchmakingClaimCard
-                key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
-                claim={entry.claim}
-                positions={entry.positions}
-                readiness={entry}
-                activeDebate={entry.active_debate}
-                // The paged list is geo-chat's own, so every row carries its kind already; only the
-                // tagged list has to wait for one.
-                answersReady={taggedAnswersReady}
-                onRequireSignIn={onRequireSignIn}
-              />
-            ))}
-          </HubCardList>
-        </HubQueryState>
+            <HubCardList
+              className={
+                workspace
+                  ? // Reflows on the centre column's own width, so the rails collapsing gives the
+                    // grid its columns back without a second set of breakpoints.
+                    'grid grid-cols-1 gap-3 @[30rem]/claims:grid-cols-2 @[46rem]/claims:grid-cols-3'
+                  : undefined
+              }
+            >
+              {visibleClaims.map(entry => (
+                <MatchmakingClaimCard
+                  key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
+                  claim={entry.claim}
+                  positions={entry.positions}
+                  readiness={entry}
+                  activeDebate={entry.active_debate}
+                  // The paged list is geo-chat's own, so every row carries its kind already; only the
+                  // tagged list has to wait for one.
+                  answersReady={taggedAnswersReady}
+                  onRequireSignIn={onRequireSignIn}
+                />
+              ))}
+            </HubCardList>
+          </HubQueryState>
 
-        {/* Pages arrive as the viewer reaches the end of the list rather than on a button. Outside
+          {/* Pages arrive as the viewer reaches the end of the list rather than on a button. Outside
           the empty state deliberately: the space allowlist and the topic filter both run over the
           loaded pages, so a page can arrive with nothing to show — and with the sentinel rendered
           only alongside results, the list would stop at the first such page and report "no claims"
@@ -737,9 +775,10 @@ export function ClaimsTab() {
           Not while the allowlist is pending, though: the tab is showing a four-row skeleton then,
           so the sentinel sits in view under it and pages the corpus on the strength of a loading
           state being visible — reading "the viewer reached the end" off a list that isn't there. */}
-        {(graphSourced ? taggedHasNextPage : claimsQuery.hasNextPage) ? (
-          <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
-        ) : null}
+          {(graphSourced ? taggedHasNextPage : claimsQuery.hasNextPage) ? (
+            <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -753,9 +792,22 @@ export function ClaimsTab() {
  * can't see. The tab row above it is already fixed — it sits outside the panel's scroll container
  * — so this is the only piece that needed pinning here.
  */
-export function HubStickyControls({ children }: { children: React.ReactNode }) {
+export function HubStickyControls({
+  children,
+  workspaceStickyOffset = false,
+}: {
+  children: React.ReactNode;
+  workspaceStickyOffset?: boolean;
+}) {
   return (
-    <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3">{children}</div>
+    <div
+      className={cx(
+        'sticky z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3',
+        workspaceStickyOffset ? 'top-[7.5rem]' : 'top-0'
+      )}
+    >
+      {children}
+    </div>
   );
 }
 
