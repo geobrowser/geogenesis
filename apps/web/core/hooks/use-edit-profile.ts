@@ -40,10 +40,13 @@ export type ProfileDraft = {
 
 export type EditProfileStatus = 'idle' | 'publishing' | 'error' | 'published';
 
-/** Ids of the local rows this modal wrote, so exactly those can be rolled back. */
+/**
+ * The local rows this modal wrote, keyed by id and carrying the `timestamp` each
+ * had when it was staged, so exactly those versions can be rolled back.
+ */
 type StagedRows = {
-  valueIds: Set<string>;
-  relationIds: Set<string>;
+  valueIds: Map<string, string | null | undefined>;
+  relationIds: Map<string, string | null | undefined>;
   /**
    * Local rows this edit replaced, put back when it is rolled back. Value ids are
    * derived from entity + property + space, so a pending draft on the same field
@@ -156,10 +159,21 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   const rollback = React.useCallback(
     (rows: StagedRows) => {
       if (!spaceId) return;
+      // Clear only the rows still carrying the version this edit staged. Value ids
+      // are derived from entity + property + space, so a normal-editor change to
+      // the same field during an in-flight publish replaces the row at our id —
+      // undoing by id alone would delete a draft this modal never made.
+      const isStagedVersion = (
+        row: { id: string; timestamp?: string | null },
+        staged: Map<string, string | null | undefined>
+      ) => staged.has(row.id) && staged.get(row.id) === row.timestamp;
+
       store.clearLocalChangesByIds({
         spaceId,
-        valueIds: [...rows.valueIds],
-        relationIds: [...rows.relationIds],
+        valueIds: getValues({ includeDeleted: true, selector: v => isStagedVersion(v, rows.valueIds) }).map(v => v.id),
+        relationIds: getRelations({ includeDeleted: true, selector: r => isStagedVersion(r, rows.relationIds) }).map(
+          r => r.id
+        ),
       });
       // After the clear, not before: `clearLocalChangesByIds` restores the synced
       // baseline for every id it drops, which would win over a snapshot put back
@@ -184,11 +198,11 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // rather than to everything unpublished on the person entity — keeps an
       // unrelated pending edit from riding along on the publish, and from being
       // rolled back when this one is abandoned.
-      const written: StagedRows = {
-        valueIds: new Set(),
-        relationIds: new Set(),
-        overwritten: [],
-        overwrittenRelations: [],
+      const written = {
+        valueIds: new Set<string>(),
+        relationIds: new Set<string>(),
+        overwritten: [] as Value[],
+        overwrittenRelations: [] as Relation[],
       };
       // Freshly minted image entities are ours by definition, so their rows can be
       // swept by entity id without that risk.
@@ -350,8 +364,8 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         // a save that never happened.
         const partial = collect();
         rollback({
-          valueIds: new Set(partial.values.map(v => v.id)),
-          relationIds: new Set(partial.relations.map(r => r.id)),
+          valueIds: new Map(partial.values.map(v => [v.id, v.timestamp])),
+          relationIds: new Map(partial.relations.map(r => [r.id, r.timestamp])),
           overwritten: written.overwritten,
           overwrittenRelations: written.overwrittenRelations,
         });
@@ -366,8 +380,8 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         nextAvatarUrl,
         unresolvedRemoval,
         rows: {
-          valueIds: new Set(values.map(v => v.id)),
-          relationIds: new Set(relations.map(r => r.id)),
+          valueIds: new Map(values.map(v => [v.id, v.timestamp])),
+          relationIds: new Map(relations.map(r => [r.id, r.timestamp])),
           overwritten: written.overwritten,
           overwrittenRelations: written.overwrittenRelations,
         },
@@ -485,10 +499,19 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       ownsPendingError.current = false;
 
       if (!stagedRef.current) {
+        // Staging uploads to IPFS before `makeProposal` touches the status bar, and
+        // that upload can be long. Closing during it is meant to hand off to the
+        // toast, so the toast has to already be saying something — otherwise the
+        // work continues with nothing on screen at all.
+        dispatch({ type: 'SET_REVIEW_STATE', payload: 'publishing-ipfs' });
+
         try {
           stagedRef.current = await stage(draft, baseline);
         } catch (error) {
           console.error('[edit-profile] failed to stage profile edit', error);
+          // The modal owns this failure — `makeProposal` never ran, so nothing else
+          // will clear the pill we just put up.
+          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
           setStatus('error');
           setErrorMessage('Couldn’t upload your images. Your changes are still here — try again.');
           return;
@@ -506,6 +529,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
           entityId,
           spaceId,
         });
+        dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
         rollback(staged.rows);
         stagedRef.current = null;
         setStatus('error');
@@ -521,6 +545,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // value already there. Publishing them earns the SDK's generic "Nothing to
       // publish" error for what is really a no-op, so settle them as done instead.
       if (staged.values.length === 0 && staged.relations.length === 0) {
+        dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
         settleSuccess();
         return;
       }
@@ -538,7 +563,18 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         },
       });
     },
-    [canEdit, current.description, current.name, entityId, makeProposal, rollback, settleSuccess, spaceId, stage]
+    [
+      canEdit,
+      current.description,
+      current.name,
+      dispatch,
+      entityId,
+      makeProposal,
+      rollback,
+      settleSuccess,
+      spaceId,
+      stage,
+    ]
   );
 
   return {

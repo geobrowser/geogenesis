@@ -384,7 +384,7 @@ describe('useEditProfile', () => {
     rerender({ isOpen: false });
 
     // The status bar is the hand-off; it has to keep the failure it is showing.
-    expect(mocks.dispatch).not.toHaveBeenCalled();
+    expect(mocks.dispatch).not.toHaveBeenCalledWith({ type: 'SET_REVIEW_STATE', payload: 'idle' });
   });
 
   it('writes the new avatar back so the navbar does not keep the old photo', async () => {
@@ -470,6 +470,29 @@ describe('useEditProfile', () => {
 
   // Only this modal's rows. An unrelated pending edit on the same entity must not
   // ride along on the publish, nor be rolled back when this one is abandoned.
+  // Value ids are derived from entity + property + space, so a normal-editor change
+  // to the same field during an in-flight publish replaces the row at our id.
+  // Undoing by id alone would delete a draft this modal never made.
+  it('leaves a row alone when another edit replaced it since staging', async () => {
+    const staged = { ...stagedValue(SystemIds.NAME_PROPERTY), timestamp: 't1' } as Value;
+    mocks.storeValues = [staged];
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    // The same id, a newer version — someone else's unsaved work.
+    mocks.storeValues = [{ ...staged, timestamp: 't2', value: 'Their newer draft' } as Value];
+
+    act(() => result.current.reset());
+
+    expect(mocks.clearLocalChangesByIds).toHaveBeenCalledWith(expect.objectContaining({ valueIds: [] }));
+  });
+
   it('leaves a pending edit made elsewhere on the entity out of the publish', async () => {
     const ours = stagedValue(SystemIds.NAME_PROPERTY);
     const theirs = {
@@ -634,7 +657,7 @@ describe('useEditProfile', () => {
 
     mocks.reviewState = 'publish-error';
     rerender({ isOpen: false });
-    expect(mocks.dispatch).not.toHaveBeenCalled();
+    expect(mocks.dispatch).not.toHaveBeenCalledWith({ type: 'SET_REVIEW_STATE', payload: 'idle' });
 
     rerender({ isOpen: true });
     expect(mocks.dispatch).toHaveBeenCalledWith({ type: 'SET_REVIEW_STATE', payload: 'idle' });
@@ -692,10 +715,46 @@ describe('useEditProfile', () => {
     rerender();
 
     // Someone else's publish fails later, with this modal still open.
+    mocks.dispatch.mockClear();
     mocks.reviewState = 'publish-error';
     rerender();
 
-    expect(mocks.dispatch).not.toHaveBeenCalled();
+    expect(mocks.dispatch).not.toHaveBeenCalledWith({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+  });
+
+  // Staging uploads to IPFS before `makeProposal` touches the status bar. Closing
+  // during that upload is meant to hand off to the toast, so the toast has to be
+  // saying something already.
+  it('puts the upload on the status bar before the publish starts', async () => {
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
+    const file = new File([''], 'banner.png', { type: 'image/png' });
+    let dispatchedBeforePublish: unknown[] = [];
+    mocks.makeProposal.mockImplementationOnce(async () => {
+      dispatchedBeforePublish = mocks.dispatch.mock.calls.map(([action]) => action);
+    });
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M', banner: { kind: 'replaced', file } }));
+    });
+
+    expect(dispatchedBeforePublish).toContainEqual({ type: 'SET_REVIEW_STATE', payload: 'publishing-ipfs' });
+  });
+
+  it('takes the upload back off the status bar when staging fails', async () => {
+    mocks.createAndLink.mockRejectedValueOnce(new Error('IPFS is down'));
+    const file = new File([''], 'banner.png', { type: 'image/png' });
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ banner: { kind: 'replaced', file } }));
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    // `makeProposal` never ran, so nothing else would clear the pill.
+    expect(mocks.dispatch).toHaveBeenCalledWith({ type: 'SET_REVIEW_STATE', payload: 'idle' });
   });
 
   it('leaves an unrelated publish failure showing in the status bar', async () => {
