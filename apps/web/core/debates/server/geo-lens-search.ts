@@ -18,18 +18,20 @@ export type GeoLensSearchConfig = {
   apiKey: string;
   /**
    * The score a claim must reach to count as an answer, on geo-lens's normalised cosine scale
-   * (`(1 + cos) / 2`). Verbatim duplicates score 0.99+; topically related but different claims land
-   * around 0.85–0.93 (measured for the debate dedup); a claim about something else sits below 0.8.
-   * A search wants the related ones and not the unrelated, hence the default. Tunable per
-   * deployment because the right floor is a property of the embedding model and the corpus, and
-   * both are geo-lens's to change.
+   * (`(1 + cos) / 2`). Measured against the deployed claims cache over the Debate tag
+   * (2026-09-09): claims that answer the words score 0.855–0.90 ("Trump affair allegations" →
+   * the affair claims at 0.873–0.895; "dating apps" → "Dating apps have made relationships
+   * worse" at 0.901); tangential neighbours 0.82–0.85 ("climate change" → "ICE should be
+   * abolished" at 0.822); gibberish tops out at 0.794. 0.85 is the line between the first two
+   * in every sample. Tunable per deployment because the right floor is a property of the
+   * embedding model and the corpus, and both are geo-lens's to change.
    */
   minScore: number;
   /** How long one geo-lens round trip may take before the hub falls back to the words. */
   timeoutMs: number;
 };
 
-export const DEFAULT_GEO_LENS_SEARCH_MIN_SCORE = 0.8;
+export const DEFAULT_GEO_LENS_SEARCH_MIN_SCORE = 0.85;
 export const DEFAULT_GEO_LENS_TIMEOUT_MS = 6_000;
 
 /**
