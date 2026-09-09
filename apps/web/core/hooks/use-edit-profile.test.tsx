@@ -29,14 +29,16 @@ const mocks = vi.hoisted(() => ({
   dispatch: vi.fn(),
   reviewState: 'idle' as string,
   entityName: 'Preston' as string | null,
+  hydratedEntity: {} as object | null,
   entityDescription: 'Working on debates.' as string | null,
   // Literals, not the consts above: vi.hoisted runs before their initialisers.
   personalEntityId: '3eb17193b0ae44fe9083ce931bc9210e' as string | null,
-  profile: { id: '3eb17193b0ae44fe9083ce931bc9210e', name: 'Preston', avatarUrl: null } as {
-    id: string;
-    name: string | null;
-    avatarUrl: string | null;
-  } | null,
+  profile: {
+    id: '3eb17193b0ae44fe9083ce931bc9210e',
+    spaceId: 'c3cdf799eb8a469abbb609b7c3ecdb83',
+    name: 'Preston',
+    avatarUrl: null,
+  } as { id: string; spaceId: string; name: string | null; avatarUrl: string | null } | null,
   storeValues: [] as Value[],
   storeRelations: [] as Relation[],
 }));
@@ -94,6 +96,9 @@ vi.mock('~/core/sync/use-mutate', () => ({
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
+  // Non-null means hydration produced an entity; the hook reads this to tell a
+  // settled-but-failed fetch from a successful one.
+  useQueryEntity: () => ({ entity: mocks.hydratedEntity, isLoading: false }),
   getValues: ({ selector }: { selector?: (v: Value) => boolean }) =>
     mocks.storeValues.filter(v => (selector ? selector(v) : true)),
   getRelations: ({ selector }: { selector?: (r: Relation) => boolean }) =>
@@ -151,7 +156,8 @@ beforeEach(() => {
   mocks.entityName = 'Preston';
   mocks.entityDescription = 'Working on debates.';
   mocks.personalEntityId = ENTITY_ID;
-  mocks.profile = { id: ENTITY_ID, name: 'Preston', avatarUrl: null };
+  mocks.hydratedEntity = {};
+  mocks.profile = { id: ENTITY_ID, spaceId: SPACE_ID, name: 'Preston', avatarUrl: null };
   mocks.storeValues = [];
   mocks.storeRelations = [];
   // Mirror the store: deleting replaces the row with an isLocal tombstone rather
@@ -184,16 +190,36 @@ describe('resolving the profile entity', () => {
   it('falls back to topicId when the profile lookup degraded to a wallet address', () => {
     // fetchProfile returns defaultProfile(address, address) on every failure path,
     // and an address is not an entity id.
-    mocks.profile = { id: ADDRESS, name: null, avatarUrl: null };
+    mocks.profile = { id: ADDRESS, spaceId: SPACE_ID, name: null, avatarUrl: null };
 
     const { result } = renderHook(() => useEditProfile({ isOpen: true }));
 
     expect(result.current.entityId).toBe(ENTITY_ID);
   });
 
+  // `apiProfileToProfile` falls back to the space id when the record has no
+  // entityId, and a space id is a valid 32-hex entity id — so shape alone cannot
+  // tell them apart. Staging against it would edit the space's system entity.
+  it('rejects the space-id fallback and keeps the topic entity', () => {
+    mocks.profile = { id: SPACE_ID, spaceId: SPACE_ID, name: 'Preston', avatarUrl: null };
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    expect(result.current.entityId).toBe(ENTITY_ID);
+  });
+
+  it('reports an unhydrated entity as not ready, even once the fetch has settled', () => {
+    // `isLoading` is derived from isFetched, which is true after a failed retry too.
+    mocks.hydratedEntity = null;
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    expect(result.current.isHydrated).toBe(false);
+  });
+
   it('cannot edit when neither source yields an entity', () => {
     mocks.personalEntityId = null;
-    mocks.profile = { id: ADDRESS, name: null, avatarUrl: null };
+    mocks.profile = { id: ADDRESS, spaceId: SPACE_ID, name: null, avatarUrl: null };
 
     const { result } = renderHook(() => useEditProfile({ isOpen: true }));
 
@@ -202,7 +228,7 @@ describe('resolving the profile entity', () => {
 
   it('falls back to the profile name while the entity is still hydrating', () => {
     mocks.entityName = null;
-    mocks.profile = { id: ENTITY_ID, name: 'Test account 70', avatarUrl: 'ipfs://profile-avatar' };
+    mocks.profile = { id: ENTITY_ID, spaceId: SPACE_ID, name: 'Test account 70', avatarUrl: 'ipfs://profile-avatar' };
 
     const { result } = renderHook(() => useEditProfile({ isOpen: true }));
 

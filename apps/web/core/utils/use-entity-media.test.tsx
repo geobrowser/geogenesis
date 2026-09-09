@@ -256,3 +256,28 @@ describe('a locally removed image', () => {
     await waitFor(() => expect(result.current).toBe('ipfs://avatar-a'));
   });
 });
+
+describe('useEntityMedia and a locally removed image', () => {
+  // The combined hook has its own fetch and its own state, so the guard the
+  // single-purpose hooks gained has to be applied here too — ranking rows and
+  // block media read this one.
+  it('stops resolving once only a deletion is left', async () => {
+    mocks.relationsByEntity[`entity-a:${ContentIds.AVATAR_PROPERTY}`] = 'ipfs://avatar-a';
+
+    const { result, rerender } = renderHook(() => useEntityMedia('entity-a', 'space-1'), { wrapper });
+    await waitFor(() => expect(result.current.avatarUrl).toBe('ipfs://avatar-a'));
+
+    mocks.localRelations = [
+      {
+        type: { id: ContentIds.AVATAR_PROPERTY },
+        fromEntity: { id: 'entity-a' },
+        toEntity: { id: 'image-1' },
+        spaceId: 'space-1',
+        isDeleted: true,
+      },
+    ];
+    rerender();
+
+    expect(result.current.avatarUrl).toBeUndefined();
+  });
+});

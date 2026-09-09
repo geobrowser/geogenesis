@@ -214,6 +214,17 @@ export function useEntityMedia(
   const storeCoverEntityId = storeCoverRelation?.toEntity.id;
   const storeCoverUrl = useImageUrlFromEntity(storeCoverEntityId, spaceId);
 
+  // Same guard as the single-purpose hooks above. Without it here, the surfaces
+  // that use this one — ranking rows, block media — keep serving an image from the
+  // five-minute relation cache after it has been removed.
+  const isAvatarRemoved = useIsLocallyRemoved(
+    entityId,
+    ContentIds.AVATAR_PROPERTY,
+    spaceId,
+    Boolean(storeAvatarRelation)
+  );
+  const isCoverRemoved = useIsLocallyRemoved(entityId, SystemIds.COVER_PROPERTY, spaceId, Boolean(storeCoverRelation));
+
   React.useEffect(() => {
     if (!entityId || (storeAvatarUrl && storeCoverUrl)) {
       return;
@@ -278,8 +289,8 @@ export function useEntityMedia(
     };
   }, [entityId, spaceId, fetchKey, storeAvatarUrl, storeCoverUrl, cache]);
 
-  const avatarUrl = storeAvatarUrl ?? settled?.avatarUrl;
-  const coverUrl = storeCoverUrl ?? settled?.coverUrl;
+  const avatarUrl = isAvatarRemoved ? undefined : (storeAvatarUrl ?? settled?.avatarUrl);
+  const coverUrl = isCoverRemoved ? undefined : (storeCoverUrl ?? settled?.coverUrl);
 
   return {
     avatarUrl,

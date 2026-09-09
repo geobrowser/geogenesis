@@ -15,7 +15,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { getRelations, getValues } from '~/core/sync/use-store';
+import { getRelations, getValues, useQueryEntity } from '~/core/sync/use-store';
 import { store } from '~/core/sync/use-sync-engine';
 import type { Profile, Relation, Value } from '~/core/types';
 import { findMediaUrlValue, useEntityAvatarUrl, useEntityCoverUrl } from '~/core/utils/use-entity-media';
@@ -109,12 +109,25 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   // the account this was first tested against, which left the modal reading a
   // blank profile it could not have saved either. /profile/address answers with
   // the person entity directly, so prefer it and keep topicId as the fallback.
-  // Its own fallback is the wallet address, which is not an entity id, hence the
-  // validity check rather than a truthiness one.
-  const entityId = profile?.id && IdUtils.isValid(profile.id) ? profile.id : (personalEntityId ?? '');
+  //
+  // Both of that endpoint's own fallbacks have to be rejected first, and neither
+  // is caught by shape alone: it answers with the wallet address when the lookup
+  // fails, and with the *space* id when the record carries no entityId — and a
+  // space id is a perfectly valid 32-hex entity id. Editing against it would
+  // stage all four fields onto the space's system entity.
+  const profileEntityId = profile && profile.id !== profile.spaceId && IdUtils.isValid(profile.id) ? profile.id : null;
+  const entityId = profileEntityId ?? personalEntityId ?? '';
   const canEdit = Boolean(isRegistered && spaceId && entityId);
 
   const entity = useEntity({ id: entityId, spaceId: spaceId || undefined });
+
+  // `isLoading` only says the fetch settled, not that it worked — `useQueryEntity`
+  // derives it from `isFetched`, which is true after a rejected retry too. Reading
+  // the store directly distinguishes them: a hydration that failed leaves nothing
+  // behind, and staging an image replacement against no relations would add a
+  // second edge instead of retargeting the one that is really there.
+  const { entity: hydratedEntity } = useQueryEntity({ id: entityId, spaceId: spaceId || undefined });
+  const isHydrated = hydratedEntity !== null;
 
   const [status, setStatus] = React.useState<EditProfileStatus>('idle');
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -279,6 +292,11 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
             selector: r => r.type.id === property.id && r.fromEntity.id === entityId && r.spaceId === spaceId,
           });
           const liveEdges = priorEdges.filter(r => !r.isDeleted);
+          // What a removal could actually act on. `setAsPublished` keeps rows, so
+          // an already-published tombstone means the deletion has happened — it is
+          // not something left to remove, and treating it as one lets a second
+          // removal stage nothing and still report success.
+          const removableEdges = priorEdges.filter(r => !r.isDeleted || r.hasBeenPublished !== true);
 
           // Every pre-existing local edge, tombstones included. A replacement made
           // through the normal editor is *two* local rows — a tombstone for the old
@@ -297,7 +315,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
             // to the profile endpoint, which answers across spaces, while these
             // edges are scoped to the personal space. Publishing would report
             // success over an image still on screen, so record it and fail instead.
-            if (priorEdges.length === 0) {
+            if (removableEdges.length === 0) {
               unresolvedRemoval = kind;
               continue;
             }
@@ -525,6 +543,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
   return {
     canEdit,
+    isHydrated,
     isLoading: entity.isLoading,
     entityId,
     spaceId,

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   publish: vi.fn(),
   reset: vi.fn(),
   canEdit: true,
+  isHydrated: true,
   isLoading: false,
   status: 'idle' as EditProfileStatus,
   errorMessage: null as string | null,
@@ -26,6 +27,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('~/core/hooks/use-edit-profile', () => ({
   useEditProfile: () => ({
     canEdit: mocks.canEdit,
+    isHydrated: mocks.isHydrated,
     isLoading: mocks.isLoading,
     entityId: 'entity',
     spaceId: 'space',
@@ -50,6 +52,7 @@ beforeEach(() => {
   mocks.publish.mockReset();
   mocks.reset.mockReset();
   mocks.canEdit = true;
+  mocks.isHydrated = true;
   mocks.isLoading = false;
   mocks.status = 'idle';
   mocks.errorMessage = null;
@@ -262,8 +265,8 @@ describe('EditProfileDialog', () => {
     renderDialog();
 
     expect(screen.queryByRole('button', { name: 'Add a photo' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Replace' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Replace profile photo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove profile photo' })).toBeInTheDocument();
   });
 
   // A click's target is the common ancestor of its pointerdown and pointerup, so
@@ -283,6 +286,48 @@ describe('EditProfileDialog', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(mocks.reset).not.toHaveBeenCalled();
     expect(nameField()).toHaveValue('Half-typed name');
+  });
+
+  it('names which image each control acts on', () => {
+    mocks.current = { ...mocks.current, avatarUrl: 'ipfs://avatar', bannerUrl: 'ipfs://banner' };
+    renderDialog();
+
+    // Both images carry a Replace and a Remove; the visible labels are identical,
+    // so the accessible names have to say which one they change.
+    expect(screen.getByRole('button', { name: 'Replace banner' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove banner' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Replace profile photo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove profile photo' })).toBeInTheDocument();
+  });
+
+  // A stored value with stray whitespace is not an edit until the user touches the
+  // field. Trimming only the draft side marked the form dirty the moment it opened.
+  it('is not dirty just because the stored value has whitespace', () => {
+    mocks.current = { ...mocks.current, name: 'Preston Mantel ' };
+    renderDialog();
+
+    expect(saveButton()).toBeDisabled();
+  });
+
+  it('leaves an untouched whitespace value alone when something else changes', async () => {
+    mocks.current = { ...mocks.current, name: 'Preston Mantel ' };
+    renderDialog();
+
+    await userEvent.clear(descriptionField());
+    await userEvent.paste('A new description');
+    await userEvent.click(saveButton());
+
+    // The name goes out exactly as stored, not silently re-trimmed.
+    expect(mocks.publish).toHaveBeenCalledWith(expect.objectContaining({ name: 'Preston Mantel ' }));
+  });
+
+  it('holds save until hydration actually produced an entity', () => {
+    mocks.isHydrated = false;
+    mocks.current = { ...mocks.current, name: 'Changed' };
+    renderDialog();
+
+    expect(saveButton()).toBeDisabled();
+    expect(screen.getByText('We couldn’t find your profile to edit. Try reloading the page.')).toBeInTheDocument();
   });
 
   it('rejects a dropped file the picker’s accept filter would never have allowed', async () => {

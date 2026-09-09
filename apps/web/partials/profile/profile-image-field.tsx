@@ -20,16 +20,18 @@ type Props = {
   onReject: (message: string) => void;
 };
 
-const COPY: Record<ProfileImageKind, { empty: string; hint: string; label: string }> = {
+const COPY: Record<ProfileImageKind, { empty: string; hint: string; label: string; target: string }> = {
   banner: {
     empty: 'Add a banner',
     hint: 'PNG or JPEG, up to 5 MB. 1500 × 500 looks best.',
     label: 'Banner',
+    target: 'banner',
   },
   avatar: {
     empty: 'Add a photo',
     hint: 'PNG or JPEG, up to 5 MB. 400 × 400 looks best.',
     label: 'Profile photo',
+    target: 'profile photo',
   },
 };
 
@@ -126,10 +128,12 @@ export function ProfileImageField({ kind, src, disabled = false, onPick, onRemov
               '[@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100'
             )}
           >
-            <OverlayButton onClick={openPicker} disabled={disabled}>
+            {/* The visible label stays short; the accessible name says which image
+                it acts on, since the avatar carries an identical pair. */}
+            <OverlayButton onClick={openPicker} disabled={disabled} label={`Replace ${copy.target}`}>
               Replace
             </OverlayButton>
-            <OverlayButton onClick={onRemove} disabled={disabled}>
+            <OverlayButton onClick={onRemove} disabled={disabled} label={`Remove ${copy.target}`}>
               Remove
             </OverlayButton>
           </div>
@@ -146,6 +150,7 @@ export function ProfileImageField({ kind, src, disabled = false, onPick, onRemov
             type="button"
             onClick={openPicker}
             disabled={disabled}
+            aria-label={`Replace ${copy.target}`}
             className="text-metadataMedium text-ctaPrimary hover:underline disabled:text-grey-03 disabled:no-underline"
           >
             Replace
@@ -154,6 +159,7 @@ export function ProfileImageField({ kind, src, disabled = false, onPick, onRemov
             type="button"
             onClick={onRemove}
             disabled={disabled}
+            aria-label={`Remove ${copy.target}`}
             className="text-metadataMedium text-grey-04 hover:underline disabled:text-grey-03 disabled:no-underline"
           >
             Remove
@@ -181,16 +187,19 @@ function OverlayButton({
   children,
   onClick,
   disabled,
+  label,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
+  label: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-label={label}
       className="rounded border border-white/40 bg-white/90 px-2 py-1 text-metadataMedium text-text transition-colors hover:bg-white"
     >
       {children}

@@ -40,7 +40,9 @@ type Props = {
  * hand-off to the status bar rather than a cancel.
  */
 export function EditProfileDialog({ open, onOpenChange }: Props) {
-  const { canEdit, isLoading, current, status, errorMessage, publish, reset } = useEditProfile({ isOpen: open });
+  const { canEdit, isHydrated, isLoading, current, status, errorMessage, publish, reset } = useEditProfile({
+    isOpen: open,
+  });
 
   const [name, setName] = React.useState('');
   const [description, setDescription] = React.useState('');
@@ -123,7 +125,17 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   };
 
   const hasFailed = status === 'error';
-  const isUnavailable = !canEdit && !isLoading;
+  // Includes a hydration that settled without producing an entity: the fields would
+  // be seeded from the profile endpoint alone, and saving against no relations
+  // would duplicate an image edge rather than retarget it.
+  const isUnavailable = !isLoading && (!canEdit || !isHydrated);
+
+  // Trim only what the user actually typed. A stored value with stray whitespace
+  // is not a change until they touch the field — comparing a trimmed draft against
+  // an untrimmed original marked the form dirty the moment it opened, and let an
+  // image-only edit quietly rewrite the name in trimmed form.
+  const publishName = pristineRef.current.name ? current.name : name.trim();
+  const publishDescription = pristineRef.current.description ? current.description : description.trim();
 
   // Compared the way they are published — trimmed, and with a removal of an image
   // that was never set counting as no change. Otherwise Save offers to publish an
@@ -132,8 +144,8 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     state.edit.kind === 'replaced' || (state.edit.kind === 'removed' && Boolean(currentUrl));
 
   const hasChanges =
-    name.trim() !== current.name ||
-    description.trim() !== current.description ||
+    publishName !== current.name ||
+    publishDescription !== current.description ||
     changesImage(banner, current.bannerUrl) ||
     changesImage(avatar, current.avatarUrl);
 
@@ -144,7 +156,8 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   // Not while the entity is still loading: the profile fallback can already show
   // an avatar, and staging a replacement before the relations arrive would add a
   // second image edge instead of retargeting the one that exists.
-  const canSave = canEdit && !isLoading && (hasChanges || hasFailed) && name.trim() !== '' && !isPublishing;
+  const canSave =
+    canEdit && isHydrated && !isLoading && (hasChanges || hasFailed) && publishName.trim() !== '' && !isPublishing;
 
   const close = () => {
     // Closing mid-publish hands off to the status bar; it does not cancel the
@@ -167,7 +180,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!canSave) return;
-    void publish({ name: name.trim(), description: description.trim(), banner: banner.edit, avatar: avatar.edit });
+    void publish({ name: publishName, description: publishDescription, banner: banner.edit, avatar: avatar.edit });
   };
 
   return (
