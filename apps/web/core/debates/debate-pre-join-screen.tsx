@@ -225,8 +225,12 @@ export function DebatePreScreen({
         <h1 className="mb-2 max-w-[390px] text-center text-[1.375rem] leading-[1.1] font-semibold text-text">
           {claim}
         </h1>
+        {/* Not "when you are both ready": pressing ready moves the debate to `connecting`, and the
+            recorder does not start until `preflight` a beat later. The overstatement erred safe —
+            it made people more guarded, not less — but this screen exists to make the recorded
+            boundary legible, so it should be exact. The pill carries the precise moment. */}
         <Text as="p" variant="metadata" color="grey-04" className="mb-5 max-w-[390px] text-center">
-          Say hello first — this part isn&apos;t recorded. Recording starts when you are both ready.
+          Say hello first — this part isn&apos;t recorded. Recording starts when the debate does.
         </Text>
 
         <div className="grid w-full gap-2">{orderedTiles}</div>
