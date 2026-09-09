@@ -10,6 +10,7 @@ import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
+import { SIDE_PANEL_WIDTH_CLASS } from '~/partials/side-panel-layout';
 
 /**
  * "Comments" side panel for any entity. It hosts the same CommentSection entity
@@ -53,11 +54,17 @@ export function EntityCommentsPanel({
     <aside
       data-entity-comments-panel
       className={cx(
-        'flex w-[360px] shrink-0 flex-col border-l border-divider bg-white',
+        'flex shrink-0 flex-col border-l border-divider bg-white',
         'md:fixed md:inset-x-0 md:top-auto md:bottom-0 md:z-[80] md:h-[85dvh] md:w-full md:rounded-t-[16px] md:border-t md:border-l-0',
-        // Above the page but below the entity side panel (z-200), which can be
-        // opened on top of it from a comment author's name.
-        presentation === 'overlay' && 'shadow-2xl fixed inset-y-0 right-0 z-[150] md:inset-y-auto'
+        // Docked, it's one column in the debates feed's row, so it matches its
+        // siblings there (JoinDebatePanel, DebateClaimsPanel) at 360px.
+        presentation === 'docked' && 'w-[360px]',
+        // As an overlay it's the same kind of right-edge panel as the entity side
+        // panel and opens in the same places, so it shares that panel's width.
+        // Above the page but below it at z-200, since that one can open on top of
+        // this from a comment author's name.
+        presentation === 'overlay' &&
+          cx(SIDE_PANEL_WIDTH_CLASS, 'shadow-2xl fixed inset-y-0 right-0 z-[150] md:inset-y-auto')
       )}
     >
       <header className="flex items-center justify-between px-5 py-4">
