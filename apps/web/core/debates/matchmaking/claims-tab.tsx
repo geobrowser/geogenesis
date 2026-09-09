@@ -162,7 +162,12 @@ export function ClaimsTab() {
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [topicIds, setTopicIds] = React.useState<string[]>([]);
 
-  const { allowlist: spaceAllowlist, memberSpaceIds, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
+  const {
+    allowlist: spaceAllowlist,
+    memberSpaceIds,
+    isLoading: allowlistLoading,
+    isSettlingMemberships,
+  } = useClaimSpaceAllowlist();
 
   // Until the allowlist settles there is no telling an allowed space from one the viewer has
   // nothing to do with, so the tab waits instead of showing the unfiltered set and trimming it
@@ -472,7 +477,10 @@ export function ClaimsTab() {
     spaceIds,
     setSpaceIds,
     memberSpaceIds,
-    pending: spacesPending || !facetsSettled,
+    // The menu *and* the viewer's spaces, both. Sign-up sends one membership proposal per picked
+    // space and they land seconds apart, so the first non-empty answer is a fraction of what the
+    // reader chose — and the seed fires once. Same reason the explore feed reports it (GEO-2834).
+    pending: spacesPending || !facetsSettled || isSettlingMemberships,
   });
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until

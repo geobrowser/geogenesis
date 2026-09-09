@@ -1,5 +1,6 @@
 import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 import {
+  REQUEST_BRIDGE_TTL_MS,
   type RequestedMembershipSpace,
   activeRequestedSpacesForOwner,
   requestedMembershipIdSet,
@@ -105,6 +106,42 @@ export function browseSidebarMemberSpaceIds(
  * the filter stays open on nothing.
  */
 export const REQUESTED_MEMBERSHIP_SETTLE_MS = 90_000;
+
+/**
+ * When this hook's answer next changes on its own, as a timestamp — or null if nothing is pending.
+ *
+ * Both deadlines here are read off a clock sampled during render, so neither can retire anything by
+ * itself: once the membership poll stops there may be no further render, and an entry that never
+ * landed would sit in `memberSpaceIds` for the rest of the visit while `isSettlingMemberships` held
+ * the filter default unspent. Callers schedule a render against this so elapsed time is something
+ * the hook observes rather than something it happens to notice.
+ *
+ * The boundaries are {@link REQUESTED_MEMBERSHIP_SETTLE_MS}, after which a request stops being
+ * waited on, and {@link REQUEST_BRIDGE_TTL_MS}, after which it stops counting as a membership at
+ * all. Only future ones count: an entry already past a boundary needs no wake-up for it.
+ */
+export function nextRequestedMembershipDeadline({
+  requestedSpaces,
+  personalSpaceId,
+  walletAddress,
+  now,
+}: {
+  requestedSpaces: RequestedMembershipSpace[];
+  personalSpaceId: string | null | undefined;
+  walletAddress: string | null | undefined;
+  now: number;
+}): number | null {
+  let next: number | null = null;
+  for (const space of activeRequestedSpacesForOwner(requestedSpaces, personalSpaceId, now, walletAddress)) {
+    for (const deadline of [
+      space.requestedAt + REQUESTED_MEMBERSHIP_SETTLE_MS,
+      space.requestedAt + REQUEST_BRIDGE_TTL_MS,
+    ]) {
+      if (deadline > now && (next === null || deadline < next)) next = deadline;
+    }
+  }
+  return next;
+}
 
 /**
  * Whether this payload still owes the viewer a membership request they have already made.

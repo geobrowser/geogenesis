@@ -70,6 +70,7 @@ const mocks = vi.hoisted(() => ({
   spaceAllowlist: null as Set<string> | null,
   memberSpaceIds: null as Set<string> | null,
   allowlistLoading: false,
+  isSettlingMemberships: false,
   publishableSpaceIds: null as Set<string> | null,
   publishableLoading: false,
   scopeHeldOver: false,
@@ -105,6 +106,7 @@ vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
     // about the member default set it explicitly.
     memberSpaceIds: mocks.memberSpaceIds,
     isLoading: mocks.allowlistLoading,
+    isSettlingMemberships: mocks.isSettlingMemberships,
   }),
 }));
 
@@ -624,6 +626,7 @@ beforeEach(() => {
   mocks.spaceAllowlist = null;
   mocks.memberSpaceIds = null;
   mocks.allowlistLoading = false;
+  mocks.isSettlingMemberships = false;
   // Same shape, same reason: settled-with-no-answer does not filter, which is what every
   // pre-existing case here runs under.
   mocks.publishableSpaceIds = null;
@@ -1917,6 +1920,28 @@ describe('topic menu', () => {
 
     // Seeded with theirs, which a seed taken against the partial list would have missed.
     await waitFor(() => expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull());
+  });
+
+  // GEO-2834. The other half of "the menu has finished arriving": so has the *viewer's* side of it.
+  // Sign-up sends one membership proposal per picked space and they land seconds apart, so the
+  // first non-empty answer is a fraction of what the reader chose — and the seed is spent on it.
+  it('holds the default while more of their memberships are still landing', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.isSettlingMemberships = true;
+    const view = render(<ClaimsTab />);
+    await showIndexedClaims();
+
+    await waitFor(() => expect(mocks.lastQuery).toBeTruthy());
+    expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
+
+    // The rest of what they picked lands.
+    mocks.memberSpaceIds = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.isSettlingMemberships = false;
+    view.rerender(<ClaimsTab />);
+
+    // Both of theirs, which a seed taken against the partial answer would have missed.
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID, OTHER_SPACE_ID] }));
   });
 
   // A default, not a policy: once it has applied, the viewer's own choice stands — including the
