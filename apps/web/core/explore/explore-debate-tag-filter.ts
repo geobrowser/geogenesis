@@ -31,6 +31,10 @@ import type { EntityFilter } from '~/core/gql/graphql';
  * single space 5 of 352, around 1.4%, each a claim living in the space they picked but tagged in
  * one of the others. That is the price, and it buys the paragraph above.
  *
+ * That trade was put to Preston with those numbers and confirmed: scoped, deliberately, rather
+ * than an oversight to be tidied up by widening it again. Anyone who does widen it is choosing the
+ * 1.4% over the open gate, so measure both before deciding it was only a scoping mistake.
+ *
  * It also settles a disagreement this was supposed to end. `taggedEntityFilter` in
  * `core/debates/tagged-claims` puts `spaceId` on the tag relation too, so an unscoped clause here
  * meant a claim could pass Explore's gate and still never appear in the claims tab.
