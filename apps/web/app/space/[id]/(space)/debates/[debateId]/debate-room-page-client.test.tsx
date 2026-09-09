@@ -644,7 +644,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
     // The issue asks for this line explicitly, and it has to stay true to when capture starts.
-    expect(screen.getByText(/this part isn't recorded/)).toBeInTheDocument();
+    expect(screen.getByText(/this part isn't recorded/i)).toBeInTheDocument();
     expect(screen.getByText('Speak to test your mic')).toBeInTheDocument();
     expect(screen.getByRole('meter')).toBeInTheDocument();
     expect(screen.queryByText('Ready')).not.toBeInTheDocument();

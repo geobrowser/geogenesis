@@ -230,7 +230,7 @@ export function DebatePreScreen({
             it made people more guarded, not less — but this screen exists to make the recorded
             boundary legible, so it should be exact. The pill carries the precise moment. */}
         <Text as="p" variant="metadata" color="grey-04" className="mb-5 max-w-[390px] text-center">
-          Say hello first — this part isn&apos;t recorded. Recording starts when the debate does.
+          Say hello first. This part isn&apos;t recorded, and recording starts when the debate does.
         </Text>
 
         <div className="grid w-full gap-2">{orderedTiles}</div>
