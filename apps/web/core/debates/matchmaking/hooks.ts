@@ -2,10 +2,18 @@
 
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import * as React from 'react';
+
 import { useRouter } from 'next/navigation';
+
+import { useParticipantAvatars } from '~/core/debates/participant-avatars';
 
 import {
   type CreateDebateRequestBody,
+  type DebateParticipantSummary,
+  type DebatePerson,
+  type DebateRequest,
+  type DebateRequestParty,
   type DismissDebateRequestBody,
   type MatchmakingClaimsQuery,
   acceptDebateRequest,
@@ -64,11 +72,16 @@ export function useMatchmakingScope(enabled: boolean) {
   return authenticated;
 }
 
+/** Stable empty reference, so an unresolved query does not hand the memo a new array each render. */
+const EMPTY_PEOPLE: DebatePerson[] = [];
+const EMPTY_PARTIES: DebateRequestParty[] = [];
+const EMPTY_PARTICIPANTS: DebateParticipantSummary[] = [];
+
 export function useDebatePeople(enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   useMatchmakingScope(enabled);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     // `accountKey` is null signed out, which keys the anonymous list separately from anyone's —
     // so signing in cannot serve the signed-out answer, and signing out cannot leak the other way.
@@ -79,13 +92,27 @@ export function useDebatePeople(enabled: boolean) {
     // when it is most likely to have moved on without us.
     refetchOnWindowFocus: true,
   });
+
+  // geo-chat's `avatar_cid` is a snapshot of the profile taken when it first learned about someone,
+  // so an avatar uploaded afterwards never reaches it and the row draws a placeholder for a face
+  // the profile page renders fine. Resolved here rather than in the rows so every consumer of this
+  // list gets it. See `participant-avatars`.
+  const people = React.useMemo(() => query.data?.people ?? EMPTY_PEOPLE, [query.data]);
+  const peopleWithAvatars = useParticipantAvatars(people);
+
+  const data = React.useMemo(
+    () => (query.data ? { ...query.data, people: peopleWithAvatars } : query.data),
+    [query.data, peopleWithAvatars]
+  );
+
+  return { ...query, data } as typeof query;
 }
 
 export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   useMatchmakingScope(enabled);
 
-  return useInfiniteQuery({
+  const infinite = useInfiniteQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.matchmakingClaims(accountKey, query),
     queryFn: ({ pageParam, signal }) =>
@@ -108,6 +135,41 @@ export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boo
       previousQuery && !sameQueryAccount(previousQuery.queryKey, accountKey) ? undefined : previousData,
     enabled,
   });
+
+  // The faces on the claim pills, which hang off each side rather than a flat participant list.
+  // Flattened across every loaded page so the whole list resolves in one batch — see
+  // `useDebatePeople` for why this happens here rather than in `PositionAvatars`.
+  const participants = React.useMemo(
+    () =>
+      infinite.data?.pages.flatMap(page =>
+        page.claims.flatMap(claim => claim.positions.flatMap(position => position.participants))
+      ) ?? EMPTY_PARTICIPANTS,
+    [infinite.data]
+  );
+
+  const resolved = useParticipantAvatars(participants);
+
+  const data = React.useMemo(() => {
+    if (!infinite.data) return infinite.data;
+
+    const byParticipant = new Map(participants.map((participant, index) => [participant, resolved[index]!]));
+
+    return {
+      ...infinite.data,
+      pages: infinite.data.pages.map(page => ({
+        ...page,
+        claims: page.claims.map(claim => ({
+          ...claim,
+          positions: claim.positions.map(position => ({
+            ...position,
+            participants: position.participants.map(participant => byParticipant.get(participant) ?? participant),
+          })),
+        })),
+      })),
+    };
+  }, [infinite.data, participants, resolved]);
+
+  return { ...infinite, data } as typeof infinite;
 }
 
 export function useMatchmakingMatches(enabled: boolean) {
@@ -130,13 +192,43 @@ export function useMatchmakingMatches(enabled: boolean) {
 export function useDebateRequests(enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.requests(accountKey),
     queryFn: ({ signal }) => listDebateRequests(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
     refetchOnWindowFocus: true,
   });
+
+  // Both parties of every request, resolved in one batch — see `useDebatePeople` for why this is
+  // done here rather than in the rows that draw the faces.
+  const parties = React.useMemo(() => {
+    if (!query.data) return EMPTY_PARTIES;
+    const requests = [...(query.data.outbound ? [query.data.outbound] : []), ...query.data.incoming];
+
+    return requests.flatMap(request => [request.requester, request.recipient]);
+  }, [query.data]);
+
+  const resolved = useParticipantAvatars(parties);
+
+  const data = React.useMemo(() => {
+    if (!query.data) return query.data;
+
+    const byIndex = new Map(parties.map((party, index) => [party, resolved[index]!]));
+    const withParties = (request: DebateRequest): DebateRequest => ({
+      ...request,
+      requester: byIndex.get(request.requester) ?? request.requester,
+      recipient: byIndex.get(request.recipient) ?? request.recipient,
+    });
+
+    return {
+      ...query.data,
+      outbound: query.data.outbound ? withParties(query.data.outbound) : query.data.outbound,
+      incoming: query.data.incoming.map(withParties),
+    };
+  }, [query.data, parties, resolved]);
+
+  return { ...query, data } as typeof query;
 }
 
 export function useDebateBlocks(enabled: boolean) {
