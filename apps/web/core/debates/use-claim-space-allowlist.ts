@@ -9,7 +9,11 @@ import { useAtomValue } from 'jotai';
 import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { useBrowseSidebarQuerySource } from '~/core/browse/use-browse-sidebar-cache';
-import { requestedMembershipSpacesAtom } from '~/core/state/requested-membership';
+import {
+  activeRequestedSpacesForOwner,
+  requestedMembershipIdSet,
+  requestedMembershipSpacesAtom,
+} from '~/core/state/requested-membership';
 
 import { loadBrowseSidebarData } from '~/partials/browse-sidebar/load-browse-sidebar-data';
 
@@ -17,6 +21,7 @@ import {
   awaitsRequestedMembership,
   browseSidebarClaimSpaceAllowlist,
   browseSidebarMemberSpaceIds,
+  nextRequestedMembershipDeadline,
 } from './claim-space-allowlist';
 
 /**
@@ -56,6 +61,10 @@ export function useClaimSpaceAllowlist(enabled: boolean = true): {
    * seconds apart — so a caller that treats the first non-empty answer as the final one acts on a
    * fraction of what the viewer chose. Read it as "one more answer is coming", bounded by
    * `REQUESTED_MEMBERSHIP_SETTLE_MS`.
+   *
+   * False until the personal space exists, since `awaitsRequestedMembership` has nothing to ask
+   * about before then. That window needs no guard: onboarding writes every pick to the bridge in
+   * one atom set, so `memberSpaceIds` is already whole the first time a caller reads it.
    */
   isSettlingMemberships: boolean;
 } {
@@ -72,6 +81,26 @@ export function useClaimSpaceAllowlist(enabled: boolean = true): {
   const queryEnabled = enabled && !personalSpaceLoading;
 
   const requestedSpaces = useAtomValue(requestedMembershipSpacesAtom);
+
+  // Everything below reads the clock during render, so without this the two bridge deadlines only
+  // take effect when something else happens to re-render. Nothing else reliably does: the poll
+  // below is the main source of renders here and it stops at the settle deadline, so a request that
+  // never landed would hold `isSettlingMemberships` true — and its space in `memberSpaceIds` — for
+  // the rest of the visit, leaving the default it gates unspent. Wake once per deadline instead.
+  const [, observeDeadline] = React.useReducer((n: number) => n + 1, 0);
+  const nextDeadline = nextRequestedMembershipDeadline({
+    requestedSpaces,
+    personalSpaceId,
+    walletAddress,
+    now: Date.now(),
+  });
+  React.useEffect(() => {
+    if (nextDeadline === null) return;
+    // Absolute, so this re-arms only when the deadline itself moves, not on every render. The extra
+    // millisecond keeps an early-firing timer from waking to a boundary that has not passed yet.
+    const timer = setTimeout(observeDeadline, Math.max(0, nextDeadline - Date.now()) + 1);
+    return () => clearTimeout(timer);
+  }, [nextDeadline]);
 
   const { data, isLoading } = useQuery({
     queryKey: browseSidebarDataQueryKey(keyInput),
@@ -116,18 +145,55 @@ export function useClaimSpaceAllowlist(enabled: boolean = true): {
   // caller seed off a set this hook was told not to maintain.
   const unresolved = personalSpaceLoading || !enabled || !data;
 
-  const allowlist = React.useMemo(
-    () => (unresolved ? null : browseSidebarClaimSpaceAllowlist(data, personalSpaceId)),
-    [data, personalSpaceId, unresolved]
+  // The spaces this viewer has asked to join that the server has not caught up on yet.
+  //
+  // A new account picks its spaces minutes before the sidebar payload can report them: the
+  // personal space is created on-chain first, the membership proposals are fired after that, and
+  // the indexer trails those again. For all of it the server correctly answers "you belong to
+  // nothing", so every filter defaulted from it opened unfiltered until the reader refreshed
+  // (GEO-2834). The bridge is the only source that knows sooner.
+  //
+  // Pending counts as belonging — the same call `buildMemberSpaceIds` makes about the server's own
+  // pending rows, applied a few minutes earlier.
+  //
+  // Matched on the wallet address as well as the personal space: onboarding seeds these entries
+  // under the address, since the personal space id does not exist when the picks are made.
+  const requestedIdsKey = [
+    ...requestedMembershipIdSet(
+      activeRequestedSpacesForOwner(requestedSpaces, personalSpaceId, Date.now(), walletAddress)
+    ),
+  ]
+    .sort()
+    .join(',');
+  // Rebuilt from the key so the set keeps one identity while the entries do — the consumers hang a
+  // once-only effect off it. Ids are UUID-derived hex, so a comma can't appear inside one.
+  const requestedSpaceIds = React.useMemo(
+    () => new Set(requestedIdsKey === '' ? [] : requestedIdsKey.split(',')),
+    [requestedIdsKey]
   );
+
+  const allowlist = React.useMemo(() => {
+    if (unresolved) return null;
+    const allowed = browseSidebarClaimSpaceAllowlist(data, personalSpaceId);
+    // Kept a superset of `memberSpaceIds` below, which is the invariant `buildClaimSpaceAllowlist`
+    // states: a space that counts as the viewer's has to be one they may see claims from.
+    for (const id of requestedSpaceIds) allowed.add(id);
+    return allowed;
+  }, [data, personalSpaceId, requestedSpaceIds, unresolved]);
 
   // Same gate, for the same reason: a signed-out entry left over under a partial key would read as
   // a settled answer of "you belong to nothing", which is the case the default treats as a viewer
   // with no memberships and falls back to showing everything. Held as null until it is real.
-  const memberSpaceIds = React.useMemo(
-    () => (unresolved ? null : browseSidebarMemberSpaceIds(data, personalSpaceId)),
-    [data, personalSpaceId, unresolved]
-  );
+  //
+  // The bridge widens a resolved answer rather than standing in for one. The default it feeds is
+  // spent the first time it matches, so answering off a few local ids while the real list is in
+  // flight could spend it on one space and drop the viewer's other memberships for the visit.
+  const memberSpaceIds = React.useMemo(() => {
+    if (unresolved) return null;
+    const mine = browseSidebarMemberSpaceIds(data, personalSpaceId);
+    for (const id of requestedSpaceIds) mine.add(id);
+    return mine;
+  }, [data, personalSpaceId, requestedSpaceIds, unresolved]);
 
   // Same question the interval asks, answered against the data the caller is being handed.
   const isSettlingMemberships =

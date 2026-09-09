@@ -23,7 +23,8 @@ type QueryOptions = { queryKey: readonly unknown[] };
 const mocks = vi.hoisted(() => ({
   authenticated: true,
   attention: true,
-  presence: true,
+  visible: true,
+  present: true,
   gatewayPaused: false,
   queryCache: { subscribe: vi.fn(() => vi.fn()) },
   queryClient: {
@@ -65,13 +66,18 @@ vi.mock('./debate-gateway', () => ({
 
 vi.mock('./debate-attention', () => ({
   useDebateAttention: () => mocks.attention,
-  useDebatePresence: () => mocks.presence,
+  // GEO-2849 split these apart: polling is gated on *visibility*, while `debate_presence` — what
+  // geo-chat turns into `is_online` — is now connection-backed and survives a hidden tab. These
+  // tests are about polling cadence, so they drive the visibility signal.
+  useDebateVisibility: () => mocks.visible,
+  useDebatePresence: () => mocks.present,
 }));
 
 beforeEach(() => {
   mocks.authenticated = true;
   mocks.attention = true;
-  mocks.presence = true;
+  mocks.visible = true;
+  mocks.present = true;
   mocks.gatewayPaused = false;
   mocks.queryClient.invalidateQueries.mockClear();
   mocks.queryClient.getQueryCache.mockClear();
@@ -114,13 +120,13 @@ describe('debate query network ownership', () => {
   // visible tab behind the focused window is exactly where someone waits for an opponent.
   it('polls the rematch session on a visible tab, including one that is not focused', () => {
     mocks.attention = false;
-    mocks.presence = true;
+    mocks.visible = true;
 
     const { rerender } = renderHook(() => useDebateRematch('rematch-1'));
     expect(mocks.useQuery.mock.calls.at(-1)?.[0]).toMatchObject({ refetchInterval: 5_000 });
 
     // A hidden tab has nobody watching the picker.
-    mocks.presence = false;
+    mocks.visible = false;
     rerender();
     expect(mocks.useQuery.mock.calls.at(-1)?.[0]).toMatchObject({ refetchInterval: false });
   });
@@ -140,11 +146,11 @@ describe('debate query network ownership', () => {
     expect(mocks.useQuery.mock.calls.at(-1)?.[0]).toMatchObject({ refetchInterval: 10_000 });
 
     // A hidden tab has no popup to draw, paused or not.
-    mocks.presence = false;
+    mocks.visible = false;
     rerender();
     expect(mocks.useQuery.mock.calls.at(-1)?.[0]).toMatchObject({ refetchInterval: false });
 
-    mocks.presence = true;
+    mocks.visible = true;
     rerender();
     expect(mocks.queryRefetch).toHaveBeenCalledTimes(1);
   });
@@ -156,7 +162,7 @@ describe('debate query network ownership', () => {
   // poll exists to cover, which is how a request still took ~36 seconds after GEO-2638.
   it('keeps polling activity on a visible tab that is not the focused window', () => {
     mocks.attention = false;
-    mocks.presence = true;
+    mocks.visible = true;
 
     renderHook(() => useDebateActivity());
 

@@ -63,7 +63,7 @@ import {
   updateDebateAvailability,
 } from './api';
 import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
-import { useDebateAttention, useDebatePresence } from './debate-attention';
+import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
@@ -365,7 +365,7 @@ export function useDebateActivity(enabled = true) {
   const queryClient = useQueryClient();
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const attentive = useDebateAttention();
-  const present = useDebatePresence();
+  const present = useDebateVisibility();
   const { paused } = useDebateGatewaySnapshot();
   const queryEnabled = enabled && authenticated;
   const wasPresent = React.useRef(present);
@@ -644,7 +644,7 @@ export function useDebateRematch(sessionId: string, enabled = true) {
   // sitting open on screen behind whatever window the viewer is typing in would not poll — and
   // waiting for an opponent while looking elsewhere is exactly this flow. That distinction is the
   // one GEO-2650 already cost once on the activity poll; see the note on `useDebateActivity`.
-  const present = useDebatePresence();
+  const present = useDebateVisibility();
 
   return useQuery({
     ...debateQueryNetworkOptions,

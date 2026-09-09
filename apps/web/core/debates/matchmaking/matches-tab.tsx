@@ -5,6 +5,7 @@ import * as React from 'react';
 import type { MatchmakingMatch } from '../api';
 import { useDebateActivity } from '../hooks';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
+import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
@@ -27,7 +28,8 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
 
   const matchesQuery = useMatchmakingMatches(true);
   const requestsQuery = useDebateRequests(true);
-  const { data: activity } = useDebateActivity(true);
+  const activityQuery = useDebateActivity(true);
+  const activity = activityQuery.data;
 
   const serverMatches = React.useMemo(() => matchesQuery.data?.matches ?? [], [matchesQuery.data]);
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
@@ -68,7 +70,15 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
-          isLoading={matchesQuery.isLoading}
+          // `activity` is a second query, and an empty list cannot be described without it: both
+          // the message and the note below say something different depending on whether the viewer
+          // has marked themselves unavailable. Whichever request lands second decides what this
+          // reads, so with nothing to show the skeleton waits for the answer rather than asserting
+          // the wrong one and correcting itself a moment later.
+          //
+          // Only while empty. A list with rows in it renders on the matches alone, as it always
+          // has — nothing above depends on `activity` then.
+          isLoading={matchesQuery.isLoading || (filtered.length === 0 && activityQuery.isLoading)}
           error={matchesQuery.error}
           onRetry={() => void matchesQuery.refetch()}
           isEmpty={filtered.length === 0}
@@ -80,7 +90,24 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
               ? 'You’re marked unavailable, so nobody can be matched with you.'
               : 'Matches appear once you’ve taken a position on a claim and someone holding the opposite position is online and ready too.'
           }
-          emptyAction={{ label: 'Browse claims', onClick: () => onTabChange('claims') }}
+          // GEO-2840. Read off `serverMatches` rather than off the space filter: with nothing to
+          // match on at all, the filter is not what emptied the list, so the test is whether anyone
+          // is there and not whether the viewer has narrowed.
+          //
+          // Deliberately *not* also gated on the viewer's availability, though the message above
+          // branches on it. geo-chat's matches query never reads the viewer's own
+          // `available_to_debate` — it walks their readiness rows and drops a claim only when the
+          // opposite side has nobody available — so an unavailable viewer's empty list is a
+          // nobody-is-online list like anyone else's. Withholding the pointer to debate hours from
+          // them left the one explanation they can act on being one that would not change anything.
+          // Availability gates *sending a request*, which is where the card already says so.
+          //
+          // `live` unconditionally: `SIGNED_OUT_TABS` in the panel keeps this tab off the signed-out
+          // hub entirely, so every viewer here holds the gateway scope.
+          emptyNote={serverMatches.length === 0 ? <DebateHoursNote live /> : undefined}
+          // Same label as People's, because it is the same action out of the same dead end. Two
+          // names for one button in one panel is a difference that implies something.
+          emptyAction={{ label: 'Explore claims', onClick: () => onTabChange('claims') }}
         >
           <HubCardList>
             {filtered.map(match => (

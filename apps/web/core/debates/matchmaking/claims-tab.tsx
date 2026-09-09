@@ -37,6 +37,7 @@ import {
 } from '../tagged-claims';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
+import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests } from './hooks';
 import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
@@ -161,7 +162,12 @@ export function ClaimsTab() {
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [topicIds, setTopicIds] = React.useState<string[]>([]);
 
-  const { allowlist: spaceAllowlist, memberSpaceIds, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
+  const {
+    allowlist: spaceAllowlist,
+    memberSpaceIds,
+    isLoading: allowlistLoading,
+    isSettlingMemberships,
+  } = useClaimSpaceAllowlist();
 
   // Until the allowlist settles there is no telling an allowed space from one the viewer has
   // nothing to do with, so the tab waits instead of showing the unfiltered set and trimming it
@@ -471,7 +477,10 @@ export function ClaimsTab() {
     spaceIds,
     setSpaceIds,
     memberSpaceIds,
-    pending: spacesPending || !facetsSettled,
+    // The menu *and* the viewer's spaces, both. Sign-up sends one membership proposal per picked
+    // space and they land seconds apart, so the first non-empty answer is a fraction of what the
+    // reader chose — and the seed fires once. Same reason the explore feed reports it (GEO-2834).
+    pending: spacesPending || !facetsSettled || isSettlingMemberships,
   });
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
@@ -654,6 +663,14 @@ export function ClaimsTab() {
                 : 'No claims match these filters.'
               : NOTHING_HERE[filter]
           }
+          // "Debate now" is the only filter here scored on who is online, so it is the only one an
+          // empty list means "nobody is around" for — Featured and All claims are statements about
+          // curation, and My positions is about the viewer. Withheld under a narrowing filter for
+          // the same reason it is on the other tabs: that emptiness has a different cause
+          // (GEO-2840).
+          // `live` unconditionally: `SIGNED_OUT_HIDDEN_FILTERS` takes "Debate now" out of the menu
+          // signed out, so reaching this note at all means holding the gateway scope.
+          emptyNote={filter === 'debate_now' && !hasNarrowingFilters ? <DebateHoursNote live /> : undefined}
           emptyAction={
             hasFilters
               ? {
