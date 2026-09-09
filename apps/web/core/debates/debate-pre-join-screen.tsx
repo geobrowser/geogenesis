@@ -248,10 +248,18 @@ export function DebatePreScreen({
         {mediaReady && (
           <div className="mt-3 w-full rounded-lg border border-grey-02 bg-white p-3">
             <div className="flex gap-[6px]">
-              <PreScreenToggle ariaLabel="Mute microphone" pressed={audioMuted} onClick={onToggleAudioMuted}>
+              <PreScreenToggle
+                ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
+                active={audioMuted}
+                onClick={onToggleAudioMuted}
+              >
                 <MicrophoneIcon muted={audioMuted} />
               </PreScreenToggle>
-              <PreScreenToggle ariaLabel="Turn camera off" pressed={!videoEnabled} onClick={onToggleVideoEnabled}>
+              <PreScreenToggle
+                ariaLabel={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
+                active={!videoEnabled}
+                onClick={onToggleVideoEnabled}
+              >
                 <CameraIcon disabled={!videoEnabled} />
               </PreScreenToggle>
             </div>
@@ -421,14 +429,25 @@ function PreScreenReadyBadge() {
   );
 }
 
+/**
+ * Labelled the way the debate room labels the same three controls: the name states the action a
+ * press performs, and there is no `aria-pressed`.
+ *
+ * Both halves matter. The original mixed the conventions, pairing an action name with
+ * `aria-pressed`, which announces "Unmute microphone, pressed" and reads as unmuting being the
+ * active state. A static name plus `aria-pressed` ("Mute microphone, pressed") is the canonical
+ * fix and is what this briefly was; correct in isolation, but it left these buttons announcing
+ * themselves differently from their counterparts one screen later in the same flow. Matching the
+ * room is worth more to a user than the marginally better pattern.
+ */
 function PreScreenToggle({
   ariaLabel,
-  pressed,
+  active,
   onClick,
   children,
 }: {
   ariaLabel: string;
-  pressed: boolean;
+  active: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -436,11 +455,10 @@ function PreScreenToggle({
     <button
       type="button"
       aria-label={ariaLabel}
-      aria-pressed={pressed}
       onClick={onClick}
       className={cx(
         'flex min-h-9 flex-1 items-center justify-center rounded-full border transition outline-none',
-        pressed ? 'border-text bg-grey-01 text-text' : 'border-grey-02 bg-white text-text hover:border-grey-04',
+        active ? 'border-text bg-grey-01 text-text' : 'border-grey-02 bg-white text-text hover:border-grey-04',
         'focus-visible:border-text focus-visible:ring-1 focus-visible:ring-text'
       )}
     >

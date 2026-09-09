@@ -1279,14 +1279,14 @@ describe('DebateRoomPageClient', () => {
 
     await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
 
+    // Stateful names and no aria-pressed, matching the debate room's controls.
     const microphone = screen.getByRole('button', { name: 'Mute microphone' });
-    expect(microphone).toHaveAttribute('aria-pressed', 'false');
+    expect(microphone).not.toHaveAttribute('aria-pressed');
 
     fireEvent.click(microphone);
     await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
-    expect(microphone).toHaveAttribute('aria-pressed', 'true');
 
-    fireEvent.click(microphone);
+    fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
     await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
   });
 
