@@ -105,7 +105,9 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           // `live` unconditionally: `SIGNED_OUT_TABS` in the panel keeps this tab off the signed-out
           // hub entirely, so every viewer here holds the gateway scope.
           emptyNote={serverMatches.length === 0 ? <DebateHoursNote live /> : undefined}
-          emptyAction={{ label: 'Browse claims', onClick: () => onTabChange('claims') }}
+          // Same label as People's, because it is the same action out of the same dead end. Two
+          // names for one button in one panel is a difference that implies something.
+          emptyAction={{ label: 'Explore claims', onClick: () => onTabChange('claims') }}
         >
           <HubCardList>
             {filtered.map(match => (

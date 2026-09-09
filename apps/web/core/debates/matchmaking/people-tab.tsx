@@ -25,12 +25,13 @@ import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
 import { usePersonRecords } from './use-person-records';
 import { useUnexpiredRequests } from './use-request-countdown';
+import type { DebatesHubTab } from '~/atoms';
 
 /**
  * Everyone online and available right now. The Debate button sends the same claimless challenge as
  * `ProfileDebateButton` on a person's home space — `DebateCoordinator` owns the resulting dialog.
  */
-export function PeopleTab() {
+export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
   const { authenticated } = useGeoChatAuth();
   const promptSignIn = usePrivySignIn();
   // Undefined when signed in, so every path below keeps behaving exactly as it did.
@@ -136,7 +137,14 @@ export function PeopleTab() {
           // static and no amount of waiting will fill it. They cannot be matched either. `live` is
           // what keeps the copy from promising both.
           emptyNote={searchExcludedEveryone ? undefined : <DebateHoursNote live={authenticated} />}
-          emptyAction={searchExcludedEveryone ? { label: 'Clear search', onClick: () => setSearch('') } : undefined}
+          // Exactly one action, and which one follows the same question the message and the note do.
+          // A search the viewer can undo gets the undo; a room that is genuinely empty gets somewhere
+          // to go, because there is nothing to undo and waiting is the only other option (GEO-2840).
+          emptyAction={
+            searchExcludedEveryone
+              ? { label: 'Clear search', onClick: () => setSearch('') }
+              : { label: 'Explore claims', onClick: () => onTabChange('claims') }
+          }
           signInAction={
             onRequireSignIn
               ? { label: 'Sign in', message: 'Sign in to see who is available to debate.', onClick: onRequireSignIn }
