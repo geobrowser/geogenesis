@@ -18,13 +18,22 @@ import { HubMessageNote } from './hub-states';
  * the viewer's own filters is a different problem with a different answer, and GEO-2840 explicitly
  * leaves it alone.
  */
-export function DebateHoursNote() {
+export function DebateHoursNote({
+  /**
+   * Whether the list under this note fills itself in, which decides what the during-hours variant
+   * can honestly ask of the viewer. Passed rather than read from auth here: it is a fact about the
+   * caller's list, and only People can be looking at one that doesn't update.
+   */
+  live,
+}: {
+  live: boolean;
+}) {
   const now = useTickingNow();
   // Null until mounted — the paragraph included, so nothing empty is left standing in its place.
   // The window is expressed in the viewer's local zone, which the server does not have and cannot
   // guess, so rendering it during SSR would hydrate as a mismatch.
   if (!now) return null;
-  return <HubMessageNote>{debateHoursNote(debateHoursWindow(now))}</HubMessageNote>;
+  return <HubMessageNote>{debateHoursNote(debateHoursWindow(now), { live })}</HubMessageNote>;
 }
 
 /**

@@ -660,7 +660,9 @@ export function ClaimsTab() {
           // curation, and My positions is about the viewer. Withheld under a narrowing filter for
           // the same reason it is on the other tabs: that emptiness has a different cause
           // (GEO-2840).
-          emptyNote={filter === 'debate_now' && !hasNarrowingFilters ? <DebateHoursNote /> : undefined}
+          // `live` unconditionally: `SIGNED_OUT_HIDDEN_FILTERS` takes "Debate now" out of the menu
+          // signed out, so reaching this note at all means holding the gateway scope.
+          emptyNote={filter === 'debate_now' && !hasNarrowingFilters ? <DebateHoursNote live /> : undefined}
           emptyAction={
             hasFilters
               ? {

@@ -38,9 +38,19 @@ const WALL_CLOCK = /^([01]\d|2[0-3]):([0-5]\d)$/;
 export function parseDebateHours(value: string | undefined): DebateHoursConfig {
   if (!value) return DEFAULT_DEBATE_HOURS;
 
-  const [range, zone] = value.trim().split('@');
-  const [start, end] = (range ?? '').split('-');
-  if (!WALL_CLOCK.test(start ?? '') || !WALL_CLOCK.test(end ?? '')) return DEFAULT_DEBATE_HOURS;
+  // Counted rather than destructured. Destructuring takes the first two parts and drops the rest,
+  // so `09:00-10:00-11:00` and `09:00-10:00@UTC@typo` would both parse as something the author did
+  // not write — which is worse than ignoring them, because the tab would then state a window
+  // nobody chose. Every extra separator is a typo, and a typo falls back like any other.
+  const parts = value.trim().split('@');
+  if (parts.length > 2) return DEFAULT_DEBATE_HOURS;
+
+  const [range, zone] = parts;
+  const bounds = (range ?? '').split('-');
+  if (bounds.length !== 2) return DEFAULT_DEBATE_HOURS;
+
+  const [start, end] = bounds;
+  if (!WALL_CLOCK.test(start) || !WALL_CLOCK.test(end)) return DEFAULT_DEBATE_HOURS;
 
   const timeZone = zone?.trim() || DEFAULT_DEBATE_HOURS.timeZone;
   // A bad zone only fails when it reaches Intl, which is at render time in a tab, so prove it here.
@@ -152,13 +162,19 @@ export function formatLocalDebateHours({ start, end }: Pick<DebateHoursWindow, '
  * The line added beneath a tab's own empty message.
  *
  * A second sentence rather than a replacement: two of the three tabs already open by saying nobody
- * is around, so the during-hours variant contributes only what they don't say — that the list fills
- * itself in, and that leaving is the one thing that won't help. The lists do live-update, from
- * `debate.matchmaking_changed`, which is what makes "stay here" the honest instruction rather than
- * the ticket's original "check back in a few minutes".
+ * is around, so the during-hours variant contributes only what they don't say.
+ *
+ * What it has to say depends on whether the list behind it updates itself — `live`. Signed in it
+ * does, off `debate.matchmaking_changed`, so "stay here" is the honest instruction and the ticket's
+ * original "check back" would send viewers away from the one place the match can happen. Signed
+ * out there is no socket to carry that, and no matching either, so the same sentence would promise
+ * twice over what the page cannot deliver — that viewer gets the ticket's original.
  */
-export function debateHoursNote(window: DebateHoursWindow) {
-  return window.isOpen
+export function debateHoursNote(window: DebateHoursWindow, { live }: { live: boolean }) {
+  if (!window.isOpen) {
+    return `Debate hours are every day between ${formatLocalDebateHours(window)}. Come back then to join a debate!`;
+  }
+  return live
     ? 'Stay here and you’ll be matched as soon as someone joins.'
-    : `Debate hours are every day between ${formatLocalDebateHours(window)}. Come back then to join a debate!`;
+    : 'Check back in a few minutes to find a debate!';
 }

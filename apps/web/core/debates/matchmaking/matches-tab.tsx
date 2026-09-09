@@ -86,8 +86,10 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           // all, the filter is not what emptied the list, so the test is whether anyone is there
           // and not whether the viewer has narrowed. Being marked unavailable is the viewer's own
           // switch, undoable in a click, and "come back at 9am" does not answer it.
+          // `live` unconditionally: `SIGNED_OUT_TABS` in the panel keeps this tab off the signed-out
+          // hub entirely, so every viewer here holds the gateway scope.
           emptyNote={
-            serverMatches.length === 0 && activity?.available_to_debate !== false ? <DebateHoursNote /> : undefined
+            serverMatches.length === 0 && activity?.available_to_debate !== false ? <DebateHoursNote live /> : undefined
           }
           emptyAction={{ label: 'Browse claims', onClick: () => onTabChange('claims') }}
         >

@@ -22,14 +22,18 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
-  process.env.TZ = originalTimeZone;
+  // Deleted rather than assigned back when there was nothing to restore: `process.env.TZ = undefined`
+  // stores the *string* `"undefined"`, which is not a zone, and leaves the process running in the
+  // UTC fallback for anything that shares it.
+  if (originalTimeZone === undefined) delete process.env.TZ;
+  else process.env.TZ = originalTimeZone;
 });
 
-function renderAt(iso: string) {
+function renderAt(iso: string, { live = true }: { live?: boolean } = {}) {
   vi.setSystemTime(new Date(iso));
   // The note renders nothing until its mount effect has run, so flush it the way the browser would.
   act(() => {
-    render(<DebateHoursNote />);
+    render(<DebateHoursNote live={live} />);
   });
 }
 
@@ -47,6 +51,25 @@ describe('DebateHoursNote', () => {
     renderAt('2026-09-08T16:30:00Z');
 
     expect(screen.getByText('Stay here and you’ll be matched as soon as someone joins.')).toBeTruthy();
+  });
+
+  // Signed out on People there is no gateway scope, so the list will not fill itself in while the
+  // viewer waits — and they could not be matched from it anyway. Asking them to stay would promise
+  // both.
+  it('tells a viewer whose list does not update itself to check back instead', () => {
+    renderAt('2026-09-08T16:30:00Z', { live: false });
+
+    expect(screen.getByText('Check back in a few minutes to find a debate!')).toBeTruthy();
+    expect(screen.queryByText(/Stay here/)).toBeNull();
+  });
+
+  // Outside the window nothing is coming for anyone, so both viewers get the same answer.
+  it('gives the same outside-hours line either way', () => {
+    renderAt('2026-09-08T15:00:00Z', { live: false });
+
+    expect(
+      screen.getByText('Debate hours are every day between 9-10am. Come back then to join a debate!')
+    ).toBeTruthy();
   });
 
   // The boundary requirement: 8:59 shows one variant and 9:00 the other, with no refresh in between.

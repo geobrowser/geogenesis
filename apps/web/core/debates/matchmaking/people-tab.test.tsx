@@ -197,6 +197,42 @@ describe('PeopleTab', () => {
     expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
   });
 
+  // People is the one tab a signed-out viewer can reach this note from (GEO-2725), and their list
+  // is static: `useMatchmakingScope` gates the gateway on a session. Waiting will not fill it, and
+  // they could not be matched from it either, so "stay here and you'll be matched" would promise
+  // both. The clock is pinned inside debate hours because that is the only variant that differs.
+  it('does not tell a signed-out viewer to wait for a list that cannot update', async () => {
+    // Real time still advances, so testing-library's async helpers are not frozen out.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // 16:30Z is 09:30 PDT — inside the window, whatever zone this suite runs in.
+    vi.setSystemTime(new Date('2026-09-08T16:30:00Z'));
+    mocks.authenticated = false;
+    mocks.people = [];
+
+    try {
+      render(<PeopleTab />);
+
+      expect(await screen.findByText('Check back in a few minutes to find a debate!')).toBeInTheDocument();
+      expect(screen.queryByText(/Stay here/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('tells a signed-in viewer to stay, because their list does update', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-09-08T16:30:00Z'));
+    mocks.people = [];
+
+    try {
+      render(<PeopleTab />);
+
+      expect(await screen.findByText('Stay here and you’ll be matched as soon as someone joins.')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('pins search alongside a sent request rather than in a second sticky', () => {
     // Two stickies would both claim top-0 and overlap; the card is conditional, so search could
     // not be offset by a known height either.

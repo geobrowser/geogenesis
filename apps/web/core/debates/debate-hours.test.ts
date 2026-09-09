@@ -108,18 +108,26 @@ describe('formatLocalDebateHours', () => {
 });
 
 describe('debateHoursNote', () => {
-  it('tells an outside-hours viewer when to come back, in their own time', () => {
-    expect(debateHoursNote({ isOpen: false, ...range(9, 0, 10, 0), nextTransition: new Date() })).toBe(
+  const closed = { isOpen: false, ...range(9, 0, 10, 0), nextTransition: new Date() };
+  const open = { isOpen: true, ...range(9, 0, 10, 0), nextTransition: new Date() };
+
+  it.each([true, false])('tells an outside-hours viewer when to come back, in their own time (live=%s)', live => {
+    // Nothing is coming for anyone outside the window, so `live` has nothing to change here.
+    expect(debateHoursNote(closed, { live })).toBe(
       'Debate hours are every day between 9-10am. Come back then to join a debate!'
     );
   });
 
-  // The lists live-update off `debate.matchmaking_changed`, so "check back later" would send people
-  // away from the only place the match can happen.
-  it('tells an in-hours viewer to stay', () => {
-    expect(debateHoursNote({ isOpen: true, ...range(9, 0, 10, 0), nextTransition: new Date() })).toBe(
-      'Stay here and you’ll be matched as soon as someone joins.'
-    );
+  // A signed-in list live-updates off `debate.matchmaking_changed`, so "check back later" would
+  // send people away from the only place the match can happen.
+  it('tells an in-hours viewer on a live list to stay', () => {
+    expect(debateHoursNote(open, { live: true })).toBe('Stay here and you’ll be matched as soon as someone joins.');
+  });
+
+  // Signed out on People there is no gateway scope behind the list and no matching to wait for, so
+  // "stay here and you'll be matched" would promise two things that cannot happen.
+  it('tells an in-hours viewer on a static list to check back', () => {
+    expect(debateHoursNote(open, { live: false })).toBe('Check back in a few minutes to find a debate!');
   });
 });
 
@@ -133,11 +141,20 @@ describe('parseDebateHours', () => {
     });
   });
 
-  // A deploy variable is not worth a crashed tab, so every bad shape lands on the default.
-  it.each(['', undefined, 'nonsense', '9-10', '25:00-26:00', '09:00', '09:00-10:00@Not/AZone'])(
-    'falls back to 9-10am Pacific for %j',
-    value => {
-      expect(parseDebateHours(value)).toEqual(PACIFIC_9_TO_10);
-    }
-  );
+  // A deploy variable is not worth a crashed tab, so every bad shape lands on the default. The
+  // trailing three are the ones a lenient parser would accept while quietly dropping the part it
+  // could not use — stating a window nobody chose, which is worse than ignoring the variable.
+  it.each([
+    '',
+    undefined,
+    'nonsense',
+    '9-10',
+    '25:00-26:00',
+    '09:00',
+    '09:00-10:00@Not/AZone',
+    '09:00-10:00-11:00',
+    '09:00-10:00@UTC@typo',
+  ])('falls back to 9-10am Pacific for %j', value => {
+    expect(parseDebateHours(value)).toEqual(PACIFIC_9_TO_10);
+  });
 });

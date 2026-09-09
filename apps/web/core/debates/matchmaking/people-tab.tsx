@@ -131,7 +131,11 @@ export function PeopleTab() {
           // GEO-2840 scopes this to the nobody-online case, which is exactly the other side of that
           // same question: a list the viewer emptied with their own search is a different problem,
           // and debate hours does not answer it.
-          emptyNote={searchExcludedEveryone ? undefined : <DebateHoursNote />}
+          // The one tab that can show this to a signed-out viewer — People is readable anonymously
+          // (GEO-2725), but `useMatchmakingScope` gates the gateway on a session, so their list is
+          // static and no amount of waiting will fill it. They cannot be matched either. `live` is
+          // what keeps the copy from promising both.
+          emptyNote={searchExcludedEveryone ? undefined : <DebateHoursNote live={authenticated} />}
           emptyAction={searchExcludedEveryone ? { label: 'Clear search', onClick: () => setSearch('') } : undefined}
           signInAction={
             onRequireSignIn
