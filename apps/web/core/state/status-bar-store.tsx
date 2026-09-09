@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { atom, useAtomValue, useSetAtom } from 'jotai';
 
-import { ReviewState } from '~/core/types';
+import { ReviewState, SpaceGovernanceType } from '~/core/types';
 
 type Retry = (() => Promise<unknown>) | (() => unknown);
 
@@ -12,12 +12,19 @@ export interface StatusBarState {
   reviewState: ReviewState;
   error: string | null;
   retry?: Retry;
+  /**
+   * Where the publish is going, so the toast can name what actually happened: writing to your own
+   * space publishes, while writing to a DAO space files a proposal for the space to decide on.
+   */
+  spaceGovernanceType: SpaceGovernanceType | null;
 }
 
 export type StatusBarActions =
   | {
       type: 'SET_REVIEW_STATE';
       payload: ReviewState;
+      /** Carried through the publish so the completion message can match the destination. */
+      spaceGovernanceType?: SpaceGovernanceType;
     }
   | { type: 'ERROR'; payload: string | null; retry?: Retry };
 
@@ -27,11 +34,13 @@ export type StatusBarActions =
 const reviewStateAtom = atom<ReviewState>('idle');
 const errorAtom = atom<string | null>(null);
 const retryAtom = atom<Retry | undefined>(undefined);
+const spaceGovernanceTypeAtom = atom<SpaceGovernanceType | null>(null);
 
 export const statusBarStateAtom = atom<StatusBarState>(get => ({
   reviewState: get(reviewStateAtom),
   error: get(errorAtom),
   retry: get(retryAtom),
+  spaceGovernanceType: get(spaceGovernanceTypeAtom),
 }));
 
 export const statusBarDispatchAtom = atom(null, (_get, set, action: StatusBarActions) => {
@@ -40,6 +49,14 @@ export const statusBarDispatchAtom = atom(null, (_get, set, action: StatusBarAct
       set(reviewStateAtom, action.payload);
       set(errorAtom, null);
       set(retryAtom, undefined);
+      // Only the dispatches that know the destination carry it, and the rest of a publish's states
+      // must not wipe what an earlier one established. Returning to idle does clear it, so the next
+      // publish can't inherit the last one's wording.
+      if (action.spaceGovernanceType !== undefined) {
+        set(spaceGovernanceTypeAtom, action.spaceGovernanceType);
+      } else if (action.payload === 'idle') {
+        set(spaceGovernanceTypeAtom, null);
+      }
       return;
     case 'ERROR':
       set(reviewStateAtom, 'publish-error');

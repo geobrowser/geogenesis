@@ -22,6 +22,8 @@ import { TickSmall } from '~/design-system/icons/tick-small';
 import { Warning } from '~/design-system/icons/warning';
 import { Spinner } from '~/design-system/spinner';
 
+import { statusBarMessage } from './status-bar-message';
+
 /**
  * Surfaces publish progress and errors.
  *
@@ -195,13 +197,13 @@ export const StatusBar = () => {
               )}
               {state.reviewState !== 'publish-complete' && publishingStates.includes(state.reviewState) && <Spinner />}
               <motion.span
-                key={message[state.reviewState]}
+                key={statusBarMessage(state)}
                 initial={{ opacity: 0, filter: 'blur(2px)' }}
                 animate={{ opacity: 1, filter: 'blur(0px)' }}
                 exit={{ opacity: 0, filter: 'blur(2px)' }}
                 transition={{ type: 'spring', duration: 0.5, delay: 0.15 }}
               >
-                {message[state.reviewState]}
+                {statusBarMessage(state)}
               </motion.span>
             </div>
           </AnimatePresence>
@@ -209,16 +211,6 @@ export const StatusBar = () => {
       </motion.div>
     </div>
   );
-};
-
-const message: Record<ReviewState, string> = {
-  idle: '',
-  reviewing: '',
-  'publishing-ipfs': 'Uploading changes to IPFS',
-  'signing-wallet': 'Sign your transaction',
-  'publishing-contract': 'Adding your changes to The Graph',
-  'publish-complete': 'Changes published!',
-  'publish-error': 'An error has occurred',
 };
 
 const publishingStates: Array<ReviewState> = [
