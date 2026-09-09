@@ -1557,14 +1557,13 @@ function RematchClaimCard({
       // Only when there is something to offer, the same way the side panel renders its control only
       // once a match exists. Rendering it unconditionally put a dead disabled button on every card.
       endSlot={
-        awaitingResponse || canRequest || requesting || claim.recently_rejected || requestError ? (
+        awaitingResponse || canRequest || requesting || claim.recently_rejected ? (
           <RequestDebateControl
             onRequest={onRequest}
             disabled={!canRequest || busy || claim.recently_rejected}
             isRequesting={requesting}
             pending={awaitingResponse}
             pendingLabel={awaitingLabel}
-            requestError={requestError}
             note={
               claim.recently_rejected ? (
                 <Text as="span" variant="footnote" color="grey-04">
@@ -1573,6 +1572,20 @@ function RematchClaimCard({
               ) : null
             }
           />
+        ) : null
+      }
+      // The refusal stays in a full-width row rather than riding the control into the header. The
+      // end slot cannot shrink — it holds a fixed-height pill beside the space chip — so a sentence
+      // like "respond to this claim before requesting a rematch" would set its max-content width and
+      // push the row wider than the card. geo-chat's refusals here are sentences, not the couple of
+      // words the side panel's are, which is why that surface can keep its own inline.
+      footer={
+        requestError ? (
+          <div role="alert" className="mt-2">
+            <Text as="p" variant="footnote" color="red-01">
+              {requestError}
+            </Text>
+          </div>
         ) : null
       }
       // `positions` locates the viewer by geo-chat user id, which is null until the token exchange
