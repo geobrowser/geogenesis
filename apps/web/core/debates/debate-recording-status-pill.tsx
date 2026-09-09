@@ -12,11 +12,18 @@ import cx from 'classnames';
  * its absence could equally mean "not recording" or "it failed to render" — so the neutral state
  * is the assurance and the change between the two is what marks the boundary.
  *
- * Rendered once, above both screens, rather than inside each. `fixed` because both screens are
- * scroll containers and an `absolute` child scrolls away with the content — on a phone it left the
- * viewport before the reader reached the "I'm ready" button, which is the one moment they need it.
- * Mounting it once also means the live region survives the intro → debate swap, so the change of
- * state is announced rather than arriving with a freshly-mounted region that screen readers ignore.
+ * `fixed`, because both screens are scroll containers and an `absolute` child scrolls away with
+ * the content — on a phone it left the viewport before the reader reached the "I'm ready" button,
+ * which is the one moment they need it.
+ *
+ * Rendered inside each screen rather than once above both. Once was tempting: the live region
+ * would survive the intro → debate swap and the change of state would be announced, instead of
+ * arriving in a freshly-mounted region that screen readers do not read out. But both screens are
+ * `aria-modal="true"`, which tells assistive technology to treat everything outside the dialog as
+ * unavailable — so hoisting it risked the pill not being reachable at all, in either state. Being
+ * readable in both states beats being announced at the boundary. Making both true means one
+ * persistent dialog wrapper with the screen bodies swapped inside it, which is a bigger change
+ * than this indicator should drag along.
  */
 export function DebateRecordingStatusPill({ recording }: { recording: boolean }) {
   return (

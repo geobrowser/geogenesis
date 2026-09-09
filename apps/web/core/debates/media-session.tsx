@@ -61,6 +61,12 @@ type DebateMediaSession = {
   }) => Promise<LocalTrackLike[]>;
   changeAudioInput: (deviceId: string) => void;
   changeAudioOutput: (deviceId: string) => Promise<void>;
+  /**
+   * Report that audio could not be routed to the selected speaker. `changeAudioOutput` handles the
+   * picker's own failures; this is for the caller that owns a live room, where the route is applied
+   * separately and can fail on its own.
+   */
+  reportAudioOutputFailure: (message: string) => void;
   changeVideoInput: (deviceId: string) => void;
 };
 
@@ -322,6 +328,10 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     [ensurePreview]
   );
 
+  const reportAudioOutputFailure = React.useCallback((message: string) => {
+    setAudioOutputError(message);
+  }, []);
+
   const changeAudioOutput = React.useCallback(async (deviceId: string) => {
     // `ensurePreview` is what normally primes this, but the claim-exploration voice dock picks a
     // speaker without ever building a preview. Probe on demand there rather than silently dropping
@@ -451,6 +461,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       changeAudioInput,
       changeAudioOutput,
       changeVideoInput,
+      reportAudioOutputFailure,
     }),
     [
       activeSessionKey,
@@ -463,6 +474,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       changeAudioOutput,
       changeVideoInput,
       ensurePreview,
+      reportAudioOutputFailure,
       previewBusy,
       previewError,
       previewState,

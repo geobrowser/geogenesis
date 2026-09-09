@@ -241,6 +241,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     changeAudioInput,
     changeAudioOutput,
     changeVideoInput,
+    reportAudioOutputFailure,
   } = mediaSession;
   const debateQuery = useDebate(debateId, true);
   const refetchDebate = debateQuery.refetch;
@@ -617,8 +618,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (!audioOutputSupported || !selectedAudioOutputId) return;
     const room = roomRef.current;
     if (!room?.switchActiveDevice) return;
-    void room.switchActiveDevice('audiooutput', selectedAudioOutputId).catch(() => undefined);
-  }, [audioOutputSupported, roomState, selectedAudioOutputId]);
+    // Reported rather than swallowed: `changeAudioOutput` surfaces its own failures, so a silent
+    // one here left the picker showing a speaker that nothing was being played through.
+    void room.switchActiveDevice('audiooutput', selectedAudioOutputId).catch(() => {
+      reportAudioOutputFailure('Could not move audio to that speaker. Sound is still on the previous one.');
+    });
+  }, [audioOutputSupported, reportAudioOutputFailure, roomState, selectedAudioOutputId]);
 
   /**
    * GEO-2819. The intro screen and the debate room each render their own media elements, and the
@@ -1166,6 +1171,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           const track = payload as RemoteTrackLike;
           subscribedRemoteTracksRef.current.add(track);
           setRemotePresence('present');
+          // Frames arriving settle the question: a mute recorded before they dropped would
+          // otherwise still be covering their live video after they rejoined.
+          if (track.kind === 'video') setRemoteCameraOff(false);
           attachRemoteTrack(track);
           void refetchDebate();
         });
@@ -1210,6 +1218,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
           setRemotePresence('left');
           setRemoteVideoReady(false);
+          setRemoteCameraOff(false);
           void refetchDebate();
         });
         // LiveKit runs its own ICE-restart reconnection; surface it so a debater whose connection
@@ -2149,12 +2158,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     );
   }
 
-  const showsRecordingStatus = Boolean(debate) && (debate?.status === 'ready' || roomState !== 'idle');
-
   return (
     <div className="py-8">
-      {showsRecordingStatus && <DebateRecordingStatusPill recording={capturing} />}
-
       {debate?.status !== 'ready' && (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
@@ -2198,6 +2203,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             remoteVideoReady={remoteVideoReady}
             remotePresence={remotePresence}
             remoteCameraOff={remoteCameraOff}
+            capturing={capturing}
             previewStream={previewStream}
             previewState={previewState}
             previewBusy={previewBusy}
@@ -2216,6 +2222,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             onAudioOutputChange={changeAudioOutput}
             onVideoInputChange={changeVideoInput}
             onRetryMedia={() => void ensureLocalPreview({ forceRestart: true }).catch(() => undefined)}
+            devicesLocked={roomState === 'connecting' || roomState === 'reconnecting'}
             audioMuted={audioMuted}
             videoEnabled={videoEnabled}
             onToggleAudioMuted={toggleAudioMuted}
@@ -2289,6 +2296,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 setLocalVideoElement={setLocalVideoElement}
                 setRemoteMediaElement={setRemoteMediaElement}
                 remoteVideoReady={remoteVideoReady}
+                capturing={capturing}
                 audioMuted={audioMuted}
                 remoteAudioEnabled={remoteAudioEnabled}
                 videoEnabled={videoEnabled}
@@ -2328,6 +2336,7 @@ function DebateRecordingModal({
   setLocalVideoElement,
   setRemoteMediaElement,
   remoteVideoReady,
+  capturing,
   audioMuted,
   remoteAudioEnabled,
   videoEnabled,
@@ -2358,6 +2367,7 @@ function DebateRecordingModal({
   setLocalVideoElement: (video: HTMLVideoElement | null) => void;
   setRemoteMediaElement: (host: HTMLDivElement | null) => void;
   remoteVideoReady: boolean;
+  capturing: boolean;
   audioMuted: boolean;
   remoteAudioEnabled: boolean;
   videoEnabled: boolean;
@@ -2560,6 +2570,8 @@ function DebateRecordingModal({
       aria-label="Debate recording"
       className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text outline-none"
     >
+      <DebateRecordingStatusPill recording={capturing} />
+
       {debateDebuggingEnabled && (
         <DebateDebugMenu
           debate={debate}

@@ -16,6 +16,7 @@ import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { AudioSettings, MobileSettingsSheet } from './audio-settings';
+import { DebateRecordingStatusPill } from './debate-recording-status-pill';
 import { CameraIcon, LeaveIcon, MicrophoneIcon, RecordingCircleButton } from './debate-room-controls';
 import { DebateVideoTile } from './debate-video-tile';
 import { DeviceOptionGroup } from './device-option-group';
@@ -44,6 +45,7 @@ export function DebatePreScreen({
   remoteVideoReady,
   remotePresence,
   remoteCameraOff,
+  capturing,
   previewStream,
   previewState,
   previewBusy,
@@ -61,6 +63,7 @@ export function DebatePreScreen({
   onAudioOutputChange,
   onVideoInputChange,
   onRetryMedia,
+  devicesLocked,
   mediaError,
   audioMuted,
   videoEnabled,
@@ -85,6 +88,7 @@ export function DebatePreScreen({
   remoteVideoReady: boolean;
   remotePresence: DebatePreScreenRemotePresence;
   remoteCameraOff: boolean;
+  capturing: boolean;
   previewStream: MediaStream | null;
   previewState: PreJoinMediaState;
   previewBusy: boolean;
@@ -103,6 +107,12 @@ export function DebatePreScreen({
   onAudioOutputChange: (deviceId: string) => void;
   onVideoInputChange: (deviceId: string) => void;
   onRetryMedia: () => void;
+  /**
+   * A connection is in flight. Swapping a device restarts the preview, which stops the very tracks
+   * that connection is in the middle of publishing — the reconnect effect only covers a swap once
+   * the room is already up, so the pickers close for the moment it takes to settle.
+   */
+  devicesLocked: boolean;
   /** Why the camera or microphone is unavailable, as distinct from a room-connection failure. */
   mediaError: string | null;
   audioMuted: boolean;
@@ -220,6 +230,8 @@ export function DebatePreScreen({
       aria-label="Debate readiness"
       className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text outline-none"
     >
+      <DebateRecordingStatusPill recording={capturing} />
+
       {/* `pt-16` clears the fixed recording pill, which is centred over the top of both screens. */}
       <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-2 pt-16 pb-8 sm:px-5">
         <h1 className="mb-2 max-w-[390px] text-center text-[1.375rem] leading-[1.1] font-semibold text-text">
@@ -273,6 +285,7 @@ export function DebatePreScreen({
                     icon={<MicrophoneIcon muted={false} />}
                     label="Custom combination"
                     open={openSettings === 'audio'}
+                    disabled={devicesLocked}
                     onClick={() => setOpenSettings(current => (current === 'audio' ? null : 'audio'))}
                   />
                   <PreScreenSettingsTrigger
@@ -281,6 +294,7 @@ export function DebatePreScreen({
                     icon={<CameraIcon disabled={false} />}
                     label={selectedCameraLabel}
                     open={openSettings === 'video'}
+                    disabled={devicesLocked}
                     onClick={() => setOpenSettings(current => (current === 'video' ? null : 'video'))}
                   />
                 </>
@@ -291,6 +305,7 @@ export function DebatePreScreen({
                     icon={<MicrophoneIcon muted={false} />}
                     label="Custom combination"
                     open={openSettings === 'audio'}
+                    disabled={devicesLocked}
                     onOpenChange={open => setOpenSettings(open ? 'audio' : null)}
                   >
                     <AudioSettings
@@ -309,6 +324,7 @@ export function DebatePreScreen({
                     icon={<CameraIcon disabled={false} />}
                     label={selectedCameraLabel}
                     open={openSettings === 'video'}
+                    disabled={devicesLocked}
                     onOpenChange={open => setOpenSettings(open ? 'video' : null)}
                   >
                     <DeviceOptionGroup
@@ -510,6 +526,7 @@ function DesktopSettingsPopover({
   icon,
   label,
   open,
+  disabled,
   onOpenChange,
   children,
 }: {
@@ -517,6 +534,7 @@ function DesktopSettingsPopover({
   icon: React.ReactNode;
   label: string;
   open: boolean;
+  disabled?: boolean;
   onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
 }) {
@@ -526,7 +544,14 @@ function DesktopSettingsPopover({
   return (
     <Popover.Root open={open} onOpenChange={onOpenChange}>
       <Popover.Trigger asChild>
-        <PreScreenSettingsTrigger ref={triggerRef} ariaLabel={ariaLabel} icon={icon} label={label} open={open} />
+        <PreScreenSettingsTrigger
+          ref={triggerRef}
+          ariaLabel={ariaLabel}
+          icon={icon}
+          label={label}
+          open={open}
+          disabled={disabled}
+        />
       </Popover.Trigger>
       {/* The default Radix wrapper is globally capped at z-60, below this screen's z-1000 overlay. */}
       {elevatedPopoverPortal && (

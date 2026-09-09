@@ -720,6 +720,57 @@ describe('DebateRoomPageClient', () => {
 
   // Your own camera toggle fires the same events; reading only the first argument reported it as
   // the opponent's.
+  // A mute recorded before they dropped used to survive the rejoin and sit over their live video.
+  it('clears a remote camera-off state when they rejoin with video', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    const remoteVideo = document.createElement('video');
+    const track = { kind: 'video', attach: () => remoteVideo, detach: () => [remoteVideo] };
+    act(() => emitRoomEvent('trackSubscribed', track));
+    act(() => emitRoomEvent('trackMuted', { kind: 'video' }, {}));
+    expect(await screen.findByText('Bri turned their camera off')).toBeInTheDocument();
+
+    act(() => emitRoomEvent('participantDisconnected', {}));
+    expect(await screen.findByText('Bri left the room.')).toBeInTheDocument();
+
+    act(() => emitRoomEvent('participantConnected', {}));
+    act(() => emitRoomEvent('trackSubscribed', track));
+
+    await waitFor(() => expect(screen.queryByText('Bri turned their camera off')).not.toBeInTheDocument());
+  });
+
+  it('reports a speaker the live room refuses to route to', async () => {
+    mocks.roomSwitchActiveDevice.mockRejectedValue(new Error('no route'));
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
+
+    expect(await screen.findByText(/Could not move audio to that speaker/)).toBeInTheDocument();
+  });
+
+  // Swapping a device restarts the preview, which stops the tracks the in-flight connection is
+  // publishing — the reconnect effect only covers a swap once the room is already up.
+  it('closes the device pickers while a connection is settling', async () => {
+    const pendingConnect = deferred<void>();
+    mocks.roomConnect.mockReturnValueOnce(pendingConnect.promise);
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Video settings' })).toBeDisabled());
+
+    act(() => pendingConnect.resolve());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Video settings' })).toBeEnabled());
+  });
+
   it('does not report the local camera toggle as the opponent turning theirs off', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
