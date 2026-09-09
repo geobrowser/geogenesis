@@ -180,6 +180,14 @@ beforeEach(() => {
   mocks.availableToDebate = true;
   mocks.activityLoading = false;
   mocks.activityErrored = false;
+
+  // The dropdown measures itself to pick a placement. Stubbed the way the Claims suite does it,
+  // because a case that opens the menu is the only thing that reaches it.
+  window.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
 });
 
 afterEach(cleanup);
@@ -360,7 +368,23 @@ describe('MatchesTab', () => {
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
   });
 
-  // The other direction: a fresh session starts unfiltered, so the atom is not quietly sticky
+  // The selection outlives the mount now, so it can outlive the match that put its space on the
+  // menu — the other side goes offline while the panel is closed. Without keeping the selected row
+  // visible the viewer comes back to an empty list filtered by a space with no row to untick.
+  it('keeps a selected space on the menu after its matches are gone', async () => {
+    const store = createStore();
+    store.set(debatesHubMatchesSpaceIdsAtom, [SPACE_ID]);
+    mocks.matches = [];
+    render(<MatchesTab onTabChange={vi.fn()} />, store);
+
+    fireEvent.click(screen.getByRole('button', { name: /Space|Any space/ }));
+
+    // The row is still there, ticked, so the filter can be undone.
+    const rows = await screen.findAllByRole('button');
+    expect(rows.some(row => row.getAttribute('aria-pressed') === 'true')).toBe(true);
+  });
+
+  // The other direction: a fresh session starts unfiltered  // The other direction: a fresh session starts unfiltered, so the atom is not quietly sticky
   // across viewers or page loads.
   it('starts unfiltered in a new session', () => {
     render(<MatchesTab onTabChange={vi.fn()} />, createStore());

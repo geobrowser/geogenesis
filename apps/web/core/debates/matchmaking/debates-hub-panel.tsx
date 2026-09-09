@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, type PanInfo, motion, useDragControls } from 'framer-motion';
+import { useAtom, useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
@@ -27,7 +28,7 @@ import { RequestsTab } from './requests-tab';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
 import { useUnexpiredRequests } from './use-request-countdown';
-import type { DebatesHubTab } from '~/atoms';
+import { type DebatesHubTab, debatesHubFiltersOwnerAtom, resetDebatesHubFiltersAtom } from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
@@ -246,7 +247,8 @@ type SurfaceProps = {
 };
 
 function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: SurfaceProps) {
-  const { authenticated, ready } = useGeoChatAuth();
+  const { authenticated, ready, accountKey } = useGeoChatAuth();
+  useFilterOwner(accountKey, ready);
   const tabs = tabsFor(authenticated);
   const activeTab = visibleTab(requestedTab, authenticated);
   const { data: activity } = useDebateActivity(authenticated);
@@ -399,4 +401,25 @@ function AvailabilityToggle() {
       </span>
     </button>
   );
+}
+
+/**
+ * Clears the hub's filter bar when the viewer behind it changes.
+ *
+ * The selections are session-scoped (GEO-2850), and a session outlives a sign-in. Compared against
+ * a stored owner rather than a mount-time ref, so an account that changed while the hub was closed
+ * is caught on the next open rather than missed.
+ *
+ * Held until Privy has resolved: `accountKey` is null before that, and treating it as "signed out"
+ * would clear a signed-in viewer's filters every time the hub reopened.
+ */
+function useFilterOwner(accountKey: string | null, ready: boolean) {
+  const [owner, setOwner] = useAtom(debatesHubFiltersOwnerAtom);
+  const resetFilters = useSetAtom(resetDebatesHubFiltersAtom);
+
+  React.useEffect(() => {
+    if (!ready || owner === accountKey) return;
+    resetFilters();
+    setOwner(accountKey);
+  }, [accountKey, owner, ready, resetFilters, setOwner]);
 }

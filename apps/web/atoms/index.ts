@@ -84,6 +84,29 @@ export const debatesHubMatchesSpaceIdsAtom = atom<string[]>([]);
  */
 export const debatesHubClaimsSpaceSeedSpentAtom = atom(false);
 
+/**
+ * Which account the filter state above belongs to, so it is never handed to a different viewer.
+ *
+ * Session-scoped state outlives the sign-in that changes who is looking. Without this, signing in
+ * after touching the filter signed out would carry a spent seed into the new session — and
+ * GEO-2834's whole point is that a brand-new account's membership default must land — while
+ * switching accounts without a reload would show B the spaces A had picked. Neither was reachable
+ * while the selection reset on every mount.
+ */
+export const debatesHubFiltersOwnerAtom = atom<string | null>(null);
+
+/**
+ * Puts the whole filter bar back to its defaults. Write-only, and in one place, so a new filter
+ * atom is added to the reset by adding it here rather than by remembering every call site.
+ */
+export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
+  set(debatesHubClaimsFilterAtom, 'featured');
+  set(debatesHubClaimsSpaceIdsAtom, []);
+  set(debatesHubClaimsTopicIdsAtom, []);
+  set(debatesHubClaimsSpaceSeedSpentAtom, false);
+  set(debatesHubMatchesSpaceIdsAtom, []);
+});
+
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 
 // Set to `Date.now()` whenever a ranking "Create new" entity is published. The

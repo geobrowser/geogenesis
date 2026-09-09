@@ -13,7 +13,7 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { countBy, orderFacetOptions, toggleId } from './topic-facets';
+import { countBy, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
 import { useStableListOrder } from './use-stable-list-order';
 import { type DebatesHubTab, debatesHubMatchesSpaceIdsAtom } from '~/atoms';
 
@@ -48,8 +48,18 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
 
   // Counted from the matches themselves — this tab has no server facet, and the whole list is in
   // hand, so the rows are the complete answer.
+  //
+  // A selected space is kept on the menu even once nothing counts towards it, the same way
+  // `useSpaceFilterMenu` does it for the Claims tab. The selection outlives this mount now
+  // (GEO-2850), so it can outlive the match that put the space on the menu in the first place —
+  // the other side goes offline while the panel is closed, and reopening it would otherwise show
+  // an empty list filtered by a space with no row left to untick it by.
   const facetSpaces = React.useMemo(
-    () => orderFacetOptions(countBy(serverMatches.map(match => ({ id: match.claim.space_id, name: null }))), spaceIds),
+    () =>
+      orderFacetOptions(
+        keepSelectedVisible(countBy(serverMatches.map(match => ({ id: match.claim.space_id, name: null }))), spaceIds),
+        spaceIds
+      ),
     [serverMatches, spaceIds]
   );
 
