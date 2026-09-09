@@ -4,10 +4,12 @@ import { cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testi
 
 import type { ReactElement } from 'react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingMatch } from '../api';
 import { MatchesTab } from './matches-tab';
+import { debatesHubMatchesSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   matches: [] as MatchmakingMatch[],
@@ -110,14 +112,18 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   useSpacesByIds: () => ({ spaces: [], spacesById: new Map(), isLoading: false }),
 }));
 
-function render(ui: ReactElement) {
+function render(ui: ReactElement, sharedStore?: ReturnType<typeof createStore>) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const view = rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
-  return {
-    ...view,
-    rerender: (next: ReactElement) =>
-      view.rerender(<QueryClientProvider client={queryClient}>{next}</QueryClientProvider>),
-  };
+  // A fresh jotai store per render, unless a case passes one in to model a reopen — the space filter is an atom since GEO-2850, so without this
+  // one case's selection would be the next one's starting state.
+  const store = sharedStore ?? createStore();
+  const wrap = (node: ReactElement) => (
+    <Provider store={store}>
+      <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>
+    </Provider>
+  );
+  const view = rtlRender(wrap(ui));
+  return { ...view, store, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
 }
 
 // Claim and space ids are knowledge-graph ids, so the fixtures have to be real ones — the card
@@ -338,6 +344,28 @@ describe('MatchesTab', () => {
     render(<MatchesTab onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /Any space/ }).closest('.sticky')).not.toBeNull();
+  });
+
+  // GEO-2850. The hub closes on an outside pointer-down, so clicking away to dismiss the dropdown
+  // unmounts this tab — and with the selection in `useState` it went too. Held in session state
+  // now, so a tab mounting fresh picks up what the viewer had already chosen. (The click that
+  // writes it is covered on the Claims tab, whose menu options carry real names to click.)
+  it('applies a space selection the viewer made earlier in the session', () => {
+    const store = createStore();
+    store.set(debatesHubMatchesSpaceIdsAtom, [SPACE_ID]);
+    render(<MatchesTab onTabChange={vi.fn()} />, store);
+
+    // The trigger reads the selection back rather than "Any space", and the list is narrowed to it.
+    expect(screen.queryByRole('button', { name: /Any space/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+  });
+
+  // The other direction: a fresh session starts unfiltered, so the atom is not quietly sticky
+  // across viewers or page loads.
+  it('starts unfiltered in a new session', () => {
+    render(<MatchesTab onTabChange={vi.fn()} />, createStore());
+
+    expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
   });
 
   // GEO-2840.

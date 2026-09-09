@@ -4,10 +4,12 @@ import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@
 
 import type { ReactElement } from 'react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
+import { debatesHubClaimsSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -514,15 +516,24 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: () => mocks.promptSignIn,
 }));
 
-function render(ui: ReactElement) {
+function render(ui: ReactElement, sharedStore?: ReturnType<typeof createStore>) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const wrap = (node: ReactElement) => <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>;
+  // A fresh jotai store per render, unless a case passes one in to model a viewer closing the
+  // panel and reopening it — the same session, a new mount. The filter selections are atoms since GEO-2850, so they are
+  // module-global by default — one case's picks would be the next case's starting state, and the
+  // order the suite happened to run in would decide what each test saw.
+  const store = sharedStore ?? createStore();
+  const wrap = (node: ReactElement) => (
+    <Provider store={store}>
+      <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>
+    </Provider>
+  );
   const view = rtlRender(wrap(ui));
   // Testing Library's own `rerender` replaces the whole tree with what it is handed, which drops
   // the provider — so a re-render of the same component crashes on a missing QueryClient rather
   // than showing what changed. Re-wrapped here so a test can move the world and render again.
   // The client comes back too, so a test can watch what a retry asks it to refetch.
-  return { ...view, queryClient, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
+  return { ...view, queryClient, store, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
 }
 
 const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
@@ -1848,6 +1859,61 @@ describe('topic menu', () => {
     await waitFor(() => expect(screen.queryByText('Models are getting cheaper')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
     expect(screen.queryByRole('button', { name: /^AI/ })).toBeNull();
+  });
+
+  // GEO-2850. The hub closes on any outside pointer-down, so dismissing a dropdown by clicking away
+  // — rather than by clicking back into the trigger — unmounts this tab. The selection used to be
+  // `useState` and went with it, which is the "the filters disappear" the ticket reports.
+  it('keeps a space selection when the panel is closed and reopened', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    const store = createStore();
+    render(<ClaimsTab />, store);
+    await showIndexedClaims();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Any space/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Crypto/ }));
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] }));
+
+    // The panel closing and reopening: this tab unmounts and a new one mounts in the same session.
+    cleanup();
+    render(<ClaimsTab />, store);
+    await showIndexedClaims();
+
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] }));
+  });
+
+  // The other half of persisting the selection: a viewer who clears the filter is asking for the
+  // unfiltered list, and reopening the panel must not decide they meant otherwise. The membership
+  // seed is spent once per session now rather than once per mount (GEO-2789 + GEO-2850).
+  it('does not re-seed the membership default over a filter the viewer cleared', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    const store = createStore();
+    render(<ClaimsTab />, store);
+    await showIndexedClaims();
+
+    // The seed lands first, unasked.
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] }));
+
+    fireEvent.click(await screen.findByRole('button', { name: /Crypto/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Any space/ }));
+    // Cleared: the query goes back to the whole eligible set rather than one space.
+    await waitFor(() => expect((mocks.lastQuery as { spaceIds: string[] }).spaceIds).toHaveLength(2));
+
+    cleanup();
+    render(<ClaimsTab />, store);
+    await showIndexedClaims();
+    // Open the menu and wait for a real option. That is exactly the seed's own precondition — it
+    // is held against a menu with nothing on it — so once a space is offered, the seed has had its
+    // chance. Asserting any earlier would pass on the moment *before* a re-seed rather than on its
+    // absence, which is how the first draft of this test passed against the bug.
+    fireEvent.click(await screen.findByRole('button', { name: /Any space/ }));
+    expect(await screen.findByRole('button', { name: /Crypto/ })).toBeInTheDocument();
+    await act(async () => {});
+
+    // Read from the store rather than the query: this is about what the viewer's selection *is*,
+    // and an empty selection and a re-seeded one both send a `spaceIds` to the server.
+    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
   });
 
   // GEO-2789. The filter opens on the spaces the viewer belongs to rather than on everything they

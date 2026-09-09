@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { useAtom } from 'jotai';
+
 import type { MatchmakingMatch } from '../api';
 import { useDebateActivity } from '../hooks';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
@@ -13,7 +15,7 @@ import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
 import { countBy, orderFacetOptions, toggleId } from './topic-facets';
 import { useStableListOrder } from './use-stable-list-order';
-import type { DebatesHubTab } from '~/atoms';
+import { type DebatesHubTab, debatesHubMatchesSpaceIdsAtom } from '~/atoms';
 
 /**
  * Claims where you're ready to debate and someone holding the opposite response is online and
@@ -24,7 +26,10 @@ import type { DebatesHubTab } from '~/atoms';
  * tab filters by space only.
  */
 export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
-  const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
+  // Session-scoped, like the Claims tab's: the hub closes on an outside pointer-down, so a
+  // click-away to dismiss the dropdown unmounted this tab and took the selection with it
+  // (GEO-2850).
+  const [spaceIds, setSpaceIds] = useAtom(debatesHubMatchesSpaceIdsAtom);
 
   const matchesQuery = useMatchmakingMatches(true);
   const requestsQuery = useDebateRequests(true);

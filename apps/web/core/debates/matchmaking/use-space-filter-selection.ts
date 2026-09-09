@@ -84,7 +84,9 @@ export function useMemberSpaceDefault({
   memberSpaceIds,
   availableSpaceIds,
   pending,
+  spent = false,
   onSeed,
+  onSpend,
 }: {
   /** The spaces the viewer is a member or editor of. Null until it is known. */
   memberSpaceIds: ReadonlySet<string> | null;
@@ -92,10 +94,24 @@ export function useMemberSpaceDefault({
   availableSpaceIds: string[];
   /** Whether those options are still resolving. */
   pending: boolean;
+  /**
+   * Whether the seed has already been applied or forfeited, from a store that outlives this mount.
+   *
+   * Read once, as the initial value of the internal marker. Everything below is unchanged for a
+   * caller that omits it: the seed is then spent per mount, which is the right lifetime whenever
+   * the selection dies with the mount too. A caller whose selection outlives its mount — the hub's
+   * tabs since GEO-2850 — has to say so, or reopening the surface would re-seed a viewer who had
+   * deliberately cleared the filter.
+   */
+  spent?: boolean;
   /** Called at most once, and only with a non-empty selection. */
   onSeed: (spaceIds: string[]) => void;
+  /** Called when the seed is spent, either way, so a caller holding {@link spent} can record it. */
+  onSpend?: () => void;
 }): () => void {
-  const seededRef = React.useRef(false);
+  const seededRef = React.useRef(spent);
+  const onSpendRef = React.useRef(onSpend);
+  onSpendRef.current = onSpend;
   // Held in a ref so a caller passing an inline function doesn't re-arm the effect on every render.
   const onSeedRef = React.useRef(onSeed);
   onSeedRef.current = onSeed;
@@ -120,6 +136,7 @@ export function useMemberSpaceDefault({
     if (seeded.length === 0) return;
 
     seededRef.current = true;
+    onSpendRef.current?.();
     onSeedRef.current(seeded);
   }, [availableSpaceIds, memberSpaceIds, pending]);
 
@@ -128,6 +145,7 @@ export function useMemberSpaceDefault({
   // would leave a window where their pick is already made and the seed still armed.
   return React.useCallback(() => {
     seededRef.current = true;
+    onSpendRef.current?.();
   }, []);
 }
 
@@ -159,6 +177,8 @@ export function useSpaceFilterMenu({
   setSpaceIds,
   memberSpaceIds,
   pending,
+  seedSpent,
+  onSeedSpend,
 }: {
   /** What this surface is offering, already gated. */
   offeredSpaces: SpaceFacetOption[];
@@ -167,6 +187,10 @@ export function useSpaceFilterMenu({
   memberSpaceIds: ReadonlySet<string> | null;
   /** Whether those options are still resolving — see {@link useMemberSpaceDefault}. */
   pending: boolean;
+  /** Passed straight through as {@link useMemberSpaceDefault}'s `spent`. */
+  seedSpent?: boolean;
+  /** Passed straight through as {@link useMemberSpaceDefault}'s `onSpend`. */
+  onSeedSpend?: () => void;
 }): {
   /** Ordered, with the viewer's selection kept visible even where the count dropped it. */
   facetSpaces: SpaceFacetOption[];
@@ -185,6 +209,8 @@ export function useSpaceFilterMenu({
     memberSpaceIds,
     availableSpaceIds: offeredSpaceIds,
     pending,
+    spent: seedSpent,
+    onSpend: onSeedSpend,
     // A seed the selection already holds is not worth a render. A surface whose options are a
     // server prop applies the default in its own initial state — see `memberSpaceSelection` — and
     // the effect then arrives at the same answer a beat later.

@@ -36,6 +36,38 @@ export type DebatesHubTab = 'requests' | 'matches' | 'claims' | 'people';
 /** `null` while the debates matchmaking hub is closed. */
 export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
 
+/**
+ * The hub's filter selections, held outside the tabs that draw them (GEO-2850).
+ *
+ * They used to be `useState` inside each tab, which made them as short-lived as the panel. The hub
+ * closes on any outside pointer-down, and dismissing a dropdown by clicking away — rather than by
+ * clicking back into the trigger — lands outside the panel and does exactly that. So the two ways
+ * of closing the same dropdown had two different outcomes, and only one of them kept the viewer's
+ * work. Reported as "the filters disappear", and the same root cause as selections not surviving a
+ * trip away from the panel.
+ *
+ * Scoped to the page session on purpose: they outlive the panel and navigation between pages, and
+ * reset on a reload or in a new tab. Not persisted to storage, which keeps GEO-2789's
+ * membership-based default meaningful — it seeds once per session rather than once per device,
+ * ever — and spares a viewer a filter they set days ago and have forgotten.
+ *
+ * Split per surface because the two menus describe different lists: the Claims facets are the
+ * whole tagged corpus, the Matches ones are only what the viewer has a match on.
+ */
+export const debatesHubClaimsSpaceIdsAtom = atom<string[]>([]);
+export const debatesHubClaimsTopicIdsAtom = atom<string[]>([]);
+export const debatesHubMatchesSpaceIdsAtom = atom<string[]>([]);
+
+/**
+ * Whether the Claims tab's membership default has been applied or forfeited this session.
+ *
+ * `useMemberSpaceDefault` spends its seed once per *mount*, which was the right lifetime while the
+ * selection died with the mount too. Now that the selection outlives the panel, the seed has to as
+ * well — otherwise reopening the hub would re-seed a viewer's deliberately cleared filter and
+ * decide they meant something other than what they asked for.
+ */
+export const debatesHubClaimsSpaceSeedSpentAtom = atom(false);
+
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 
 // Set to `Date.now()` whenever a ranking "Create new" entity is published. The

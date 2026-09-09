@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useAtom } from 'jotai';
 
 import { claimResponseKind } from '~/core/claims/response-kind';
 import { FEATURED_TAG_ID } from '~/core/constants';
@@ -50,6 +51,11 @@ import { useDebouncedSelection } from './use-debounced-selection';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { useStableListOrder } from './use-stable-list-order';
+import {
+  debatesHubClaimsSpaceIdsAtom,
+  debatesHubClaimsSpaceSeedSpentAtom,
+  debatesHubClaimsTopicIdsAtom,
+} from '~/atoms';
 
 /**
  * `featured` and `all` are the tab's own, not geo-chat's: the index has no notion of either tag, so
@@ -159,8 +165,12 @@ export function ClaimsTab() {
   // reset through an effect so the query, the menu label, the ordering key and the empty state all
   // read the same value on the very first render after the session goes away.
   const filter = !authenticated && SIGNED_OUT_HIDDEN_FILTERS.includes(selectedFilter) ? 'featured' : selectedFilter;
-  const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
-  const [topicIds, setTopicIds] = React.useState<string[]>([]);
+  // Held outside this component so they survive it. The hub closes on any outside pointer-down,
+  // so dismissing a dropdown by clicking away unmounts this tab — and with `useState` that took
+  // the viewer's selection with it (GEO-2850).
+  const [spaceIds, setSpaceIds] = useAtom(debatesHubClaimsSpaceIdsAtom);
+  const [topicIds, setTopicIds] = useAtom(debatesHubClaimsTopicIdsAtom);
+  const [spaceSeedSpent, setSpaceSeedSpent] = useAtom(debatesHubClaimsSpaceSeedSpentAtom);
 
   const {
     allowlist: spaceAllowlist,
@@ -481,6 +491,12 @@ export function ClaimsTab() {
     // space and they land seconds apart, so the first non-empty answer is a fraction of what the
     // reader chose — and the seed fires once. Same reason the explore feed reports it (GEO-2834).
     pending: spacesPending || !facetsSettled || isSettlingMemberships,
+    // The selection now outlives this mount, so the seed has to as well. Without this, closing the
+    // panel and reopening it would re-seed the member spaces over a filter the viewer had cleared
+    // on purpose — deciding they meant something other than what they asked for, which is the one
+    // thing GEO-2789 says a default must never do.
+    seedSpent: spaceSeedSpent,
+    onSeedSpend: () => setSpaceSeedSpent(true),
   });
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
