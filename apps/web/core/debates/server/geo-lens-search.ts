@@ -9,9 +9,9 @@ import { SEMANTIC_SEARCH_K, type SemanticClaimSearchRequest } from '../semantic-
  *
  * Unprefixed env vars, like the acceptor's, so the key never reaches the client bundle. Presence
  * of `GEO_LENS_URL` turns the feature on — the same switch geo-chat's media worker uses — and a
- * deployment without it answers every search with "not configured", which the hub reads as "use
- * the words". `GEO_LENS_API_KEY` is then required: a URL with no key is a misconfiguration, not a
- * quieter way of being off.
+ * deployment without it answers every search with "not configured", which the hub reads as "match
+ * the words", the only search it then has. `GEO_LENS_API_KEY` is then required: a URL with no key
+ * is a misconfiguration, not a quieter way of being off.
  */
 export type GeoLensSearchConfig = {
   url: string;
@@ -27,7 +27,7 @@ export type GeoLensSearchConfig = {
    * embedding model and the corpus, and both are geo-lens's to change.
    */
   minScore: number;
-  /** How long one geo-lens round trip may take before the hub falls back to the words. */
+  /** How long one geo-lens round trip may take before the hub reports the search as failed. */
   timeoutMs: number;
 };
 

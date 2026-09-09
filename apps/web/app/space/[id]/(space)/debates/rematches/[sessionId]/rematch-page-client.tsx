@@ -302,13 +302,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [debouncedSearch, debouncedTopicIds, eligibleSpaceIds, spaceIds]
   );
 
-  // The search, resolved the way the hub resolves it: geo-lens's answer to the words when it has
-  // one, the words themselves otherwise, and the previous filters held while it is being asked.
-  const { filters: taggedFilters, pending: semanticPending } = useSemanticTaggedFilters(
-    claimsTagId,
-    typedTaggedFilters,
-    taggedEnabled && !allowlistPending
-  );
+  // The search, resolved the way the hub resolves it: geo-lens's answer to the words, an empty
+  // answer included, the previous filters held while it is being asked, and a failure reported
+  // as the tab's error.
+  const {
+    filters: taggedFilters,
+    pending: semanticPending,
+    error: semanticError,
+  } = useSemanticTaggedFilters(claimsTagId, typedTaggedFilters, taggedEnabled && !allowlistPending);
 
   // One ranked, filtered page of the tag at a time (GEO-2798), carrying its own topics and its
   // "Is factual" value — so there is no entity lookup behind it and no corpus held to show the top
@@ -994,8 +995,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         ? // The page is the list, and it carries everything a row is built from — so its failure is
           // the only one that leaves nothing to show. geo-chat's row lookup is metadata beside it:
           // losing it costs the faces and the readiness, not the claims, and blanking the tab for
-          // that trades a short list for no list.
-          taggedCatalogError
+          // that trades a short list for no list. The search that chose the page is part of it.
+          (taggedCatalogError ?? semanticError)
         : curatedClaimsQuery.error);
 
   // A topic the menu no longer offers is unpickable as well as empty — the chip filtering the

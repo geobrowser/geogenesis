@@ -13,10 +13,16 @@ import { type SemanticClaimHit, TAGGED_STALE_TIME, type TaggedClaimFilters } fro
  *
  * The words typed go to geo-lens (through `/api/debates/claims/semantic-search`, which holds the
  * key), which answers with the claims that *mean* them, over the same tag, spaces and topics the
- * list is drawn from. Those ids become the list's filter in place of the word-by-word match, and
- * the rows come back closest-first. When geo-lens finds nothing above its floor, is not configured,
- * or fails, the words are matched as they always were — so the worst case is exactly what the box
- * did before, never an empty list that a substring would have filled.
+ * list is drawn from. Those ids become the list's filter, and the rows come back closest-first.
+ *
+ * geo-lens's answer is the answer, including an empty one. This used to fall back to matching the
+ * words when geo-lens named nothing, and that fallback was the source of every complaint: the
+ * words are matched as substrings, so "art" listed seventy-two claims about *part*ners, *part*ies
+ * and *start*ing, none about art, while geo-lens had correctly said there were none. A search that
+ * finds nothing now shows nothing, and a search that fails shows the list's error state with a
+ * retry, the same as the list failing. The one thing still matched by words is a deployment with
+ * no geo-lens configured at all — the route answers `hits: null` — because there the words are
+ * the only search there is.
  *
  * Why the answer is resolved *before* the list is asked, rather than merged after: the facets. Both
  * menus count over the same filter the rows use, and a search that changed the rows without
@@ -28,12 +34,14 @@ export type SemanticSearchMode =
   | 'off'
   /** geo-lens has been asked and has not answered. */
   | 'pending'
-  /** geo-lens named claims; they are the list. */
-  | 'semantic'
-  /** geo-lens named nothing, is off, or failed: the words are matched instead. */
-  | 'text';
+  /** geo-lens answered; the claims it named are the list, and none is an answer too. */
+  | 'answered'
+  /** The request failed: the list is empty and the failure is reported for the error state. */
+  | 'error'
+  /** No geo-lens on this deployment: the words are matched, there being nothing else. */
+  | 'unconfigured';
 
-/** The route's answer; `null` is "not configured here", which reads as the words, not as nothing. */
+/** The route's answer; `null` is "not configured here". */
 export async function fetchSemanticClaimHits(
   request: SemanticClaimSearchRequest,
   signal?: AbortSignal
@@ -49,11 +57,13 @@ export async function fetchSemanticClaimHits(
   return body.hits ?? null;
 }
 
+const NO_HITS: SemanticClaimHit[] = [];
+
 /**
  * What the search box means for the list, given where geo-lens's answer stands.
  *
- * Pure, because the fallback is the part that matters and the part hardest to exercise through a
- * hook: an error, an empty answer and an unconfigured deployment all have to land on the words.
+ * Pure, because the edges are the part that matters: an empty answer and a failure both have to
+ * produce an empty list — never the words — and only the unconfigured route may fall through.
  */
 export function resolveSemanticSearch(args: {
   search: string;
@@ -63,8 +73,9 @@ export function resolveSemanticSearch(args: {
 }): { mode: SemanticSearchMode; hits: SemanticClaimHit[] | null } {
   if (!args.enabled || args.search === '') return { mode: 'off', hits: null };
   if (args.status === 'pending') return { mode: 'pending', hits: null };
-  if (args.status === 'error' || !args.hits || args.hits.length === 0) return { mode: 'text', hits: null };
-  return { mode: 'semantic', hits: args.hits };
+  if (args.status === 'error') return { mode: 'error', hits: NO_HITS };
+  if (args.hits === null || args.hits === undefined) return { mode: 'unconfigured', hits: null };
+  return { mode: 'answered', hits: args.hits };
 }
 
 /**
@@ -73,6 +84,18 @@ export function resolveSemanticSearch(args: {
  */
 export const semanticSearchQueryKey = (tagId: string, filters: TaggedClaimFilters) =>
   ['tagged-claims', 'semantic', tagId, filters.search, filters.topicIds, filters.eligibleSpaceIds] as const;
+
+export type SemanticTaggedFilters = {
+  /** The filters to hand the tagged hooks, with the search resolved. */
+  filters: TaggedClaimFilters;
+  /** geo-lens is being asked; the filters are the previous answer's until it answers. */
+  pending: boolean;
+  /** The failed request, for the list's error state. `null` otherwise. */
+  error: unknown;
+  /** Ask geo-lens again after a failure; a no-op when nothing failed. */
+  refetch: () => Promise<unknown>;
+  mode: SemanticSearchMode;
+};
 
 /**
  * The filters to hand the tagged hooks, with the search resolved.
@@ -90,7 +113,7 @@ export function useSemanticTaggedFilters(
   tagId: string,
   filters: TaggedClaimFilters,
   enabled: boolean
-): { filters: TaggedClaimFilters; pending: boolean; mode: SemanticSearchMode } {
+): SemanticTaggedFilters {
   const active = enabled && filters.search !== '';
   const query = useQuery({
     queryKey: semanticSearchQueryKey(tagId, filters),
@@ -102,8 +125,8 @@ export function useSemanticTaggedFilters(
     enabled: active,
     // The tag's own answer stays fresh this long; a search over it has no reason to differ.
     staleTime: TAGGED_STALE_TIME,
-    // The fallback *is* the retry. Waiting out a backoff to try geo-lens again would hold the list
-    // on a stale search for seconds when the words could answer it now.
+    // A failure is shown, with a retry, rather than waited out: react-query's backoff would hold
+    // the list on the previous search for seconds with nothing on screen to say why.
     retry: false,
   });
 
@@ -116,7 +139,7 @@ export function useSemanticTaggedFilters(
 
   const resolved = React.useMemo<TaggedClaimFilters | null>(() => {
     if (mode === 'pending') return null;
-    return { ...filters, semanticHits: mode === 'semantic' ? hits : null };
+    return { ...filters, semanticHits: hits };
   }, [filters, hits, mode]);
 
   // The last answer, for the window in which there is no current one. Before there is any, the
@@ -129,7 +152,13 @@ export function useSemanticTaggedFilters(
     if (resolved) setHeld(current => (sameTaggedFilters(current, resolved) ? current : resolved));
   }, [resolved]);
 
-  return { filters: resolved ?? held, pending: mode === 'pending', mode };
+  return {
+    filters: resolved ?? held,
+    pending: mode === 'pending',
+    error: mode === 'error' ? (query.error ?? new Error('Semantic search failed')) : null,
+    refetch: query.refetch,
+    mode,
+  };
 }
 
 function sameIds(a: readonly string[] | null | undefined, b: readonly string[] | null | undefined): boolean {

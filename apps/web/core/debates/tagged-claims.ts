@@ -140,9 +140,9 @@ export type TaggedClaimFilters = {
    * What `search` resolved to when geo-lens answered it: the claims whose meaning is closest to the
    * words typed, over this tag, the eligible spaces and the picked topics. Set, the list is these
    * claims and nothing else — the words themselves are not matched — ordered by how close they
-   * came. `null` (or absent) is the word-by-word match above, which is also what a search geo-lens
-   * found nothing for falls back to. Resolved by `useSemanticTaggedFilters`; never empty when set,
-   * because an empty answer *is* the fallback.
+   * came. Empty is an answer: geo-lens found nothing, so the list shows nothing. `null` (or absent)
+   * is the word-by-word match above, kept for a deployment with no geo-lens to ask; see
+   * `useSemanticTaggedFilters` for why nothing else falls through to it.
    */
   semanticHits?: readonly SemanticClaimHit[] | null;
   /** AND, not OR: a claim has to carry every picked topic. */
@@ -298,7 +298,9 @@ function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: '
   if (filters.semanticHits) {
     // The search already happened, in geo-lens, over the same tag, spaces and topics as above; what
     // is left is to fetch the claims it named. The words are deliberately not matched as well — a
-    // claim that means what was typed need not contain it, which is the whole point.
+    // claim that means what was typed need not contain it, which is the whole point. An empty
+    // answer is asked for as `in: []`, which the graph answers with nothing, so the list and both
+    // menus empty together.
     and.push({ id: { in: filters.semanticHits.map(hit => hit.id) } });
     return { and };
   }

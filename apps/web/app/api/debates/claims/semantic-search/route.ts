@@ -22,9 +22,9 @@ import { getGeoLensSearchConfig, searchSemanticClaims } from '~/core/debates/ser
  * and id caps bound one request's work.
  *
  * `{ hits: null }` is a real answer meaning "not configured on this deployment": the client reads it
- * as "match the words", which is what the box did before this route existed. A misconfiguration
- * (URL without key) is a 503 rather than a quiet null, so it is seen; the client falls back to the
- * words on that too.
+ * as "match the words", which is what the box did before this route existed and the only search
+ * such a deployment has. A misconfiguration (URL without key) is a 503 rather than a quiet null, so
+ * it is seen; like any other failure the client shows it as the list's error, with a retry.
  */
 export const dynamic = 'force-dynamic';
 

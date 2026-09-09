@@ -505,6 +505,17 @@ describe('a semantic answer to the search', () => {
     expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a2', 'a1']);
   });
 
+  it('asks for nothing when geo-lens named nothing, rather than for the words', async () => {
+    respondWithPages([[]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'art', semanticHits: [] });
+    await waitFor(() => expect(graphqlMock).toHaveBeenCalled());
+
+    const filter = JSON.stringify(sentVariables().filter);
+    expect(filter).toContain('"id":{"in":[]}');
+    expect(filter).not.toContain('includesInsensitive');
+    expect(result.current.claims).toEqual([]);
+  });
+
   it('is its own query, distinct from the same words matched literally', () => {
     const words: TaggedClaimFilters = { ...NO_TAGGED_CLAIM_FILTERS, search: 'trump affair' };
     const semantic: TaggedClaimFilters = { ...words, semanticHits: hits };

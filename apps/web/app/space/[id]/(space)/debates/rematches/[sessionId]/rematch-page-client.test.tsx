@@ -666,7 +666,23 @@ function mutation(mutate = mocks.mutate) {
   return { mutate, mutateAsync: mutate, isPending: false, error: null };
 }
 
+// The semantic-search route is not configured in this environment: it answers `hits: null`, and
+// the search matches words — the behaviour these tests cover. Every other request stays refused,
+// as the setup file has it.
+const refuseNetwork = globalThis.fetch;
+const semanticRouteUnconfigured: typeof fetch = async (input, init) => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+  if (url.includes('/api/debates/claims/semantic-search')) {
+    return new Response(JSON.stringify({ hits: null }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+  return refuseNetwork(input, init);
+};
+
 beforeEach(() => {
+  vi.stubGlobal('fetch', semanticRouteUnconfigured);
   clearDebateReturnDestination();
   mocks.replace.mockReset();
   mocks.back.mockReset();
@@ -780,6 +796,7 @@ beforeEach(() => {
 afterEach(() => {
   clearDebateReturnDestination();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   cleanup();
 });
 

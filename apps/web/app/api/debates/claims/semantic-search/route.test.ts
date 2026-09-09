@@ -76,7 +76,7 @@ describe('POST /api/debates/claims/semantic-search', () => {
     );
   });
 
-  it('answers 502 when geo-lens fails, so the client falls back to the words', async () => {
+  it('answers 502 when geo-lens fails, which the client shows as the search failing', async () => {
     mocks.search.mockRejectedValue(new Error('geo-lens replied 500'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
     expect((await post({ query: 'q', tagId: TAG })).status).toBe(502);

@@ -66,19 +66,30 @@ describe('resolveSemanticSearch', () => {
     );
   });
 
-  it('falls back to the words on an error, an empty answer, or an unconfigured route', () => {
-    for (const args of [
-      { status: 'error' as const, hits: undefined },
-      { status: 'success' as const, hits: [] },
-      { status: 'success' as const, hits: null },
-    ]) {
-      expect(resolveSemanticSearch({ search: 'q', enabled: true, ...args })).toEqual({ mode: 'text', hits: null });
-    }
+  it('takes an empty answer as the answer, never the words', () => {
+    expect(resolveSemanticSearch({ search: 'q', enabled: true, status: 'success', hits: [] })).toEqual({
+      mode: 'answered',
+      hits: [],
+    });
   });
 
-  it('is semantic with hits', () => {
+  it('empties the list on a failure and reports it', () => {
+    expect(resolveSemanticSearch({ search: 'q', enabled: true, status: 'error', hits: undefined })).toEqual({
+      mode: 'error',
+      hits: [],
+    });
+  });
+
+  it('hands the words through only when the route is not configured', () => {
+    expect(resolveSemanticSearch({ search: 'q', enabled: true, status: 'success', hits: null })).toEqual({
+      mode: 'unconfigured',
+      hits: null,
+    });
+  });
+
+  it('is answered with hits', () => {
     expect(resolveSemanticSearch({ search: 'q', enabled: true, status: 'success', hits: HITS })).toEqual({
-      mode: 'semantic',
+      mode: 'answered',
       hits: HITS,
     });
   });
@@ -90,6 +101,7 @@ describe('sameTaggedFilters', () => {
     expect(sameTaggedFilters(filters({ semanticHits: HITS }), filters({ semanticHits: [...HITS] }))).toBe(true);
     expect(sameTaggedFilters(filters(), filters({ search: 'other' }))).toBe(false);
     expect(sameTaggedFilters(filters(), filters({ semanticHits: HITS }))).toBe(false);
+    expect(sameTaggedFilters(filters({ semanticHits: [] }), filters({ semanticHits: null }))).toBe(false);
     expect(sameTaggedFilters(filters(), filters({ eligibleSpaceIds: null }))).toBe(false);
   });
 });
@@ -100,7 +112,7 @@ describe('useSemanticTaggedFilters', () => {
     // A fresh filters object every render, on purpose: the hook must settle rather than re-hold.
     const { result } = renderHook(() => useSemanticTaggedFilters(TAG, filters(), true), { wrapper });
 
-    await waitFor(() => expect(result.current.mode).toBe('semantic'));
+    await waitFor(() => expect(result.current.mode).toBe('answered'));
     expect(sentBody(fetchMock)).toEqual({
       query: 'trump affair',
       tagId: TAG,
@@ -110,28 +122,50 @@ describe('useSemanticTaggedFilters', () => {
     // the hits ride on the filters; the words and every other filter stay as they were
     expect(result.current.filters).toEqual({ ...filters(), semanticHits: HITS });
     expect(result.current.pending).toBe(false);
+    expect(result.current.error).toBeNull();
   });
 
-  it('hands the words through when geo-lens finds nothing', async () => {
+  it('hands an empty answer to the list as an empty answer, not as the words', async () => {
     stubRoute({ body: { hits: [] } });
     const typed = filters();
     const { result } = renderHook(() => useSemanticTaggedFilters(TAG, typed, true), { wrapper });
 
-    await waitFor(() => expect(result.current.mode).toBe('text'));
-    expect(result.current.filters).toEqual({ ...filters(), semanticHits: null });
+    await waitFor(() => expect(result.current.mode).toBe('answered'));
+    expect(result.current.filters).toEqual({ ...typed, semanticHits: [] });
+    expect(result.current.error).toBeNull();
   });
 
-  it('hands the words through when the route is not configured, or fails', async () => {
-    const typed = filters();
-    stubRoute({ body: { hits: null } });
-    const off = renderHook(() => useSemanticTaggedFilters(TAG, typed, true), { wrapper });
-    await waitFor(() => expect(off.result.current.mode).toBe('text'));
-    expect(off.result.current.filters.semanticHits).toBeNull();
-
+  it('empties the list and reports the failure when the route fails', async () => {
     stubRoute({ status: 502, body: { error: 'down' } });
-    const failed = renderHook(() => useSemanticTaggedFilters(TAG, typed, true), { wrapper });
-    await waitFor(() => expect(failed.result.current.mode).toBe('text'));
-    expect(failed.result.current.filters).toEqual({ ...filters(), semanticHits: null });
+    const typed = filters();
+    const { result } = renderHook(() => useSemanticTaggedFilters(TAG, typed, true), { wrapper });
+
+    await waitFor(() => expect(result.current.mode).toBe('error'));
+    expect(result.current.filters).toEqual({ ...typed, semanticHits: [] });
+    expect(result.current.error).toBeInstanceOf(Error);
+  });
+
+  it('asks again on retry', async () => {
+    const fetchMock = stubRoute({ status: 502, body: { error: 'down' } });
+    const typed = filters();
+    const { result } = renderHook(() => useSemanticTaggedFilters(TAG, typed, true), { wrapper });
+    await waitFor(() => expect(result.current.mode).toBe('error'));
+
+    stubRoute({ body: { hits: HITS } });
+    await result.current.refetch();
+    await waitFor(() => expect(result.current.mode).toBe('answered'));
+    expect(result.current.filters.semanticHits).toEqual(HITS);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands the words through when the route is not configured', async () => {
+    stubRoute({ body: { hits: null } });
+    const typed = filters();
+    const { result } = renderHook(() => useSemanticTaggedFilters(TAG, typed, true), { wrapper });
+
+    await waitFor(() => expect(result.current.mode).toBe('unconfigured'));
+    expect(result.current.filters).toEqual({ ...typed, semanticHits: null });
+    expect(result.current.error).toBeNull();
   });
 
   it('does not ask with nothing typed, and passes the filters through', () => {
@@ -139,7 +173,8 @@ describe('useSemanticTaggedFilters', () => {
     const empty = filters({ search: '' });
     const { result } = renderHook(() => useSemanticTaggedFilters(TAG, empty, true), { wrapper });
 
-    expect(result.current).toEqual({ filters: { ...empty, semanticHits: null }, pending: false, mode: 'off' });
+    expect(result.current.filters).toEqual({ ...empty, semanticHits: null });
+    expect(result.current).toMatchObject({ pending: false, error: null, mode: 'off' });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -167,7 +202,7 @@ describe('useSemanticTaggedFilters', () => {
       ({ current }: { current: TaggedClaimFilters }) => useSemanticTaggedFilters(TAG, current, true),
       { wrapper, initialProps: { current: filters() } }
     );
-    await waitFor(() => expect(result.current.mode).toBe('semantic'));
+    await waitFor(() => expect(result.current.mode).toBe('answered'));
     const settled = result.current.filters;
 
     stubRoute({ body: { hits: [] }, delayMs: 50 });
@@ -178,7 +213,7 @@ describe('useSemanticTaggedFilters', () => {
     expect(result.current.pending).toBe(true);
     expect(result.current.filters).toBe(settled);
 
-    await waitFor(() => expect(result.current.mode).toBe('text'));
-    expect(result.current.filters).toEqual({ ...retyped, semanticHits: null });
+    await waitFor(() => expect(result.current.mode).toBe('answered'));
+    expect(result.current.filters).toEqual({ ...retyped, semanticHits: [] });
   });
 });

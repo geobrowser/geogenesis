@@ -306,15 +306,17 @@ export function ClaimsTab() {
   // now would fetch and cache a page scoped to every space and then narrow it under the viewer.
   const taggedEnabled = graphSourced && !spacesPending;
 
-  // The search, resolved: geo-lens's answer to the words when it has one, the words themselves
-  // otherwise. Resolved before the list and both facets are asked, so all three describe one set.
-  // While geo-lens is being asked the previous filters stand, which is what keeps the rows on
-  // screen; `semanticPending` covers the counts for that window like the debounce does.
-  const { filters: taggedFilters, pending: semanticPending } = useSemanticTaggedFilters(
-    claimsTagId,
-    typedTaggedFilters,
-    taggedEnabled
-  );
+  // The search, resolved: geo-lens's answer to the words, an empty answer included. Resolved
+  // before the list and both facets are asked, so all three describe one set. While geo-lens is
+  // being asked the previous filters stand, which is what keeps the rows on screen;
+  // `semanticPending` covers the counts for that window like the debounce does. A failed search
+  // is the list's error, with the same retry.
+  const {
+    filters: taggedFilters,
+    pending: semanticPending,
+    error: semanticError,
+    refetch: refetchSemantic,
+  } = useSemanticTaggedFilters(claimsTagId, typedTaggedFilters, taggedEnabled);
   const {
     claims: taggedClaims,
     isLoading: taggedLoading,
@@ -639,7 +641,7 @@ export function ClaimsTab() {
           // viewer's topic selection is not spent, and `taggedKindResolvedFor` keeps a card
           // unpressable until its vocabulary and the viewer's own side have actually arrived. A
           // short list beats a blank one; a wrong publish beats neither, and is what those guard.
-          error={graphSourced ? taggedError : claimsQuery.error}
+          error={graphSourced ? (taggedError ?? semanticError) : claimsQuery.error}
           // Retries whatever failed, not just the catalog. The error above can come from either of
           // the two lookups behind the list, and neither is keyed on the catalog — so refetching
           // only that left the failed dependency untouched and the error state exactly where it
@@ -649,6 +651,7 @@ export function ClaimsTab() {
           onRetry={() =>
             void (graphSourced
               ? Promise.all([
+                  refetchSemantic(),
                   refetchTagged(),
                   queryClient.invalidateQueries({ queryKey: CLAIM_ENTITIES_QUERY_PREFIX }),
                   queryClient.invalidateQueries({ queryKey: DEBATE_CLAIMS_QUERY_PREFIX }),
