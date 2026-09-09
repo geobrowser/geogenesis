@@ -72,7 +72,18 @@ export function useMatchmakingScope(enabled: boolean) {
   return authenticated;
 }
 
-/** Stable empty reference, so an unresolved query does not hand the memo a new array each render. */
+/**
+ * A query result carrying derived `data`, without restating the rest of it.
+ *
+ * Mirrors `holdWhileSpaceResolves` in `core/debates/hooks`: generic in the result so the whole
+ * react-query surface — `isLoading`, `fetchNextPage`, the lot — passes through with its own types
+ * rather than being widened by a cast.
+ */
+function withQueryData<T extends { data: D }, D>(query: T, data: D): T {
+  return { ...query, data };
+}
+
+/** Stable empty references, so an unresolved query does not hand the memos a new array each render. */
 const EMPTY_PEOPLE: DebatePerson[] = [];
 const EMPTY_PARTIES: DebateRequestParty[] = [];
 const EMPTY_PARTICIPANTS: DebateParticipantSummary[] = [];
@@ -98,14 +109,14 @@ export function useDebatePeople(enabled: boolean) {
   // the profile page renders fine. Resolved here rather than in the rows so every consumer of this
   // list gets it. See `participant-avatars`.
   const people = React.useMemo(() => query.data?.people ?? EMPTY_PEOPLE, [query.data]);
-  const peopleWithAvatars = useParticipantAvatars(people);
+  const withAvatar = useParticipantAvatars(people);
 
   const data = React.useMemo(
-    () => (query.data ? { ...query.data, people: peopleWithAvatars } : query.data),
-    [query.data, peopleWithAvatars]
+    () => (query.data ? { ...query.data, people: people.map(withAvatar) } : query.data),
+    [query.data, people, withAvatar]
   );
 
-  return { ...query, data } as typeof query;
+  return withQueryData(query, data);
 }
 
 export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boolean) {
@@ -147,12 +158,10 @@ export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boo
     [infinite.data]
   );
 
-  const resolved = useParticipantAvatars(participants);
+  const withAvatar = useParticipantAvatars(participants);
 
   const data = React.useMemo(() => {
     if (!infinite.data) return infinite.data;
-
-    const byParticipant = new Map(participants.map((participant, index) => [participant, resolved[index]!]));
 
     return {
       ...infinite.data,
@@ -162,14 +171,14 @@ export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boo
           ...claim,
           positions: claim.positions.map(position => ({
             ...position,
-            participants: position.participants.map(participant => byParticipant.get(participant) ?? participant),
+            participants: position.participants.map(withAvatar),
           })),
         })),
       })),
     };
-  }, [infinite.data, participants, resolved]);
+  }, [infinite.data, withAvatar]);
 
-  return { ...infinite, data } as typeof infinite;
+  return withQueryData(infinite, data);
 }
 
 export function useMatchmakingMatches(enabled: boolean) {
@@ -209,16 +218,15 @@ export function useDebateRequests(enabled: boolean) {
     return requests.flatMap(request => [request.requester, request.recipient]);
   }, [query.data]);
 
-  const resolved = useParticipantAvatars(parties);
+  const withAvatar = useParticipantAvatars(parties);
 
   const data = React.useMemo(() => {
     if (!query.data) return query.data;
 
-    const byIndex = new Map(parties.map((party, index) => [party, resolved[index]!]));
     const withParties = (request: DebateRequest): DebateRequest => ({
       ...request,
-      requester: byIndex.get(request.requester) ?? request.requester,
-      recipient: byIndex.get(request.recipient) ?? request.recipient,
+      requester: withAvatar(request.requester),
+      recipient: withAvatar(request.recipient),
     });
 
     return {
@@ -226,9 +234,9 @@ export function useDebateRequests(enabled: boolean) {
       outbound: query.data.outbound ? withParties(query.data.outbound) : query.data.outbound,
       incoming: query.data.incoming.map(withParties),
     };
-  }, [query.data, parties, resolved]);
+  }, [query.data, withAvatar]);
 
-  return { ...query, data } as typeof query;
+  return withQueryData(query, data);
 }
 
 export function useDebateBlocks(enabled: boolean) {

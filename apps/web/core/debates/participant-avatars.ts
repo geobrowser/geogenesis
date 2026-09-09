@@ -53,11 +53,19 @@ export function participantAvatarUrl(
 }
 
 /**
+ * A mapper that puts the best-known avatar on a row, for the whole list resolved in one batch.
+ *
+ * Hands back a function rather than a parallel array so callers apply it wherever the rows actually
+ * sit — two named parties on a request, a participant list nested under each side of a claim —
+ * without pairing anything back up by index.
+ *
  * The resolved value goes back into `avatar_cid`, which is the field every consumer already draws.
  * Both spellings reach the same place: `NativeGeoImage` resolves an `ipfs://` value through its
  * gateway chain, which is how the graph's avatars render everywhere else in the app.
  */
-export function useParticipantAvatars<T extends ParticipantAvatarSource>(participants: readonly T[]): T[] {
+export function useParticipantAvatars<T extends ParticipantAvatarSource>(
+  participants: readonly T[]
+): (participant: T) => T {
   // Keyed on the ids themselves rather than the array's identity: these lists are rebuilt from a
   // query result on every render while the people in them are not.
   const spaceIdKey = participants
@@ -67,15 +75,14 @@ export function useParticipantAvatars<T extends ParticipantAvatarSource>(partici
   const spaceIds = React.useMemo(() => [...new Set(spaceIdKey.split(',').filter(Boolean))], [spaceIdKey]);
   const { profilesBySpaceId } = useProfilesBySpaceIds(spaceIds, spaceIds.length > 0);
 
-  return React.useMemo(
-    () =>
-      participants.map(participant => {
-        const avatar = participantAvatarUrl(participant, profilesBySpaceId);
+  return React.useCallback(
+    (participant: T) => {
+      const avatar = participantAvatarUrl(participant, profilesBySpaceId);
 
-        // Same object back when nothing changed, so a memoized consumer downstream is not
-        // invalidated by a list that merely re-resolved to what it already had.
-        return avatar === (participant.avatar_cid ?? null) ? participant : { ...participant, avatar_cid: avatar };
-      }),
-    [participants, profilesBySpaceId]
+      // The same object back when nothing changed, so a memoized consumer downstream is not
+      // invalidated by a list that merely re-resolved to what it already had.
+      return avatar === (participant.avatar_cid ?? null) ? participant : { ...participant, avatar_cid: avatar };
+    },
+    [profilesBySpaceId]
   );
 }
