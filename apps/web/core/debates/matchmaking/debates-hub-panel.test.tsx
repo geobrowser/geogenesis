@@ -167,12 +167,12 @@ describe('DebatesHubPanel', () => {
     expect(store.get(debatesHubClaimsFilterAtom)).toBe('all');
   });
 
-  // Signed out there were no memberships for the seed to apply, so a viewer arriving with nothing
-  // selected still gets the default GEO-2834 is about once their account exists.
-  it('re-arms the membership default on sign-in when nothing is selected', () => {
+  // Signed out there are no memberships for the seed to apply to, so it is never spent by seeding
+  // — only by working the menu. An untouched session therefore arrives at sign-in still armed, and
+  // the default GEO-2834 is about lands on its own. Nothing here has to re-arm it.
+  it('leaves the membership seed armed through an untouched sign-in', () => {
     mocks.accountKey = null;
     const store = renderOpen('claims');
-    store.set(debatesHubClaimsSpaceSeedSpentAtom, true);
 
     mocks.accountKey = 'user-a';
     store.rerender();
@@ -180,7 +180,8 @@ describe('DebatesHubPanel', () => {
     expect(store.get(debatesHubClaimsSpaceSeedSpentAtom)).toBe(false);
   });
 
-  // But not over a selection they made: re-arming would replace their picks with their memberships.
+  // A spent seed means the viewer worked the menu, and forcing it back would overwrite what they
+  // did — whether they picked spaces...
   it('leaves the seed spent on sign-in when the viewer has picked spaces', () => {
     mocks.accountKey = null;
     const store = renderOpen('claims');
@@ -191,6 +192,23 @@ describe('DebatesHubPanel', () => {
     store.rerender();
 
     expect(store.get(debatesHubClaimsSpaceSeedSpentAtom)).toBe(true);
+  });
+
+  // ...or deliberately cleared them, which is indistinguishable from an untouched filter by the
+  // selection alone. GEO-2789 is explicit that an empty selection the viewer asked for means the
+  // unfiltered list, and is not an invitation to fill it back in for them.
+  it('leaves the seed spent on sign-in when the viewer cleared the filter themselves', () => {
+    mocks.accountKey = null;
+    const store = renderOpen('claims');
+    // What pick-then-clear leaves behind: nothing selected, but the seed forfeited.
+    store.set(debatesHubClaimsSpaceSeedSpentAtom, true);
+    store.set(debatesHubClaimsSpaceIdsAtom, []);
+
+    mocks.accountKey = 'user-a';
+    store.rerender();
+
+    expect(store.get(debatesHubClaimsSpaceSeedSpentAtom)).toBe(true);
+    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
   });
 
   // Signing out must not forget who the state belongs to, or the next viewer to sign in would look

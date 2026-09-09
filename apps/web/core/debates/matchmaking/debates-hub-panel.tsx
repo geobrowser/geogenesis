@@ -28,13 +28,7 @@ import { RequestsTab } from './requests-tab';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
 import { useUnexpiredRequests } from './use-request-countdown';
-import {
-  type DebatesHubTab,
-  debatesHubClaimsSpaceIdsAtom,
-  debatesHubClaimsSpaceSeedSpentAtom,
-  debatesHubFiltersOwnerAtom,
-  resetDebatesHubFiltersAtom,
-} from '~/atoms';
+import { type DebatesHubTab, debatesHubFiltersOwnerAtom, resetDebatesHubFiltersAtom } from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
@@ -419,10 +413,11 @@ function AvailabilityToggle() {
  * Signing in is the *same person* authenticating, not a new one. The Claims tab offers a sign-in
  * prompt from inside its own empty state, so wiping the bar there would lose the picks a viewer
  * made seconds earlier on the flow the tab itself invited — which is the complaint GEO-2850 exists
- * to fix. Their selection stays. The seed is re-armed instead, and only when nothing is selected:
- * signed out there were no memberships for it to apply, so a brand-new account still gets the
- * default GEO-2834 is about, while a viewer who did pick spaces keeps what they picked rather than
- * having it replaced by their memberships.
+ * to fix. Nothing is cleared, and nothing is re-armed either: an untouched session still has its
+ * seed, so the membership default GEO-2834 is about lands on its own once the account's spaces
+ * arrive. A session whose seed is spent is one where the viewer worked the menu, and forcing it
+ * back would overwrite what they did — including the deliberate clear that GEO-2789 says must
+ * never be second-guessed, which looks identical to an untouched filter from here.
  *
  * A different account is a different viewer, and inherits nothing.
  *
@@ -436,22 +431,10 @@ function AvailabilityToggle() {
 function useFilterOwner(accountKey: string | null, ready: boolean) {
   const [owner, setOwner] = useAtom(debatesHubFiltersOwnerAtom);
   const resetFilters = useSetAtom(resetDebatesHubFiltersAtom);
-  const [claimsSpaceIds] = useAtom(debatesHubClaimsSpaceIdsAtom);
-  const setSpaceSeedSpent = useSetAtom(debatesHubClaimsSpaceSeedSpentAtom);
-  // Read through a ref so re-arming is decided by what is selected when the account lands, without
-  // the selection itself re-running this.
-  const claimsSpaceIdsRef = React.useRef(claimsSpaceIds);
-  claimsSpaceIdsRef.current = claimsSpaceIds;
 
   React.useEffect(() => {
     if (!ready || accountKey === null || owner === accountKey) return;
-
-    if (owner === null) {
-      if (claimsSpaceIdsRef.current.length === 0) setSpaceSeedSpent(false);
-    } else {
-      resetFilters();
-    }
-
+    if (owner !== null) resetFilters();
     setOwner(accountKey);
-  }, [accountKey, owner, ready, resetFilters, setOwner, setSpaceSeedSpent]);
+  }, [accountKey, owner, ready, resetFilters, setOwner]);
 }

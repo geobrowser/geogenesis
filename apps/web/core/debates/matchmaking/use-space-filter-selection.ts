@@ -34,14 +34,26 @@ import { keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets
  * it could mean anything. Nothing can override a viewer who has acted — that is what the returned
  * marker is for — so late is the only risk, and never is the worse one.
  *
- * The selection is not persisted, which is what it already was: both surfaces started from an
- * empty selection on every mount and still do. So "first open" means this visit — a viewer who
- * narrows or widens the filter keeps that while the surface is up, and starts fresh next time.
+ * ## How long "once" lasts
  *
- * That also disposes of the case a persisted default would have to answer: a viewer who
- * deliberately unticks everything is asking for the unfiltered list, and nothing here later decides
- * they meant otherwise. The seed fires once and never again, even if their memberships change under
- * it.
+ * This hook does not own the selection, so it does not decide how long the answer survives — the
+ * caller does, through `spent`. There are two kinds of caller, and they want different lifetimes.
+ *
+ * A caller that omits `spent` keeps the original arrangement: the selection starts empty on every
+ * mount and the seed is spent once per mount, so "first open" means this visit and a viewer who
+ * narrows or widens the filter keeps that only while the surface is up. The rematch page and the
+ * explore feed are both this.
+ *
+ * A caller that passes `spent` holds the marker somewhere the mount cannot take with it, because
+ * its selection outlives the mount too — the debates hub since GEO-2850, where closing the panel no
+ * longer discards the filter bar. For those, "once" means once a session, and the marker has to
+ * travel with the selection or reopening the surface would seed straight over it.
+ *
+ * Either way the rule below is the same, and it is what both lifetimes exist to protect: a viewer
+ * who deliberately unticks everything is asking for the unfiltered list, and nothing here later
+ * decides they meant otherwise. That case is indistinguishable from an untouched filter by the
+ * selection alone — both are empty — which is exactly why the marker is what carries it and why a
+ * caller must never infer one from the other.
  *
  * ## Losing the right to seed
  *
