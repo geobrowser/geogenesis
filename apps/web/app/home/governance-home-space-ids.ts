@@ -2,10 +2,8 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { cache } from 'react';
 
-import * as Effect from 'effect/Effect';
-
-import { getSpacesWhereMember } from '~/core/io/queries';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
+import { fetchMemberSpaces } from '~/core/io/subgraph/fetch-member-spaces';
 
 const EMPTY_CONTEXT = { editorIds: [] as string[], myProposalSpaceIds: [] as string[] };
 
@@ -30,7 +28,7 @@ export const getGovernanceHomeSpaceContext = cache(async (memberSpaceId: string)
 
   const [editorIds, memberSpaces] = await Promise.all([
     fetchEditorSpaceIds(memberSpaceId),
-    Effect.runPromise(getSpacesWhereMember(memberSpaceId)),
+    fetchMemberSpaces(memberSpaceId),
   ]);
 
   const memberIds = memberSpaces.map(s => s.id).filter(id => id !== memberSpaceId);
