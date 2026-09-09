@@ -27,6 +27,7 @@ import type {
 } from '../api';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
 import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
+import { useSemanticTaggedFilters } from '../semantic-claim-search';
 import {
   type TaggedClaim,
   type TaggedClaimFilters,
@@ -291,7 +292,7 @@ export function ClaimsTab() {
   // set. Without that a topic living only in a space the viewer cannot see is still offered, and
   // picking it returns rows the client then removes — an option that can only produce an empty list
   // (GEO-2653). It is the same list geo-chat's own query is scoped by, for the same reason.
-  const taggedFilters = React.useMemo<TaggedClaimFilters>(
+  const typedTaggedFilters = React.useMemo<TaggedClaimFilters>(
     () => ({
       search: debouncedSearch,
       topicIds: debouncedTopicIds,
@@ -304,6 +305,16 @@ export function ClaimsTab() {
   // Held while the space gates are still resolving: they pass everything until they land, so asking
   // now would fetch and cache a page scoped to every space and then narrow it under the viewer.
   const taggedEnabled = graphSourced && !spacesPending;
+
+  // The search, resolved: geo-lens's answer to the words when it has one, the words themselves
+  // otherwise. Resolved before the list and both facets are asked, so all three describe one set.
+  // While geo-lens is being asked the previous filters stand, which is what keeps the rows on
+  // screen; `semanticPending` covers the counts for that window like the debounce does.
+  const { filters: taggedFilters, pending: semanticPending } = useSemanticTaggedFilters(
+    claimsTagId,
+    typedTaggedFilters,
+    taggedEnabled
+  );
   const {
     claims: taggedClaims,
     isLoading: taggedLoading,
@@ -506,7 +517,9 @@ export function ClaimsTab() {
   // window this flag exists to mark, or the old counts read as current for a debounce plus a
   // request. `facetsSettled` is the same question these menus already answer with.
   const countsPending =
-    searchSettling || indexedCountsPending || (graphSourced && (topicsSettling || spacesSettling || !facetsSettled));
+    searchSettling ||
+    indexedCountsPending ||
+    (graphSourced && (topicsSettling || spacesSettling || semanticPending || !facetsSettled));
 
   // The space is let go on the condition that actually means "not yours to pick" — the gates
   // stopped admitting it — rather than on its absence from the facet.
@@ -539,9 +552,14 @@ export function ClaimsTab() {
   // re-runs on its own output while the query is still debounced on the previous selection and
   // `facetsSettled` is still true from it — reconciling repeatedly against one stale answer and
   // draining the whole selection in a single tick, rather than one pick per server response.
+  //
+  // `semanticPending` for the same reason as `topicsSettling`: the menu in hand answers the search
+  // the viewer has moved on from, and is settled only for that one.
   React.useEffect(() => {
-    setTopicIds(current => keepSelectableTopics(current, facetTopics, facetsSettled && !topicsSettling));
-  }, [facetTopics, facetsSettled, topicsSettling]);
+    setTopicIds(current =>
+      keepSelectableTopics(current, facetTopics, facetsSettled && !topicsSettling && !semanticPending)
+    );
+  }, [facetTopics, facetsSettled, semanticPending, topicsSettling]);
 
   // Featured is not counted: it chooses which list is on screen rather than narrowing one, so an
   // empty Featured tab should say nothing is featured — not that filters are hiding things — and

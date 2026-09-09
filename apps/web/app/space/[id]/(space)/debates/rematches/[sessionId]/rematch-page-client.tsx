@@ -61,6 +61,7 @@ import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
+import { useSemanticTaggedFilters } from '~/core/debates/semantic-claim-search';
 import {
   type TaggedClaimFilters,
   tagDisplaySpaceId,
@@ -296,9 +297,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const { value: debouncedTopicIds, pending: topicsSettling } = useDebouncedSelection(topicIds);
 
-  const taggedFilters = React.useMemo<TaggedClaimFilters>(
+  const typedTaggedFilters = React.useMemo<TaggedClaimFilters>(
     () => ({ search: debouncedSearch, topicIds: debouncedTopicIds, spaceIds, eligibleSpaceIds }),
     [debouncedSearch, debouncedTopicIds, eligibleSpaceIds, spaceIds]
+  );
+
+  // The search, resolved the way the hub resolves it: geo-lens's answer to the words when it has
+  // one, the words themselves otherwise, and the previous filters held while it is being asked.
+  const { filters: taggedFilters, pending: semanticPending } = useSemanticTaggedFilters(
+    claimsTagId,
+    typedTaggedFilters,
+    taggedEnabled && !allowlistPending
   );
 
   // One ranked, filtered page of the tag at a time (GEO-2798), carrying its own topics and its
@@ -1017,9 +1026,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // already cached settles it instantly while the facet is still out, and the menu it hands over
     // in that gap is empty for the same reason an outage's is. Same rule as the two above, applied
     // to the one source whose menu does not come from its own rows.
-    const resolved = !topicsSettling && !tabIsLoading && !tabError && (!graphFiltered || taggedTopicFacet.settled);
+    const resolved =
+      !topicsSettling && !semanticPending && !tabIsLoading && !tabError && (!graphFiltered || taggedTopicFacet.settled);
     setTopicIds(current => keepSelectableTopics(current, facetTopics, resolved));
-  }, [facetTopics, graphFiltered, tabError, tabIsLoading, taggedTopicFacet.settled, topicsSettling]);
+  }, [facetTopics, graphFiltered, semanticPending, tabError, tabIsLoading, taggedTopicFacet.settled, topicsSettling]);
 
   // The curated tab groups by block rather than listing flat, but narrows on the same filters.
   const showsSections = tab === 'claims' && source === 'recommended';
@@ -1215,7 +1225,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               // blinking, so without this they read as current for a debounce plus a request.
               countsPending={
                 searchSettling ||
-                (graphFiltered && (topicsSettling || !taggedTopicFacet.settled || !taggedSpaceFacet.settled))
+                (graphFiltered &&
+                  (topicsSettling || semanticPending || !taggedTopicFacet.settled || !taggedSpaceFacet.settled))
               }
               topicAtEnd
               // Only on Claims: the opponent's tab is one fixed source — their own responses — and
