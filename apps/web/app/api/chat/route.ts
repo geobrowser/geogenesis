@@ -6,9 +6,11 @@ import {
   type TextStreamPart,
   type ToolSet,
   type UIMessage,
+  type UIMessageChunk,
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
+  isTextUIPart,
   jsonSchema,
   stepCountIs,
   streamText,
@@ -20,6 +22,7 @@ import { EDIT_TOOL_NAMES } from '~/core/chat/edit-types';
 import { CONTEXT_USAGE_DATA_TYPE, type ContextUsageData, ENTITY_ID_REGEX, MAX_PATH_CHARS } from '~/core/chat/limits';
 import { WALLET_ADDRESS } from '~/core/cookie';
 
+import { attachmentInLastUserMessage, renderAttachmentNote } from './attachment-note';
 import {
   CLOSER_SYSTEM_PROMPT,
   type ChatClientContext,
@@ -32,9 +35,18 @@ import {
   renderPreloadedEntitySection,
 } from './chat-system-prompt';
 import { type CostStage, formatTurnCost } from './cost';
+import { buildFollowUpCapabilityNote } from './follow-up-capabilities';
 import { CLOSER_MODEL, FOLLOW_UPS_MODEL, MAIN_MODEL, OPENER_MODEL } from './models';
 import { anonLimit, ipCeilingLimit, loggedInLimit } from './rate-limit';
+import { requestedItemCount } from './requested-item-count';
 import { sanitizeModelMessages } from './sanitize-model-messages';
+import { scopeToolTrafficToCurrentTurn } from './scope-tool-traffic';
+import {
+  appendNoteToLastUserMessage,
+  previousSpaceInConversation,
+  renderCurrentSpaceNote,
+  renderSpaceSwitchNote,
+} from './space-switch-note';
 import { buildNavTools } from './tools/nav';
 import { memberReadTools, readTools } from './tools/read';
 import { buildWriteContext, writeTools } from './tools/write';
@@ -47,6 +59,23 @@ const MAX_OUTPUT_TOKENS = 8_000;
 // High because rate limits + context window are the real ceiling; this just
 // stops a runaway loop.
 const MAX_TOOL_STEPS = 100;
+
+const EXECUTOR_EMPTY_RETRY =
+  'You produced no tool call and no text, so this turn currently has nothing in it and the closer would have to invent a reply. Answer the request now: call the tools it needs, or — if it genuinely needs none — write the answer as text.';
+
+// A turn the executor answered in text rather than tools ends on an assistant
+// message, which Anthropic reads as a prefilled reply to continue — the closer
+// sees a finished answer and returns nothing. This turns that analysis back into
+// material to write from.
+const CLOSER_FROM_ANALYSIS =
+  'The analysis above is internal — the user has not seen it, and no tool ran this turn. Write the user-facing reply from it now, in your own voice, following your output rules.';
+
+function endsWithAssistantText(messages: ModelMessage[]): boolean {
+  const last = messages[messages.length - 1];
+  if (last?.role !== 'assistant') return false;
+  if (typeof last.content === 'string') return last.content.trim().length > 0;
+  return Array.isArray(last.content) && last.content.some(part => part.type === 'text' && part.text.trim().length > 0);
+}
 
 // Best-effort, dev-only aggregation of per-stage cost across a resubmit chain.
 // Module-local, so in serverless deploys chain requests can land on different
@@ -205,12 +234,16 @@ function failedLimiterReset(probes: LimitProbe[]): number {
   return max;
 }
 
-// Strip text deltas from the executor's stream. Its text is still present in
-// response.messages so the closer can read Sonnet's analysis, just not user-
-// facing — the opener and closer own all visible text.
-function suppressAllText<TOOLS extends ToolSet>(): StreamTextTransform<TOOLS> {
-  return () =>
-    new TransformStream<TextStreamPart<TOOLS>, TextStreamPart<TOOLS>>({
+// Hide the executor's text from the user without hiding it from the closer.
+// This runs on the UI stream, NOT as an `experimental_transform`: a transform
+// there also empties `response.messages`, and on a turn the executor answers in
+// text rather than tools that leaves the closer with no material at all — it
+// then invents an answer, which is how "there is no voting feature in Geo" and
+// "what is the space ID for Crypto?" reached users. The opener and closer still
+// own every visible word.
+function stripTextChunks(stream: ReadableStream<UIMessageChunk>): ReadableStream<UIMessageChunk> {
+  return stream.pipeThrough(
+    new TransformStream<UIMessageChunk, UIMessageChunk>({
       transform(chunk, controller) {
         switch (chunk.type) {
           case 'text-start':
@@ -221,7 +254,8 @@ function suppressAllText<TOOLS extends ToolSet>(): StreamTextTransform<TOOLS> {
             controller.enqueue(chunk);
         }
       },
-    });
+    })
+  );
 }
 
 // The Haiku opener occasionally wraps its reasoning in <thinking>…</thinking>
@@ -299,7 +333,43 @@ const CLIENT_READ_TOOL_NAMES = new Set<string>([
   'research',
   'webFetch',
   'searchImages',
+  'geoQuery',
+  // Both run in the browser: the parsed file lives in a module-scoped Map
+  // there and is never uploaded. applyImport is a write, but it is dispatched
+  // by import-dispatcher rather than edit-dispatcher, so it is listed here —
+  // this set is what makes the route wait for a client result instead of
+  // ending the turn with the call unanswered.
+  'proposeImportMapping',
+  'applyImport',
+  // Signs an on-chain membership proposal with the user's smart account, so it
+  // runs in the browser too — and the turn must wait for its outcome, or the
+  // closer would report a request that hasn't landed.
+  'joinSpace',
 ]);
+
+// The closer's reply budget. A backstop, not a length control: the model is
+// never shown this number, so it cannot shorten to fit — at 400 a multi-part
+// question ("assess this space's quality, relevance, timeliness…") was cut
+// mid-word, often mid-`geo://` citation, which renders as broken markdown.
+// Concision is the prompt's job; this only decides where a runaway stops.
+// Raising it costs nothing on ordinary turns — they generate what the prompt
+// asks for regardless — and only spends tokens where a reply was being
+// truncated. The 5-item list cap still applies: a pill costs roughly
+// TOKENS_PER_LISTED_ITEM, two 32-char hex ids tokenizing badly, and room for a
+// longer list is still bought per-turn against a count the user actually named.
+const CLOSER_BASE_OUTPUT_TOKENS = 1_200;
+const TOKENS_PER_LISTED_ITEM = 50;
+// Ceiling on a named count, whatever was asked for. Beyond this the reply stops
+// being a list and becomes a data dump: 25 items is already ~1,650 tokens and
+// 12-15s of streaming, and the read tools cap out at 50 rows (`geoQuery`) and
+// 10 (`searchGraph`), so a larger ask cannot be satisfied anyway. Over-asking is
+// reported to the user rather than silently trimmed — see the closer's turn note.
+const MAX_LISTED_ITEMS = 25;
+
+function closerMaxOutputTokens(listedCount: number | null): number {
+  if (listedCount === null) return CLOSER_BASE_OUTPUT_TOKENS;
+  return CLOSER_BASE_OUTPUT_TOKENS + listedCount * TOKENS_PER_LISTED_ITEM;
+}
 
 // Edit/client tools resolve via resubmit, so the assistant turn that triggers
 // 'edit' framing isn't always the one that emitted the call. Walk every
@@ -443,7 +513,30 @@ export async function POST(req: Request) {
   }
 
   const rawConverted = await convertToModelMessages(uiMessages);
-  const { messages: converted, droppedToolCallIds } = sanitizeModelMessages(rawConverted);
+  const { messages: sanitized, droppedToolCallIds } = sanitizeModelMessages(rawConverted);
+
+  // Added after sanitizing so the notes can't be mistaken for orphaned tool
+  // traffic. Two of them, answering different questions: where the user is
+  // standing now (every turn — see `renderCurrentSpaceNote` for why it has no
+  // trigger), and, when they moved, which space the numbers above describe.
+  const previousSpaceId = previousSpaceInConversation(uiMessages, clientContext?.currentSpaceId ?? null);
+  const spaceNotes = [
+    clientContext?.currentSpaceId ? renderCurrentSpaceNote(clientContext.currentSpaceId) : null,
+    previousSpaceId && clientContext?.currentSpaceId
+      ? renderSpaceSwitchNote(clientContext.currentSpaceId, previousSpaceId)
+      : null,
+  ].filter((note): note is string => note !== null);
+  const withSpaceNote =
+    spaceNotes.length > 0 ? appendNoteToLastUserMessage(sanitized, spaceNotes.join('\n\n')) : sanitized;
+
+  // Same mechanism, same reason: metadata is dropped by
+  // `convertToModelMessages`, so a file the user attached is announced here.
+  // Latest user message only — an older attachment has already been handled.
+  const attachment = attachmentInLastUserMessage(uiMessages);
+  const converted = attachment
+    ? appendNoteToLastUserMessage(withSpaceNote, renderAttachmentNote(attachment))
+    : withSpaceNote;
+
   if (droppedToolCallIds.length > 0) {
     console.warn(
       `[chat:srv] dropped ${droppedToolCallIds.length} tool-call/result blocks from converted history`,
@@ -453,7 +546,9 @@ export async function POST(req: Request) {
 
   const writeContext = buildWriteContext({ walletAddress: wallet });
 
+  // Both resolve from one cached membership lookup — the second await is free.
   const serverPersonalSpaceId = writeContext.kind === 'member' ? await writeContext.personalSpaceId() : null;
+  const serverProfileEntityId = writeContext.kind === 'member' ? await writeContext.profileEntityId() : null;
 
   const basePrompt =
     chatMode === 'ingestion' && isLoggedIn
@@ -461,7 +556,7 @@ export async function POST(req: Request) {
       : isLoggedIn
         ? DEFAULT_MEMBER_SYSTEM_PROMPT
         : DEFAULT_GUEST_SYSTEM_PROMPT;
-  const contextSection = renderCurrentContextSection(clientContext, serverPersonalSpaceId);
+  const contextSection = renderCurrentContextSection(clientContext, serverPersonalSpaceId, serverProfileEntityId);
   const preloadSection = renderPreloadedEntitySection(preloadedEntity);
   const systemContent = [basePrompt, contextSection, preloadSection].filter(Boolean).join('\n');
 
@@ -487,7 +582,8 @@ export async function POST(req: Request) {
             items: { type: 'string' },
             minItems: 1,
             maxItems: 3,
-            description: 'Short (≤6 words each) next-step options relevant to the response just given.',
+            description:
+              'Short (≤6 words each) next-step options relevant to the response just given, each written in the user\'s voice as a command to the assistant ("Add a bio"), never in the assistant\'s own voice.',
           },
         },
         required: ['suggestions'],
@@ -508,6 +604,8 @@ export async function POST(req: Request) {
   const memberWriteTools: ToolSet = isLoggedIn ? writeTools : {};
   const memberResearchTools: ToolSet = isLoggedIn ? memberReadTools : {};
 
+  const executorTools: ToolSet = { ...readTools, ...navTools, ...memberWriteTools, ...memberResearchTools };
+
   // `debug` → one tight line per stage/step (default in dev).
   // `verbose` → also dump per-chunk and full message/state objects.
   const debug = process.env.NODE_ENV !== 'production' || process.env.CHAT_DEBUG === '1';
@@ -525,10 +623,28 @@ export async function POST(req: Request) {
     }
   };
   if (debug) {
+    // The space is logged because a wrong-space answer is otherwise invisible
+    // here: identifying which space a turn actually used meant counting
+    // entities in the graph and matching the numbers by hand.
+    const space = clientContext?.currentSpaceId ? `space=${clientContext.currentSpaceId.slice(0, 8)}` : 'space=none';
+    const moved = previousSpaceId ? ` moved-from=${previousSpaceId.slice(0, 8)}` : '';
     console.log(
-      `[chat] turn begin (${isLoggedIn ? 'member' : 'guest'}, ${uiMessages.length} msg${uiMessages.length === 1 ? '' : 's'}${chatMode === 'ingestion' ? ', ingestion' : ''})`
+      `[chat] turn begin (${isLoggedIn ? 'member' : 'guest'}, ${uiMessages.length} msg${uiMessages.length === 1 ? '' : 's'}${chatMode === 'ingestion' ? ', ingestion' : ''}, ${space}${moved})`
     );
   }
+
+  // Read from the user's own words, not from what the tools returned: a list of
+  // 200 rows is still best summarised, but "give me 15" is an instruction the
+  // closer's 5-item cap would otherwise overrule. Survives resubmits because
+  // the triggering user message stays last until the turn ends.
+  const lastUserMessage = [...uiMessages].reverse().find(m => m.role === 'user');
+  const requestedCount = requestedItemCount(
+    (lastUserMessage?.parts ?? [])
+      .filter(isTextUIPart)
+      .map(part => part.text)
+      .join(' ')
+  );
+  const listedCount = requestedCount === null ? null : Math.min(requestedCount, MAX_LISTED_ITEMS);
   if (verbose) {
     const summary = converted.map((m, idx) => {
       let blocks: unknown;
@@ -609,7 +725,13 @@ export async function POST(req: Request) {
       if (isFirstRequestOfTurn) {
         const openerResult = streamText({
           model: anthropic(OPENER_MODEL),
-          system: OPENER_SYSTEM_PROMPT,
+          // The opener writes the first line the user reads, off the raw
+          // conversation. Without the current context its only clue to "this
+          // space" is whatever was discussed earlier, so it would announce
+          // "Scanning the Crypto space" to someone standing in the AI space —
+          // the executor and closer then answered correctly, leaving the user
+          // with a reply that contradicted its own opening line.
+          system: [OPENER_SYSTEM_PROMPT, contextSection].filter(Boolean).join('\n\n'),
           messages: converted,
           maxOutputTokens: 80,
           experimental_transform: stripThinkingTags(),
@@ -634,58 +756,92 @@ export async function POST(req: Request) {
       // the last steps carry the full transcript + tool results, so the peak is
       // the closest read on how full the context window is this turn.
       let peakExecInputTokens = 0;
-      const execResult = streamText({
-        model: anthropic(MAIN_MODEL),
-        messages,
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
-        abortSignal: req.signal,
-        tools: { ...readTools, ...navTools, ...memberWriteTools, ...memberResearchTools },
-        toolChoice: 'auto',
-        // Serial tool use matches the prompt's "searchGraph first, then
-        // research / writes" ordering and avoids client-tool resubmit races.
-        providerOptions: {
-          anthropic: { disableParallelToolUse: true },
-        },
-        stopWhen: stepCountIs(MAX_TOOL_STEPS),
-        experimental_transform: suppressAllText(),
-        onChunk: verbose
-          ? ({ chunk }) => {
-              const summary: Record<string, unknown> = { type: chunk.type };
-              if ('toolName' in chunk) summary.toolName = chunk.toolName;
-              if ('toolCallId' in chunk) summary.toolCallId = chunk.toolCallId;
-              if ('providerExecuted' in chunk) summary.providerExecuted = chunk.providerExecuted;
-              if ('dynamic' in chunk) summary.dynamic = chunk.dynamic;
-              debugLog('chunk', summary);
+      const runExecutor = (extraMessages: ModelMessage[] = []) =>
+        streamText({
+          model: anthropic(MAIN_MODEL),
+          messages: extraMessages.length > 0 ? [...messages, ...extraMessages] : messages,
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          abortSignal: req.signal,
+          tools: executorTools,
+          toolChoice: 'auto',
+          // Serial tool use matches the prompt's "searchGraph first, then
+          // research / writes" ordering and avoids client-tool resubmit races.
+          providerOptions: {
+            anthropic: { disableParallelToolUse: true },
+          },
+          stopWhen: stepCountIs(MAX_TOOL_STEPS),
+          onChunk: verbose
+            ? ({ chunk }) => {
+                const summary: Record<string, unknown> = { type: chunk.type };
+                if ('toolName' in chunk) summary.toolName = chunk.toolName;
+                if ('toolCallId' in chunk) summary.toolCallId = chunk.toolCallId;
+                if ('providerExecuted' in chunk) summary.providerExecuted = chunk.providerExecuted;
+                if ('dynamic' in chunk) summary.dynamic = chunk.dynamic;
+                debugLog('chunk', summary);
+              }
+            : undefined,
+          onStepFinish: step => {
+            const stepInput = step.usage?.inputTokens ?? 0;
+            if (stepInput > peakExecInputTokens) peakExecInputTokens = stepInput;
+            if (debug) {
+              const tools =
+                step.toolCalls
+                  ?.map(tc => tc.toolName)
+                  .filter(Boolean)
+                  .join(', ') ?? '';
+              const text = (step.text?.length ?? 0) > 0 ? ' +text' : '';
+              console.log(`[chat] step ${tools || '(no-tool)'}${text} → ${step.finishReason}`);
             }
-          : undefined,
-        onStepFinish: step => {
-          const stepInput = step.usage?.inputTokens ?? 0;
-          if (stepInput > peakExecInputTokens) peakExecInputTokens = stepInput;
-          if (debug) {
-            const tools =
-              step.toolCalls
-                ?.map(tc => tc.toolName)
-                .filter(Boolean)
-                .join(', ') ?? '';
-            const text = (step.text?.length ?? 0) > 0 ? ' +text' : '';
-            console.log(`[chat] step ${tools || '(no-tool)'}${text} → ${step.finishReason}`);
-          }
-        },
-        onError: err => {
-          if (!isAbortError(err)) console.error('[chat:srv] executor stream error', err);
-        },
-      });
+          },
+          onError: err => {
+            if (!isAbortError(err)) console.error('[chat:srv] executor stream error', err);
+          },
+        });
+
+      const execResult = runExecutor();
       writer.merge(
-        execResult.toUIMessageStream({
-          sendReasoning: false,
-          // Opener already emitted message-start; don't duplicate it.
-          sendStart: !isFirstRequestOfTurn,
-          sendFinish: false,
-        })
+        stripTextChunks(
+          execResult.toUIMessageStream({
+            sendReasoning: false,
+            // Opener already emitted message-start; don't duplicate it.
+            sendStart: !isFirstRequestOfTurn,
+            sendFinish: false,
+          })
+        )
       );
 
-      const execMessages = (await execResult.response).messages;
+      let execMessages = (await execResult.response).messages;
       await recordCost('executor', MAIN_MODEL, execResult);
+
+      if (execMessages.length === 0) {
+        if (debug) console.log('[chat] executor returned nothing — retrying once');
+        const retryResult = runExecutor([{ role: 'user', content: EXECUTOR_EMPTY_RETRY }]);
+        writer.merge(
+          stripTextChunks(retryResult.toUIMessageStream({ sendReasoning: false, sendStart: false, sendFinish: false }))
+        );
+        execMessages = (await retryResult.response).messages;
+        await recordCost('executor', MAIN_MODEL, retryResult);
+      }
+
+      // Twice in a row with nothing to show means the executor never ran — an
+      // API error swallowed by `onError`, not a turn with a quiet answer. The
+      // closer would be handed an empty transcript and write *about* that
+      // ("I don't have tool results from this turn to write a reply from"),
+      // which is an internal condition, not something to say to a user. Say
+      // what actually happened instead, and stop.
+      if (execMessages.length === 0) {
+        console.error('[chat:srv] executor produced nothing twice — ending turn with a failure notice');
+        const noticeId = 'executor-empty';
+        writer.write({ type: 'text-start', id: noticeId });
+        writer.write({
+          type: 'text-delta',
+          id: noticeId,
+          delta: "Something went wrong on my side and I couldn't work on that. Please try again.",
+        });
+        writer.write({ type: 'text-end', id: noticeId });
+        logChainCost();
+        return;
+      }
 
       // Surface context occupancy so the widget can compact when we near the
       // window. Transient: informs the client, never lands in message history.
@@ -719,18 +875,44 @@ export async function POST(req: Request) {
         // More requests coming in this chain — don't log yet.
         return;
       }
-      if (turnKind === 'skip') {
-        logChainCost();
-        return;
-      }
 
       // Stage C: closer (Haiku). Writes the user-facing summary from the
       // executor's tool calls + results.
+      //
+      // Every turn gets a reply, including a nav-only one. Suppressing the
+      // closer on `skip` assumed navigating is its own feedback, which holds
+      // when the user asked to go somewhere and breaks badly when the executor
+      // chose to navigate in response to something else ("complete my profile"
+      // → navigate → silence). A one-sentence Haiku ack costs a fraction of a
+      // cent and removes the possibility of a turn that answers nothing.
+      const scopedForCloser = scopeToolTrafficToCurrentTurn([...converted, ...execMessages]);
+      const closerInput: ModelMessage[] = endsWithAssistantText(scopedForCloser)
+        ? [...scopedForCloser, { role: 'user', content: CLOSER_FROM_ANALYSIS }]
+        : scopedForCloser;
+
       const closerResult = streamText({
         model: anthropic(CLOSER_MODEL),
-        system: CLOSER_SYSTEM_PROMPT,
-        messages: [...converted, ...execMessages],
-        maxOutputTokens: 400,
+        // Same Current context the executor gets. The closer writes the visible
+        // reply, so it is the model that has to know what "this space" means —
+        // without it, it cannot scope an answer to where the user is standing.
+        system: [
+          CLOSER_SYSTEM_PROMPT,
+          contextSection,
+          turnKind === 'skip'
+            ? "# This turn\nThe only thing that happened was navigation. Say where you took the user, in one sentence, and stop. Do not describe the destination's contents — you haven't read them."
+            : null,
+          requestedCount === null || listedCount === null
+            ? null
+            : `# This turn\nThe user asked for ${requestedCount} items, so the 5-item list cap does NOT apply — list up to ${listedCount}, each cited as a \`geo://\` pill, and you have been given the output budget for it.${
+                requestedCount > listedCount
+                  ? ` They asked for more than can be shown, so open with "Showing ${listedCount} of the ${requestedCount} you asked for" (or the same point in your own words) — never present ${listedCount} as though it were all of them.`
+                  : ''
+              } If the tool results contain fewer than that, list every one you have and say plainly how many there are; do not pad the list and do not close with "…and N more" when nothing remains.`,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+        messages: closerInput,
+        maxOutputTokens: closerMaxOutputTokens(listedCount),
         abortSignal: req.signal,
         onError: err => {
           if (!isAbortError(err)) console.error('[chat:srv] closer stream error', err);
@@ -747,11 +929,17 @@ export async function POST(req: Request) {
       const closerMessages = (await closerResult.response).messages;
       await recordCost('closer', CLOSER_MODEL, closerResult);
 
+      if (debug && (await closerResult.finishReason) === 'length') {
+        console.warn(`[chat:srv] closer hit its ${closerMaxOutputTokens(listedCount)}-token cap — reply was truncated`);
+      }
+
       // Stage D: follow-ups (Haiku, forced tool).
-      const followUpInstruction =
+      const followUpInstruction = [
+        buildFollowUpCapabilityNote(executorTools),
         turnKind === 'edit'
-          ? "You just edited the graph on the user's behalf. Call suggestFollowUps with 1–3 short options for further edits they're likely to want next — more fields to fill, related blocks to add, filters to tune, or an undo. Don't suggest navigation, \"learn more\", or open questions."
-          : 'Now call suggestFollowUps with 1–3 short clickable next-step options relevant to your answer above.';
+          ? "You just edited the graph on the user's behalf. Call suggestFollowUps with 1–3 short options for further edits they're likely to want next — more fields to fill, related blocks to add, filters to tune, or removing what you just added. Don't suggest navigation, \"learn more\", or open questions."
+          : 'Now call suggestFollowUps with 1–3 short clickable next-step options relevant to your answer above.',
+      ].join('\n\n');
 
       const followUpResult = streamText({
         model: anthropic(FOLLOW_UPS_MODEL),

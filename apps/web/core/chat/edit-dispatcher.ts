@@ -37,6 +37,7 @@ import {
   isEditToolPartType,
   lookupFailed,
 } from './edit-types';
+import { ImageAttachments } from './image-attachment';
 import { planWriteTool } from './write-validators';
 import { editorContentVersionAtom } from '~/atoms';
 
@@ -165,12 +166,13 @@ function extensionForMime(mime: string): string {
   return MIME_TO_EXTENSION[normalized] ?? 'png';
 }
 
-// Mints an Image entity from a source URL and writes the link relation via
-// the same `storage.images.createAndLink` helper the in-page editor uses for
-// file uploads. http(s) URLs go through /api/chat/proxy-image (CORS); ipfs://
-// URLs short-circuit since they're already pinned.
+// Mints an Image entity and writes the link relation via the same
+// `storage.images.createAndLink` helper the in-page editor uses for file
+// uploads. A file the user attached goes straight in as a blob; http(s) URLs
+// go through /api/chat/proxy-image (CORS); ipfs:// URLs short-circuit since
+// they're already pinned.
 async function applySetEntityImage(intent: Extract<EditIntent, { kind: 'setEntityImage' }>): Promise<ApplyResult> {
-  const { entityId, entityName, spaceId, propertyId, propertyName, sourceUrl } = intent;
+  const { entityId, entityName, spaceId, propertyId, propertyName, sourceUrl, attachment } = intent;
 
   // Replace, don't stack: tombstone any existing same-property image relations
   // on this entity in this space first. Mirrors the in-page editor's behavior
@@ -183,6 +185,32 @@ async function applySetEntityImage(intent: Extract<EditIntent, { kind: 'setEntit
   );
   for (const old of oldImageRelations) {
     storage.relations.delete(old);
+  }
+
+  // The user handed us the bytes. No proxy, no fetch — `createAndLink` takes a
+  // File directly, which is the path the entity page's own upload control uses.
+  if (attachment) {
+    const held = ImageAttachments.get(attachment.id);
+    if (!held) {
+      return applyFailed('that attached image is no longer available');
+    }
+    try {
+      await storage.images.createAndLink({
+        file: held.file,
+        fromEntityId: entityId,
+        fromEntityName: entityName,
+        relationPropertyId: propertyId,
+        relationPropertyName: propertyName,
+        spaceId,
+      });
+    } catch (err) {
+      console.error('[chat/edit-dispatcher] image attachment upload failed', err);
+      return applyFailed('the image could not be uploaded');
+    }
+    // Consumed. Leaving it would let a later turn silently re-upload the same
+    // picture onto a different entity.
+    ImageAttachments.clear(attachment.id);
+    return { ok: true };
   }
 
   if (sourceUrl.toLowerCase().startsWith('ipfs://')) {
@@ -1352,49 +1380,61 @@ export function useEditDispatcher(
         const inputSpaceId = typeof input.spaceId === 'string' ? input.spaceId : undefined;
         const inputTargetSpaceId = typeof input.targetSpaceId === 'string' ? input.targetSpaceId : undefined;
 
+        // Every dispatched call must be answered exactly once. An unanswered
+        // one is not a dropped edit — it is a turn that never ends: the model
+        // waits on a result that will never come and the panel stays "working"
+        // until the user reloads. `enqueue` only console.errors a throw, so
+        // without this catch a failure inside `planWriteTool` reaches nobody —
+        // not the user, not the model. The read dispatcher already works this
+        // way; this is the write side catching up.
         enqueue(async () => {
-          if (cancelledRef.current) return;
-
-          // Lazy controller for the StrictMode pre-mount-effect window.
-          const signal = (abortRef.current ??= new AbortController()).signal;
-          const auth = await authorizeWrite(inputSpaceId, toolName, signal, inputTargetSpaceId);
-          if (cancelledRef.current) return;
-          if (auth.ok !== true) {
-            addToolResultRef.current?.({ tool: toolName, toolCallId, output: auth });
-            return;
-          }
-
-          const ctx = { store, cache: queryClient };
-          const planned: EditToolOutput = await planWriteTool(toolName, input, ctx);
-          if (cancelledRef.current) return;
-          if (!planned.ok) {
-            addToolResultRef.current?.({ tool: toolName, toolCallId, output: planned });
-            return;
-          }
-
-          let applyResult: ApplyResult;
           try {
-            applyResult = await applyIntent(planned.intent, { setEditable, bumpEditorVersion });
-          } catch (err) {
-            console.error('[chat/edit-dispatcher] applyIntent threw', err);
-            addToolResultRef.current?.({ tool: toolName, toolCallId, output: lookupFailed() });
-            return;
-          }
-          // No cancellation gate past this point — the mutation has landed,
-          // so the model has to hear about it or the turn hangs forever.
-          if (!applyResult.ok) {
-            addToolResultRef.current?.({ tool: toolName, toolCallId, output: applyResult });
-            return;
-          }
+            if (cancelledRef.current) return;
 
-          if (EDITOR_REFRESHING_INTENTS.has(planned.intent.kind)) {
-            bumpEditorVersion();
+            // Lazy controller for the StrictMode pre-mount-effect window.
+            const signal = (abortRef.current ??= new AbortController()).signal;
+            const auth = await authorizeWrite(inputSpaceId, toolName, signal, inputTargetSpaceId);
+            if (cancelledRef.current) return;
+            if (auth.ok !== true) {
+              addToolResultRef.current?.({ tool: toolName, toolCallId, output: auth });
+              return;
+            }
+
+            const ctx = { store, cache: queryClient };
+            const planned: EditToolOutput = await planWriteTool(toolName, input, ctx);
+            if (cancelledRef.current) return;
+            if (!planned.ok) {
+              addToolResultRef.current?.({ tool: toolName, toolCallId, output: planned });
+              return;
+            }
+
+            let applyResult: ApplyResult;
+            try {
+              applyResult = await applyIntent(planned.intent, { setEditable, bumpEditorVersion });
+            } catch (err) {
+              console.error('[chat/edit-dispatcher] applyIntent threw', err);
+              addToolResultRef.current?.({ tool: toolName, toolCallId, output: lookupFailed() });
+              return;
+            }
+            // No cancellation gate past this point — the mutation has landed,
+            // so the model has to hear about it or the turn hangs forever.
+            if (!applyResult.ok) {
+              addToolResultRef.current?.({ tool: toolName, toolCallId, output: applyResult });
+              return;
+            }
+
+            if (EDITOR_REFRESHING_INTENTS.has(planned.intent.kind)) {
+              bumpEditorVersion();
+            }
+            addToolResultRef.current?.({
+              tool: toolName,
+              toolCallId,
+              output: { ok: true, intent: planned.intent },
+            });
+          } catch (err) {
+            console.error('[chat/edit-dispatcher] tool execution threw', toolName, err);
+            addToolResultRef.current?.({ tool: toolName, toolCallId, output: lookupFailed() });
           }
-          addToolResultRef.current?.({
-            tool: toolName,
-            toolCallId,
-            output: { ok: true, intent: planned.intent },
-          });
         });
       }
     }

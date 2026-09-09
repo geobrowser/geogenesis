@@ -30,6 +30,18 @@ function normalizeSpaceId(spaceId: string): string {
   return spaceId.replace(/-/g, '').toLowerCase();
 }
 
+/**
+ * The ranked spaces, best first.
+ *
+ * Ranking answers "which of these do I prefer?", which is only useful once the
+ * candidates are in hand. Callers that have to *fetch* candidates need the list
+ * itself — a search scoped to the current space alone never surfaces the
+ * curated vocabulary these spaces hold, so there is nothing left to rank.
+ */
+export const RANKED_SPACE_IDS: readonly string[] = Object.keys(SPACE_RANK).sort(
+  (a, b) => SPACE_RANK[a] - SPACE_RANK[b]
+);
+
 export function getSpaceRank(spaceId: string): number {
   return SPACE_RANK[normalizeSpaceId(spaceId)] ?? UNRANKED;
 }

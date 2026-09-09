@@ -18,7 +18,15 @@ const anthropic = createAnthropic({
   apiKey: process.env.CLAUDE_API_KEY,
 });
 
+// Summarize at most this many messages, taken from the end. A cap is needed —
+// the payload is parsed and walked — but it must not become a refusal: the
+// request only arrives *because* the conversation got long, so rejecting long
+// conversations rejects every real caller. The client re-fires on the same
+// unchanged reading, so a refusal here is a permanent one, retried forever.
+// Trimming to the most recent messages keeps the part that still matters.
 const MAX_INPUT_MESSAGES = 60;
+// Beyond this the payload isn't a conversation any more, it's an attack.
+const MAX_ACCEPTED_MESSAGES = 2_000;
 // Cap the synthesized transcript so the Haiku call stays well under its 200k
 // context window with room for the system prompt.
 const MAX_TRANSCRIPT_CHARS = 200_000;
@@ -74,10 +82,10 @@ function rateLimitResponse(reset: number) {
   return jsonError(429, 'Rate limit exceeded.', { 'Retry-After': retryAfter.toString() });
 }
 
-function validateUIMessages(input: unknown): UIMessage[] | null {
+export function validateUIMessages(input: unknown): UIMessage[] | null {
   if (!Array.isArray(input)) return null;
   if (input.length === 0) return null;
-  if (input.length > MAX_INPUT_MESSAGES) return null;
+  if (input.length > MAX_ACCEPTED_MESSAGES) return null;
   for (const msg of input) {
     if (!msg || typeof msg !== 'object') return null;
     const role = (msg as { role?: unknown }).role;
@@ -89,7 +97,9 @@ function validateUIMessages(input: unknown): UIMessage[] | null {
       if (typeof (part as { type?: unknown }).type !== 'string') return null;
     }
   }
-  return input as UIMessage[];
+  // Trim rather than refuse: this request only happens because the chat got
+  // long, so the tail is what the summary needs.
+  return (input as UIMessage[]).slice(-MAX_INPUT_MESSAGES);
 }
 
 // Plain-text transcript of just the conversational content. Tool calls become

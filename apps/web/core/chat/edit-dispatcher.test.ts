@@ -1390,6 +1390,43 @@ afterEach(() => {
 });
 
 describeWithDom('useEditDispatcher: planning phase', () => {
+  it('answers the model when the write path throws', async () => {
+    // Before this, a throw was swallowed by the apply queue's console.error:
+    // the tool call was never answered, so the model waited on a result that
+    // would never arrive and the panel sat in "working" until a page reload.
+    // An unanswered call hangs the turn, so answering is not optional.
+    // `resolveProperty` reads the local store *outside* its try, so a throw
+    // there escapes planning entirely — the one place nothing else guards.
+    localStore.getProperty.mockImplementation(() => {
+      throw new Error('planning blew up');
+    });
+    mockAuthorizeFetch({ ok: true });
+    const addToolResult = vi.fn();
+    const ref = { current: addToolResult };
+
+    const messages: UIMessage[] = [
+      makeMessage([
+        makeWriteToolPart('setEntityValue', {
+          entityId: ENTITY_ID,
+          spaceId: SPACE_ID,
+          propertyId: PROPERTY_ID,
+          value: 'Due north',
+        }),
+      ]),
+    ];
+    renderHook(() => useEditDispatcher(messages, ref));
+    await waitForFlush();
+    await waitFor(() => expect(addToolResult).toHaveBeenCalled());
+
+    expect(addToolResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tool: 'setEntityValue',
+        toolCallId: 'tc-1',
+        output: expect.objectContaining({ ok: false }),
+      })
+    );
+  });
+
   it('setEntityValue against a locally-minted property succeeds end-to-end', async () => {
     // Local store resolves the property (its dataType lives in pendingDataTypes
     // until publish), and E.findOne resolves the entity.

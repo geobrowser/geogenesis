@@ -20,3 +20,27 @@ export type NavigateOutput =
 export type OpenReviewPanelInput = Record<string, never>;
 
 export type OpenReviewPanelOutput = { ok: true } | { ok: false; error: 'not_signed_in' };
+
+export type JoinSpaceInput = { spaceId: string };
+
+// `requested` is the only success: membership is a proposal editors vote on,
+// never an immediate join, and the reply must not imply otherwise.
+export type JoinSpaceOutput =
+  | { ok: true; status: 'requested'; spaceId: string; spaceName?: string }
+  | {
+      ok: false;
+      error:
+        | 'invalid_input'
+        | 'not_signed_in'
+        | 'no_personal_space'
+        | 'space_not_found'
+        | 'not_joinable'
+        | 'already_member'
+        // Named for what already happened, not for the state it leaves behind:
+        // `request_pending` read to the closer as "your request is now pending"
+        // and got reported as a fresh request we never made.
+        | 'already_requested'
+        | 'request_failed';
+      spaceId?: string;
+      spaceName?: string;
+    };

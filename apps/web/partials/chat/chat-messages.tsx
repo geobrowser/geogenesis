@@ -17,11 +17,21 @@ import { Spinner } from '~/design-system/spinner';
 import { ChatMarkdown } from './chat-markdown';
 import { ChatSourceLink } from './chat-source-pill';
 import { InjectInlineProgress } from './inject-progress-bar';
+import { isInterrupted } from './interrupted';
 import { useSmoothStream } from './use-smooth-stream';
 
 // Off by default in dev — the per-state-flip transcript was unreadably noisy
 // during long agent turns. Set NEXT_PUBLIC_CHAT_VERBOSE=1 to opt back in.
 const DEBUG = process.env.NEXT_PUBLIC_CHAT_VERBOSE === '1';
+
+/**
+ * Marks a turn that ended without an answer — Stop, a reload, or switching
+ * chats mid-turn. Quiet on purpose: it explains a gap in the transcript, it
+ * isn't an error and nothing went wrong.
+ */
+function InterruptedNotice() {
+  return <div className="text-footnote text-grey-03 italic">Interrupted</div>;
+}
 
 function userText(message: UIMessage): string {
   return message.parts
@@ -164,8 +174,12 @@ const TOOL_LABELS: Record<string, string> = {
   'tool-getSpaceTypes': 'Checking space types',
   'tool-research': 'Researching the web',
   'tool-webFetch': 'Reading a page',
+  'tool-geoQuery': 'Querying the graph',
+  'tool-proposeImportMapping': 'Reading your file',
+  'tool-applyImport': 'Importing your file',
   'tool-navigate': 'Navigating',
   'tool-openReviewPanel': 'Opening the review panel',
+  'tool-joinSpace': 'Requesting membership',
   'tool-createEntity': 'Creating an entity',
   'tool-deleteEntity': 'Deleting an entity',
   'tool-moveEntityToSpace': 'Moving an entity',
@@ -490,8 +504,9 @@ export function ChatMessages({ messages, status, error, onSuggestion, disabled }
             const text = userText(message);
             if (!text) return null;
             return (
-              <div key={message.id} data-message-id={message.id} className="flex justify-end">
+              <div key={message.id} data-message-id={message.id} className="flex flex-col items-end gap-1">
                 <div className="max-w-[80%] rounded-md bg-grey-01 px-2 py-1.5 text-chat text-text">{text}</div>
+                {isInterrupted(message) ? <InterruptedNotice /> : null}
               </div>
             );
           }
@@ -513,7 +528,10 @@ export function ChatMessages({ messages, status, error, onSuggestion, disabled }
           const showInlineThinking = isLatest && isThinking && lastAssistantIdx > lastUserIdx;
           // Only the latest message participates in the drip animation.
           const displayed = isLatest ? latestDisplayed : text;
-          if (!text && !showInlineThinking) return null;
+          // An interrupted turn often has no text at all — that is precisely the
+          // case the notice exists for, so it must not be skipped as empty.
+          const wasInterrupted = isInterrupted(message);
+          if (!text && !showInlineThinking && !wasInterrupted) return null;
 
           const sources = messageWebSources(message);
           // Pills appear only once the message is fully settled. The
@@ -524,14 +542,17 @@ export function ChatMessages({ messages, status, error, onSuggestion, disabled }
 
           return (
             <div key={message.id} className="flex flex-col items-start gap-2">
-              <AssistantMessage
-                messageId={message.id}
-                text={text}
-                displayed={displayed}
-                showThinking={showInlineThinking}
-                thinkingLabel={currentThinkingLabel}
-                entityCache={entityCache}
-              />
+              {text || showInlineThinking ? (
+                <AssistantMessage
+                  messageId={message.id}
+                  text={text}
+                  displayed={displayed}
+                  showThinking={showInlineThinking}
+                  thinkingLabel={currentThinkingLabel}
+                  entityCache={entityCache}
+                />
+              ) : null}
+              {wasInterrupted ? <InterruptedNotice /> : null}
               {showSources ? (
                 <section className="flex flex-col gap-0.5 pt-1" aria-labelledby={`references-${message.id}`}>
                   <div id={`references-${message.id}`} className="text-footnote text-grey-04">

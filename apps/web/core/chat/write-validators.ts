@@ -11,6 +11,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import * as Effect from 'effect/Effect';
 
 import type { Filter, FilterMode, ModesByColumn } from '~/core/blocks/data/filters';
+import { ImageAttachments } from '~/core/chat/image-attachment';
 import { ID } from '~/core/id';
 import { getEntity, getProperty, getSpace } from '~/core/io/queries';
 import { E } from '~/core/sync/orm';
@@ -478,7 +479,8 @@ type SetEntityImageInput = {
   entityId: string;
   spaceId: string;
   propertyId: string;
-  sourceUrl: string;
+  sourceUrl?: string;
+  attachmentId?: string;
 };
 
 const IMAGE_SOURCE_URL_RE = /^(https?|ipfs):\/\//i;
@@ -489,10 +491,26 @@ async function planSetEntityImage(input: SetEntityImageInput, ctx: WriteCtx): Pr
     return invalid();
   }
   const sourceUrl = typeof input.sourceUrl === 'string' ? input.sourceUrl.trim() : '';
-  if (!sourceUrl) return invalid('sourceUrl is required');
-  if (sourceUrl.length > MAX_IMAGE_URL_CHARS) return invalid('sourceUrl too long');
-  if (!IMAGE_SOURCE_URL_RE.test(sourceUrl)) {
-    return invalid('sourceUrl must be http://, https://, or ipfs://');
+  const attachmentId = typeof input.attachmentId === 'string' ? input.attachmentId.trim() : '';
+
+  if (sourceUrl && attachmentId) return invalid('pass either sourceUrl or attachmentId, not both');
+  if (!sourceUrl && !attachmentId) return invalid('sourceUrl or attachmentId is required');
+
+  // Resolved here rather than in the dispatcher so a stale id — the usual cause
+  // being a page reload, which empties the in-memory store — is reported before
+  // anything is written, and the model can ask for the file again.
+  let attachment: { id: string; fileName: string } | undefined;
+  if (attachmentId) {
+    const held = ImageAttachments.get(attachmentId);
+    if (!held) return invalid('that attached image is no longer available — ask the user to attach it again');
+    attachment = { id: held.id, fileName: held.fileName };
+  }
+
+  if (sourceUrl) {
+    if (sourceUrl.length > MAX_IMAGE_URL_CHARS) return invalid('sourceUrl too long');
+    if (!IMAGE_SOURCE_URL_RE.test(sourceUrl)) {
+      return invalid('sourceUrl must be http://, https://, or ipfs://');
+    }
   }
 
   const entityId = normalizeEntityId(input.entityId);
@@ -531,6 +549,7 @@ async function planSetEntityImage(input: SetEntityImageInput, ctx: WriteCtx): Pr
       propertyId,
       propertyName: property.name ?? null,
       sourceUrl,
+      ...(attachment ? { attachment } : {}),
     },
   };
 }
