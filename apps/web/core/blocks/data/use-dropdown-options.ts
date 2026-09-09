@@ -13,12 +13,15 @@ import {
   fingerprintIdList,
 } from './fetch-dropdown-options';
 import { filterStateToWhere } from './filter-state-to-where';
+import { isBacklinkFilter } from './filter-state-to-where';
 import type { Filter, ModesByColumn } from './filters';
 import {
-  type DropdownSelectionMode,
   type DropdownSelectionModes,
   type DropdownSelections,
   applyDropdownSelectionsToFilters,
+  effectiveDropdownMode,
+  effectiveDropdownSelection,
+  filterDefaultsForColumn,
 } from './table-dropdown-selections';
 
 export type { DropdownOption } from './fetch-dropdown-options';
@@ -52,7 +55,6 @@ export function useDropdownOptions({
   baseModesByColumn,
   selections,
   selectionModes,
-  ownMode,
   facetColumnIds,
   collectionItemIds,
   pinned,
@@ -65,10 +67,8 @@ export function useDropdownOptions({
   baseModesByColumn: ModesByColumn;
   /** Personal selections; the ones on OTHER facet columns narrow this population. */
   selections: DropdownSelections;
-  /** Per-dropdown combinators — other columns' modes shape this population like their selections do. */
+  /** Per-dropdown combinators — other columns' modes shape populations like their selections do. */
   selectionModes: DropdownSelectionModes;
-  /** THIS dropdown's effective combinator; 'AND' makes counts include its own current picks. */
-  ownMode: DropdownSelectionMode;
   /** The overlay's applied columns — the facet dimensions. */
   facetColumnIds: string[];
   /** COLLECTION blocks: the ordered item ids that ARE the population; null for query sources. */
@@ -81,19 +81,45 @@ export function useDropdownOptions({
   /** One-shot intents (end of list, "scan more"); each extends the walk by one more auto window. */
   demandGrants?: number;
 }) {
-  const population: DropdownPopulation = React.useMemo(() => {
-    const otherColumns = facetColumnIds.filter(id => !ID.equals(id, columnId));
-    const overlaid = applyDropdownSelectionsToFilters(
-      baseFilterState,
-      baseModesByColumn,
-      selections,
-      otherColumns,
-      selectionModes
-    );
-    const withoutColumn = overlaid.filterState.filter(f => !(ID.equals(f.columnId, columnId) && !f.isBacklink));
-    const where = filterStateToWhere(withoutColumn, overlaid.modesByColumn);
-    return collectionItemIds ? { kind: 'ids', ids: collectionItemIds, where } : { kind: 'query', where };
-  }, [baseFilterState, baseModesByColumn, selections, selectionModes, facetColumnIds, columnId, collectionItemIds]);
+  // The hook is the single source of truth for this dropdown's combinator
+  // and both populations — a caller cannot desynchronize what the radio
+  // shows from what the queries do.
+  const filterDefaults = React.useMemo(
+    () => filterDefaultsForColumn(baseFilterState, columnId),
+    [baseFilterState, columnId]
+  );
+  const ownMode = effectiveDropdownMode(selectionModes, columnId, filterDefaults, baseModesByColumn);
+  const ownSelected = effectiveDropdownSelection(selections, columnId, filterDefaults);
+
+  const buildPopulation = React.useCallback(
+    (appliedColumns: string[], stripOwnForward: boolean): DropdownPopulation => {
+      const overlaid = applyDropdownSelectionsToFilters(
+        baseFilterState,
+        baseModesByColumn,
+        selections,
+        appliedColumns,
+        selectionModes
+      );
+      const filters = stripOwnForward
+        ? overlaid.filterState.filter(f => !(ID.equals(f.columnId, columnId) && !isBacklinkFilter(f)))
+        : overlaid.filterState;
+      const where = filterStateToWhere(filters, overlaid.modesByColumn);
+      return collectionItemIds ? { kind: 'ids', ids: collectionItemIds, where } : { kind: 'query', where };
+    },
+    [baseFilterState, baseModesByColumn, selections, selectionModes, columnId, collectionItemIds]
+  );
+
+  const population: DropdownPopulation = React.useMemo(
+    () =>
+      buildPopulation(
+        facetColumnIds.filter(id => !ID.equals(id, columnId)),
+        true
+      ),
+    [buildPopulation, facetColumnIds, columnId]
+  );
+
+  /** Own picks constrain the counts (intersection semantics) — the walk tally cannot serve then. */
+  const countsDiverge = ownMode === 'AND' && ownSelected.length > 0;
 
   /**
    * Where COUNTS are evaluated. In union mode this is the walk population
@@ -103,27 +129,10 @@ export function useDropdownOptions({
    * incompatible options gray out at 0. The option LIST always enumerates
    * from the unconstrained walk so options gray rather than vanish.
    */
-  const countPopulation: DropdownPopulation = React.useMemo(() => {
-    if (ownMode !== 'AND') return population;
-    const overlaid = applyDropdownSelectionsToFilters(
-      baseFilterState,
-      baseModesByColumn,
-      selections,
-      facetColumnIds,
-      selectionModes
-    );
-    const where = filterStateToWhere(overlaid.filterState, overlaid.modesByColumn);
-    return collectionItemIds ? { kind: 'ids', ids: collectionItemIds, where } : { kind: 'query', where };
-  }, [
-    ownMode,
-    population,
-    baseFilterState,
-    baseModesByColumn,
-    selections,
-    selectionModes,
-    facetColumnIds,
-    collectionItemIds,
-  ]);
+  const countPopulation: DropdownPopulation = React.useMemo(
+    () => (countsDiverge ? buildPopulation(facetColumnIds, false) : population),
+    [countsDiverge, buildPopulation, facetColumnIds, population]
+  );
 
   const populationKey = React.useMemo(
     () =>
@@ -203,7 +212,8 @@ export function useDropdownOptions({
   return {
     options,
     nameOf,
-    population,
+    ownMode,
+    countsDiverge,
     countPopulation,
     isWalking,
     hasMoreInScope,

@@ -9,7 +9,6 @@ import {
   DropdownSelectionMode,
   DropdownSelectionModes,
   DropdownSelections,
-  effectiveDropdownMode,
   effectiveDropdownSelection,
   filterDefaultsForColumn,
   toggleDropdownSelection,
@@ -154,9 +153,10 @@ function TableBlockDropdown({
     [baseFilterState, columnId]
   );
   const selected = effectiveDropdownSelection(selections, columnId, filterDefaults);
-  const isOverridden = selections[columnId] !== undefined;
-  // Union ('Any') or intersection ('All') of this menu's checked options.
-  const ownMode = effectiveDropdownMode(selectionModes, columnId, filterDefaults, baseModesByColumn);
+  // A personal override is selections OR a stored Any/All choice — both
+  // must light the pill and offer the reset path, or a mode-only override
+  // becomes invisible and unclearable.
+  const isOverridden = selections[columnId] !== undefined || selectionModes[columnId] !== undefined;
 
   // Names for the preset values come straight from the resolved filters, so
   // the pill reads correctly before (or without) any fetch.
@@ -193,21 +193,31 @@ function TableBlockDropdown({
 
   // The dropdown's one scope: this property's values across the table's
   // population; the first pages load on their own, the rest on demand.
-  const { options, nameOf, countPopulation, isWalking, hasMoreInScope, scopeExhausted, isError, retry, scannedCount } =
-    useDropdownOptions({
-      columnId,
-      baseFilterState,
-      baseModesByColumn,
-      selections,
-      selectionModes,
-      ownMode,
-      facetColumnIds,
-      collectionItemIds,
-      pinned,
-      enabled: open && populationReady,
-      searchDemand: query.length > 0,
-      demandGrants,
-    });
+  const {
+    options,
+    nameOf,
+    ownMode,
+    countsDiverge,
+    countPopulation,
+    isWalking,
+    hasMoreInScope,
+    scopeExhausted,
+    isError,
+    retry,
+    scannedCount,
+  } = useDropdownOptions({
+    columnId,
+    baseFilterState,
+    baseModesByColumn,
+    selections,
+    selectionModes,
+    facetColumnIds,
+    collectionItemIds,
+    pinned,
+    enabled: open && populationReady,
+    searchDemand: query.length > 0,
+    demandGrants,
+  });
 
   const showLoading = isWalking || (open && !populationReady);
 
@@ -231,11 +241,11 @@ function TableBlockDropdown({
   // Intersection mode makes the walk's tally unusable (it counts the
   // population WITHOUT this menu's own picks), so counts come from the
   // server whenever the own picks constrain — even on an exhausted walk.
-  const countsDiverge = ownMode === 'AND' && selected.length > 0;
   const { counts: exactCounts, pendingIds: pendingCountIds } = useExactOptionCounts({
     columnId,
     population: countPopulation,
     optionIds: revealedIds,
+    checkedIds: countsDiverge ? selected : [],
     enabled: open && populationReady && (countsDiverge || !scopeExhausted),
   });
   const hasMoreToReveal = visibleCount < visibleOptions.length;
@@ -338,30 +348,30 @@ function TableBlockDropdown({
             />
           </div>
         )}
-        <div className="flex shrink-0 items-center justify-between gap-2 px-2 pt-2 pb-1">
-          <span className="text-footnote text-grey-04">Show rows matching</span>
-          <div
-            className="flex shrink-0 overflow-hidden rounded border border-grey-02"
-            role="radiogroup"
-            aria-label="Combine checked options"
-          >
-            {(['OR', 'AND'] as const).map(mode => (
-              <button
-                key={mode}
-                type="button"
-                role="radio"
-                aria-checked={ownMode === mode}
-                onClick={() => setColumnMode(columnId, mode)}
-                className={cx(
-                  'px-2 py-0.5 text-footnote transition-colors',
-                  ownMode === mode ? 'bg-grey-02 text-text' : 'bg-white text-grey-04 hover:text-text'
-                )}
-              >
-                {mode === 'OR' ? 'Any' : 'All'}
-              </button>
-            ))}
+        {!isError && (options.length > 1 || selectionModes[columnId] !== undefined) && (
+          <div className="flex shrink-0 items-center justify-between gap-2 px-2 pt-2 pb-1">
+            <span className="text-footnote text-grey-04">Show rows matching</span>
+            <div
+              className="flex shrink-0 overflow-hidden rounded border border-grey-02"
+              aria-label="Combine checked options"
+            >
+              {(['OR', 'AND'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={ownMode === mode}
+                  onClick={() => setColumnMode(columnId, mode)}
+                  className={cx(
+                    'px-2 py-0.5 text-footnote transition-colors',
+                    ownMode === mode ? 'bg-grey-02 text-text' : 'bg-white text-grey-04 hover:text-text'
+                  )}
+                >
+                  {mode === 'OR' ? 'Any' : 'All'}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
         <div
           ref={setListEl}
           role="group"
