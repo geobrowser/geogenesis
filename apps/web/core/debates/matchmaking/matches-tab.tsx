@@ -28,7 +28,8 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
 
   const matchesQuery = useMatchmakingMatches(true);
   const requestsQuery = useDebateRequests(true);
-  const { data: activity } = useDebateActivity(true);
+  const activityQuery = useDebateActivity(true);
+  const activity = activityQuery.data;
 
   const serverMatches = React.useMemo(() => matchesQuery.data?.matches ?? [], [matchesQuery.data]);
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
@@ -69,7 +70,15 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
-          isLoading={matchesQuery.isLoading}
+          // `activity` is a second query, and an empty list cannot be described without it: both
+          // the message and the note below say something different depending on whether the viewer
+          // has marked themselves unavailable. Whichever request lands second decides what this
+          // reads, so with nothing to show the skeleton waits for the answer rather than asserting
+          // the wrong one and correcting itself a moment later.
+          //
+          // Only while empty. A list with rows in it renders on the matches alone, as it always
+          // has — nothing above depends on `activity` then.
+          isLoading={matchesQuery.isLoading || (filtered.length === 0 && activityQuery.isLoading)}
           error={matchesQuery.error}
           onRetry={() => void matchesQuery.refetch()}
           isEmpty={filtered.length === 0}

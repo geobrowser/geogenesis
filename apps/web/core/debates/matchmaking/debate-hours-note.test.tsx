@@ -78,7 +78,8 @@ describe('DebateHoursNote', () => {
     expect(screen.getByText(/Come back then/)).toBeTruthy();
 
     act(() => {
-      vi.advanceTimersByTime(61_000 + 1_000);
+      // Just past the boundary, not a second past it: the flip has to be effectively immediate.
+      vi.advanceTimersByTime(60_000 + 100);
     });
 
     expect(screen.queryByText(/Come back then/)).toBeNull();
@@ -90,7 +91,8 @@ describe('DebateHoursNote', () => {
     expect(screen.getByText(/Stay here/)).toBeTruthy();
 
     act(() => {
-      vi.advanceTimersByTime(61_000 + 1_000);
+      // Just past the boundary, not a second past it: the flip has to be effectively immediate.
+      vi.advanceTimersByTime(60_000 + 100);
     });
 
     expect(screen.getByText(/Come back then/)).toBeTruthy();

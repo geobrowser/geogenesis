@@ -37,6 +37,20 @@ export function DebateHoursNote({
 }
 
 /**
+ * Enough to clear the boundary rather than land a hair short of it — `setTimeout` counts on a
+ * different clock than `Date`, so a wake aimed exactly at 9:00:00 can read 8:59:59.999. Small
+ * enough that nobody sees it: the copy is a second sentence in an empty state, not a countdown.
+ */
+const BOUNDARY_OVERSHOOT_MS = 50;
+
+/**
+ * Floor on a reschedule. A wake that lands early anyway recomputes the same side and asks for the
+ * few milliseconds it was short by, and this keeps that from becoming a busy loop — at the cost of
+ * at most this much staleness at the boundary, which is the only place it can apply.
+ */
+const MIN_TICK_MS = 250;
+
+/**
  * `now`, re-read each time the open/closed answer changes.
  *
  * Scheduled to the boundary rather than polled: the copy has to flip at 9:00 without a refresh, and
@@ -52,9 +66,10 @@ function useTickingNow() {
       const current = new Date();
       setNow(current);
       const { nextTransition } = debateHoursWindow(current);
-      // Aimed just past the boundary. A timer that fires a millisecond early would recompute the
-      // same side of it and reschedule for ~0ms, and the floor keeps that from becoming a spin.
-      timer = setTimeout(tick, Math.max(1_000, nextTransition.getTime() - current.getTime() + 1_000));
+      timer = setTimeout(
+        tick,
+        Math.max(MIN_TICK_MS, nextTransition.getTime() - current.getTime() + BOUNDARY_OVERSHOOT_MS)
+      );
     };
 
     tick();
