@@ -40,8 +40,10 @@ import type { RemoteParticipant } from 'livekit-client';
 // on its own the moment they land — and an open mic they never chose reads as intrusive. They still
 // hear the other side immediately; unmuting is one click on the local row.
 //
-// Joining muted also means `<LiveKitRoom>` never calls `getUserMedia` on connect, so the picker no
-// longer seizes the microphone (or prompts for it) behind a call the user has running elsewhere.
+// Joining muted also stops `<LiveKitRoom>` capturing on connect: no track is published and nothing
+// is held open behind a call the user has running elsewhere. That covers LiveKit's automatic
+// capture only — `usePrimedMicrophonePermission` below still opens the device once, deliberately,
+// when the permission has never been answered, and hands the stream straight back.
 const JOIN_MIC_ENABLED = false;
 
 /** How long "You're muted" stays up before it stops being information and starts being noise. */

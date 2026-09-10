@@ -712,8 +712,8 @@ describe('RematchVoicePill', () => {
   });
 
   // The dock connects the moment the pair lands here, with no click in between, so an unmuted join
-  // opens a microphone nobody asked to open. `audio: false` is also what leaves `getUserMedia`
-  // unclaimed, keeping the picker out of a call the user has running in another tab.
+  // opens a microphone nobody asked to open. This pins LiveKit's own capture only — the prime
+  // still reaches `getUserMedia` once on the same visit, which the tests below cover.
   it('joins with the microphone muted', async () => {
     render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
