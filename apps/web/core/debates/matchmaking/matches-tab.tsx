@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { useAtom } from 'jotai';
+
 import type { MatchmakingMatch } from '../api';
 import { useDebateActivity } from '../hooks';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
@@ -11,9 +13,9 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { countBy, orderFacetOptions, toggleId } from './topic-facets';
+import { countBy, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
 import { useStableListOrder } from './use-stable-list-order';
-import type { DebatesHubTab } from '~/atoms';
+import { type DebatesHubTab, debatesHubMatchesSpaceIdsAtom } from '~/atoms';
 
 /**
  * Claims where you're ready to debate and someone holding the opposite response is online and
@@ -24,7 +26,10 @@ import type { DebatesHubTab } from '~/atoms';
  * tab filters by space only.
  */
 export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
-  const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
+  // Session-scoped, like the Claims tab's: the hub closes on an outside pointer-down, so a
+  // click-away to dismiss the dropdown unmounted this tab and took the selection with it
+  // (GEO-2850).
+  const [spaceIds, setSpaceIds] = useAtom(debatesHubMatchesSpaceIdsAtom);
 
   const matchesQuery = useMatchmakingMatches(true);
   const requestsQuery = useDebateRequests(true);
@@ -43,8 +48,18 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
 
   // Counted from the matches themselves — this tab has no server facet, and the whole list is in
   // hand, so the rows are the complete answer.
+  //
+  // A selected space is kept on the menu even once nothing counts towards it, the same way
+  // `useSpaceFilterMenu` does it for the Claims tab. The selection outlives this mount now
+  // (GEO-2850), so it can outlive the match that put the space on the menu in the first place —
+  // the other side goes offline while the panel is closed, and reopening it would otherwise show
+  // an empty list filtered by a space with no row left to untick it by.
   const facetSpaces = React.useMemo(
-    () => orderFacetOptions(countBy(serverMatches.map(match => ({ id: match.claim.space_id, name: null }))), spaceIds),
+    () =>
+      orderFacetOptions(
+        keepSelectedVisible(countBy(serverMatches.map(match => ({ id: match.claim.space_id, name: null }))), spaceIds),
+        spaceIds
+      ),
     [serverMatches, spaceIds]
   );
 
@@ -52,6 +67,10 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
     () => matches.filter(match => spaceIds.length === 0 || spaceIds.includes(match.claim.space_id)),
     [matches, spaceIds]
   );
+
+  // The viewer's own filter emptied a list that has something in it — the one empty state here
+  // they can undo, and the one `serverMatches.length === 0` is false for.
+  const filteredBySpace = filtered.length === 0 && serverMatches.length > 0;
 
   return (
     <div className="flex flex-col">
@@ -85,10 +104,15 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           // A match needs three things at once, and the old copy asserted which one was missing
           // without being able to know. Name all of them instead, starting with the half the
           // viewer controls.
+          // The space filter comes first because it is the only one of these the viewer can undo in
+          // a click — and it survives a close and reopen now (GEO-2850), so a list it emptied would
+          // otherwise be blamed on having no positions or on nobody being online.
           emptyMessage={
-            activity?.available_to_debate === false
-              ? 'You’re marked unavailable, so nobody can be matched with you.'
-              : 'Matches appear once you’ve taken a position on a claim and someone holding the opposite position is online and ready too.'
+            filteredBySpace
+              ? 'No matches in the spaces you’ve picked.'
+              : activity?.available_to_debate === false
+                ? 'You’re marked unavailable, so nobody can be matched with you.'
+                : 'Matches appear once you’ve taken a position on a claim and someone holding the opposite position is online and ready too.'
           }
           // GEO-2840. Read off `serverMatches` rather than off the space filter: with nothing to
           // match on at all, the filter is not what emptied the list, so the test is whether anyone
@@ -107,7 +131,13 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           emptyNote={serverMatches.length === 0 ? <DebateHoursNote live /> : undefined}
           // Same label as People's, because it is the same action out of the same dead end. Two
           // names for one button in one panel is a difference that implies something.
-          emptyAction={{ label: 'Explore claims', onClick: () => onTabChange('claims') }}
+          // Clearing the filter is the whole answer when the filter is the cause, and browsing claims
+          // cannot be — there are matches, just not in the spaces on screen.
+          emptyAction={
+            filteredBySpace
+              ? { label: 'Clear filters', onClick: () => setSpaceIds([]) }
+              : { label: 'Explore claims', onClick: () => onTabChange('claims') }
+          }
         >
           <HubCardList>
             {filtered.map(match => (
