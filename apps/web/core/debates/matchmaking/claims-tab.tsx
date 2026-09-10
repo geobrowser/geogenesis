@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { useAtom } from 'jotai';
+import { useSearchParams } from 'next/navigation';
 
 import { claimResponseKind } from '~/core/claims/response-kind';
 import { FEATURED_TAG_ID } from '~/core/constants';
@@ -38,6 +39,7 @@ import {
 } from '../tagged-claims';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
+import { fromClaimsFilterSearch } from './claims-filter-params';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests } from './hooks';
 import { HubFacetRail } from './hub-facet-rail';
@@ -144,7 +146,8 @@ export type ClaimsLayout = 'panel' | 'workspace';
 
 /**
  * `workspace`: facet rail + grid; panel menus are the narrow fallback.
- * Filters are local — layouts do not share search state (a shared atom needs care with effects below).
+ * Filters are passed, not shared: the panel publishes a snapshot that its expand link puts in the
+ * URL, and the workspace seeds from that URL on mount. Nothing comes back.
  */
 export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) {
   const workspace = layout === 'workspace';
@@ -183,6 +186,26 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
   const [spaceIds, setSpaceIds] = useAtom(debatesHubClaimsSpaceIdsAtom);
   const [topicIds, setTopicIds] = useAtom(debatesHubClaimsTopicIdsAtom);
   const [spaceSeedSpent, setSpaceSeedSpent] = useAtom(debatesHubClaimsSpaceSeedSpentAtom);
+
+  const searchParams = useSearchParams();
+  const urlSeedApplied = React.useRef(false);
+  React.useEffect(() => {
+    if (!workspace || urlSeedApplied.current || !searchParams) return;
+    urlSeedApplied.current = true;
+
+    const seed = fromClaimsFilterSearch(
+      new URLSearchParams(searchParams.toString()),
+      FILTER_OPTIONS.map(option => option.value)
+    );
+
+    if (seed.scope) setFilter(seed.scope);
+    if (seed.search) setSearch(seed.search);
+    if (seed.topicIds.length > 0) setTopicIds([...seed.topicIds]);
+    if (seed.spaceIds.length > 0) {
+      setSpaceIds([...seed.spaceIds]);
+      setSpaceSeedSpent(true);
+    }
+  }, [workspace, searchParams, setFilter, setSpaceIds, setTopicIds, setSpaceSeedSpent]);
 
   const {
     allowlist: spaceAllowlist,

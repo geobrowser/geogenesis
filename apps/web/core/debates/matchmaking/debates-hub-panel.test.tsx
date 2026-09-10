@@ -549,3 +549,34 @@ describe('the way out to the full-screen hub', () => {
     expect(store.get(debatesHubAtom)).toBeNull();
   });
 });
+
+describe('the filters the expand link carries', () => {
+  it('links to a bare route when nothing is narrowed', () => {
+    renderOpen('claims');
+
+    expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute('href', '/matchmaking');
+  });
+
+  it('carries the tab’s narrowing into the URL', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'claims' });
+    store.set(debatesHubClaimsFilterAtom, 'mine');
+    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+    store.set(debatesHubClaimsTopicIdsAtom, ['topic-a', 'topic-b']);
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    const params = new URLSearchParams(href.split('?')[1] ?? '');
+    expect(params.get('scope')).toBe('mine');
+    // Search is not carried: it is local to the Claims tab rather than session-scoped like the
+    // three below, so there is nothing for this link to read while that tab may be unmounted.
+    expect(params.get('q')).toBeNull();
+    expect(params.get('spaces')).toBe('space-a');
+    expect(params.get('topics')).toBe('topic-a,topic-b');
+  });
+});
