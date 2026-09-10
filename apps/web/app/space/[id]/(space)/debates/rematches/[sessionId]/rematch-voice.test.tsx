@@ -782,6 +782,32 @@ describe('RematchVoicePill', () => {
     expect(mocks.getUserMedia).not.toHaveBeenCalled();
   });
 
+  // Dismissing a permission dialog — closing it rather than answering — leaves the permission on
+  // 'prompt', so the settled-state guard lets a second ask straight through. Nothing but a
+  // per-visit latch stops the dock re-prompting someone who has already waved the dialog away.
+  it('primes once a visit, however often the dock cycles back to wanting one', async () => {
+    mocks.isMicrophoneEnabled = false;
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    await flushOwnership();
+    await waitFor(() => expect(mocks.getUserMedia).toHaveBeenCalledTimes(1));
+
+    // Unmute, then mute again. Both flips run through the `!micIntent` gate, so the prime's
+    // `enabled` goes false and back to true — the same shape a takeover handed back or a token
+    // retry produces.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+    });
+    mocks.isMicrophoneEnabled = true;
+    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
+    });
+
+    expect(mocks.micPermissionState).toBe('prompt');
+    expect(mocks.getUserMedia).toHaveBeenCalledTimes(1);
+  });
+
   // The pair usually arrives straight from a debate, where the origin was already granted the
   // microphone. Priming again would open the device for nothing.
   it('skips the prime when the permission is already settled', async () => {
@@ -863,6 +889,31 @@ describe('RematchVoicePill', () => {
     mocks.isSpeaking = true;
     rerender(<RematchVoicePill session={session} currentUserId="me" />);
     expect(screen.getByTestId('muted-nudge')).toBeInTheDocument();
+  });
+
+  // The click that answers the nudge lands in the one window where `isMicrophoneEnabled` is still
+  // false — the permission dialog holds it there until the user answers. Waiting on `muted` to
+  // clear would leave "You're muted" sitting over the button they just pressed for as long as the
+  // dialog is open, so the click has to take the bubble down itself.
+  it('takes the nudge down on the unmute click, before the microphone opens', async () => {
+    mocks.isMicrophoneEnabled = false;
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    mocks.isSpeaking = true;
+    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    expect(screen.getByTestId('muted-nudge')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+    });
+
+    // Still muted as far as LiveKit is concerned — the dialog has not been answered.
+    expect(mocks.isMicrophoneEnabled).toBe(false);
+    expect(screen.queryByTestId('muted-nudge')).toBeNull();
+    expect(screen.getByTestId('muted-nudge-announcement')).toHaveTextContent('');
   });
 
   it('leaves an unmuted user alone when the opponent speaks', async () => {

@@ -84,8 +84,17 @@ async function microphonePermissionState(): Promise<PermissionState | 'unsupport
  * it through LiveKit's `onMediaDeviceFailure` like any other microphone failure.
  */
 function usePrimedMicrophonePermission(enabled: boolean, deviceId?: string) {
+  // Once per visit, whatever `enabled` does afterwards. A dismissed prompt — closed rather than
+  // answered — leaves the permission on 'prompt', so without this every later false→true flip
+  // asks again: a takeover handed back, a token retry, or simply muting again after an unmute.
+  // Re-asking someone who has already waved the dialog away is the unsolicited prompt this whole
+  // flow is trying to remove.
+  const attemptedRef = React.useRef(false);
+
   React.useEffect(() => {
-    if (!enabled || typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+    if (!enabled || attemptedRef.current) return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+    attemptedRef.current = true;
     let cancelled = false;
 
     void (async () => {
@@ -156,7 +165,16 @@ function useMutedNudge(muted: boolean, opponentAudible: boolean, spentRef: React
     if (!muted) setVisible(false);
   }, [muted]);
 
-  return visible;
+  // For the mute button, which cannot wait for `muted` to catch up: unmuting leaves
+  // `isMicrophoneEnabled` false for as long as the permission dialog is open, so the effect above
+  // would keep the bubble on screen for seconds after the click that answered it. Spending the ref
+  // alone is not enough — that stops the next nudge, not the one already rendered.
+  const dismiss = React.useCallback(() => {
+    spentRef.current = true;
+    setVisible(false);
+  }, [spentRef]);
+
+  return { visible, dismiss };
 }
 
 /**
@@ -829,7 +847,11 @@ function LocalAudioControls({
 
   const muted = !isMicrophoneEnabled || Boolean(micFailure);
   // A dead microphone has its own note under the dock, which says more than this could.
-  const nudgeVisible = useMutedNudge(muted && !micFailure, opponentAudible, nudgeSpentRef);
+  const { visible: nudgeVisible, dismiss: dismissNudge } = useMutedNudge(
+    muted && !micFailure,
+    opponentAudible,
+    nudgeSpentRef
+  );
   const settingsTrigger = (
     <button
       ref={triggerRef}
@@ -866,12 +888,12 @@ function LocalAudioControls({
         onClick={() => {
           const next = !isMicrophoneEnabled;
           // Whichever way this click goes, the user has just found the control — so the nudge
-          // that exists to point at it has nothing left to say. Spending it here also covers two
+          // that exists to point at it has nothing left to say. Dismissing here also covers two
           // states it would otherwise misread: muting on purpose looks exactly like the join
           // default, and unmuting leaves `isMicrophoneEnabled` false for as long as the
-          // permission dialog is open, both of which would pop the bubble at someone who is
-          // already dealing with the microphone.
-          nudgeSpentRef.current = true;
+          // permission dialog is open, both of which would leave the bubble up in front of
+          // someone who is already dealing with the microphone.
+          dismissNudge();
           // Record the intent before publishing it, so a reconnect restores this choice rather
           // than the join-time default.
           onMicIntentChange(next);
