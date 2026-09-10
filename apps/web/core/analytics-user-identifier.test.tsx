@@ -221,6 +221,22 @@ describe('AnalyticsUserIdentifier', () => {
     expect(bindIdentity).toHaveBeenCalledTimes(1);
   });
 
+  it('binds a renewed browser epoch after a successful binding', async () => {
+    vi.stubEnv('NEXT_PUBLIC_GEO_ANALYTICS_VERIFIED_IDENTITY', 'true');
+    mocks.privyState.ready = true;
+    mocks.privyState.authenticated = true;
+    mocks.privyState.user = { id: 'did:privy:renew' };
+    mocks.privyState.getAccessToken.mockResolvedValue('fresh-token');
+    const bindIdentity = vi.fn().mockResolvedValue(true);
+    (window as any).lytics.bindIdentity = bindIdentity;
+    const { AnalyticsUserIdentifier } = await import('./analytics-user-identifier');
+    render(<AnalyticsUserIdentifier />);
+    await waitFor(() => expect(bindIdentity).toHaveBeenCalledTimes(1));
+    await act(async () => { window.dispatchEvent(new Event('geo-analytics-identity-epoch-issued')); });
+    await waitFor(() => expect(bindIdentity).toHaveBeenCalledTimes(2));
+    expect(mocks.privyState.getAccessToken).toHaveBeenCalledTimes(2);
+  });
+
   it('does not overlap recovery events with an in-flight binding or rebind after success', async () => {
     vi.useFakeTimers();
     vi.stubEnv('NEXT_PUBLIC_GEO_ANALYTICS_VERIFIED_IDENTITY', 'true');

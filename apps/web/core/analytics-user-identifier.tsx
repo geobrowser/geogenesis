@@ -97,12 +97,21 @@ export function AnalyticsUserIdentifier() {
       retry = 0;
       void attempt();
     }
+    const renew = () => {
+      bound = false;
+      retry = 0;
+      // Epoch issuance can occur inside the current binding request; that request
+      // already owns the new epoch and must finish before another attempt starts.
+      if (!inFlight) resume();
+    };
+    window.addEventListener('geo-analytics-identity-epoch-issued', renew);
     window.addEventListener('online', resume);
     document.addEventListener('visibilitychange', resume);
     void attempt();
     return () => {
       current = false;
       clearTimeout(timer);
+      window.removeEventListener('geo-analytics-identity-epoch-issued', renew);
       window.removeEventListener('online', resume);
       document.removeEventListener('visibilitychange', resume);
     };
