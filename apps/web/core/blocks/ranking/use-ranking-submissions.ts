@@ -132,8 +132,18 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   );
 
   // Purely clock-based: the ballot is live until the block's submission window
-  // has elapsed since it was created. The block's Aggregated rankings relations
-  // are no help here — they retain every past ballot indefinitely.
+  // has elapsed since it was created.
+  //
+  // The block's `Aggregated rankings` relations cannot answer this. They hold one
+  // relation per *contributing author*, not every past ballot — the indexer
+  // rewrites them from the ballots that fed the current projection each sweep. A
+  // block with 56 submissions from 5 people carries 5. (An earlier comment here
+  // claimed they "retain every past ballot indefinitely"; they do not. GEO-2871.)
+  //
+  // Note this clock is the client's alone. Since gaia#921 (GEO-2869) the indexer
+  // does not expire ballots at all — an old one is weighted down, never dropped —
+  // so "rolled off" now means only "time to rank again", never "your ranking
+  // stopped counting".
   const isSubmissionLive = React.useMemo(() => {
     if (!isRolling || !myRankEntity) return true;
     if (submissionFrequencyHours == null || submittedAtMs === 0) return true;
@@ -143,13 +153,25 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   const hasRolledOff = isRolling && Boolean(myRankEntity) && !isSubmissionLive;
 
   // A rolled-off ballot is treated as absent everywhere: the block's views and
-  // the compose flow open fresh, as if the author hadn't ranked yet. (An earlier
-  // iteration retained the expired ballot because the indexer kept only the
-  // newest rank per author, so a rebuilt-from-scratch short ballot permanently
-  // superseded the fuller one — see #2122. The indexer now retains every ballot
-  // in the aggregate, so a fresh submission adds to it instead of replacing.)
+  // the compose flow open fresh, as if the author hadn't ranked yet.
   // `hasRolledOff` still drives the "Rank" call to action, and publishing still
   // mints a fresh rank entity below (keyed off myRankEntity, not mySubmission).
+  //
+  // **The justification that used to sit here was false.** It said the #2122
+  // failure — rebuilding a short ballot from scratch permanently superseding a
+  // fuller one — was fixed because "the indexer now retains every ballot in the
+  // aggregate, so a fresh submission adds to it instead of replacing". It does
+  // not. `ranking-indexer/src/dedup.rs` keeps only the most-recently-updated
+  // submission per (block, personal space), by design: one vote per person.
+  // Verified on live data — 9 in-window ballots from 5 people produced exactly 5
+  // aggregated rankings.
+  //
+  // So #2122 is still live: blank the sheet, rank 3 things, and the 20 you ranked
+  // before are gone from your contribution. Fixing it means decoupling this
+  // blanking from the CTA — `showEditRankingButton` currently clears *because*
+  // `mySubmission` goes null (see `ranking-block-body.tsx`), so simply pre-filling
+  // the compose screen also removes the prompt to rank again. Tracked in GEO-2871;
+  // left alone here because it changes visible behaviour.
   const mySubmission = hasRolledOff ? null : apiMySubmission;
   const hasMySubmission = (mySubmission?.orderedEntityIds.length ?? 0) > 0;
 
