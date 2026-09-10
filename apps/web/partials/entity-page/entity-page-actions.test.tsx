@@ -120,9 +120,9 @@ describe('EntityPageActions', () => {
     expect(mocks.historyArgs).toMatchObject({ entityId: 'entity-1', spaceId: 'space-1' });
   });
 
-  // The mobile-only create shortcut is an icon with no text, so without a label it reaches a screen
-  // reader as the bare URL it points at.
-  it('gives the mobile create link an accessible name while editing', () => {
+  // Icon-only, so without a label it reaches a screen reader as the bare URL it points at.
+  // (It is hidden on phones, not shown only there — `sm` is max-width 639px in this repo.)
+  it('gives the create link an accessible name while editing', () => {
     mocks.isEditing = true;
     render(<EntityPageActions entityId="entity-1" spaceId="space-1" />);
 

@@ -85,6 +85,19 @@ describe('EntityPageTitle accessory', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveClass('text-entityTitle');
   });
 
+  /**
+   * The badge is a fixed-height pill next to a title that is now 44, 36 or 26px. Master nudged it
+   * with `mt-[9px]`, tuned against a title fixed at 52px — carried over, that offset does not
+   * scale, and at 26px it reads as the badge sagging below the name. The row centres it instead.
+   */
+  it('aligns the accessory by the row rather than a fixed pixel offset', () => {
+    renderTitle({ accessory: <span data-testid="verified" /> });
+
+    const wrapper = screen.getByTestId('verified').parentElement;
+    expect(wrapper?.className).not.toMatch(/\bm[tby]-\[/);
+    expect(screen.getByRole('heading', { level: 1 }).parentElement).toHaveClass('items-center');
+  });
+
   // Editing swaps the `h1` for a textarea; an inline badge beside a growing textarea has nowhere
   // to sit, so it is dropped rather than repositioned.
   it('is left out while editing', () => {

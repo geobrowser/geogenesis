@@ -63,7 +63,11 @@ export function EntityPageTitle({
           <h1 className={cx(titleTypographyClassName, 'min-w-0 wrap-break-word text-text')}>
             {value || ZERO_WIDTH_SPACE}
           </h1>
-          <span className="mt-[9px] inline-flex shrink-0">{accessory}</span>
+          {/* Centred by the row, with no pixel nudge. Master offset this by `mt-[9px]`, tuned
+              against a title fixed at 52px; the token now steps 44/36/26, and a fixed offset
+              reads as the badge sagging below a 26px title. The badge is a fixed-height pill
+              either way, so it cannot scale with the text. */}
+          <span className="inline-flex shrink-0">{accessory}</span>
         </div>
       ) : (
         <h1 className={cx(titleTypographyClassName, 'w-full wrap-break-word text-text')}>{value || ZERO_WIDTH_SPACE}</h1>

@@ -147,6 +147,9 @@ export function EditableSpaceHeading({
             {isSpacePage && (
               <>
                 {isEditing && (
+                  // NB: desktop-first breakpoints — `sm` is max-width 639px, so `sm:hidden` hides
+                  // this on phones and shows it everywhere else. Matches the entity row's link;
+                  // only the label is new.
                   <Link
                     href={NavUtils.toEntity(spaceId, ID.createEntityId())}
                     aria-label="Create new entity"

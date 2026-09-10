@@ -26,7 +26,7 @@ interface EntityPageActionsProps {
   isVoteable?: boolean;
 }
 
-/** Menu, history, mobile create, and votes — separate from type metadata */
+/** Menu, history, create, and votes — separate from type metadata */
 export function EntityPageActions({ entityId, spaceId, isVoteable = false }: EntityPageActionsProps) {
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const editable = useUserIsEditing(spaceId);
@@ -79,6 +79,9 @@ export function EntityPageActions({ entityId, spaceId, isVoteable = false }: Ent
         )}
       </HistoryPanel>
       {editable && (
+        // NB: breakpoints here are desktop-first (`sm` = max-width 639px), so `sm:hidden` hides
+        // this on phones and shows it everywhere else. Carried unchanged from master; only the
+        // label is new, since an icon-only link otherwise announces as its bare URL.
         <Link
           href={NavUtils.toEntity(spaceId, ID.createEntityId())}
           aria-label="Create new entity"
