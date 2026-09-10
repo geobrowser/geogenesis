@@ -33,7 +33,15 @@ import {
   IN_PROGRESS_CARD_HEIGHT_PX,
   InProgressBountyCard,
 } from './bounty-card';
-import { type BountyScope, CheckboxFilter, ScopeFilter } from './bounty-filters';
+import {
+  type BountyScope,
+  CheckboxFilter,
+  DEFAULT_BOUNTY_SCOPE,
+  ScopeFilter,
+  UNFILTERED_BOUNTY_SCOPE,
+  bountyScopeFromParam,
+  writeBountyScopeParam,
+} from './bounty-filters';
 import type { BountyStatusSlug } from './bounty-status';
 import { FILTER_PILL_CLASS } from './community-filter-pill';
 import { communityFullscreenActiveAtom } from '~/atoms';
@@ -49,7 +57,8 @@ const SECTION_TITLE_CLASS = 'text-[24px] leading-[29px] font-semibold tracking-[
 const selectsEverything = (selected: Set<string>, options: readonly string[]) =>
   selected.size === 0 || options.every(option => selected.has(option));
 
-function applyFilters(
+/** Exported for its own test: it is the whole of what the filter pills actually do. */
+export function applyFilters(
   bounties: SpaceBounty[],
   scope: BountyScope,
   difficulties: Set<string>,
@@ -300,13 +309,14 @@ function useBountyFilterPresentation(
   return { filtered, filterKey, controls, clearFilters };
 }
 
-function useBountyFilterState(bounties: SpaceBounty[], skills: string[]): BountyFilterState {
-  const [scope, setScope] = React.useState<BountyScope>('featured');
+/** Exported for its own test: which scope the tables open on is the whole point of this filter. */
+export function useBountyFilterState(bounties: SpaceBounty[], skills: string[]): BountyFilterState {
+  const [scope, setScope] = React.useState<BountyScope>(DEFAULT_BOUNTY_SCOPE);
   const [difficulties, setDifficulties] = React.useState<Set<string>>(() => new Set(BOUNTY_DIFFICULTY_LEVELS));
   const [selectedSkills, setSelectedSkills] = React.useState<Set<string> | null>(null);
 
   const clearFilters = React.useCallback(() => {
-    setScope('all');
+    setScope(UNFILTERED_BOUNTY_SCOPE);
     setDifficulties(new Set(BOUNTY_DIFFICULTY_LEVELS));
     setSelectedSkills(null);
   }, []);
@@ -327,7 +337,7 @@ function useUrlBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bou
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const scope: BountyScope = searchParams.get('scope') === 'all' ? 'all' : 'featured';
+  const scope = bountyScopeFromParam(searchParams.get('scope'));
 
   const difficultyParam = searchParams.get('difficulty');
   const difficulties = React.useMemo(() => {
@@ -346,8 +356,7 @@ function useUrlBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bou
     (next: BountyFilterValues) => {
       const params = new URLSearchParams(searchParams.toString());
 
-      if (next.scope === 'all') params.set('scope', 'all');
-      else params.delete('scope');
+      writeBountyScopeParam(params, next.scope);
 
       if (allDifficultiesSelected(next.difficulties)) params.delete('difficulty');
       else params.set('difficulty', [...next.difficulties].join(','));
@@ -371,7 +380,8 @@ function useUrlBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bou
     setScope: nextScope => commit({ ...values, scope: nextScope }),
     setDifficulties: nextDifficulties => commit({ ...values, difficulties: nextDifficulties }),
     setSelectedSkills: nextSelectedSkills => commit({ ...values, selectedSkills: nextSelectedSkills }),
-    clearFilters: () => commit({ scope: 'all', difficulties: new Set(BOUNTY_DIFFICULTY_LEVELS), selectedSkills: null }),
+    clearFilters: () =>
+      commit({ scope: UNFILTERED_BOUNTY_SCOPE, difficulties: new Set(BOUNTY_DIFFICULTY_LEVELS), selectedSkills: null }),
   };
 
   return useBountyFilterPresentation(bounties, skills, values, setters);
