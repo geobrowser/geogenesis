@@ -22,6 +22,15 @@ type EntityPageTitleProps = {
   accessory?: React.ReactNode;
 };
 
+/**
+ * The shared page title for an entity and a space.
+ *
+ * The three-line clamp the old `Truncate`/`ClampedText` headers applied is intentionally gone. It
+ * compensated for a title fixed at 44px on every screen, so a long name ran past three lines on a
+ * phone; the token now steps down to 26px there. Clamping on top of that would hide the end of a
+ * name with no way to reveal it — a title has no More toggle, unlike the description below it,
+ * which still clamps.
+ */
 export function EntityPageTitle({
   value,
   isEditing,
