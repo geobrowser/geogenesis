@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { MotionConfig, type PanInfo, motion, useDragControls } from 'framer-motion';
 import { useAtom, useSetAtom } from 'jotai';
+import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
@@ -13,6 +14,7 @@ import { requestsModal } from '~/core/deep-links/modal-deep-link';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { ExpandSmall } from '~/design-system/icons/expand-small';
 import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
@@ -361,6 +363,28 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           </HubSwap>
         )}
       </motion.div>
+
+      <ExpandToWorkspaceLink />
+    </div>
+  );
+}
+
+/**
+ * The way out to the full-screen hub at `/matchmaking`.
+ */
+function ExpandToWorkspaceLink() {
+  const { close } = useDebatesHub();
+
+  return (
+    <div className="shrink-0 border-t border-grey-02 px-4 py-2.5">
+      <Link
+        href="/matchmaking"
+        onClick={close}
+        className="flex items-center justify-center gap-1.5 text-metadata text-grey-04 transition-colors hover:text-text"
+      >
+        <ExpandSmall />
+        Open full screen
+      </Link>
     </div>
   );
 }

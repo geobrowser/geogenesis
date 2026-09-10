@@ -517,3 +517,35 @@ it.each<[string, { tab: DebatesHubTab } | null]>([
 
   expect(store.get(debatesHubAtom)).toEqual({ tab: 'claims' });
 });
+
+describe('the way out to the full-screen hub', () => {
+  it('offers it from every tab, not just the one it was added on', () => {
+    for (const tab of ['requests', 'matches', 'claims', 'people'] as const) {
+      const view = renderOpen(tab);
+      expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute('href', '/matchmaking');
+      cleanup();
+      void view;
+    }
+  });
+
+  /**
+   * A real anchor, so a modified click opens a tab and the destination shows on hover. A router
+   * push would give neither, and the whole point of the route is that it can be linked to.
+   */
+  it('is a link rather than a button', () => {
+    renderOpen('claims');
+
+    const link = screen.getByRole('link', { name: /open full screen/i });
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', '/matchmaking');
+  });
+
+  it('closes the panel, so it is not left over the page it navigated to', () => {
+    const store = renderOpen('claims');
+    expect(store.get(debatesHubAtom)).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('link', { name: /open full screen/i }));
+
+    expect(store.get(debatesHubAtom)).toBeNull();
+  });
+});
