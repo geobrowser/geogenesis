@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 
@@ -31,6 +31,12 @@ export type ExistingClaimEntity = {
   /** Every space holding a value or relation of the entity. */
   spaces: string[];
   types: Array<{ id: string }>;
+  /**
+   * Targets of the entity's existing Topics relations. The topics writer adds only what is
+   * missing, because `relate` does not dedupe and a repeated Topics relation renders twice.
+   * Optional so injected test lookups predating topics stay valid; absent reads as none.
+   */
+  topicIds?: string[];
 };
 
 export type ExistingClaimLookup = (entityIds: string[]) => Promise<ExistingClaimEntity[]>;
@@ -47,11 +53,14 @@ const lookupInGraph: ExistingClaimLookup = entityIds =>
                   id: entity.id,
                   spaces: (entity.spaceIds ?? []).filter((id): id is string => typeof id === 'string'),
                   types: (entity.types ?? []).flatMap(type => (type ? [{ id: type.id }] : [])),
+                  topicIds: (entity.topicRelations ?? []).flatMap(relation =>
+                    relation?.toEntityId ? [relation.toEntityId] : []
+                  ),
                 },
               ]
             : []
         ),
-      variables: { ids: entityIds },
+      variables: { ids: entityIds, topicsPropertyId: TOPICS_PROPERTY_ID },
     })
   );
 
@@ -129,6 +138,7 @@ export async function applyClaimReusePolicy(
     ),
   ];
   let verified: Set<string>;
+  const existingTopicsByEntity = new Map<string, Set<string>>();
   try {
     const entities = ids.length > 0 ? await (options.lookup ?? lookupInGraph)(ids) : [];
     const spaceKey = uuidToHex(spaceId);
@@ -141,6 +151,9 @@ export async function applyClaimReusePolicy(
         )
         .map(entity => uuidToHex(entity.id))
     );
+    for (const entity of entities) {
+      existingTopicsByEntity.set(uuidToHex(entity.id), new Set((entity.topicIds ?? []).map(uuidToHex)));
+    }
   } catch (error) {
     console.warn('[debate-acceptor] could not verify matched claims; minting all of them instead', {
       debateId: options.debateId,
@@ -159,6 +172,14 @@ export async function applyClaimReusePolicy(
       verified.has(uuidToHex(claim.existingClaimEntityId))
     ) {
       reused += 1;
+      // Topics ride reused claims too, but only the ones the entity does not already carry —
+      // the same graph read that verified the entity says which those are. Everything minted
+      // keeps its full topic set (a fresh entity has nothing to duplicate).
+      const existingTopics = existingTopicsByEntity.get(uuidToHex(claim.existingClaimEntityId));
+      if (existingTopics?.size && claim.topics?.length) {
+        const missing = claim.topics.filter(topic => !existingTopics.has(uuidToHex(topic.id)));
+        if (missing.length !== claim.topics.length) return { ...claim, topics: missing };
+      }
       return claim;
     }
     return withoutReference(claim);

@@ -42,6 +42,48 @@ afterEach(() => {
 });
 
 describe('applyClaimReusePolicy', () => {
+  it('subtracts topics the reused entity already carries and keeps the rest', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const CARRIED = { id: '27b73193ecea48fdaa46fdee40c0b717', name: 'AI and mental health' };
+    const MISSING = { id: '3f2044d6609746cd964da85414f7ba63', name: 'Morning routine' };
+    const lookup = vi.fn<ExistingClaimLookup>(async () => [
+      { id: EXISTING, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }], topicIds: [CARRIED.id] },
+    ]);
+
+    const result = await applyClaimReusePolicy(
+      [
+        {
+          text: 'Matched.',
+          isFactual: null,
+          turnIndex: 0,
+          existingClaimEntityId: EXISTING,
+          topics: [CARRIED, MISSING],
+        },
+      ],
+      SPACE,
+      { enabled: true, lookup }
+    );
+
+    expect(result[0].existingClaimEntityId).toBe(EXISTING);
+    expect(result[0].topics).toEqual([MISSING]);
+  });
+
+  it('keeps every topic on a claim whose reference is dropped (it mints a fresh entity)', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const TOPIC = { id: '27b73193ecea48fdaa46fdee40c0b717', name: 'AI and mental health' };
+    const lookup = vi.fn<ExistingClaimLookup>(async () => []);
+
+    const result = await applyClaimReusePolicy(
+      [{ text: 'Gone.', isFactual: null, turnIndex: 0, existingClaimEntityId: GONE, topics: [TOPIC] }],
+      SPACE,
+      { enabled: true, lookup }
+    );
+
+    expect(result[0].existingClaimEntityId).toBeNull();
+    expect(result[0].topics).toEqual([TOPIC]);
+  });
+
   it('drops every reference and never reads the graph while reuse is off (shadow mode)', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const lookup = vi.fn(async () => graph);

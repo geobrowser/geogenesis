@@ -360,24 +360,29 @@ describe('buildDebatePublishDraft', () => {
     expect(blockAuthoringClaim(draft, claimIdByName(draft, 'A novel point.'))).toBe(NO_SPACE);
   });
 
-  it('adds Topics relations to minted claims but never to reused entities', () => {
+  it('adds Topics relations on minted and reused claims, deduped per claim and topic', () => {
     const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
     const TOPIC = { id: '27b73193ecea48fdaa46fdee40c0b717', name: 'AI and mental health' };
+    const OTHER = { id: '3f2044d6609746cd964da85414f7ba63', name: 'Morning routine' };
     const draft = buildDebatePublishDraft(
       baseInput({
         claims: [
-          { text: 'A novel point.', isFactual: true, turnIndex: 0, topics: [TOPIC] },
-          { text: 'A restated point.', isFactual: null, turnIndex: 1, existingClaimEntityId: EXISTING, topics: [TOPIC] },
+          { text: 'A novel point.', isFactual: true, turnIndex: 0, topics: [TOPIC, OTHER] },
+          // The same reused entity appears behind both debaters' restatements with the same
+          // topic: one relation, not two. (Topics the entity already carries on the graph were
+          // subtracted upstream by the reuse policy.)
+          { text: 'A restated point.', isFactual: null, turnIndex: 0, existingClaimEntityId: EXISTING, topics: [TOPIC] },
+          { text: 'Restated again.', isFactual: null, turnIndex: 1, existingClaimEntityId: EXISTING, topics: [TOPIC] },
         ],
       }),
       { createEntityId: idFactory(), createPosition: () => 'a0' }
     );
-    // Only the minted claim gets the Topics relation; the reused entity keeps its own topics.
     const topicRelations = draft.relations.filter(r => r.type.id === TOPICS_PROPERTY_ID);
-    expect(topicRelations).toHaveLength(1);
-    expect(topicRelations[0].fromEntity.id).toBe(claimIdByName(draft, 'A novel point.'));
-    expect(topicRelations[0].toEntity.id).toBe(TOPIC.id);
-    expect(topicRelations[0].toEntity.name).toBe(TOPIC.name);
+    const mintedId = claimIdByName(draft, 'A novel point.');
+    expect(topicRelations.map(r => `${r.fromEntity.id}->${r.toEntity.id}`).sort()).toEqual(
+      [`${mintedId}->${TOPIC.id}`, `${mintedId}->${OTHER.id}`, `${EXISTING}->${TOPIC.id}`].sort()
+    );
+    expect(topicRelations.find(r => r.fromEntity.id === EXISTING)?.toEntity.name).toBe(TOPIC.name);
   });
 
   it('writes each relation once when several claims resolve to the same existing entity', () => {

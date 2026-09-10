@@ -73,8 +73,9 @@ export type DebateClaimInput = {
   existingClaimEntityId?: string | null;
   /**
    * Topics the extractor assigned to this claim, selected from the debated claim's own topic
-   * set ({KG entity id, name}). Written only when the claim mints a fresh entity — a reused
-   * entity keeps its own topics, like its Name, Types and Is factual.
+   * set ({KG entity id, name}). Written on minted and reused claims alike; for a reused entity
+   * the reuse policy has already subtracted the topics the entity carries on the graph, so the
+   * draft never writes a duplicate Topics relation.
    */
   topics?: { id: string; name: string | null }[];
 };
@@ -323,6 +324,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     // claim per debate.
     const linkedBlockClaims = new Set<string>();
     const sourcedClaims = new Set<string>();
+    const claimTopicEdges = new Set<string>();
 
     turns.forEach(turn => {
       const speakerName = turn.speakerName?.trim() ? turn.speakerName.trim() : 'Anonymous';
@@ -382,14 +384,21 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
           if (claim.isFactual !== null) {
             setBoolean(claimId, claimEntityText, CLAIM_IS_FACTUAL_PROPERTY_ID, claim.isFactual);
           }
-          for (const topic of claim.topics ?? []) {
-            relate({
-              fromEntity: claimRef,
-              propertyId: TOPICS_PROPERTY_ID,
-              toEntityId: topic.id,
-              toEntityName: topic.name,
-            });
-          }
+        }
+        // Topics ride both branches — a minted claim gets its full set, a reused entity only what
+        // the reuse policy left after subtracting the graph's current relations. Deduped per
+        // (claim, topic): a reused entity can appear behind several extracted claims carrying the
+        // same topic, and `relate` does not dedupe.
+        for (const topic of claim.topics ?? []) {
+          const edge = `${claimId}:${topic.id}`;
+          if (claimTopicEdges.has(edge)) continue;
+          claimTopicEdges.add(edge);
+          relate({
+            fromEntity: claimRef,
+            propertyId: TOPICS_PROPERTY_ID,
+            toEntityId: topic.id,
+            toEntityName: topic.name,
+          });
         }
         const blockClaimKey = `${blockId}:${claimId}`;
         if (!linkedBlockClaims.has(blockClaimKey)) {
