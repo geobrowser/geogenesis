@@ -65,4 +65,47 @@ describe('useGeoProfile', () => {
     await waitFor(() => expect(result.current.isFetched).toBe(true));
     expect(queryClient.getQueryData(profileBySpaceIdQueryKey(ADDRESS))).toBeUndefined();
   });
+
+  // GEO-2841 review. `fetchProfile` collapses a real-but-empty profile into `defaultProfile`, and
+  // once that value is under a space key no reader can tell it from "this person has no profile" —
+  // the debates avatar resolver reads it as absent and keeps whatever it was already showing.
+  it('does not seed a collapsed placeholder profile', async () => {
+    const collapsed: Profile = {
+      id: 'viewer-entity',
+      spaceId: 'space-viewer',
+      address: ADDRESS,
+      avatarUrl: null,
+      coverUrl: null,
+      name: null,
+      profileLink: null,
+    };
+    fetchProfile.mockReturnValue(Effect.succeed(collapsed));
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderHook(() => useGeoProfile(ADDRESS), { wrapper: makeWrapper(queryClient) });
+
+    await waitFor(() => expect(queryClient.getQueryData(['profile', ADDRESS])).toEqual(collapsed));
+    expect(queryClient.getQueryData(profileBySpaceIdQueryKey('space-viewer'))).toBeUndefined();
+  });
+
+  // The other direction, and the reason the guard cannot simply be "is it empty". Clearing an
+  // avatar leaves a real profile that is legitimately empty; `useEditProfile` writes that to the
+  // address entry and leaves this effect to carry it to every avatar surface.
+  it('seeds a real profile whose avatar has been removed, so the removal propagates', async () => {
+    const cleared: Profile = {
+      id: 'viewer-entity',
+      spaceId: 'space-viewer',
+      address: ADDRESS,
+      avatarUrl: null,
+      coverUrl: null,
+      name: null,
+      profileLink: '/space/space-viewer',
+    };
+    fetchProfile.mockReturnValue(Effect.succeed(cleared));
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderHook(() => useGeoProfile(ADDRESS), { wrapper: makeWrapper(queryClient) });
+
+    await waitFor(() => expect(queryClient.getQueryData(profileBySpaceIdQueryKey('space-viewer'))).toEqual(cleared));
+  });
 });
