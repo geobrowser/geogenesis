@@ -24,8 +24,68 @@ import {
   filterDefaultsForColumn,
 } from './table-dropdown-selections';
 
-/** An option row: entity id, name when known (pinned entries carry theirs), exact count when known. */
-export type DropdownOption = { id: string; name: string | null; count?: number };
+/**
+ * An option row: entity id, name when known (pinned entries carry theirs),
+ * exact count when known, and whether the current filters have exhausted it.
+ *
+ * `isExhausted` is set by {@link orderDropdownOptions} and is what the menu
+ * grays out — the rule lives here rather than in the component so that what
+ * sinks to the bottom of the list and what is drawn inert can never disagree.
+ */
+export type DropdownOption = { id: string; name: string | null; count?: number; isExhausted?: boolean };
+
+/**
+ * The menu's row order: pinned entries first (block defaults and the viewer's
+ * own picks — a preset must never go missing), then the facet's own
+ * count-descending order, and finally the options the current filters have
+ * exhausted.
+ *
+ * A definite zero can only take the table to an empty view, so it sinks below
+ * everything that can still narrow — the value stays listed and discoverable
+ * (and countable at a glance), it just stops occupying the rows a viewer
+ * reads first. Sinking is a STABLE partition: both halves keep the order they
+ * were built in, so it only ever changes which half a row is in.
+ *
+ * A checked option never sinks however low its count, because a row the
+ * viewer cannot reach is a selection they cannot undo — and in intersection
+ * mode their own picks are exactly what drove the other counts to zero.
+ */
+export function orderDropdownOptions({
+  pinned,
+  entries,
+  counts,
+  checkedIds,
+}: {
+  pinned: DropdownOption[];
+  entries: DropdownFacetEntry[];
+  /** Null while the counts for this population are still unknown — nothing sinks yet. */
+  counts: Map<string, number> | null;
+  checkedIds: string[];
+}): DropdownOption[] {
+  const checked = new Set(checkedIds.map(uuidToHex));
+  const seen = new Set<string>();
+  const available: DropdownOption[] = [];
+  const exhausted: DropdownOption[] = [];
+
+  const place = (option: DropdownOption, key: string) => {
+    const isExhausted = option.count === 0 && !checked.has(key);
+    (isExhausted ? exhausted : available).push({ ...option, isExhausted });
+  };
+
+  for (const pin of pinned) {
+    const key = uuidToHex(pin.id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    place({ ...pin, count: counts?.get(key) ?? (counts ? 0 : undefined) }, key);
+  }
+  for (const entry of entries) {
+    if (seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    place({ id: entry.id, name: null, count: counts ? (counts.get(entry.id) ?? 0) : undefined }, entry.id);
+  }
+
+  return exhausted.length === 0 ? available : [...available, ...exhausted];
+}
 
 function populationKeyOf(population: DropdownPopulation): string {
   return population.kind === 'ids'
@@ -155,23 +215,12 @@ export function useDropdownOptions({
     return new Map(source.map(entry => [entry.id, entry.count]));
   }, [countsDiverge, countFacet.data, listFacet.data, listFacet.isPlaceholderData]);
 
-  // Pinned first (dedup by canonical id form), then the facet count-descending.
-  const options: DropdownOption[] = React.useMemo(() => {
-    const seen = new Set<string>();
-    const out: DropdownOption[] = [];
-    for (const pin of pinned) {
-      const key = uuidToHex(pin.id);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ ...pin, count: counts?.get(key) ?? (counts ? 0 : undefined) });
-    }
-    for (const entry of listFacet.data ?? []) {
-      if (seen.has(entry.id)) continue;
-      seen.add(entry.id);
-      out.push({ id: entry.id, name: null, count: counts ? (counts.get(entry.id) ?? 0) : undefined });
-    }
-    return out;
-  }, [pinned, listFacet.data, counts]);
+  const options: DropdownOption[] = React.useMemo(
+    // `ownSelected` is a stable reference (a stored array or the memoized
+    // defaults), so this does not recompute the list on every render.
+    () => orderDropdownOptions({ pinned, entries: listFacet.data ?? [], counts, checkedIds: ownSelected }),
+    [pinned, listFacet.data, counts, ownSelected]
+  );
 
   return {
     options,
