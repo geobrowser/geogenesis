@@ -23,6 +23,7 @@ import {
   type DebateMediaResponse,
   type DebateParticipant,
   type DebateRematchClaimsResponse,
+  type DebateRematchParticipant,
   GeoChatRequestError,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
@@ -714,6 +715,9 @@ export function useConsentToDebateRematch(debateId: string) {
   });
 }
 
+/** Stable empty reference, so an unresolved rematch query does not rebuild the memos. */
+const EMPTY_REMATCH_PARTICIPANTS: DebateRematchParticipant[] = [];
+
 export function useDebateRematch(sessionId: string, enabled = true) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   // Presence, not attention. `useDebateAttention` also requires `document.hasFocus()`, so a tab
@@ -722,7 +726,7 @@ export function useDebateRematch(sessionId: string, enabled = true) {
   // one GEO-2650 already cost once on the activity poll; see the note on `useDebateActivity`.
   const present = useDebateVisibility();
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.rematch(accountKey, sessionId),
     queryFn: ({ signal }) => getDebateRematch(sessionId, getPrivyIdentityToken, accountKey, signal),
@@ -731,6 +735,19 @@ export function useDebateRematch(sessionId: string, enabled = true) {
     // arrives, which this query previously had no answer to.
     refetchInterval: present ? REMATCH_POLL_MS : false,
   });
+
+  // The rematch voice rows name both debaters off this session. See `participant-avatars`.
+  const participants = React.useMemo(() => query.data?.participants ?? EMPTY_REMATCH_PARTICIPANTS, [query.data]);
+
+  const withAvatar = useParticipantAvatars(participants, enabled && Boolean(sessionId));
+
+  const data = React.useMemo(
+    () =>
+      query.data?.participants ? { ...query.data, participants: query.data.participants.map(withAvatar) } : query.data,
+    [query.data, withAvatar]
+  );
+
+  return withQueryData(query, data);
 }
 
 /**
