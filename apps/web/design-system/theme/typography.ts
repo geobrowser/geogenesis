@@ -20,6 +20,15 @@ const baseTypography = {
       letterSpacing: '0.37px',
       fontWeight: WEIGHTS.semibold,
     },
+    // Page titles for an entity, a space or a topic. Sizes here are the desktop step; the
+    // narrow-viewport steps live in `styles.css`, which is where `text-entityTitle` resolves.
+    entityTitle: {
+      color: colors.light.text,
+      fontSize: '2.75rem',
+      lineHeight: '2.875rem',
+      letterSpacing: '-0.5px',
+      fontWeight: WEIGHTS.semibold,
+    },
     largeTitle: {
       color: colors.light.text,
       fontSize: '2rem',
@@ -170,6 +179,7 @@ const typography = {
 
 export const textStyles: Record<TypographyName, string> = {
   mainPage: 'text-mainPage',
+  entityTitle: 'text-entityTitle',
   largeTitle: 'text-largeTitle',
   mediumTitle: 'text-mediumTitle',
   cardEntityTitle: 'text-cardEntityTitle',
