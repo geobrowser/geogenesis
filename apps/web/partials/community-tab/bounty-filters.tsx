@@ -9,10 +9,32 @@ import { FilterPillTrigger, SingleSelectPill } from './community-filter-pill';
 
 export type BountyScope = 'featured' | 'all';
 
+/**
+ * All leads, and is the default the tables open on.
+ *
+ * Featured was first and selected by default, which meant every bounties table opened already
+ * filtered — with no sign that it was, beyond a pill reading "Featured" that looks much like a
+ * label. A curator's shortlist is a narrower answer than "what work is there", and the second is
+ * the question someone lands on this tab with.
+ */
 export const BOUNTY_SCOPE_OPTIONS: readonly { value: BountyScope; label: string }[] = [
-  { value: 'featured', label: 'Featured' },
   { value: 'all', label: 'All' },
+  { value: 'featured', label: 'Featured' },
 ];
+
+/**
+ * What the tables open on, read off the list above rather than written out again.
+ *
+ * The two were separate constants and could disagree — the menu led with Featured while the tables
+ * defaulted to it independently, so changing one was not enough. Tying them together makes
+ * reordering the options the whole of the change.
+ */
+export const DEFAULT_BOUNTY_SCOPE: BountyScope = BOUNTY_SCOPE_OPTIONS[0].value;
+
+/** Whether a raw query-string value names one of the scopes above. */
+export function isBountyScope(value: string | null): value is BountyScope {
+  return BOUNTY_SCOPE_OPTIONS.some(option => option.value === value);
+}
 
 export function CheckboxFilter({
   allLabel,

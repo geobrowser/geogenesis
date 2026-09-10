@@ -2,7 +2,13 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CheckboxFilter } from './bounty-filters';
+import {
+  BOUNTY_SCOPE_OPTIONS,
+  CheckboxFilter,
+  DEFAULT_BOUNTY_SCOPE,
+  ScopeFilter,
+  isBountyScope,
+} from './bounty-filters';
 
 vi.stubGlobal(
   'ResizeObserver',
@@ -89,5 +95,42 @@ describe('CheckboxFilter', () => {
     );
 
     expect(screen.getByRole('button').textContent).toContain('Easy, Hard');
+  });
+});
+
+describe('the bounty scope filter', () => {
+  // The tables used to open on Featured, so every bounties table arrived already filtered to a
+  // curator's shortlist — with nothing to say so but a pill that reads much like a label. "What
+  // work is there" is the question someone lands on this tab with, so All leads and is the default.
+  it('opens on All, with Featured kept as the second option', () => {
+    expect(BOUNTY_SCOPE_OPTIONS.map(option => option.value)).toEqual(['all', 'featured']);
+    expect(DEFAULT_BOUNTY_SCOPE).toBe('all');
+  });
+
+  // The default is read off the list rather than written out again, so reordering the options is
+  // the whole of the change and the two cannot drift apart.
+  it('takes its default from whichever option comes first', () => {
+    expect(DEFAULT_BOUNTY_SCOPE).toBe(BOUNTY_SCOPE_OPTIONS[0].value);
+  });
+
+  it('shows the scopes in order, and reports the one picked', () => {
+    const onScopeChange = vi.fn();
+    render(<ScopeFilter value={DEFAULT_BOUNTY_SCOPE} onChange={onScopeChange} />);
+
+    // The trigger reads the current scope, so an unfiltered table says "All" rather than "Featured".
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    const menu = within(screen.getByRole('dialog'));
+    expect(menu.getAllByRole('button').map(button => button.textContent)).toEqual(['All', 'Featured']);
+
+    fireEvent.click(menu.getByRole('button', { name: 'Featured' }));
+    expect(onScopeChange).toHaveBeenCalledWith('featured');
+  });
+
+  // What a stale `?scope=all` link, or a hand-edited one, has to land on.
+  it('recognises only the real scopes', () => {
+    expect(isBountyScope('all')).toBe(true);
+    expect(isBountyScope('featured')).toBe(true);
+    expect(isBountyScope('nonsense')).toBe(false);
+    expect(isBountyScope(null)).toBe(false);
   });
 });

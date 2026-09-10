@@ -33,7 +33,7 @@ import {
   IN_PROGRESS_CARD_HEIGHT_PX,
   InProgressBountyCard,
 } from './bounty-card';
-import { type BountyScope, CheckboxFilter, ScopeFilter } from './bounty-filters';
+import { type BountyScope, CheckboxFilter, DEFAULT_BOUNTY_SCOPE, ScopeFilter, isBountyScope } from './bounty-filters';
 import type { BountyStatusSlug } from './bounty-status';
 import { FILTER_PILL_CLASS } from './community-filter-pill';
 import { communityFullscreenActiveAtom } from '~/atoms';
@@ -301,12 +301,12 @@ function useBountyFilterPresentation(
 }
 
 function useBountyFilterState(bounties: SpaceBounty[], skills: string[]): BountyFilterState {
-  const [scope, setScope] = React.useState<BountyScope>('featured');
+  const [scope, setScope] = React.useState<BountyScope>(DEFAULT_BOUNTY_SCOPE);
   const [difficulties, setDifficulties] = React.useState<Set<string>>(() => new Set(BOUNTY_DIFFICULTY_LEVELS));
   const [selectedSkills, setSelectedSkills] = React.useState<Set<string> | null>(null);
 
   const clearFilters = React.useCallback(() => {
-    setScope('all');
+    setScope(DEFAULT_BOUNTY_SCOPE);
     setDifficulties(new Set(BOUNTY_DIFFICULTY_LEVELS));
     setSelectedSkills(null);
   }, []);
@@ -327,7 +327,10 @@ function useUrlBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bou
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const scope: BountyScope = searchParams.get('scope') === 'all' ? 'all' : 'featured';
+  // Anything that is not one of the scopes — including a `scope=all` from before All became the
+  // default — falls back to it rather than being carried around meaning nothing.
+  const scopeParam = searchParams.get('scope');
+  const scope: BountyScope = isBountyScope(scopeParam) ? scopeParam : DEFAULT_BOUNTY_SCOPE;
 
   const difficultyParam = searchParams.get('difficulty');
   const difficulties = React.useMemo(() => {
@@ -346,8 +349,9 @@ function useUrlBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bou
     (next: BountyFilterValues) => {
       const params = new URLSearchParams(searchParams.toString());
 
-      if (next.scope === 'all') params.set('scope', 'all');
-      else params.delete('scope');
+      // Only a non-default scope is worth a query param.
+      if (next.scope === DEFAULT_BOUNTY_SCOPE) params.delete('scope');
+      else params.set('scope', next.scope);
 
       if (allDifficultiesSelected(next.difficulties)) params.delete('difficulty');
       else params.set('difficulty', [...next.difficulties].join(','));
@@ -371,7 +375,8 @@ function useUrlBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bou
     setScope: nextScope => commit({ ...values, scope: nextScope }),
     setDifficulties: nextDifficulties => commit({ ...values, difficulties: nextDifficulties }),
     setSelectedSkills: nextSelectedSkills => commit({ ...values, selectedSkills: nextSelectedSkills }),
-    clearFilters: () => commit({ scope: 'all', difficulties: new Set(BOUNTY_DIFFICULTY_LEVELS), selectedSkills: null }),
+    clearFilters: () =>
+      commit({ scope: DEFAULT_BOUNTY_SCOPE, difficulties: new Set(BOUNTY_DIFFICULTY_LEVELS), selectedSkills: null }),
   };
 
   return useBountyFilterPresentation(bounties, skills, values, setters);
