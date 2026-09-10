@@ -125,7 +125,9 @@ export async function applyClaimReusePolicy(
       claims: claims.length,
       matched: referenced.length,
     });
-    return claims.map(withoutReference);
+    // Shadow mode promises to change nothing but the counters. Minting Debate-tagged
+    // twins of claims that already carry the tag in this space would break that.
+    return claims.map(withoutReferenceOrCandidacy);
   }
 
   // One malformed id would fail the whole batched read (the API rejects the query, not the id), and
@@ -181,7 +183,9 @@ export async function applyClaimReusePolicy(
       matched: referenced.length,
       error,
     });
-    return claims.map(withoutReference);
+    // The read that would have told us which targets are already tagged is the one
+    // that failed, so no claim in this sweep may be minted as a motion.
+    return claims.map(withoutReferenceOrCandidacy);
   }
 
   let reused = 0;
@@ -214,6 +218,9 @@ export async function applyClaimReusePolicy(
       }
       return next;
     }
+    // A reference to the debate's own motion is refused above so a restatement cannot
+    // hijack it; it must not be minted as a rival motion either.
+    if (isMotion(claim.existingClaimEntityId)) return withoutReferenceOrCandidacy(claim);
     return withoutReference(claim);
   });
   const dropped = referenced.length - reused;
@@ -223,6 +230,10 @@ export async function applyClaimReusePolicy(
     matched: referenced.length,
     reused,
     dropped,
+    // Zero here while claims are being published is the signature of the upstream
+    // flag going missing — a renamed field, or a facade that predates the
+    // classification. Without a count, that regression is invisible.
+    debateCandidates: result.filter(candidate => candidate.isContestable).length,
   });
   if (dropped > 0) {
     console.warn('[debate-acceptor] matched claims no longer verifiable as Claims in this space; minted instead', {
@@ -241,4 +252,24 @@ export async function applyClaimReusePolicy(
 
 function withoutReference(claim: DebateClaimInput): DebateClaimInput {
   return claim.existingClaimEntityId ? { ...claim, existingClaimEntityId: null } : claim;
+}
+
+/**
+ * Drop the reference AND the claim's candidacy as a debate motion.
+ *
+ * Tags are space-scoped, so most dropped references are harmless: an entity that was
+ * deleted, re-typed, or lives in another space cannot already be tagged *here*, and
+ * minting a tagged replacement duplicates nothing. Three paths are different, because
+ * they drop the reference without ever learning what the target carries in this space
+ * — the debate's own motion (which is tagged by construction: motions are drawn from
+ * the Debate-tagged claims list), shadow mode, and a failed graph read. Minting a
+ * tagged twin of one of those puts a second candidate motion for the same proposition
+ * in the picker, which is the outcome the tag subtraction exists to prevent.
+ *
+ * Minting the duplicate entity is the long-standing, tolerated failure. Tagging it is
+ * not, so the tag is what gets withheld.
+ */
+function withoutReferenceOrCandidacy(claim: DebateClaimInput): DebateClaimInput {
+  const dropped = withoutReference(claim);
+  return dropped.isContestable ? { ...dropped, isContestable: false } : dropped;
 }

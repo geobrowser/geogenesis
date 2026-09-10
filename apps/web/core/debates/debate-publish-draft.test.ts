@@ -427,6 +427,21 @@ describe('buildDebatePublishDraft', () => {
     expect(claimIdByName(draft, 'A narrow fact.')).toBeTruthy();
   });
 
+  it('tags one motion when a proposition is extracted twice and matched to nothing', () => {
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claims: [
+          // Both mint their own entity (long-standing behaviour), but a fresh id per
+          // claim means an id-keyed dedupe would never fire — two rival motions.
+          { text: 'AI chatbots are effective therapy.', isFactual: false, turnIndex: 0, isContestable: true },
+          { text: 'AI chatbots are effective therapy.', isFactual: false, turnIndex: 1, isContestable: true },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+    expect(draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID)).toHaveLength(1);
+  });
+
   it('treats dashed and dashless forms of one topic as a single relation', () => {
     const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
     const draft = buildDebatePublishDraft(

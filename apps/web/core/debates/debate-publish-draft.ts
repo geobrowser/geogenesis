@@ -403,8 +403,14 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         // same topic, and `relate` does not dedupe.
         // The Debate tag is what makes a claim a candidate motion in the picker, so it
         // goes on contestable claims only — minted or reused alike, once per entity.
-        if (claim.isContestable && !debateTaggedClaims.has(normalizeId(claimId))) {
-          debateTaggedClaims.add(normalizeId(claimId));
+        // Reused entities key on their id; minted ones cannot, because `createEntityId`
+        // returns a fresh id per claim, so keying on it would dedupe nothing. Two
+        // verbatim extractions of one proposition therefore mint two entities (the
+        // long-standing behaviour) but yield a single motion. Near-duplicates that
+        // differ in wording still slip through — matching upstream is what catches those.
+        const tagKey = existingClaimId ? normalizeId(existingClaimId) : `text:${claimEntityText.toLowerCase()}`;
+        if (claim.isContestable && !debateTaggedClaims.has(tagKey)) {
+          debateTaggedClaims.add(tagKey);
           relate({
             fromEntity: claimRef,
             propertyId: TAG_PROPERTY_ID,
