@@ -34,14 +34,41 @@ export function isSignInRequired(error: unknown) {
  * Horizontally neutral: every tab already insets its content by 16px, so self-padding here would
  * double it and make the empty state sit further in than the list it replaces.
  */
-export function HubMessage({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+export function HubMessage({
+  children,
+  note,
+  action,
+}: {
+  children: React.ReactNode;
+  /**
+   * A second sentence under the message, set closer to it than the action is.
+   *
+   * Rendered as given rather than wrapped in a `Text` of its own: a note that decides at runtime it
+   * has nothing to say returns null, and a wrapper here would still leave an empty paragraph in the
+   * markup and the a11y tree. Notes bring their own {@link HubMessageNote}.
+   */
+  note?: React.ReactNode;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col items-center gap-3 py-10 text-center">
-      <Text as="p" variant="metadata" color="grey-04">
-        {children}
-      </Text>
+      <div className="flex flex-col gap-1">
+        <Text as="p" variant="metadata" color="grey-04">
+          {children}
+        </Text>
+        {note}
+      </div>
       {action}
     </div>
+  );
+}
+
+/** The type the message itself is set in, so a `note` sits with it rather than beside it. */
+export function HubMessageNote({ children }: { children: React.ReactNode }) {
+  return (
+    <Text as="p" variant="metadata" color="grey-04">
+      {children}
+    </Text>
   );
 }
 
@@ -50,6 +77,12 @@ type HubQueryStateProps = {
   error: unknown;
   isEmpty: boolean;
   emptyMessage: string;
+  /**
+   * A second line under `emptyMessage`. Where {@link DebateHoursNote} goes — which is why it is a
+   * node rather than a string: it holds a timer of its own, so it has to mount and unmount with the
+   * empty state rather than be computed by a tab that is rendering for other reasons.
+   */
+  emptyNote?: React.ReactNode;
   /** Offered alongside `emptyMessage` — an empty tab should say what to do next. */
   emptyAction?: { label: string; onClick: () => void };
   /** Enables a retry on the error state. */
@@ -65,6 +98,7 @@ export function HubQueryState({
   error,
   isEmpty,
   emptyMessage,
+  emptyNote,
   emptyAction,
   onRetry,
   signInAction,
@@ -94,6 +128,7 @@ export function HubQueryState({
         <HubSkeleton />
       ) : state === 'empty' ? (
         <HubMessage
+          note={emptyNote}
           action={emptyAction ? <HubPillButton onClick={emptyAction.onClick}>{emptyAction.label}</HubPillButton> : null}
         >
           {emptyMessage}

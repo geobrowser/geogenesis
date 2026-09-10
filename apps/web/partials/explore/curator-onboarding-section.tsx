@@ -4,7 +4,11 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { CURATOR_ONBOARDING_PROGRESS_COLOR, CURATOR_ONBOARDING_STEPS } from '~/core/explore/curator-onboarding-steps';
+import {
+  CURATOR_ONBOARDING_PROGRESS_COLOR,
+  CURATOR_ONBOARDING_TITLE,
+  VISIBLE_CURATOR_ONBOARDING_STEPS,
+} from '~/core/explore/curator-onboarding-steps';
 import { useChecklistExpansion } from '~/core/hooks/use-checklist-expansion';
 import { useCuratorOnboardingStatus } from '~/core/hooks/use-curator-onboarding-status';
 
@@ -43,11 +47,13 @@ export function CuratorOnboardingSection() {
   return (
     <section className="flex flex-col rounded-lg border border-grey-02 bg-white p-5 shadow-panel">
       <div className="flex items-start justify-between gap-3">
-        <h2 className="text-[24px] leading-[28px] font-semibold tracking-[-0.02em] text-text">Curator onboarding</h2>
+        <h2 className="text-[24px] leading-[28px] font-semibold tracking-[-0.02em] text-text">
+          {CURATOR_ONBOARDING_TITLE}
+        </h2>
         <button
           type="button"
           aria-expanded={expanded}
-          aria-label={expanded ? 'Collapse curator onboarding' : 'Expand curator onboarding'}
+          aria-label={`${expanded ? 'Collapse' : 'Expand'} ${CURATOR_ONBOARDING_TITLE}`}
           onClick={onToggle}
           className="mt-1.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-grey-04 transition-colors hover:text-text"
         >
@@ -74,15 +80,21 @@ export function CuratorOnboardingSection() {
 
       {expanded ? (
         <ul className="mt-5 flex flex-col gap-5">
-          {CURATOR_ONBOARDING_STEPS.map(step => {
+          {VISIBLE_CURATOR_ONBOARDING_STEPS.map(step => {
             const complete = completion[step.id];
 
             return (
               <li key={step.id} className="flex gap-3">
                 <CuratorOnboardingStepIndicator complete={complete} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[16px] leading-[17px] font-medium tracking-[-0.35px] text-text">{step.title}</p>
-                  <p className="mt-1 text-[16px] leading-[16px] font-normal tracking-[-0.35px] text-grey-04">
+                  {/* `text-pretty`, not `text-balance`, per the note on the claim page hero: balancing
+                      evens every line and reads as wrapping early, while pretty only refuses to
+                      strand the last word. The rail is fluid between 280px and 360px now, so there
+                      is no wording that avoids a lone trailing word at every width — this does. */}
+                  <p className="text-[16px] leading-[17px] font-medium tracking-[-0.35px] text-pretty text-text">
+                    {step.title}
+                  </p>
+                  <p className="mt-1 text-[16px] leading-[16px] font-normal tracking-[-0.35px] text-pretty text-grey-04">
                     {step.description}
                   </p>
                 </div>

@@ -1,6 +1,8 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
+import type { MatchmakingClaimsFilter } from '~/core/debates/api';
+
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
 
 export const editingPropertiesAtom = atom<boolean>(false);
@@ -35,6 +37,84 @@ export type DebatesHubTab = 'requests' | 'matches' | 'claims' | 'people';
 
 /** `null` while the debates matchmaking hub is closed. */
 export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
+
+/**
+ * The hub's filter selections, held outside the tabs that draw them (GEO-2850).
+ *
+ * They used to be `useState` inside each tab, which made them as short-lived as the panel. The hub
+ * closes on any outside pointer-down, and dismissing a dropdown by clicking away — rather than by
+ * clicking back into the trigger — lands outside the panel and does exactly that. So the two ways
+ * of closing the same dropdown had two different outcomes, and only one of them kept the viewer's
+ * work. Reported as "the filters disappear", and the same root cause as selections not surviving a
+ * trip away from the panel.
+ *
+ * Scoped to the page session on purpose: they outlive the panel and navigation between pages, and
+ * reset on a reload or in a new tab. Not persisted to storage, which keeps GEO-2789's
+ * membership-based default meaningful — it seeds once per session rather than once per device,
+ * ever — and spares a viewer a filter they set days ago and have forgotten.
+ *
+ * Split per surface because the two menus describe different lists: the Claims facets are the
+ * whole tagged corpus, the Matches ones are only what the viewer has a match on.
+ */
+/**
+ * Which list the Claims tab is showing. `featured` is the tab's own rather than geo-chat's, which
+ * is why this is not just {@link MatchmakingClaimsFilter} — typed off it so the two cannot drift.
+ *
+ * Persisted with the rest of the filter bar (GEO-2850): it is the same dropdown, dismissed the same
+ * way, and losing it on a click-away was the same surprise.
+ *
+ * The signed-out coercion stays where it is, in the tab. It is a rule about what may be *shown*,
+ * not about what the viewer picked, so it leaves this value alone — which is what lets a viewer who
+ * signs in keep the list they had chosen. Changing account is the one thing that clears it; see
+ * {@link debatesHubFiltersOwnerAtom}.
+ */
+export type DebatesHubClaimsFilter = MatchmakingClaimsFilter | 'featured';
+export const debatesHubClaimsFilterAtom = atom<DebatesHubClaimsFilter>('featured');
+
+export const debatesHubClaimsSpaceIdsAtom = atom<string[]>([]);
+export const debatesHubClaimsTopicIdsAtom = atom<string[]>([]);
+export const debatesHubMatchesSpaceIdsAtom = atom<string[]>([]);
+
+/**
+ * Whether the Claims tab's membership default has been applied or forfeited this session.
+ *
+ * `useMemberSpaceDefault` spends its seed once per *mount*, which was the right lifetime while the
+ * selection died with the mount too. Now that the selection outlives the panel, the seed has to as
+ * well — otherwise reopening the hub would re-seed a viewer's deliberately cleared filter and
+ * decide they meant something other than what they asked for.
+ */
+export const debatesHubClaimsSpaceSeedSpentAtom = atom(false);
+
+/**
+ * Which account the filter state above belongs to, so it is never handed to a different viewer.
+ *
+ * Session-scoped state outlives the sign-in that changes who is looking, so "whose are these" has
+ * to be recorded rather than assumed. Two transitions, and they want opposite answers:
+ *
+ * A viewer signing in is the same person authenticating, and keeps the bar they were just using —
+ * the Claims tab prompts for sign-in from inside its own empty state, so clearing it there would
+ * lose picks made seconds earlier. `owner` being null marks that case, and nothing is reset.
+ *
+ * A different established account is a different viewer, and inherits nothing: without this,
+ * switching accounts without a reload would show B the spaces A had picked. `owner` keeps naming
+ * the last account seen across a sign-out, so B signing in after A signs out is still read as a
+ * handover rather than a first sign-in.
+ *
+ * Neither was reachable while the selection reset on every mount.
+ */
+export const debatesHubFiltersOwnerAtom = atom<string | null>(null);
+
+/**
+ * Puts the whole filter bar back to its defaults. Write-only, and in one place, so a new filter
+ * atom is added to the reset by adding it here rather than by remembering every call site.
+ */
+export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
+  set(debatesHubClaimsFilterAtom, 'featured');
+  set(debatesHubClaimsSpaceIdsAtom, []);
+  set(debatesHubClaimsTopicIdsAtom, []);
+  set(debatesHubClaimsSpaceSeedSpentAtom, false);
+  set(debatesHubMatchesSpaceIdsAtom, []);
+});
 
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 

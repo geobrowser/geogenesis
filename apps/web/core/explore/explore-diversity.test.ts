@@ -4,6 +4,7 @@ import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 
 import {
   EPISODE_TYPE_ID,
+  EXPLORE_ENTITY_TYPE_IDS,
   EXPLORE_PAGE_SIZE,
   NEWS_STORY_TYPE_ID,
   TWEET_TYPE_ID,
@@ -15,11 +16,7 @@ import {
   exploreItemTypeKey,
   longestTypeRun,
 } from './explore-diversity';
-import {
-  decodeExploreWindowCursor,
-  encodeExploreWindowCursor,
-  nextExploreWindowCursor,
-} from './explore-window-cursor';
+import { decodeExploreWindowCursor, encodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
 
 type Item = { id: string; types: { id: string }[] };
 
@@ -46,16 +43,29 @@ describe('exploreItemTypeKey', () => {
   it('is stable across relation order', () => {
     // `types` comes from relations, whose order is not meaningful. Two identical entities
     // must not land in different diversity buckets because the rows came back swapped.
-    expect(key(item('a', CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID))).toBe(
-      key(item('b', NEWS_STORY_TYPE_ID, CLAIM_TYPE_ID))
-    );
+    expect(key(item('a', CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID))).toBe(key(item('b', NEWS_STORY_TYPE_ID, CLAIM_TYPE_ID)));
   });
 
   it('classifies a multi-typed claim as its more specific type', () => {
-    // Claim is declared last in EXPLORE_ENTITY_TYPES, so it loses every tie. That is the
-    // useful direction: such an item can break a claim run instead of extending one.
+    // Claim classifies last, so it loses every tie. That is the useful direction: such an item can
+    // break a claim run instead of extending one.
+    //
+    // It used to lose ties by being declared last in EXPLORE_ENTITY_TYPES, which made this
+    // behaviour a side effect of menu order — GEO-2790 moved Claim to the top of the menu and
+    // inverted it. The priority is stated separately now, and the test below guards the split.
     expect(key(item('a', CLAIM_TYPE_ID, EPISODE_TYPE_ID))).not.toBe(key(item('b', CLAIM_TYPE_ID)));
     expect(key(item('a', CLAIM_TYPE_ID, EPISODE_TYPE_ID))).toBe(key(item('c', EPISODE_TYPE_ID)));
+  });
+
+  it('classifies independently of the order the menu lists types in', () => {
+    // The invariant that keeps the two apart. Claim leads the dropdown so the boxes a reader
+    // arrives with read first; it must still lose classification ties to a more specific type, or
+    // the diversity cap starts extending claim runs instead of breaking them — the exact failure
+    // this module exists to prevent.
+    expect(EXPLORE_ENTITY_TYPE_IDS.indexOf(CLAIM_TYPE_ID)).toBeLessThan(
+      EXPLORE_ENTITY_TYPE_IDS.indexOf(EPISODE_TYPE_ID)
+    );
+    expect(key(item('a', CLAIM_TYPE_ID, EPISODE_TYPE_ID))).toBe(key(item('b', EPISODE_TYPE_ID)));
   });
 
   it('is case- and hyphen-insensitive, matching the ids the feed actually returns', () => {
@@ -94,9 +104,7 @@ describe('applyDiversityCap', () => {
     expect(expectedBreaks).toBe(5);
     expect(news.length).toBeGreaterThanOrEqual(expectedBreaks);
     // The measured 100% is now at most 77%, which is the floor a run cap alone can reach.
-    expect(firstScreenAfter.length - news.length).toBeLessThanOrEqual(
-      EXPLORE_PAGE_SIZE - expectedBreaks
-    );
+    expect(firstScreenAfter.length - news.length).toBeLessThanOrEqual(EXPLORE_PAGE_SIZE - expectedBreaks);
   });
 
   it('caps runs across the whole window, not just the first page', () => {

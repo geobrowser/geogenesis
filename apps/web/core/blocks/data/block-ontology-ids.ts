@@ -8,6 +8,13 @@ export const DATA_BLOCK_INFINITE_SCROLL_PROPERTY_ID = '456d585279fd4915aca820ff0
 
 export const DATA_BLOCK_TOOLS_PROPERTY_ID = '721ac0d146404b0f93edf52535151d19';
 
+/**
+ * Relation type on the block's BLOCKS-relation entity, parallel to
+ * `SystemIds.PROPERTIES`: each to-entity is a (relation) property that browse
+ * mode offers as a personal filter dropdown for that table.
+ */
+export const DATA_BLOCK_DROPDOWNS_PROPERTY_ID = '720dec9123044054b044c49a03cee273';
+
 export const LINK_INGESTION_TOOL_ID = '3eb4db0098d74dfbb357c852f4ac0590';
 
 export const DEFAULT_DATA_BLOCK_PAGE_SIZE = 9;

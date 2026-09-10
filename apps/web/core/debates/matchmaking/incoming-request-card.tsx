@@ -15,6 +15,7 @@ import { HubPillButton } from './hub-pill-button';
 import { SpaceChip } from './matchmaking-claim-card';
 import { RequestOverflowMenu } from './request-overflow-menu';
 import { RequestParties } from './request-parties';
+import { useAnswerOnce } from './use-answer-once';
 import { useRequestCountdown } from './use-request-countdown';
 
 /**
@@ -33,14 +34,7 @@ export function IncomingRequestCard({ request, ref }: { request: DebateRequest; 
 
   const busy = acceptRequest.isPending || dismissRequest.isPending || blockUser.isPending;
   const unavailable = request.requester.in_debate;
-  // `isPending` only disables the button on the *next* render, so a double tap gets two accepts in
-  // before it takes effect — and the second one 409s over a request the first already took.
-  const answered = React.useRef(false);
-  const answerOnce = (answer: () => void) => {
-    if (answered.current) return;
-    answered.current = true;
-    answer();
-  };
+  const { answerOnce, releaseAnswer } = useAnswerOnce();
 
   return (
     // Expiry is owned by the list (`useUnexpiredRequests`) rather than this card, so the card can
@@ -71,10 +65,17 @@ export function IncomingRequestCard({ request, ref }: { request: DebateRequest; 
           <RequestOverflowMenu
             actions={[
               {
+                // Guarded like the buttons: this is the same dismiss endpoint they use, so an
+                // answer already taken would 409 here.
                 label: "I don't want to debate this claim",
-                onClick: () => dismissRequest.mutate({ requestId: request.id, removeIntent: true }),
+                onClick: () =>
+                  answerOnce(() => dismissRequest.mutate({ requestId: request.id, removeIntent: true }, releaseAnswer)),
               },
               {
+                // Deliberately outside the guard. Blocking writes the viewer's block list
+                // (`PUT /me/debate-blocks/{userId}`) rather than answering this request, so it
+                // cannot collide with one — and gating it would let an answer already taken
+                // swallow a safety action, which is the worse failure by far.
                 label: `Block ${speakerLabel(request.requester)}`,
                 destructive: true,
                 onClick: () => blockUser.mutate(request.requester.user_id),
@@ -92,7 +93,7 @@ export function IncomingRequestCard({ request, ref }: { request: DebateRequest; 
 
       <div className="grid grid-cols-2 gap-2">
         <HubPillButton
-          onClick={() => answerOnce(() => dismissRequest.mutate({ requestId: request.id }))}
+          onClick={() => answerOnce(() => dismissRequest.mutate({ requestId: request.id }, releaseAnswer))}
           disabled={busy}
           pending={dismissRequest.isPending}
           pendingLabel="Dismissing…"
@@ -101,7 +102,7 @@ export function IncomingRequestCard({ request, ref }: { request: DebateRequest; 
         </HubPillButton>
         <HubPillButton
           variant="primary"
-          onClick={() => answerOnce(() => acceptRequest.mutate({ requestId: request.id }))}
+          onClick={() => answerOnce(() => acceptRequest.mutate({ requestId: request.id }, releaseAnswer))}
           disabled={busy || unavailable}
           pending={acceptRequest.isPending}
           pendingLabel="Accepting…"

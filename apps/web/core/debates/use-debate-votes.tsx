@@ -9,6 +9,7 @@ import * as React from 'react';
 import { Duration, Effect, Either, Schedule } from 'effect';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
+import { useGeoChatAuth } from '~/core/debates/hooks';
 import {
   NAME_PROPERTY_ID,
   TYPES_PROPERTY_ID,
@@ -19,12 +20,11 @@ import {
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { type DebateVoteRecord, tallyDebateVotes, voteSharePercentages } from '~/core/debates/vote-tally';
 import { TransactionWriteFailedError } from '~/core/errors';
-import { ID } from '~/core/id';
-import { useGeoChatAuth } from '~/core/debates/hooks';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { ID } from '~/core/id';
 import { checkEntityExists, getDebateVoteEntities } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { useReportError } from '~/core/state/status-bar-store';
 import type { Entity, Relation, Value } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
@@ -381,17 +381,36 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
 
       void (async () => {
         await sleep(FIRST_POLL_MS);
+        // The loop ends two ways — the vote became readable, or the attempts ran out — and only one
+        // of them means anything is true yet.
+        let voteIsReadable = false;
         for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
           if (pollGeneration !== pollGenerationRef.current) return;
           try {
-            if (await isVoteIndexed()) break;
+            if (await isVoteIndexed()) {
+              voteIsReadable = true;
+              break;
+            }
           } catch (error) {
             console.error('[useDebateVotes] Poll for indexed vote failed:', error);
           }
           await sleep(POLL_INTERVAL_MS);
         }
         if (pollGeneration !== pollGenerationRef.current) return;
+        // Unconditional: on the timeout path this is what reconciles the optimistic row against
+        // whatever the indexer actually has.
         await queryClient.invalidateQueries({ queryKey: votesQueryKey(debateEntityId) });
+
+        // Choosing a winner is an onboarding step, and that card caches for a minute — long enough
+        // that returning to Explore straight after voting can still show it unticked (GEO-2800).
+        //
+        // Only on success, though. Refetching the checklist while the vote is still unreadable
+        // would answer `false` and mark that answer fresh for another minute, which is worse than
+        // never asking: left alone, the card would have refetched on its next mount and had a
+        // chance at the truth.
+        if (voteIsReadable) {
+          void queryClient.invalidateQueries({ queryKey: ['curator-onboarding-status'] });
+        }
       })();
     },
     [

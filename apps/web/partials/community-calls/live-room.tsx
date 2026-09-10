@@ -33,6 +33,7 @@ import {
 import { LAST_EDITOR_CONFIRM_DELAY_MS } from '~/core/community-calls/constants';
 import { formatDuration } from '~/core/community-calls/format';
 import { Recording, parseParticipantMetadata } from '~/core/community-calls/types';
+import { useCallExtension } from '~/core/community-calls/use-call-extension';
 import { useCallTimeUp } from '~/core/community-calls/use-call-time-up';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
 import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call-layout';
@@ -40,6 +41,7 @@ import { ChatEntry, usePersistentChat } from '~/core/community-calls/use-persist
 import { useReconnectionState } from '~/core/community-calls/use-reconnection-state';
 import { useRecordingMetadataSync } from '~/core/community-calls/use-recording-metadata-sync';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { setTelemetryUser } from '~/core/telemetry/logger';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 
 import { Avatar } from '~/design-system/avatar';
@@ -196,6 +198,21 @@ function RoomBody({
   const isActiveEditor = isEditor && !isViewer;
   const canControlRecording = isActiveEditor && Boolean(egressId);
 
+  // Shared cutoff extension. Every client enforces the cutoff itself, so this has to be
+  // agreed across the room rather than held locally — see `useCallExtension`.
+  const { extensionMs, extend, canExtendFurther } = useCallExtension({ room, canExtend: isActiveEditor });
+
+  // Every Sentry issue on this app reported "Users: 0" — `setTelemetryUser` existed and was
+  // never called from anywhere, so nothing was ever attributed to a person. Without it the
+  // drop telemetry can count episodes but not people, and "11 drops" reads the same whether
+  // it is eleven users once or one user eleven times. Set from the room rather than at
+  // sign-in because that is where this audit needed it; the identity is the participant's
+  // own and stays correct after they leave, so it is not cleared on unmount.
+  const localIdentity = room.localParticipant.identity;
+  React.useEffect(() => {
+    if (localIdentity) setTelemetryUser({ id: localIdentity });
+  }, [localIdentity]);
+
   // Moderation's "stop screen share" only mutes the track server-side, which doesn't
   // stop the browser's own capture (its "you're sharing your screen" indicator stays
   // up) — the moderator's client also sends this data message so the sharer's own
@@ -229,8 +246,9 @@ function RoomBody({
       roomName,
       occurrenceStart,
       role: isViewer ? ('viewer' as const) : ('participant' as const),
+      participantIdentity: localIdentity,
     }),
-    [spaceId, callId, roomName, occurrenceStart, isViewer]
+    [spaceId, callId, roomName, occurrenceStart, isViewer, localIdentity]
   );
 
   // Distinguishes an intentional Leave (CLIENT_INITIATED) — navigate away directly —
@@ -319,11 +337,29 @@ function RoomBody({
 
   // Forced-timeout path: fires once when the CallEndTimer banner counts down to
   // zero, converging on the same disconnect as the manual leave dialog but flagging
-  // itself first so the overlay can say why. No recording-stop confirmation on this
-  // path — the call ends regardless of whether a recording is still running.
+  // itself first so the overlay can say why.
+  //
+  // No *confirmation* on this path — the call ends regardless — but the recording is still
+  // stopped, which it previously was not. Both graceful exits stop egress first and this one
+  // did not, so the one meeting guaranteed to hit the cutoff (the one that ran over, and so
+  // the one most worth having) was also the one whose recording nothing closed out. The
+  // room emptying does eventually stop egress on LiveKit's side, but "eventually, as a side
+  // effect" is not what the other two paths rely on and not what this should either.
+  //
+  // Only the client that owns recording control sends it: every participant runs this same
+  // cutoff, so an ungated stop would fire once per person in the room.
   const handleTimeUp = useCallTimeUp(() => {
     reconnection.markEndedByCutoff();
-    onLeave();
+    if (!canControlRecording || !egressId) {
+      onLeave();
+      return;
+    }
+    // Disconnect regardless of how the stop goes — a failed or slow stop must not leave this
+    // client sitting in a call the rest of the room has already left.
+    void getToken()
+      .then(token => (token ? stopRecording({ egressId, room: roomName }, token) : undefined))
+      .catch(() => {})
+      .finally(onLeave);
   });
 
   const onStopRecordingAndLeave = async () => {
@@ -372,7 +408,11 @@ function RoomBody({
 
       {occurrenceEnd !== undefined && (
         <div className="px-3 pt-3">
-          <CallEndTimer endTime={new Date(occurrenceEnd)} onTimeUp={handleTimeUp} />
+          <CallEndTimer
+            endTime={new Date(occurrenceEnd + extensionMs)}
+            onTimeUp={handleTimeUp}
+            onExtend={canExtendFurther ? extend : undefined}
+          />
         </div>
       )}
 

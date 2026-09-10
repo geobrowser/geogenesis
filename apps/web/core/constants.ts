@@ -26,6 +26,23 @@ export const VIDEO_RENDERABLE_TYPE = '0fb6bbf022044db49f70fa82c41570a4';
 export const KEY_FRAME_IMAGE_PROPERTY = '7379342cf33e48e1b54fb015b3ef0f86';
 
 /**
+ * The image an entity wants shown when it is shared, ahead of its cover and its avatar.
+ *
+ * A cover is chosen to sit behind a page and an avatar to read at 20px, and neither is picked for a
+ * 600x315 card in someone else's feed. This property lets an entity name that card directly, and is
+ * first in the chain `Entities.ogImage` heads for exactly that reason.
+ *
+ * Relation-typed and pointing at an Image entity, the same shape as Cover and Avatar, so it is read
+ * the same way — confirmed against the graph rather than assumed: Data type `Relation`, To entity
+ * types `Image`, Renderable type `Image`. Not exported by the SDK yet, hence the literal here.
+ *
+ * Written as well as read: publishing a debate mints a share card and relates it through this same
+ * property (`debates/ontology.ts` re-exports this id as `OG_IMAGE_PROPERTY_ID`), so a published
+ * debate serves that generated card rather than the default one.
+ */
+export const OG_IMAGE_PROPERTY = '7abfeb2d147a464e8e26efdd26441189';
+
+/**
  * Default pixel dimensions for Image/Video properties.
  */
 export const PROPERTY_WIDTH_PIXELS_ID = 'e39e49bbebb14718b2feba15103c1fe4';

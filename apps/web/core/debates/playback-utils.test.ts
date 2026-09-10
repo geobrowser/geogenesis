@@ -5,6 +5,7 @@ import {
   clampSeconds,
   hasProcessedVideo,
   normalizeTurnDurationsMs,
+  playBothWithMutedFallback,
   recordingWindowOffsetsSeconds,
   timelineSecondsFor,
   turnStateForTime,
@@ -134,5 +135,128 @@ describe('recordingWindowOffsetsSeconds', () => {
     const offsets = recordingWindowOffsetsSeconds('not-a-date', null, Number.NaN);
     expect(offsets.slot1).toBe(0);
     expect(offsets.slot2).toBe(0);
+  });
+});
+
+describe('playBothWithMutedFallback (GEO-2783)', () => {
+  /**
+   * A fake video whose `play()` refuses while it has audio, which is what the autoplay policy
+   * does outside a user gesture. `blockUnmuted: false` models a gesture-driven play, where the
+   * browser allows sound.
+   */
+  function fakeVideo({ muted, blockUnmuted = true }: { muted: boolean; blockUnmuted?: boolean }) {
+    const video = {
+      muted,
+      paused: true,
+      plays: 0,
+      async play() {
+        this.plays += 1;
+        if (blockUnmuted && !this.muted) throw new Error('NotAllowedError');
+        this.paused = false;
+      },
+    };
+    return video;
+  }
+
+  /**
+   * A video whose `play()` resolves but leaves `paused` true for a moment, which is what a real
+   * element does while it transitions. This is the shape that produced the false "Could not play
+   * both videos" on every scroll: the old check read `paused` on the next microtask and called it
+   * a block.
+   */
+  function laggyVideo({ pollsUntilPlaying }: { pollsUntilPlaying: number }) {
+    const video = {
+      muted: true,
+      paused: true,
+      plays: 0,
+      polls: 0,
+      async play() {
+        this.plays += 1;
+      },
+      /** Flips to playing only after the helper has waited `pollsUntilPlaying` times. */
+      tick() {
+        this.polls += 1;
+        if (this.polls >= pollsUntilPlaying) this.paused = false;
+      },
+    };
+    return video;
+  }
+
+  it('does not report a block when the element is only slow to leave paused (GEO-2783 follow-up)', async () => {
+    const a = laggyVideo({ pollsUntilPlaying: 2 });
+    const b = laggyVideo({ pollsUntilPlaying: 2 });
+    const wait = async () => {
+      a.tick();
+      b.tick();
+    };
+
+    expect(await playBothWithMutedFallback(a, b, wait)).toBe('playing');
+    // The point of the fix: no muted retry, because it was never actually blocked.
+    expect([a.plays, b.plays]).toEqual([1, 1]);
+  });
+
+  it('still reports a block when the element never starts', async () => {
+    const a = laggyVideo({ pollsUntilPlaying: Number.POSITIVE_INFINITY });
+    const b = laggyVideo({ pollsUntilPlaying: Number.POSITIVE_INFINITY });
+    const wait = async () => {
+      a.tick();
+      b.tick();
+    };
+
+    // Both already muted, so there is no fallback to try — this must not be reported as playing.
+    expect(await playBothWithMutedFallback(a, b, wait)).toBe('blocked');
+  });
+
+  it('plays straight away when the browser allows it', async () => {
+    const a = fakeVideo({ muted: true });
+    const b = fakeVideo({ muted: true });
+    expect(await playBothWithMutedFallback(a, b)).toBe('playing');
+    expect([a.plays, b.plays]).toEqual([1, 1]);
+  });
+
+  /* The actual bug: unmuted autoplay is blocked, and the viewer used to get an error. */
+  it('retries muted when unmuted autoplay is blocked, and says so', async () => {
+    const a = fakeVideo({ muted: false });
+    const b = fakeVideo({ muted: false });
+    expect(await playBothWithMutedFallback(a, b)).toBe('playing-muted');
+    expect(a.muted).toBe(true);
+    expect(b.muted).toBe(true);
+    expect(a.paused).toBe(false);
+  });
+
+  it('retries when only one of the two is unmuted — the speaking slot is the audible one', async () => {
+    const a = fakeVideo({ muted: false });
+    const b = fakeVideo({ muted: true });
+    expect(await playBothWithMutedFallback(a, b)).toBe('playing-muted');
+  });
+
+  /* Already muted and still blocked means the cause is not the autoplay policy, so there is
+     nothing to retry and reporting 'playing-muted' would be a lie. */
+  it('does not retry when both were already muted', async () => {
+    const a = fakeVideo({ muted: true, blockUnmuted: false });
+    const b = fakeVideo({ muted: true, blockUnmuted: false });
+    a.play = async () => {
+      a.plays += 1;
+    }; // resolves but stays paused
+    expect(await playBothWithMutedFallback(a, b)).toBe('blocked');
+    expect(a.plays).toBe(1);
+  });
+
+  /* A resolved play() that leaves the element paused is also a block — only one of the two
+     failure shapes throws, which is why `paused` is checked as well as the promise. */
+  it('treats a resolved-but-paused play as blocked', async () => {
+    const a = fakeVideo({ muted: true });
+    a.play = async () => {
+      a.plays += 1;
+    };
+    const b = fakeVideo({ muted: true });
+    expect(await playBothWithMutedFallback(a, b)).toBe('blocked');
+  });
+
+  it('keeps sound when the play is gesture-driven', async () => {
+    const a = fakeVideo({ muted: false, blockUnmuted: false });
+    const b = fakeVideo({ muted: false, blockUnmuted: false });
+    expect(await playBothWithMutedFallback(a, b)).toBe('playing');
+    expect(a.muted).toBe(false);
   });
 });

@@ -8,7 +8,7 @@ import cx from 'classnames';
 import { useSetAtom } from 'jotai';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import type { Debate } from '~/core/debates/api';
+import { type Debate, GeoChatRequestError } from '~/core/debates/api';
 import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
@@ -34,6 +34,7 @@ import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 import { exceedsLineClamp } from './line-clamp-overflow';
+import { DebateShareDialog } from './share-dialog';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
 import { debateFullscreenActiveAtom } from '~/atoms';
@@ -70,8 +71,7 @@ export function DebatesBrowseFeed({
   // So fetch the anchor by id instead of requiring it to appear. Gated on the listing having
   // settled without it, which keeps the common case at one request — this only fires where the
   // feed would otherwise have silently rendered the wrong page.
-  const anchorListed =
-    initialDebateId != null && listedDebates.some(debate => ID.equals(debate.id, initialDebateId));
+  const anchorListed = initialDebateId != null && listedDebates.some(debate => ID.equals(debate.id, initialDebateId));
   const anchorQuery = useDebate(
     initialDebateId ?? '',
     initialDebateId != null && !debatesQuery.isLoading && !anchorListed
@@ -187,11 +187,21 @@ export function DebatesBrowseFeed({
 
   const anchorUnresolved = initialDebateId != null && !anchorPresent;
 
+  // A 404 is the exception to the rule below: it is a definitive answer, not a failed lookup. The
+  // debate is not there -- it never existed, or it has been hidden (GEO-2785, which makes every
+  // by-id route read as absent). Treating that as "unknown" would hold the feed on an error state
+  // for a debate that is deliberately gone, so it falls through to `anchorMissing` and the
+  // caller's fallback view instead.
+  const anchorGone = anchorQuery.error instanceof GeoChatRequestError && anchorQuery.error.status === 404;
+
   // An anchor absent after a failed lookup is *unknown*, not missing: falling
   // back would misread a transient readiness/query error as "this debate has no
   // video", so the feed stays up and shows its own error state instead.
   const anchorErrored =
-    anchorUnresolved && !isLoading && (mediaError || debatesQuery.error != null || anchorQuery.error != null);
+    anchorUnresolved &&
+    !isLoading &&
+    !anchorGone &&
+    (mediaError || debatesQuery.error != null || anchorQuery.error != null);
 
   // Hold an anchored feed until the anchor itself is ready: the per-debate
   // readiness lookups resolve one at a time, so painting the partial list would
@@ -368,7 +378,7 @@ function DebateFeedItem({
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const winnerVotes = useDebateVotes(debate);
-  const shareAction = useDebateShareAction(debate, active);
+  const share = useDebateShareAction();
   // Comments live on the Debate entity — same query key as the panel, so posting
   // there updates this count without a refetch of our own.
   // Same arguments as the Comments panel's own useComments, so the two share a
@@ -400,7 +410,8 @@ function DebateFeedItem({
     claimsCount: claims.totalCount,
     onComment: onOpenComments,
     onClaims: onOpenClaims,
-    shareAction,
+    onShare: share.onOpen,
+    shareOpen: share.open,
   };
 
   return (
@@ -453,6 +464,13 @@ function DebateFeedItem({
           <DebateInteractionBar orientation="vertical" {...interactionProps} />
         </div>
       </div>
+      <DebateShareDialog
+        open={share.open}
+        onOpenChange={share.onOpenChange}
+        debate={debate}
+        spaceId={spaceId}
+        openerRef={share.openerRef}
+      />
     </section>
   );
 }

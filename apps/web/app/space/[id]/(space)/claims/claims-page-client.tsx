@@ -322,7 +322,7 @@ function ClaimListItem({
   useRetireConfirmedResponseIndexing({ debateClaim, entityId: claim.id, spaceId });
   // Catches up readiness for a position the viewer already held before GEO-2740. Temporary; see
   // the hook.
-  useBackfillReadinessForHeldPosition({ debateClaim, entityId: claim.id, spaceId });
+  useBackfillReadinessForHeldPosition({ readiness: debateClaim, entityId: claim.id, spaceId });
 
   // The page resolved the kind already, to batch its response reads; the hook resolves it again from
   // the same two inputs and by construction gets the same answer.

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { type DebateClaim, notifyClaimResponseIndexed } from './api';
+import { type MatchmakingReadiness, notifyClaimResponseIndexed } from './api';
 import { useGeoChatAuth } from './hooks';
 
 /** Keeps a session from re-sending for the same claim, and from growing without bound. */
@@ -36,14 +36,28 @@ const MAX_TRACKED = 256;
  * No user intent is overridden: `user_disabled` rows were flipped by migration 0038, and with the
  * toggle gone there is no way to be deliberately not-ready on a claim you hold a position on.
  *
+ * Wire it wherever a claim's pills are drawn, not only on the claim page. Readiness is what puts a
+ * viewer in geo-chat's presence view, so a surface that draws a held position without repairing it
+ * leaves that viewer invisible on the claim — to everyone else, and to themselves in the avatar
+ * stack (GEO-2821).
+ *
  * Remove this once the population has turned over. It is a migration wearing a hook's clothes.
  */
 export function useBackfillReadinessForHeldPosition({
-  debateClaim,
+  readiness,
   entityId,
   spaceId,
 }: {
-  debateClaim: DebateClaim | null;
+  /**
+   * geo-chat's own answer for this claim, or null where it has none.
+   *
+   * `MatchmakingReadiness` rather than a `DebateClaim` because the hub's rows carry the same four
+   * fields under a different envelope, and both are geo-chat's. What must not be passed is a
+   * readiness whose `viewer_response` fell back to the graph — see `useClaimResponseState`. The
+   * gap this closes is geo-chat holding the response and not the readiness; a claim it has no row
+   * for at all is a different repair, and not one to run per card in a feed.
+   */
+  readiness: MatchmakingReadiness | null;
   entityId: string;
   spaceId: string;
 }) {
@@ -51,10 +65,10 @@ export function useBackfillReadinessForHeldPosition({
   const sent = React.useRef(new Set<string>());
   const sentOrder = React.useRef<string[]>([]);
 
-  const viewerResponse = debateClaim?.viewer_response ?? null;
-  const responseKind = debateClaim?.response_kind ?? null;
-  const alreadyReady = debateClaim?.viewer_debate_ready ?? false;
-  const disabledReason = debateClaim?.readiness_disabled_reason ?? null;
+  const viewerResponse = readiness?.viewer_response ?? null;
+  const responseKind = readiness?.response_kind ?? null;
+  const alreadyReady = readiness?.viewer_debate_ready ?? false;
+  const disabledReason = readiness?.readiness_disabled_reason ?? null;
 
   React.useEffect(() => {
     if (!ready || !authenticated || !accountKey) return;

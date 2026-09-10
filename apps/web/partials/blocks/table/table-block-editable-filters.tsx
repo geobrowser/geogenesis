@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import equal from 'fast-deep-equal';
 
-import { Filter } from '~/core/blocks/data/filters';
+import { Filter, ModesByColumn } from '~/core/blocks/data/filters';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 
@@ -25,15 +25,27 @@ type RenderableFilter = Filter & { columnName: string };
 
 interface TableBlockEditableFiltersProps {
   filterState?: Filter[];
-  setFilterState?: (filters: Filter[]) => void;
+  setFilterState?: (filters: Filter[], modeOverrides?: ModesByColumn) => void;
+  /** Active mode map matching `filterState`; forwarded to the prompt for display. */
+  modesByColumn?: ModesByColumn;
   filterSuggestionSpaceId?: string;
   orderedColumnIds?: string[];
   isEditing?: boolean;
+  /** Rendered right after the "+ Filter" trigger, before the right-aligned query mode toggle. */
+  afterFilterTrigger?: React.ReactNode;
 }
 
 export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPromptHandle, TableBlockEditableFiltersProps>(
   function TableBlockEditableFilters(
-    { filterState, setFilterState, filterSuggestionSpaceId, orderedColumnIds = [], isEditing = true },
+    {
+      filterState,
+      setFilterState,
+      modesByColumn,
+      filterSuggestionSpaceId,
+      orderedColumnIds = [],
+      isEditing = true,
+      afterFilterTrigger,
+    },
     ref
   ) {
     const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
@@ -91,8 +103,13 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
 
     const sortedFilters = orderFiltersForPicker(filterableColumns, orderedColumnIds);
 
-    const onCreateFilter = (filters: TableBlockNewFilterRow[], touchedColumnIds: string[]) => {
-      if (touchedColumnIds.length === 0) return;
+    const onCreateFilter = (
+      filters: TableBlockNewFilterRow[],
+      touchedColumnIds: string[],
+      modeOverrides?: ModesByColumn
+    ) => {
+      const hasModeOverrides = modeOverrides !== undefined && Object.keys(modeOverrides).length > 0;
+      if (touchedColumnIds.length === 0 && !hasModeOverrides) return;
       const touched = new Set(touchedColumnIds);
       const base = effectiveFilterState.filter(f => !touched.has(f.columnId));
       const newFilters = filters.map(f => ({
@@ -105,10 +122,10 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
       const firstTouchedIndex = effectiveFilterState.findIndex(f => touched.has(f.columnId));
       const insertIndex = firstTouchedIndex === -1 ? base.length : firstTouchedIndex;
       const next = [...base.slice(0, insertIndex), ...newFilters, ...base.slice(insertIndex)];
-      if (equal(comparableFilterList(next), comparableFilterList(effectiveFilterState))) {
+      if (!hasModeOverrides && equal(comparableFilterList(next), comparableFilterList(effectiveFilterState))) {
         return;
       }
-      effectiveSetFilterState(next);
+      effectiveSetFilterState(next, modeOverrides);
     };
 
     if (!isEditing) {
@@ -129,6 +146,7 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
           options={sortedFilters}
           filterSuggestionSpaceId={filterSuggestionSpaceId}
           filterStateForSeed={effectiveFilterState}
+          modesByColumnForSeed={modesByColumn}
           onCreate={onCreateFilter}
           isEditing={isEditing}
           trigger={
@@ -137,6 +155,12 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
             </SmallButton>
           }
         />
+        {afterFilterTrigger && (
+          <>
+            <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
+            {afterFilterTrigger}
+          </>
+        )}
         {source.type !== 'COLLECTION' && <QueryModeToggle />}
       </div>
     );

@@ -2,18 +2,25 @@
 
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import * as React from 'react';
+
 import { useRouter } from 'next/navigation';
+
+import { useParticipantAvatars, withRowParticipantAvatars } from '~/core/debates/participant-avatars';
+import { withQueryData } from '~/core/debates/with-query-data';
 
 import {
   type CreateDebateRequestBody,
+  type DebateParticipantSummary,
+  type DebatePerson,
+  type DebateRequest,
+  type DebateRequestParty,
   type DismissDebateRequestBody,
   type MatchmakingClaimsQuery,
   acceptDebateRequest,
   blockDebateUser,
   createDebateRequest,
   dismissDebateRequest,
-  joinDebateQueue,
-  leaveDebateQueue,
   listDebateBlocks,
   listDebatePeople,
   listDebateRequests,
@@ -66,11 +73,16 @@ export function useMatchmakingScope(enabled: boolean) {
   return authenticated;
 }
 
+/** Stable empty references, so an unresolved query does not hand the memos a new array each render. */
+const EMPTY_PEOPLE: DebatePerson[] = [];
+const EMPTY_PARTIES: DebateRequestParty[] = [];
+const EMPTY_PARTICIPANTS: DebateParticipantSummary[] = [];
+
 export function useDebatePeople(enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   useMatchmakingScope(enabled);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     // `accountKey` is null signed out, which keys the anonymous list separately from anyone's —
     // so signing in cannot serve the signed-out answer, and signing out cannot leak the other way.
@@ -81,13 +93,27 @@ export function useDebatePeople(enabled: boolean) {
     // when it is most likely to have moved on without us.
     refetchOnWindowFocus: true,
   });
+
+  // geo-chat's `avatar_cid` is a snapshot of the profile taken when it first learned about someone,
+  // so an avatar uploaded afterwards never reaches it and the row draws a placeholder for a face
+  // the profile page renders fine. Resolved here rather than in the rows so every consumer of this
+  // list gets it. See `participant-avatars`.
+  const people = React.useMemo(() => query.data?.people ?? EMPTY_PEOPLE, [query.data]);
+  const withAvatar = useParticipantAvatars(people, enabled);
+
+  const data = React.useMemo(
+    () => (query.data ? { ...query.data, people: people.map(withAvatar) } : query.data),
+    [query.data, people, withAvatar]
+  );
+
+  return withQueryData(query, data);
 }
 
 export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   useMatchmakingScope(enabled);
 
-  return useInfiniteQuery({
+  const infinite = useInfiniteQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.matchmakingClaims(accountKey, query),
     queryFn: ({ pageParam, signal }) =>
@@ -110,18 +136,73 @@ export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boo
       previousQuery && !sameQueryAccount(previousQuery.queryKey, accountKey) ? undefined : previousData,
     enabled,
   });
+
+  // The faces on the claim pills, which hang off each side rather than a flat participant list.
+  // Flattened across every loaded page so the whole list resolves in one batch — see
+  // `useDebatePeople` for why this happens here rather than in `PositionAvatars`.
+  const participants = React.useMemo(
+    () =>
+      infinite.data?.pages.flatMap(page =>
+        page.claims.flatMap(claim => claim.positions.flatMap(position => position.participants))
+      ) ?? EMPTY_PARTICIPANTS,
+    [infinite.data]
+  );
+
+  const withAvatar = useParticipantAvatars(participants, enabled);
+
+  const data = React.useMemo(() => {
+    if (!infinite.data) return infinite.data;
+
+    return {
+      ...infinite.data,
+      pages: infinite.data.pages.map(page => ({
+        ...page,
+        claims: page.claims.map(claim => ({
+          ...claim,
+          positions: claim.positions.map(position => withRowParticipantAvatars(position, withAvatar)),
+        })),
+      })),
+    };
+  }, [infinite.data, withAvatar]);
+
+  return withQueryData(infinite, data);
 }
 
 export function useMatchmakingMatches(enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const authenticated = useMatchmakingScope(enabled);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.matches(accountKey),
     queryFn: ({ signal }) => listMatchmakingMatches(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
   });
+
+  // The Matches tab draws the same `MatchmakingClaimCard` as the Claims tab, off the same
+  // `positions[].participants` — so it needs the same treatment. See `participant-avatars`.
+  const participants = React.useMemo(
+    () =>
+      query.data?.matches.flatMap(match => match.positions.flatMap(position => position.participants)) ??
+      EMPTY_PARTICIPANTS,
+    [query.data]
+  );
+
+  const withAvatar = useParticipantAvatars(participants, enabled && authenticated);
+
+  const data = React.useMemo(() => {
+    if (!query.data) return query.data;
+
+    return {
+      ...query.data,
+      matches: query.data.matches.map(match => ({
+        ...match,
+        positions: match.positions.map(position => withRowParticipantAvatars(position, withAvatar)),
+      })),
+    };
+  }, [query.data, withAvatar]);
+
+  return withQueryData(query, data);
 }
 
 /**
@@ -132,13 +213,42 @@ export function useMatchmakingMatches(enabled: boolean) {
 export function useDebateRequests(enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.requests(accountKey),
     queryFn: ({ signal }) => listDebateRequests(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
     refetchOnWindowFocus: true,
   });
+
+  // Both parties of every request, resolved in one batch — see `useDebatePeople` for why this is
+  // done here rather than in the rows that draw the faces.
+  const parties = React.useMemo(() => {
+    if (!query.data) return EMPTY_PARTIES;
+    const requests = [...(query.data.outbound ? [query.data.outbound] : []), ...query.data.incoming];
+
+    return requests.flatMap(request => [request.requester, request.recipient]);
+  }, [query.data]);
+
+  const withAvatar = useParticipantAvatars(parties, enabled && authenticated);
+
+  const data = React.useMemo(() => {
+    if (!query.data) return query.data;
+
+    const withParties = (request: DebateRequest): DebateRequest => ({
+      ...request,
+      requester: withAvatar(request.requester),
+      recipient: withAvatar(request.recipient),
+    });
+
+    return {
+      ...query.data,
+      outbound: query.data.outbound ? withParties(query.data.outbound) : query.data.outbound,
+      incoming: query.data.incoming.map(withParties),
+    };
+  }, [query.data, withAvatar]);
+
+  return withQueryData(query, data);
 }
 
 export function useDebateBlocks(enabled: boolean) {
@@ -150,120 +260,6 @@ export function useDebateBlocks(enabled: boolean) {
     queryFn: ({ signal }) => listDebateBlocks(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
   });
-}
-
-/**
- * Readiness for one claim. A position is an on-chain claim response, so the hub can only turn
- * readiness on (the server requires an indexed active response) or off — it never sends a side.
- * Both directions are the plain queue endpoints, keyed per claim so cards can pass their own space.
- */
-/**
- * Every cached family that carries `viewer_debate_ready`, so the switch moves in whichever surface
- * the viewer is looking at. `['debates', 'claims']` is the per-space family the rematch picker
- * reads; leaving it out left that toggle unmoved until the settle refetch landed.
- */
-const READINESS_FAMILIES = (accountKey: string | null) =>
-  [
-    debateQueryKeys.matchmakingClaimsRoot(accountKey),
-    debateQueryKeys.matches(accountKey),
-    ['debates', 'claims'],
-  ] as const;
-
-export function useClaimReadiness() {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  return useMutation({
-    mutationFn: ({ spaceId, claimId, ready }: { spaceId: string; claimId: string; ready: boolean }) =>
-      ready
-        ? joinDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey)
-        : leaveDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey),
-    // The switch moves now rather than a round trip and a refetch later, mirroring the
-    // availability switch in the panel header.
-    onMutate: async ({ spaceId, claimId, ready }) => {
-      const families = READINESS_FAMILIES(accountKey);
-      await Promise.all(families.map(queryKey => queryClient.cancelQueries({ queryKey })));
-      for (const queryKey of families) {
-        queryClient.setQueriesData({ queryKey }, (current: unknown) =>
-          patchClaimReadiness(current, spaceId, claimId, ready)
-        );
-      }
-    },
-    // Undo just this claim rather than restoring a snapshot of both families: every card holds its
-    // own copy of this mutation, so a snapshot rollback would also revert a toggle on another claim
-    // and any gateway refetch that landed in between.
-    onError: (_error, { spaceId, claimId, ready }) => {
-      for (const queryKey of READINESS_FAMILIES(accountKey)) {
-        queryClient.setQueriesData({ queryKey }, (current: unknown) =>
-          patchClaimReadiness(current, spaceId, claimId, !ready)
-        );
-      }
-    },
-    // Readiness changes who is matchable, so let the server re-sort — but only the families it
-    // actually affects, rather than every debate query.
-    onSettled: () => {
-      for (const queryKey of [
-        debateQueryKeys.matchmakingClaimsRoot(accountKey),
-        debateQueryKeys.matches(accountKey),
-        debateQueryKeys.activity(accountKey),
-        ['debates', 'claims'] as const,
-      ]) {
-        void queryClient.invalidateQueries({ queryKey });
-      }
-    },
-  });
-}
-
-/**
- * Flips `viewer_debate_ready` on one claim wherever it appears, in both the flat matches response
- * and the paged claims response. Anything else is returned untouched.
- *
- * Readiness is per (space, claim): geo-chat keys it on `(public_dao_space_id, claim_entity_id)`,
- * and the Claims tab is cross-space, so the same claim entity can hold two rows with different
- * readiness. Matching on the entity alone would move both switches for one round trip.
- */
-function patchClaimReadiness(data: unknown, spaceId: string, claimId: string, ready: boolean): unknown {
-  const patchOne = <T extends { claim: { space_id: string; claim_entity_id: string }; viewer_debate_ready: boolean }>(
-    entry: T
-  ) =>
-    entry.claim.claim_entity_id === claimId && entry.claim.space_id === spaceId
-      ? { ...entry, viewer_debate_ready: ready }
-      : entry;
-
-  if (!data || typeof data !== 'object') return data;
-
-  // The per-space family (`DebateClaimsResponse`) keys the ids on the entry itself rather than
-  // nesting them under `claim`, so it needs its own matcher.
-  const patchFlat = <T extends { space_id: string; claim_entity_id: string; viewer_debate_ready: boolean }>(
-    entry: T
-  ) =>
-    entry.claim_entity_id === claimId && entry.space_id === spaceId ? { ...entry, viewer_debate_ready: ready } : entry;
-
-  if ('matches' in data && Array.isArray(data.matches)) {
-    return { ...data, matches: data.matches.map(patchOne) };
-  }
-
-  if ('claims' in data && Array.isArray(data.claims)) {
-    return {
-      ...data,
-      claims: data.claims.map((entry: unknown) =>
-        entry && typeof entry === 'object' && 'claim_entity_id' in entry ? patchFlat(entry as never) : entry
-      ),
-    };
-  }
-
-  if ('pages' in data && Array.isArray(data.pages)) {
-    return {
-      ...data,
-      pages: data.pages.map((page: unknown) =>
-        page && typeof page === 'object' && 'claims' in page && Array.isArray(page.claims)
-          ? { ...page, claims: page.claims.map(patchOne) }
-          : page
-      ),
-    };
-  }
-
-  return data;
 }
 
 export function useCreateDebateRequest() {

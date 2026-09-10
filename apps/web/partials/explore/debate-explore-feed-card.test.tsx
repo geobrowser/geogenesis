@@ -56,7 +56,11 @@ vi.mock('~/core/debates/browse/debate-feed-player', () => ({
 }));
 
 vi.mock('~/core/debates/browse/use-debate-share-action', () => ({
-  useDebateShareAction: () => ({ state: 'ready', method: 'share', tooltipMessage: undefined, onActivate: vi.fn() }),
+  useDebateShareAction: () => ({ open: false, onOpen: vi.fn(), onOpenChange: vi.fn() }),
+}));
+
+vi.mock('~/core/debates/browse/share-dialog', () => ({
+  DebateShareDialog: () => null,
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
@@ -230,7 +234,7 @@ describe('DebateExploreFeedCard', () => {
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
     renderCard();
 
-    expect(screen.getByRole('button', { name: 'Share debate video' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Share debate' })).toBeDefined();
 
     expect(screen.queryByTestId('claims-panel')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Claims' }));

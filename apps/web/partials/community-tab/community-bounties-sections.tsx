@@ -31,7 +31,13 @@ import {
   IN_PROGRESS_CARD_HEIGHT_PX,
   InProgressBountyCard,
 } from './bounty-card';
-import { type BountyScope, CheckboxFilter, ScopeFilter } from './bounty-filters';
+import {
+  type BountyScope,
+  CheckboxFilter,
+  DEFAULT_BOUNTY_SCOPE,
+  ScopeFilter,
+  UNFILTERED_BOUNTY_SCOPE,
+} from './bounty-filters';
 import type { BountyStatusSlug } from './bounty-status';
 import { FILTER_PILL_CLASS } from './community-filter-pill';
 
@@ -44,7 +50,8 @@ const SECTION_TITLE_CLASS = 'text-[24px] leading-[29px] font-semibold tracking-[
 const selectsEverything = (selected: Set<string>, options: readonly string[]) =>
   selected.size === 0 || options.every(option => selected.has(option));
 
-function applyFilters(
+/** Exported for its own test: it is the whole of what the filter pills actually do. */
+export function applyFilters(
   bounties: SpaceBounty[],
   scope: BountyScope,
   difficulties: Set<string>,
@@ -321,13 +328,14 @@ function useBountyFilterPresentation(
   return { filtered, filterKey, controls, clearFilters, values: { scope, difficulties, selectedSkills } };
 }
 
-function useBountyFilterState(bounties: SpaceBounty[], skills: string[]): BountyFilterState {
-  const [scope, setScope] = React.useState<BountyScope>('featured');
+/** Exported for its own test: which scope the tables open on is the whole point of this filter. */
+export function useBountyFilterState(bounties: SpaceBounty[], skills: string[]): BountyFilterState {
+  const [scope, setScope] = React.useState<BountyScope>(DEFAULT_BOUNTY_SCOPE);
   const [difficulties, setDifficulties] = React.useState<Set<string>>(() => new Set(BOUNTY_DIFFICULTY_LEVELS));
   const [selectedSkills, setSelectedSkills] = React.useState<Set<string> | null>(null);
 
   const clearFilters = React.useCallback(() => {
-    setScope('all');
+    setScope(UNFILTERED_BOUNTY_SCOPE);
     setDifficulties(new Set(BOUNTY_DIFFICULTY_LEVELS));
     setSelectedSkills(null);
   }, []);

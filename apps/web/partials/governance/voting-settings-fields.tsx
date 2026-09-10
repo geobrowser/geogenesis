@@ -1,9 +1,11 @@
 'use client';
 
 import * as React from 'react';
+
 import { createPortal } from 'react-dom';
 
 import { QuestionCircle } from '~/design-system/icons/question-circle';
+import { Toggle } from '~/design-system/toggle';
 
 import type { VotingSettingsFormState } from './voting-settings';
 
@@ -16,11 +18,13 @@ type Props = {
 /**
  * The governance settings the form exposes: slow-path threshold (slider), universal
  * (early-execution) threshold (slider), vote duration (days/hours/minutes/seconds),
- * fast-path votes, and quorum. Shared between create-space "advanced" settings and the
- * edit-existing-space proposal modal.
+ * fast-path votes, fast path for new members (switch), and quorum. Shared between
+ * create-space "advanced" settings and the edit-existing-space proposal modal.
  */
 export function VotingSettingsFields({ state, onChange, disabled = false }: Props) {
-  const set = <K extends keyof VotingSettingsFormState>(key: K, value: string) => {
+  // Keyed to the field's own type: every text input holds a string, and the fast-path switch a
+  // boolean, so a single `string` here would have made the switch unassignable.
+  const set = <K extends keyof VotingSettingsFormState>(key: K, value: VotingSettingsFormState[K]) => {
     onChange({ ...state, [key]: value });
   };
 
@@ -79,8 +83,18 @@ export function VotingSettingsFields({ state, onChange, disabled = false }: Prop
       <div className="flex flex-col gap-3">
         <SettingLabel label="Vote duration" hint="How long a review-path proposal stays open for voting." />
         <div className="flex items-stretch gap-1.5 text-center">
-          <DurationInput label="Day" value={state.durationDays} onChange={v => set('durationDays', v)} disabled={disabled} />
-          <DurationInput label="Hours" value={state.durationHours} onChange={v => set('durationHours', v)} disabled={disabled} />
+          <DurationInput
+            label="Day"
+            value={state.durationDays}
+            onChange={v => set('durationDays', v)}
+            disabled={disabled}
+          />
+          <DurationInput
+            label="Hours"
+            value={state.durationHours}
+            onChange={v => set('durationHours', v)}
+            disabled={disabled}
+          />
           <DurationInput
             label="Minutes"
             value={state.durationMinutes}
@@ -105,9 +119,34 @@ export function VotingSettingsFields({ state, onChange, disabled = false }: Prop
         <ValueInput value={state.fastPathVotes} onChange={v => set('fastPathVotes', v)} disabled={disabled} />
       </SettingRow>
 
+      {/* Kept against Fast path votes with no rule between them: both answer "who gets the fast
+          path, and on what terms", which is one question asked twice. */}
+      {/* A switch rather than a number, phrased as what it grants rather than what it disables:
+          the stored field is `disableFastPathForNewMembers`, and a control labelled with a negative
+          that is then toggled off asks the reader to hold two inversions at once. */}
+      <SettingRow
+        label="Fast path for new members"
+        hint="When off, members who join from now on can only propose on the review path. Members who already joined keep whatever access they have — turning this back on does not restore theirs."
+      >
+        <button
+          type="button"
+          role="switch"
+          aria-checked={!state.disableFastPathForNewMembers}
+          aria-label="Fast path for new members"
+          disabled={disabled}
+          onClick={() => set('disableFastPathForNewMembers', !state.disableFastPathForNewMembers)}
+          className="flex h-8 items-center justify-end px-2 disabled:opacity-50"
+        >
+          <Toggle checked={!state.disableFastPathForNewMembers} />
+        </button>
+      </SettingRow>
+
       <Divider />
 
-      <SettingRow label="Quorum" hint="Minimum number of editors that must vote for a review-path proposal to be valid.">
+      <SettingRow
+        label="Quorum"
+        hint="Minimum number of editors that must vote for a review-path proposal to be valid."
+      >
         <ValueInput value={state.quorum} onChange={v => set('quorum', v)} disabled={disabled} />
       </SettingRow>
     </div>
@@ -212,7 +251,15 @@ function DurationInput({ label, value, onChange, disabled }: DurationInputProps)
   );
 }
 
-function ValueInput({ value, onChange, disabled }: { value: string; onChange: (next: string) => void; disabled?: boolean }) {
+function ValueInput({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  disabled?: boolean;
+}) {
   return (
     <input
       value={value}
