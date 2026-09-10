@@ -15,7 +15,7 @@
 import { Effect } from 'effect';
 import { readFile } from 'node:fs/promises';
 
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import {
   type DebateClaimInput,
   type DebatePublishInput,
@@ -93,6 +93,12 @@ const claimsToReused = draft.relations.filter(r => reusedIds.has(r.toEntity.id) 
 const mintedClaims = draft.relations.filter(r => r.type.id === TYPES_PROPERTY_ID && r.toEntity.id === CLAIM_TYPE_ID);
 const opsByType = ops.reduce<Record<string, number>>((acc, op) => ({ ...acc, [op.type]: (acc[op.type] ?? 0) + 1 }), {});
 
+// Topics DO get written onto reused entities — only the ones the reuse policy found missing in
+// this space. Counted rather than asserted at 0, unlike values/types, which must stay untouched.
+const topicsFromReused = draft.relations.filter(
+  r => r.type.id === TOPICS_PROPERTY_ID && reusedIds.has(r.fromEntity.id)
+);
+
 console.log('\ndraft:');
 console.log(`  minted Claim entities:                 ${mintedClaims.length}`);
 console.log(`  reused Claim entities:                 ${reusedIds.size}`);
@@ -100,6 +106,7 @@ console.log(`  values written on reused entities:     ${valuesOnReused.length}  
 console.log(`  Types relations from reused entities:  ${typesOnReused.length}  (must be 0)`);
 console.log(`  block→Claims relations to reused:      ${claimsToReused.length}`);
 console.log(`  claim→Sources relations from reused:   ${sourcesFromReused.length}`);
+console.log(`  Topics relations from reused entities: ${topicsFromReused.length}  (only what the space lacks)`);
 console.log(
   `  Name values written:                   ${draft.values.filter(v => v.property.id === NAME_PROPERTY_ID).length}`
 );

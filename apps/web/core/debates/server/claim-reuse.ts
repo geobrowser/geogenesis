@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 
@@ -31,11 +31,17 @@ export type ExistingClaimEntity = {
   /** Every space holding a value or relation of the entity. */
   spaces: string[];
   types: Array<{ id: string }>;
+  /**
+   * Targets of the entity's existing Topics relations. The topics writer adds only what is
+   * missing, because `relate` does not dedupe and a repeated Topics relation renders twice.
+   * Optional so injected test lookups predating topics stay valid; absent reads as none.
+   */
+  topicIds?: string[];
 };
 
-export type ExistingClaimLookup = (entityIds: string[]) => Promise<ExistingClaimEntity[]>;
+export type ExistingClaimLookup = (entityIds: string[], spaceId: string) => Promise<ExistingClaimEntity[]>;
 
-const lookupInGraph: ExistingClaimLookup = entityIds =>
+const lookupInGraph: ExistingClaimLookup = (entityIds, spaceId) =>
   Effect.runPromise(
     graphql({
       query: existingClaimsDocument,
@@ -47,17 +53,29 @@ const lookupInGraph: ExistingClaimLookup = entityIds =>
                   id: entity.id,
                   spaces: (entity.spaceIds ?? []).filter((id): id is string => typeof id === 'string'),
                   types: (entity.types ?? []).flatMap(type => (type ? [{ id: type.id }] : [])),
+                  topicIds: (entity.topicRelations ?? []).flatMap(relation =>
+                    relation?.toEntityId ? [relation.toEntityId] : []
+                  ),
                 },
               ]
             : []
         ),
-      variables: { ids: entityIds },
+      variables: { ids: entityIds, topicsPropertyId: TOPICS_PROPERTY_ID, spaceId },
     })
   );
 
-/** A Geo entity id in either shape: 32 hex chars, dashed or not. Anything else cannot be queried. */
+/**
+ * A Geo entity id in either shape the SDK accepts: 32 hex chars, or the dashed UUID form.
+ * Anything else cannot be queried — and, more importantly, `Graph.createRelation` runs
+ * `assertValid` on every id it is handed and THROWS, which fails the whole edit. This mirrors
+ * the SDK's own `Id.isValid` exactly (dashless OR canonically-dashed); a laxer test would let
+ * a half-dashed id through to a throw at publish time.
+ */
+const DASHLESS_ID = /^[0-9a-f]{32}$/i;
+const DASHED_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function looksLikeEntityId(id: string): boolean {
-  return /^[0-9a-f]{32}$/i.test(id.replace(/-/g, ''));
+  return DASHLESS_ID.test(id) || DASHED_ID.test(id);
 }
 
 export function isDebateClaimReuseEnabled(): boolean {
@@ -129,8 +147,9 @@ export async function applyClaimReusePolicy(
     ),
   ];
   let verified: Set<string>;
+  const existingTopicsByEntity = new Map<string, Set<string>>();
   try {
-    const entities = ids.length > 0 ? await (options.lookup ?? lookupInGraph)(ids) : [];
+    const entities = ids.length > 0 ? await (options.lookup ?? lookupInGraph)(ids, spaceId) : [];
     const spaceKey = uuidToHex(spaceId);
     verified = new Set(
       entities
@@ -141,6 +160,9 @@ export async function applyClaimReusePolicy(
         )
         .map(entity => uuidToHex(entity.id))
     );
+    for (const entity of entities) {
+      existingTopicsByEntity.set(uuidToHex(entity.id), new Set((entity.topicIds ?? []).map(uuidToHex)));
+    }
   } catch (error) {
     console.warn('[debate-acceptor] could not verify matched claims; minting all of them instead', {
       debateId: options.debateId,
@@ -159,6 +181,19 @@ export async function applyClaimReusePolicy(
       verified.has(uuidToHex(claim.existingClaimEntityId))
     ) {
       reused += 1;
+      // Topics ride reused claims too, but only the ones the entity does not already carry in
+      // THIS space — the same graph read that verified the entity says which those are.
+      // Everything minted keeps its full topic set (a fresh entity has nothing to duplicate).
+      //
+      // The read is a pre-submit snapshot, so it cannot see an edit that has not indexed yet:
+      // two debates in one sweep that reuse the same entity and share a topic can each write
+      // the relation once. That window is the sweep's, not this policy's — deduping across it
+      // would need a post-index pass.
+      const existingTopics = existingTopicsByEntity.get(uuidToHex(claim.existingClaimEntityId));
+      if (existingTopics?.size && claim.topics?.length) {
+        const missing = claim.topics.filter(topic => !existingTopics.has(uuidToHex(topic.id)));
+        if (missing.length !== claim.topics.length) return { ...claim, topics: missing };
+      }
       return claim;
     }
     return withoutReference(claim);

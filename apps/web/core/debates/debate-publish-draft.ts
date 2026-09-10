@@ -1,6 +1,6 @@
 import { Position } from '@geoprotocol/geo-sdk/lite';
 
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { ID } from '~/core/id';
 import type { DataType, Relation, Value } from '~/core/types';
 
@@ -71,6 +71,13 @@ export type DebateClaimInput = {
    * facts. Null/absent mints a fresh Claim as before.
    */
   existingClaimEntityId?: string | null;
+  /**
+   * Topics the extractor assigned to this claim, selected from the debated claim's own topic
+   * set ({KG entity id, name}). Written on minted and reused claims alike; for a reused entity
+   * the reuse policy has already subtracted the topics the entity carries on the graph, so the
+   * draft never writes a duplicate Topics relation.
+   */
+  topics?: { id: string; name: string | null }[];
 };
 
 export type DebatePublishInput = {
@@ -317,6 +324,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     // claim per debate.
     const linkedBlockClaims = new Set<string>();
     const sourcedClaims = new Set<string>();
+    const claimTopicEdges = new Set<string>();
 
     turns.forEach(turn => {
       const speakerName = turn.speakerName?.trim() ? turn.speakerName.trim() : 'Anonymous';
@@ -356,9 +364,11 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
       // Supported/Opposed-by membership on the Debate.
       //
       // Find-or-create: a claim geo-chat matched to an existing Claim in this space reuses that
-      // entity. Only the two relations are written — the block's Claims and the claim's Sources —
-      // and nothing on the entity itself, so a claim someone else published keeps its own Name,
-      // Types and Is factual even where this extraction would have said otherwise.
+      // entity. Nothing describing the claim is written onto it — no Name, no Types, no Is
+      // factual — so a claim someone else published keeps its own facts even where this
+      // extraction would have said otherwise. What is written is membership: the block's Claims
+      // relation, the claim's Sources relation, and any Topics the entity does not already carry
+      // in this space (the reuse policy subtracts the ones it does).
       for (const claim of claimsByTurnIndex.get(turn.turnIndex) ?? []) {
         const claimEntityText = claim.text.trim();
         if (claimEntityText.length === 0) continue;
@@ -376,6 +386,23 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
           if (claim.isFactual !== null) {
             setBoolean(claimId, claimEntityText, CLAIM_IS_FACTUAL_PROPERTY_ID, claim.isFactual);
           }
+        }
+        // Topics ride both branches — a minted claim gets its full set, a reused entity only what
+        // the reuse policy left after subtracting the graph's current relations. Deduped per
+        // (claim, topic): a reused entity can appear behind several extracted claims carrying the
+        // same topic, and `relate` does not dedupe.
+        for (const topic of claim.topics ?? []) {
+          // Keyed on normalized ids so the dedupe agrees with the reuse policy, which compares
+          // topics as hex: the same entity written once dashed and once dashless is one edge.
+          const edge = `${normalizeId(claimId)}:${normalizeId(topic.id)}`;
+          if (claimTopicEdges.has(edge)) continue;
+          claimTopicEdges.add(edge);
+          relate({
+            fromEntity: claimRef,
+            propertyId: TOPICS_PROPERTY_ID,
+            toEntityId: topic.id,
+            toEntityName: topic.name,
+          });
         }
         const blockClaimKey = `${blockId}:${claimId}`;
         if (!linkedBlockClaims.has(blockClaimKey)) {
@@ -430,6 +457,11 @@ export function mergeTranscriptSegmentsIntoTurns(
     }
   }
   return turns;
+}
+
+/** Dashless, lower-case — the form ids are compared in, so one entity is one key. */
+function normalizeId(id: string): string {
+  return id.replace(/-/g, '').toLowerCase();
 }
 
 const TEXT_DATA_TYPE: DataType = 'TEXT';
