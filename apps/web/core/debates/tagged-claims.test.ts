@@ -463,7 +463,7 @@ describe('the facet menus', () => {
     await waitFor(() => expect(result.current.spaces).toHaveLength(1));
 
     expect(sentVariables().groupBy).toEqual(['SPACE_ID']);
-    expect(sentVariables().relationTypeId).toBe('257090341ba5406f94e4d4af90042fba');
+    expect(sentVariables().typeId).toBe('257090341ba5406f94e4d4af90042fba');
     expect(sentVariables().toEntityId).toBe(TAG);
   });
 
