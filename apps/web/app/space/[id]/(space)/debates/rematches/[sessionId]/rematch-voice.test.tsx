@@ -751,6 +751,37 @@ describe('RematchVoicePill', () => {
     });
   });
 
+  // The prime only exists to move the prompt off the unmute click. The permission query it waits
+  // on can still be pending when the user clicks unmute — a permission dialog stays 'prompt' for
+  // as long as it is on screen — and by then `<LiveKitRoom audio>` is opening the device for real.
+  // The prime has to drop out rather than fire a second request beside it.
+  it('abandons a prime still in flight when the user unmutes', async () => {
+    mocks.isMicrophoneEnabled = false;
+    let answerPermission = () => {};
+    mocks.permissionsQuery.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          answerPermission = () => resolve({ state: 'prompt' });
+        })
+    );
+
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    await waitFor(() => expect(mocks.permissionsQuery).toHaveBeenCalled());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+    });
+    expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(true);
+
+    // The browser answers only now, after the user has already asked for the microphone.
+    await act(async () => {
+      answerPermission();
+    });
+
+    expect(mocks.getUserMedia).not.toHaveBeenCalled();
+  });
+
   // The pair usually arrives straight from a debate, where the origin was already granted the
   // microphone. Priming again would open the device for nothing.
   it('skips the prime when the permission is already settled', async () => {

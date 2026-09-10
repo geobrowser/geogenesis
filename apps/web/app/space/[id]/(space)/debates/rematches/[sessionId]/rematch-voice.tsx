@@ -138,7 +138,7 @@ function useMutedNudge(muted: boolean, opponentAudible: boolean, spentRef: React
     if (spentRef.current || !muted || !opponentAudible) return;
     spentRef.current = true;
     setVisible(true);
-  }, [muted, opponentAudible]);
+  }, [muted, opponentAudible, spentRef]);
 
   // The dismissal clock is deliberately its own effect, keyed only on `visible`. Sharing the
   // effect above would put `opponentAudible` in its dependencies, and the opponent stops talking
@@ -329,8 +329,11 @@ export function RematchVoicePill({
   // session that somehow arrives without one, which the early return below also refuses to draw.
   // The same device `audioCaptureDefaults` will publish, so the prompt names the microphone the
   // user will actually speak through and the prime cannot fail on a busy system default.
+  // `!micIntent` because the prime exists only to move the prompt off the unmute click. Once the
+  // user has asked for the microphone, `<LiveKitRoom audio>` is opening it for real and a second
+  // request alongside the one already on screen is pure redundancy.
   usePrimedMicrophonePermission(
-    voiceActive && ownership === 'owned' && Boolean(join.data) && Boolean(opponent),
+    !micIntent && voiceActive && ownership === 'owned' && Boolean(join.data) && Boolean(opponent),
     initialAudioInputIdRef.current || undefined
   );
 
