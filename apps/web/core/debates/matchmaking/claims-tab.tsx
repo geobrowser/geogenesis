@@ -41,7 +41,7 @@ import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { fromClaimsFilterSearch } from './claims-filter-params';
 import { DebateHoursNote } from './debate-hours-note';
-import { useDebateRequests } from './hooks';
+import { useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubFacetRail } from './hub-facet-rail';
 import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
@@ -79,6 +79,7 @@ const FILTER_OPTIONS: HubFilterOption<ClaimsTabFilter>[] = [
   { value: 'all', label: 'All claims' },
   { value: 'mine', label: 'My positions' },
   { value: 'debate_now', label: 'Debate now' },
+  { value: 'matches', label: 'Matches' },
 ];
 
 /**
@@ -91,7 +92,7 @@ const FILTER_OPTIONS: HubFilterOption<ClaimsTabFilter>[] = [
  *
  * Featured and All claims describe the corpus rather than the viewer, and both still answer.
  */
-const SIGNED_OUT_HIDDEN_FILTERS: ClaimsTabFilter[] = ['mine', 'debate_now'];
+const SIGNED_OUT_HIDDEN_FILTERS: ClaimsTabFilter[] = ['mine', 'debate_now', 'matches'];
 
 /**
  * The two filters the graph answers, and the tag each one asks for.
@@ -104,18 +105,22 @@ const TAG_FOR_FILTER: Partial<Record<ClaimsTabFilter, string>> = {
   all: DEBATE_TAG_ID,
 };
 
+const EMPTY_TOPIC_FACET: { id: string; name: string | null; count: number }[] = [];
+
 /** What an empty list means, which differs by where the list came from. */
 const NOTHING_HERE: Record<ClaimsTabFilter, string> = {
   featured: 'No claims have been featured yet.',
   all: 'No claims have been tagged for debate yet.',
   mine: 'You haven’t taken a position on any claims yet.',
   debate_now: 'Nobody is ready to debate you on a claim right now.',
+  matches:
+    'Matches appear once you’ve taken a position on a claim and someone holding the opposite position is online and ready too.',
 };
 
-function filterOptionsFor(authenticated: boolean) {
-  return authenticated
-    ? FILTER_OPTIONS
-    : FILTER_OPTIONS.filter(option => !SIGNED_OUT_HIDDEN_FILTERS.includes(option.value));
+function filterOptionsFor(authenticated: boolean, workspace: boolean) {
+  const forSurface = workspace ? FILTER_OPTIONS : FILTER_OPTIONS.filter(option => option.value !== 'matches');
+
+  return authenticated ? forSurface : forSurface.filter(option => !SIGNED_OUT_HIDDEN_FILTERS.includes(option.value));
 }
 
 /** Stable identity so the geo-chat lookups don't restart on every render of a geo-chat list. */
@@ -165,7 +170,7 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
   const requestsQuery = useDebateRequests(authenticated);
   const { data: activity } = useDebateActivity(authenticated);
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
-  const filterOptions = React.useMemo(() => filterOptionsFor(authenticated), [authenticated]);
+  const filterOptions = React.useMemo(() => filterOptionsFor(authenticated, workspace), [authenticated, workspace]);
 
   const [search, setSearch] = React.useState('');
   const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
@@ -179,7 +184,13 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
   // anonymously and showing a trigger value that is no longer in the menu. Derived rather than
   // reset through an effect so the query, the menu label, the ordering key and the empty state all
   // read the same value on the very first render after the session goes away.
-  const filter = !authenticated && SIGNED_OUT_HIDDEN_FILTERS.includes(selectedFilter) ? 'featured' : selectedFilter;
+  // One question instead of two: is the scope one this surface currently offers? That covers the
+  // signed-out case `SIGNED_OUT_HIDDEN_FILTERS` used to answer on its own, and `matches` in the
+  // panel, which has a tab for it rather than a scope. The selection itself is left alone, so a
+  // scope comes back the moment its surface offers it again.
+  const offeredHere = filterOptions.some(option => option.value === selectedFilter);
+  const filter = offeredHere ? selectedFilter : 'featured';
+
   // Held outside this component so they survive it. The hub closes on any outside pointer-down,
   // so dismissing a dropdown by clicking away unmounts this tab — and with `useState` that took
   // the viewer's selection with it (GEO-2850).
@@ -265,6 +276,7 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
   // that catalog is *used* is `graphSourced`, which is also what holds the index query off.
   const claimsTagId = TAG_FOR_FILTER[filter] ?? DEBATE_TAG_ID;
   const graphSourced = TAG_FOR_FILTER[filter] !== undefined;
+  const matchesSourced = filter === 'matches';
 
   // A graph-sourced filter draws its own list, so the index isn't asked for one. The query keeps
   // saying `all` rather than going undefined: switching to one of those and back then lands on the
@@ -295,7 +307,7 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
   // once, for both pickers — see `useScopedMatchmakingClaims`. Featured passes `unusable`: it draws
   // its own list, so there is nothing worth asking the index for, and the masking that comes with
   // it also keeps the paging sentinel off a list that has no next page.
-  const claimsQuery = useScopedMatchmakingClaims(query, scope, debouncedSpaceIds, graphSourced);
+  const claimsQuery = useScopedMatchmakingClaims(query, scope, debouncedSpaceIds, graphSourced || matchesSourced);
   const { pages, facets } = claimsQuery;
 
   // The debounce is part of the staleness, not separate from it. For those milliseconds no request
@@ -316,6 +328,15 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
   //
   // The graph path is folded in below, once its facets exist to be asked — see `countsPending`.
   const indexedCountsPending = !graphSourced && (claimsQuery.countsPending || topicsSettling || spacesSettling);
+
+  const matchesQuery = useMatchmakingMatches(matchesSourced && authenticated);
+  const matchEntries = React.useMemo(() => {
+    if (!matchesSourced) return [];
+    return (matchesQuery.data?.matches ?? [])
+      .filter(match => spaceShowsClaims(match.claim.space_id))
+      .filter(match => debouncedSpaceIds.length === 0 || debouncedSpaceIds.includes(match.claim.space_id))
+      .map(match => ({ ...match, score: 0, active_debate: false }));
+  }, [matchesSourced, matchesQuery.data, spaceShowsClaims, debouncedSpaceIds]);
 
   const serverClaims = React.useMemo(
     () => pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id)),
@@ -537,7 +558,7 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
   // they ask for a different list.
   const claims = useStableListOrder(
-    graphSourced ? taggedEntries : serverClaims,
+    matchesSourced ? matchEntries : graphSourced ? taggedEntries : serverClaims,
     entry => `${entry.claim.space_id}:${entry.claim.claim_entity_id}`,
     `${debouncedSearch}|${spaceIds.join(',')}|${topicIds.join(',')}|${filter}`
   );
@@ -641,7 +662,7 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
             spaceIds={spaceIds}
             onSpaceToggle={onSpaceToggle}
             onSpacesClear={onSpacesClear}
-            facetTopics={facetTopics}
+            facetTopics={matchesSourced ? EMPTY_TOPIC_FACET : facetTopics}
             topicIds={topicIds}
             onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
             onTopicsClear={() => setTopicIds([])}
@@ -659,9 +680,10 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
 
           <Input
             withSearchIcon
-            value={search}
+            value={matchesSourced ? '' : search}
             onChange={event => setSearch(event.currentTarget.value)}
-            placeholder="Search claims"
+            disabled={matchesSourced}
+            placeholder={matchesSourced ? 'Search is off for Matches' : 'Search claims'}
             aria-label="Search claims"
           />
 
@@ -674,7 +696,7 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
               onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
               onTopicsClear={() => setTopicIds([])}
               facetSpaces={facetSpaces}
-              facetTopics={facetTopics}
+              facetTopics={matchesSourced ? EMPTY_TOPIC_FACET : facetTopics}
               countsPending={countsPending}
               leading={
                 <HubFilterMenu
@@ -690,7 +712,10 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
 
         <div className="flex flex-col gap-3 px-4 py-3">
           <HubQueryState
-            isLoading={spacesPending || (graphSourced ? taggedLoading : claimsQuery.isLoading)}
+            isLoading={
+              spacesPending ||
+              (matchesSourced ? matchesQuery.isLoading : graphSourced ? taggedLoading : claimsQuery.isLoading)
+            }
             // The catalog only. It is the list — without it there is nothing to show, and an error is
             // the honest answer.
             //
@@ -705,7 +730,7 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
             // viewer's topic selection is not spent, and `taggedKindResolvedFor` keeps a card
             // unpressable until its vocabulary and the viewer's own side have actually arrived. A
             // short list beats a blank one; a wrong publish beats neither, and is what those guard.
-            error={graphSourced ? taggedError : claimsQuery.error}
+            error={matchesSourced ? matchesQuery.error : graphSourced ? taggedError : claimsQuery.error}
             // Retries whatever failed, not just the catalog. The error above can come from either of
             // the two lookups behind the list, and neither is keyed on the catalog — so refetching
             // only that left the failed dependency untouched and the error state exactly where it

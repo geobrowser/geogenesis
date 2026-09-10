@@ -8,13 +8,11 @@ import { Text } from '~/design-system/text';
 
 import { useGeoChatAuth } from '../hooks';
 import { HubPillButton } from './hub-pill-button';
-import { MatchesTab } from './matches-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
 
 /**
- * The workspace's right rail: the three lists that are only useful *while* you are doing something
- * else, stacked so they stop being modal.
+ * The workspace's right rail: requests and presence, useful while browsing claims.
  */
 export function HubLiveRail() {
   const { authenticated, ready } = useGeoChatAuth();
@@ -25,9 +23,6 @@ export function HubLiveRail() {
         <>
           <RailSection label="Requests">
             <RequestsTab dense />
-          </RailSection>
-          <RailSection label="Matches">
-            <MatchesTab dense onTabChange={() => {}} />
           </RailSection>
           <RailSection label="Available now">
             <PeopleTab dense />
@@ -40,7 +35,7 @@ export function HubLiveRail() {
   );
 }
 
-/** Signed out: keep People, explain Requests/Matches instead of two empty headings. */
+/** Signed out: keep People, explain the account-gated lists instead of empty headings. */
 function SignedOutRail() {
   const promptSignIn = usePrivySignIn();
 

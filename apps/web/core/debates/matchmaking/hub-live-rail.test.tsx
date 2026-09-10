@@ -15,10 +15,10 @@ vi.mock('../hooks', () => ({
   useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: 'user-a' }),
 }));
 
-// The three lists are the panel's own and have their own suites; this one is about which of them
-// the rail shows, in what order, and what stands in for the two that need an account.
+// Requests and People are the panel's own and have their own suites; this one is about which of
+// them the rail shows, in what order, and what stands in when an account is required. Matches is a
+// Claims scope on this surface, not a rail section.
 vi.mock('./requests-tab', () => ({ RequestsTab: () => <div data-testid="requests-tab" /> }));
-vi.mock('./matches-tab', () => ({ MatchesTab: () => <div data-testid="matches-tab" /> }));
 vi.mock('./people-tab', () => ({ PeopleTab: () => <div data-testid="people-tab" /> }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
@@ -32,12 +32,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('HubLiveRail', () => {
-  // Ordered by urgency rather than by the tab order it inherits: a request expires in ~25 minutes,
-  // matches are pairable now, presence is the slowest of the three.
-  it('stacks requests, then matches, then who is available', () => {
+  // Ordered by urgency: a request expires in ~25 minutes; presence is slower.
+  it('stacks requests, then who is available', () => {
     const { container } = render(<HubLiveRail />);
 
-    const rendered = ['requests-tab', 'matches-tab', 'people-tab'].map(id => screen.getByTestId(id));
+    const rendered = ['requests-tab', 'people-tab'].map(id => screen.getByTestId(id));
     for (const [index, node] of rendered.slice(0, -1).entries()) {
       const next = rendered[index + 1];
       expect(Boolean(node.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
@@ -45,15 +44,14 @@ describe('HubLiveRail', () => {
     expect(container).toBeTruthy();
   });
 
-  // Signed out the rail loses two of its three lists. Two empty headings would say nothing, so it
-  // keeps the one that still answers and explains the two that need an account.
+  // Signed out the rail loses Requests. An empty heading would say nothing, so it keeps People and
+  // explains the account-gated lists.
   it('keeps People signed out and explains what the other two would offer', () => {
     mocks.authenticated = false;
     render(<HubLiveRail />);
 
     expect(screen.getByTestId('people-tab')).toBeInTheDocument();
     expect(screen.queryByTestId('requests-tab')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('matches-tab')).not.toBeInTheDocument();
     expect(screen.getByText(/paired with someone who disagrees/)).toBeInTheDocument();
   });
 

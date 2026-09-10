@@ -688,6 +688,31 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+/**
+ * Matches is a tab in the panel and a scope in the workspace — one route to it per surface. Offering
+ * both in the same place is the ambiguity moving it into the scope selector was meant to remove.
+ */
+describe('where the Matches scope is offered', () => {
+  it('is not among the panel’s scopes, which has a tab for it', async () => {
+    render(<ClaimsTab />);
+    await showIndexedClaims();
+
+    expect(screen.queryByText('Matches')).not.toBeInTheDocument();
+  });
+
+  it('is offered in the workspace, under Debate now', async () => {
+    render(<ClaimsTab layout="workspace" />);
+    await showIndexedClaims();
+
+    const scopes = screen.getAllByRole('radio').map(option => option.textContent ?? '');
+    const debateNow = scopes.findIndex(label => label.includes('Debate now'));
+    const matches = scopes.findIndex(label => label.includes('Matches'));
+
+    expect(matches).toBeGreaterThan(-1);
+    expect(matches).toBe(debateNow + 1);
+  });
+});
+
 describe('ClaimsTab', () => {
   // GEO-2684. The list pages forever, so controls left in the scrolling body meant scrolling back
   // to the start to change a filter. jsdom has no layout, so what's assertable is that they sit in
