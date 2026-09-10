@@ -57,6 +57,24 @@ describe('useMemberSpaceDefault', () => {
       expect(view.onSeed).toHaveBeenCalledWith([A]);
     });
 
+    // `onSpend` is optional, so a caller may seed at `spent={false}` and never write the value
+    // back. Re-arming on the value rather than on a change would then seed again on the next
+    // options or membership update — over whatever the viewer had picked in between.
+    it('does not re-seed a caller that stays at false', () => {
+      const view = controlled(false);
+      expect(view.onSeed).toHaveBeenCalledTimes(1);
+
+      view.rerender({
+        memberSpaceIds: new Set([A]),
+        availableSpaceIds: [A, B, STRANGER],
+        pending: false,
+        spent: false,
+      });
+      view.rerender({ memberSpaceIds: new Set([A, B]), availableSpaceIds: [A, B], pending: false, spent: false });
+
+      expect(view.onSeed).toHaveBeenCalledTimes(1);
+    });
+
     it('reports the seed being spent so the caller can record it', () => {
       const { onSpend } = controlled(false);
 

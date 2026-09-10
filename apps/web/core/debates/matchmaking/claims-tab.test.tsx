@@ -1903,7 +1903,7 @@ describe('topic menu', () => {
     await waitFor(() => expect(mocks.lastQuery).toMatchObject({ topicIds: ['topic-ai'] }));
   });
 
-  // The list selector is the same filter bar, dismissed the same way, so it sticks with the rest.  // The list selector is the same filter bar, dismissed the same way, so it sticks with the rest.
+  // The list selector is the same filter bar, dismissed the same way, so it sticks with the rest.
   it('keeps the chosen list when the panel is closed and reopened', async () => {
     const store = createStore();
     render(<ClaimsTab />, store);

@@ -16,6 +16,8 @@ import {
   debatesHubClaimsFilterAtom,
   debatesHubClaimsSpaceIdsAtom,
   debatesHubClaimsSpaceSeedSpentAtom,
+  debatesHubClaimsTopicIdsAtom,
+  debatesHubMatchesSpaceIdsAtom,
 } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
@@ -137,18 +139,25 @@ describe('DebatesHubPanel', () => {
   // GEO-2850. The filter bar is session state now, and a session outlives a sign-in. A spent seed
   // carried across one would keep GEO-2834's brand-new-account default from ever landing, and a
   // carried selection would show one viewer the spaces another had picked.
+  //
+  // Every atom the bar holds, not a sample of them: this is the isolation test, so an atom left out
+  // of `resetDebatesHubFiltersAtom` has to fail here rather than quietly hand B one of A's filters.
   it('clears the filter bar when the account behind it changes', () => {
     const store = renderOpen('claims');
     store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+    store.set(debatesHubClaimsTopicIdsAtom, ['topic-a']);
     store.set(debatesHubClaimsSpaceSeedSpentAtom, true);
     store.set(debatesHubClaimsFilterAtom, 'mine');
+    store.set(debatesHubMatchesSpaceIdsAtom, ['space-a']);
 
     mocks.accountKey = 'user-b';
     store.rerender();
 
     expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
+    expect(store.get(debatesHubClaimsTopicIdsAtom)).toEqual([]);
     expect(store.get(debatesHubClaimsSpaceSeedSpentAtom)).toBe(false);
     expect(store.get(debatesHubClaimsFilterAtom)).toBe('featured');
+    expect(store.get(debatesHubMatchesSpaceIdsAtom)).toEqual([]);
   });
 
   // Signing in is the same person authenticating. The Claims tab prompts for sign-in from inside
@@ -241,7 +250,7 @@ describe('DebatesHubPanel', () => {
     expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
   });
 
-  // The same viewer reopening the panel must keep what they picked, which is the whole feature.  // The same viewer reopening the panel must keep what they picked, which is the whole feature.
+  // The same viewer reopening the panel must keep what they picked, which is the whole feature.
   it('leaves the filter bar alone for the same account', () => {
     const store = renderOpen('claims');
     store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);

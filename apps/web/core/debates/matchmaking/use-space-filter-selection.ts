@@ -127,6 +127,9 @@ export function useMemberSpaceDefault({
   onSpend?: () => void;
 }): () => void {
   const seededRef = React.useRef(spent === true);
+  // The controlled value as this hook last saw it, so the effect below can tell a *transition* from
+  // a caller that simply sits at the same value.
+  const lastSpentRef = React.useRef(spent);
   const onSpendRef = React.useRef(onSpend);
   onSpendRef.current = onSpend;
   // Held in a ref so a caller passing an inline function doesn't re-arm the effect on every render.
@@ -134,9 +137,16 @@ export function useMemberSpaceDefault({
   onSeedRef.current = onSeed;
 
   React.useEffect(() => {
-    // Only a controlled caller can re-arm; `undefined` means the marker is this mount's alone, and
-    // treating it as `false` would re-arm the uncontrolled callers on every run of this effect.
-    if (spent === false) seededRef.current = false;
+    // Only a *transition* of the controlled marker moves the internal one, and only a controlled
+    // caller has one at all — `undefined` means the marker is this mount's alone.
+    //
+    // Reading `spent === false` on every run instead would break the at-most-once contract for a
+    // caller that legitimately stays at false: `onSpend` is optional, so a caller may never write
+    // the value back, and the next options or membership update would re-arm the marker and seed
+    // straight over a selection the viewer had since made.
+    const previousSpent = lastSpentRef.current;
+    lastSpentRef.current = spent;
+    if (spent !== undefined && spent !== previousSpent) seededRef.current = spent;
     if (seededRef.current || pending || memberSpaceIds === null) return;
     // An empty menu is not an answer about the viewer, settled or not — see the note above on why
     // this holds the seed rather than spending it.
