@@ -4,9 +4,10 @@ import type { Filter } from './filters';
 import {
   applyDropdownSelectionsToFilters,
   dropdownSelectionsStorageKey,
+  effectiveDropdownMode,
   effectiveDropdownSelection,
   filterDefaultsForColumn,
-  parseStoredDropdownSelections,
+  parseStoredDropdownState,
   toggleDropdownSelection,
 } from './table-dropdown-selections';
 
@@ -22,21 +23,54 @@ const relationFilter = (columnId: string, value: string, overrides: Partial<Filt
   ...overrides,
 });
 
-describe('parseStoredDropdownSelections', () => {
+describe('parseStoredDropdownState', () => {
   it('returns no overrides for missing or corrupt storage', () => {
-    expect(parseStoredDropdownSelections(null)).toEqual({});
-    expect(parseStoredDropdownSelections('not json')).toEqual({});
-    expect(parseStoredDropdownSelections('"a string"')).toEqual({});
-    expect(parseStoredDropdownSelections('[1,2]')).toEqual({});
+    expect(parseStoredDropdownState(null)).toEqual({ selections: {}, modes: {} });
+    expect(parseStoredDropdownState('not json')).toEqual({ selections: {}, modes: {} });
+    expect(parseStoredDropdownState('"a string"')).toEqual({ selections: {}, modes: {} });
+    expect(parseStoredDropdownState('[1,2]')).toEqual({ selections: {}, modes: {} });
   });
 
-  it('keeps only non-empty string-array entries and dedupes ids', () => {
+  it('reads the legacy bare-selections shape with no stored modes', () => {
     const raw = JSON.stringify({
       [TOPICS]: ['t1', 't1', 't2', 7, ''],
       [AUTHORS]: [],
       junk: 'nope',
     });
-    expect(parseStoredDropdownSelections(raw)).toEqual({ [TOPICS]: ['t1', 't2'] });
+    // Master compiled every multi-pick override as OR — legacy storage is
+    // stamped so the new preset-inheritance default can't flip it to AND.
+    expect(parseStoredDropdownState(raw)).toEqual({
+      selections: { [TOPICS]: ['t1', 't2'] },
+      modes: { [TOPICS]: 'OR' },
+    });
+  });
+
+  it('reads the enveloped shape and drops invalid mode values', () => {
+    const raw = JSON.stringify({
+      selections: { [TOPICS]: ['t1'] },
+      modes: { [TOPICS]: 'AND', [AUTHORS]: 'BANANA' },
+    });
+    expect(parseStoredDropdownState(raw)).toEqual({
+      selections: { [TOPICS]: ['t1'] },
+      modes: { [TOPICS]: 'AND' },
+    });
+  });
+});
+
+describe('effectiveDropdownMode', () => {
+  it('a stored choice always wins', () => {
+    expect(effectiveDropdownMode({ [TOPICS]: 'AND' }, TOPICS, [], {})).toBe('AND');
+    expect(effectiveDropdownMode({ [TOPICS]: 'OR' }, TOPICS, ['a', 'b'], { [TOPICS]: 'AND' })).toBe('OR');
+  });
+
+  it('a multi-value preset inherits the block filter combinator (missing = AND)', () => {
+    expect(effectiveDropdownMode({}, TOPICS, ['a', 'b'], {})).toBe('AND');
+    expect(effectiveDropdownMode({}, TOPICS, ['a', 'b'], { [TOPICS]: 'OR' })).toBe('OR');
+  });
+
+  it('fresh picks default to union — checklist intuition', () => {
+    expect(effectiveDropdownMode({}, TOPICS, [], {})).toBe('OR');
+    expect(effectiveDropdownMode({}, TOPICS, ['a'], {})).toBe('OR');
   });
 });
 
@@ -220,5 +254,97 @@ describe('backlink-aware defaults and rebuilds', () => {
     expect(modesByColumn.p1).toBe('OR');
     // The where-builder ANDs the backlink group with the OR-ed selections —
     // covered end to end in filter-state-to-where.test.ts.
+  });
+});
+
+describe('applyDropdownSelectionsToFilters with selection modes', () => {
+  const base: Filter = {
+    columnId: TOPICS,
+    columnName: 'Topics',
+    valueType: 'RELATION',
+    value: 't1',
+    valueName: null,
+  };
+
+  it('intersection mode compiles multi-selections to AND', () => {
+    const { modesByColumn } = applyDropdownSelectionsToFilters([base], {}, { [TOPICS]: ['t2', 't3'] }, [TOPICS], {
+      [TOPICS]: 'AND',
+    });
+    expect(modesByColumn[TOPICS]).toBe('AND');
+  });
+
+  it('defaults multi-selections to OR when no mode is stored and no multi-preset exists', () => {
+    const { modesByColumn } = applyDropdownSelectionsToFilters([base], {}, { [TOPICS]: ['t2', 't3'] }, [TOPICS], {});
+    expect(modesByColumn[TOPICS]).toBe('OR');
+  });
+
+  it('a modified multi-value AND preset keeps intersecting', () => {
+    const second: Filter = { ...base, value: 't2' };
+    const { modesByColumn } = applyDropdownSelectionsToFilters(
+      [base, second],
+      {},
+      { [TOPICS]: ['t1', 't3'] },
+      [TOPICS],
+      {}
+    );
+    // Two block defaults with the format-default AND combinator: refining
+    // the list stays an intersection unless the user flips the toggle.
+    expect(modesByColumn[TOPICS]).toBe('AND');
+  });
+});
+
+describe('parseStoredDropdownState envelope guards', () => {
+  it('rejects an envelope with null or array selections outright', () => {
+    expect(parseStoredDropdownState(JSON.stringify({ selections: null, modes: { a: 'AND' } }))).toEqual({
+      selections: {},
+      modes: {},
+    });
+    expect(parseStoredDropdownState(JSON.stringify({ selections: ['a'], modes: {} }))).toEqual({
+      selections: {},
+      modes: {},
+    });
+  });
+});
+
+describe('mode-only overrides', () => {
+  const preset1: Filter = {
+    columnId: TOPICS,
+    columnName: 'Topics',
+    valueType: 'RELATION',
+    value: 't1',
+    valueName: null,
+  };
+  const preset2: Filter = {
+    columnId: TOPICS,
+    columnName: 'Topics',
+    valueType: 'RELATION',
+    value: 't2',
+    valueName: null,
+  };
+
+  it('a stored mode with no selections override still reaches the query', () => {
+    const { filterState, modesByColumn } = applyDropdownSelectionsToFilters([preset1, preset2], {}, {}, [TOPICS], {
+      [TOPICS]: 'OR',
+    });
+    expect(modesByColumn[TOPICS]).toBe('OR');
+    // The preset filters themselves are kept verbatim.
+    expect(filterState).toContain(preset1);
+    expect(filterState).toContain(preset2);
+  });
+
+  it('a stored mode on a single-value preset stays a no-op', () => {
+    const { filterState, modesByColumn } = applyDropdownSelectionsToFilters([preset1], {}, {}, [TOPICS], {
+      [TOPICS]: 'AND',
+    });
+    expect(filterState).toEqual([preset1]);
+    expect(modesByColumn[TOPICS]).toBeUndefined();
+  });
+});
+
+describe('effectiveDropdownMode id-form tolerance', () => {
+  it('reads a base OR mode stored under the dashed form of the column id', () => {
+    const dashless = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1';
+    const dashed = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1';
+    expect(effectiveDropdownMode({}, dashless, ['a', 'b'], { [dashed]: 'OR' })).toBe('OR');
   });
 });

@@ -21,7 +21,10 @@ import {
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
   type DebateMediaResponse,
+  type DebateParticipant,
+  type DebateParticipantSummary,
   type DebateRematchClaimsResponse,
+  type DebateRematchParticipant,
   GeoChatRequestError,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
@@ -66,6 +69,12 @@ import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
+import {
+  type ParticipantAvatarMapper,
+  type ParticipantAvatarSource,
+  useParticipantAvatars,
+  withRowParticipantAvatars,
+} from './participant-avatars';
 import { hasProcessedVideo } from './playback-utils';
 import {
   isRematchClaimsQueryKey,
@@ -73,6 +82,7 @@ import {
   rematchClaimBatchesWithClaim,
 } from './rematch-claims-query-key';
 import { type SpaceDebateSupport, useSpaceDebateSupport } from './space-debate-support';
+import { withQueryData } from './with-query-data';
 
 export const debateQueryNetworkOptions = {
   retry: false,
@@ -152,6 +162,9 @@ function holdWhileSpaceResolves<T extends { isLoading: boolean }>(query: T, supp
 // Pass a claim-id array to enrich a known set, or `null` to list every debatable
 // claim in the space. geo-chat indexes them, so this skips the KG scan over all
 // the space's Claim entities that 504s on large spaces.
+/** Stable empty reference, so an unresolved claims query does not rebuild the memos. */
+const EMPTY_ONLINE_PARTICIPANTS: DebateParticipantSummary[] = [];
+
 export function useDebateClaims(spaceId: string, claimIds: string[] | null, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const support = useSpaceDebateSupport(spaceId);
@@ -172,7 +185,37 @@ export function useDebateClaims(spaceId: string, claimIds: string[] | null, enab
     enabled: shouldFetch,
   });
 
-  return holdWhileSpaceResolves(query, support);
+  // The claim pills draw their faces off `online_choices`, so these rows need the same treatment as
+  // the matchmaking ones. See `participant-avatars`.
+  const participants = React.useMemo(
+    () =>
+      query.data?.claims.flatMap(claim => claim.online_choices.flatMap(choice => choice.participants ?? [])) ??
+      EMPTY_ONLINE_PARTICIPANTS,
+    [query.data]
+  );
+
+  const withAvatar = useParticipantAvatars(participants, shouldFetch);
+
+  const data = React.useMemo(
+    () =>
+      query.data
+        ? { ...query.data, claims: query.data.claims.map(claim => withOnlineChoiceAvatars(claim, withAvatar)) }
+        : query.data,
+    [query.data, withAvatar]
+  );
+
+  return holdWhileSpaceResolves(withQueryData(query, data), support);
+}
+
+/** A claim row's two sides, as geo-chat reports who is online and available on each. */
+function withOnlineChoiceAvatars<T extends { online_choices: Array<{ participants?: ParticipantAvatarSource[] }> }>(
+  claim: T,
+  withAvatar: ParticipantAvatarMapper
+): T {
+  return {
+    ...claim,
+    online_choices: claim.online_choices.map(choice => withRowParticipantAvatars(choice, withAvatar)),
+  };
 }
 
 /**
@@ -401,7 +444,47 @@ export function useDebateActivity(enabled = true) {
     if (returned && queryEnabled) void query.refetch();
   }, [attentive, present, query.refetch, queryEnabled]);
 
-  return query;
+  // Everyone this payload names. The challenge rides here rather than on `useDebateRequests`, and
+  // so does the ready debate — `RequestsTab`, `PeopleTab`, `DebateChallengeDialog` and
+  // `DebateReadyPrompt` all draw faces straight off it. Empty while nothing is pending, which is
+  // the usual case, so this costs nothing until there is something to draw. See
+  // `participant-avatars`.
+  const activityPeople = React.useMemo(() => {
+    const { challenge, outbound_request: outbound, debate, rematch } = query.data ?? {};
+
+    return [
+      ...(challenge ? [challenge.requester, challenge.recipient] : []),
+      // The tabs fall back to `outbound_request` while `useDebateRequests` is still loading, and
+      // draw both parties from it in `OutboundRequestCard`.
+      ...(outbound ? [outbound.requester, outbound.recipient] : []),
+      // `DebateCoordinator` hands `activity.debate` to `DebateReadyPrompt`, which is where the
+      // request dialog and the format details draw their faces from.
+      ...(debate?.participants ?? []),
+      // This copy seeds the rematch query's cache in `queryFn` above, so leaving it raw would put
+      // stale faces into a second query as well as this one.
+      ...(rematch?.participants ?? []),
+    ];
+  }, [query.data]);
+
+  const withAvatar = useParticipantAvatars(activityPeople, queryEnabled);
+
+  const data = React.useMemo(() => {
+    if (!query.data) return query.data;
+    const { challenge, outbound_request: outbound, debate, rematch } = query.data;
+    if (!challenge && !outbound && !debate && !rematch) return query.data;
+
+    // `match` is deliberately left alone: nothing has populated it since GEO-2514 and nothing here
+    // reads it, so resolving faces for it would be work for a field that is always null.
+    return {
+      ...query.data,
+      challenge: challenge ? withParties(challenge, withAvatar) : challenge,
+      outbound_request: outbound ? withParties(outbound, withAvatar) : outbound,
+      debate: debate ? withRowParticipantAvatars(debate, withAvatar) : debate,
+      rematch: rematch ? withRowParticipantAvatars(rematch, withAvatar) : rematch,
+    };
+  }, [query.data, withAvatar]);
+
+  return withQueryData(query, data);
 }
 
 export function useUpdateDebateAvailability() {
@@ -469,6 +552,20 @@ export function useClearDebateActivity() {
   return useClearDebateActivityCache({ clearCooldown: false, reconcile: false });
 }
 
+/**
+ * A requester/recipient pair — how a challenge and an outbound request each name their two people,
+ * the same shape under two field names.
+ */
+function withParties<T extends { requester: ParticipantAvatarSource; recipient: ParticipantAvatarSource }>(
+  row: T,
+  withAvatar: ParticipantAvatarMapper
+): T {
+  return { ...row, requester: withAvatar(row.requester), recipient: withAvatar(row.recipient) };
+}
+
+/** Stable empty reference, so an unresolved debate query does not rebuild the memos. */
+const EMPTY_DEBATE_PARTICIPANTS: DebateParticipant[] = [];
+
 export function useSpaceDebates(spaceId: string, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   // The browse feed subscribes the same way `useDebateClaims` does, so it needs the same gate:
@@ -490,20 +587,52 @@ export function useSpaceDebates(spaceId: string, enabled: boolean) {
     enabled: shouldFetch,
   });
 
-  return holdWhileSpaceResolves(query, support);
+  // The browse feed and its player draw their debaters from these rows. See `participant-avatars`.
+  const participants = React.useMemo(
+    () => query.data?.debates.flatMap(debate => debate.participants ?? []) ?? EMPTY_DEBATE_PARTICIPANTS,
+    [query.data]
+  );
+
+  const withAvatar = useParticipantAvatars(participants, shouldFetch);
+
+  const data = React.useMemo(
+    () =>
+      query.data
+        ? {
+            ...query.data,
+            debates: query.data.debates.map(debate => withRowParticipantAvatars(debate, withAvatar)),
+          }
+        : query.data,
+    [query.data, withAvatar]
+  );
+
+  return holdWhileSpaceResolves(withQueryData(query, data), support);
 }
 
 export function useDebate(debateId: string, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   useDebateGatewayScope({ scope: 'debate', debate_id: debateId }, enabled && authenticated);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.debate(debateId),
     queryFn: ({ signal }) =>
       getDebate(debateId, authenticated ? getPrivyIdentityToken : undefined, authenticated ? accountKey : null, signal),
     enabled,
   });
+
+  // A single debate feeds the room, its claims panel and the pre-join screen, all of which name
+  // both debaters. See `participant-avatars`.
+  const participants = React.useMemo(() => query.data?.participants ?? EMPTY_DEBATE_PARTICIPANTS, [query.data]);
+
+  const withAvatar = useParticipantAvatars(participants, enabled);
+
+  const data = React.useMemo(
+    () => (query.data ? withRowParticipantAvatars(query.data, withAvatar) : query.data),
+    [query.data, withAvatar]
+  );
+
+  return withQueryData(query, data);
 }
 
 export function useLiveKitJoin(debateId: string) {
@@ -638,6 +767,9 @@ export function useConsentToDebateRematch(debateId: string) {
   });
 }
 
+/** Stable empty reference, so an unresolved rematch query does not rebuild the memos. */
+const EMPTY_REMATCH_PARTICIPANTS: DebateRematchParticipant[] = [];
+
 export function useDebateRematch(sessionId: string, enabled = true) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   // Presence, not attention. `useDebateAttention` also requires `document.hasFocus()`, so a tab
@@ -646,7 +778,7 @@ export function useDebateRematch(sessionId: string, enabled = true) {
   // one GEO-2650 already cost once on the activity poll; see the note on `useDebateActivity`.
   const present = useDebateVisibility();
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.rematch(accountKey, sessionId),
     queryFn: ({ signal }) => getDebateRematch(sessionId, getPrivyIdentityToken, accountKey, signal),
@@ -655,6 +787,18 @@ export function useDebateRematch(sessionId: string, enabled = true) {
     // arrives, which this query previously had no answer to.
     refetchInterval: present ? REMATCH_POLL_MS : false,
   });
+
+  // The rematch voice rows name both debaters off this session. See `participant-avatars`.
+  const participants = React.useMemo(() => query.data?.participants ?? EMPTY_REMATCH_PARTICIPANTS, [query.data]);
+
+  const withAvatar = useParticipantAvatars(participants, enabled && Boolean(sessionId));
+
+  const data = React.useMemo(
+    () => (query.data ? withRowParticipantAvatars(query.data, withAvatar) : query.data),
+    [query.data, withAvatar]
+  );
+
+  return withQueryData(query, data);
 }
 
 /**

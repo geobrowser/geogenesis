@@ -2,6 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import * as React from 'react';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NavbarActions } from './navbar-actions';
@@ -15,6 +17,8 @@ const mocks = vi.hoisted(() => ({
     avatarUrl: 'ipfs://avatar',
   } as { name: string | null; avatarUrl: string | null } | null,
   personalSpaceId: 'personal-space' as string | null,
+  isSmartAccountLoading: false,
+  dialogMounts: 0,
   pendingPersonalSpace: { isPending: false, topicId: null as string | null },
   privyUser: {
     id: 'user-a',
@@ -31,7 +35,10 @@ vi.mock('@geogenesis/auth', () => ({
 vi.mock('jotai', () => ({ useAtomValue: () => '' }));
 
 vi.mock('~/core/hooks/use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: { account: { address } }, isLoading: false }),
+  useSmartAccount: () => ({
+    smartAccount: { account: { address } },
+    isLoading: mocks.isSmartAccountLoading,
+  }),
 }));
 vi.mock('~/core/hooks/use-geo-profile', () => ({
   useGeoProfile: () => ({ profile: mocks.profile, isLoading: false }),
@@ -42,8 +49,7 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
 vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => mocks.pendingPersonalSpace,
 }));
-vi.mock('~/core/state/feature-flags', () => ({
-}));
+vi.mock('~/core/state/feature-flags', () => ({}));
 vi.mock('~/core/hooks/use-space-id', () => ({ useSpaceId: () => null }));
 vi.mock('~/core/hooks/use-access-control', () => ({
   useAccessControl: () => ({ canEdit: false, isLoading: false }),
@@ -57,6 +63,18 @@ vi.mock('~/partials/hints/edit-mode-toggle-tip', () => ({
   useEditModeToggleTip: () => ({ open: false, dismiss: vi.fn(), isActive: false }),
 }));
 vi.mock('~/partials/onboarding/dialog', () => ({ avatarAtom: {} }));
+// The real dialog pulls in the whole publish chain (which needs an unmocked
+// jotai). The navbar's job is only to mount it, so assert on that.
+vi.mock('~/partials/profile/edit-profile-dialog', () => ({
+  // Counts mounts, not renders. The dialog owns the publish state, so surviving a
+  // navbar re-render is not enough — it has to be the *same* component instance.
+  EditProfileDialog: ({ open }: { open: boolean }) => {
+    React.useEffect(() => {
+      mocks.dialogMounts += 1;
+    }, []);
+    return open ? <div data-testid="edit-profile-dialog" /> : null;
+  },
+}));
 vi.mock('~/core/wallet', () => ({ GeoConnectButton: () => <button>Connect</button> }));
 vi.mock('~/design-system/fallback-image', () => ({
   FallbackImage: ({ value }: { value: string }) => <img src={value} alt="" />,
@@ -105,6 +123,8 @@ describe('NavbarActions profile menu', () => {
     mocks.logout.mockReset();
     mocks.profile = { name: 'Max', avatarUrl: 'ipfs://avatar' };
     mocks.personalSpaceId = 'personal-space';
+    mocks.isSmartAccountLoading = false;
+    mocks.dialogMounts = 0;
     mocks.pendingPersonalSpace = { isPending: false, topicId: null };
     mocks.privyUser = {
       id: 'user-a',
@@ -167,6 +187,61 @@ describe('NavbarActions profile menu', () => {
     const identityLink = screen.getByRole('link', { name: /0x1234…5678/ });
     expect(identityLink).toHaveAttribute('href', '/space/pending/topic-1');
     expect(within(identityLink).getByText(address, { selector: 'p' })).toBeInTheDocument();
+  });
+
+  it('opens the edit profile modal from the menu, above the sign out divider', async () => {
+    const user = userEvent.setup();
+    render(<NavbarActions />);
+    await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+
+    // Nothing is mounted until it is asked for — a publish outlives the close,
+    // so the dialog stays mounted from here on rather than being remounted.
+    expect(screen.queryByTestId('edit-profile-dialog')).not.toBeInTheDocument();
+
+    const editProfile = screen.getByRole('button', { name: 'Edit profile' });
+    // Each of the three groups — identity, Edit profile, Sign out — is separated
+    // by its own rule.
+    expect(editProfile).toHaveClass('border-t', 'border-grey-02');
+    expect(editProfile.compareDocumentPosition(screen.getByRole('button', { name: 'Sign out' }))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+
+    await user.click(editProfile);
+
+    expect(screen.getByTestId('edit-profile-dialog')).toBeInTheDocument();
+    // Opening it closes the menu it was launched from.
+    expect(screen.queryByTestId('profile-menu')).not.toBeInTheDocument();
+  });
+
+  it('hides edit profile until a personal space exists to publish into', async () => {
+    mocks.personalSpaceId = null;
+    const user = userEvent.setup();
+    render(<NavbarActions />);
+    await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+
+    expect(screen.queryByRole('button', { name: 'Edit profile' })).not.toBeInTheDocument();
+  });
+
+  // A publish outlives the modal closing, and `isUserLoading` can flip back to true
+  // mid-session — the smart-account query key includes the wallet address, so a tab
+  // refocus re-resolves it. Unmounting the dialog there tears down the hook under an
+  // in-flight write and strands its staged rows.
+  it('keeps the edit profile dialog mounted while the account re-resolves', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<NavbarActions />);
+    await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+    await user.click(screen.getByRole('button', { name: 'Edit profile' }));
+    expect(screen.getByTestId('edit-profile-dialog')).toBeInTheDocument();
+
+    expect(mocks.dialogMounts).toBe(1);
+
+    mocks.isSmartAccountLoading = true;
+    rerender(<NavbarActions />);
+
+    // Presence alone is not the guarantee — a remounted dialog is still in the DOM
+    // but has lost the staged edit it was holding.
+    expect(screen.getByTestId('edit-profile-dialog')).toBeInTheDocument();
+    expect(mocks.dialogMounts).toBe(1);
   });
 
   it('leaves sign out working, and no longer offers a second availability switch', async () => {

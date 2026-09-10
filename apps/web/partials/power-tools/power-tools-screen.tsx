@@ -1115,7 +1115,9 @@ export function PowerToolsScreen() {
             baseFilterState={effectiveFilterState}
             baseModesByColumn={activeModesByColumn}
             selections={browseDropdowns.selections}
+            selectionModes={browseDropdowns.selectionModes}
             updateSelections={browseDropdowns.updateSelections}
+            setColumnMode={browseDropdowns.setColumnMode}
             hydrated={browseDropdowns.hydrated}
             collectionItemIds={browseDropdowns.collectionItemIds}
             populationReady={browseDropdowns.populationReady}

@@ -14,6 +14,16 @@ import type { Filter, FilterMode } from './filters';
  */
 export type DropdownSelections = Record<string, string[]>;
 
+/** Per-dropdown combinator for the CHECKED options: union ('OR') or intersection ('AND'). */
+export type DropdownSelectionMode = 'OR' | 'AND';
+export type DropdownSelectionModes = Record<string, DropdownSelectionMode>;
+
+/** Everything the per-user store persists for one block. */
+export type StoredDropdownState = {
+  selections: DropdownSelections;
+  modes: DropdownSelectionModes;
+};
+
 const STORAGE_PREFIX = 'tableDropdownSelections:';
 
 /** One key per block relation entity, so the view is scoped to that table. */
@@ -21,21 +31,57 @@ export function dropdownSelectionsStorageKey(blocksRelationEntityId: string): st
   return `${STORAGE_PREFIX}${blocksRelationEntityId}`;
 }
 
-/** Missing/corrupt storage means "no overrides" — never guess a selection. */
-export function parseStoredDropdownSelections(raw: string | null): DropdownSelections {
-  if (!raw) return {};
+const EMPTY_STATE: StoredDropdownState = { selections: {}, modes: {} };
+
+function parseSelectionsRecord(parsed: Record<string, unknown>): DropdownSelections {
+  const selections: DropdownSelections = {};
+  for (const [columnId, value] of Object.entries(parsed)) {
+    if (!Array.isArray(value)) continue;
+    const ids = value.filter((id): id is string => typeof id === 'string' && id.length > 0);
+    if (ids.length > 0) selections[columnId] = [...new Set(ids)];
+  }
+  return selections;
+}
+
+/**
+ * Missing/corrupt storage means "no overrides" — never guess a selection.
+ * Two shapes exist: the current `{ selections, modes }` envelope, and the
+ * legacy bare `Record<columnId, string[]>` written before per-dropdown
+ * modes existed (read as selections with no stored modes).
+ */
+export function parseStoredDropdownState(raw: string | null): StoredDropdownState {
+  if (!raw) return EMPTY_STATE;
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    const selections: DropdownSelections = {};
-    for (const [columnId, value] of Object.entries(parsed as Record<string, unknown>)) {
-      if (!Array.isArray(value)) continue;
-      const ids = value.filter((id): id is string => typeof id === 'string' && id.length > 0);
-      if (ids.length > 0) selections[columnId] = [...new Set(ids)];
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return EMPTY_STATE;
+    const record = parsed as Record<string, unknown>;
+    if (record.selections !== undefined) {
+      // Envelope shape. An envelope with invalid selections is rejected
+      // outright rather than legacy-parsed (the literal key 'selections'
+      // must never become a pseudo-column).
+      if (record.selections === null || typeof record.selections !== 'object' || Array.isArray(record.selections)) {
+        return EMPTY_STATE;
+      }
+      const modes: DropdownSelectionModes = {};
+      if (record.modes !== null && typeof record.modes === 'object' && !Array.isArray(record.modes)) {
+        for (const [columnId, mode] of Object.entries(record.modes as Record<string, unknown>)) {
+          if (mode === 'OR' || mode === 'AND') modes[columnId] = mode;
+        }
+      }
+      return { selections: parseSelectionsRecord(record.selections as Record<string, unknown>), modes };
     }
-    return selections;
+    // Legacy bare-selections shape, written before per-dropdown modes
+    // existed. Master compiled every multi-pick override as OR, so stamp
+    // those columns explicitly — otherwise the preset-inheritance default
+    // would silently flip an existing user's stored union to intersection.
+    const selections = parseSelectionsRecord(record);
+    const modes: DropdownSelectionModes = {};
+    for (const [columnId, ids] of Object.entries(selections)) {
+      if (ids.length > 1) modes[columnId] = 'OR';
+    }
+    return { selections, modes };
   } catch {
-    return {};
+    return EMPTY_STATE;
   }
 }
 
@@ -79,6 +125,30 @@ export function toggleDropdownSelection(
   return nextSelections;
 }
 
+/**
+ * The combinator the dropdown displays and applies: the user's stored choice,
+ * else — for a multi-value preset — the block filter's own combinator for the
+ * column (missing = AND, the filter format's default), else union: checking
+ * several options in a checklist intuitively means "any of these".
+ */
+export function effectiveDropdownMode(
+  modes: DropdownSelectionModes,
+  columnId: string,
+  filterDefaults: string[],
+  baseModesByColumn: Record<string, FilterMode>
+): DropdownSelectionMode {
+  const stored = modes[columnId];
+  if (stored) return stored;
+  if (filterDefaults.length > 1) {
+    // Mode keys and the dropdown's column id arrive in dashed and dashless
+    // forms from different sources; a raw lookup would silently read a
+    // persisted OR preset as AND.
+    const baseMode = Object.entries(baseModesByColumn).find(([key]) => ID.equals(key, columnId))?.[1];
+    return baseMode === 'OR' ? 'OR' : 'AND';
+  }
+  return 'OR';
+}
+
 /** What the dropdown shows as checked: the override, else the filter default. */
 export function effectiveDropdownSelection(
   selections: DropdownSelections,
@@ -103,9 +173,17 @@ export function applyDropdownSelectionsToFilters(
   filterState: Filter[],
   modesByColumn: Record<string, FilterMode>,
   selections: DropdownSelections,
-  dropdownColumnIds: string[]
+  dropdownColumnIds: string[],
+  selectionModes: DropdownSelectionModes = {}
 ): { filterState: Filter[]; modesByColumn: Record<string, FilterMode> } {
-  const overriddenColumns = dropdownColumnIds.filter(columnId => selections[columnId] !== undefined);
+  const overriddenColumns = dropdownColumnIds.filter(columnId => {
+    if (selections[columnId] !== undefined) return true;
+    // A stored Any/All choice alone overrides too, when the preset has 2+
+    // values to combine — otherwise clicking the toggle without touching a
+    // checkbox would be a permanent no-op on the rows while the control
+    // displays (and persists) the choice.
+    return selectionModes[columnId] !== undefined && filterDefaultsForColumn(filterState, columnId).length > 1;
+  });
   if (overriddenColumns.length === 0) return { filterState, modesByColumn };
 
   const nextFilters = filterState.filter(
@@ -116,7 +194,8 @@ export function applyDropdownSelectionsToFilters(
   for (const columnId of overriddenColumns) {
     const baseForColumn = filterState.filter(f => ID.equals(f.columnId, columnId) && !isBacklinkFilter(f));
     const template = baseForColumn[0];
-    for (const entityId of selections[columnId]) {
+    const selectedIds = selections[columnId] ?? baseForColumn.map(f => f.value);
+    for (const entityId of selectedIds) {
       // A still-checked base filter is kept verbatim, so its valueName and
       // space scoping (typesRelationSpaceId) survive; only genuinely new
       // values are synthesized — inheriting the column's scoping fields.
@@ -133,8 +212,13 @@ export function applyDropdownSelectionsToFilters(
         }
       );
     }
-    if (selections[columnId].length > 1) {
-      nextModes[columnId] = 'OR';
+    if (selectedIds.length > 1) {
+      nextModes[columnId] = effectiveDropdownMode(
+        selectionModes,
+        columnId,
+        filterDefaultsForColumn(filterState, columnId),
+        modesByColumn
+      );
     } else {
       // With a single selection the forward group's mode is irrelevant.
       // Backlink filters live in their own logical group (filterGroupKey)

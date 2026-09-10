@@ -6,7 +6,10 @@ import { VariantProps, cva } from 'class-variance-authority';
 import { Search } from './icons/search';
 
 // appearance-none fixes iOS specific shadow issues.
-const inputStyles = cva(
+// Exported so a multiline field can wear the same chrome without copying it —
+// there is no design-system textarea, and the alternative is a duplicate of this
+// string that drifts the first time the focus ring changes.
+export const inputStyles = cva(
   'w-full appearance-none rounded px-[10px] py-[9px] text-input text-text shadow-inner shadow-grey-02 outline-hidden transition-all duration-150 placeholder:text-grey-03 hover:shadow-text focus:shadow-inner-lg focus:shadow-text disabled:cursor-not-allowed disabled:bg-divider disabled:text-grey-03 disabled:hover:shadow-grey-02',
   {
     variants: {

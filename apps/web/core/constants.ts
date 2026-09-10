@@ -60,24 +60,26 @@ export const FEATURED_TAG_ID = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
 /** Relation type that links a parent Topic to its immediate subtopics. */
 export const SUBTOPIC_RELATION_TYPE_ID = '39e40cadb23d4f63ab2faea1596436c7';
 
-// Bounty linking - relation type used to link proposals to bounties
-export const BOUNTIES_RELATION_TYPE = '3b4c516ff3ac41e0a939374119a27d6e';
-export const BOUNTY_TYPE_ID = '808af0bad5884e3391f09dd4b25e18be';
-export const BOUNTY_DESCRIPTION_PROPERTY_ID = '9b1f76ff9711404c861e59dc3fa7d037';
-export const BOUNTY_BUDGET_PROPERTY_ID = '9ece325c592d42d5b2e785e8e6fe05b6';
-export const BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID = '1d7bb89ec2854df7afac28cec9007e38';
-export const BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID = '21c06b6d7f7846f1ac65e4fc4eadc615';
-export const BOUNTY_DIFFICULTY_PROPERTY_ID = '8c8405abc6bc4d46a5806e4fc80d8187';
-export const BOUNTY_STATUS_PROPERTY_ID = 'f54a81632f4c44a8a6a5d7b97ec0370e';
-export const BOUNTY_DEADLINE_PROPERTY_ID = '7566286ca054405a83e185ffd60492fb';
-export const BOUNTY_ALLOCATED_PROPERTY_ID = 'cfeb642223c54df4b3f9375a489d9e22';
-/** Bounty "Task status" relation property; linking is disabled when it points at Done. */
-export const BOUNTY_TASK_STATUS_PROPERTY_ID = '054a7993ec2843e29688c84ac7a09220';
-export const BOUNTY_TASK_STATUS_DONE_ENTITY_ID = '425f3e809cf9488696581775159dfc33';
-export const BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID = '548fca08e94743668457b0d8429d5bf9';
-export const BOUNTY_TASK_STATUS_TODO_ENTITY_ID = '76b5b831a5fa4203ad61b3f93915edec';
-export const INTERESTED_IN_RELATION_TYPE_ID = 'ff7e1b4444a2419187324e6c222afe07';
-export const BOUNTY_SKILLS_PROPERTY_ID = 'a38732e33a3d47f9a459fb369c287709';
+// Bounty ontology ids live in ~/core/bounties/ontology (canonical geo-sdk
+// re-exports, shared with curator-app). The aliases below are the names the
+// pre-existing bounty-linking and community-tab code import; new code imports
+// from the ontology module directly. The former BOUNTY_STATUS_PROPERTY_ID
+// (f54a8163…) was removed: that id is the generic "Status" property used by
+// non-bounty entities, never part of the bounty ontology.
+export {
+  BOUNTY_TYPE_ID,
+  BOUNTY_SUBMISSION_PROPERTY_ID as BOUNTIES_RELATION_TYPE,
+  BOUNTY_DESCRIPTION_PROPERTY_ID,
+  BOUNTY_BUDGET_PROPERTY_ID,
+  BOUNTY_DIFFICULTY_PROPERTY_ID,
+  BOUNTY_ALLOCATED_PROPERTY_ID,
+  BOUNTY_TASK_STATUS_PROPERTY_ID,
+  BOUNTY_STATUS_DONE_ID as BOUNTY_TASK_STATUS_DONE_ENTITY_ID,
+  BOUNTY_STATUS_IN_PROGRESS_ID as BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID,
+  BOUNTY_STATUS_TODO_ID as BOUNTY_TASK_STATUS_TODO_ENTITY_ID,
+  INTERESTED_IN_BOUNTY_PROPERTY_ID as INTERESTED_IN_RELATION_TYPE_ID,
+  BOUNTY_SKILLS_PROPERTY_ID,
+} from '~/core/bounties/ontology';
 export const BOUNTY_DIFFICULTY_LEVELS = ['Easy', 'Medium', 'Hard'] as const;
 export type BountyDifficultyLevel = (typeof BOUNTY_DIFFICULTY_LEVELS)[number];
 /** Share of a bounty's budget shown as the per-contributor estimated payout. */
