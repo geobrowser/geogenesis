@@ -33,7 +33,14 @@ import {
   IN_PROGRESS_CARD_HEIGHT_PX,
   InProgressBountyCard,
 } from './bounty-card';
-import { type BountyScope, CheckboxFilter, DEFAULT_BOUNTY_SCOPE, ScopeFilter, isBountyScope } from './bounty-filters';
+import {
+  type BountyScope,
+  CheckboxFilter,
+  DEFAULT_BOUNTY_SCOPE,
+  ScopeFilter,
+  UNFILTERED_BOUNTY_SCOPE,
+  isBountyScope,
+} from './bounty-filters';
 import type { BountyStatusSlug } from './bounty-status';
 import { FILTER_PILL_CLASS } from './community-filter-pill';
 import { communityFullscreenActiveAtom } from '~/atoms';
@@ -49,7 +56,8 @@ const SECTION_TITLE_CLASS = 'text-[24px] leading-[29px] font-semibold tracking-[
 const selectsEverything = (selected: Set<string>, options: readonly string[]) =>
   selected.size === 0 || options.every(option => selected.has(option));
 
-function applyFilters(
+/** Exported for its own test: it is the whole of what the filter pills actually do. */
+export function applyFilters(
   bounties: SpaceBounty[],
   scope: BountyScope,
   difficulties: Set<string>,
@@ -306,7 +314,7 @@ function useBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bounty
   const [selectedSkills, setSelectedSkills] = React.useState<Set<string> | null>(null);
 
   const clearFilters = React.useCallback(() => {
-    setScope(DEFAULT_BOUNTY_SCOPE);
+    setScope(UNFILTERED_BOUNTY_SCOPE);
     setDifficulties(new Set(BOUNTY_DIFFICULTY_LEVELS));
     setSelectedSkills(null);
   }, []);
@@ -376,7 +384,7 @@ function useUrlBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bou
     setDifficulties: nextDifficulties => commit({ ...values, difficulties: nextDifficulties }),
     setSelectedSkills: nextSelectedSkills => commit({ ...values, selectedSkills: nextSelectedSkills }),
     clearFilters: () =>
-      commit({ scope: DEFAULT_BOUNTY_SCOPE, difficulties: new Set(BOUNTY_DIFFICULTY_LEVELS), selectedSkills: null }),
+      commit({ scope: UNFILTERED_BOUNTY_SCOPE, difficulties: new Set(BOUNTY_DIFFICULTY_LEVELS), selectedSkills: null }),
   };
 
   return useBountyFilterPresentation(bounties, skills, values, setters);

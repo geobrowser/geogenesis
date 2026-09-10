@@ -31,6 +31,16 @@ export const BOUNTY_SCOPE_OPTIONS: readonly { value: BountyScope; label: string 
  */
 export const DEFAULT_BOUNTY_SCOPE: BountyScope = BOUNTY_SCOPE_OPTIONS[0].value;
 
+/**
+ * The scope that narrows nothing — what "Show all" on an empty state has to mean.
+ *
+ * Distinct from {@link DEFAULT_BOUNTY_SCOPE} even though the two name the same value today. One is
+ * where the tables open, the other is where an escape hatch has to land, and reordering the options
+ * moves only the first. Clearing to the default instead would mean that putting Featured back at
+ * the front turned "Show all" into a button that reproduced the empty state it was offered from.
+ */
+export const UNFILTERED_BOUNTY_SCOPE: BountyScope = 'all';
+
 /** Whether a raw query-string value names one of the scopes above. */
 export function isBountyScope(value: string | null): value is BountyScope {
   return BOUNTY_SCOPE_OPTIONS.some(option => option.value === value);
