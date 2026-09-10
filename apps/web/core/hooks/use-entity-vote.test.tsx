@@ -145,6 +145,7 @@ describe('useEntityResponse indexing reconciliation', () => {
         ([name, properties]) => name === 'vote_cast' && properties.outcome_phase === 'submitted'
       );
       expect(votes).toHaveLength(1);
+      expect(mocks.capture.mock.calls.filter(([name, properties]) => name === 'vote_cast' && properties.outcome_phase === 'indexed')).toHaveLength(1);
       expect(votes[0][1]).toMatchObject({
         vote_direction: direction === 'positive' ? 'up' : direction === 'negative' ? 'down' : 'none',
         response_kind: 'curation',
