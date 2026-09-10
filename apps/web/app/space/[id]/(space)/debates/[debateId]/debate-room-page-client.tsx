@@ -270,7 +270,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    */
   const [remotePresence, setRemotePresence] = React.useState<DebateRemotePresence>('absent');
   /** Their camera is off, as distinct from their video never having arrived. */
-  const [remoteCameraOff, setRemoteCameraOff] = React.useState(false);
   /**
    * True for exactly as long as the local `MediaRecorder` is running, so the recording pill can be
    * driven by what is actually being written rather than by a status the pill infers.
@@ -1112,7 +1111,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setServerClockSettled(false);
       setRemoteVideoReady(false);
       setRemotePresence('absent');
-      setRemoteCameraOff(false);
       markedJoinedRef.current = false;
       markJoinedAttemptsRef.current = 0;
       if (markJoinedRetryTimerRef.current !== null) {
@@ -1161,30 +1159,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           const track = payload as RemoteTrackLike;
           subscribedRemoteTracksRef.current.add(track);
           setRemotePresence('present');
-          // Frames arriving settle the question: a mute recorded before they dropped would
-          // otherwise still be covering their live video after they rejoined.
-          if (track.kind === 'video') setRemoteCameraOff(false);
           attachRemoteTrack(track);
           void refetchDebate();
         });
         // When a remote track drops mid-debate, detach its element instead of leaving a frozen black
         // tile. Resetting remoteVideoReady flips the tile back to "Waiting for video" so a later
         // re-subscribe attaches a fresh element rather than stacking a second one behind it.
-        // The intro has a camera toggle, and muting a video track neither unsubscribes it nor
-        // stops it — so without this the other side just sees a black rectangle on the one screen
-        // whose whole purpose is seeing each other.
-        //
-        // These fire for the local participant as well, and carry the publication rather than the
-        // track, so both arguments matter: reading only the first would report your own camera
-        // toggle as theirs.
-        const remoteVideoMuteHandler = (muted: boolean) => (publication: unknown, participant: unknown) => {
-          if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
-          if (participant === room.localParticipant) return;
-          if ((publication as { kind?: string } | undefined)?.kind !== 'video') return;
-          setRemoteCameraOff(muted);
-        };
-        room.on(livekit.RoomEvent.TrackMuted, remoteVideoMuteHandler(true));
-        room.on(livekit.RoomEvent.TrackUnmuted, remoteVideoMuteHandler(false));
         room.on(livekit.RoomEvent.TrackUnsubscribed, payload => {
           if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
           const track = payload as RemoteTrackLike;
@@ -1208,7 +1188,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
           setRemotePresence('left');
           setRemoteVideoReady(false);
-          setRemoteCameraOff(false);
           void refetchDebate();
         });
         // LiveKit runs its own ICE-restart reconnection; surface it so a debater whose connection
@@ -2179,7 +2158,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             setRemoteMediaElement={setRemoteMediaElement}
             remoteVideoReady={remoteVideoReady}
             remotePresence={remotePresence}
-            remoteCameraOff={remoteCameraOff}
             capturing={capturing}
             previewStream={previewStream}
             previewState={previewState}
@@ -2201,10 +2179,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             onRetryMedia={() => void ensureLocalPreview({ forceRestart: true }).catch(() => undefined)}
             devicesLocked={roomState === 'connecting' || roomState === 'reconnecting'}
             connectionSettling={roomState === 'connecting' || roomState === 'reconnecting'}
-            audioMuted={audioMuted}
-            videoEnabled={videoEnabled}
-            onToggleAudioMuted={toggleAudioMuted}
-            onToggleVideoEnabled={toggleVideoEnabled}
             canRetryConnection={roomState === 'idle' && roomError !== null && !connectionConflict}
             onRetryConnection={retryConnection}
             canTakeOverConnection={connectionConflict && canTakeOverConnection}
@@ -2994,12 +2968,11 @@ function setLocalTrackPreferences(
       track.mediaStreamTrack.enabled = preferences.audioEnabled;
     }
     if (track.mediaStreamTrack.kind === 'video') {
-      // Through LiveKit's mute, not just `enabled`. `enabled = false` keeps the publication live
-      // and sends black frames, so the other side sees a black rectangle and no TrackMuted event.
-      // Idempotent, so reconciling repeatedly is cheap; `enabled` stays as the fallback for a
-      // preview track that has not been published yet.
-      if (preferences.videoEnabled) void track.unmute?.();
-      else void track.mute?.();
+      // `enabled`, never LiveKit's `mute()`. For a camera track LiveKit stops the underlying
+      // MediaStreamTrack on mute and acquires a replacement on unmute, but the preview and the
+      // `MediaRecorder` hold a MediaStream captured at publish time — they would keep the stopped
+      // track and the debate would record without video. Disabling sends black frames instead,
+      // which keeps one live track for the whole recording.
       track.mediaStreamTrack.enabled = preferences.videoEnabled;
     }
   }

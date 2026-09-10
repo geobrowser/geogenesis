@@ -180,8 +180,6 @@ vi.mock('livekit-client', () => ({
     TrackUnsubscribed: 'trackUnsubscribed',
     ParticipantConnected: 'participantConnected',
     ParticipantDisconnected: 'participantDisconnected',
-    TrackMuted: 'trackMuted',
-    TrackUnmuted: 'trackUnmuted',
     Reconnecting: 'reconnecting',
     Reconnected: 'reconnected',
     Disconnected: 'disconnected',
@@ -641,8 +639,11 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByRole('button', { name: "I'm ready" })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Audio settings' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Video settings' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
+    // No mic or camera toggle on the intro. The screen exists so the two of them see and hear each
+    // other before the debate; muting the person you are about to introduce yourself to is not a
+    // state worth supporting, and every way of reaching it costs the recorder its video track.
+    expect(screen.queryByRole('button', { name: 'Mute microphone' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Turn camera off' })).not.toBeInTheDocument();
     // The issue asks for this line explicitly, and it has to stay true to when capture starts.
     expect(screen.getByText(/this part isn't recorded/i)).toBeInTheDocument();
     expect(screen.getByText('Speak to test your mic')).toBeInTheDocument();
@@ -700,73 +701,6 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByText('Waiting for video')).toBeInTheDocument();
   });
 
-  // The camera toggle has to reach LiveKit's mute, not just MediaStreamTrack.enabled: `enabled`
-  // keeps the publication live and sends black frames, so the other side gets a black rectangle
-  // and no TrackMuted. Driving the real button is the point — emitting the event by hand, as the
-  // handler test below does, would pass either way.
-  it('mutes the published video track through LiveKit when the camera is turned off', async () => {
-    const videoTrack = {
-      mediaStreamTrack: { kind: 'video', enabled: true },
-      mute: vi.fn().mockResolvedValue(undefined),
-      unmute: vi.fn().mockResolvedValue(undefined),
-      stop: vi.fn(),
-      detach: vi.fn(),
-    };
-    mocks.createLocalTracks.mockResolvedValue([createLocalAudioTrack(), videoTrack]);
-    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
-
-    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
-
-    fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
-    await waitFor(() => expect(videoTrack.mute).toHaveBeenCalled());
-
-    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
-    await waitFor(() => expect(videoTrack.unmute).toHaveBeenCalled());
-  });
-
-  it('explains a remote camera that has been turned off', async () => {
-    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
-
-    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
-
-    const remoteVideo = document.createElement('video');
-    act(() =>
-      emitRoomEvent('trackSubscribed', { kind: 'video', attach: () => remoteVideo, detach: () => [remoteVideo] })
-    );
-
-    act(() => emitRoomEvent('trackMuted', { kind: 'video' }, {}));
-    expect(await screen.findByText('Bri turned their camera off')).toBeInTheDocument();
-
-    act(() => emitRoomEvent('trackUnmuted', { kind: 'video' }, {}));
-    await waitFor(() => expect(screen.queryByText('Bri turned their camera off')).not.toBeInTheDocument());
-  });
-
-  // Your own camera toggle fires the same events; reading only the first argument reported it as
-  // the opponent's.
-  // A mute recorded before they dropped used to survive the rejoin and sit over their live video.
-  it('clears a remote camera-off state when they rejoin with video', async () => {
-    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
-
-    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
-
-    const remoteVideo = document.createElement('video');
-    const track = { kind: 'video', attach: () => remoteVideo, detach: () => [remoteVideo] };
-    act(() => emitRoomEvent('trackSubscribed', track));
-    act(() => emitRoomEvent('trackMuted', { kind: 'video' }, {}));
-    expect(await screen.findByText('Bri turned their camera off')).toBeInTheDocument();
-
-    act(() => emitRoomEvent('participantDisconnected', {}));
-    expect(await screen.findByText('Bri left the room.')).toBeInTheDocument();
-
-    act(() => emitRoomEvent('participantConnected', {}));
-    act(() => emitRoomEvent('trackSubscribed', track));
-
-    await waitFor(() => expect(screen.queryByText('Bri turned their camera off')).not.toBeInTheDocument());
-  });
-
   it('reports a speaker the live room refuses to route to', async () => {
     mocks.roomSwitchActiveDevice.mockRejectedValue(new Error('no route'));
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
@@ -794,22 +728,6 @@ describe('DebateRoomPageClient', () => {
 
     act(() => pendingConnect.resolve());
     await waitFor(() => expect(screen.getByRole('button', { name: 'Video settings' })).toBeEnabled());
-  });
-
-  it('does not report the local camera toggle as the opponent turning theirs off', async () => {
-    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
-
-    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
-
-    const remoteVideo = document.createElement('video');
-    act(() =>
-      emitRoomEvent('trackSubscribed', { kind: 'video', attach: () => remoteVideo, detach: () => [remoteVideo] })
-    );
-
-    act(() => emitRoomEvent('trackMuted', { kind: 'video' }, mocks.roomLocalParticipant));
-
-    await waitFor(() => expect(screen.queryByText('Bri turned their camera off')).not.toBeInTheDocument());
   });
 
   it('shows the opponent as still joining until they reach the room', async () => {
@@ -1344,7 +1262,7 @@ describe('DebateRoomPageClient', () => {
 
   // Turn-taking mutes the microphone track for whoever is not speaking. Applied to the intro, that
   // silenced the introductions and the mic meter along with them.
-  it('keeps the microphone live during the intro and honours the mute toggle', async () => {
+  it('keeps the microphone live during the intro', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     const audioTrack = createLocalAudioTrack();
     const videoTrack = { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() };
@@ -1354,16 +1272,41 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
 
     await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
+  });
 
-    // Stateful names and no aria-pressed, matching the debate room's controls.
-    const microphone = screen.getByRole('button', { name: 'Mute microphone' });
-    expect(microphone).not.toHaveAttribute('aria-pressed');
+  /**
+   * The recorder and the self-preview run off a MediaStream captured once, at publish time. For a
+   * camera track LiveKit's `mute()` stops the underlying MediaStreamTrack and `unmute()` acquires a
+   * replacement, which that stream would never see: the opponent's feed would recover while the
+   * recording carried on against an ended track. Toggling has to stay `enabled`-only, which sends
+   * black frames over one track that stays live for the whole recording.
+   */
+  it('turns the camera off without stopping the track the recorder holds', async () => {
+    const videoTrack = {
+      mediaStreamTrack: { kind: 'video', enabled: true },
+      mute: vi.fn().mockResolvedValue(undefined),
+      unmute: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn(),
+      detach: vi.fn(),
+    };
+    mocks.createLocalTracks.mockResolvedValue([createLocalAudioTrack(), videoTrack]);
+    // The room's own camera toggle sits behind the debugging flag, and is the only one left once
+    // the intro's was removed.
+    mocks.featureFlags.debateDebugging = true;
+    mocks.debate = { ...completedDebate(), status: 'in_progress', completed_at: null };
 
-    fireEvent.click(microphone);
-    await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
-    await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
+    await waitFor(() => expect(videoTrack.mediaStreamTrack.enabled).toBe(false));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(videoTrack.mediaStreamTrack.enabled).toBe(true));
+
+    expect(videoTrack.mute).not.toHaveBeenCalled();
+    expect(videoTrack.unmute).not.toHaveBeenCalled();
+    expect(videoTrack.stop).not.toHaveBeenCalled();
   });
 
   // Restarting the preview stops the tracks the intro room is publishing, and nothing republishes

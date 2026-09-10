@@ -42,7 +42,6 @@ export function DebatePreScreen({
   setRemoteMediaElement,
   remoteVideoReady,
   remotePresence,
-  remoteCameraOff,
   capturing,
   previewStream,
   previewState,
@@ -64,10 +63,6 @@ export function DebatePreScreen({
   devicesLocked,
   connectionSettling,
   mediaError,
-  audioMuted,
-  videoEnabled,
-  onToggleAudioMuted,
-  onToggleVideoEnabled,
   canRetryConnection,
   onRetryConnection,
   canTakeOverConnection,
@@ -86,7 +81,6 @@ export function DebatePreScreen({
   setRemoteMediaElement: (host: HTMLDivElement | null) => void;
   remoteVideoReady: boolean;
   remotePresence: DebatePreScreenRemotePresence;
-  remoteCameraOff: boolean;
   capturing: boolean;
   previewStream: MediaStream | null;
   previewState: PreJoinMediaState;
@@ -122,10 +116,6 @@ export function DebatePreScreen({
   connectionSettling: boolean;
   /** Why the camera or microphone is unavailable, as distinct from a room-connection failure. */
   mediaError: string | null;
-  audioMuted: boolean;
-  videoEnabled: boolean;
-  onToggleAudioMuted: () => void;
-  onToggleVideoEnabled: () => void;
   canRetryConnection: boolean;
   onRetryConnection: () => void;
   /** Another tab or device holds this debate and this one can claim it back. */
@@ -180,9 +170,7 @@ export function DebatePreScreen({
         mediaReady
           ? switchingDevice
             ? 'Switching device…'
-            : videoEnabled
-              ? null
-              : 'Camera off'
+            : null
           : previewState === 'requesting'
             ? 'Requesting camera and mic…'
             : mediaError
@@ -191,7 +179,6 @@ export function DebatePreScreen({
       overlayCompact={!mediaReady || switchingDevice}
       inactiveIndicatorId="local"
       tileLabel="You"
-      showMutedIndicator={audioMuted}
       badge={localReady ? <PreScreenReadyBadge /> : null}
     >
       <video ref={setLocalVideoElement} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
@@ -213,9 +200,7 @@ export function DebatePreScreen({
             ? `Waiting for ${remoteName} to join…`
             : !remoteVideoReady
               ? 'Waiting for video'
-              : remoteCameraOff
-                ? `${remoteName} turned their camera off`
-                : null
+              : null
       }
       overlayCompact={remotePresence !== 'present'}
       inactiveIndicatorId="remote"
@@ -268,24 +253,7 @@ export function DebatePreScreen({
 
         {mediaReady && (
           <div className="mt-3 w-full rounded-lg border border-grey-02 bg-white p-3">
-            <div className="flex gap-[6px]">
-              <PreScreenToggle
-                ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
-                active={audioMuted}
-                onClick={onToggleAudioMuted}
-              >
-                <MicrophoneIcon muted={audioMuted} />
-              </PreScreenToggle>
-              <PreScreenToggle
-                ariaLabel={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
-                active={!videoEnabled}
-                onClick={onToggleVideoEnabled}
-              >
-                <CameraIcon disabled={!videoEnabled} />
-              </PreScreenToggle>
-            </div>
-
-            <div className="mt-[6px] flex flex-col gap-[6px]">
+            <div className="flex flex-col gap-[6px]">
               {isMobile ? (
                 <>
                   <PreScreenSettingsTrigger
@@ -451,38 +419,6 @@ function PreScreenReadyBadge() {
       <Check />
       Ready
     </span>
-  );
-}
-
-/**
- * Labelled as the debate room labels the same controls: the name states the action a press
- * performs, and there is no `aria-pressed`. Never pair the two — "Unmute microphone, pressed"
- * reads as unmuting being the active state.
- */
-function PreScreenToggle({
-  ariaLabel,
-  active,
-  onClick,
-  children,
-}: {
-  ariaLabel: string;
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={ariaLabel}
-      onClick={onClick}
-      className={cx(
-        'flex min-h-9 flex-1 items-center justify-center rounded-full border transition outline-none',
-        active ? 'border-text bg-grey-01 text-text' : 'border-grey-02 bg-white text-text hover:border-grey-04',
-        'focus-visible:border-text focus-visible:ring-1 focus-visible:ring-text'
-      )}
-    >
-      {children}
-    </button>
   );
 }
 

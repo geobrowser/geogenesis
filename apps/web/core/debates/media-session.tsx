@@ -17,9 +17,6 @@ export type LocalTrackLike = {
   mediaStreamTrack: MediaStreamTrack;
   setProcessor?: (processor: KrispNoiseFilterProcessor) => Promise<void>;
   stopProcessor?: () => Promise<void>;
-  /** LiveKit's own mute, which signals publication state to the other side. */
-  mute?: () => Promise<unknown>;
-  unmute?: () => Promise<unknown>;
   stop: () => void;
   detach?: () => void;
 };

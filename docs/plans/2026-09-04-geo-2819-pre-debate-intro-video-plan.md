@@ -132,9 +132,10 @@ if (effectiveStatus === 'ready') return true
   "they're waiting for you" copy on the other side — the issue flags the pressure risk, and a
   factual chip is the least coercive form of it.
 - Keep the device pickers, the mic-level meter and the "Speak to test your mic" row below the
-  tiles. Add mic-mute and camera-off toggles from `debate-room-controls` — a live two-way call
-  without a mute button is a gap, and both toggles already exist and are wired to `audioMuted` /
-  `videoEnabled`.
+  tiles. Deliberately **no** mic-mute or camera-off toggle: the screen exists so the two of them
+  see and hear each other before the debate, and muting the person you are about to introduce
+  yourself to is not a state worth supporting. Reaching it also costs the recorder its video
+  track — see "Camera toggles stay `enabled`-only" below.
 - Copy above the **I'm ready** button: something like _"Say hello — this part isn't recorded.
   Recording starts when you're both ready."_
 - Local button states: `I'm ready` → `Waiting for <name>…` once `ready_at` is set.
@@ -223,18 +224,30 @@ device choices that used to happen entirely _before_ any connection now happen o
 4. A remote `TrackSubscribed` during `ready` renders in the pre-screen; after the flip to
    `connecting` the same track is still attached in the modal (step 2 regression).
 5. Local video `srcObject` is bound on both screens across the swap.
-6. Microphone track stays enabled during `ready`, and honours the mute toggle.
+6. Microphone track stays enabled during `ready`.
 7. `MediaRecorder` is never constructed while `status === 'ready'`.
 8. Pill reads "Not recording" during `ready` and "Recording" once the recorder's `start` fires.
 9. `ParticipantDisconnected` during `ready` shows the "left" placeholder.
+
+## Camera toggles stay `enabled`-only
+
+`setLocalTrackPreferences` disables the video `MediaStreamTrack` and never calls LiveKit's
+`mute()`. For a camera track (`source === Camera`, `isUserProvided === false`, which is what
+`createLocalTracks` produces) livekit-client 2.20 stops the underlying browser track on `mute()`
+and acquires a *replacement* on `unmute()`. The self-preview and the `MediaRecorder` both run off a
+`MediaStream` captured once at publish time, so they would keep the stopped track: the opponent's
+feed would recover while the recording carried on against an ended track, and the debate — the
+artifact the whole feature exists to produce — would have no video.
+
+Disabling instead sends black frames over one track that stays live for the entire recording. The
+cost is that the other side cannot tell a disabled camera from a dark room, which is why there is
+no camera-off state in the UI to get wrong.
 
 ## What shipped beyond the plan
 
 - Permission state is reported _inside_ the local tile rather than replacing the screen. The old
   layout hid the opponent and their readiness from whoever was slowest to grant, and everything
   jumped position the moment they did.
-- Mic-mute and camera-off toggles on the intro screen (a live two-way call without a mute button
-  is a gap).
 - A reconnect affordance on the intro screen for a room-connection error, since a failed intro
   connect no longer auto-retries.
 - `remotePresence` is seeded from `room.remoteParticipants` after connecting: LiveKit fires
