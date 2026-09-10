@@ -4,7 +4,12 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
-import type { MatchmakingMatch } from '../api';
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+
+import { Input } from '~/design-system/input';
+
+import type { MatchmakingMatch, MatchmakingTopic } from '../api';
+import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateActivity } from '../hooks';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
@@ -13,9 +18,10 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { countBy, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
+import { carriesEveryTopic, countBy, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
+import { useDebouncedSearch } from './use-debounced-search';
 import { useStableListOrder } from './use-stable-list-order';
-import { type DebatesHubTab, debatesHubLobbySpaceIdsAtom } from '~/atoms';
+import { type DebatesHubTab, debatesHubLobbySpaceIdsAtom, debatesHubLobbyTopicIdsAtom } from '~/atoms';
 
 /**
  * Claims where you're ready to debate and someone holding the opposite response is online and
@@ -31,11 +37,11 @@ import { type DebatesHubTab, debatesHubLobbySpaceIdsAtom } from '~/atoms';
  */
 export function MatchesList({
   onTabChange,
-  leading,
+  trailing,
 }: {
   onTabChange: (tab: DebatesHubTab) => void;
-  /** Lobby's "Matches only" toggle, in the slot Explore gives its source picker. */
-  leading?: React.ReactNode;
+  /** Lobby's "Matches only" switch, at the end of the filter row. */
+  trailing?: React.ReactNode;
 }) {
   // Lobby's one selection, shared with its toggled-off state (GEO-2861) — the toggle narrows the
   // list, and would be a strange place to also change which spaces the viewer had picked.
@@ -43,6 +49,11 @@ export function MatchesList({
   // Session-scoped, like Explore's: the hub closes on an outside pointer-down, so a click-away to
   // dismiss the dropdown unmounted this list and took the selection with it (GEO-2850).
   const [spaceIds, setSpaceIds] = useAtom(debatesHubLobbySpaceIdsAtom);
+  // Shared with Lobby's other list too, so narrowing survives the switch rather than being undone
+  // by it.
+  const [topicIds, setTopicIds] = useAtom(debatesHubLobbyTopicIdsAtom);
+  const [search, setSearch] = React.useState('');
+  const { value: debouncedSearch } = useDebouncedSearch(search);
 
   const matchesQuery = useMatchmakingMatches(true);
   const requestsQuery = useDebateRequests(true);
@@ -76,14 +87,60 @@ export function MatchesList({
     [serverMatches, spaceIds]
   );
 
-  const filtered = React.useMemo(
-    () => matches.filter(match => spaceIds.length === 0 || spaceIds.includes(match.claim.space_id)),
-    [matches, spaceIds]
+  // Topics are Knowledge Graph data that `/matchmaking/matches` does not carry — `match.topics` is
+  // empty on every row, the same way `MatchmakingClaim.topics` is — and there is no facet beside it
+  // either. So they are resolved from the claim entities, which is what the rematch picker already
+  // does for its own by-id lists.
+  //
+  // Safe to count and filter client-side here in a way it would not be for a paged list: this whole
+  // list is in hand, so the rows *are* the complete answer (see `facetSpaces` above for the same
+  // reasoning about spaces).
+  const claimEntityIds = React.useMemo(() => serverMatches.map(match => match.claim.claim_entity_id), [serverMatches]);
+  const { entities: claimEntities } = useClaimEntitiesByIds(claimEntityIds);
+
+  const topicsByClaimId = React.useMemo(() => {
+    const map = new Map<string, MatchmakingTopic[]>();
+    for (const entity of claimEntities) {
+      const topics = entity.relations
+        .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
+        .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
+      if (topics.length > 0) map.set(entity.id, topics);
+    }
+    return map;
+  }, [claimEntities]);
+
+  // Counted over the rows the *other* filters already allow, so the menu answers "what else is in
+  // what I am looking at" rather than offering a topic that would empty the list.
+  const facetTopics = React.useMemo(
+    () =>
+      orderFacetOptions(
+        keepSelectedVisible(
+          countBy(
+            matches
+              .filter(match => spaceIds.length === 0 || spaceIds.includes(match.claim.space_id))
+              .flatMap(match => topicsByClaimId.get(match.claim.claim_entity_id) ?? [])
+          ),
+          topicIds
+        ),
+        topicIds
+      ),
+    [matches, spaceIds, topicIds, topicsByClaimId]
   );
 
-  // The viewer's own filter emptied a list that has something in it — the one empty state here
+  const filtered = React.useMemo(
+    () =>
+      matches.filter(match => {
+        if (spaceIds.length > 0 && !spaceIds.includes(match.claim.space_id)) return false;
+        if (!carriesEveryTopic(topicsByClaimId.get(match.claim.claim_entity_id), topicIds)) return false;
+        if (debouncedSearch && !match.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
+        return true;
+      }),
+    [debouncedSearch, matches, spaceIds, topicIds, topicsByClaimId]
+  );
+
+  // The viewer's own filters emptied a list that has something in it — the one empty state here
   // they can undo, and the one `serverMatches.length === 0` is false for.
-  const filteredBySpace = filtered.length === 0 && serverMatches.length > 0;
+  const filteredByViewer = filtered.length === 0 && serverMatches.length > 0;
 
   return (
     <div className="flex flex-col">
@@ -92,12 +149,24 @@ export function MatchesList({
           couldn't be offset by a known height. */}
       <HubStickyControls>
         {outbound ? <OutboundRequestCard request={outbound} /> : null}
+        <Input
+          withSearchIcon
+          value={search}
+          onChange={event => setSearch(event.currentTarget.value)}
+          placeholder="Search claims"
+          aria-label="Search claims"
+        />
+
         <SpaceTopicFilters
           spaceIds={spaceIds}
           onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
           onSpacesClear={() => setSpaceIds([])}
+          topicIds={topicIds}
+          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+          onTopicsClear={() => setTopicIds([])}
           facetSpaces={facetSpaces}
-          leading={leading}
+          facetTopics={facetTopics}
+          trailing={trailing}
         />
       </HubStickyControls>
 
@@ -122,8 +191,8 @@ export function MatchesList({
           // a click — and it survives a close and reopen now (GEO-2850), so a list it emptied would
           // otherwise be blamed on having no positions or on nobody being online.
           emptyMessage={
-            filteredBySpace
-              ? 'No matches in the spaces you’ve picked.'
+            filteredByViewer
+              ? 'No matches match these filters.'
               : activity?.available_to_debate === false
                 ? 'You’re marked unavailable, so nobody can be matched with you.'
                 : 'Matches appear once you’ve taken a position on a claim and someone holding the opposite position is online and ready too.'
@@ -148,8 +217,15 @@ export function MatchesList({
           // Clearing the filter is the whole answer when the filter is the cause, and browsing claims
           // cannot be — there are matches, just not in the spaces on screen.
           emptyAction={
-            filteredBySpace
-              ? { label: 'Clear filters', onClick: () => setSpaceIds([]) }
+            filteredByViewer
+              ? {
+                  label: 'Clear filters',
+                  onClick: () => {
+                    setSearch('');
+                    setSpaceIds([]);
+                    setTopicIds([]);
+                  },
+                }
               : { label: 'Explore claims', onClick: () => onTabChange('explore') }
           }
         >

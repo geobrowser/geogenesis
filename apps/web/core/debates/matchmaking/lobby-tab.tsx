@@ -4,10 +4,9 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
-import { SmallButton } from '~/design-system/button';
-
 import { ClaimsTab } from './claims-tab';
 import { MatchesList } from './matches-list';
+import { MatchesOnlySwitch } from './matches-only-switch';
 import { type DebatesHubTab, debatesHubMatchesOnlyAtom } from '~/atoms';
 
 /**
@@ -32,24 +31,14 @@ import { type DebatesHubTab, debatesHubMatchesOnlyAtom } from '~/atoms';
 export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
   const [matchesOnly, setMatchesOnly] = useAtom(debatesHubMatchesOnlyAtom);
 
-  const toggle = (
-    <SmallButton
-      variant={matchesOnly ? 'primary' : 'secondary'}
-      // A pressed toggle, not a menu: `aria-pressed` is what says the control has two states and
-      // which one it is in. The pills beside it are menus and announce themselves as such.
-      aria-pressed={matchesOnly}
-      onClick={() => setMatchesOnly(current => !current)}
-    >
-      Matches only
-    </SmallButton>
-  );
+  const toggle = <MatchesOnlySwitch checked={matchesOnly} onChange={setMatchesOnly} />;
 
   // Two components rather than one with a branch inside it. They query different endpoints, derive
   // their space menus differently, and describe an empty list in different words — the only thing
   // they share is the toggle and the selection it sits beside, which is exactly what is passed.
   return matchesOnly ? (
-    <MatchesList onTabChange={onTabChange} leading={toggle} />
+    <MatchesList onTabChange={onTabChange} trailing={toggle} />
   ) : (
-    <ClaimsTab variant="lobby" leading={toggle} />
+    <ClaimsTab variant="lobby" trailing={toggle} />
   );
 }

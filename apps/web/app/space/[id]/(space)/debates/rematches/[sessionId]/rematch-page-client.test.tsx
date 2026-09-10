@@ -1414,7 +1414,7 @@ describe('DebateRematchPageClient', () => {
       ];
     }
 
-    const pressMatchesOnly = () => fireEvent.click(screen.getByRole('button', { name: 'Matches only' }));
+    const pressMatchesOnly = () => fireEvent.click(screen.getByRole('switch', { name: 'Matches only' }));
 
     it('lists every position the opponent holds while off', async () => {
       threeClaims();
@@ -1468,7 +1468,7 @@ describe('DebateRematchPageClient', () => {
       pressMatchesOnly();
       await showExplore();
 
-      expect(screen.queryByRole('button', { name: 'Matches only' })).toBeNull();
+      expect(screen.queryByRole('switch', { name: 'Matches only' })).toBeNull();
     });
   });
 

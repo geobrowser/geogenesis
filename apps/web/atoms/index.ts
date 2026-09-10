@@ -33,7 +33,7 @@ export const spaceSidebarHasContentAtom = atom<boolean | null>(null);
  */
 export const entityCommentsPanelAtom = atom<{ entityId: string; spaceId: string } | null>(null);
 
-export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'people';
+export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'mine' | 'people';
 
 /** `null` while the debates matchmaking hub is closed. */
 export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
@@ -68,8 +68,12 @@ export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
  * signs in keep the list they had chosen. Changing account is the one thing that clears it; see
  * {@link debatesHubFiltersOwnerAtom}.
  */
-export type DebatesHubExploreFilter = Exclude<MatchmakingClaimsFilter, 'debate_now'> | 'featured';
-export const debatesHubExploreFilterAtom = atom<DebatesHubExploreFilter>('featured');
+/**
+ * What Explore's source picker offers. `debate_now` left for Lobby and `mine` for its own tab, so
+ * what remains is the two cuts of the corpus — everything, and the curated pick.
+ */
+export type DebatesHubExploreFilter = Exclude<MatchmakingClaimsFilter, 'debate_now' | 'mine'> | 'featured';
+export const debatesHubExploreFilterAtom = atom<DebatesHubExploreFilter>('all');
 
 export const debatesHubExploreSpaceIdsAtom = atom<string[]>([]);
 export const debatesHubExploreTopicIdsAtom = atom<string[]>([]);
@@ -89,6 +93,10 @@ export const debatesHubExploreTopicIdsAtom = atom<string[]>([]);
 export const debatesHubLobbySpaceIdsAtom = atom<string[]>([]);
 export const debatesHubLobbyTopicIdsAtom = atom<string[]>([]);
 
+/** My claims is its own surface, so it narrows independently of the two beside it. */
+export const debatesHubMineSpaceIdsAtom = atom<string[]>([]);
+export const debatesHubMineTopicIdsAtom = atom<string[]>([]);
+
 /**
  * Whether the Claims tab's membership default has been applied or forfeited this session.
  *
@@ -99,6 +107,7 @@ export const debatesHubLobbyTopicIdsAtom = atom<string[]>([]);
  */
 export const debatesHubExploreSpaceSeedSpentAtom = atom(false);
 export const debatesHubLobbySpaceSeedSpentAtom = atom(false);
+export const debatesHubMineSpaceSeedSpentAtom = atom(false);
 
 /**
  * Which account the filter state above belongs to, so it is never handed to a different viewer.
@@ -124,13 +133,16 @@ export const debatesHubFiltersOwnerAtom = atom<string | null>(null);
  * atom is added to the reset by adding it here rather than by remembering every call site.
  */
 export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
-  set(debatesHubExploreFilterAtom, 'featured');
+  set(debatesHubExploreFilterAtom, 'all');
   set(debatesHubExploreSpaceIdsAtom, []);
   set(debatesHubExploreTopicIdsAtom, []);
   set(debatesHubExploreSpaceSeedSpentAtom, false);
   set(debatesHubLobbySpaceIdsAtom, []);
   set(debatesHubLobbyTopicIdsAtom, []);
   set(debatesHubLobbySpaceSeedSpentAtom, false);
+  set(debatesHubMineSpaceIdsAtom, []);
+  set(debatesHubMineTopicIdsAtom, []);
+  set(debatesHubMineSpaceSeedSpentAtom, false);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than
   // working state, which is the whole reason it is stored rather than session-scoped. Handing a new
   // account the previous one's *filters* is a leak; handing them a browsing preference held on this

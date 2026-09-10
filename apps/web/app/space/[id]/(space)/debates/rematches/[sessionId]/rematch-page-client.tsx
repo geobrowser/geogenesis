@@ -46,6 +46,7 @@ import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/
 import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
+import { MatchesOnlySwitch } from '~/core/debates/matchmaking/matches-only-switch';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import {
   carriesEveryTopic,
@@ -81,7 +82,6 @@ import { responsePositionLabel } from '~/core/responses/entity-response';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { validateEntityId } from '~/core/utils/utils';
 
-import { SmallButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
@@ -1277,6 +1277,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               topicAtEnd
               // Only on Claims: the opponent's tab is one fixed source — their own responses — and
               // a menu offering three others there would read as filtering a list it can't reach.
+              // The switch belongs to the opponent's tab, where it means something; Explore is the
+              // wider catalogue and has its source picker here instead.
+              trailing={
+                tab === 'opponent' ? <MatchesOnlySwitch checked={matchesOnly} onChange={setMatchesOnly} /> : null
+              }
               leading={
                 tab === 'explore' ? (
                   <HubFilterMenu
@@ -1285,15 +1290,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                     value={source}
                     onChange={setChosenSource}
                   />
-                ) : (
-                  <SmallButton
-                    variant={matchesOnly ? 'primary' : 'secondary'}
-                    aria-pressed={matchesOnly}
-                    onClick={() => setMatchesOnly(current => !current)}
-                  >
-                    Matches only
-                  </SmallButton>
-                )
+                ) : null
               }
             />
             <Input

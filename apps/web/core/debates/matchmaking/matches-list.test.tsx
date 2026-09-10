@@ -32,6 +32,10 @@ const mocks = vi.hoisted(() => ({
   responseCounts: { positive: 0, negative: 0 },
 }));
 
+// Topics come from the claim entities now (GEO-2861), which is a real request. This file asserts
+// on matches and their space filter, not on topics.
+vi.mock('../claim-picker-page', () => ({ useClaimEntitiesByIds: () => ({ entities: [], isLoading: false }) }));
+
 vi.mock('../hooks', () => ({
   useDebateActivity: () => ({
     // Undefined while loading, exactly as react-query reports it — the empty state has to wait for
@@ -400,7 +404,7 @@ describe('MatchesList', () => {
     store.set(debatesHubLobbySpaceIdsAtom, ['019fedae-72b6-7ab2-927a-df044d57c599']);
     render(<MatchesList onTabChange={vi.fn()} />, store);
 
-    expect(await screen.findByText('No matches in the spaces you’ve picked.')).toBeInTheDocument();
+    expect(await screen.findByText('No matches match these filters.')).toBeInTheDocument();
     expect(screen.queryByText(/Matches appear once you/)).not.toBeInTheDocument();
     // Debate hours would be the wrong answer: people are around, the filter is hiding them.
     expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).not.toBeInTheDocument();

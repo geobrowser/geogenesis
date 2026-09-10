@@ -8,15 +8,15 @@ import { LobbyTab } from './lobby-tab';
 import { debatesHubMatchesOnlyAtom } from '~/atoms';
 
 vi.mock('./claims-tab', () => ({
-  ClaimsTab: ({ variant, leading }: { variant?: string; leading?: React.ReactNode }) => (
+  ClaimsTab: ({ variant, trailing }: { variant?: string; trailing?: React.ReactNode }) => (
     <div data-testid="claims-tab" data-variant={variant}>
-      {leading}
+      {trailing}
     </div>
   ),
 }));
 
 vi.mock('./matches-list', () => ({
-  MatchesList: ({ leading }: { leading?: React.ReactNode }) => <div data-testid="matches-list">{leading}</div>,
+  MatchesList: ({ trailing }: { trailing?: React.ReactNode }) => <div data-testid="matches-list">{trailing}</div>,
 }));
 
 const STORAGE_KEY = 'debatesHubMatchesOnly';
@@ -31,7 +31,7 @@ function renderLobby(store = createStore()) {
   return store;
 }
 
-const toggle = () => screen.getByRole('button', { name: 'Matches only' });
+const toggle = () => screen.getByRole('switch', { name: 'Matches only' });
 
 afterEach(() => {
   cleanup();
@@ -51,7 +51,7 @@ describe('LobbyTab', () => {
     // rather than as a filter being on.
     expect(screen.getByTestId('claims-tab')).toHaveAttribute('data-variant', 'lobby');
     expect(screen.queryByTestId('matches-list')).not.toBeInTheDocument();
-    expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+    expect(toggle()).toHaveAttribute('aria-checked', 'false');
   });
 
   it('swaps to the matches list when toggled on', () => {
@@ -61,12 +61,12 @@ describe('LobbyTab', () => {
 
     expect(screen.getByTestId('matches-list')).toBeInTheDocument();
     expect(screen.queryByTestId('claims-tab')).not.toBeInTheDocument();
-    expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle()).toHaveAttribute('aria-checked', 'true');
   });
 
-  // The toggle rides in the filter bar's leading slot on both sides, so it stays under the pointer
-  // that just pressed it rather than moving as the list changes.
-  it('draws the toggle in the same slot either way', () => {
+  // The switch rides at the end of the filter row on both sides, so it stays under the pointer that
+  // just pressed it rather than moving as the list changes.
+  it('draws the switch in the same slot either way', () => {
     renderLobby();
 
     expect(screen.getByTestId('claims-tab')).toContainElement(toggle());
@@ -84,7 +84,7 @@ describe('LobbyTab', () => {
     renderLobby();
 
     expect(screen.getByTestId('matches-list')).toBeInTheDocument();
-    expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle()).toHaveAttribute('aria-checked', 'true');
   });
 
   it('writes the preference so it survives the panel closing', () => {
