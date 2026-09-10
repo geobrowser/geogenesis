@@ -18,6 +18,7 @@ const BOB_SPACE = 'bobspace000000000000000000000001';
 const DEBATE_ID = 'debate00000000000000000000000001';
 
 const mocks = vi.hoisted(() => ({
+  capture: vi.fn(),
   voteEntities: [] as unknown[],
   publishedRelations: [] as unknown[][],
   publishEdit: vi.fn(),
@@ -38,6 +39,8 @@ const mocks = vi.hoisted(() => ({
   reportError: vi.fn(),
   enqueuePendingAction: vi.fn(),
 }));
+
+vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
 
 vi.mock('@geoprotocol/geo-sdk', () => ({
   personalSpace: { publishEdit: (...args: unknown[]) => mocks.publishEdit(...args) },
@@ -176,6 +179,7 @@ async function renderVotes() {
 
 beforeEach(() => {
   resetDebateVotePublishStateForTests();
+  mocks.capture.mockReset();
   // Not mock fns, so no automatic reset restores them.
   mocks.signedIn = true;
   mocks.accountLoading = false;
@@ -286,6 +290,18 @@ describe('useDebateVotes castVote', () => {
     expect(deleted).toHaveLength(0);
     expect(all).toHaveLength(3);
     expect(winnerCreates[0]?.toEntity.id).toBe(ALICE_SPACE);
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'vote_cast',
+      expect.objectContaining({
+        vote_kind: 'winner',
+        vote_direction: 'winner',
+        mutation_kind: 'cast',
+        target_type: 'debate',
+        target_id: DEBATE_ID,
+        outcome_phase: 'submitted',
+        operation_id: expect.any(String),
+      })
+    );
   });
 
   it('re-emits anchor relations and swaps the winner when changing a pick', async () => {
@@ -308,6 +324,16 @@ describe('useDebateVotes castVote', () => {
       VOTE_WINNER_PROPERTY_ID,
     ]);
     expect(winnerCreates[0]?.toEntity.id).toBe(BOB_SPACE);
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'vote_cast',
+      expect.objectContaining({
+        vote_kind: 'winner',
+        mutation_kind: 'switch',
+        previous_winner_id: ALICE_SPACE,
+        winner_id: BOB_SPACE,
+        outcome_phase: 'submitted',
+      })
+    );
   });
 
   it('shares in-flight state across surfaces so a second vote cannot start mid-publish', async () => {

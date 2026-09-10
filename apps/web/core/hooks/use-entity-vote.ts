@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import { Effect, Either } from 'effect';
 
 import { ensureSpaceMembership } from '~/core/access/request-space-membership';
+import { observeOperation } from '~/core/analytics-operations';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import {
@@ -52,6 +53,7 @@ interface UseEntityResponseArgs {
 }
 
 export type PendingEntityResponseIndex = {
+  onIndexed?: () => void;
   entityId: string;
   expectedResponse: ActiveResponseDirection | null;
   personalSpaceId: string;
@@ -273,6 +275,8 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
         return;
       }
 
+      pending.onIndexed?.();
+
       try {
         if (pending.responseKind === 'curation') {
           await Promise.all([
@@ -461,6 +465,18 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
     onMutate: direction => {
       const previousState =
         queryClient.getQueryData<EntityResponseIndexingState>(indexingQueryKey) ?? IDLE_INDEXING_STATE;
+      const previousResponse = previousState.pending
+        ? previousState.pending.expectedResponse
+        : queryClient.getQueryData<ActiveResponseDirection | null>(
+            userEntityResponseQueryKey(
+              readRegisteredSpace().personalSpaceId,
+              entityId,
+              spaceId,
+              0,
+              responseKind ?? 'curation'
+            )
+          );
+      const operation = observeOperation('vote', 'entity', entityId);
       const { runId, runOrder } = createResponseIndexingRunId();
       const pending = pendingResponseIndex(direction);
       getResponseSubmissionRuns(responseIndexingRegistry, indexingKeyId).set(runId, {
@@ -476,9 +492,29 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
         pending,
         runId,
       });
-      return { previousState, runId, runOrder };
+      return { previousState, runId, runOrder, previousResponse, operation };
     },
     onSuccess: (submission, direction, context) => {
+      const previousDirection =
+        context?.previousResponse === 'positive' ? 'up' : context?.previousResponse === 'negative' ? 'down' : undefined;
+      const voteDirection = direction === 'positive' ? 'up' : direction === 'negative' ? 'down' : 'none';
+      const voteAction =
+        direction === 'clear' ? 'remove' : previousDirection && previousDirection !== voteDirection ? 'switch' : 'cast';
+      const outcomeProperties = {
+        vote_direction: voteDirection,
+        vote_kind: voteDirection,
+        mutation_kind: voteAction,
+        vote_action: voteAction,
+        previous_vote_direction: previousDirection,
+        response_kind: submission.pending.responseKind,
+        response_action: getResponseActionMethod(submission.pending.responseKind, direction),
+        entity_id: submission.pending.entityId,
+        space_id: submission.pending.spaceId,
+        object_type: 0,
+        user_operation_hash: submission.transaction,
+      };
+      context?.operation.outcome('vote_cast', 'submitted', outcomeProperties);
+      submission.pending.onIndexed = () => context?.operation.outcome('vote_cast', 'indexed', outcomeProperties);
       syncVotedLists(direction, submission.pending);
       // Taking a position on a claim (agree/disagree, verify/dispute) says the user wants to
       // take part in the space the claim is published in, so join them to it the same way
@@ -507,6 +543,9 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       }
     },
     onError: (_error, _direction, context) => {
+      context?.operation.failed(
+        _error instanceof Error && _error.message.includes('User rejected') ? 'rejected' : 'unknown'
+      );
       if (!context) return;
       const runs = responseIndexingRegistry.submissionRuns.get(indexingKeyId);
       const failedRun = runs?.get(context.runId);

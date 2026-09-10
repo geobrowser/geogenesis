@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useSetAtom } from 'jotai';
 
+import { capture } from '~/core/analytics';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
 import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
@@ -154,6 +155,26 @@ export function DebatesBrowseFeed({
   // An anchored feed starts active on the anchor so the linked debate is the one
   // that autoplays, before any IntersectionObserver has fired.
   const [activeId, setActiveId] = React.useState<string | null>(initialDebateId ?? null);
+  const lastObservedDebate = React.useRef<string | null>(null);
+  const lastScrollIntent = React.useRef(-Infinity);
+  const activateVisibleDebate = (debateId: string) => {
+    setActiveId(debateId);
+    if (lastObservedDebate.current === debateId) return;
+    const previousDebateId = lastObservedDebate.current;
+    lastObservedDebate.current = debateId;
+    try {
+      capture('debate_navigation', {
+        measurement_version: 'growth-v2',
+        debate_id: debateId,
+        previous_debate_id: previousDebateId,
+        navigation_id: crypto.randomUUID(),
+        trigger: performance.now() - lastScrollIntent.current < 2000 ? 'manual' : 'unknown',
+        navigation_surface: 'debate_feed',
+      });
+    } catch {
+      /* Navigation must work without analytics. */
+    }
+  };
   // Which panel is open, not which debate it was opened from: the claims and
   // comments panels describe the debate you're watching, so they follow the feed
   // as you scroll rather than staying pinned to the one whose button you pressed.
@@ -268,6 +289,16 @@ export function DebatesBrowseFeed({
   const feed = (
     <div
       ref={setScrollEl}
+      onWheel={() => {
+        lastScrollIntent.current = performance.now();
+      }}
+      onTouchMove={() => {
+        lastScrollIntent.current = performance.now();
+      }}
+      onKeyDown={event => {
+        if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', ' '].includes(event.key))
+          lastScrollIntent.current = performance.now();
+      }}
       className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
     >
       {visibleDebates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
@@ -283,7 +314,7 @@ export function DebatesBrowseFeed({
           root={scrollEl}
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
-          onActivate={() => setActiveId(debate.id)}
+          onActivate={() => activateVisibleDebate(debate.id)}
           // Pressing a debate's own control makes it the active one rather than
           // waiting for the scroll observer: its bar is reachable from 0%
           // visibility but activation needs 60%, so mid-scroll the panel would

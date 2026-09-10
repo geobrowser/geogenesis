@@ -5,6 +5,9 @@ export type AnalyticsProperties = Record<string, unknown>;
 type AnalyticsIdentity = string | number | AnalyticsProperties;
 
 type GeoAnalyticsRuntime = {
+  measurementContextRevision?: () => number;
+  reconcileAnonymousIdentity?: () => void;
+  bindIdentity?: (accessToken: string) => Promise<boolean>;
   capture?: (eventName: string, properties?: AnalyticsProperties) => void;
   identify?: (user: AnalyticsIdentity, traits?: AnalyticsProperties) => void;
   identifyUser?: (user: AnalyticsIdentity, traits?: AnalyticsProperties) => void;
@@ -56,7 +59,7 @@ type PendingCall =
       properties: AnalyticsProperties;
     }
   | {
-      method: 'loggedOut' | 'identityReset';
+      method: 'loggedOut' | 'identityReset' | 'reconcileAnonymousIdentity';
       properties: AnalyticsProperties;
     };
 
@@ -104,7 +107,7 @@ declare global {
 }
 
 const appName = 'genesis';
-const analyticsScriptSrc = '/geo-analytics-9bd2328ffe3d.js';
+const analyticsScriptSrc = '/geo-analytics-f30de1fcdc71.js';
 const collectorUrl = 'https://c.geobrowser.io';
 
 let scriptRequested = false;
@@ -128,6 +131,7 @@ export function initAnalytics() {
     ...window.GeoAnalyticsConfig,
     ...window.lyticsConfig,
     app: appName,
+    identityBinding: process.env.NEXT_PUBLIC_GEO_ANALYTICS_VERIFIED_IDENTITY === 'true',
     collectorUrl: shouldUseCollector ? collectorUrl : false,
     collectorMode: isProductionGenesisHost(hostname) ? 'production' : 'shadow',
     environment: analyticsEnvironment(hostname),
@@ -156,7 +160,7 @@ export function initAnalytics() {
 
   const script = document.createElement('script');
   script.src = analyticsScriptSrc;
-  script.integrity = 'sha256-m9Iyj/490Y9cKmv/7yzKDjadjE9XBmjT+8kEhUwccbg=';
+  script.integrity = 'sha256-8w3h/NxxQRVAy6gcR5ekJNlCYaayd3d1h/UjkdIRpqc=';
   script.crossOrigin = 'anonymous';
   script.defer = true;
   script.async = true;
@@ -174,6 +178,10 @@ export function capture(eventName: string, properties: AnalyticsProperties = {})
       ...properties,
     },
   });
+}
+
+export function analyticsContextRevision(): number | null {
+  return analyticsRuntime()?.measurementContextRevision?.() ?? null;
 }
 
 export function pageViewed(properties: AnalyticsProperties = {}) {
@@ -309,6 +317,10 @@ export function loggedOut(properties: AnalyticsProperties = {}) {
       ...properties,
     }),
   });
+}
+
+export function reconcileAnonymousAnalyticsIdentity() {
+  callOrQueue({ method: 'reconcileAnonymousIdentity', properties: {} });
 }
 
 export function resetAnalyticsIdentity(properties: AnalyticsProperties = {}) {
@@ -539,6 +551,11 @@ function invokeRuntime(call: PendingCall) {
     }
   }
 
+  if (call.method === 'reconcileAnonymousIdentity' && analytics.reconcileAnonymousIdentity) {
+    analytics.reconcileAnonymousIdentity();
+    return true;
+  }
+
   if (call.method === 'identityReset') {
     const identityReset = analytics.identityReset ?? analytics.resetIdentity;
 
@@ -684,4 +701,42 @@ export function isProductionGenesisHost(hostname: string) {
     hostname === 'genesis.geobrowser.io' ||
     hostname === 'geogenesis.geobrowser.io'
   );
+}
+
+// Fetch the token only when a live runtime can send it; never put tokens in PendingCall.
+export async function bindPrivyAnalytics(
+  getAccessToken: () => Promise<string | null>,
+  isCurrent: () => boolean = () => true
+): Promise<boolean> {
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    process.env.NEXT_PUBLIC_GEO_ANALYTICS_VERIFIED_IDENTITY !== 'true' ||
+    !isAnalyticsEnabled ||
+    !isCurrent()
+  )
+    return false;
+  initAnalytics();
+  if (!analyticsRuntime()?.bindIdentity) {
+    await new Promise<void>(resolve => {
+      const script = document.querySelector<HTMLScriptElement>(`script[src="${analyticsScriptSrc}"]`);
+      if (!script) return resolve();
+      const finish = () => {
+        window.clearTimeout(timer);
+        script.removeEventListener('load', finish);
+        script.removeEventListener('error', finish);
+        resolve();
+      };
+      const timer = window.setTimeout(finish, 10000);
+      script.addEventListener('load', finish, { once: true });
+      script.addEventListener('error', finish, { once: true });
+    });
+  }
+  if (!isCurrent() || !analyticsRuntime()?.bindIdentity) return false;
+  try {
+    const token = await getAccessToken();
+    return !!(token && isCurrent() && (await analyticsRuntime()?.bindIdentity?.(token)));
+  } catch {
+    return false;
+  }
 }

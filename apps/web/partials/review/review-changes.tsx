@@ -560,16 +560,6 @@ export const ReviewChanges = () => {
     setIsPublishing(true);
     const proposalEntityId = ID.createEntityId();
 
-    publishedEdit({
-      content_id: proposalEntityId,
-      content_type: 'publish',
-      publish_flow: 'review_changes',
-      publish_kind: activeSpaceMetadata?.type === 'PERSONAL' ? 'edit' : 'proposal',
-      space_id: activeSpace,
-      value_count: valuesFromSpace.length,
-      relation_count: relationsFromSpace.length,
-    });
-
     let resolved = false;
     const publishSucceeded = await new Promise<boolean>(resolve => {
       const settle = (value: boolean) => {
@@ -604,6 +594,20 @@ export const ReviewChanges = () => {
           settle(false);
         });
     });
+
+    if (publishSucceeded) {
+      publishedEdit({
+        operation_id: proposalEntityId,
+        publication_status: 'confirmed',
+        content_id: proposalEntityId,
+        content_type: 'publish',
+        publish_flow: 'review_changes',
+        publish_kind: activeSpaceMetadata?.type === 'PERSONAL' ? 'edit' : 'proposal',
+        space_id: activeSpace,
+        value_count: valuesFromSpace.length,
+        relation_count: relationsFromSpace.length,
+      });
+    }
 
     if (publishSucceeded && selectedBountyIds.size > 0 && personalSpaceId) {
       const bountyLinkValues: StoreValue[] = [

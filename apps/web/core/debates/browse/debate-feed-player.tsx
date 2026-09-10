@@ -8,6 +8,7 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
+import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
 
@@ -27,6 +28,7 @@ type DebateFeedPlayerProps = {
 export function DebateFeedPlayer({ debate, active, votes }: DebateFeedPlayerProps) {
   const { hasVoted } = votes;
   const controller = useDebatePlayback(debate, active);
+  const measurement = usePlaybackAnalytics(debate, active, controller);
   const {
     slot1VideoRef,
     slot2VideoRef,
@@ -47,14 +49,26 @@ export function DebateFeedPlayer({ debate, active, votes }: DebateFeedPlayerProp
     activeSlot,
     subtitle,
     onPlaybackTick,
-    togglePlayback,
-    playFromStart,
+    togglePlayback: togglePlaybackRaw,
+    playFromStart: playFromStartRaw,
     resumeBoth,
     suspend,
-    seekBoth,
+    seekBoth: seekBothRaw,
     beginScrub,
     endScrub,
   } = controller;
+  const togglePlayback = () => {
+    measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
+    togglePlaybackRaw();
+  };
+  const playFromStart = () => {
+    measurement.control('replay');
+    void playFromStartRaw();
+  };
+  const seekBoth = (seconds: number) => {
+    measurement.control('seek');
+    seekBothRaw(seconds);
+  };
 
   // Autoplay the debate that's in view; pause the rest. Respect an explicit
   // user pause so scrolling back doesn't fight the viewer, and don't resume
@@ -74,7 +88,7 @@ export function DebateFeedPlayer({ debate, active, votes }: DebateFeedPlayerProp
   const showPausedGlyph = ready && userPaused && !playbackEnded;
 
   return (
-    <div className="group relative flex flex-col gap-2">
+    <div ref={measurement.elementRef} className="group relative flex flex-col gap-2">
       <DebaterVideo
         participant={slot1Participant}
         src={urls.slot1}
@@ -97,7 +111,10 @@ export function DebateFeedPlayer({ debate, active, votes }: DebateFeedPlayerProp
             // to hover-only.
             <ControlCircle
               ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
-              onClick={() => setMutedByUser(current => !current)}
+              onClick={() => {
+                measurement.control(mutedByUser ? 'unmute' : 'mute');
+                setMutedByUser(current => !current);
+              }}
               className={
                 mutedByUser
                   ? undefined

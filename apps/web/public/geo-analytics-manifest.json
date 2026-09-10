@@ -1,0 +1,16 @@
+{
+  "name": "@geobrowser/analytics",
+  "version": "0.1.0",
+  "hashAlgorithm": "sha256",
+  "schemaVersion": "2026-05-09",
+  "sourceHash": "d0c4d735ad2457a87d5c403bbc5d9d89abd07f93f462c37aa9a19dfb3c30c2b4",
+  "eventRegistryHash": "1b0e703f0621a8f4a1e6039378fbd8f72dae7d1a5b17abd619cbc4009fa1f7f2",
+  "hash": "f30de1fcdc71411540cba81c4797a424d94261a6b277777587f52391d211a6a7",
+  "shortHash": "f30de1fcdc71",
+  "integrity": "sha256-8w3h/NxxQRVAy6gcR5ekJNlCYaayd3d1h/UjkdIRpqc=",
+  "files": {
+    "stable": "ga.js",
+    "latest": "ga-latest.js",
+    "hashed": "ga-f30de1fcdc71.js"
+  }
+}
