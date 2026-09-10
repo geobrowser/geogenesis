@@ -327,7 +327,12 @@ export function RematchVoicePill({
   // voice UI to explain it is worse than the one this hook exists to move. The token covers a
   // backend with LiveKit unconfigured (503) or the endpoint undeployed (404); `opponent` covers a
   // session that somehow arrives without one, which the early return below also refuses to draw.
-  usePrimedMicrophonePermission(voiceActive && ownership === 'owned' && Boolean(join.data) && Boolean(opponent));
+  // The same device `audioCaptureDefaults` will publish, so the prompt names the microphone the
+  // user will actually speak through and the prime cannot fail on a busy system default.
+  usePrimedMicrophonePermission(
+    voiceActive && ownership === 'owned' && Boolean(join.data) && Boolean(opponent),
+    initialAudioInputIdRef.current || undefined
+  );
 
   if (!voiceActive || !opponent) return null;
 

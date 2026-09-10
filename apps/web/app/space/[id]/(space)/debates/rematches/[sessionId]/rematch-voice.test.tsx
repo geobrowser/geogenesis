@@ -60,6 +60,8 @@ const mocks = vi.hoisted(() => ({
   micTrackStop: vi.fn(),
   permissionsQuery: vi.fn(),
   micPermissionState: 'prompt' as PermissionState | 'unsupported',
+  /** The microphone carried over from the debate. Empty means the user never picked one. */
+  selectedAudioInputId: '',
   /** The published microphone, once there is one. */
   microphoneTrack: undefined as { track: Record<string, unknown> } | undefined,
   useKrispNoiseFilter: vi.fn(() => ({ setNoiseFilterEnabled: vi.fn(() => Promise.resolve()) })),
@@ -160,7 +162,7 @@ vi.mock('~/core/debates/hooks', () => ({
 vi.mock('~/core/debates/media-session', () => ({
   systemDefaultAudioOutput: { deviceId: 'default', groupId: 'default', kind: 'audiooutput', label: 'System default' },
   useDebateMediaSession: () => ({
-    selectedAudioInputId: '',
+    selectedAudioInputId: mocks.selectedAudioInputId,
     audioOutputError: null,
     changeAudioInput: mocks.changeAudioInput,
     changeAudioOutput: mocks.changeAudioOutput,
@@ -267,9 +269,9 @@ function setMobileLayout(matches: boolean) {
 }
 
 /**
- * The opponent as LiveKit hands them over. `getTrackPublication` matters: the chip reads it
- * directly to tell "joined muted, never published" apart from "published and unmuted", which
- * `useIsMuted` alone reports as unmuted on its first commit.
+ * The opponent as LiveKit hands them over. `getTrackPublication` is what the `useIsMuted` mock
+ * reads, matching the real hook: no publication at all is a peer who joined muted and never
+ * opened up, which reports as muted rather than as unmuted.
  */
 function remoteOpponent() {
   // Honours the source it is asked for, like the real participant: asking for the wrong track
@@ -283,6 +285,7 @@ function remoteOpponent() {
 /** jsdom ships neither `mediaDevices` nor a microphone permission descriptor. */
 function stubMicrophoneApis() {
   mocks.micPermissionState = 'prompt';
+  mocks.selectedAudioInputId = '';
   mocks.micTrackStop.mockReset();
   mocks.getUserMedia.mockReset().mockResolvedValue({ getTracks: () => [{ stop: mocks.micTrackStop }] });
   mocks.permissionsQuery.mockReset().mockImplementation(async () => {
@@ -732,6 +735,20 @@ describe('RematchVoicePill', () => {
     await waitFor(() => expect(mocks.micTrackStop).toHaveBeenCalled());
     // And priming publishes nothing: the room is still muted.
     expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(false);
+  });
+
+  // The prime has to open the same device `audioCaptureDefaults` will publish. A bare
+  // `{audio: true}` opens the OS default instead, which can be busy in another call while the
+  // chosen microphone is free, and names the wrong device in the prompt.
+  it('primes the microphone the pair carried over from the debate', async () => {
+    mocks.selectedAudioInputId = 'chosen-mic';
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    await waitFor(() => expect(mocks.getUserMedia).toHaveBeenCalledWith({ audio: { deviceId: 'chosen-mic' } }));
+    expect(mocks.livekitRoomProps.at(-1)?.options).toMatchObject({
+      audioCaptureDefaults: { deviceId: 'chosen-mic' },
+    });
   });
 
   // The pair usually arrives straight from a debate, where the origin was already granted the
