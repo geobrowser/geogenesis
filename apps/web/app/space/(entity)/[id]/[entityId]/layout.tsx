@@ -102,7 +102,9 @@ export default async function ProfileLayout(props: Props) {
             <EntityPageInlineDescription entityId={entityId} spaceId={spaceId} />
             <div className="flex items-center gap-4 text-text">
               <EntityPageMetadataHeader spaceId={spaceId} />
-              <EntityPageActions entityId={profile.id} spaceId={spaceId} isVoteable />
+              {/* The route's entity id, not `profile.id` — the store provider, title and metadata
+                  header are all keyed on it, and history/menu/votes must act on the same entity. */}
+              <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />
             </div>
           </div>
 
