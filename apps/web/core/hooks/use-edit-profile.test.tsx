@@ -13,6 +13,8 @@ import { useEditProfile } from './use-edit-profile';
 const ENTITY_ID = '3eb17193b0ae44fe9083ce931bc9210e';
 const SPACE_ID = 'c3cdf799eb8a469abbb609b7c3ecdb83';
 const ADDRESS = '0xA452380716c7699581aE129f178cafa8a49e5e80';
+/** A second account's person entity, for the account-change case. */
+const NEW_ENTITY_ID = 'a1b2c3d4e5f6478899aabbccddeeff00';
 
 const mocks = vi.hoisted(() => ({
   makeProposal: vi.fn(),
@@ -560,6 +562,41 @@ describe('useEditProfile', () => {
     expect(mocks.setValue).not.toHaveBeenCalled();
   });
 
+  // The navbar keeps this hook mounted through an account change, so a staged edit
+  // can outlive the account that made it. Retrying would publish one person's rows
+  // into another's space.
+  it('abandons a staged edit when the account changes underneath it', async () => {
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+
+    const { result, rerender } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    // Someone else signs in.
+    mocks.profile = { id: NEW_ENTITY_ID, spaceId: SPACE_ID, name: 'Someone else', avatarUrl: null };
+    mocks.personalEntityId = NEW_ENTITY_ID;
+    rerender();
+
+    await waitFor(() => expect(result.current.status).toBe('idle'));
+    // Undone against the space it came from, not whatever is current now.
+    expect(mocks.clearLocalChangesByIds).toHaveBeenCalledWith(expect.objectContaining({ spaceId: SPACE_ID }));
+
+    mocks.setValue.mockClear();
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Their name' }));
+    });
+
+    // Staged afresh for whoever is signed in now, rather than re-sending rows the
+    // previous account left behind.
+    expect(mocks.setValue).toHaveBeenCalledWith(
+      expect.objectContaining({ value: 'Their name', entity: expect.objectContaining({ id: NEW_ENTITY_ID }) })
+    );
+  });
+
   it('leaves a pending edit made elsewhere on the entity out of the publish', async () => {
     const ours = stagedValue(SystemIds.NAME_PROPERTY);
     const theirs = {
@@ -794,6 +831,7 @@ describe('useEditProfile', () => {
   // saying something already.
   it('puts the upload on the status bar before the publish starts', async () => {
     mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
+    mocks.reviewState = 'idle';
     const file = new File([''], 'banner.png', { type: 'image/png' });
     let dispatchedBeforePublish: unknown[] = [];
     mocks.makeProposal.mockImplementationOnce(async () => {
@@ -822,6 +860,37 @@ describe('useEditProfile', () => {
     await waitFor(() => expect(result.current.status).toBe('error'));
     // `makeProposal` never ran, so nothing else would clear the pill.
     expect(mocks.dispatch).toHaveBeenCalledWith({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+  });
+
+  // The status bar is global and carries no operation identity, so raising ours
+  // over another publish's progress would replace its reporting with ours.
+  it('leaves the status bar alone when another publish is already using it', async () => {
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
+    mocks.reviewState = 'publishing-contract';
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }));
+    });
+
+    expect(mocks.dispatch).not.toHaveBeenCalledWith({ type: 'SET_REVIEW_STATE', payload: 'publishing-ipfs' });
+  });
+
+  it('does not take down a pill it never raised', async () => {
+    mocks.reviewState = 'publishing-contract';
+    mocks.createAndLink.mockRejectedValueOnce(new Error('IPFS is down'));
+    const file = new File([''], 'banner.png', { type: 'image/png' });
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ banner: { kind: 'replaced', file } }));
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    // Clearing here would hide the other operation entirely.
+    expect(mocks.dispatch).not.toHaveBeenCalledWith({ type: 'SET_REVIEW_STATE', payload: 'idle' });
   });
 
   it('leaves an unrelated publish failure showing in the status bar', async () => {

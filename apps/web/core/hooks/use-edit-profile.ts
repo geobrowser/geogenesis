@@ -71,6 +71,12 @@ type StagedEdit = {
   /** The draft these rows came from, so Retry can tell a re-send from a new edit. */
   draft: ProfileDraft;
   /**
+   * The account context these rows were staged against. This hook survives an
+   * account change, so without it a Retry would re-send one person's rows into
+   * whichever space happened to be current.
+   */
+  owner: { entityId: string; spaceId: string };
+  /**
    * The entity's values as they stood before this edit touched anything. Held
    * because `current` reads back through the local store, so once rows are staged
    * it reports the unpublished edit rather than what is actually published — and
@@ -156,6 +162,9 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   /** Set when this modal's own publish fails; see the suppression effect below. */
   const ownsPendingError = React.useRef(false);
 
+  /** Whether the staging pill on the global status bar is ours to take down. */
+  const raisedStagingStatus = React.useRef(false);
+
   const bannerUrl = useEntityCoverUrl(entityId || undefined, spaceId);
   const avatarUrl = useEntityAvatarUrl(entityId || undefined, spaceId);
 
@@ -173,8 +182,14 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   );
 
   const rollback = React.useCallback(
-    (rows: StagedRows) => {
-      if (!spaceId) return;
+    (rows: StagedRows, rowsSpaceId: string) => {
+      // The space the rows were staged against, passed in rather than read from the
+      // current render. This hook outlives an account change by design (the navbar
+      // keeps it mounted through one), so by the time an edit is undone `spaceId`
+      // may belong to somebody else — or be empty, which used to make this a no-op
+      // and strand the rows with nothing left pointing at them.
+      if (!rowsSpaceId) return;
+      const spaceId = rowsSpaceId;
       // Clear only the rows still carrying the version this edit staged. Value ids
       // are derived from entity + property + space, so a normal-editor change to
       // the same field during an in-flight publish replaces the row at our id —
@@ -400,12 +415,15 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         // upload. Left there they become pending edits on the personal space for
         // a save that never happened.
         const partial = collect();
-        rollback({
-          valueIds: new Map(partial.values.map(v => [v.id, v.timestamp])),
-          relationIds: new Map(partial.relations.map(r => [r.id, r.timestamp])),
-          overwritten: written.overwritten,
-          overwrittenRelations: written.overwrittenRelations,
-        });
+        rollback(
+          {
+            valueIds: new Map(partial.values.map(v => [v.id, v.timestamp])),
+            relationIds: new Map(partial.relations.map(r => [r.id, r.timestamp])),
+            overwritten: written.overwritten,
+            overwrittenRelations: written.overwrittenRelations,
+          },
+          spaceId
+        );
         throw error;
       }
 
@@ -424,6 +442,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         },
         draft,
         baseline,
+        owner: { entityId, spaceId },
       };
     },
     [entityId, rollback, spaceId, storage]
@@ -441,8 +460,25 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
     setStatus('idle');
     setErrorMessage(null);
     ownsPendingError.current = false;
-    if (staged) rollback(staged.rows);
+    if (staged) rollback(staged.rows, staged.owner.spaceId);
   }, [rollback]);
+
+  // An account change strands whatever was staged for the previous one. Retrying it
+  // would publish one person's rows into another's space, and leaving it in place
+  // shows the new account an error about work that was never theirs — so it is
+  // undone against the space it came from and the modal returns to idle.
+  React.useEffect(() => {
+    const staged = stagedRef.current;
+    if (!staged) return;
+    if (staged.owner.entityId === entityId && staged.owner.spaceId === spaceId) return;
+
+    console.warn('[edit-profile] abandoning a staged edit after an account change', { owner: staged.owner });
+    stagedRef.current = null;
+    ownsPendingError.current = false;
+    setStatus('idle');
+    setErrorMessage(null);
+    rollback(staged.rows, staged.owner.spaceId);
+  }, [entityId, rollback, spaceId]);
 
   const settleSuccess = React.useCallback(() => {
     const staged = stagedRef.current;
@@ -510,6 +546,12 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
     dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
   }, [dispatch, isOpen, statusBarState.reviewState]);
 
+  const clearStagingStatus = React.useCallback(() => {
+    if (!raisedStagingStatus.current) return;
+    raisedStagingStatus.current = false;
+    dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+  }, [dispatch]);
+
   const publish = React.useCallback(
     async (draft: ProfileDraft) => {
       if (!canEdit) return;
@@ -532,7 +574,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       };
 
       if (previouslyStaged && !isSameDraft(previouslyStaged.draft, draft)) {
-        rollback(previouslyStaged.rows);
+        rollback(previouslyStaged.rows, previouslyStaged.owner.spaceId);
         stagedRef.current = null;
       }
 
@@ -545,15 +587,22 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         // that upload can be long. Closing during it is meant to hand off to the
         // toast, so the toast has to already be saying something — otherwise the
         // work continues with nothing on screen at all.
-        dispatch({ type: 'SET_REVIEW_STATE', payload: 'publishing-ipfs' });
+        //
+        // Only when nothing else is using the bar. It is global and carries no
+        // operation identity, so raising ours over another publish's progress would
+        // replace its reporting with ours.
+        raisedStagingStatus.current = statusBarState.reviewState === 'idle';
+        if (raisedStagingStatus.current) {
+          dispatch({ type: 'SET_REVIEW_STATE', payload: 'publishing-ipfs' });
+        }
 
         try {
           stagedRef.current = await stage(draft, baseline);
         } catch (error) {
           console.error('[edit-profile] failed to stage profile edit', error);
-          // The modal owns this failure — `makeProposal` never ran, so nothing else
-          // will clear the pill we just put up.
-          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+          // `makeProposal` never ran, so nothing else will clear the pill — but only
+          // clear it if it is still ours to clear.
+          clearStagingStatus();
           setStatus('error');
           setErrorMessage('Couldn’t upload your images. Your changes are still here — try again.');
           return;
@@ -571,8 +620,8 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
           entityId,
           spaceId,
         });
-        dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-        rollback(staged.rows);
+        clearStagingStatus();
+        rollback(staged.rows, staged.owner.spaceId);
         stagedRef.current = null;
         setStatus('error');
         setErrorMessage(
@@ -587,7 +636,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // value already there. Publishing them earns the SDK's generic "Nothing to
       // publish" error for what is really a no-op, so settle them as done instead.
       if (staged.values.length === 0 && staged.relations.length === 0) {
-        dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+        clearStagingStatus();
         settleSuccess();
         return;
       }
@@ -611,11 +660,13 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       current.name,
       dispatch,
       entityId,
+      clearStagingStatus,
       makeProposal,
       rollback,
       settleSuccess,
       spaceId,
       stage,
+      statusBarState.reviewState,
     ]
   );
 
