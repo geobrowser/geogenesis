@@ -41,6 +41,11 @@ export function useGeoProfile(account?: `0x${string}`): {
     // space. That id is a wallet address, not a space, so caching it under a space key would
     // be a lie waiting to be read back.
     if (!profile || !profileSpaceId || profileSpaceId === profile.address) return;
+    // Nor when the address lookup collapsed a real-but-empty profile into `defaultProfile`: that
+    // value is indistinguishable from "no such profile" once it is in the cache, and readers that
+    // tell those apart — the debates avatar resolver does — would take it for an absent one and
+    // keep showing whatever they had. There is nothing to warm in it either way.
+    if (!profile.name && !profile.avatarUrl) return;
     queryClient.setQueryData(profileBySpaceIdQueryKey(profileSpaceId), profile);
   }, [profile, profileSpaceId, queryClient]);
 

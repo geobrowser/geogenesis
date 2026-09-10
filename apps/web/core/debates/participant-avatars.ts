@@ -48,11 +48,17 @@ type ProfileLike = { profileLink?: string | null; avatarUrl?: string | null };
  * carries nulls in every field. Treating every resolved null as authoritative would therefore blank
  * a perfectly good snapshot on any upstream blip.
  *
- * `profileLink` is what separates them, and it is the only field that does it reliably.
- * `apiProfileToProfile` always sets it, `defaultProfile` never does — where a *name* is merely
- * usually present, so keying on that left a nameless account's avatar stuck on the old snapshot
- * after they removed it. A profile the API answered for is a real answer, so its avatar is trusted
- * including its absence, which is what lets a removal propagate here. Anything else falls back.
+ * `profileLink` is what separates them. `apiProfileToProfile` always sets it and `defaultProfile`
+ * never does — where a *name* is merely usually present, so keying on that left a nameless account
+ * stuck on its old snapshot after removing an avatar. A profile the API answered for is a real
+ * answer, so its avatar is trusted including its absence, which is what lets a removal propagate
+ * here. Anything else falls back.
+ *
+ * This holds only because the cache behind it holds one kind of value. `profileBySpaceIdQueryKey`
+ * has three writers, and `useGeoProfile` used to seed it from the *address* endpoint, which
+ * collapses a real-but-empty profile into `defaultProfile` — a found profile wearing a
+ * not-found shape, which this would then read as absent. That seed is now skipped at the source.
+ * A reader cannot defend itself against a lossy write; the write had to stop.
  */
 export function participantAvatarUrl(
   participant: ParticipantAvatarSource | null | undefined,
