@@ -9,6 +9,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { usePathname } from 'next/navigation';
 
 import { personalSpaceViewed } from '~/core/analytics';
+import { useBountiesEnabled } from '~/core/bounties/config';
 import { BROWSE_NAV_ICON } from '~/core/browse/browse-nav-icon-src';
 import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
@@ -33,6 +34,7 @@ import { Avatar } from '~/design-system/avatar';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
+import { Gem } from '~/design-system/icons/gem';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -132,8 +134,10 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
   const { isPending, topicId } = usePendingPersonalSpace();
   const pendingAvatar = useAtomValue(avatarAtom);
   const pathname = usePathname() ?? '';
+  const bountiesEnabled = useBountiesEnabled();
 
   const isExplore = pathname === '/explore' || pathname.startsWith('/explore/');
+  const isBounties = pathname === '/bounties' || pathname.startsWith('/bounties/');
   const isRoot = pathname === '/root';
   const isGovernance = pathname === '/home' || pathname.startsWith('/home/');
   // Optimistic: link to the navigable `pending:` page until the real spaceId lands.
@@ -188,6 +192,14 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
             isActive={isGovernance}
           />
           <span>Governance</span>
+        </Link>
+      ) : null}
+      {bountiesEnabled ? (
+        <Link href={NavUtils.toBounties()} prefetch className={isBounties ? navLinkActive : navLinkIdle}>
+          <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
+            <Gem color={isBounties ? 'purple' : 'grey-04'} />
+          </span>
+          <span>Bounties</span>
         </Link>
       ) : null}
       <Link href={NavUtils.toRoot()} className={isRoot ? navLinkActive : navLinkIdle}>

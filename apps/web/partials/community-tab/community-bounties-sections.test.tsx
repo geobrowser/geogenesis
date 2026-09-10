@@ -74,8 +74,9 @@ const shown = () => screen.queryAllByRole('listitem').map(item => item.textConte
 
 function chooseScope(label: string) {
   // The trigger reads the current scope, so it is named after whatever is selected right now.
-  fireEvent.click(screen.getByRole('button', { name: /^(All|Featured)$/ }));
-  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: label }));
+  fireEvent.click(screen.getByRole('button', { name: /^(All|Featured)/ }));
+  // FilterMenu rows are menuitemradio, not buttons.
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('menuitemradio', { name: new RegExp(label) }));
 }
 
 describe('the bounties tables', () => {
