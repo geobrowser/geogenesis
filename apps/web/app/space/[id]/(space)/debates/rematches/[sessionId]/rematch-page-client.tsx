@@ -22,6 +22,9 @@ import {
 } from '~/core/debates/api';
 import { type ClaimPickerEntity, useClaimEntitiesByIds } from '~/core/debates/claim-picker-page';
 import { isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
+import { CreateDebateClaimForm } from '~/core/debates/create-claim/create-debate-claim-form';
+import { PendingClaimCard } from '~/core/debates/create-claim/pending-claim-card';
+import { usePendingDebateClaims } from '~/core/debates/create-claim/use-pending-debate-claims';
 import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
 import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
@@ -80,7 +83,9 @@ import { responsePositionLabel } from '~/core/responses/entity-response';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { validateEntityId } from '~/core/utils/utils';
 
+import { Button } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Plus } from '~/design-system/icons/plus';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
@@ -144,6 +149,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const sessionQuery = useDebateRematch(sessionId);
   const [search, setSearch] = React.useState('');
   const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
+  const [creatingClaim, setCreatingClaim] = React.useState(false);
+  const { openSidePanel } = useEntitySidePanel();
 
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [topicIds, setTopicIds] = React.useState<string[]>([]);
@@ -941,6 +948,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
 
+  // Optimistic rows for just-created claims; drop once the real list has them.
+  const { pendingClaims, dismissPendingClaim } = usePendingDebateClaims();
+  const listedClaimId = React.useCallback(
+    (claimId: string) => visibleClaims.some(entry => idEquals(entry.claim.claim_entity_id, claimId)),
+    [visibleClaims]
+  );
+  const pinnedPendingClaims = React.useMemo(
+    () => pendingClaims.filter(claim => !listedClaimId(claim.claimId)),
+    [pendingClaims, listedClaimId]
+  );
+  React.useEffect(() => {
+    for (const claim of pendingClaims) {
+      if (listedClaimId(claim.claimId)) dismissPendingClaim(claim.claimId);
+    }
+  }, [pendingClaims, listedClaimId, dismissPendingClaim]);
+
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage: taggedHasNextPage,
     isFetchingNextPage: taggedFetchingNextPage,
@@ -1268,6 +1291,48 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             {rematchCancellationMessage(session.request.cancellation_reason)}
           </Text>
         )}
+
+        {tab === 'claims' ? (
+          <div className="mb-3 flex flex-col gap-3">
+            {creatingClaim ? (
+              <CreateDebateClaimForm
+                candidateSpaceIds={eligibleSpaceIds}
+                defaultSpaceId={spaceIds[0] ?? session?.source_space_id ?? null}
+                onCreated={({ claimId, spaceId, alreadyExisted }) => {
+                  setCreatingClaim(false);
+                  setSearch('');
+                  setTopicIds([]);
+                  setSpaceIds(current =>
+                    current.length === 0 || current.includes(spaceId) ? current : [...current, spaceId]
+                  );
+
+                  if (alreadyExisted) {
+                    openSidePanel(claimId, spaceId, false);
+                  }
+                }}
+                onCancel={() => setCreatingClaim(false)}
+              />
+            ) : (
+              <div className="flex justify-end">
+                <Button type="button" variant="secondary" icon={<Plus />} onClick={() => setCreatingClaim(true)}>
+                  New claim
+                </Button>
+              </div>
+            )}
+
+            {pinnedPendingClaims.length > 0 ? (
+              <HubCardList>
+                {pinnedPendingClaims.map(claim => (
+                  <PendingClaimCard
+                    key={claim.claimId}
+                    claim={claim}
+                    onDismiss={() => dismissPendingClaim(claim.claimId)}
+                  />
+                ))}
+              </HubCardList>
+            ) : null}
+          </div>
+        ) : null}
 
         <HubQueryState
           // Only what the visible tab actually draws from, and only while it has nothing to show.
