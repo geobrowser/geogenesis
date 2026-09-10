@@ -53,6 +53,91 @@ describe('applyClaimReusePolicy', () => {
     expect(lookup.mock.calls[0]?.[1]).toBe(SPACE);
   });
 
+  it('withholds motion candidacy wherever a reference is dropped blind', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const MOTION = '00000000000000000000000000000009';
+    const contestable = (id: string | null) => ({
+      text: 'A restatement.',
+      isFactual: null,
+      turnIndex: 0,
+      existingClaimEntityId: id,
+      isContestable: true,
+    });
+
+    // The debate's own motion: refused reuse so a restatement cannot hijack it, and it
+    // must not be minted as a rival motion either — the motion is Debate-tagged already.
+    const motion = await applyClaimReusePolicy([contestable(MOTION)], SPACE, {
+      enabled: true,
+      lookup: vi.fn<ExistingClaimLookup>(async () => graph),
+      motionClaimEntityId: MOTION,
+    });
+    expect(motion[0].existingClaimEntityId).toBeNull();
+    expect(motion[0].isContestable).toBe(false);
+
+    // Shadow mode promises to change nothing but the counters.
+    const shadow = await applyClaimReusePolicy([contestable(EXISTING)], SPACE, {
+      enabled: false,
+      lookup: vi.fn<ExistingClaimLookup>(async () => graph),
+    });
+    expect(shadow[0].isContestable).toBe(false);
+
+    // The read that would have said which targets are tagged is the one that failed.
+    const failed = await applyClaimReusePolicy([contestable(EXISTING)], SPACE, {
+      enabled: true,
+      lookup: vi.fn<ExistingClaimLookup>(async () => {
+        throw new Error('graph down');
+      }),
+    });
+    expect(failed[0].isContestable).toBe(false);
+  });
+
+  it('keeps candidacy when the graph confirms the target is not a Claim here', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Tags are space-scoped, so an entity that lives only in another space cannot
+    // already be a motion here — minting a tagged replacement duplicates nothing.
+    const result = await applyClaimReusePolicy(
+      [{ text: 'Elsewhere.', isFactual: null, turnIndex: 0, existingClaimEntityId: ELSEWHERE, isContestable: true }],
+      SPACE,
+      { enabled: true, lookup: vi.fn<ExistingClaimLookup>(async () => graph) }
+    );
+    expect(result[0].existingClaimEntityId).toBeNull();
+    expect(result[0].isContestable).toBe(true);
+  });
+
+  it('does not re-tag a reused entity that already carries the Debate tag', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const DEBATE_TAG = '55c95b2626f8482cb9739ea99dfde438';
+    const lookup = vi.fn<ExistingClaimLookup>(async () => [
+      { id: EXISTING, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }], tagIds: [DEBATE_TAG] },
+    ]);
+
+    const result = await applyClaimReusePolicy(
+      [{ text: 'Matched.', isFactual: null, turnIndex: 0, existingClaimEntityId: EXISTING, isContestable: true }],
+      SPACE,
+      { enabled: true, lookup }
+    );
+
+    expect(result[0].existingClaimEntityId).toBe(EXISTING);
+    expect(result[0].isContestable).toBe(false);
+  });
+
+  it('tags a reused entity that is not yet a debate claim', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const lookup = vi.fn<ExistingClaimLookup>(async () => [
+      { id: EXISTING, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }], tagIds: [] },
+    ]);
+
+    const result = await applyClaimReusePolicy(
+      [{ text: 'Matched.', isFactual: null, turnIndex: 0, existingClaimEntityId: EXISTING, isContestable: true }],
+      SPACE,
+      { enabled: true, lookup }
+    );
+
+    expect(result[0].isContestable).toBe(true);
+  });
+
   it('subtracts topics the reused entity already carries and keeps the rest', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const CARRIED = { id: '27b73193ecea48fdaa46fdee40c0b717', name: 'AI and mental health' };

@@ -4,6 +4,8 @@ import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { TAG_PROPERTY_ID } from '~/core/constants';
+import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { ID } from '~/core/id';
 import { Publish } from '~/core/utils/publish';
 
@@ -389,6 +391,55 @@ describe('buildDebatePublishDraft', () => {
       [`${mintedId}->${TOPIC.id}`, `${mintedId}->${OTHER.id}`, `${EXISTING}->${TOPIC.id}`].sort()
     );
     expect(topicRelations.find(r => r.fromEntity.id === EXISTING)?.toEntity.name).toBe(TOPIC.name);
+  });
+
+  it('tags only contestable claims as Debate, minted or reused, once per entity', () => {
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claims: [
+          { text: 'A broad position.', isFactual: false, turnIndex: 0, isContestable: true },
+          // Narrowly verifiable: still published as a Claim, just not offered as a motion.
+          { text: 'A narrow fact.', isFactual: true, turnIndex: 0, isContestable: false },
+          // The same reused entity behind two restatements gets one tag, not two.
+          {
+            text: 'Restated once.',
+            isFactual: null,
+            turnIndex: 1,
+            existingClaimEntityId: EXISTING,
+            isContestable: true,
+          },
+          {
+            text: 'Restated twice.',
+            isFactual: null,
+            turnIndex: 1,
+            existingClaimEntityId: EXISTING,
+            isContestable: true,
+          },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+    const tags = draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID);
+    expect(tags.map(r => r.fromEntity.id).sort()).toEqual([claimIdByName(draft, 'A broad position.'), EXISTING].sort());
+    expect(tags.every(r => r.toEntity.id === DEBATE_TAG_ID)).toBe(true);
+    // The narrow claim is still published as a Claim, it just carries no Debate tag.
+    expect(claimIdByName(draft, 'A narrow fact.')).toBeTruthy();
+  });
+
+  it('tags one motion when a proposition is extracted twice and matched to nothing', () => {
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claims: [
+          // Both mint their own entity (long-standing behaviour), but a fresh id per
+          // claim means an id-keyed dedupe would never fire — two rival motions.
+          { text: 'AI chatbots are effective therapy.', isFactual: false, turnIndex: 0, isContestable: true },
+          { text: 'AI chatbots are effective therapy.', isFactual: false, turnIndex: 1, isContestable: true },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+    expect(draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID)).toHaveLength(1);
   });
 
   it('treats dashed and dashless forms of one topic as a single relation', () => {
