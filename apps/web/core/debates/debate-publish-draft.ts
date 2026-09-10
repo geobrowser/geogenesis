@@ -1,6 +1,6 @@
 import { Position } from '@geoprotocol/geo-sdk/lite';
 
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { ID } from '~/core/id';
 import type { DataType, Relation, Value } from '~/core/types';
 
@@ -71,6 +71,12 @@ export type DebateClaimInput = {
    * facts. Null/absent mints a fresh Claim as before.
    */
   existingClaimEntityId?: string | null;
+  /**
+   * Topics the extractor assigned to this claim, selected from the debated claim's own topic
+   * set ({KG entity id, name}). Written only when the claim mints a fresh entity — a reused
+   * entity keeps its own topics, like its Name, Types and Is factual.
+   */
+  topics?: { id: string; name: string | null }[];
 };
 
 export type DebatePublishInput = {
@@ -375,6 +381,14 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
           });
           if (claim.isFactual !== null) {
             setBoolean(claimId, claimEntityText, CLAIM_IS_FACTUAL_PROPERTY_ID, claim.isFactual);
+          }
+          for (const topic of claim.topics ?? []) {
+            relate({
+              fromEntity: claimRef,
+              propertyId: TOPICS_PROPERTY_ID,
+              toEntityId: topic.id,
+              toEntityName: topic.name,
+            });
           }
         }
         const blockClaimKey = `${blockId}:${claimId}`;

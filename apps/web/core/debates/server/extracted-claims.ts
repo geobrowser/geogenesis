@@ -21,6 +21,12 @@ export type DebateExtractedClaimsClaim = {
    * `match` audit object next to it, which the publisher does not read.
    */
   existing_entity_id?: string | null;
+  /**
+   * Topics the extractor assigned to this claim, drawn from the debated claim's own topic set
+   * (geo-chat's replica naming: entity_id + name). Absent on payloads from before topic
+   * assignment shipped, and empty when the debated claim has no topics.
+   */
+  topics?: { entity_id: string; name: string | null }[] | null;
 };
 
 export type DebateExtractedClaimsResponse = {
@@ -53,6 +59,10 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
       typeof claim.existing_entity_id === 'string' && claim.existing_entity_id.trim().length > 0
         ? claim.existing_entity_id.trim()
         : null,
+    topics: (claim.topics ?? []).flatMap(topic => {
+      const id = typeof topic?.entity_id === 'string' ? topic.entity_id.trim() : '';
+      return id.length > 0 ? [{ id, name: topic.name ?? null }] : [];
+    }),
   }));
   return { transcriptTurns, claims };
 }

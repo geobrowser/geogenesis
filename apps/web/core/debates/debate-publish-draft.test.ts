@@ -3,7 +3,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { ID } from '~/core/id';
 import { Publish } from '~/core/utils/publish';
 
@@ -358,6 +358,26 @@ describe('buildDebatePublishDraft', () => {
     ).toBe(true);
     // The novel claim is minted and attributed as before.
     expect(blockAuthoringClaim(draft, claimIdByName(draft, 'A novel point.'))).toBe(NO_SPACE);
+  });
+
+  it('adds Topics relations to minted claims but never to reused entities', () => {
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+    const TOPIC = { id: '27b73193ecea48fdaa46fdee40c0b717', name: 'AI and mental health' };
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claims: [
+          { text: 'A novel point.', isFactual: true, turnIndex: 0, topics: [TOPIC] },
+          { text: 'A restated point.', isFactual: null, turnIndex: 1, existingClaimEntityId: EXISTING, topics: [TOPIC] },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+    // Only the minted claim gets the Topics relation; the reused entity keeps its own topics.
+    const topicRelations = draft.relations.filter(r => r.type.id === TOPICS_PROPERTY_ID);
+    expect(topicRelations).toHaveLength(1);
+    expect(topicRelations[0].fromEntity.id).toBe(claimIdByName(draft, 'A novel point.'));
+    expect(topicRelations[0].toEntity.id).toBe(TOPIC.id);
+    expect(topicRelations[0].toEntity.name).toBe(TOPIC.name);
   });
 
   it('writes each relation once when several claims resolve to the same existing entity', () => {
