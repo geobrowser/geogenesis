@@ -50,7 +50,13 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
     includeDeleted: true,
   });
 
-  const name = useName(entityId, spaceId);
+  // Prefer this space's name, but fall back to any space that has one. `name` is never rendered
+  // here — it only labels writes (the auto-created Format property, and `fromEntity.name` on the
+  // Data Type relation). Scoping alone would label them 'New Property' / '' for an entity whose
+  // Name value lives in another space, which is what master's unscoped read avoided.
+  const nameInSpace = useName(entityId, spaceId);
+  const nameInAnySpace = useName(entityId);
+  const name = nameInSpace ?? nameInAnySpace;
 
   const { storage } = useMutate();
 

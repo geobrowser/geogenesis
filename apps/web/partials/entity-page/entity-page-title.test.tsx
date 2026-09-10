@@ -40,11 +40,17 @@ describe('EntityPageTitle typography', () => {
     expect(screen.getByPlaceholderText('Entity name...')).toHaveClass('text-entityTitle');
   });
 
+  // Any sizing utility, not just the two this PR removed — an earlier version forbade exactly
+  // `text-[…]` and `text-mainPage`, so adding `text-3xl` beside the token slipped straight past.
   it('restates no font size of its own', () => {
     renderTitle();
 
-    const className = screen.getByRole('heading', { level: 1 }).className;
-    expect(className).not.toMatch(/text-\[|text-mainPage|leading-\[/);
+    for (const className of screen.getByRole('heading', { level: 1 }).className.split(/\s+/)) {
+      if (className === 'text-entityTitle') continue;
+      expect(className, `${className} sizes the title outside the token`).not.toMatch(
+        /^(text|leading)-(?!text$)/
+      );
+    }
   });
 });
 
@@ -57,12 +63,17 @@ describe('EntityPageTitle typography', () => {
  * trades a collapsible one on the other.
  */
 describe('EntityPageTitle wrapping', () => {
+  // Checked up the tree, not just on the `h1` — a clamp on any wrapper cuts the title identically,
+  // which is how the old `Truncate`/`ClampedText` headers applied theirs.
   it('does not clamp a long name', () => {
-    renderTitle({ value: LONG_NAME });
-
+    const { container } = renderTitle({ value: LONG_NAME });
     const title = screen.getByRole('heading', { level: 1 });
+
     expect(title).toHaveTextContent(LONG_NAME);
-    expect(title.className).not.toMatch(/line-clamp|truncate/);
+
+    for (let node: HTMLElement | null = title; node && node !== container; node = node.parentElement) {
+      expect(node.className, `${node.className} clamps the title`).not.toMatch(/line-clamp|truncate/);
+    }
   });
 
   it('wraps long words instead of overflowing', () => {
@@ -96,9 +107,14 @@ describe('EntityPageTitle accessory', () => {
   it('aligns the accessory by the row rather than a fixed pixel offset', () => {
     renderTitle({ accessory: <span data-testid="verified" /> });
 
-    const wrapper = screen.getByTestId('verified').parentElement;
-    expect(wrapper?.className).not.toMatch(/\bm[tby]-\[/);
-    expect(screen.getByRole('heading', { level: 1 }).parentElement).toHaveClass('items-center');
+    // Both sides of the row: an offset on the title shifts it against the badge just as visibly as
+    // one on the badge, and the earlier version of this test only looked at the badge.
+    const badge = screen.getByTestId('verified').parentElement;
+    const title = screen.getByRole('heading', { level: 1 });
+
+    expect(badge?.className).not.toMatch(/\bm[tby]-\[/);
+    expect(title.className).not.toMatch(/\bm[tby]-\[/);
+    expect(title.parentElement).toHaveClass('items-center');
   });
 
   // Editing swaps the `h1` for a textarea; an inline badge beside a growing textarea has nowhere
