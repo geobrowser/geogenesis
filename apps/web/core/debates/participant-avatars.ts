@@ -78,8 +78,8 @@ export function participantAvatarUrl(
  * Both spellings reach the same place: `NativeGeoImage` resolves an `ipfs://` value through its
  * gateway chain, which is how the graph's avatars render everywhere else in the app.
  */
-export function useParticipantAvatars<T extends ParticipantAvatarSource>(
-  participants: readonly T[],
+export function useParticipantAvatars(
+  participants: readonly ParticipantAvatarSource[],
   /**
    * The parent query's own `enabled`. Passed on rather than assumed, because a disabled parent is
    * not merely idle — `DebatesHubButton` mounts `useDebateRequests(false)` on every page purely to
@@ -89,7 +89,7 @@ export function useParticipantAvatars<T extends ParticipantAvatarSource>(
    * surface that has resolved these faces once keeps drawing them.
    */
   enabled = true
-): (participant: T) => T {
+): <T extends ParticipantAvatarSource>(participant: T) => T {
   // Keyed on the ids themselves rather than the array's identity: these lists are rebuilt from a
   // query result on every render while the people in them are not.
   const spaceIdKey = participants
@@ -99,8 +99,11 @@ export function useParticipantAvatars<T extends ParticipantAvatarSource>(
   const spaceIds = React.useMemo(() => [...new Set(spaceIdKey.split(',').filter(Boolean))], [spaceIdKey]);
   const { profilesBySpaceId } = useProfilesBySpaceIds(spaceIds, enabled && spaceIds.length > 0);
 
+  // Generic in the *returned* function rather than the hook, so one call can resolve a payload that
+  // names people in more than one shape — an activity carries a challenge's two parties and a
+  // debate's participants, and they are different types describing the same faces.
   return React.useCallback(
-    (participant: T) => {
+    <T extends ParticipantAvatarSource>(participant: T) => {
       const avatar = participantAvatarUrl(participant, profilesBySpaceId);
 
       // The same object back when nothing changed, so a memoized consumer downstream is not

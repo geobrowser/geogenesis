@@ -175,12 +175,40 @@ export function useMatchmakingMatches(enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const authenticated = useMatchmakingScope(enabled);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.matches(accountKey),
     queryFn: ({ signal }) => listMatchmakingMatches(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
   });
+
+  // The Matches tab draws the same `MatchmakingClaimCard` as the Claims tab, off the same
+  // `positions[].participants` — so it needs the same treatment. See `participant-avatars`.
+  const participants = React.useMemo(
+    () =>
+      query.data?.matches.flatMap(match => match.positions.flatMap(position => position.participants)) ??
+      EMPTY_PARTICIPANTS,
+    [query.data]
+  );
+
+  const withAvatar = useParticipantAvatars(participants, enabled && authenticated);
+
+  const data = React.useMemo(() => {
+    if (!query.data) return query.data;
+
+    return {
+      ...query.data,
+      matches: query.data.matches.map(match => ({
+        ...match,
+        positions: match.positions.map(position => ({
+          ...position,
+          participants: position.participants.map(withAvatar),
+        })),
+      })),
+    };
+  }, [query.data, withAvatar]);
+
+  return withQueryData(query, data);
 }
 
 /**

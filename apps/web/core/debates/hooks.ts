@@ -21,7 +21,7 @@ import {
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
   type DebateMediaResponse,
-  type DebateParticipantSummary,
+  type DebateParticipant,
   type DebateRematchClaimsResponse,
   GeoChatRequestError,
   type LocalRecordingCompleteRequest,
@@ -364,9 +364,6 @@ const ACTIVITY_DEGRADED_POLL_MS = 10_000;
  * ask; that is why geo-chat keys reachability (`is_online`) on presence too. This is what was
  * still reported as a ~36 second delivery after GEO-2638 (GEO-2650).
  */
-/** Stable empty reference, so a pending-challenge-free activity does not rebuild the memo. */
-const EMPTY_PARTIES: DebateParticipantSummary[] = [];
-
 export function useDebateActivity(enabled = true) {
   const queryClient = useQueryClient();
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
@@ -407,28 +404,37 @@ export function useDebateActivity(enabled = true) {
     if (returned && queryEnabled) void query.refetch();
   }, [attentive, present, query.refetch, queryEnabled]);
 
-  // The challenge rides here rather than on `useDebateRequests`, so it needs the same treatment:
-  // `RequestsTab`, `PeopleTab` and `DebateChallengeDialog` all draw these two faces straight off
-  // `activity.challenge`. Empty while no challenge is pending, which is the usual case, so this
-  // costs nothing until there is one. See `participant-avatars`.
-  const challengeParties = React.useMemo(
-    () => (query.data?.challenge ? [query.data.challenge.requester, query.data.challenge.recipient] : EMPTY_PARTIES),
-    [query.data]
-  );
+  // Everyone this payload names. The challenge rides here rather than on `useDebateRequests`, and
+  // so does the ready debate — `RequestsTab`, `PeopleTab`, `DebateChallengeDialog` and
+  // `DebateReadyPrompt` all draw faces straight off it. Empty while nothing is pending, which is
+  // the usual case, so this costs nothing until there is something to draw. See
+  // `participant-avatars`.
+  const activityPeople = React.useMemo(() => {
+    const challenge = query.data?.challenge;
 
-  const withAvatar = useParticipantAvatars(challengeParties, queryEnabled);
+    return [
+      ...(challenge ? [challenge.requester, challenge.recipient] : []),
+      // `DebateCoordinator` hands `activity.debate` to `DebateReadyPrompt`, which is where the
+      // request dialog and the format details draw their faces from.
+      ...(query.data?.debate?.participants ?? []),
+    ];
+  }, [query.data]);
+
+  const withAvatar = useParticipantAvatars(activityPeople, queryEnabled);
 
   const data = React.useMemo(() => {
-    const challenge = query.data?.challenge;
-    if (!query.data || !challenge) return query.data;
+    if (!query.data) return query.data;
+    const { challenge, debate } = query.data;
+    if (!challenge && !debate) return query.data;
 
     return {
       ...query.data,
-      challenge: {
-        ...challenge,
-        requester: withAvatar(challenge.requester),
-        recipient: withAvatar(challenge.recipient),
-      },
+      challenge: challenge
+        ? { ...challenge, requester: withAvatar(challenge.requester), recipient: withAvatar(challenge.recipient) }
+        : challenge,
+      // `participants` is typed as present but is not always sent — a partially seeded debate
+      // arrives without it — so this maps only when there is a list to map.
+      debate: debate?.participants ? { ...debate, participants: debate.participants.map(withAvatar) } : debate,
     };
   }, [query.data, withAvatar]);
 
@@ -500,6 +506,9 @@ export function useClearDebateActivity() {
   return useClearDebateActivityCache({ clearCooldown: false, reconcile: false });
 }
 
+/** Stable empty reference, so an unresolved debate query does not rebuild the memos. */
+const EMPTY_DEBATE_PARTICIPANTS: DebateParticipant[] = [];
+
 export function useSpaceDebates(spaceId: string, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   // The browse feed subscribes the same way `useDebateClaims` does, so it needs the same gate:
@@ -521,20 +530,56 @@ export function useSpaceDebates(spaceId: string, enabled: boolean) {
     enabled: shouldFetch,
   });
 
-  return holdWhileSpaceResolves(query, support);
+  // The browse feed and its player draw their debaters from these rows. See `participant-avatars`.
+  const participants = React.useMemo(
+    () => query.data?.debates.flatMap(debate => debate.participants ?? []) ?? EMPTY_DEBATE_PARTICIPANTS,
+    [query.data]
+  );
+
+  const withAvatar = useParticipantAvatars(participants, shouldFetch);
+
+  const data = React.useMemo(
+    () =>
+      query.data
+        ? {
+            ...query.data,
+            debates: query.data.debates.map(debate => ({
+              ...debate,
+              participants: debate.participants.map(withAvatar),
+            })),
+          }
+        : query.data,
+    [query.data, withAvatar]
+  );
+
+  return holdWhileSpaceResolves(withQueryData(query, data), support);
 }
 
 export function useDebate(debateId: string, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   useDebateGatewayScope({ scope: 'debate', debate_id: debateId }, enabled && authenticated);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.debate(debateId),
     queryFn: ({ signal }) =>
       getDebate(debateId, authenticated ? getPrivyIdentityToken : undefined, authenticated ? accountKey : null, signal),
     enabled,
   });
+
+  // A single debate feeds the room, its claims panel and the pre-join screen, all of which name
+  // both debaters. See `participant-avatars`.
+  const participants = React.useMemo(() => query.data?.participants ?? EMPTY_DEBATE_PARTICIPANTS, [query.data]);
+
+  const withAvatar = useParticipantAvatars(participants, enabled);
+
+  const data = React.useMemo(
+    () =>
+      query.data?.participants ? { ...query.data, participants: query.data.participants.map(withAvatar) } : query.data,
+    [query.data, withAvatar]
+  );
+
+  return withQueryData(query, data);
 }
 
 export function useLiveKitJoin(debateId: string) {
