@@ -26,13 +26,11 @@ import { useScrollLock } from './use-scroll-lock';
 export type DebatePreScreenRemotePresence = 'absent' | 'present' | 'left';
 
 /**
- * The pre-debate screen. GEO-2819 turned it from a solo mirror into a live two-way call: both
- * debaters are in the LiveKit room from the moment they grant the camera, so the introductions
- * users said they wanted have somewhere to happen. Nothing here is recorded — the pill says so,
- * in the position the debate room repeats it — and the debate starts only once both press ready.
+ * The pre-debate screen: a live two-way call from the moment both sides grant the camera, ending
+ * when both press ready. Nothing here is recorded.
  *
- * Deliberately the same geometry as the room: two stacked tiles, same order rule, same widths.
- * The transition into the debate then changes the chrome and leaves the layout alone.
+ * Shares the room's tile, ordering and geometry so crossing into the debate changes the chrome
+ * rather than the layout.
  */
 export function DebatePreScreen({
   claim,
@@ -64,6 +62,7 @@ export function DebatePreScreen({
   onVideoInputChange,
   onRetryMedia,
   devicesLocked,
+  connectionSettling,
   mediaError,
   audioMuted,
   videoEnabled,
@@ -113,6 +112,14 @@ export function DebatePreScreen({
    * the room is already up, so the pickers close for the moment it takes to settle.
    */
   devicesLocked: boolean;
+  /**
+   * A connection is mid-handshake. Readiness is held back until it settles: the second ready
+   * starts the server's connecting deadline, and starting it from a half-open room spends that
+   * window on a handshake already in progress. A failed connection deliberately does not block
+   * readiness, because the connecting phase exists to get both sides into the room and would
+   * otherwise leave a debate unstartable whenever the intro could not connect.
+   */
+  connectionSettling: boolean;
   /** Why the camera or microphone is unavailable, as distinct from a room-connection failure. */
   mediaError: string | null;
   audioMuted: boolean;
@@ -149,6 +156,12 @@ export function DebatePreScreen({
 
   useScrollLock();
 
+  // Closing, not just disabling the trigger: an open popover or sheet keeps its radios clickable,
+  // and picking one there restarts the preview underneath the connection that is publishing it.
+  React.useEffect(() => {
+    if (devicesLocked) setOpenSettings(null);
+  }, [devicesLocked]);
+
   // The intro and the debate room are two `aria-modal` dialogs that replace each other, and the
   // swap is triggered by the *other* participant — so without this, focus silently falls to
   // `body` at the moment the recorded debate begins.
@@ -161,9 +174,8 @@ export function DebatePreScreen({
       participantPosition={localParticipant?.position ?? null}
       positionLabel={localParticipant?.position_label ?? null}
       active={false}
-      // Permission is reported inside the tile rather than in place of the layout. Replacing the
-      // screen meant the opponent — and their readiness — vanished for whoever was slowest to
-      // grant, and everything jumped position the moment they did.
+      // Permission is reported inside the tile, not in place of the layout: replacing the screen
+      // hid the opponent and their readiness from whoever was slowest to grant.
       overlayText={
         mediaReady
           ? switchingDevice
@@ -192,9 +204,8 @@ export function DebatePreScreen({
       participantPosition={remoteParticipant?.position ?? null}
       positionLabel={remoteParticipant?.position_label ?? null}
       active={false}
-      // Presence and video are separate facts here. "Still joining" is the state the issue asks
-      // for — the other side has not granted their camera yet — and it reads very differently
-      // from someone who was here and walked away.
+      // Presence and video are separate facts: not yet granted reads very differently from
+      // someone who was here and left.
       overlayText={
         remotePresence === 'left'
           ? `${remoteName} left the room.`
@@ -237,10 +248,8 @@ export function DebatePreScreen({
         <h1 className="mb-2 max-w-[390px] text-center text-[1.375rem] leading-[1.1] font-semibold text-text">
           {claim}
         </h1>
-        {/* Not "when you are both ready": pressing ready moves the debate to `connecting`, and the
-            recorder does not start until `preflight` a beat later. The overstatement erred safe —
-            it made people more guarded, not less — but this screen exists to make the recorded
-            boundary legible, so it should be exact. The pill carries the precise moment. */}
+        {/* Not "when you are both ready": that moves the debate to `connecting`, and the recorder
+            does not start until `preflight` a beat later. */}
         <Text as="p" variant="metadata" color="grey-04" className="mb-5 max-w-[390px] text-center">
           Say hello first. This part isn&apos;t recorded, and recording starts when the debate does.
         </Text>
@@ -331,6 +340,7 @@ export function DebatePreScreen({
                       label="Select a camera"
                       options={videoInputDevices}
                       selectedDeviceId={selectedVideoInputId}
+                      disabled={devicesLocked}
                       onChange={onVideoInputChange}
                     />
                   </DesktopSettingsPopover>
@@ -365,16 +375,18 @@ export function DebatePreScreen({
           <button
             type="button"
             onClick={onReady}
-            disabled={readyBusy || localReady || previewBusy}
+            disabled={readyBusy || localReady || previewBusy || connectionSettling}
             className="mt-3 flex min-h-11 w-full items-center justify-center rounded-full bg-text px-5 text-button text-white transition-colors hover:bg-text/90 disabled:opacity-50"
           >
             {localReady
               ? `Waiting for ${remoteName}…`
-              : readyBusy
-                ? 'Saving...'
-                : remoteReady
-                  ? "I'm ready too"
-                  : "I'm ready"}
+              : connectionSettling
+                ? 'Connecting…'
+                : readyBusy
+                  ? 'Saving...'
+                  : remoteReady
+                    ? "I'm ready too"
+                    : "I'm ready"}
           </button>
         )}
 
@@ -421,6 +433,7 @@ export function DebatePreScreen({
                 label="Select a camera"
                 options={videoInputDevices}
                 selectedDeviceId={selectedVideoInputId}
+                disabled={devicesLocked}
                 onChange={onVideoInputChange}
               />
             </div>
@@ -431,11 +444,7 @@ export function DebatePreScreen({
   );
 }
 
-/**
- * Readiness, stated and left alone. The issue flags that telling someone their opponent is ready
- * can hurry them into starting before they want to, so this is a fact on a tile rather than a
- * prompt, a countdown or a nudge anywhere near the button.
- */
+/** Readiness as a fact on a tile, deliberately not a prompt or countdown near the ready button. */
 function PreScreenReadyBadge() {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-green px-3 py-1.5 text-metadata leading-none text-text">
@@ -446,15 +455,9 @@ function PreScreenReadyBadge() {
 }
 
 /**
- * Labelled the way the debate room labels the same three controls: the name states the action a
- * press performs, and there is no `aria-pressed`.
- *
- * Both halves matter. The original mixed the conventions, pairing an action name with
- * `aria-pressed`, which announces "Unmute microphone, pressed" and reads as unmuting being the
- * active state. A static name plus `aria-pressed` ("Mute microphone, pressed") is the canonical
- * fix and is what this briefly was; correct in isolation, but it left these buttons announcing
- * themselves differently from their counterparts one screen later in the same flow. Matching the
- * room is worth more to a user than the marginally better pattern.
+ * Labelled as the debate room labels the same controls: the name states the action a press
+ * performs, and there is no `aria-pressed`. Never pair the two — "Unmute microphone, pressed"
+ * reads as unmuting being the active state.
  */
 function PreScreenToggle({
   ariaLabel,

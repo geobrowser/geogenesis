@@ -337,9 +337,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   /** Spent across the whole `connecting` window, not per invocation — see `reportJoinedForConnecting`. */
   const markJoinedAttemptsRef = React.useRef(0);
   const markJoinedRetryTimerRef = React.useRef<number | null>(null);
-  // Rejects rather than resolves: this is only a placeholder until the sync effect below fills it
-  // in, and a no-op that resolved would let `reportJoinedForConnecting` record a join that never
-  // reached the server.
+  // Rejects rather than resolves: a no-op that resolved would let `reportJoinedForConnecting`
+  // record a join that never reached the server.
   const markJoinedRef = React.useRef<() => Promise<unknown>>(() =>
     Promise.reject(new Error('The debate join reporter is not ready yet.'))
   );
@@ -609,10 +608,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [remoteAudioEnabled]);
 
   /**
-   * `debateRoomOptions` hands the room its speaker at construction, which used to be after the
-   * pre-screen had been dismissed and every device choice made. GEO-2819 connects during the
-   * intro, so a speaker picked from here on has to be pushed to the live room — otherwise the
-   * selection lands in the picker and changes nothing anyone can hear.
+   * `debateRoomOptions` applies the speaker at room construction, which now happens during the
+   * intro, so a speaker picked afterwards has to be pushed to the live room.
    */
   React.useEffect(() => {
     if (!audioOutputSupported || !selectedAudioOutputId) return;
@@ -626,10 +623,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [audioOutputSupported, reportAudioOutputFailure, roomState, selectedAudioOutputId]);
 
   /**
-   * GEO-2819. The intro screen and the debate room each render their own media elements, and the
-   * status flip swaps one for the other while the LiveKit connection is left untouched. So the
-   * elements are bound as they mount rather than once, at the end of `connect` — bound once, the
-   * debate opened onto two blank tiles.
+   * The intro and the debate room own separate media elements and the status flip swaps them while
+   * the connection stays up, so elements bind as they mount rather than once at the end of
+   * `connect`.
    */
   const bindLocalVideo = React.useCallback((video: HTMLVideoElement | null, stream: MediaStream | null) => {
     if (!video) return;
@@ -646,10 +642,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     [bindLocalVideo, localMediaStreamRef]
   );
 
-  // Both paths read `localMediaStreamRef`, with `previewStream` only as the trigger. Reading the
-  // state here and the ref in the callback let them disagree: `ensurePreview({forceRestart})`
-  // nulls the ref but deliberately holds the state at the old stream, so a tile mounting during a
-  // device switch bound null and was then overwritten with an already-stopped stream.
+  // Reads `localMediaStreamRef`, with `previewStream` only as the trigger: the two disagree
+  // during `ensurePreview({forceRestart})`, which nulls the ref while holding the state at the
+  // old stream.
   React.useEffect(() => {
     bindLocalVideo(localVideoRef.current, localMediaStreamRef.current);
   }, [bindLocalVideo, localMediaStreamRef, previewStream]);
@@ -678,9 +673,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, []);
 
   /**
-   * Moves the subscribed remote tracks onto whichever host node is currently mounted. Detach
-   * first for the same reason the `Reconnected` handler does (GEO-2602): `attach` is not
-   * guaranteed to hand back the element it gave out last time.
+   * Moves the subscribed remote tracks onto whichever host node is mounted. Detach first, as the
+   * `Reconnected` handler does: `attach` may not return the same element twice.
    */
   const setRemoteMediaElement = React.useCallback(
     (host: HTMLDivElement | null) => {
@@ -824,11 +818,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       },
       { once: true }
     );
-    // A recorder can end without going through `stopLocalRecorder`: `disconnectRoom` stops the
-    // local tracks, which makes the stream inactive and the recorder stop itself, and an encoder
-    // can fail outright. `capturing` lives on the surface rather than the modal, so it survives
-    // the unmount and the pill came back red on the next connection while `startLocalRecorder`
-    // early-returned and wrote nothing. Clear it from the recorder's own events.
+    // A recorder can end without `stopLocalRecorder`: `disconnectRoom` stops the local tracks,
+    // the stream goes inactive and the recorder stops itself. `capturing` outlives the modal, so
+    // clear it from the recorder's own events or the pill keeps claiming to record.
     recorder.addEventListener('stop', () => setCapturing(false), { once: true });
     recorder.addEventListener('error', () => setCapturing(false), { once: true });
     recorder.ondataavailable = event => {
@@ -1104,11 +1096,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         return;
       }
 
-      // Let go of a room we are still holding before building another. Ordinarily `connect` only
-      // runs from an idle room, but an intro device change (GEO-2819) reconnects from a live one,
-      // and leaving the old session up would evict the new one on duplicate identity. Nulling the
-      // ref first keeps the Disconnected handler from treating our own teardown as a dropped call;
-      // the tracks it stops are the previous ones, already replaced by the new preview.
+      // An intro device change reconnects from a live room, and leaving the old session up evicts
+      // the new one on duplicate identity. Null the ref first so the Disconnected handler does not
+      // read our own teardown as a dropped call.
       const previousRoom = roomRef.current;
       if (previousRoom) {
         roomRef.current = null;
@@ -1419,10 +1409,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         }
         connectionStage = 'local_preview';
         const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
-        // `setPreviewStream` is what puts this on screen: `bindLocalVideo` runs off it and off the
-        // element callback ref, so whichever tile is mounted picks it up. Binding here instead
-        // bound the tile that happened to exist at this instant, which the ready → connecting
-        // swap then replaced with an empty one.
+        // `bindLocalVideo` runs off this and off the element callback ref, so whichever tile is
+        // mounted picks it up.
         setPreviewStream(stream);
         publishedStreamRef.current = stream;
 
@@ -1462,13 +1450,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           // The server already counts us as joined past this point, so it will never cancel the
           // pair with `connection_timeout` and rematch them. Keep a retry reachable even once the
           // debate has advanced out of `connecting`, and spend one silent re-attempt first.
-          // The join has to have been attempted for any of this to apply: an intro connection
-          // (GEO-2819) walks the same later stages without ever calling `/joined`, so nothing on
-          // the server is counting it and the connecting deadline can still rescue the pair.
-          // `mark_joined` itself counts as attempted — that stage only fails inside the call.
-          // Past `ready` the pair is on the connecting deadline whether or not this particular
-          // connection got as far as reporting the join, and losing the silent re-attempt there
-          // costs them the debate rather than 750ms.
+          // Only applies once the join has been attempted: an intro connection walks the same
+          // later stages without calling `/joined`, so the connecting deadline can still rescue
+          // the pair. `mark_joined` counts as attempted, since it only fails inside the call, and
+          // so does any status past `ready`, where the deadline is already running.
           const attemptedJoin =
             markedJoinedRef.current || connectionStage === 'mark_joined' || debateStatusRef.current !== 'ready';
           const failedAfterJoin = attemptedJoin && debateRoomStagesAfterJoin.has(connectionStage);
@@ -1736,12 +1721,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * ready" flips the debate to `connecting`, so `connect` never runs again — but the server still
    * has to be told this participant is present, or the connecting deadline cancels the pair.
    *
-   * The budget is spent from a ref rather than a loop counter, and `markJoined` is reached through
-   * a ref rather than closed over. `useMutation` hands back a new object every render and the
-   * countdown re-renders this twice a second, so a dependency on it made this callback — and the
-   * effect below — new every render: each tick restarted the whole budget, turning a failing
-   * `/joined` into a request storm for the length of the connecting window. A late retry landing
-   * after `connecting_deadline_at` makes the client itself the thing that cancels the debate.
+   * The budget lives in a ref and `markJoined` is reached through one, because `useMutation`
+   * returns a new object every render and the countdown re-renders twice a second. Depending on
+   * its identity restarts the budget on every tick, and a retry landing after
+   * `connecting_deadline_at` makes this client the thing that cancels the debate.
    */
   const reportJoinedForConnecting = React.useCallback(async () => {
     if (markedJoinedRef.current || markJoinedInFlightRef.current) return;
@@ -1956,14 +1939,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // and is deliberately gated on focus; auto-connecting here would just fight it.
     if (connectionConflictSource !== null) return;
     if (['complete', 'cancelled'].includes(debate.status)) return;
-    // GEO-2819. The intro joins the room while the debate is still `ready`, but only once the
-    // preview owns the camera: `connect` creates its own tracks when it finds none, and racing
-    // `ensurePreview` for the device is how one tab ends up holding two captures. Waiting also
-    // makes the permission grant the gate the issue asks for — nothing connects until it lands.
+    // Only once the preview owns the camera: `connect` creates its own tracks when it finds none,
+    // and racing `ensurePreview` for the device leaves one tab holding two captures.
     if (debate.status === 'ready' && previewState !== 'ready') return;
-    // `ready` and `connecting` are separate opportunities, so an intro connection that failed does
-    // not spend the one the debate itself depends on. A successful one is held by the `roomState`
-    // guard above rather than by this key, which is what keeps the status flip from reconnecting.
+    // `ready` and `connecting` are separate opportunities, so a failed intro connection does not
+    // spend the one the debate depends on. A successful one is held by the `roomState` guard.
     const autoConnectKey = `${debate.id}:${debate.status === 'ready' ? 'intro' : 'debate'}`;
     if (autoConnectAttemptedRef.current === autoConnectKey) return;
     autoConnectAttemptedRef.current = autoConnectKey;
@@ -1971,17 +1951,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [connect, connectionConflictSource, debate, previewState, roomState]);
 
   /**
-   * GEO-2819. Picking a different camera or microphone restarts the preview, which stops the
-   * tracks the room is publishing — and nothing republishes them, so the intro would carry on with
-   * a dead tile and a dead mic meter. Nothing is recorded or timed yet, so rebuilding the
-   * connection around the new devices is both the cheapest and the most complete answer.
+   * Picking a different camera or microphone restarts the preview, which stops the tracks the room
+   * is publishing, and nothing republishes them. Nothing is recorded or timed during the intro, so
+   * the connection is rebuilt around the new devices.
    */
   React.useEffect(() => {
     if (debate?.status !== 'ready' || roomState !== 'connected') return;
-    // `previewBusy` and not just `previewState`: a forced restart deliberately holds the state at
-    // `ready` so the tile does not flicker, so it is the only signal that `ensurePreview` still
-    // has the camera. Reconnecting underneath it runs a second `createLocalTracks` against the
-    // same device — the two-captures hazard the auto-connect gate above exists to avoid.
+    // `previewBusy` and not just `previewState`: a forced restart holds the state at `ready`, so
+    // it is the only signal that `ensurePreview` still has the camera.
     if (previewState !== 'ready' || previewBusy || !previewStream) return;
     if (publishedStreamRef.current === null || publishedStreamRef.current === previewStream) return;
     void connect();
@@ -2223,6 +2200,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             onVideoInputChange={changeVideoInput}
             onRetryMedia={() => void ensureLocalPreview({ forceRestart: true }).catch(() => undefined)}
             devicesLocked={roomState === 'connecting' || roomState === 'reconnecting'}
+            connectionSettling={roomState === 'connecting' || roomState === 'reconnecting'}
             audioMuted={audioMuted}
             videoEnabled={videoEnabled}
             onToggleAudioMuted={toggleAudioMuted}
@@ -3016,6 +2994,12 @@ function setLocalTrackPreferences(
       track.mediaStreamTrack.enabled = preferences.audioEnabled;
     }
     if (track.mediaStreamTrack.kind === 'video') {
+      // Through LiveKit's mute, not just `enabled`. `enabled = false` keeps the publication live
+      // and sends black frames, so the other side sees a black rectangle and no TrackMuted event.
+      // Idempotent, so reconciling repeatedly is cheap; `enabled` stays as the fallback for a
+      // preview track that has not been published yet.
+      if (preferences.videoEnabled) void track.unmute?.();
+      else void track.mute?.();
       track.mediaStreamTrack.enabled = preferences.videoEnabled;
     }
   }
@@ -3039,9 +3023,8 @@ function shouldEnableLocalAudio(
   audioMuted: boolean
 ) {
   if (audioMuted || !effectiveStatus || !localSlot) return false;
-  // GEO-2819. The pre-debate intro is an open two-way call — turn-taking starts with the debate.
-  // This is load-bearing rather than cosmetic: once the intro publishes tracks, the turn rule
-  // below would disable the microphone track, silencing the intro and the mic meter with it.
+  // The intro is an open two-way call; turn-taking starts with the debate. Load-bearing: the turn
+  // rule below would otherwise disable the published microphone track and the mic meter with it.
   if (effectiveStatus === 'ready') return true;
   if (effectiveStatus === 'thanking') return true;
   return effectiveStatus === 'in_progress' && activeSlot === localSlot;

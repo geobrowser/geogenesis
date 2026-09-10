@@ -8,22 +8,16 @@ import cx from 'classnames';
  * GEO-2819. Says whether the camera is being written to disk, in the same place on the intro
  * screen and in the debate room.
  *
- * Shown in both states on purpose. An indicator that only appears while recording is ambiguous —
- * its absence could equally mean "not recording" or "it failed to render" — so the neutral state
- * is the assurance and the change between the two is what marks the boundary.
+ * Both states are shown deliberately: an absent indicator is ambiguous between "not recording"
+ * and "failed to render", so the neutral state is the assurance.
  *
- * `fixed`, because both screens are scroll containers and an `absolute` child scrolls away with
- * the content — on a phone it left the viewport before the reader reached the "I'm ready" button,
- * which is the one moment they need it.
+ * `fixed`, because both screens are scroll containers and an `absolute` child scrolls out of view
+ * with the content.
  *
- * Rendered inside each screen rather than once above both. Once was tempting: the live region
- * would survive the intro → debate swap and the change of state would be announced, instead of
- * arriving in a freshly-mounted region that screen readers do not read out. But both screens are
- * `aria-modal="true"`, which tells assistive technology to treat everything outside the dialog as
- * unavailable — so hoisting it risked the pill not being reachable at all, in either state. Being
- * readable in both states beats being announced at the boundary. Making both true means one
- * persistent dialog wrapper with the screen bodies swapped inside it, which is a bigger change
- * than this indicator should drag along.
+ * Rendered inside each screen rather than once above both: the screens are `aria-modal`, so a
+ * sibling can be pruned from the accessibility tree entirely. The cost is that the live region
+ * remounts at the swap and the transition goes unannounced; a single persistent dialog wrapper
+ * would buy both.
  */
 export function DebateRecordingStatusPill({ recording }: { recording: boolean }) {
   return (

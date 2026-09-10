@@ -19,12 +19,9 @@ export const recordingLabelTextShadow = {
 };
 
 /**
- * One participant's tile. Shared by the pre-debate intro screen and the recording modal so the
- * two screens have the same geometry — GEO-2819 makes the intro a two-way call, and a tile that
- * changed shape at the boundary would read as the debate restarting.
- *
- * Everything past the video itself is optional: the intro passes a label and an overlay, the
- * debate adds turn countdowns and the phase overlays.
+ * One participant's tile, shared by the intro screen and the recording modal so the two have the
+ * same geometry. Everything past the video is optional: the intro passes a label and an overlay,
+ * the debate adds turn countdowns and phase overlays.
  */
 export function DebateVideoTile({
   participantPosition,

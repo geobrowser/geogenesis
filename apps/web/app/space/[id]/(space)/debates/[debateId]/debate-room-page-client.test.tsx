@@ -700,6 +700,31 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByText('Waiting for video')).toBeInTheDocument();
   });
 
+  // The camera toggle has to reach LiveKit's mute, not just MediaStreamTrack.enabled: `enabled`
+  // keeps the publication live and sends black frames, so the other side gets a black rectangle
+  // and no TrackMuted. Driving the real button is the point — emitting the event by hand, as the
+  // handler test below does, would pass either way.
+  it('mutes the published video track through LiveKit when the camera is turned off', async () => {
+    const videoTrack = {
+      mediaStreamTrack: { kind: 'video', enabled: true },
+      mute: vi.fn().mockResolvedValue(undefined),
+      unmute: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn(),
+      detach: vi.fn(),
+    };
+    mocks.createLocalTracks.mockResolvedValue([createLocalAudioTrack(), videoTrack]);
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
+    await waitFor(() => expect(videoTrack.mute).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(videoTrack.unmute).toHaveBeenCalled());
+  });
+
   it('explains a remote camera that has been turned off', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
@@ -1443,6 +1468,42 @@ describe('DebateRoomPageClient', () => {
     fireEvent.click(continueHere);
 
     await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalled());
+  });
+
+  it('holds readiness back while the connection is still settling', async () => {
+    const pendingConnect = deferred<void>();
+    mocks.roomConnect.mockReturnValueOnce(pendingConnect.promise);
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    expect(await screen.findByRole('button', { name: 'Connecting…' })).toBeDisabled();
+
+    act(() => pendingConnect.resolve());
+    await waitFor(() => expect(screen.getByRole('button', { name: "I'm ready" })).toBeEnabled());
+  });
+
+  // Disabling the trigger is not enough: an open picker keeps its radios clickable.
+  it('closes an open device picker when a connection starts', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    expect(screen.getByRole('radio', { name: 'Desk Camera' })).toBeInTheDocument();
+
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+    mocks.roomConnect.mockReturnValueOnce(deferred<void>().promise);
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(screen.queryByRole('radio', { name: 'Desk Camera' })).not.toBeInTheDocument());
   });
 
   it('marks the local participant ready from the pre-screen', async () => {
