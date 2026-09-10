@@ -39,7 +39,8 @@ import {
   DEFAULT_BOUNTY_SCOPE,
   ScopeFilter,
   UNFILTERED_BOUNTY_SCOPE,
-  isBountyScope,
+  bountyScopeFromParam,
+  writeBountyScopeParam,
 } from './bounty-filters';
 import type { BountyStatusSlug } from './bounty-status';
 import { FILTER_PILL_CLASS } from './community-filter-pill';
@@ -308,7 +309,8 @@ function useBountyFilterPresentation(
   return { filtered, filterKey, controls, clearFilters };
 }
 
-function useBountyFilterState(bounties: SpaceBounty[], skills: string[]): BountyFilterState {
+/** Exported for its own test: which scope the tables open on is the whole point of this filter. */
+export function useBountyFilterState(bounties: SpaceBounty[], skills: string[]): BountyFilterState {
   const [scope, setScope] = React.useState<BountyScope>(DEFAULT_BOUNTY_SCOPE);
   const [difficulties, setDifficulties] = React.useState<Set<string>>(() => new Set(BOUNTY_DIFFICULTY_LEVELS));
   const [selectedSkills, setSelectedSkills] = React.useState<Set<string> | null>(null);
@@ -335,10 +337,7 @@ function useUrlBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bou
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Anything that is not one of the scopes — including a `scope=all` from before All became the
-  // default — falls back to it rather than being carried around meaning nothing.
-  const scopeParam = searchParams.get('scope');
-  const scope: BountyScope = isBountyScope(scopeParam) ? scopeParam : DEFAULT_BOUNTY_SCOPE;
+  const scope = bountyScopeFromParam(searchParams.get('scope'));
 
   const difficultyParam = searchParams.get('difficulty');
   const difficulties = React.useMemo(() => {
@@ -357,9 +356,7 @@ function useUrlBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bou
     (next: BountyFilterValues) => {
       const params = new URLSearchParams(searchParams.toString());
 
-      // Only a non-default scope is worth a query param.
-      if (next.scope === DEFAULT_BOUNTY_SCOPE) params.delete('scope');
-      else params.set('scope', next.scope);
+      writeBountyScopeParam(params, next.scope);
 
       if (allDifficultiesSelected(next.difficulties)) params.delete('difficulty');
       else params.set('difficulty', [...next.difficulties].join(','));

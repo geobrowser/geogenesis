@@ -1,7 +1,11 @@
+import { renderHook } from '@testing-library/react';
+
+import { act } from 'react';
+
 import { describe, expect, it } from 'vitest';
 
 import { UNFILTERED_BOUNTY_SCOPE } from './bounty-filters';
-import { applyFilters } from './community-bounties-sections';
+import { applyFilters, useBountyFilterState } from './community-bounties-sections';
 
 type Bounty = Parameters<typeof applyFilters>[0][number];
 
@@ -29,5 +33,25 @@ describe('the unfiltered bounty scope', () => {
     const kept = applyFilters(BOUNTIES, 'featured', ANY_DIFFICULTY, ANY_SKILL, []);
 
     expect(kept.map(entry => entry.id)).toEqual(['featured']);
+  });
+});
+
+describe('the bounties tables', () => {
+  // The whole point of the change: a table used to open on Featured, so a curator's shortlist stood
+  // in front of "what work is there" with nothing but a pill to say so. Asserted on what the table
+  // shows rather than on the scope value, so it survives a rename of the scopes.
+  it('open showing every bounty, not only the featured ones', () => {
+    const { result } = renderHook(() => useBountyFilterState(BOUNTIES, []));
+
+    expect(result.current.filtered.map(entry => entry.id)).toEqual(['featured', 'plain']);
+  });
+
+  // "Show all" has to widen the list, whatever the tables happen to open on.
+  it('show every bounty again after the filters are cleared', () => {
+    const { result } = renderHook(() => useBountyFilterState(BOUNTIES, []));
+
+    act(() => result.current.clearFilters());
+
+    expect(result.current.filtered.map(entry => entry.id)).toEqual(['featured', 'plain']);
   });
 });

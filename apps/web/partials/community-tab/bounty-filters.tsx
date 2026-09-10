@@ -42,8 +42,31 @@ export const DEFAULT_BOUNTY_SCOPE: BountyScope = BOUNTY_SCOPE_OPTIONS[0].value;
 export const UNFILTERED_BOUNTY_SCOPE: BountyScope = 'all';
 
 /** Whether a raw query-string value names one of the scopes above. */
-export function isBountyScope(value: string | null): value is BountyScope {
+function isBountyScope(value: string | null): value is BountyScope {
   return BOUNTY_SCOPE_OPTIONS.some(option => option.value === value);
+}
+
+/**
+ * The scope a `?scope=` value names.
+ *
+ * `all` and `featured` are both real values and are read as themselves — a `?scope=all` link from
+ * before All became the default still names All, and keeps working. Only a missing or unrecognised
+ * value falls back, rather than being carried around meaning nothing.
+ */
+export function bountyScopeFromParam(value: string | null): BountyScope {
+  return isBountyScope(value) ? value : DEFAULT_BOUNTY_SCOPE;
+}
+
+/**
+ * Mirrors a scope into `params`, in place.
+ *
+ * The default is expressed by the param's absence rather than by its value, so an untouched filter
+ * leaves no trace in the URL. Paired with {@link bountyScopeFromParam} so the two directions cannot
+ * disagree about which value that is.
+ */
+export function writeBountyScopeParam(params: URLSearchParams, scope: BountyScope): void {
+  if (scope === DEFAULT_BOUNTY_SCOPE) params.delete('scope');
+  else params.set('scope', scope);
 }
 
 export function CheckboxFilter({

@@ -7,7 +7,8 @@ import {
   CheckboxFilter,
   DEFAULT_BOUNTY_SCOPE,
   ScopeFilter,
-  isBountyScope,
+  bountyScopeFromParam,
+  writeBountyScopeParam,
 } from './bounty-filters';
 
 vi.stubGlobal(
@@ -126,11 +127,41 @@ describe('the bounty scope filter', () => {
     expect(onScopeChange).toHaveBeenCalledWith('featured');
   });
 
-  // What a stale `?scope=all` link, or a hand-edited one, has to land on.
-  it('recognises only the real scopes', () => {
-    expect(isBountyScope('all')).toBe(true);
-    expect(isBountyScope('featured')).toBe(true);
-    expect(isBountyScope('nonsense')).toBe(false);
-    expect(isBountyScope(null)).toBe(false);
+  // Both directions of the URL contract, which is the part of this change a reversed condition
+  // would break silently — the pills would still look right while the link they produce did not.
+  describe('the scope query param', () => {
+    it('reads a missing or unrecognised value as the default', () => {
+      expect(bountyScopeFromParam(null)).toBe(DEFAULT_BOUNTY_SCOPE);
+      expect(bountyScopeFromParam('')).toBe(DEFAULT_BOUNTY_SCOPE);
+      expect(bountyScopeFromParam('nonsense')).toBe(DEFAULT_BOUNTY_SCOPE);
+    });
+
+    // `all` is a real scope, not an unknown one: a link written before All became the default is
+    // read as itself and keeps working.
+    it('reads each real scope as itself, legacy links included', () => {
+      expect(bountyScopeFromParam('all')).toBe('all');
+      expect(bountyScopeFromParam('featured')).toBe('featured');
+    });
+
+    it('writes only a non-default scope, and clears a stale one', () => {
+      const featured = new URLSearchParams();
+      writeBountyScopeParam(featured, 'featured');
+      expect(featured.get('scope')).toBe('featured');
+
+      // The default is expressed by absence, so switching back to it removes what was there.
+      const cleared = new URLSearchParams('scope=featured&difficulty=Easy');
+      writeBountyScopeParam(cleared, DEFAULT_BOUNTY_SCOPE);
+      expect(cleared.get('scope')).toBeNull();
+      // Only the scope is this function's business.
+      expect(cleared.get('difficulty')).toBe('Easy');
+    });
+
+    // The round trip, so the two directions cannot drift apart.
+    it.each(BOUNTY_SCOPE_OPTIONS.map(option => option.value))('round-trips %s', scope => {
+      const params = new URLSearchParams();
+      writeBountyScopeParam(params, scope);
+
+      expect(bountyScopeFromParam(params.get('scope'))).toBe(scope);
+    });
   });
 });
