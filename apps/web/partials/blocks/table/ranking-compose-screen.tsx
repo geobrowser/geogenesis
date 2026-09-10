@@ -22,7 +22,6 @@ import {
   getRowDisplayName,
   splitRankableEntityIds,
 } from '~/core/blocks/ranking/ranking-rankable-list';
-import { formatRollingSubmissionLabel } from '~/core/blocks/ranking/ranking-rolling';
 import { useRankingAccumulatedRows } from '~/core/blocks/ranking/use-ranking-accumulated-rows';
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
@@ -124,6 +123,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const {
     submissions,
     mySubmission,
+    myLastSubmission,
     hasMySubmission,
     saveMySubmission,
     isSaving,
@@ -175,7 +175,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     allRankableEntityIds
   );
 
-  const [orderedIds, setOrderedIds] = React.useState<string[]>(mySubmission?.orderedEntityIds ?? []);
+  // Seeded from the author's last ballot, which survives roll-off, rather than from
+  // `mySubmission`, which is blanked by it. See `myLastSubmission` (GEO-2871).
+  const [orderedIds, setOrderedIds] = React.useState<string[]>(myLastSubmission?.orderedEntityIds ?? []);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [activeSwipeRowKey, setActiveSwipeRowKey] = React.useState<string | null>(null);
   const [entitySheetTarget, setEntitySheetTarget] = React.useState<{
@@ -245,10 +247,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const { entries: searchEntries } = useRankingEntryEntities(spaceId, isSearchActive ? searchEntityIds : []);
 
-  const mySubmissionIdsKey = (mySubmission?.orderedEntityIds ?? []).join('|');
+  const mySubmissionIdsKey = (myLastSubmission?.orderedEntityIds ?? []).join('|');
 
   React.useEffect(() => {
-    const next = mySubmission?.orderedEntityIds ?? [];
+    const next = myLastSubmission?.orderedEntityIds ?? [];
     setOrderedIds(prev => {
       if (prev.length === next.length && prev.every((id, index) => id === next[index])) {
         return prev;

@@ -152,28 +152,42 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
   const hasRolledOff = isRolling && Boolean(myRankEntity) && !isSubmissionLive;
 
-  // A rolled-off ballot is treated as absent everywhere: the block's views and
-  // the compose flow open fresh, as if the author hadn't ranked yet.
-  // `hasRolledOff` still drives the "Rank" call to action, and publishing still
-  // mints a fresh rank entity below (keyed off myRankEntity, not mySubmission).
+  // A rolled-off ballot reads as absent to the block's views and to the call to action, so the
+  // author is prompted to rank again. `hasRolledOff` still drives that prompt, and publishing
+  // still mints a fresh rank entity below (keyed off myRankEntity, not mySubmission).
   //
-  // **The justification that used to sit here was false.** It said the #2122
-  // failure — rebuilding a short ballot from scratch permanently superseding a
-  // fuller one — was fixed because "the indexer now retains every ballot in the
-  // aggregate, so a fresh submission adds to it instead of replacing". It does
-  // not. `ranking-indexer/src/dedup.rs` keeps only the most-recently-updated
-  // submission per (block, personal space), by design: one vote per person.
-  // Verified on live data — 9 in-window ballots from 5 people produced exactly 5
+  // It is *not* absent to the compose screen any more — see `myLastSubmission` below. That
+  // split is the GEO-2871 fix, and this comment is where the reason lives.
+  //
+  // **The justification that used to sit here was false.** It said the #2122 failure —
+  // rebuilding a short ballot from scratch permanently superseding a fuller one — was fixed
+  // because "the indexer now retains every ballot in the aggregate, so a fresh submission adds
+  // to it instead of replacing". It does not. `ranking-indexer/src/dedup.rs` keeps only the
+  // most-recently-updated submission per (block, personal space), by design: one vote per
+  // person. Verified on live data — 9 in-window ballots from 5 people produced exactly 5
   // aggregated rankings.
   //
-  // So #2122 is still live: blank the sheet, rank 3 things, and the 20 you ranked
-  // before are gone from your contribution. Fixing it means decoupling this
-  // blanking from the CTA — `showEditRankingButton` currently clears *because*
-  // `mySubmission` goes null (see `ranking-block-body.tsx`), so simply pre-filling
-  // the compose screen also removes the prompt to rank again. Tracked in GEO-2871;
-  // left alone here because it changes visible behaviour.
+  // So #2122 was still live: blank the sheet, rank 3 things, and the 20 you ranked before were
+  // gone from your contribution. The reason it could not be fixed by simply un-blanking here is
+  // that the blanking is what *produces* the prompt — `showEditRankingButton` clears **because**
+  // `mySubmission` goes null (see `ranking-block-body.tsx`). Hence the second value rather than
+  // a change to this one: the prompt keeps its cause, and the ballot survives.
   const mySubmission = hasRolledOff ? null : apiMySubmission;
   const hasMySubmission = (mySubmission?.orderedEntityIds.length ?? 0) > 0;
+
+  // The same ballot, *not* blanked on roll-off — what the author last ranked, which the
+  // indexer is still counting (see the note above about `dedup_latest`).
+  //
+  // The compose screen seeds from this rather than `mySubmission`, so re-ranking starts from
+  // "here is what you said, change what you want" instead of an empty sheet. That is the
+  // GEO-2871 fix and it is deliberately narrow: `mySubmission` keeps blanking, so the "Add my
+  // ranking" call to action still appears and the prompt to re-rank survives. Fixing the loss
+  // by un-blanking `mySubmission` outright would have taken the prompt with it.
+  //
+  // It also leaves `hasUnpublishedChanges` reading true against an empty published key, which
+  // is correct on roll-off: publishing has to mint a fresh rank entity to get a fresh
+  // `submitted_at`, and `shouldMintNewRankEntity` already does.
+  const myLastSubmission = apiMySubmission;
 
   const saveMySubmission = React.useCallback(
     async (
@@ -395,6 +409,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   return {
     submissions: [] as RankingSubmissionRecord[],
     mySubmission,
+    myLastSubmission,
     hasMySubmission,
     saveMySubmission,
     isLoading: isLoadingMyRanking,
