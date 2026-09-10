@@ -410,24 +410,93 @@ async function withCountSlot<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * Ceiling for id-list populations in count queries: each query embeds the
+ * whole list (~39KB at 1,000 ids), so bigger collections get no per-option
+ * counts rather than megabytes of duplicated upload per badge wave.
+ */
+export const MAX_COUNTABLE_ID_LIST = 1000;
+
+/** Count variables for one option against an id-list (collection) population. */
+export function optionCountVariablesForIds(
+  ids: string[],
+  where: WhereCondition,
+  columnId: string,
+  optionId: string
+): OptionCountVariables {
+  const base = populationVariablesForIds(ids, where);
+  const predicate = { relations: { some: { typeId: { is: columnId }, toEntityId: { is: optionId } } } } as EntityFilter;
+  return {
+    filter: { and: [base.filter!, predicate] } as EntityFilter,
+    spaceId: base.spaceId,
+    spaceIds: base.spaceIds,
+    typeId: base.typeId,
+    typeIds: base.typeIds,
+  };
+}
+
 /** The exact number of population rows carrying this option's value. */
 export function fetchExactOptionCount({
   columnId,
   optionId,
-  where,
+  population,
   signal,
 }: {
   columnId: string;
   optionId: string;
-  where: WhereCondition;
+  population: DropdownPopulation;
   signal?: AbortSignal;
 }): Promise<number> {
+  if (population.kind === 'ids' && population.ids.length > MAX_COUNTABLE_ID_LIST) {
+    return Promise.reject(new Error(`id-list population exceeds MAX_COUNTABLE_ID_LIST (${population.ids.length})`));
+  }
+  const variables =
+    population.kind === 'ids'
+      ? optionCountVariablesForIds(population.ids, population.where, columnId, optionId)
+      : optionCountVariables(population.where, columnId, optionId);
   return withCountSlot(() =>
     Effect.runPromise(
       graphql({
         query: OPTION_COUNT_DOCUMENT,
         decoder: (result: OptionCountResult) => result.entitiesConnection?.totalCount ?? 0,
-        variables: optionCountVariables(where, columnId, optionId),
+        variables,
+        signal,
+      })
+    )
+  );
+}
+
+/**
+ * The population's own total. In intersection mode every already-checked
+ * option's count equals this number (its predicate is implied by the picks),
+ * so one shared query replaces k identical per-option ones.
+ */
+export function fetchPopulationTotal({
+  population,
+  signal,
+}: {
+  population: DropdownPopulation;
+  signal?: AbortSignal;
+}): Promise<number> {
+  if (population.kind === 'ids' && population.ids.length > MAX_COUNTABLE_ID_LIST) {
+    return Promise.reject(new Error(`id-list population exceeds MAX_COUNTABLE_ID_LIST (${population.ids.length})`));
+  }
+  const base =
+    population.kind === 'ids'
+      ? populationVariablesForIds(population.ids, population.where)
+      : populationVariablesFromWhere(population.where, 1);
+  return withCountSlot(() =>
+    Effect.runPromise(
+      graphql({
+        query: OPTION_COUNT_DOCUMENT,
+        decoder: (result: OptionCountResult) => result.entitiesConnection?.totalCount ?? 0,
+        variables: {
+          filter: base.filter,
+          spaceId: base.spaceId,
+          spaceIds: base.spaceIds,
+          typeId: base.typeId,
+          typeIds: base.typeIds,
+        },
         signal,
       })
     )

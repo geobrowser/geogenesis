@@ -4,6 +4,7 @@ import {
   DROPDOWN_POPULATION_PAGE_SIZE,
   mergeDropdownOptionCounts,
   optionCountVariables,
+  optionCountVariablesForIds,
   populationVariablesForIds,
   populationVariablesFromWhere,
   slicePopulationIds,
@@ -188,5 +189,18 @@ describe('populationVariablesFromWhere OR collapse', () => {
     const json = JSON.stringify(variables.filter);
     expect(json).toContain('overlaps');
     expect(json).not.toContain('"or"');
+  });
+});
+
+describe('optionCountVariablesForIds', () => {
+  it('ANDs the option predicate onto the id-list population filter', () => {
+    const variables = optionCountVariablesForIds(['id-1', 'id-2'], {}, 'prop-1', 'value-1');
+    expect(variables.filter).toEqual({
+      and: [
+        { id: { in: ['id-1', 'id-2'] } },
+        { relations: { some: { typeId: { is: 'prop-1' }, toEntityId: { is: 'value-1' } } } },
+      ],
+    });
+    expect(variables.spaceId).toBeNull();
   });
 });
