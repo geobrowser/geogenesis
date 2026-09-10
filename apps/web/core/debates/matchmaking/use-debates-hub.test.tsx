@@ -1,12 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
 
-import { Provider, createStore } from 'jotai';
-
 import * as React from 'react';
 
+import { Provider, createStore } from 'jotai';
 import { describe, expect, it } from 'vitest';
-
-import { debatesHubAtom } from '~/atoms';
 
 import { useDebatesHub } from './use-debates-hub';
 

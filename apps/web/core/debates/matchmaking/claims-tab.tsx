@@ -4,7 +4,6 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import cx from 'classnames';
 import { useAtom } from 'jotai';
 
 import { claimResponseKind } from '~/core/claims/response-kind';
@@ -60,9 +59,6 @@ import {
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
-  debatesHubMineSpaceIdsAtom,
-  debatesHubMineSpaceSeedSpentAtom,
-  debatesHubMineTopicIdsAtom,
 } from '~/atoms';
 
 /**
@@ -73,17 +69,30 @@ import {
  * `mine` and `debate_now` stay geo-chat's. Both are viewer-relative and scored on who is available
  * and who this viewer is already pair-blocked with, which is not in the graph at any price.
  */
-type ClaimsTabFilter = DebatesHubExploreFilter | 'debate_now' | 'mine';
+type ClaimsTabFilter = DebatesHubExploreFilter | 'debate_now';
 
-// All claims leads: it is where the tab opens now, and an option the menu opens on should be the
-// one at the top of it. Featured is the narrower, curated cut, and sits one below.
-//
-// "My positions" is not here at all — it is a tab of its own, which is what a list about the viewer
-// rather than about the corpus deserves.
+// All claims leads: it is where the tab opens, and an option the menu opens on should be the one
+// at the top of it. Featured is the narrower, curated cut, and sits one below. "My positions" is
+// last: it is the same catalogue cut to the viewer, so it belongs with the others rather than on a
+// tab of its own, but it is the one a viewer arrives looking for least often.
 const FILTER_OPTIONS: HubFilterOption<DebatesHubExploreFilter>[] = [
   { value: 'all', label: 'All claims' },
   { value: 'featured', label: 'Featured' },
+  { value: 'mine', label: 'My positions' },
 ];
+
+/**
+ * The one viewer-relative filter leaves the menu signed out.
+ *
+ * "My positions" is the viewer's own list, so it could only ever come back empty. Featured and All
+ * claims describe the corpus rather than the viewer, and both still answer.
+ *
+ * "Debate now" used to be here too, and left the menu entirely with GEO-2861 — it is Lobby now, and
+ * `SIGNED_OUT_TABS` keeps that whole tab off the signed-out hub for the same reason it was hidden
+ * here: geo-chat scores it on who is available to debate *you*, so with no viewer it is not a
+ * stricter "all claims" but a question with no subject.
+ */
+const SIGNED_OUT_HIDDEN_FILTERS: ClaimsTabFilter[] = ['mine'];
 
 /**
  * The two filters the graph answers, and the tag each one asks for.
@@ -103,6 +112,12 @@ const NOTHING_HERE: Record<ClaimsTabFilter, string> = {
   mine: 'You haven’t taken a position on any claims yet.',
   debate_now: 'Nobody is ready to debate you on a claim right now.',
 };
+
+function filterOptionsFor(authenticated: boolean) {
+  return authenticated
+    ? FILTER_OPTIONS
+    : FILTER_OPTIONS.filter(option => !SIGNED_OUT_HIDDEN_FILTERS.includes(option.value));
+}
 
 /** Stable identity so the geo-chat lookups don't restart on every render of a geo-chat list. */
 
@@ -137,7 +152,7 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
  * act from narrowing what you are browsing — so the atoms come from here rather than being read
  * directly, and adding a surface means adding a row rather than threading another flag through.
  */
-export type ClaimsTabVariant = 'explore' | 'lobby' | 'mine';
+export type ClaimsTabVariant = 'explore' | 'lobby';
 
 const VARIANT_ATOMS = {
   explore: {
@@ -150,11 +165,6 @@ const VARIANT_ATOMS = {
     topicIds: debatesHubLobbyTopicIdsAtom,
     seedSpent: debatesHubLobbySpaceSeedSpentAtom,
   },
-  mine: {
-    spaceIds: debatesHubMineSpaceIdsAtom,
-    topicIds: debatesHubMineTopicIdsAtom,
-    seedSpent: debatesHubMineSpaceSeedSpentAtom,
-  },
 } as const;
 
 export function ClaimsTab({
@@ -166,10 +176,6 @@ export function ClaimsTab({
   trailing?: React.ReactNode;
 } = {}) {
   const isLobby = variant === 'lobby';
-  const isMine = variant === 'mine';
-  // Neither Lobby nor My claims draws a source picker: each is one fixed list, which is the point
-  // of giving it a tab of its own.
-  const hasSourcePicker = variant === 'explore';
   const atoms = VARIANT_ATOMS[variant];
   const queryClient = useQueryClient();
   const { authenticated, accountKey } = useGeoChatAuth();
@@ -185,6 +191,7 @@ export function ClaimsTab({
   const requestsQuery = useDebateRequests(authenticated);
   const { data: activity } = useDebateActivity(authenticated);
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
+  const filterOptions = React.useMemo(() => filterOptionsFor(authenticated), [authenticated]);
 
   const [search, setSearch] = React.useState('');
   const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
@@ -194,11 +201,16 @@ export function ClaimsTab({
   // Session-scoped like the space and topic selections below, and for the same reason: it is the
   // same filter bar, dismissed the same way (GEO-2850).
   const [selectedFilter, setFilter] = useAtom(debatesHubExploreFilterAtom);
-  // No signed-out coercion left to do here. Both of Explore's options describe the corpus rather
-  // than the viewer, so both still answer anonymously; the two lists that did not — `debate_now`
-  // and `mine` — are tabs of their own now, and `SIGNED_OUT_TABS` keeps them off the signed-out hub
-  // entirely (GEO-2861). That is the same rule, applied one level up where it is visible.
-  const filter: ClaimsTabFilter = isLobby ? 'debate_now' : isMine ? 'mine' : selectedFilter;
+  // Signing out with "My positions" selected would otherwise leave the tab querying it anonymously
+  // and showing a trigger value that is no longer in the menu. Derived rather than reset through an
+  // effect so the query, the menu label, the ordering key and the empty state all read the same
+  // value on the very first render after the session goes away.
+  //
+  // Lobby is the `debate_now` list and nothing else, so it never reads the picker's value. That tab
+  // is hidden signed out (`SIGNED_OUT_TABS`), which is what stands in for the coercion here.
+  const exploreFilter: DebatesHubExploreFilter =
+    !authenticated && SIGNED_OUT_HIDDEN_FILTERS.includes(selectedFilter) ? 'all' : selectedFilter;
+  const filter: ClaimsTabFilter = isLobby ? 'debate_now' : exploreFilter;
   // Held outside this component so they survive it. The hub closes on any outside pointer-down,
   // so dismissing a dropdown by clicking away unmounts this tab — and with `useState` that took
   // the viewer's selection with it (GEO-2850).
@@ -654,14 +666,14 @@ export function ClaimsTab({
           countsPending={countsPending}
           trailing={trailing}
           leading={
-            hasSourcePicker ? (
+            isLobby ? null : (
               <HubFilterMenu
-                label={FILTER_OPTIONS.find(option => option.value === selectedFilter)?.label ?? 'All claims'}
-                options={FILTER_OPTIONS}
-                value={selectedFilter}
+                label={filterOptions.find(option => option.value === exploreFilter)?.label ?? 'All claims'}
+                options={filterOptions}
+                value={exploreFilter}
                 onChange={setFilter}
               />
-            ) : null
+            )
           }
         />
       </HubStickyControls>
@@ -848,13 +860,6 @@ type SpaceTopicFiltersProps = {
    * at the edge than as a fourth pill in the run.
    */
   trailing?: React.ReactNode;
-  /**
-   * Pushes the topic menu to the far end of the row, leaving the source and space menus together on
-   * the left. For a surface with width to spare: the rematch picker is a full page, where a row of
-   * menus huddled at one edge leaves an obvious gap. The side panel is narrow enough that they fill
-   * the row anyway, and pushing one out there would only separate it from the others.
-   */
-  topicAtEnd?: boolean;
 };
 
 /**
@@ -875,7 +880,6 @@ export function SpaceTopicFilters({
   countsPending,
   leading,
   trailing,
-  topicAtEnd,
 }: SpaceTopicFiltersProps) {
   const facetSpaceIds = React.useMemo(() => facetSpaces.map(space => space.id), [facetSpaces]);
 
@@ -932,20 +936,19 @@ export function SpaceTopicFilters({
         showImages
       />
       {facetTopics && topicIds && onTopicToggle && onTopicsClear ? (
-        // `ml-auto` on the menu itself rather than `justify-between` on the row: with three items
-        // that spread all of them, which stranded the space menu in the middle instead of leaving
-        // it beside the source it narrows.
-        <div className={cx(topicAtEnd && 'ml-auto')}>
-          <HubMultiFilterMenu
-            label={topicMenuLabel}
-            options={topicOptions}
-            values={topicIds}
-            onToggle={onTopicToggle}
-            onClear={onTopicsClear}
-            clearLabel="Any topic"
-            countsPending={countsPending}
-          />
-        </div>
+        // Beside the space menu, never pushed to the far end. The rematch picker used to do that
+        // with the width it has spare, and once "Matches only" arrived at that end the two sat
+        // together there — a menu and a switch, reading as one control. The menus belong with each
+        // other; the switch is what the end of the row is for.
+        <HubMultiFilterMenu
+          label={topicMenuLabel}
+          options={topicOptions}
+          values={topicIds}
+          onToggle={onTopicToggle}
+          onClear={onTopicsClear}
+          clearLabel="Any topic"
+          countsPending={countsPending}
+        />
       ) : null}
       {/* `ml-auto` so it sits at the end whatever is in front of it, and keeps sitting there when a
           menu drops out of the row — the topic menu is conditional. */}

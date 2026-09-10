@@ -18,7 +18,6 @@ import {
   debatesHubExploreSpaceSeedSpentAtom,
   debatesHubExploreTopicIdsAtom,
   debatesHubLobbySpaceIdsAtom,
-  debatesHubMineSpaceIdsAtom,
 } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
@@ -143,29 +142,17 @@ describe('DebatesHubPanel', () => {
   //
   // Every atom the bar holds, not a sample of them: this is the isolation test, so an atom left out
   // of `resetDebatesHubFiltersAtom` has to fail here rather than quietly hand B one of A's filters.
-  // GEO-2861. "My positions" was a source inside Explore's menu; it is a tab now, which is what a
-  // list about the viewer rather than about the corpus deserves — and what lets the signed-out rule
-  // be stated once, on the row, instead of again inside the menu.
-  it('gives My claims a tab of its own, between Explore and Requests', () => {
-    renderOpen('mine');
+  // GEO-2861. Four tabs, and "My positions" is not one of them: it is a source inside Explore's
+  // menu, one more answer to "which claims?" rather than a surface of its own.
+  it('offers Lobby, People, Explore and Requests, in that order', () => {
+    renderOpen('explore');
 
-    const order = ['Lobby', 'People', 'Explore', 'My claims', 'Requests'];
+    const order = ['Lobby', 'People', 'Explore', 'Requests'];
     const row = screen.getByRole('button', { name: /^Lobby/ }).closest('.overflow-x-auto');
     const labels = [...(row?.querySelectorAll('button') ?? [])].map(button => button.textContent?.trim());
 
     expect(labels).toEqual(order);
-    expect(screen.getByRole('button', { name: 'My claims' })).toHaveAttribute('aria-current', 'true');
-  });
-
-  // Viewer-relative, so signed out it has no possible contents — the same reason Lobby and Requests
-  // are kept off the anonymous hub.
-  it('hides My claims from a signed-out visitor', () => {
-    mocks.authenticated = false;
-    renderOpen('mine');
-
     expect(screen.queryByRole('button', { name: 'My claims' })).not.toBeInTheDocument();
-    // And the panel falls back to a tab that is actually in the row.
-    expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-current', 'true');
   });
 
   it('clears the filter bar when the account behind it changes', () => {
@@ -175,7 +162,6 @@ describe('DebatesHubPanel', () => {
     store.set(debatesHubExploreSpaceSeedSpentAtom, true);
     store.set(debatesHubExploreFilterAtom, 'featured');
     store.set(debatesHubLobbySpaceIdsAtom, ['space-a']);
-    store.set(debatesHubMineSpaceIdsAtom, ['space-a']);
 
     mocks.accountKey = 'user-b';
     store.rerender();
@@ -185,7 +171,6 @@ describe('DebatesHubPanel', () => {
     expect(store.get(debatesHubExploreSpaceSeedSpentAtom)).toBe(false);
     expect(store.get(debatesHubExploreFilterAtom)).toBe('all');
     expect(store.get(debatesHubLobbySpaceIdsAtom)).toEqual([]);
-    expect(store.get(debatesHubMineSpaceIdsAtom)).toEqual([]);
   });
 
   // Signing in is the same person authenticating. The Claims tab prompts for sign-in from inside

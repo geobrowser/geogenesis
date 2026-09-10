@@ -43,17 +43,16 @@ const TABS: { id: DebatesHubTab; label: string }[] = [
   { id: 'lobby', label: 'Lobby' },
   { id: 'people', label: 'People' },
   { id: 'explore', label: 'Explore' },
-  { id: 'mine', label: 'My claims' },
   { id: 'requests', label: 'Requests' },
 ];
 
 /**
- * GEO-2725. Lobby, My claims and Requests are a particular person's, so signed out they have no
- * possible contents — not an empty list but a meaningless one. Both of Lobby's lists are
- * viewer-relative (geo-chat scores `debate_now` on who is available to debate *you*, and a match is
- * a claim you hold a side on), and My claims is the viewer's own positions by definition. Explore
- * and People describe the world rather than the viewer, so both read fine anonymously and are what
- * the hub offers before sign-in (GEO-2861).
+ * GEO-2725. Lobby and Requests are a particular person's, so signed out they have no possible
+ * contents — not an empty list but a meaningless one. Both of Lobby's lists are viewer-relative:
+ * geo-chat scores `debate_now` on who is available to debate *you*, and a match is a claim you hold
+ * a side on. Explore and People describe the world rather than the viewer, so both read fine
+ * anonymously and are what the hub offers before sign-in (GEO-2861) — Explore's own viewer-relative
+ * source, "My positions", leaves its menu signed out for the same reason.
  */
 const SIGNED_OUT_TABS: DebatesHubTab[] = ['explore', 'people'];
 
@@ -359,8 +358,6 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
               <LobbyTab onTabChange={changeTab} />
             ) : activeTab === 'explore' ? (
               <ClaimsTab />
-            ) : activeTab === 'mine' ? (
-              <ClaimsTab variant="mine" />
             ) : (
               <PeopleTab onTabChange={changeTab} />
             )}

@@ -579,20 +579,16 @@ function chooseFilter(current: string, next: string) {
 }
 
 /**
- * Explore opens on All claims. The index-backed list left the menu entirely with GEO-2861 — "My
- * positions" is its own tab — so the cases about geo-chat's paged list render that variant instead
- * of picking it, and this only waits for the list to settle.
+ * Waits for the list geo-chat's index answers to settle, having been rendered onto it.
+ *
+ * "All claims" is not one of those — GEO-2771 moved it to the graph's Debate tag — so the paged
+ * behaviours these tests cover (the cursor, the scroll sentinel, the server facets, the space
+ * allowlist over returned rows) are reached through "My positions", the one viewer-relative source
+ * left in the menu. The mocked index ignores `filter`, so which one is picked changes nothing it
+ * returns; what matters is that the source is index-backed.
  *
  * Awaits the swap: the region cross-fades with `mode="wait"`, so the list is not in the DOM until
  * the state it replaced has finished leaving.
- */
-/**
- * Switches to a list geo-chat's index answers.
- *
- * "All claims" is no longer one of those — GEO-2771 moved it to the graph's Debate tag — so the
- * paged behaviours these tests cover (the cursor, the scroll sentinel, the server facets, the space
- * allowlist over returned rows) are reachable through the viewer-relative filters, which stayed.
- * The mocked index ignores `filter`, so which of the two is picked changes nothing it returns.
  */
 async function showIndexedClaims() {
   await waitFor(() => expect(screen.queryByText('No claims have been featured yet.')).toBeNull());
@@ -609,18 +605,31 @@ async function showFeatured() {
 }
 
 /**
- * Featured is one pick below All claims since GEO-2861, so the cases about it have to select it.
+ * Renders Explore with one of the menu's other sources already picked. It opens on All claims since
+ * GEO-2861, so every case about the other two has to select one.
  *
  * Set on the atom rather than driven through the menu: the picker is a popover, and opening it,
  * finding an option that shares its name with the trigger, and waiting for the list underneath to
  * settle is three sources of flake in a setup step that is not what any of these cases are about.
+ *
+ * Takes a store for the cases that model closing the panel and reopening it, which is the one thing
+ * the selection has to survive.
  */
-function renderFeatured(ui: ReactElement = <ClaimsTab />) {
-  const store = createStore();
-  store.set(debatesHubExploreFilterAtom, 'featured');
+function renderWithSource(
+  source: 'featured' | 'mine',
+  ui: ReactElement = <ClaimsTab />,
+  sharedStore?: ReturnType<typeof createStore>
+) {
+  const store = sharedStore ?? createStore();
+  store.set(debatesHubExploreFilterAtom, source);
 
   return render(ui, store);
 }
+
+const renderFeatured = (ui?: ReactElement) => renderWithSource('featured', ui);
+
+/** "My positions" is geo-chat's index, which is what the paged behaviours are reachable through. */
+const renderMine = (ui?: ReactElement, store?: ReturnType<typeof createStore>) => renderWithSource('mine', ui, store);
 
 /** The Debate-tagged list, which the graph answers — and which Explore now opens on. */
 async function showAllClaims() {
@@ -719,7 +728,7 @@ describe('ClaimsTab', () => {
     // The sentinel only exists while a page is outstanding, and it is the handle for "this part
     // scrolls".
     mocks.hasNextPage = true;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     const pinned = screen.getByLabelText('Search claims').closest('.sticky');
@@ -737,7 +746,7 @@ describe('ClaimsTab', () => {
   // Pages arrive by reaching the end of the list, not by pressing anything.
   it('fetches the next page when the end of the list scrolls into view', async () => {
     mocks.hasNextPage = true;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
@@ -749,7 +758,7 @@ describe('ClaimsTab', () => {
   });
 
   it('places no sentinel once the last page has arrived', async () => {
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
@@ -759,7 +768,7 @@ describe('ClaimsTab', () => {
   // re-ranked it by something the Position filter in the dropdown already covers, and it moved a
   // card between two sections the moment you took a side.
   it('renders one unsectioned list in the order the server returned', async () => {
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.queryByRole('heading', { name: 'My positions' })).not.toBeInTheDocument();
@@ -777,7 +786,7 @@ describe('ClaimsTab', () => {
       claim(THEIRS, 'Bitcoin will never top $250K', false),
       claim(MINE, 'Chips are better than fries', true),
     ];
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     const unanswered = screen.getByText('Bitcoin will never top $250K');
@@ -795,7 +804,7 @@ describe('ClaimsTab', () => {
       claim(MINE, 'Chips are better than fries', true, true),
       claim(OFF, 'Rust belongs in the kernel', true, false),
     ];
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     // The helper already lands here, which is the filter this is about.
     await showIndexedClaims();
 
@@ -812,7 +821,7 @@ describe('ClaimsTab', () => {
       claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID),
     ];
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
@@ -828,7 +837,7 @@ describe('ClaimsTab', () => {
       claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID),
     ];
     mocks.publishableSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
@@ -841,7 +850,7 @@ describe('ClaimsTab', () => {
     mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
     mocks.publishableSpaceIds = new Set([OTHER_SPACE_ID.replace(/-/g, '')]);
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.queryByText('Chips are better than fries')).toBeNull();
@@ -851,7 +860,7 @@ describe('ClaimsTab', () => {
     mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
     mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
     mocks.publishableSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
@@ -866,7 +875,7 @@ describe('ClaimsTab', () => {
     mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID)];
     mocks.publishableSpaceIds = null;
     mocks.publishableLoading = true;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.queryByText('Bitcoin will never top $250K')).toBeNull();
@@ -878,7 +887,7 @@ describe('ClaimsTab', () => {
     mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
     mocks.publishableSpaceIds = null;
     mocks.publishableLoading = false;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
@@ -888,7 +897,7 @@ describe('ClaimsTab', () => {
   it('matches allowed spaces across id formats', async () => {
     mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '').toLowerCase()]);
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
@@ -902,7 +911,7 @@ describe('ClaimsTab', () => {
     mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
     mocks.spaceAllowlist = null;
     mocks.allowlistLoading = true;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.queryByText('Bitcoin will never top $250K')).toBeNull();
@@ -918,7 +927,7 @@ describe('ClaimsTab', () => {
     mocks.spaceAllowlist = null;
     mocks.allowlistLoading = true;
     mocks.hasNextPage = true;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
@@ -934,7 +943,7 @@ describe('ClaimsTab', () => {
     mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID)];
     mocks.spaceAllowlist = null;
     mocks.allowlistLoading = false;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.getByText('Bitcoin will never top $250K')).toBeInTheDocument();
@@ -944,7 +953,7 @@ describe('ClaimsTab', () => {
   it('offers only allowed spaces in the space filter', async () => {
     mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
@@ -960,7 +969,7 @@ describe('ClaimsTab', () => {
     mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID)];
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
     mocks.hasNextPage = true;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     // Nothing is narrowing the list — the viewer simply holds no positions — so it says that rather
@@ -978,7 +987,7 @@ describe('ClaimsTab', () => {
   it('names the space options from the sidebar rows without fetching them again', async () => {
     mocks.facetSpaceIds = [SPACE_ID];
     mocks.sidebarData = sidebarData();
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
@@ -993,7 +1002,7 @@ describe('ClaimsTab', () => {
   it('names each card space from the sidebar rows too', async () => {
     mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
     mocks.sidebarData = sidebarData();
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.getByText('Crypto')).toBeInTheDocument();
@@ -1005,7 +1014,7 @@ describe('ClaimsTab', () => {
     mocks.claims = [];
     mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
     mocks.spacesLoading = true;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
@@ -1019,7 +1028,7 @@ describe('ClaimsTab', () => {
     mocks.claims = [];
     mocks.facetSpaceIds = [SPACE_ID];
     mocks.spacesLoading = true;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
@@ -1037,7 +1046,7 @@ describe('ClaimsTab', () => {
     mocks.claims = [];
     mocks.facetSpaceIds = [SPACE_ID];
     mocks.spacesLoading = false;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
@@ -1051,7 +1060,7 @@ describe('ClaimsTab', () => {
   it('draws an unresolved card space as a skeleton', async () => {
     mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
     mocks.spacesLoading = true;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.getAllByLabelText('Loading space name').length).toBeGreaterThan(0);
@@ -1062,7 +1071,7 @@ describe('ClaimsTab', () => {
   it('still fetches a space the sidebar has never heard of', async () => {
     mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
     mocks.sidebarData = sidebarData();
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect([...new Set(mocks.fetchedSpaceIds.flat())]).toEqual([OTHER_SPACE_ID]);
@@ -1072,7 +1081,7 @@ describe('ClaimsTab', () => {
 // Search, the space filter and the position filter all run server-side, so what this tab puts in
 // the query is the whole feature — a mock that ignores it cannot catch a dropped filter.
 it('asks the server for the filter the viewer picked', async () => {
-  render(<ClaimsTab variant="mine" />);
+  renderMine();
   await showIndexedClaims();
 
   expect(mocks.lastQuery).toMatchObject({ filter: 'mine', spaceIds: null });
@@ -1479,7 +1488,7 @@ describe('All claims reads the Debate tag', () => {
   // an unfiltered My positions was being blamed on filters the viewer never set.
   it('says why an unfiltered list is empty rather than blaming filters', async () => {
     mocks.claims = [];
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.getByText('You haven’t taken a position on any claims yet.')).toBeInTheDocument();
@@ -1743,7 +1752,7 @@ describe('topic menu', () => {
   });
 
   it('offers every topic while no space is picked', async () => {
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
@@ -1757,7 +1766,7 @@ describe('topic menu', () => {
   // which is the part a unit test on the helper cannot see: `facetTopics` is rebuilt from
   // `topicIds`, so an ungated effect reconciles against its own output and takes both.
   it('gives back only the newest topic when two picked in a row cannot co-occur', async () => {
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
@@ -1774,7 +1783,7 @@ describe('topic menu', () => {
   // keystroke. Left out, the grace period didn't begin until the search debounce had already run,
   // so the stale numbers stood for both delays back to back instead of one.
   it('covers the counts while the typed query is still settling', async () => {
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
 
@@ -1794,7 +1803,7 @@ describe('topic menu', () => {
   });
 
   it('drops the topics that have no claims in the picked space', async () => {
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
@@ -1818,7 +1827,7 @@ describe('topic menu', () => {
       claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI]),
     ];
     mocks.pageSize = 1;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.getByText('A claim with no topics')).toBeInTheDocument();
@@ -1833,7 +1842,7 @@ describe('topic menu', () => {
   // space this viewer can't be shown claims from is offered over a list the client then empties.
   it('scopes the query to the spaces the viewer can be shown claims from', async () => {
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID.replace(/-/g, '')] });
@@ -1848,7 +1857,7 @@ describe('topic menu', () => {
     mocks.spaceAllowlist = null;
     mocks.allowlistLoading = false;
     mocks.publishableSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID.replace(/-/g, '')] });
@@ -1859,7 +1868,7 @@ describe('topic menu', () => {
     mocks.spaceAllowlist = null;
     mocks.allowlistLoading = false;
     mocks.publishableSpaceIds = null;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(mocks.lastQuery).toMatchObject({ spaceIds: null });
@@ -1871,7 +1880,7 @@ describe('topic menu', () => {
   it('asks for nothing at all when no space is eligible', async () => {
     mocks.spaceAllowlist = new Set();
     mocks.claims = [claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI])];
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.queryByText('Models are getting cheaper')).toBeNull();
@@ -1885,7 +1894,7 @@ describe('topic menu', () => {
   it("drops the previous scope's menu when the eligible set narrows to nothing", async () => {
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
     mocks.claims = [claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI])];
-    const view = render(<ClaimsTab variant="mine" />);
+    const view = renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
@@ -1893,7 +1902,7 @@ describe('topic menu', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
 
     mocks.spaceAllowlist = new Set();
-    view.rerender(<ClaimsTab variant="mine" />);
+    view.rerender(<ClaimsTab />);
 
     // The list animates its rows out, so the card outlives the render that dropped it.
     await waitFor(() => expect(screen.queryByText('Models are getting cheaper')).toBeNull());
@@ -1907,7 +1916,7 @@ describe('topic menu', () => {
   it('keeps a space selection when the panel is closed and reopened', async () => {
     mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
     const store = createStore();
-    render(<ClaimsTab variant="mine" />, store);
+    renderMine(<ClaimsTab />, store);
     await showIndexedClaims();
 
     fireEvent.click(await screen.findByRole('button', { name: /Any space/ }));
@@ -1917,7 +1926,7 @@ describe('topic menu', () => {
     // The panel closing and reopening: this tab unmounts and a new one mounts in the same session.
     // No need to pick the list again — that dropdown persists too, so the tab comes back on it.
     cleanup();
-    render(<ClaimsTab variant="mine" />, store);
+    renderMine(<ClaimsTab />, store);
 
     await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID], filter: 'mine' }));
   });
@@ -1930,7 +1939,7 @@ describe('topic menu', () => {
       claim('claim-plain', 'A claim with no topics', false, false, SPACE_ID),
     ];
     const store = createStore();
-    render(<ClaimsTab variant="mine" />, store);
+    renderMine(<ClaimsTab />, store);
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
@@ -1938,7 +1947,7 @@ describe('topic menu', () => {
     await waitFor(() => expect(mocks.lastQuery).toMatchObject({ topicIds: ['topic-ai'] }));
 
     cleanup();
-    render(<ClaimsTab variant="mine" />, store);
+    renderMine(<ClaimsTab />, store);
 
     await waitFor(() => expect(mocks.lastQuery).toMatchObject({ topicIds: ['topic-ai'] }));
   });
@@ -1964,7 +1973,7 @@ describe('topic menu', () => {
     mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
     mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
     const store = createStore();
-    render(<ClaimsTab variant="mine" />, store);
+    renderMine(<ClaimsTab />, store);
     await showIndexedClaims();
 
     // The seed lands first, unasked.
@@ -1976,7 +1985,7 @@ describe('topic menu', () => {
     await waitFor(() => expect((mocks.lastQuery as { spaceIds: string[] }).spaceIds).toHaveLength(2));
 
     cleanup();
-    render(<ClaimsTab variant="mine" />, store);
+    renderMine(<ClaimsTab />, store);
     // Open the menu and wait for a real option. That is exactly the seed's own precondition — it
     // is held against a menu with nothing on it — so once a space is offered, the seed has had its
     // chance. Asserting any earlier would pass on the moment *before* a re-seed rather than on its
@@ -1995,7 +2004,7 @@ describe('topic menu', () => {
   it('opens on the spaces the viewer belongs to', async () => {
     mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
     mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     // The menu's own ids, which is what a click would have produced too.
@@ -2009,7 +2018,7 @@ describe('topic menu', () => {
   it('shows the default as ticked in the menu, not merely applied to the query', async () => {
     mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
     mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     // The trigger is named after the selected space too, so pick out the row, which is the one
@@ -2070,7 +2079,7 @@ describe('topic menu', () => {
     mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
     mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
     mocks.isSettlingMemberships = true;
-    const view = render(<ClaimsTab variant="mine" />);
+    const view = renderMine();
     await showIndexedClaims();
 
     await waitFor(() => expect(mocks.lastQuery).toBeTruthy());
@@ -2079,7 +2088,7 @@ describe('topic menu', () => {
     // The rest of what they picked lands.
     mocks.memberSpaceIds = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
     mocks.isSettlingMemberships = false;
-    view.rerender(<ClaimsTab variant="mine" />);
+    view.rerender(<ClaimsTab />);
 
     // Both of theirs, which a seed taken against the partial answer would have missed.
     await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID, OTHER_SPACE_ID] }));
@@ -2090,7 +2099,7 @@ describe('topic menu', () => {
   it('lets the viewer clear the default back to every space', async () => {
     mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
     mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
     await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] }));
 
@@ -2106,7 +2115,7 @@ describe('topic menu', () => {
 
   it('sends the picked space alone, never alongside the eligible list', async () => {
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, ''), OTHER_SPACE_ID.replace(/-/g, '')]);
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
@@ -2120,7 +2129,7 @@ describe('topic menu', () => {
   });
 
   it('asks the server to do the topic filtering', async () => {
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
@@ -2140,7 +2149,7 @@ describe('topic menu', () => {
   it('does not ask for a corpus wider than the scope it is about to apply', async () => {
     mocks.spaceAllowlist = null;
     mocks.allowlistLoading = true;
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
@@ -2153,7 +2162,7 @@ describe('topic menu', () => {
   // topic with no claims in the picked space is never on offer to pick. It is reachable by the
   // corpus moving underneath a selection that was valid when it was made.
   it('lets go of a selected topic once the space stops having claims for it', async () => {
-    const view = render(<ClaimsTab variant="mine" />);
+    const view = renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
@@ -2167,7 +2176,7 @@ describe('topic menu', () => {
     // The one AI claim in Crypto is answered, published elsewhere, or otherwise leaves the
     // candidate set. Crypto now carries no AI claim, so the topic facet drops it.
     mocks.claims = [claim('claim-health', 'Sleep is underrated', false, false, OTHER_SPACE_ID, [HEALTH])];
-    view.rerender(<ClaimsTab variant="mine" />);
+    view.rerender(<ClaimsTab />);
 
     // Left held, it would filter the list from a chip no longer in the menu to unpick. Awaited
     // rather than immediate: reconciliation waits for a facet that answers the selection in hand,
@@ -2181,7 +2190,7 @@ describe('topic menu', () => {
   // That is a reason to show an empty list, not to revise a choice the viewer made. Clearing it
   // would silently discard the space the moment a topic, or a search, emptied the pair.
   it('keeps a selected space when the current combination has nothing in it', async () => {
-    const view = render(<ClaimsTab variant="mine" />);
+    const view = renderMine();
     await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
@@ -2191,7 +2200,7 @@ describe('topic menu', () => {
 
     // The AI claim moves out of Crypto, so the AI-narrowed space facet no longer names it.
     mocks.claims = [claim('claim-ai', 'Models are getting cheaper', false, false, OTHER_SPACE_ID, [AI])];
-    view.rerender(<ClaimsTab variant="mine" />);
+    view.rerender(<ClaimsTab />);
 
     expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument();
   });
@@ -2440,17 +2449,17 @@ describe('ClaimsTab -- Featured', () => {
   });
 
   // All claims leads the menu because it is what the tab opens on; an option you land on shouldn't
-  // sit below the one you didn't. "My positions" is not in this menu at all — it is a tab now.
-  it('leads the source menu, ahead of Featured', () => {
+  // sit below the one you didn't. Featured is the narrower cut of the same corpus, and "My
+  // positions" — the viewer's own cut of it — is last.
+  it('leads the source menu, ahead of Featured and My positions', () => {
     render(<ClaimsTab />);
 
     fireEvent.click(screen.getByRole('button', { name: 'All claims' }));
 
-    const labels = ['All claims', 'Featured'];
+    const labels = ['All claims', 'Featured', 'My positions'];
     const options = screen.getAllByRole('button').filter(button => labels.includes(button.textContent?.trim() ?? ''));
     // The trigger carries the current label too, and it is rendered ahead of the options.
-    expect(options.slice(-2).map(button => button.textContent?.trim())).toEqual(labels);
-    expect(screen.queryByRole('button', { name: 'My positions' })).not.toBeInTheDocument();
+    expect(options.slice(-3).map(button => button.textContent?.trim())).toEqual(labels);
   });
 
   // Featured claims are a few hundred in a corpus of hundreds of thousands, so the index is no help
@@ -2465,7 +2474,7 @@ describe('ClaimsTab -- Featured', () => {
     expect(mocks.lastQuery).toMatchObject({ filter: 'all' });
 
     cleanup();
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(mocks.lastEnabled).toBe(true);
@@ -2643,7 +2652,7 @@ describe('ClaimsTab -- Featured', () => {
     expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
 
     cleanup();
-    render(<ClaimsTab variant="mine" />);
+    renderMine();
     await showIndexedClaims();
 
     expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
@@ -2673,17 +2682,30 @@ describe('ClaimsTab -- Featured', () => {
     expect(mocks.lastEnabled).toBe(false);
   });
 
-  // GEO-2725's rule moved up a level with GEO-2861 and is asserted where it now lives, in
-  // `debates-hub-panel`: the viewer-relative lists are tabs — Lobby and My claims — and
-  // `SIGNED_OUT_TABS` keeps both off the signed-out hub. Explore's own menu no longer holds
-  // anything that needs hiding, so both of its options answer for everyone.
-  it('offers both of its sources to a signed-out visitor', async () => {
+  // GEO-2725. The two sources that describe the corpus still answer anonymously; the one that
+  // describes the viewer could only ever come back empty, so it leaves the menu with them.
+  //
+  // "Debate now" used to be hidden here as well and is not in this menu at all any more — it is
+  // Lobby, and `SIGNED_OUT_TABS` keeps that whole tab off the signed-out hub, which is asserted
+  // where it now lives in `debates-hub-panel`.
+  it('offers its two corpus sources to a signed-out visitor, and not My positions', async () => {
     mocks.authenticated = false;
     render(<ClaimsTab />);
 
     fireEvent.click(await screen.findByRole('button', { name: /All claims/ }));
 
     expect(screen.getByRole('button', { name: 'Featured' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'My positions' })).not.toBeInTheDocument();
+  });
+
+  // Derived rather than reset through an effect, so the query, the menu label and the empty state
+  // all read the same value on the very first render after the session goes away — rather than the
+  // tab querying a viewer-relative list anonymously and showing a trigger no longer in its menu.
+  it('falls back to All claims when the viewer signs out on My positions', async () => {
+    mocks.authenticated = false;
+    renderMine();
+
+    expect(await screen.findByRole('button', { name: 'All claims' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'My positions' })).not.toBeInTheDocument();
   });
 
