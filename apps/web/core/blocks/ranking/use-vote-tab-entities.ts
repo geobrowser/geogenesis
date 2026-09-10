@@ -44,8 +44,9 @@ const EMPTY_VOTE_TAB_HYDRATION: VoteTabHydration = { entries: [], signatures: {}
 export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) {
   const { filterState, modesByColumn, spaceId } = useDataBlock();
   const blockWhere = React.useMemo(
-    () => filterStateToWhere(filterState, modesByColumn),
-    [filterState, modesByColumn]
+    // Space-scoped like the data block itself (GEO-2865).
+    () => filterStateToWhere(filterState, modesByColumn, spaceId),
+    [filterState, modesByColumn, spaceId]
   );
 
   const enabled = direction !== null;
