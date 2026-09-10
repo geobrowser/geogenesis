@@ -31,9 +31,6 @@ import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
 
-const sidePanelHeadingClassName =
-  '[&_.line-clamp-1]:!line-clamp-none [&_.line-clamp-2]:!line-clamp-none [&_.line-clamp-3]:!line-clamp-none [&_.line-clamp-4]:!line-clamp-none [&_.line-clamp-5]:!line-clamp-none [&_.line-clamp-6]:!line-clamp-none';
-
 type SharedProps = {
   entityId: string;
   spaceId: string;
@@ -227,9 +224,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
         <EntityPageContentContainer>
           <div>
             <div className="space-y-2">
-              <div className={sidePanelHeadingClassName}>
-                <EditableHeading spaceId={spaceId} entityId={entityId} fallbackName={previewName} />
-              </div>
+              <EditableHeading spaceId={spaceId} entityId={entityId} fallbackName={previewName} />
               {!isRelationPage && (
                 <EntityPageInlineDescription
                   entityId={entityId}
