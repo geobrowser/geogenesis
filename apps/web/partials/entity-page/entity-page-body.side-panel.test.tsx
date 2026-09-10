@@ -82,10 +82,13 @@ afterEach(cleanup);
  * A relation page is the side panel opened on a relation itself rather than on an entity. It hides
  * type metadata and voting, because a relation has neither to show.
  *
- * The actions used to live inside the metadata header, so hiding one hid the other: opening a
- * relation lost the context menu and the history panel along with the types. They are separate
- * components now, and this pins the split — the gate answers "is there type metadata to show",
- * which is a different question from "can this entity be acted on".
+ * On master this worked by accident of layout: the menu and history lived in `EditableHeading`,
+ * which the side panel rendered outside the gate, so a relation page kept them. Extracting
+ * `EntityPageActions` moved them next to the metadata header and under its gate, and relation
+ * pages lost both — a regression this PR introduced and then fixed in 640fc513d.
+ *
+ * The gate answers "is there type metadata to show", which is a different question from "can this
+ * entity be acted on". Nothing enforced that split before; this does.
  */
 describe('EntityPageBody relation side panel', () => {
   it('keeps the menu and history on a relation page', () => {

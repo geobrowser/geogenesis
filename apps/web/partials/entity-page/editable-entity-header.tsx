@@ -3,8 +3,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useSelector } from '@xstate/store/react';
 
-import * as React from 'react';
-
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';

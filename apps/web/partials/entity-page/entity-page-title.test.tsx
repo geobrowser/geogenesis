@@ -49,9 +49,12 @@ describe('EntityPageTitle typography', () => {
 });
 
 /**
- * The three-line clamp the old `Truncate`/`ClampedText` headers applied is intentionally gone: it
- * compensated for a title fixed at 44px on a phone, and the token now steps down to 26px there.
- * A clamped title has no More toggle to reveal the rest, unlike the description below it.
+ * The three-line clamp is intentionally gone — the designer asked for it. It compensated for a
+ * title fixed at 52px (`mainPage`) at every width; the token now steps down to 26px on a phone.
+ *
+ * The space header clamped with `Truncate` (no way to reveal the rest); the entity header used
+ * `ClampedText`, which does offer a More toggle. So this removes a hard cut on one surface and
+ * trades a collapsible one on the other.
  */
 describe('EntityPageTitle wrapping', () => {
   it('does not clamp a long name', () => {

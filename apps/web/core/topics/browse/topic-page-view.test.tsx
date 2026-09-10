@@ -112,9 +112,10 @@ describe('TopicPageView description', () => {
 });
 
 /**
- * GEO-2460 gave entity and space titles their own responsive token. A topic renders through this
- * view instead of the entity header, so the same route drew the same slot at two different sizes
- * depending on whether the entity happened to be typed as a Topic.
+ * GEO-2460 gave entity and space titles their own responsive token. On master this view and the
+ * entity header both used `mainPage`, so they matched; moving only the entity header would have
+ * shipped the same route drawing the same slot at two sizes depending on whether the entity
+ * happened to be typed as a Topic. This keeps them on one token instead.
  *
  * Asserted as the token rather than as sizes: the 44/36/26 steps live in `styles.css` and jsdom
  * applies no stylesheet, so a size assertion here would only restate the class anyway.

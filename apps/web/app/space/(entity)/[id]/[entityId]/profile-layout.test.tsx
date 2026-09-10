@@ -114,11 +114,13 @@ async function renderProfileLayout() {
 /**
  * `getProfilePage` spreads the fetched person, so `profile.id` is that entity's own id — which is
  * the route id only when the fetch resolved to the same entity, and falls back to the route id when
- * it missed entirely. Everything else on this page is keyed on the route id: the store provider,
- * the title, the metadata header and `generateMetadata`.
+ * it missed entirely. The store provider, the title and `generateMetadata` are all keyed on the
+ * route id, so handing the actions the other one meant the history panel, the context menu and the
+ * vote buttons could read and write a different entity than the one the page names.
  *
- * Handing the actions the other one meant the history panel, the context menu and the vote buttons
- * could read and write a different entity than the one the page names.
+ * `RouteEditorProvider` (layout.tsx:91) is still keyed on `profile.id`. Left alone on purpose: it
+ * is given that entity's blocks and tabs, so the fetched id is the right one there — the two are
+ * equal at runtime either way.
  */
 describe('profile ProfileLayout', () => {
   it('gives the actions the route entity id, not the fetched profile id', async () => {

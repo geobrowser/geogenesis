@@ -80,8 +80,10 @@ export function EntityPageActions({ entityId, spaceId, isVoteable = false }: Ent
       </HistoryPanel>
       {editable && (
         // NB: breakpoints here are desktop-first (`sm` = max-width 639px), so `sm:hidden` hides
-        // this on phones and shows it everywhere else. Carried unchanged from master; only the
-        // label is new, since an icon-only link otherwise announces as its bare URL.
+        // this on phones and shows it everywhere else — that class is master's and unchanged.
+        // New here: the label, since an icon-only link otherwise announces as its bare URL, and
+        // `PrefetchLink` in place of `next/link`, matching the space header (hover prefetch
+        // rather than Next's default).
         <Link
           href={NavUtils.toEntity(spaceId, ID.createEntityId())}
           aria-label="Create new entity"

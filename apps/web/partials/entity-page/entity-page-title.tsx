@@ -25,11 +25,15 @@ type EntityPageTitleProps = {
 /**
  * The shared page title for an entity and a space.
  *
- * The three-line clamp the old `Truncate`/`ClampedText` headers applied is intentionally gone. It
- * compensated for a title fixed at 44px on every screen, so a long name ran past three lines on a
- * phone; the token now steps down to 26px there. Clamping on top of that would hide the end of a
- * name with no way to reveal it — a title has no More toggle, unlike the description below it,
- * which still clamps.
+ * The three-line clamp is intentionally gone — the designer asked for it (GEO-2460 issue thread,
+ * 2026-07-31). It compensated for a title fixed at 52px (`mainPage`) at every width; the token now
+ * steps down to 26px on a phone, which is what the clamp was working around.
+ *
+ * The two headers it replaced clamped differently, and only one of them offered a way out: the
+ * space header used `Truncate`, which cuts with no reveal, while the entity header used
+ * `ClampedText`, which renders a More/Less toggle. So this is a straight win for space titles and a
+ * trade for entity titles — a pathological name (a pasted paragraph) now runs full length instead
+ * of collapsing behind More. Accepted deliberately; revisit here if it shows up in practice.
  */
 export function EntityPageTitle({
   value,

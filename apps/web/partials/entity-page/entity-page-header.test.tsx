@@ -53,9 +53,13 @@ afterEach(cleanup);
  * `showHeader` and `showHeading` answer different questions, and the pages that pass them use each
  * on its own — a page can want the title without the types-and-actions row under it.
  *
- * The row itself is what regressed: while the actions lived inside the metadata header, turning off
- * `showHeader` was the only way to hide either, and separating them made it possible to hide the
- * metadata and leave the menu, history and vote buttons drawn on a page that asked for no header.
+ * Both gates changed shape in this PR, so both are pinned. On master the menu, history and create
+ * link sat inside `EditableHeading` and so followed `showHeading`, while `showHeader` covered only
+ * the type row and votes. Extracting `EntityPageActions` moved them under `showHeader`; an
+ * intermediate state then left them drawn on a page that had asked for no header at all.
+ *
+ * No caller passes either flag as false today, which is exactly why this is worth pinning — the
+ * props exist to be turned off, and the first page to do it should get what the names promise.
  */
 describe('EntityPageHeader', () => {
   it('draws the metadata strip and the actions when showHeader is on', () => {
