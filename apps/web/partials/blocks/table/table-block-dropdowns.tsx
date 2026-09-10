@@ -400,20 +400,21 @@ function TableBlockDropdown({
             // pending (skeleton) only while a re-keyed population or the
             // All-mode facet resolves. A definite zero is shown but inert
             // (bounty-board facet behavior) — unless checked, so it can
-            // still be unselected.
+            // still be unselected. The hook decides which those are, and
+            // sinks exactly the same rows to the end of the list.
             const count = option.count;
-            const isInertZero = count === 0 && !checked;
+            const isExhausted = option.isExhausted ?? false;
             return (
               <button
                 key={option.id}
                 type="button"
                 role="checkbox"
                 aria-checked={checked}
-                disabled={isInertZero}
+                disabled={isExhausted}
                 onClick={() => toggle(option.id)}
                 className={cx(
                   'flex items-center gap-2 rounded px-2 py-2 text-left text-sm text-text hover:bg-grey-01',
-                  isInertZero && 'opacity-50 hover:bg-transparent'
+                  isExhausted && 'opacity-50 hover:bg-transparent'
                 )}
               >
                 <CheckboxVisual checked={checked} />
