@@ -30,7 +30,7 @@ interface EntityPageActionsProps {
 export function EntityPageActions({ entityId, spaceId, isVoteable = false }: EntityPageActionsProps) {
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const editable = useUserIsEditing(spaceId);
-  const name = useName(entityId);
+  const name = useName(entityId, spaceId);
 
   const {
     allVersions,

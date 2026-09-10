@@ -141,7 +141,7 @@ export function EditableSpaceHeading({
           accessory={nameAccessoryComponent}
           className="min-w-0 grow"
         />
-        {isSpacePage && (
+        {(actionsComponent || isSpacePage) && (
           <div className="inline-flex items-center gap-4">
             {actionsComponent}
             {isSpacePage && (

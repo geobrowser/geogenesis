@@ -57,7 +57,7 @@ export function EntityPageTitle({
           <span className="mt-[9px] inline-flex shrink-0">{accessory}</span>
         </div>
       ) : (
-        <h1 className={cx(titleTypographyClassName, 'w-full text-text')}>{value || ZERO_WIDTH_SPACE}</h1>
+        <h1 className={cx(titleTypographyClassName, 'w-full wrap-break-word text-text')}>{value || ZERO_WIDTH_SPACE}</h1>
       )}
       <Spacer height={12} />
     </div>
