@@ -189,8 +189,16 @@ describe('loadDebatePublishSource media gating', () => {
         turnIndex: 0,
         existingClaimEntityId: null,
         topics: [],
+        isContestable: false,
       },
-      { text: 'The action was unjustified.', isFactual: false, turnIndex: 1, existingClaimEntityId: null, topics: [] },
+      {
+        text: 'The action was unjustified.',
+        isFactual: false,
+        turnIndex: 1,
+        existingClaimEntityId: null,
+        topics: [],
+        isContestable: false,
+      },
     ]);
   });
 

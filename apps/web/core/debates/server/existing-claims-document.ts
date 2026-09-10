@@ -10,7 +10,7 @@ import { parse } from 'graphql';
  * "not a Claim here" and mint a duplicate for.
  */
 const EXISTING_CLAIMS_SOURCE = /* GraphQL */ `
-  query ExistingClaims($ids: [UUID!]!, $topicsPropertyId: UUID!, $spaceId: UUID!) {
+  query ExistingClaims($ids: [UUID!]!, $topicsPropertyId: UUID!, $tagPropertyId: UUID!, $spaceId: UUID!) {
     entities(filter: { id: { in: $ids } }) {
       id
       spaceIds
@@ -21,6 +21,9 @@ const EXISTING_CLAIMS_SOURCE = /* GraphQL */ `
         first: 100
         filter: { typeId: { is: $topicsPropertyId }, spaceId: { is: $spaceId } }
       ) {
+        toEntityId
+      }
+      tagRelations: relationsList(first: 100, filter: { typeId: { is: $tagPropertyId }, spaceId: { is: $spaceId } }) {
         toEntityId
       }
     }
@@ -41,10 +44,13 @@ export type ExistingClaimsQuery = {
      * a server default.
      */
     topicRelations: Array<{ toEntityId: string | null } | null> | null;
+    /** The entity's existing Tags relations in the publication space — read for the same
+     * reason as topics: a tag it already carries here must not be written twice. */
+    tagRelations: Array<{ toEntityId: string | null } | null> | null;
   } | null> | null;
 };
 
 export const existingClaimsDocument = parse(EXISTING_CLAIMS_SOURCE) as TypedDocumentNode<
   ExistingClaimsQuery,
-  { ids: string[]; topicsPropertyId: string; spaceId: string }
+  { ids: string[]; topicsPropertyId: string; tagPropertyId: string; spaceId: string }
 >;
