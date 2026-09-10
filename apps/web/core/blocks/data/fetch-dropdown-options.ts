@@ -1,13 +1,17 @@
-import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-
 import { Effect } from 'effect';
-import { parse } from 'graphql';
 
 import type { EntityFilter } from '~/core/gql/graphql';
+import { uuidToHex } from '~/core/id/normalize';
 import { convertWhereConditionToEntityFilter } from '~/core/io/converters';
 import { collapseOrFilter } from '~/core/io/filter-or-collapse';
 import { graphql } from '~/core/io/graphql-client';
 import { getEntityNames } from '~/core/io/queries';
+import {
+  type RelationFacetCount,
+  type RelationFacetResult,
+  decodeRelationFacet,
+  relationFacetDocument,
+} from '~/core/io/relation-facet';
 import type { WhereCondition } from '~/core/sync/experimental_query-layer';
 
 /**
@@ -21,48 +25,16 @@ export type DropdownPopulation =
   { kind: 'query'; where: WhereCondition } | { kind: 'ids'; ids: string[]; where: WhereCondition };
 
 /** One facet row: an option's entity id and how many population rows carry it. */
-export type DropdownFacetEntry = { id: string; count: number };
+export type DropdownFacetEntry = RelationFacetCount;
 
-/**
- * A dropdown's data comes from ONE grouped-aggregation query: the property's
- * relations, restricted to rows matching the population, grouped by target —
- * every option id with its exact count in a single request. Measured on the
- * live API: 19,309 values over a 60,744-row population in 2.7s; populations
- * narrowed by other dropdowns 0.8–1.6s; collection id-lists <1s. This
- * replaced a page-walked enumeration plus per-option totalCount queries
- * (0.7–4.6s EACH) once relationsConnection.groupedAggregates was found — the
- * same mechanism the debates hub facets use (tagged-claims.ts, GEO-2798).
- *
- * `distinctCount(fromEntityId)` counts DISTINCT rows per value, so a row
- * carrying duplicate relations to one value counts once — identical to the
- * old walk-tally semantics, and verified equal to the per-option totalCount.
+/*
+ * A dropdown's data comes from ONE grouped-aggregation request — the shared
+ * relation-facet query (core/io/relation-facet.ts), the same document the
+ * debates hub facets run. Measured on the live API: 19,309 values over a
+ * 60,744-row population in 2.7s; populations narrowed by other dropdowns
+ * 0.8-1.6s; collection id-lists <1s. This replaced a page-walked enumeration
+ * plus per-option totalCount queries (0.7-4.6s EACH).
  */
-const DROPDOWN_FACET_DOCUMENT = parse(/* GraphQL */ `
-  query DropdownFacet($typeId: UUID!, $fromEntity: EntityFilter) {
-    relationsConnection(filter: { typeId: { is: $typeId }, fromEntity: $fromEntity }) {
-      groupedAggregates(groupBy: TO_ENTITY_ID) {
-        keys
-        distinctCount {
-          fromEntityId
-        }
-      }
-    }
-  }
-`) as unknown as TypedDocumentNode<DropdownFacetResult, { typeId: string; fromEntity: EntityFilter | null }>;
-
-type DropdownFacetResult = {
-  relationsConnection: {
-    groupedAggregates: Array<{
-      keys: string[] | null;
-      distinctCount: { fromEntityId: string | null } | null;
-    } | null> | null;
-  } | null;
-};
-
-/** Group keys and name lookups arrive in dashed and dashless forms; one canonical form for map keys. */
-export function dropdownIdKey(id: string): string {
-  return id.replace(/-/g, '').toLowerCase();
-}
 
 /**
  * The population as a `fromEntity` filter. relationsConnection has no
@@ -88,15 +60,9 @@ export function populationToFromEntityFilter(population: DropdownPopulation): En
   return base ?? null;
 }
 
-/** Facet rows from the raw result: normalized ids, numeric counts, count-descending (stable by id). */
-export function decodeDropdownFacet(result: DropdownFacetResult): DropdownFacetEntry[] {
-  const entries: DropdownFacetEntry[] = [];
-  for (const group of result.relationsConnection?.groupedAggregates ?? []) {
-    const id = group?.keys?.[0];
-    if (!id) continue;
-    entries.push({ id: dropdownIdKey(id), count: Number(group?.distinctCount?.fromEntityId ?? 0) });
-  }
-  return entries.sort((a, b) => b.count - a.count || (a.id < b.id ? -1 : 1));
+/** Facet rows for a dropdown: the shared decode, ordered count-descending (stable by id). */
+export function decodeDropdownFacet(result: RelationFacetResult): DropdownFacetEntry[] {
+  return decodeRelationFacet(result).sort((a, b) => b.count - a.count || (a.id < b.id ? -1 : 1));
 }
 
 /** Every option of one property across the population, with exact counts — one request. */
@@ -111,9 +77,14 @@ export function fetchDropdownFacet({
 }): Promise<DropdownFacetEntry[]> {
   return Effect.runPromise(
     graphql({
-      query: DROPDOWN_FACET_DOCUMENT,
+      query: relationFacetDocument,
       decoder: decodeDropdownFacet,
-      variables: { typeId: columnId, fromEntity: populationToFromEntityFilter(population) },
+      variables: {
+        typeId: columnId,
+        toEntityId: null,
+        fromEntity: populationToFromEntityFilter(population),
+        groupBy: ['TO_ENTITY_ID'],
+      },
       signal,
     })
   );
@@ -122,7 +93,7 @@ export function fetchDropdownFacet({
 /** Batch size for name lookups — the API caps `first` at 1000. */
 export const NAME_BATCH_SIZE = 900;
 
-/** Names for a set of option ids, batched; keys normalized via dropdownIdKey. */
+/** Names for a set of option ids, batched; keys normalized via uuidToHex. */
 export async function fetchDropdownOptionNames(
   ids: string[],
   signal?: AbortSignal
@@ -131,7 +102,7 @@ export async function fetchDropdownOptionNames(
   for (let start = 0; start < ids.length; start += NAME_BATCH_SIZE) {
     const chunk = ids.slice(start, start + NAME_BATCH_SIZE);
     const rows = await Effect.runPromise(getEntityNames(chunk, signal));
-    for (const row of rows) names.set(dropdownIdKey(row.id), row.name);
+    for (const row of rows) names.set(uuidToHex(row.id), row.name);
   }
   return names;
 }

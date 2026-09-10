@@ -4,7 +4,9 @@ import { useQueries } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { NAME_BATCH_SIZE, dropdownIdKey, fetchDropdownOptionNames, fingerprintIdList } from './fetch-dropdown-options';
+import { uuidToHex } from '~/core/id/normalize';
+
+import { NAME_BATCH_SIZE, fetchDropdownOptionNames, fingerprintIdList } from './fetch-dropdown-options';
 
 /**
  * Names for dropdown options, fetched lazily: the facet answers in ids, and
@@ -24,7 +26,7 @@ export function useDropdownOptionNames({ ids, enabled }: { ids: string[]; enable
   const missing: string[] = [];
   const missingSeen = new Set<string>();
   for (const id of ids) {
-    const key = dropdownIdKey(id);
+    const key = uuidToHex(id);
     if (nameCache.has(key) || missingSeen.has(key)) continue;
     missingSeen.add(key);
     missing.push(key);
@@ -60,7 +62,7 @@ export function useDropdownOptionNames({ ids, enabled }: { ids: string[]; enable
 
   // Stable identities reading the mutable cache — consumers memoize against
   // `loadingNames` (which flips as batches land) rather than these.
-  const nameOf = React.useCallback((id: string): string | null => nameCache.get(dropdownIdKey(id)) ?? null, []);
-  const hasName = React.useCallback((id: string): boolean => nameCache.has(dropdownIdKey(id)), []);
+  const nameOf = React.useCallback((id: string): string | null => nameCache.get(uuidToHex(id)) ?? null, []);
+  const hasName = React.useCallback((id: string): boolean => nameCache.has(uuidToHex(id)), []);
   return { nameOf, hasName, loadingNames };
 }

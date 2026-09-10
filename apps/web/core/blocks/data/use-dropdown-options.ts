@@ -5,11 +5,11 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { ID } from '~/core/id';
+import { uuidToHex } from '~/core/id/normalize';
 
 import {
   type DropdownFacetEntry,
   type DropdownPopulation,
-  dropdownIdKey,
   fetchDropdownFacet,
   fingerprintIdList,
 } from './fetch-dropdown-options';
@@ -160,7 +160,7 @@ export function useDropdownOptions({
     const seen = new Set<string>();
     const out: DropdownOption[] = [];
     for (const pin of pinned) {
-      const key = dropdownIdKey(pin.id);
+      const key = uuidToHex(pin.id);
       if (seen.has(key)) continue;
       seen.add(key);
       out.push({ ...pin, count: counts?.get(key) ?? (counts ? 0 : undefined) });

@@ -1,18 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  decodeDropdownFacet,
-  dropdownIdKey,
-  fingerprintIdList,
-  populationToFromEntityFilter,
-} from './fetch-dropdown-options';
-
-describe('dropdownIdKey', () => {
-  it('canonicalizes dashed and dashless spellings of one id to the same key', () => {
-    expect(dropdownIdKey('591F5D7C-C3FF-48DE-932A-C6F190D21B7B')).toBe('591f5d7cc3ff48de932ac6f190d21b7b');
-    expect(dropdownIdKey('591f5d7cc3ff48de932ac6f190d21b7b')).toBe('591f5d7cc3ff48de932ac6f190d21b7b');
-  });
-});
+import { decodeDropdownFacet, fingerprintIdList, populationToFromEntityFilter } from './fetch-dropdown-options';
 
 describe('decodeDropdownFacet', () => {
   it('normalizes group keys and coerces bigint-string counts, sorted count-descending', () => {
