@@ -34,6 +34,7 @@ function expectVotedListsRefreshed(invalidateQueries: MockInstance, personalSpac
 }
 
 const mocks = vi.hoisted(() => ({
+  capture: vi.fn(),
   fetchResponse:
     vi.fn<(signal?: AbortSignal) => 'positive' | 'negative' | null | Promise<'positive' | 'negative' | null>>(),
   runEffectEither: vi.fn(),
@@ -43,6 +44,8 @@ const mocks = vi.hoisted(() => ({
   personalSpaceId: 'd4bee0928fb5405baba3b1513f085835' as string | null,
   ensureSpaceMembership: vi.fn(),
 }));
+
+vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
 
 vi.mock('~/core/access/request-space-membership', () => ({
   ensureSpaceMembership: (...args: unknown[]) => mocks.ensureSpaceMembership(...args),
@@ -107,6 +110,7 @@ vi.mock('~/core/telemetry/effect-runtime', () => ({
 
 beforeEach(() => {
   vi.useFakeTimers();
+  mocks.capture.mockReset();
   mocks.fetchResponse.mockReset();
   mocks.runEffectEither.mockReset();
   mocks.responseAction.mockClear();
@@ -125,6 +129,48 @@ afterEach(() => {
 });
 
 describe('useEntityResponse indexing reconciliation', () => {
+  it.each(['positive', 'negative', 'clear'] as const)(
+    'tracks successful async/queued %s responses exactly once',
+    async direction => {
+      mocks.fetchResponse.mockReturnValue(direction === 'clear' ? null : direction);
+      const { wrapper } = createHarness();
+      const { result } = renderHook(
+        () => useEntityResponse({ entityId: 'story-1', spaceId: TARGET_SPACE_ID, responseKind: 'curation' }),
+        { wrapper }
+      );
+      await act(async () => {
+        await result.current.submitResponseAsync(direction);
+      });
+      const votes = mocks.capture.mock.calls.filter(
+        ([name, properties]) => name === 'vote_cast' && properties.outcome_phase === 'submitted'
+      );
+      expect(votes).toHaveLength(1);
+      expect(votes[0][1]).toMatchObject({
+        vote_direction: direction === 'positive' ? 'up' : direction === 'negative' ? 'down' : 'none',
+        response_kind: 'curation',
+        target_type: 'entity',
+        target_id: 'story-1',
+        entity_id: 'story-1',
+        space_id: TARGET_SPACE_ID,
+        outcome_phase: 'submitted',
+        operation_id: expect.any(String),
+      });
+    }
+  );
+
+  it('does not count a rejected response as a vote', async () => {
+    mocks.runEffectEither.mockResolvedValue({ _tag: 'Left', left: new Error('User rejected') });
+    const { wrapper } = createHarness();
+    const { result } = renderHook(
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'veracity' }),
+      { wrapper }
+    );
+    await act(async () => {
+      await expect(result.current.submitResponseAsync('negative')).rejects.toThrow();
+    });
+    expect(mocks.capture.mock.calls.filter(([name]) => name === 'vote_cast')).toHaveLength(0);
+  });
+
   it('exposes the expected optimistic response before the transaction settles', async () => {
     const transaction = deferred<unknown>();
     mocks.runEffectEither.mockReturnValue(transaction.promise);
