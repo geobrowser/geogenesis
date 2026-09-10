@@ -1,6 +1,7 @@
 import { Position } from '@geoprotocol/geo-sdk/lite';
 
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { TAG_PROPERTY_ID } from '~/core/constants';
 import { ID } from '~/core/id';
 import type { DataType, Relation, Value } from '~/core/types';
 
@@ -11,6 +12,7 @@ import {
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_PARTICIPANTS_PROPERTY_ID,
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
+  DEBATE_TAG_ID,
   DEBATE_TRANSCRIPTS_PROPERTY_ID,
   DEBATE_TYPE_ID,
   DEBATE_VIDEOS_PROPERTY_ID,
@@ -78,6 +80,13 @@ export type DebateClaimInput = {
    * draft never writes a duplicate Topics relation.
    */
   topics?: { id: string; name: string | null }[];
+  /**
+   * True when the claim is broad enough to be argued for and against. Tagged `Debate`
+   * so it joins the claim picker's candidate motions; a narrowly verifiable claim
+   * publishes as a Claim like any other, just untagged. For a reused entity the reuse
+   * policy has already cleared this when the entity carries the tag already.
+   */
+  isContestable?: boolean;
 };
 
 export type DebatePublishInput = {
@@ -325,6 +334,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     const linkedBlockClaims = new Set<string>();
     const sourcedClaims = new Set<string>();
     const claimTopicEdges = new Set<string>();
+    const debateTaggedClaims = new Set<string>();
 
     turns.forEach(turn => {
       const speakerName = turn.speakerName?.trim() ? turn.speakerName.trim() : 'Anonymous';
@@ -391,6 +401,17 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         // the reuse policy left after subtracting the graph's current relations. Deduped per
         // (claim, topic): a reused entity can appear behind several extracted claims carrying the
         // same topic, and `relate` does not dedupe.
+        // The Debate tag is what makes a claim a candidate motion in the picker, so it
+        // goes on contestable claims only — minted or reused alike, once per entity.
+        if (claim.isContestable && !debateTaggedClaims.has(normalizeId(claimId))) {
+          debateTaggedClaims.add(normalizeId(claimId));
+          relate({
+            fromEntity: claimRef,
+            propertyId: TAG_PROPERTY_ID,
+            toEntityId: DEBATE_TAG_ID,
+            toEntityName: 'Debate',
+          });
+        }
         for (const topic of claim.topics ?? []) {
           // Keyed on normalized ids so the dedupe agrees with the reuse policy, which compares
           // topics as hex: the same entity written once dashed and once dashless is one edge.

@@ -28,6 +28,13 @@ export type DebateExtractedClaimsClaim = {
    * assignment shipped, and empty when the debated claim has no topics.
    */
   topics?: { entity_id: string; name: string | null }[] | null;
+  /**
+   * True when the claim's main assertion is broad enough to hold positions for and
+   * against it. Only these are tagged as debate claims on Geo, because the tag is what
+   * the claim picker lists as candidate motions. Absent on payloads from before the
+   * classification shipped, which read as "not a motion".
+   */
+  is_contestable?: boolean | null;
 };
 
 export type DebateExtractedClaimsResponse = {
@@ -62,6 +69,7 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
         ? claim.existing_entity_id.trim()
         : null,
     topics: decodeTopics(claim.topics, droppedTopics),
+    isContestable: claim.is_contestable === true,
   }));
   if (droppedTopics.length > 0) {
     // Loud, like the malformed-claim-id path in `claim-reuse`: a field rename upstream would

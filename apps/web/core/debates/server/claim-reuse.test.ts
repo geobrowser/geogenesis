@@ -53,6 +53,38 @@ describe('applyClaimReusePolicy', () => {
     expect(lookup.mock.calls[0]?.[1]).toBe(SPACE);
   });
 
+  it('does not re-tag a reused entity that already carries the Debate tag', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const DEBATE_TAG = '55c95b2626f8482cb9739ea99dfde438';
+    const lookup = vi.fn<ExistingClaimLookup>(async () => [
+      { id: EXISTING, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }], tagIds: [DEBATE_TAG] },
+    ]);
+
+    const result = await applyClaimReusePolicy(
+      [{ text: 'Matched.', isFactual: null, turnIndex: 0, existingClaimEntityId: EXISTING, isContestable: true }],
+      SPACE,
+      { enabled: true, lookup }
+    );
+
+    expect(result[0].existingClaimEntityId).toBe(EXISTING);
+    expect(result[0].isContestable).toBe(false);
+  });
+
+  it('tags a reused entity that is not yet a debate claim', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const lookup = vi.fn<ExistingClaimLookup>(async () => [
+      { id: EXISTING, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }], tagIds: [] },
+    ]);
+
+    const result = await applyClaimReusePolicy(
+      [{ text: 'Matched.', isFactual: null, turnIndex: 0, existingClaimEntityId: EXISTING, isContestable: true }],
+      SPACE,
+      { enabled: true, lookup }
+    );
+
+    expect(result[0].isContestable).toBe(true);
+  });
+
   it('subtracts topics the reused entity already carries and keeps the rest', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const CARRIED = { id: '27b73193ecea48fdaa46fdee40c0b717', name: 'AI and mental health' };

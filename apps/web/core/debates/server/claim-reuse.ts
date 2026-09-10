@@ -1,6 +1,8 @@
 import { Effect } from 'effect';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { TAG_PROPERTY_ID } from '~/core/constants';
+import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 
@@ -37,6 +39,9 @@ export type ExistingClaimEntity = {
    * Optional so injected test lookups predating topics stay valid; absent reads as none.
    */
   topicIds?: string[];
+  /** Targets of the entity's Tags relations in the publication space. Optional for the
+   * same reason as `topicIds`: injected test lookups predating tags stay valid. */
+  tagIds?: string[];
 };
 
 export type ExistingClaimLookup = (entityIds: string[], spaceId: string) => Promise<ExistingClaimEntity[]>;
@@ -56,11 +61,14 @@ const lookupInGraph: ExistingClaimLookup = (entityIds, spaceId) =>
                   topicIds: (entity.topicRelations ?? []).flatMap(relation =>
                     relation?.toEntityId ? [relation.toEntityId] : []
                   ),
+                  tagIds: (entity.tagRelations ?? []).flatMap(relation =>
+                    relation?.toEntityId ? [relation.toEntityId] : []
+                  ),
                 },
               ]
             : []
         ),
-      variables: { ids: entityIds, topicsPropertyId: TOPICS_PROPERTY_ID, spaceId },
+      variables: { ids: entityIds, topicsPropertyId: TOPICS_PROPERTY_ID, tagPropertyId: TAG_PROPERTY_ID, spaceId },
     })
   );
 
@@ -148,6 +156,7 @@ export async function applyClaimReusePolicy(
   ];
   let verified: Set<string>;
   const existingTopicsByEntity = new Map<string, Set<string>>();
+  const alreadyTaggedDebate = new Set<string>();
   try {
     const entities = ids.length > 0 ? await (options.lookup ?? lookupInGraph)(ids, spaceId) : [];
     const spaceKey = uuidToHex(spaceId);
@@ -162,6 +171,9 @@ export async function applyClaimReusePolicy(
     );
     for (const entity of entities) {
       existingTopicsByEntity.set(uuidToHex(entity.id), new Set((entity.topicIds ?? []).map(uuidToHex)));
+      if ((entity.tagIds ?? []).some(tag => uuidToHex(tag) === uuidToHex(DEBATE_TAG_ID))) {
+        alreadyTaggedDebate.add(uuidToHex(entity.id));
+      }
     }
   } catch (error) {
     console.warn('[debate-acceptor] could not verify matched claims; minting all of them instead', {
@@ -190,11 +202,17 @@ export async function applyClaimReusePolicy(
       // the relation once. That window is the sweep's, not this policy's — deduping across it
       // would need a post-index pass.
       const existingTopics = existingTopicsByEntity.get(uuidToHex(claim.existingClaimEntityId));
+      let next = claim;
       if (existingTopics?.size && claim.topics?.length) {
         const missing = claim.topics.filter(topic => !existingTopics.has(uuidToHex(topic.id)));
-        if (missing.length !== claim.topics.length) return { ...claim, topics: missing };
+        if (missing.length !== claim.topics.length) next = { ...next, topics: missing };
       }
-      return claim;
+      // Same rule for the Debate tag: an entity already listed as a debate claim in this
+      // space must not be tagged a second time.
+      if (next.isContestable && alreadyTaggedDebate.has(uuidToHex(claim.existingClaimEntityId))) {
+        next = { ...next, isContestable: false };
+      }
+      return next;
     }
     return withoutReference(claim);
   });
