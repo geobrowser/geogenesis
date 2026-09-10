@@ -1,6 +1,6 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { KEY_FRAME_IMAGE_PROPERTY } from '~/core/constants';
+import { KEY_FRAME_IMAGE_PROPERTY, OG_IMAGE_PROPERTY } from '~/core/constants';
 
 /**
  * GRC-20 ontology for publishing a finished debate to the knowledge graph.
@@ -12,6 +12,15 @@ import { KEY_FRAME_IMAGE_PROPERTY } from '~/core/constants';
 
 /** Debate (TYPE) — the top-level entity a published debate becomes. */
 export const DEBATE_TYPE_ID = 'fd51f93520634617be397b672b23364c';
+
+/**
+ * The entity a `Tags` relation points at to mark a Claim as one meant for debating (GEO-2771).
+ *
+ * Curation rather than a property on the claim, which is what lets the debates surfaces ask the
+ * graph for their whole corpus in one query: a few hundred tagged claims out of three hundred
+ * thousand, so the tag is what gets asked for and the claims come back with it.
+ */
+export const DEBATE_TAG_ID = '55c95b2626f8482cb9739ea99dfde438';
 
 /** Transcript (TYPE) — holds the per-turn text blocks of a debate. */
 export const TRANSCRIPT_TYPE_ID = '97042e6d9c7b4db5930c43d48debda84';
@@ -27,6 +36,15 @@ export const DEBATE_CLAIMS_PROPERTY_ID = 'e614cce1c4ce45868304fd1237119eb2';
 
 /** Transcripts (RELATION) → Transcript. */
 export const DEBATE_TRANSCRIPTS_PROPERTY_ID = 'c504c7d5c3374016a5f083e4b5a92911';
+
+/**
+ * The debate entity's social share card, generated once at publish time (GEO-2755).
+ *
+ * Re-exported rather than a second literal, per the note above: the same property now heads the
+ * share-image chain every entity page reads (GEO-2782), so the id has a home outside this ontology
+ * and the two must not drift.
+ */
+export const OG_IMAGE_PROPERTY_ID = OG_IMAGE_PROPERTY;
 
 /** Key frame (RELATION) → Image. The still the app shows as a video's poster. */
 export const KEY_FRAME_IMAGE_PROPERTY_ID = KEY_FRAME_IMAGE_PROPERTY;
@@ -69,10 +87,15 @@ export const VIDEO_URL_PROPERTY_ID = SystemIds.VIDEO_URL_PROPERTY; // 33da2ef5�
 export const IMAGE_TYPE_ID = SystemIds.IMAGE_TYPE; // ba4e4146…
 /**
  * The unified IPFS URL property. Despite the name it carries the `ipfs://` URI for Video entities
- * as well as Images. `RelationDtoLive` and the media hooks read a media entity's URL from here and
- * nowhere else, so a Video that only sets `Video URL` renders as an empty relation.
+ * as well as Images. Media resolution reads this property first.
  */
 export const IMAGE_URL_PROPERTY_ID = SystemIds.IMAGE_URL_PROPERTY; // 8a743832…
+/**
+ * The canonical link property ("Web URL"). Debate media entities carry their durable geo-chat
+ * content URL here instead of an IPFS pin. It is also a general-purpose link, so it is only read
+ * as a media URL on entities already typed Image/Video, and never promotes a renderable type.
+ */
+export const WEB_URL_PROPERTY_ID = ContentIds.WEB_URL_PROPERTY; // 412ff593…
 export const BLOCKS_PROPERTY_ID = SystemIds.BLOCKS; // beaba5cb…
 export const TEXT_BLOCK_TYPE_ID = SystemIds.TEXT_BLOCK; // 76474f2f…
 export const MARKDOWN_CONTENT_PROPERTY_ID = SystemIds.MARKDOWN_CONTENT; // e3e363d1… (matches spec)

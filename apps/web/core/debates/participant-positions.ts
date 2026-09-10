@@ -1,7 +1,7 @@
 'use client';
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { hashKey, keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -12,7 +12,7 @@ import { graphql } from '~/core/io/graphql-client';
 import { decodeActiveResponseDirection, responseKindToVoteKind } from '~/core/responses/entity-response';
 
 import type { DebateRematchParticipant, DebateResponseKind } from './api';
-import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
+import { claimResponseIndexedEvent, pendingClaimResponse } from './claim-response-indexed-notifier';
 import { useDebateAttention } from './debate-attention';
 
 /**
@@ -188,7 +188,204 @@ function sameId(left: string, right: string) {
   return left.replace(/-/g, '').toLowerCase() === right.replace(/-/g, '').toLowerCase();
 }
 
-export function useParticipantPositions(participants: DebateRematchParticipant[]) {
+/**
+ * A position the viewer's own client knows about before the graph does.
+ *
+ * `position: null` is a removal, which the merge resolves by deleting the fetched row rather than
+ * adding one — so this cannot be a `ParticipantPosition`, whose `position` is the side someone
+ * holds.
+ */
+export type PendingParticipantPosition = Omit<ParticipantPosition, 'position'> & { position: boolean | null };
+
+/** A confirmed position retained until this query's own fetch accounts for it. */
+type SettlingPosition = { row: PendingParticipantPosition; retiredAt: number };
+
+/**
+ * How long a confirmed row is held while the fetched list still disagrees.
+ *
+ * Longer than a poll interval, so the ordinary case is decided by agreement rather than by this;
+ * short enough that a row whose write silently vanished stops being asserted. Only reachable when
+ * the graph confirmed the write and then kept answering without it.
+ */
+const SETTLING_MAX_HOLD_MS = 30_000;
+
+/** Whether the fetched list already says what a retained row says, so the row has nothing left to do. */
+function fetchedAgrees(fetched: ParticipantPosition[], row: PendingParticipantPosition) {
+  const match = fetched.find(candidate => positionKey(candidate) === positionKey(row));
+  return row.position === null ? match === undefined : match?.position === row.position;
+}
+
+/**
+ * The viewer's own in-flight responses, as positions (GEO-2784).
+ *
+ * Reads the `entity-response-indexing` entries this browser has in flight and turns each one into
+ * the position it is about to become. Without this the viewer waits on their own write before the
+ * UI reacts — p50 9.9s, p95 48.6s (`web.write.entity_response`) — which is what makes the
+ * "request debate" button feel broken after clicking a position.
+ *
+ * Subscribed rather than read once: the pending set changes as writes start and settle, and none
+ * of those transitions re-render this hook on their own.
+ *
+ * ## Why a row outlives the snapshot it came from (GEO-2807)
+ *
+ * A confirmed row stays overlaid after its snapshot is retired, because retirement happens when the
+ * *write* is confirmed and this query is only invalidated at that moment — an invalidation is a
+ * fetch starting, not a fetch landing. Dropping the overlay there leaves a gap where the position is
+ * in neither place, which is the flicker; on a removal the stale row reappears instead.
+ *
+ * A retained row is released when this query's own data agrees with it — not merely when newer data
+ * arrives. `dataUpdatedAt` is when a response *landed*, so a poll already in flight when the write
+ * confirmed would otherwise release the overlay onto rows fetched before it, which is the flicker
+ * again. Nor can a disagreeing fetch be read as "the write did not survive": the invalidation that
+ * follows `indexed` often issues its fetch *after* the retirement, and `userVotes` can trail the
+ * read that confirmed the write. So disagreement means "not yet", bounded by {@link SETTLING_MAX_HOLD_MS}
+ * so a row cannot outlive its usefulness if the two never agree.
+ *
+ * A response that returns to idle without ever reaching `indexed` was rolled back by a failed
+ * publish, and is dropped rather than retained.
+ */
+function useOwnPendingPositions(
+  localProfileSpaceId: string | null | undefined,
+  /** This hook's own query, watched for the fetches that release a retained row. */
+  queryKey: readonly unknown[]
+): PendingParticipantPosition[] {
+  const queryClient = useQueryClient();
+  const [pending, setPending] = React.useState<PendingParticipantPosition[]>([]);
+  const [settling, setSettling] = React.useState<SettlingPosition[]>([]);
+  // Track the previous cache state to identify confirmed snapshots that were retired.
+  const lastRead = React.useRef(new Map<string, { row: PendingParticipantPosition; indexed: boolean }>());
+  const lastViewer = React.useRef(localProfileSpaceId);
+  const queryHash = hashKey(queryKey);
+
+  React.useEffect(() => {
+    // A different viewer — or none — inherits nothing. Without this, signing out retires the
+    // outgoing viewer's rows into the retained set and keeps overlaying them.
+    if (lastViewer.current !== localProfileSpaceId) {
+      lastViewer.current = localProfileSpaceId;
+      lastRead.current = new Map();
+      setSettling(current => (current.length === 0 ? current : []));
+    }
+    const cache = queryClient.getQueryCache();
+
+    const read = () => {
+      const rows: PendingParticipantPosition[] = [];
+      const seen = new Map<string, { row: PendingParticipantPosition; indexed: boolean }>();
+      for (const query of cache.getAll()) {
+        const parsed = pendingClaimResponse(query.queryKey, query.state.data);
+        // Attributed to whoever made the write, and kept only while that is this viewer. Stamping
+        // the current viewer onto every row instead would hand one account's response to the next.
+        if (!parsed || !localProfileSpaceId || !sameId(parsed.personalSpaceId, localProfileSpaceId)) continue;
+        const row: PendingParticipantPosition = {
+          profileSpaceId: parsed.personalSpaceId,
+          claimId: parsed.entityId,
+          spaceId: parsed.spaceId,
+          responseKind: parsed.responseKind,
+          // `null` means the viewer is *removing* the position. Carried through as a tombstone and
+          // resolved in the merge below, because dropping it here would let the stale fetched row
+          // keep the position visible until the next refetch.
+          position: parsed.position,
+        };
+        rows.push(row);
+        seen.set(positionKey(row), { row, indexed: parsed.status === 'indexed' });
+      }
+
+      const retiredAt = Date.now();
+      const retired = [...lastRead.current]
+        .filter(([key, previous]) => !seen.has(key) && previous.indexed)
+        .map(([, previous]) => ({ row: previous.row, retiredAt }));
+      lastRead.current = seen;
+
+      if (retired.length > 0) {
+        const held = new Set(retired.map(entry => positionKey(entry.row)));
+        setSettling(current => [...current.filter(entry => !held.has(positionKey(entry.row))), ...retired]);
+      }
+      // Referential stability matters: this feeds a `useMemo` that regroups every position.
+      setPending(current => (samePositions(current, rows) ? current : rows));
+    };
+
+    read();
+    return cache.subscribe(event => {
+      // Every event, not only `updated`. An `entity-response-indexing` query has no observers, so
+      // it is garbage collected on its own schedule — and a `removed` this hook ignored left the
+      // row overlaid for the rest of the session, outside the retention rule entirely.
+      if (event.query.queryKey[0] === 'entity-response-indexing') {
+        read();
+        return;
+      }
+
+      if (event.query.queryHash !== queryHash) return;
+      if (event.type !== 'updated' || event.action.type !== 'success') return;
+      const fetched = (event.query.state.data ?? []) as ParticipantPosition[];
+      const now = Date.now();
+      setSettling(current => {
+        const held = current.filter(
+          entry => !fetchedAgrees(fetched, entry.row) && now - entry.retiredAt < SETTLING_MAX_HOLD_MS
+        );
+        return held.length === current.length ? current : held;
+      });
+    });
+  }, [localProfileSpaceId, queryClient, queryHash]);
+
+  // Apply active responses after retained responses so newer input takes precedence.
+  return React.useMemo(
+    () => (settling.length === 0 ? pending : [...settling.map(entry => entry.row), ...pending]),
+    [pending, settling]
+  );
+}
+
+function samePositions(a: PendingParticipantPosition[], b: PendingParticipantPosition[]) {
+  if (a.length !== b.length) return false;
+  return a.every((row, i) => {
+    const other = b[i];
+    return (
+      row.claimId === other.claimId &&
+      row.spaceId === other.spaceId &&
+      row.responseKind === other.responseKind &&
+      row.position === other.position &&
+      row.profileSpaceId === other.profileSpaceId
+    );
+  });
+}
+
+/**
+ * Key a position by who took it, on what, where, in which kind — the identity the graph enforces.
+ *
+ * `spaceId` is part of it because a response is space-scoped and `participantSidesOn` reads it that
+ * way: without it an overlay for a claim in one space evicts the fetched row for the same claim in
+ * another, and that side then reads as no position at all.
+ */
+function positionKey(row: Pick<ParticipantPosition, 'profileSpaceId' | 'claimId' | 'spaceId' | 'responseKind'>) {
+  const bare = (id: string) => id.replace(/-/g, '').toLowerCase();
+  return `${bare(row.profileSpaceId)}|${bare(row.claimId)}|${bare(row.spaceId)}|${row.responseKind}`;
+}
+
+/**
+ * Fetched rows, with the viewer's in-flight writes applied on top.
+ *
+ * A pending write is by definition newer than anything the query returned, so it wins — and a
+ * pending *removal* (`position === null`) deletes the row rather than adding one. Once the write
+ * lands and the refetch arrives the two agree, so the overlay stops being visible without needing
+ * to be torn down.
+ */
+export function applyPendingPositions(
+  fetched: ParticipantPosition[],
+  pending: PendingParticipantPosition[]
+): ParticipantPosition[] {
+  if (pending.length === 0) return fetched;
+  const merged = new Map(fetched.map(row => [positionKey(row), row]));
+  for (const row of pending) {
+    const { position } = row;
+    if (position === null) merged.delete(positionKey(row));
+    else merged.set(positionKey(row), { ...row, position });
+  }
+  return [...merged.values()];
+}
+
+export function useParticipantPositions(
+  participants: DebateRematchParticipant[],
+  /** The viewer's own personal space id, so their in-flight writes can be shown immediately. */
+  localProfileSpaceId?: string | null
+) {
   const queryClient = useQueryClient();
   const foreground = useDebateAttention();
   const profileSpaceIds = React.useMemo(
@@ -240,7 +437,14 @@ export function useParticipantPositions(participants: DebateRematchParticipant[]
     placeholderData: keepPreviousData,
   });
 
-  const byClaim = React.useMemo(() => groupParticipantPositions(query.data ?? []), [query.data]);
+  // The key, not `query.dataUpdatedAt`: reading that timestamp makes it a tracked property, and it
+  // changes on every poll — so the whole page re-rendered every 20s for a refetch that returned the
+  // same rows.
+  const ownPending = useOwnPendingPositions(localProfileSpaceId, queryKey);
+  const byClaim = React.useMemo(
+    () => groupParticipantPositions(applyPendingPositions(query.data ?? [], ownPending)),
+    [query.data, ownPending]
+  );
 
   return { byClaim, isLoading: query.isLoading, error: query.error };
 }

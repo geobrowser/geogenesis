@@ -10,6 +10,7 @@ import {
   ApiProfileSchema,
   encodePathSegment,
   restFetch,
+  validateSpaceId,
   validateWalletAddress,
 } from '../rest';
 
@@ -185,12 +186,17 @@ export function fetchProfilesBySpaceIds(spaceIds: string[]): Effect.Effect<Profi
       return spaceIds.map(spaceId => defaultProfile(spaceId, spaceId));
     }
 
-    // Create a map for O(1) lookup
-    const profileMap = new Map(decoded.right.profiles.map(p => [p.spaceId, apiProfileToProfile(p)]));
+    // Keyed on the normalized id, not the raw one. REST may answer with the same bytes dashed or
+    // bare (see `validateSpaceId`), and callers ask with whichever spelling their own payload
+    // carried — so an exact match quietly substituted `defaultProfile` for every row whenever the
+    // two disagreed, which reads downstream as "this person has no profile".
+    const profileMap = new Map(
+      decoded.right.profiles.map(p => [validateSpaceId(p.spaceId) ?? p.spaceId, apiProfileToProfile(p)])
+    );
 
     // Return profiles in the original order (including duplicates)
     return spaceIds.map(spaceId => {
-      const profile = profileMap.get(spaceId);
+      const profile = profileMap.get(validateSpaceId(spaceId) ?? spaceId);
       return profile ?? defaultProfile(spaceId, spaceId);
     });
   });

@@ -317,6 +317,13 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       }
       if (!isCurrentIndexingRun(runId)) return;
 
+      // The onboarding checklist reads two of its steps out of this table — an upvote is one step,
+      // a position on a claim is another — and it caches for a minute, so without this a reader who
+      // answers a claim while the card is on screen watches the step stay unticked until they
+      // navigate away and back. Not branched on kind: the card asks about both, and this is the one
+      // moment either becomes true (GEO-2800).
+      void queryClient.invalidateQueries({ queryKey: ['curator-onboarding-status'] });
+
       // The vote is indexed, so the server lists can finally see it. Refetch them
       // before dropping the optimistic override, or the row would blink out of the
       // tab in the gap between the two.

@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { requestsSignInModal, signInModalSource, toSignIn, urlWithoutSignInModal } from './sign-in-deep-link';
+import { modalVia, requestsModal } from '~/core/deep-links/modal-deep-link';
 
-const params = (search: string) => new URLSearchParams(search);
+import { SIGN_IN_MODAL, toSignIn } from './sign-in-deep-link';
 
+/**
+ * Only what is specific to this link. Reading a trigger, clearing one, and the param names are the
+ * scheme's, and are covered once in `core/deep-links/modal-deep-link.test.ts` rather than again per
+ * feature.
+ */
 describe('toSignIn', () => {
   // The marketing site hardcodes whatever this returns, so the shape is the deliverable.
   it('builds the link the marketing site hardcodes', () => {
-    expect(toSignIn({ source: 'marketing' })).toBe('/explore?modal=signin&source=marketing');
+    expect(toSignIn({ via: 'marketing' })).toBe('/explore?modal=signin&via=marketing');
   });
 
   it('omits the attribution when there is none to record', () => {
@@ -17,81 +22,18 @@ describe('toSignIn', () => {
   // Nothing about the trigger is specific to Explore — the handler is app-wide — so the same
   // link works for the next surface that wants one.
   it('takes the trigger to another route', () => {
-    expect(toSignIn({ pathname: '/root', source: 'email' })).toBe('/root?modal=signin&source=email');
+    expect(toSignIn({ pathname: '/root', via: 'email' })).toBe('/root?modal=signin&via=email');
   });
 
-  it('round-trips through the readers', () => {
-    const built = new URL(toSignIn({ source: 'marketing' }), 'https://geobrowser.io');
+  it('round-trips through the scheme’s readers', () => {
+    const built = new URL(toSignIn({ via: 'marketing' }), 'https://geobrowser.io');
 
-    expect(requestsSignInModal(built.searchParams)).toBe(true);
-    expect(signInModalSource(built.searchParams)).toBe('marketing');
-  });
-});
-
-describe('requestsSignInModal', () => {
-  it('recognises the trigger', () => {
-    expect(requestsSignInModal(params('modal=signin'))).toBe(true);
+    expect(requestsModal(built.searchParams, SIGN_IN_MODAL)).toBe(true);
+    expect(modalVia(built.searchParams)).toBe('marketing');
   });
 
-  it('ignores a different modal, so an unrelated deep link never opens the login', () => {
-    expect(requestsSignInModal(params('modal=something-else'))).toBe(false);
-    expect(requestsSignInModal(params(''))).toBe(false);
-    expect(requestsSignInModal(null)).toBe(false);
-  });
-});
-
-describe('signInModalSource', () => {
-  it('reads the attribution', () => {
-    expect(signInModalSource(params('modal=signin&source=marketing'))).toBe('marketing');
-  });
-
-  it('is null when absent or empty rather than an empty string', () => {
-    expect(signInModalSource(params('modal=signin'))).toBeNull();
-    expect(signInModalSource(params('modal=signin&source='))).toBeNull();
-  });
-});
-
-describe('urlWithoutSignInModal', () => {
-  it('leaves a clean route once the trigger is spent', () => {
-    expect(urlWithoutSignInModal('/explore', params('modal=signin&source=marketing'))).toBe('/explore');
-  });
-
-  // The viewer may have landed somewhere that carries its own state. Dropping it to tidy up the
-  // trigger would be a worse bug than the one the tidying prevents.
-  it('keeps every other param', () => {
-    expect(urlWithoutSignInModal('/space/space-1/entity-1', params('modal=signin&source=marketing&tabId=tab-2'))).toBe(
-      '/space/space-1/entity-1?tabId=tab-2'
-    );
-  });
-
-  // A fragment is route state in this app, not decoration — `block-reorder` resolves a linked
-  // block out of `window.location.hash`. Rebuilding the URL without it drops the anchor the
-  // viewer followed, and `replaceState` rewrites the whole URL, so the loss is not recoverable.
-  it('keeps the fragment', () => {
-    expect(urlWithoutSignInModal('/space/space-1/entity-1', params('modal=signin&source=email'), '#block-1')).toBe(
-      '/space/space-1/entity-1#block-1'
-    );
-  });
-
-  it('orders the fragment after the surviving params', () => {
-    expect(urlWithoutSignInModal('/space/space-1/entity-1', params('modal=signin&tabId=tab-2'), '#block-1')).toBe(
-      '/space/space-1/entity-1?tabId=tab-2#block-1'
-    );
-  });
-
-  // `location.hash` is '' when there is no anchor and '#' for a bare one, and neither should
-  // leave a dangling marker on the tidied URL.
-  it('adds no marker when there is no anchor', () => {
-    expect(urlWithoutSignInModal('/explore', params('modal=signin'), '')).toBe('/explore');
-    expect(urlWithoutSignInModal('/explore', params('modal=signin'), '#')).toBe('/explore');
-  });
-
-  it('tolerates a bare id from a caller that is not reading location.hash', () => {
-    expect(urlWithoutSignInModal('/explore', params('modal=signin'), 'block-1')).toBe('/explore#block-1');
-  });
-
-  it('is a no-op on a URL that never carried the trigger', () => {
-    expect(urlWithoutSignInModal('/explore', params('tabId=tab-2'))).toBe('/explore?tabId=tab-2');
-    expect(urlWithoutSignInModal('/explore', null)).toBe('/explore');
+  // Both links share the trigger param, so the value has to be the thing that tells them apart.
+  it('is distinguishable from the debates link', () => {
+    expect(requestsModal(new URLSearchParams('modal=debates'), SIGN_IN_MODAL)).toBe(false);
   });
 });

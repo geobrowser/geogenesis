@@ -10,10 +10,7 @@ import { KEY_FRAME_IMAGE_PROPERTY } from '~/core/constants';
 import { ID } from '~/core/id';
 import { getRelationsByFromEntityId } from '~/core/io/queries';
 import { useSpaceAwareRelation, useValues } from '~/core/sync/use-store';
-
-function isDirectMediaUrl(value: string | null | undefined): value is string {
-  return Boolean(value && (value.startsWith('ipfs://') || value.startsWith('http://') || value.startsWith('https://')));
-}
+import { isDirectMediaUrl } from '~/core/utils/media-url';
 
 export type VideoKeyframeUrl = {
   url: string | undefined;

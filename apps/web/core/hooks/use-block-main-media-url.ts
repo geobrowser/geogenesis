@@ -5,13 +5,10 @@ import * as React from 'react';
 import type { BlockMediaKind } from '~/core/blocks/data/resolve-main-media-property';
 import { ID } from '~/core/id';
 import { useSpaceAwareRelation, useValues } from '~/core/sync/use-store';
+import { isDirectMediaUrl } from '~/core/utils/media-url';
 import { useEntityMedia } from '~/core/utils/use-entity-media';
 
 import { useVideoKeyframeUrl } from './use-video-keyframe-url';
-
-function isDirectMediaUrl(value: string | null | undefined): value is string {
-  return Boolean(value && (value.startsWith('ipfs://') || value.startsWith('http://') || value.startsWith('https://')));
-}
 
 export type BlockMainMediaUrl = {
   url: string | undefined;

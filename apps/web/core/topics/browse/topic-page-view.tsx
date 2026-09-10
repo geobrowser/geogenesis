@@ -10,11 +10,14 @@ import type { Relation } from '~/core/types';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { NavUtils } from '~/core/utils/utils';
 
+import { ClampedText } from '~/design-system/clamped-text';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
+import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
+import { META_CHIP_CLASS, RelationChipSection } from '~/partials/entity-page/relation-chip-section';
 
 import { UNNAMED_SUBTOPIC_PROPERTY_ID } from '../ontology';
 import { TopicClaims } from './topic-claims';
@@ -22,11 +25,6 @@ import { TopicComposition } from './topic-composition';
 import { TopicCoverage } from './topic-coverage';
 import { TopicDebates } from './topic-debates';
 import { useTopicAncestors } from './use-topic-ancestors';
-
-/** Subtopic chips shown before the rest collapse into a count. */
-const SUBTOPIC_CHIP_CAP = 8;
-
-const META_CHIP_CLASS = 'flex h-6 max-w-full items-center rounded border border-grey-02 bg-white px-1.5 text-metadata';
 
 /**
  * The browse-mode read view for a Topic.
@@ -132,10 +130,24 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
             {entity.name ?? entity.id}
           </Text>
 
+          {/* Clamped, like entity pages, the side panel and the claim page (GEO-2776). What is
+              shared is the line budget, not the cut: wrapping decides where the break lands and
+              wrapping follows width, so the route view, the side panel and a phone stop at
+              different words. They give up the same three lines of the page, which a character
+              count could not do — the same count spends a different number of lines at each width,
+              and lines are what the reader is actually paying.
+
+              `ClampedText` measures an unclamped clone, so the toggle appears only when something
+              is genuinely hidden. The naive-overflow bug GEO-2756 fixed lived in the debates
+              feed's own title, which clamps a heading inside a link and so has its own
+              implementation. */}
           {entity.description && (
-            <Text as="p" variant="body" color="grey-04">
-              {entity.description}
-            </Text>
+            <ClampedText
+              text={entity.description}
+              maxLines={ENTITY_DESCRIPTION_MAX_LINES}
+              variant="body"
+              textClassName="wrap-break-word text-grey-04"
+            />
           )}
 
           <div className="flex flex-wrap items-center gap-1.5">
@@ -146,7 +158,7 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
 
         <TopicComposition topicId={entityId} spaceId={spaceId} />
 
-        <TopicSubtopics subtopics={subtopics} spaceId={spaceId} />
+        <RelationChipSection label="Subtopics" relations={subtopics} spaceId={spaceId} />
 
         <TopicDebates topicId={entityId} spaceId={spaceId} />
 
@@ -157,49 +169,5 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
         <CommentSection entityId={entityId} spaceId={spaceId} />
       </div>
     </div>
-  );
-}
-
-/**
- * Where to go next, high on the page.
- *
- * Chips rather than cards: a topic with fourteen subtopics should cost a line or two, not a screen.
- * Placed directly under the header because on a broad topic the most useful thing a reader can do is
- * narrow — and on a thin one, this is the section that still has something to offer.
- */
-function TopicSubtopics({ subtopics, spaceId }: { subtopics: Relation[]; spaceId: string }) {
-  const [expanded, setExpanded] = React.useState(false);
-
-  if (subtopics.length === 0) return null;
-
-  const visible = expanded ? subtopics : subtopics.slice(0, SUBTOPIC_CHIP_CAP);
-  const hidden = subtopics.length - visible.length;
-
-  return (
-    <section aria-label="Subtopics">
-      <Text as="h2" variant="mediumTitle" color="text" className="mb-3 block">
-        Subtopics
-      </Text>
-      <div className="flex flex-wrap gap-1.5">
-        {visible.map(relation => (
-          <Link
-            key={relation.id}
-            href={NavUtils.toEntity(spaceId, relation.toEntity.id)}
-            className={`${META_CHIP_CLASS} text-text transition-colors hover:border-text`}
-          >
-            <span className="truncate">{relation.toEntity.name ?? relation.toEntity.id}</span>
-          </Link>
-        ))}
-        {hidden > 0 && (
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className={`${META_CHIP_CLASS} text-grey-04 tabular-nums transition-colors hover:border-text hover:text-text`}
-          >
-            +{hidden}
-          </button>
-        )}
-      </div>
-    </section>
   );
 }

@@ -14,7 +14,7 @@ import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
-import { Text } from '~/design-system/text';
+import { SectionTitle } from '~/partials/entity-page/section-title';
 
 import { useClaimResponseState } from './use-claim-response-state';
 import { CursorPager, useCursorPages } from './use-cursor-pages';
@@ -144,9 +144,7 @@ export function ClaimRelatedClaims({
 
   return (
     <section aria-label="Related claims">
-      <Text as="h2" variant="smallTitle" color="text" className="mb-3 block">
-        Related claims
-      </Text>
+      <SectionTitle>Related claims</SectionTitle>
       {/* Two up where there is room, one up in the side panel and on a phone — the same container
           query the rest of the page lays out against, so the gallery follows the panel's width
           rather than the window's. */}

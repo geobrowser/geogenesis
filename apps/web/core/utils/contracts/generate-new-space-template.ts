@@ -49,6 +49,8 @@ const RECENT_NEWS_TYPE_IDS = [
 
 function filterByType(spaceId: string, typeId: string): string {
   return JSON.stringify({
+    // Empty `modes` marks the per-property format; absent entries mean AND.
+    modes: {},
     spaceId: { in: [spaceId] },
     filter: { [SystemIds.TYPES_PROPERTY]: { is: typeId } },
   });
@@ -56,7 +58,7 @@ function filterByType(spaceId: string, typeId: string): string {
 
 function filterByTypes(spaceId: string, typeIds: string[]): string {
   return JSON.stringify({
-    mode: 'OR',
+    modes: { [SystemIds.TYPES_PROPERTY]: 'OR' },
     spaceId: { in: [spaceId] },
     filter: { [SystemIds.TYPES_PROPERTY]: { in: typeIds } },
   });

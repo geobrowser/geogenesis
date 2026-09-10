@@ -13,7 +13,6 @@ import {
   useRemoteParticipants,
   useRoomContext,
 } from '@livekit/components-react';
-import { useKrispNoiseFilter } from '@livekit/components-react/krisp';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -340,10 +339,16 @@ function VoiceDockBody({
     };
   }, [room, roomRef]);
 
-  const { setNoiseFilterEnabled } = useKrispNoiseFilter();
-  React.useEffect(() => {
-    void setNoiseFilterEnabled(true);
-  }, [setNoiseFilterEnabled]);
+  // No noise filter here, deliberately. Krisp substitutes its own output for the *published* track,
+  // so anything that leaves it attached and not producing audio is a microphone that reads unmuted
+  // and carries nothing: the room stays connected, the pills stay lit, and the other side hears
+  // silence with nothing to click. The raw track depends on no audio context, worklet or processor
+  // swap, so this dock is on air whenever the room is. It auto-joins and exists to keep two people
+  // talking while they browse claims, and filtering is worth less here than audio that is either
+  // working or visibly broken.
+  //
+  // The debate room keeps Krisp: its pre-join screen means the audio context is already running
+  // before a filter attaches, and its recording is worth the filtering.
 
   // Auto-join means no click stands between arriving and connecting, so the browser's autoplay
   // policy can refuse to play the opponent's audio — silently, with the room otherwise healthy

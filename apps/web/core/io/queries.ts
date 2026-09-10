@@ -7,6 +7,8 @@ import {
   AUTHORS_PROPERTY_ID,
   BLOCKS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
+  DEBATE_OPPOSED_BY_PROPERTY_ID,
+  DEBATE_SUPPORTED_BY_PROPERTY_ID,
   DEBATE_TRANSCRIPTS_PROPERTY_ID,
   NAME_PROPERTY_ID,
   VOTE_DEBATES_PROPERTY_ID,
@@ -24,8 +26,9 @@ import {
   type EntityExistsQuery,
   type EntityFilter,
   type EntitySpacesBatchQuery,
+  UserDebateParticipationDocument,
   UserEntityVotesByTypeDocument,
-  UserHasEntityVoteDocument,
+  UserHasVoteOfKindDocument,
   type UserVoteFilter,
   type UuidFilter,
 } from '~/core/gql/graphql';
@@ -35,6 +38,7 @@ import {
   type ActiveResponseDirection,
   type ResponseKind,
   type ResponseObjectType,
+  type ResponseVoteKind,
   decodeActiveResponseDirection,
   entityResponseQueryVariables,
 } from '~/core/responses/entity-response';
@@ -52,6 +56,7 @@ import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
 import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
+import { collapseOrFilter } from './filter-or-collapse';
 import { graphql } from './graphql-client';
 import {
   claimResponseSummariesQuery,
@@ -87,7 +92,6 @@ import {
 import { restFetch } from './rest';
 import { capSearchQuery } from './search-query';
 import { type SortOrder } from './sort-order';
-import { collapseOrFilter } from './filter-or-collapse';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
 
@@ -464,17 +468,50 @@ export function getRelationEntityRelations(entityId: string, spaceId: string, si
   });
 }
 
+const RELATIONS_PAGE_SIZE = 500;
+
+/**
+ * Backlink rows for a set of target entities. The id list is chunked under the
+ * API's per-request cap, and every chunk drains pages — the root `relations`
+ * field truncates at the server's 100-row default otherwise, which silently
+ * drops rows for well-linked entities (verified against the live API).
+ */
 export function getRelationsByToEntityIds(
   toEntityIds: string[],
   typeId?: string,
   spaceId?: string,
   signal?: AbortController['signal']
 ) {
-  return graphql({
-    query: relationsByToEntityIdsQuery,
-    decoder: data => data.relations ?? [],
-    variables: { toEntityIds, typeId, spaceId },
-    signal,
+  return Effect.gen(function* () {
+    // Dedupe (dash-insensitively) before chunking: the same id in two chunks
+    // would return its rows twice and inflate downstream counts.
+    const uniqueIds = [...new Map(toEntityIds.map(id => [id.replace(/-/g, '').toLowerCase(), id])).values()];
+    if (uniqueIds.length === 0) return [];
+
+    type Row = { id: string; toEntityId: string; spaceId: string; fromEntityId: string };
+    type RelationsPage = { nodes: Row[]; pageInfo: { hasNextPage: boolean; endCursor?: string | null } } | null;
+    const rows: Row[] = [];
+
+    for (let start = 0; start < uniqueIds.length; start += ENTITY_ID_BATCH_SIZE) {
+      const chunk = uniqueIds.slice(start, start + ENTITY_ID_BATCH_SIZE);
+      // Cursor pagination, not offset: the server rejects offsets above 1000,
+      // and well-linked chunks (e.g. submission backlinks) can exceed that.
+      let after: string | null = null;
+      for (;;) {
+        const page: RelationsPage = yield* graphql({
+          query: relationsByToEntityIdsQuery,
+          decoder: data => (data.relationsConnection ?? null) as RelationsPage,
+          variables: { toEntityIds: chunk, typeId, spaceId, first: RELATIONS_PAGE_SIZE, after },
+          signal,
+        });
+        if (!page) break;
+        rows.push(...page.nodes);
+        if (!page.pageInfo.hasNextPage || !page.pageInfo.endCursor) break;
+        after = page.pageInfo.endCursor;
+      }
+    }
+
+    return rows;
   });
 }
 
@@ -1326,11 +1363,41 @@ export function getUserEntityResponse(
   });
 }
 
-export function getUserHasEntityVote(userId: string, signal?: AbortController['signal']) {
+/**
+ * Has this user cast a vote of any of the given kinds?
+ *
+ * Takes the kinds rather than assuming them: curation (0) is an entity upvote, stance (1) and
+ * veracity (2) are a position on a claim, and the onboarding checklist counts those as two
+ * different things a person can have done.
+ */
+export function getUserHasVoteOfKind(
+  userId: string,
+  voteKinds: readonly ResponseVoteKind[],
+  signal?: AbortController['signal']
+) {
   return graphql({
-    query: UserHasEntityVoteDocument,
+    query: UserHasVoteOfKindDocument,
     decoder: data => (data.userVotes?.length ?? 0) > 0,
-    variables: { userId },
+    variables: { userId, voteKinds: [...voteKinds] },
+    signal,
+  });
+}
+
+/**
+ * Has this personal space been published on either side of a debate?
+ *
+ * Supported by / Opposed by point from the debate at the participant, so this reads the relation
+ * from the participant's end. Their existence implies a published debate — the relations are
+ * written by the publish flow and by nothing else.
+ */
+export function getUserHasDebateParticipation(personalSpaceId: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: UserDebateParticipationDocument,
+    decoder: data => (data.relations?.length ?? 0) > 0,
+    variables: {
+      personalSpaceId,
+      sidePropertyIds: [DEBATE_SUPPORTED_BY_PROPERTY_ID, DEBATE_OPPOSED_BY_PROPERTY_ID],
+    },
     signal,
   });
 }

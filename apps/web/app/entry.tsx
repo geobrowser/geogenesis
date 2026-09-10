@@ -34,7 +34,7 @@ import { StatusBar } from '~/partials/review/status-bar';
 import { SearchDialog } from '~/partials/search';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
-import { communityFullscreenActiveAtom, rankingFullscreenActiveAtom } from '~/atoms';
+import { rankingFullscreenActiveAtom } from '~/atoms';
 
 const OnboardingDialog = dynamic(
   () => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })),
@@ -75,8 +75,8 @@ const PostAuthRedirect = dynamic(
   { ssr: false }
 );
 
-const SignInDeepLinkHandler = dynamic(
-  () => import('~/partials/auth/sign-in-deep-link-handler').then(m => ({ default: m.SignInDeepLinkHandler })),
+const DeepLinkHandler = dynamic(
+  () => import('~/partials/deep-links/deep-link-handler').then(m => ({ default: m.DeepLinkHandler })),
   { ssr: false }
 );
 
@@ -97,9 +97,7 @@ const DebatesHubPanel = dynamic(
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
-  const rankingFullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
-  const communityFullscreenActive = useAtomValue(communityFullscreenActiveAtom);
-  const fullscreenActive = rankingFullscreenActive || communityFullscreenActive;
+  const fullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
 
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
@@ -149,7 +147,7 @@ export function App({ children }: { children: React.ReactNode }) {
           <SignInPrompt />
           <PostAuthRedirect />
           <React.Suspense fallback={null}>
-            <SignInDeepLinkHandler />
+            <DeepLinkHandler />
           </React.Suspense>
           <Toast />
           <GovernanceReopenEditLoadingBar />
@@ -159,7 +157,11 @@ export function App({ children }: { children: React.ReactNode }) {
           <ChatWidget />
           <FeatureFlagsDialog />
           <DebateCoordinator />
-          <DebatesHubPanel />
+          {/* Suspense: the panel reads `useSearchParams` to tell a debates deep link apart from
+              an ordinary navigation. */}
+          <React.Suspense fallback={null}>
+            <DebatesHubPanel />
+          </React.Suspense>
           <DebateRecordingUploadCoordinator />
           <Persistence />
         </ClientOnly>

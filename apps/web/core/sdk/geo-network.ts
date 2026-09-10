@@ -17,7 +17,12 @@ import { GEOGENESIS } from '../wallet/geo-chain';
 
 const config = Environment.getConfig();
 
-const IS_TESTNET = Number(config.chainId) === GeoTestnetConfig.chain?.id;
+/**
+ * Exported for feature gating only (e.g. bounties are testnet-only until the
+ * ontology ships on mainnet). Consumers branch on this boolean instead of
+ * comparing network literals, keeping this module the single network authority.
+ */
+export const IS_TESTNET = Number(config.chainId) === GeoTestnetConfig.chain?.id;
 
 // On testnet the SDK's built-in addresses are the defaults and env vars are
 // overrides (used by the v2 contract cutover until the SDK publishes the new

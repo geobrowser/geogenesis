@@ -139,6 +139,31 @@ describe('getVotingSettingsProposalDetails', () => {
   it('returns null when the action carries none of the settings values', () => {
     expect(getVotingSettingsProposalDetails([{ actionType: 'UPDATE_VOTING_SETTINGS' }])).toBeNull();
   });
+
+  // `false` is the meaningful half of this field — it is what grants new members the fast path —
+  // and it is the value a truthiness check would drop on the floor. Both directions are asserted
+  // so neither can be mistaken for "absent".
+  it.each([
+    ['granting new members the fast path', false],
+    ['withholding it', true],
+  ])('carries the new-member fast-path value through when it is %s', (_label, disabled) => {
+    expect(
+      getVotingSettingsProposalDetails([
+        { actionType: 'UPDATE_VOTING_SETTINGS', quorum: 3, disableFastPathAccessForNewMembers: disabled },
+      ])
+    ).toEqual({ quorum: 3, disableFastPathForNewMembers: disabled });
+  });
+
+  // `hasAnyValue` tests `!== undefined` rather than truthiness. A proposal whose only reported
+  // change is `false` still has something to say, and returning null here would hide it entirely
+  // rather than merely leaving its row out.
+  it('does not treat a lone false as an empty action', () => {
+    expect(
+      getVotingSettingsProposalDetails([
+        { actionType: 'UPDATE_VOTING_SETTINGS', disableFastPathAccessForNewMembers: false },
+      ])
+    ).toEqual({ disableFastPathForNewMembers: false });
+  });
 });
 
 describe('mapApiActionsToProposalType — voting settings', () => {

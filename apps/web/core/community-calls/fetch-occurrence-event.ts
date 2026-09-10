@@ -5,7 +5,8 @@ import { Effect } from 'effect';
 import { getBatchEntities, getEntityBacklinks, getRelationsByFromEntityId } from '~/core/io/queries';
 import { Entity, Relation } from '~/core/types';
 
-import { EVENT_SCHEMA, OCCURRENCE_MATCH_TOLERANCE_MS } from './constants';
+import { CALL_SCHEMA, EVENT_SCHEMA, OCCURRENCE_MATCH_TOLERANCE_MS } from './constants';
+import { findOccurrenceByStart } from './occurrences';
 import { isPlayableRecordingUrl } from './recordings';
 
 export type PublishedAgendaBlock = { blockId: string; markdown: string; position: string };
@@ -19,8 +20,43 @@ export type PublishedOccurrenceEvent = {
 };
 
 /**
+ * Which instant a published `Community call event` says it is for.
+ *
+ * Three properties can carry it, and they are tried in the order the writers actually
+ * populate them — not in the order the schema lists them:
+ *
+ * 1. **Occurence original start** (note the typo in the deployed property name) is the
+ *    RRULE slot, pinned at publish for exactly this purpose: it maps the event back to its
+ *    series slot even when the event's own time was overridden. Both the curator frontend
+ *    (`publish-occurrence-event.ts`) and the Rapporteur bot (`publisher.ts`) write it.
+ * 2. **Start time** is what geogenesis's own publish path writes, and nothing else does.
+ * 3. **Meeting Time** is the event's own single-occurrence schedule — last, because it is
+ *    the one that a publish-time override changes, so it can disagree with the slot.
+ *
+ * Matching used to consider only (2), which is why this went unnoticed: of the 107
+ * `Community call event` entities in the graph, 6 carry Start time and 90 carry Occurence
+ * original start. So 101 published occurrences matched nothing, and three things failed
+ * quietly for them — the listing never linked to the published occurrence, a published
+ * recording could never be detected, and an agenda republish could not find the previous
+ * event to tombstone its blocks, so it duplicated them instead.
+ */
+export function eventOccurrenceStart(entity: Entity, occurrenceStart: number): number | null {
+  const valueOf = (propertyId: string) => entity.values.find(v => v.property.id === propertyId)?.value;
+
+  for (const propertyId of [EVENT_SCHEMA.OCCURRENCE_ORIGINAL_START_PROPERTY, EVENT_SCHEMA.START_TIME_PROPERTY]) {
+    const raw = valueOf(propertyId);
+    const ms = raw ? Date.parse(raw) : NaN;
+    if (Number.isFinite(ms)) return ms;
+  }
+
+  const schedule = valueOf(CALL_SCHEMA.MEETING_TIME_PROPERTY);
+  return schedule ? (findOccurrenceByStart(schedule, occurrenceStart)?.startMs ?? null) : null;
+}
+
+/**
  * Best-effort match of an occurrence to its published `Community call event` entity: the
- * event backlink whose START_TIME is nearest `occurrenceStart` within tolerance, or null.
+ * event backlink whose claimed start (see {@link eventOccurrenceStart}) is nearest
+ * `occurrenceStart` within tolerance, or null.
  */
 async function matchOccurrenceEvent(
   seriesId: string,
@@ -37,9 +73,8 @@ async function matchOccurrenceEvent(
 
   const entities = await Effect.runPromise(getBatchEntities(candidateIds)).catch(() => []);
   const scored = entities.flatMap(entity => {
-    const startVal = entity.values.find(v => v.property.id === EVENT_SCHEMA.START_TIME_PROPERTY)?.value;
-    const startMs = startVal ? Date.parse(startVal) : NaN;
-    return Number.isFinite(startMs) ? [{ entity, startMs }] : [];
+    const startMs = eventOccurrenceStart(entity, occurrenceStart);
+    return startMs === null ? [] : [{ entity, startMs }];
   });
 
   const best = scored.reduce<{ entity: Entity; startMs: number } | null>((closest, candidate) => {

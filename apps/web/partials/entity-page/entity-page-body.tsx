@@ -51,6 +51,10 @@ export type RouteEntityPageBodyProps = SharedProps & {
   serverRelations: Relation[];
   notice?: React.ReactNode;
   coverSlot?: React.ReactNode;
+  /** Rendered after the block content and property sheet, before backlinks (e.g. bounty submissions/payouts). */
+  belowBodySlot?: React.ReactNode;
+  /** Hides the collapsible properties sheet (e.g. bounty pages render their own facts card instead). */
+  hideProperties?: boolean;
 };
 
 export type SidePanelEntityPageBodyProps = SharedProps & {
@@ -59,6 +63,10 @@ export type SidePanelEntityPageBodyProps = SharedProps & {
   previewImageUrl?: string | null;
   previewName?: string | null;
   previewDescription?: string | null;
+  /** Same slots as the route page, so a bounty reads the same in the panel (see entity-side-panel). */
+  notice?: React.ReactNode;
+  belowBodySlot?: React.ReactNode;
+  hideProperties?: boolean;
 };
 
 export type EntityPageBodyProps = RouteEntityPageBodyProps | SidePanelEntityPageBodyProps;
@@ -106,10 +114,14 @@ function EditorFooter({
   entityId,
   spaceId,
   variant,
+  belowBodySlot,
+  hideProperties = false,
 }: {
   entityId: string;
   spaceId: string;
   variant: EntityPageBodyProps['variant'];
+  belowBodySlot?: React.ReactNode;
+  hideProperties?: boolean;
 }) {
   return (
     <>
@@ -117,12 +129,18 @@ function EditorFooter({
       {variant === 'route' ? (
         <>
           <Spacer height={24} />
-          <ToggleEntityPage id={entityId} spaceId={spaceId} />
+          {hideProperties ? null : <ToggleEntityPage id={entityId} spaceId={spaceId} />}
           <AutomaticModeToggle />
         </>
-      ) : (
+      ) : hideProperties ? null : (
         <ToggleEntityPage id={entityId} spaceId={spaceId} />
       )}
+      {belowBodySlot ? (
+        <>
+          <Spacer height={40} />
+          {belowBodySlot}
+        </>
+      ) : null}
       <Spacer height={40} />
       <EntityBacklinks entityId={entityId} />
       <CommentSection entityId={entityId} spaceId={spaceId} />
@@ -200,7 +218,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   );
 
   if (props.variant === 'sidePanel') {
-    const { isRelationPage = false, previewName, previewDescription } = props;
+    const { isRelationPage = false, previewName, previewDescription, notice, belowBodySlot, hideProperties } = props;
     const avatarUrl = props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null;
 
     return (
@@ -226,15 +244,36 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             </div>
             <Spacer height={40} />
             {tabsSection}
+            {notice ? (
+              <>
+                <Spacer height={24} />
+                {notice}
+              </>
+            ) : null}
             <Spacer height={40} />
-            <EditorFooter entityId={entityId} spaceId={spaceId} variant="sidePanel" />
+            <EditorFooter
+              entityId={entityId}
+              spaceId={spaceId}
+              variant="sidePanel"
+              belowBodySlot={belowBodySlot}
+              hideProperties={hideProperties}
+            />
           </div>
         </EntityPageContentContainer>
       </div>
     );
   }
 
-  const { showCover = true, showHeading = true, showHeader = true, serverRelations, notice = null, coverSlot } = props;
+  const {
+    showCover = true,
+    showHeading = true,
+    showHeader = true,
+    serverRelations,
+    notice = null,
+    coverSlot,
+    belowBodySlot,
+    hideProperties,
+  } = props;
   const showSpacer = showCover || showHeading || showHeader;
 
   return (
@@ -252,9 +291,16 @@ export function EntityPageBody(props: EntityPageBodyProps) {
         <TypeSchemaInline entityId={entityId} spaceId={spaceId} />
         <Spacer height={16} />
         {tabsSection}
+        {notice ? <Spacer height={24} /> : null}
         {notice}
         {(showSpacer || !!notice) && <Spacer height={40} />}
-        <EditorFooter entityId={entityId} spaceId={spaceId} variant="route" />
+        <EditorFooter
+          entityId={entityId}
+          spaceId={spaceId}
+          variant="route"
+          belowBodySlot={belowBodySlot}
+          hideProperties={hideProperties}
+        />
       </EntityPageContentContainer>
     </>
   );
