@@ -5,6 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
@@ -80,12 +81,14 @@ import { responsePositionLabel } from '~/core/responses/entity-response';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { validateEntityId } from '~/core/utils/utils';
 
+import { SmallButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { RematchVoicePill } from './rematch-voice';
+import { rematchMatchesOnlyAtom } from '~/atoms';
 
 const NO_PARTICIPANTS: DebateRematchParticipant[] = [];
 
@@ -111,7 +114,8 @@ function useLastSettled<T>(value: T, settling: boolean, resetKey: string): T {
   return settling && lastSettledRef.current ? lastSettledRef.current.value : value;
 }
 
-type PickerTab = 'claims' | 'opponent';
+/** Renamed from `claims` with GEO-2861, to match the hub's own browse tab. */
+type PickerTab = 'explore' | 'opponent';
 
 /**
  * GEO-2683. Where the Claims tab draws its list from. Recommended, Featured and the whole corpus
@@ -151,6 +155,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // put something together for this pairing, and it doesn't exist otherwise. Deciding in state
   // would fix the default before that lookup settles.
   const [chosenTab, setChosenTab] = React.useState<PickerTab | null>(null);
+  const [matchesOnly, setMatchesOnly] = useAtom(rematchMatchesOnlyAtom);
   // Left unset until the viewer picks one: Recommended is the best default when a curator has put
   // something together for this pairing, and it doesn't exist otherwise. Deciding in state would
   // fix the default before that lookup settles.
@@ -159,7 +164,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Claims is where the picker opens, whatever its source turns out to be. The strip no longer
   // shifts under the viewer as lookups land: which claims Claims shows is the menu's business now,
   // and the menu says so in words rather than by growing a tab.
-  const tab: PickerTab = chosenTab ?? 'claims';
+  // The opponent's positions is where this opens (GEO-2861). A returning pair are here *because*
+  // they just debated each other, so a general catalogue is not the first thing they came for —
+  // the claims their opponent has already taken a side on are.
+  const tab: PickerTab = chosenTab ?? 'opponent';
   const setTab = setChosenTab;
 
   const savedClaimsQuery = useDebateRematchClaims(sessionId);
@@ -279,7 +287,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Gated on the tab too: a remembered source shouldn't keep a graph query alive behind the
   // opponent's positions, which draw from somewhere else entirely.
   const claimsTagId = source === 'featured' ? FEATURED_TAG_ID : DEBATE_TAG_ID;
-  const taggedEnabled = tab === 'claims' && (source === 'featured' || source === 'all') && !sourceUndecided;
+  const taggedEnabled = tab === 'explore' && (source === 'featured' || source === 'all') && !sourceUndecided;
   // What goes to the server, so the page and both facet menus describe the same set of spaces.
   //
   // Two of the three gates can be sent; one cannot. The viewer's allowlist and the acceptor's
@@ -777,6 +785,32 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [currentUserId]
   );
 
+  const viewerPositionOf = React.useCallback(
+    (claim: DebateRematchClaim) =>
+      currentUserId === null
+        ? null
+        : (claim.participants.find(position => position.user_id === currentUserId)?.position ?? null),
+    [currentUserId]
+  );
+
+  /**
+   * The rematch flow's "Matches only" (GEO-2861): both of you hold a side, and they are opposite
+   * ones — the claims a rematch can be requested on right now.
+   *
+   * A client-side predicate, unlike the hub's, because there is no matches endpoint here. Both sides
+   * are already in hand from the session's own rows, so this asks the same question of them rather
+   * than approximating it.
+   */
+  const isRematchable = React.useCallback(
+    (claim: DebateRematchClaim) => {
+      const mine = viewerPositionOf(claim);
+      const theirs = opponentPositionOf(claim);
+
+      return mine !== null && theirs !== null && mine !== theirs;
+    },
+    [opponentPositionOf, viewerPositionOf]
+  );
+
   const returnFromSession = React.useCallback(
     (endedSession: DebateRematchSession) => {
       if (exitStartedRef.current) return;
@@ -862,7 +896,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           taggedClaims;
 
   // Whether the list on screen was narrowed by its own query. Only the tagged sources are.
-  const graphFiltered = tab === 'claims' && (source === 'featured' || source === 'all');
+  const graphFiltered = tab === 'explore' && (source === 'featured' || source === 'all');
 
   // Both menus come from the server's own count over the tag, each narrowed by every dimension but
   // its own (GEO-2796). Counting from the rows could only ever describe the page in hand, which is
@@ -929,15 +963,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Only the tagged sources are narrowed by their query. The opponent's tab and Recommended are
   // both lists fetched by id — the opponent's positions, a curator's page — so nothing narrowed
   // them on the way in and the filters still run here.
+  // Only on the opponent's tab: Explore is the wider catalogue by definition, and a claim there
+  // that neither of you has answered is the normal case rather than one to hide.
+  const matchesOnlyHere = matchesOnly && tab === 'opponent';
+
   const visibleClaims = React.useMemo(() => {
     if (graphFiltered) return claims;
     return claims.filter(claim => {
+      if (matchesOnlyHere && !isRematchable(claim)) return false;
       if (spaceIds.length > 0 && !spaceIds.includes(claim.claim.space_id)) return false;
       if (!carriesPickedTopics(claim.claim.claim_entity_id)) return false;
       if (debouncedSearch && !claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
       return true;
     });
-  }, [carriesPickedTopics, claims, debouncedSearch, graphFiltered, spaceIds]);
+  }, [carriesPickedTopics, claims, debouncedSearch, graphFiltered, isRematchable, matchesOnlyHere, spaceIds]);
 
   const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
 
@@ -978,7 +1017,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // `isSettlingMemberships` is the same rule applied to the *viewer's* side of the match rather
     // than the menu's: sign-up sends one membership proposal per picked space and they land
     // seconds apart, so the first non-empty answer is a fraction of what they chose (GEO-2834).
+    //
+    // And never on the opponent's tab, which is the landing tab since GEO-2861. That list is the
+    // claims *they* hold a side on, and seeding it with the spaces the viewer belongs to would hide
+    // the opponent's positions everywhere else — the one thing the tab is for. The default is about
+    // browsing, so it waits for Explore, where the seed is spent against a menu it is about.
     pending:
+      tab === 'opponent' ||
       tabIsLoading ||
       publishabilityPending ||
       publishableSpacesLoading ||
@@ -1032,7 +1077,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   }, [facetTopics, graphFiltered, tabError, tabIsLoading, taggedTopicFacet.settled, topicsSettling]);
 
   // The curated tab groups by block rather than listing flat, but narrows on the same filters.
-  const showsSections = tab === 'claims' && source === 'recommended';
+  const showsSections = tab === 'explore' && source === 'recommended';
   const visibleSections = React.useMemo(() => {
     if (!showsSections) return [];
     const visibleById = new Map(visibleClaims.map(claim => [claim.claim.claim_entity_id, claim]));
@@ -1167,9 +1212,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 gives those tabs somewhere to go, and `overscroll-x-contain` stops a swipe that
                 reaches the end from chaining into the browser's back gesture. */}
             <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-5 overflow-x-auto overscroll-x-contain">
-              <TabButton active={tab === 'claims'} onClick={() => setTab('claims')}>
-                Claims
-              </TabButton>
               <TabButton active={tab === 'opponent'} onClick={() => setTab('opponent')}>
                 <span className="max-w-[10rem] truncate">{firstNamePossessive(remoteName)} positions</span>
                 <span
@@ -1187,6 +1229,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                     opponentPositionCount
                   )}
                 </span>
+              </TabButton>
+              {/* Second, and named for the hub's browse tab: this is the wider catalogue you reach
+                  for once the opponent's own positions are not what you want. */}
+              <TabButton active={tab === 'explore'} onClick={() => setTab('explore')}>
+                Explore
               </TabButton>
             </div>
             <button
@@ -1231,14 +1278,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               // Only on Claims: the opponent's tab is one fixed source — their own responses — and
               // a menu offering three others there would read as filtering a list it can't reach.
               leading={
-                tab === 'claims' ? (
+                tab === 'explore' ? (
                   <HubFilterMenu
                     label={CLAIMS_SOURCE_LABELS[source]}
                     options={sourceOptions}
                     value={source}
                     onChange={setChosenSource}
                   />
-                ) : null
+                ) : (
+                  <SmallButton
+                    variant={matchesOnly ? 'primary' : 'secondary'}
+                    aria-pressed={matchesOnly}
+                    onClick={() => setMatchesOnly(current => !current)}
+                  >
+                    Matches only
+                  </SmallButton>
+                )
               }
             />
             <Input
@@ -1279,14 +1334,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           emptyMessage={
             hasFilters
               ? 'No claims match these filters.'
-              : tab === 'opponent'
-                ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
-                : source === 'recommended'
-                  ? `Nothing recommended for you and ${remoteName} yet.`
-                  : source === 'featured'
-                    ? 'No featured claims are available to debate yet.'
-                    : 'No other eligible claims are available yet.'
+              : matchesOnlyHere
+                ? `You and ${remoteName} haven’t taken opposite sides on anything yet.`
+                : tab === 'opponent'
+                  ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
+                  : source === 'recommended'
+                    ? `Nothing recommended for you and ${remoteName} yet.`
+                    : source === 'featured'
+                      ? 'No featured claims are available to debate yet.'
+                      : 'No other eligible claims are available yet.'
           }
+          // Three dead ends, and each has a different way out. Ordered by how much the viewer has
+          // to give up: clearing their filters, then dropping the toggle, then leaving the tab.
           emptyAction={
             hasFilters
               ? {
@@ -1299,7 +1358,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                     setTopicIds([]);
                   },
                 }
-              : undefined
+              : matchesOnlyHere
+                ? { label: 'Show all their positions', onClick: () => setMatchesOnly(false) }
+                : tab === 'opponent'
+                  ? // GEO-2861. An opponent who has answered nothing is a dead end this tab cannot
+                    // resolve, and the catalogue next door is the whole of the way out of it.
+                    { label: 'Explore claims', onClick: () => setTab('explore') }
+                  : undefined
           }
         >
           {showsSections ? (
@@ -1319,7 +1384,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         {/* The Claims tab pages again (GEO-2798), so the sentinel is back — for the tagged sources
             only. Recommended is a curator's page and the opponent's tab is their whole list; both
             still arrive complete. */}
-        {taggedHasNextPage && !showsSections && tab === 'claims' ? (
+        {taggedHasNextPage && !showsSections && tab === 'explore' ? (
           <div ref={sentinelRef} data-testid="rematch-claims-scroll-sentinel" className="h-px" />
         ) : null}
       </main>

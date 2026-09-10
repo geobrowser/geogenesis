@@ -33,7 +33,7 @@ export const spaceSidebarHasContentAtom = atom<boolean | null>(null);
  */
 export const entityCommentsPanelAtom = atom<{ entityId: string; spaceId: string } | null>(null);
 
-export type DebatesHubTab = 'requests' | 'matches' | 'claims' | 'people';
+export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'people';
 
 /** `null` while the debates matchmaking hub is closed. */
 export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
@@ -68,12 +68,26 @@ export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
  * signs in keep the list they had chosen. Changing account is the one thing that clears it; see
  * {@link debatesHubFiltersOwnerAtom}.
  */
-export type DebatesHubClaimsFilter = MatchmakingClaimsFilter | 'featured';
-export const debatesHubClaimsFilterAtom = atom<DebatesHubClaimsFilter>('featured');
+export type DebatesHubExploreFilter = Exclude<MatchmakingClaimsFilter, 'debate_now'> | 'featured';
+export const debatesHubExploreFilterAtom = atom<DebatesHubExploreFilter>('featured');
 
-export const debatesHubClaimsSpaceIdsAtom = atom<string[]>([]);
-export const debatesHubClaimsTopicIdsAtom = atom<string[]>([]);
-export const debatesHubMatchesSpaceIdsAtom = atom<string[]>([]);
+export const debatesHubExploreSpaceIdsAtom = atom<string[]>([]);
+export const debatesHubExploreTopicIdsAtom = atom<string[]>([]);
+
+/**
+ * Lobby's own space selection (GEO-2861).
+ *
+ * One selection, not two. Claims and Matches each kept their own while they were separate tabs;
+ * Lobby is a single tab whose two states answer the same question, so carrying two selections
+ * across the "Matches only" toggle would silently re-filter the list on a switch the viewer reads
+ * as narrowing, not as changing what they had picked.
+ *
+ * The menu behind it is still derived twice — Explore's comes from a server facet, the matches list
+ * counts from its own rows — so a space can be selected and then absent from the options after a
+ * toggle. `keepSelectedVisible` is what keeps it pickable, and so untickable, either way.
+ */
+export const debatesHubLobbySpaceIdsAtom = atom<string[]>([]);
+export const debatesHubLobbyTopicIdsAtom = atom<string[]>([]);
 
 /**
  * Whether the Claims tab's membership default has been applied or forfeited this session.
@@ -83,7 +97,8 @@ export const debatesHubMatchesSpaceIdsAtom = atom<string[]>([]);
  * well — otherwise reopening the hub would re-seed a viewer's deliberately cleared filter and
  * decide they meant something other than what they asked for.
  */
-export const debatesHubClaimsSpaceSeedSpentAtom = atom(false);
+export const debatesHubExploreSpaceSeedSpentAtom = atom(false);
+export const debatesHubLobbySpaceSeedSpentAtom = atom(false);
 
 /**
  * Which account the filter state above belongs to, so it is never handed to a different viewer.
@@ -109,12 +124,40 @@ export const debatesHubFiltersOwnerAtom = atom<string | null>(null);
  * atom is added to the reset by adding it here rather than by remembering every call site.
  */
 export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
-  set(debatesHubClaimsFilterAtom, 'featured');
-  set(debatesHubClaimsSpaceIdsAtom, []);
-  set(debatesHubClaimsTopicIdsAtom, []);
-  set(debatesHubClaimsSpaceSeedSpentAtom, false);
-  set(debatesHubMatchesSpaceIdsAtom, []);
+  set(debatesHubExploreFilterAtom, 'featured');
+  set(debatesHubExploreSpaceIdsAtom, []);
+  set(debatesHubExploreTopicIdsAtom, []);
+  set(debatesHubExploreSpaceSeedSpentAtom, false);
+  set(debatesHubLobbySpaceIdsAtom, []);
+  set(debatesHubLobbyTopicIdsAtom, []);
+  set(debatesHubLobbySpaceSeedSpentAtom, false);
+  // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than
+  // working state, which is the whole reason it is stored rather than session-scoped. Handing a new
+  // account the previous one's *filters* is a leak; handing them a browsing preference held on this
+  // device is the same thing every other stored preference here does.
 });
+
+/**
+ * Whether Lobby is showing matches only (GEO-2861).
+ *
+ * Stored, unlike the rest of the filter bar. The bar is session-scoped on purpose (GEO-2850)
+ * because it is working state — what you are looking through right now. This is not that: it is a
+ * standing answer to how you like to arrive at a debate, and a viewer who only ever wants a
+ * confirmed match should not have to say so again every session.
+ *
+ * Off by default. The wider list is the one that can always answer; opening onto a stricter list
+ * that is usually empty would read as the hub being broken rather than as a filter being on.
+ */
+export const debatesHubMatchesOnlyAtom = atomWithStorage('debatesHubMatchesOnly', false);
+
+/**
+ * The same standing preference for the debate-again flow (GEO-2861), under its own key.
+ *
+ * Two keys rather than one: the hub asks "who can I debate right now, out of everyone", the rematch
+ * picker asks "which of this opponent's claims can we go again on". Wanting the strict answer to one
+ * is not a statement about the other, and sharing a key would make it one.
+ */
+export const rematchMatchesOnlyAtom = atomWithStorage('rematchMatchesOnly', false);
 
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 

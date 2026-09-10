@@ -22,7 +22,7 @@ import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { HubSwap } from './hub-motion';
 import { hubClosesOnArrivalAt } from './hub-navigation';
 import { HubMessage } from './hub-states';
-import { MatchesTab } from './matches-tab';
+import { LobbyTab } from './lobby-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
 import { useDebatesHub } from './use-debates-hub';
@@ -40,30 +40,32 @@ const PANEL_SCROLL_SELECTOR = '[data-debates-hub-scroll]';
 // separately, by `DEFAULT_TAB` in use-debates-hub — it happens to agree with this order, but
 // reordering here does not move it.
 const TABS: { id: DebatesHubTab; label: string }[] = [
-  { id: 'claims', label: 'Claims' },
+  { id: 'lobby', label: 'Lobby' },
   { id: 'people', label: 'People' },
-  { id: 'matches', label: 'Matches' },
+  { id: 'explore', label: 'Explore' },
   { id: 'requests', label: 'Requests' },
 ];
 
 /**
- * GEO-2725. Matches and Requests are a particular person's, so signed out they have no possible
- * contents — not an empty list but a meaningless one. Claims and People describe the world rather
- * than the viewer, so both read fine anonymously and are what the hub offers before sign-in.
+ * GEO-2725. Lobby and Requests are a particular person's, so signed out they have no possible
+ * contents — not an empty list but a meaningless one. Both of Lobby's lists are viewer-relative:
+ * geo-chat scores `debate_now` on who is available to debate *you*, and a match is a claim you hold
+ * a side on. Explore and People describe the world rather than the viewer, so both read fine
+ * anonymously and are what the hub offers before sign-in (GEO-2861).
  */
-const SIGNED_OUT_TABS: DebatesHubTab[] = ['claims', 'people'];
+const SIGNED_OUT_TABS: DebatesHubTab[] = ['explore', 'people'];
 
 function tabsFor(authenticated: boolean) {
   return authenticated ? TABS : TABS.filter(tab => SIGNED_OUT_TABS.includes(tab.id));
 }
 
 /**
- * Signing out with Matches or Requests open would otherwise leave the panel on a tab that is no
+ * Signing out with Lobby or Requests open would otherwise leave the panel on a tab that is no
  * longer in the row, showing a tab body with no tab selected.
  */
 function visibleTab(activeTab: DebatesHubTab, authenticated: boolean): DebatesHubTab {
   if (authenticated || SIGNED_OUT_TABS.includes(activeTab)) return activeTab;
-  return 'claims';
+  return 'explore';
 }
 
 function isInteractiveDragTarget(target: EventTarget | null): boolean {
@@ -351,9 +353,9 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           <HubSwap activeKey={activeTab}>
             {activeTab === 'requests' ? (
               <RequestsTab />
-            ) : activeTab === 'matches' ? (
-              <MatchesTab onTabChange={changeTab} />
-            ) : activeTab === 'claims' ? (
+            ) : activeTab === 'lobby' ? (
+              <LobbyTab onTabChange={changeTab} />
+            ) : activeTab === 'explore' ? (
               <ClaimsTab />
             ) : (
               <PeopleTab onTabChange={changeTab} />

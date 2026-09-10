@@ -127,7 +127,7 @@ vi.mock('./share-dialog', () => ({
 vi.mock('~/core/debates/matchmaking/use-debates-hub', () => ({
   useDebatesHub: () => ({
     isOpen: mocks.hubIsOpen,
-    activeTab: 'claims' as const,
+    activeTab: 'lobby' as const,
     open: mocks.hubOpen,
     close: mocks.hubClose,
     toggle: vi.fn(),
@@ -569,12 +569,12 @@ describe('DebatesBrowseFeed comments', () => {
 
   // "Join a debate" is no longer one of the feed's own panels: it opens the shared hub, which is
   // cross-space and carries the filters, counts and ranking the feed's panel never had.
-  it('opens the debates hub on the claims tab instead of a feed panel', () => {
+  it('opens the debates hub on Lobby instead of a feed panel', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
 
-    expect(mocks.hubOpen).toHaveBeenCalledWith('claims');
+    expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
     // The hub is a portal of its own, so nothing lands in the feed's in-flow panel slot.
     expect(screen.queryByText(/^Claims panel for/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Comments panel for/)).not.toBeInTheDocument();
@@ -616,7 +616,7 @@ describe('DebatesBrowseFeed comments', () => {
 
     act(() => mocks.privyOnComplete?.());
 
-    expect(mocks.hubOpen).toHaveBeenCalledWith('claims');
+    expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
   });
 
   it('does nothing until Privy has restored the session', () => {
@@ -651,7 +651,7 @@ describe('DebatesBrowseFeed comments', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
 
-    expect(mocks.hubOpen).toHaveBeenCalledWith('claims');
+    expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
     expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
   });
 

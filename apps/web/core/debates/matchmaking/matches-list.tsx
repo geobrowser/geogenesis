@@ -15,21 +15,34 @@ import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
 import { countBy, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
 import { useStableListOrder } from './use-stable-list-order';
-import { type DebatesHubTab, debatesHubMatchesSpaceIdsAtom } from '~/atoms';
+import { type DebatesHubTab, debatesHubLobbySpaceIdsAtom } from '~/atoms';
 
 /**
  * Claims where you're ready to debate and someone holding the opposite response is online and
  * ready too. Requesting sends to whoever has been online longest; the server advances to the next
- * candidate if they pass, so this tab never has to pick a person.
+ * candidate if they pass, so this list never has to pick a person.
  *
  * Topics are Knowledge Graph data geo-chat doesn't model — `match.topics` is always empty, so this
- * tab filters by space only.
+ * filters by space only.
+ *
+ * No longer a tab of its own (GEO-2861): this is Lobby with "Matches only" on. Lobby owns the
+ * toggle and passes it down, so this renders the same filter bar in the same place either way and
+ * the control does not move as the list under it changes.
  */
-export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
-  // Session-scoped, like the Claims tab's: the hub closes on an outside pointer-down, so a
-  // click-away to dismiss the dropdown unmounted this tab and took the selection with it
-  // (GEO-2850).
-  const [spaceIds, setSpaceIds] = useAtom(debatesHubMatchesSpaceIdsAtom);
+export function MatchesList({
+  onTabChange,
+  leading,
+}: {
+  onTabChange: (tab: DebatesHubTab) => void;
+  /** Lobby's "Matches only" toggle, in the slot Explore gives its source picker. */
+  leading?: React.ReactNode;
+}) {
+  // Lobby's one selection, shared with its toggled-off state (GEO-2861) — the toggle narrows the
+  // list, and would be a strange place to also change which spaces the viewer had picked.
+  //
+  // Session-scoped, like Explore's: the hub closes on an outside pointer-down, so a click-away to
+  // dismiss the dropdown unmounted this list and took the selection with it (GEO-2850).
+  const [spaceIds, setSpaceIds] = useAtom(debatesHubLobbySpaceIdsAtom);
 
   const matchesQuery = useMatchmakingMatches(true);
   const requestsQuery = useDebateRequests(true);
@@ -84,6 +97,7 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
           onSpacesClear={() => setSpaceIds([])}
           facetSpaces={facetSpaces}
+          leading={leading}
         />
       </HubStickyControls>
 
@@ -126,7 +140,7 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           // them left the one explanation they can act on being one that would not change anything.
           // Availability gates *sending a request*, which is where the card already says so.
           //
-          // `live` unconditionally: `SIGNED_OUT_TABS` in the panel keeps this tab off the signed-out
+          // `live` unconditionally: `SIGNED_OUT_TABS` in the panel keeps Lobby off the signed-out
           // hub entirely, so every viewer here holds the gateway scope.
           emptyNote={serverMatches.length === 0 ? <DebateHoursNote live /> : undefined}
           // Same label as People's, because it is the same action out of the same dead end. Two
@@ -136,7 +150,7 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           emptyAction={
             filteredBySpace
               ? { label: 'Clear filters', onClick: () => setSpaceIds([]) }
-              : { label: 'Explore claims', onClick: () => onTabChange('claims') }
+              : { label: 'Explore claims', onClick: () => onTabChange('explore') }
           }
         >
           <HubCardList>

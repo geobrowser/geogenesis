@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
-import { debatesHubClaimsSpaceIdsAtom } from '~/atoms';
+import { debatesHubExploreSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -1054,10 +1054,17 @@ it('asks the server for the filter the viewer picked', async () => {
 
   expect(mocks.lastQuery).toMatchObject({ filter: 'mine', spaceIds: null });
 
-  fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Debate now' }));
+  expect(mocks.lastQuery).toMatchObject({ filter: 'mine' });
+});
 
-  expect(mocks.lastQuery).toMatchObject({ filter: 'debate_now' });
+// GEO-2861 moved "Debate now" out of the menu and made it Lobby, which is fixed to that one filter
+// and draws no picker at all. The query is still the whole feature, so it is still asserted here.
+it('asks the server for debate_now when it is Lobby drawing the list', async () => {
+  render(<ClaimsTab variant="lobby" />);
+
+  // No source menu to click through — Lobby is fixed to this one list, which is the point of it.
+  await waitFor(() => expect(mocks.lastQuery).toMatchObject({ filter: 'debate_now' }));
+  expect(screen.queryByRole('button', { name: 'All claims' })).not.toBeInTheDocument();
 });
 
 /**
@@ -1667,18 +1674,24 @@ describe('All claims reads the Debate tag', () => {
     expect(screen.getByText('No claims have been tagged for debate yet.')).toBeInTheDocument();
   });
 
-  // GEO-2840. "Debate now" is the only filter on this tab scored on who is online, so it is the
-  // only one whose empty list means "nobody is around" — the other three are statements about
-  // curation or about the viewer's own positions, and debate hours would not explain any of them.
-  it('adds the debate hours line under Debate now, and not under All claims', async () => {
+  // GEO-2840. `debate_now` is the only list scored on who is online, so it is the only one whose
+  // empty state means "nobody is around" — the rest are statements about curation or about the
+  // viewer's own positions, and debate hours would not explain any of them. Since GEO-2861 that
+  // list is Lobby rather than a filter here, so the two halves are asserted on the two surfaces.
+  it('leaves the debate hours line off All claims', async () => {
     mocks.taggedClaims[DEBATE_TAG] = [];
     mocks.claims = [];
     render(<ClaimsTab />);
 
     await showAllClaims();
-    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).toBeNull();
 
-    chooseFilter('All claims', 'Debate now');
+    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).toBeNull();
+  });
+
+  it('adds the debate hours line under Lobby', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [];
+    mocks.claims = [];
+    render(<ClaimsTab variant="lobby" />);
 
     expect(await screen.findByText('Nobody is ready to debate you on a claim right now.')).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
@@ -1948,7 +1961,7 @@ describe('topic menu', () => {
 
     // Read from the store rather than the query: this is about what the viewer's selection *is*,
     // and an empty selection and a re-seeded one both send a `spaceIds` to the server.
-    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
+    expect(store.get(debatesHubExploreSpaceIdsAtom)).toEqual([]);
   });
 
   // GEO-2789. The filter opens on the spaces the viewer belongs to rather than on everything they
@@ -2403,10 +2416,10 @@ describe('ClaimsTab -- Featured', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Featured' }));
 
-    const labels = ['Featured', 'All claims', 'My positions', 'Debate now'];
+    const labels = ['Featured', 'All claims', 'My positions'];
     const options = screen.getAllByRole('button').filter(button => labels.includes(button.textContent?.trim() ?? ''));
     // The trigger carries the current label too, and it is rendered ahead of the options.
-    expect(options.slice(-4).map(button => button.textContent?.trim())).toEqual(labels);
+    expect(options.slice(-3).map(button => button.textContent?.trim())).toEqual(labels);
   });
 
   // Featured claims are a few hundred in a corpus of hundreds of thousands, so the index is no help
@@ -2621,27 +2634,26 @@ describe('ClaimsTab -- Featured', () => {
     expect(mocks.lastEnabled).toBe(false);
   });
 
-  // GEO-2725. Both are viewer-relative: "My positions" is the viewer's own list, and "Debate now"
-  // is scored on who is available to debate *you*. Signed out neither has a subject.
-  it('drops the viewer-relative filters when signed out', async () => {
+  // GEO-2725. "My positions" is the viewer's own list, so signed out it has no subject. It is the
+  // only one left here: "Debate now" was the other, and GEO-2861 made it Lobby, which the panel
+  // keeps off the signed-out hub entirely for the same reason.
+  it('drops the viewer-relative filter when signed out', async () => {
     mocks.authenticated = false;
     render(<ClaimsTab />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Featured/ }));
 
     expect(screen.queryByRole('button', { name: 'My positions' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Debate now' })).not.toBeInTheDocument();
     // Featured and All claims describe the corpus, so both stay.
     expect(screen.getByRole('button', { name: 'All claims' })).toBeInTheDocument();
   });
 
-  it('keeps both for a signed-in viewer', async () => {
+  it('keeps it for a signed-in viewer', async () => {
     render(<ClaimsTab />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Featured/ }));
 
     expect(screen.getByRole('button', { name: 'My positions' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Debate now' })).toBeInTheDocument();
   });
 
   // Signing out with a viewer-relative filter selected used to leave the tab querying it

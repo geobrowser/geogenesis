@@ -52,11 +52,14 @@ import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { useStableListOrder } from './use-stable-list-order';
 import {
-  type DebatesHubClaimsFilter,
-  debatesHubClaimsFilterAtom,
-  debatesHubClaimsSpaceIdsAtom,
-  debatesHubClaimsSpaceSeedSpentAtom,
-  debatesHubClaimsTopicIdsAtom,
+  type DebatesHubExploreFilter,
+  debatesHubExploreFilterAtom,
+  debatesHubExploreSpaceIdsAtom,
+  debatesHubExploreSpaceSeedSpentAtom,
+  debatesHubExploreTopicIdsAtom,
+  debatesHubLobbySpaceIdsAtom,
+  debatesHubLobbySpaceSeedSpentAtom,
+  debatesHubLobbyTopicIdsAtom,
 } from '~/atoms';
 
 /**
@@ -67,28 +70,28 @@ import {
  * `mine` and `debate_now` stay geo-chat's. Both are viewer-relative and scored on who is available
  * and who this viewer is already pair-blocked with, which is not in the graph at any price.
  */
-type ClaimsTabFilter = DebatesHubClaimsFilter;
+type ClaimsTabFilter = DebatesHubExploreFilter | 'debate_now';
 
 // Featured leads: it is where the tab opens, and an option the menu opens on should be the one at
 // the top of it.
-const FILTER_OPTIONS: HubFilterOption<ClaimsTabFilter>[] = [
+const FILTER_OPTIONS: HubFilterOption<DebatesHubExploreFilter>[] = [
   { value: 'featured', label: 'Featured' },
   { value: 'all', label: 'All claims' },
   { value: 'mine', label: 'My positions' },
-  { value: 'debate_now', label: 'Debate now' },
 ];
 
 /**
  * The two viewer-relative filters leave the menu signed out.
  *
- * "My positions" is the viewer's own list, so it could only ever come back empty. "Debate now" is
- * viewer-relative in a less obvious way — geo-chat scores it on who is available to debate *you*,
- * excluding anyone you are already pair-blocked with — so with no viewer it is not a stricter
- * "all claims" but a question with no subject.
+ * "My positions" is the viewer's own list, so it could only ever come back empty. Featured and All
+ * claims describe the corpus rather than the viewer, and both still answer.
  *
- * Featured and All claims describe the corpus rather than the viewer, and both still answer.
+ * "Debate now" used to be here too, and left the menu entirely with GEO-2861 — it is Lobby now, and
+ * `SIGNED_OUT_TABS` keeps that whole tab off the signed-out hub for the same reason it was hidden
+ * here: geo-chat scores it on who is available to debate *you*, so with no viewer it is not a
+ * stricter "all claims" but a question with no subject.
  */
-const SIGNED_OUT_HIDDEN_FILTERS: ClaimsTabFilter[] = ['mine', 'debate_now'];
+const SIGNED_OUT_HIDDEN_FILTERS: ClaimsTabFilter[] = ['mine'];
 
 /**
  * The two filters the graph answers, and the tag each one asks for.
@@ -139,7 +142,40 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
  * resolves topics itself, because its list comes from the knowledge graph and the index has never
  * seen it.
  */
-export function ClaimsTab() {
+/**
+ * Which surface is drawing this list (GEO-2861).
+ *
+ * Lobby and Explore are the same machinery over two different questions: Lobby is fixed to
+ * `debate_now` and has no source picker, Explore keeps the picker and never asks for `debate_now`.
+ * They hold their filter selections apart — narrowing what you can debate right now is a different
+ * act from narrowing what you are browsing — so the atoms come from here rather than being read
+ * directly, and adding a surface means adding a row rather than threading another flag through.
+ */
+export type ClaimsTabVariant = 'explore' | 'lobby';
+
+const VARIANT_ATOMS = {
+  explore: {
+    spaceIds: debatesHubExploreSpaceIdsAtom,
+    topicIds: debatesHubExploreTopicIdsAtom,
+    seedSpent: debatesHubExploreSpaceSeedSpentAtom,
+  },
+  lobby: {
+    spaceIds: debatesHubLobbySpaceIdsAtom,
+    topicIds: debatesHubLobbyTopicIdsAtom,
+    seedSpent: debatesHubLobbySpaceSeedSpentAtom,
+  },
+} as const;
+
+export function ClaimsTab({
+  variant = 'explore',
+  leading,
+}: {
+  variant?: ClaimsTabVariant;
+  /** Rendered where Explore puts its source picker. Lobby passes its "Matches only" toggle. */
+  leading?: React.ReactNode;
+} = {}) {
+  const isLobby = variant === 'lobby';
+  const atoms = VARIANT_ATOMS[variant];
   const queryClient = useQueryClient();
   const { authenticated, accountKey } = useGeoChatAuth();
   // A signed-out viewer gets Privy rather than a dead pill, the same hook and for the same reason
@@ -163,18 +199,22 @@ export function ClaimsTab() {
   // ranked highest, and All claims is one option below.
   // Session-scoped like the space and topic selections below, and for the same reason: it is the
   // same filter bar, dismissed the same way (GEO-2850).
-  const [selectedFilter, setFilter] = useAtom(debatesHubClaimsFilterAtom);
+  const [selectedFilter, setFilter] = useAtom(debatesHubExploreFilterAtom);
   // Signing out with a viewer-relative filter selected would otherwise leave the tab querying it
   // anonymously and showing a trigger value that is no longer in the menu. Derived rather than
   // reset through an effect so the query, the menu label, the ordering key and the empty state all
   // read the same value on the very first render after the session goes away.
-  const filter = !authenticated && SIGNED_OUT_HIDDEN_FILTERS.includes(selectedFilter) ? 'featured' : selectedFilter;
+  // Lobby is the `debate_now` list and nothing else, so it never reads the picker's value. The tab
+  // itself is hidden signed out (`SIGNED_OUT_TABS`), which is what stands in for the coercion below.
+  const exploreFilter: DebatesHubExploreFilter =
+    !authenticated && SIGNED_OUT_HIDDEN_FILTERS.includes(selectedFilter) ? 'featured' : selectedFilter;
+  const filter: ClaimsTabFilter = isLobby ? 'debate_now' : exploreFilter;
   // Held outside this component so they survive it. The hub closes on any outside pointer-down,
   // so dismissing a dropdown by clicking away unmounts this tab — and with `useState` that took
   // the viewer's selection with it (GEO-2850).
-  const [spaceIds, setSpaceIds] = useAtom(debatesHubClaimsSpaceIdsAtom);
-  const [topicIds, setTopicIds] = useAtom(debatesHubClaimsTopicIdsAtom);
-  const [spaceSeedSpent, setSpaceSeedSpent] = useAtom(debatesHubClaimsSpaceSeedSpentAtom);
+  const [spaceIds, setSpaceIds] = useAtom(atoms.spaceIds);
+  const [topicIds, setTopicIds] = useAtom(atoms.topicIds);
+  const [spaceSeedSpent, setSpaceSeedSpent] = useAtom(atoms.seedSpent);
 
   const {
     allowlist: spaceAllowlist,
@@ -623,12 +663,16 @@ export function ClaimsTab() {
           facetTopics={facetTopics}
           countsPending={countsPending}
           leading={
-            <HubFilterMenu
-              label={filterOptions.find(option => option.value === filter)?.label ?? 'All claims'}
-              options={filterOptions}
-              value={filter}
-              onChange={setFilter}
-            />
+            isLobby ? (
+              leading
+            ) : (
+              <HubFilterMenu
+                label={filterOptions.find(option => option.value === exploreFilter)?.label ?? 'All claims'}
+                options={filterOptions}
+                value={exploreFilter}
+                onChange={setFilter}
+              />
+            )
           }
         />
       </HubStickyControls>

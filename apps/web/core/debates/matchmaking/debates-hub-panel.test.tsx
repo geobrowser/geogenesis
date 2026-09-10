@@ -13,11 +13,11 @@ import { DebatesHubPanel } from './debates-hub-panel';
 import {
   type DebatesHubTab,
   debatesHubAtom,
-  debatesHubClaimsFilterAtom,
-  debatesHubClaimsSpaceIdsAtom,
-  debatesHubClaimsSpaceSeedSpentAtom,
-  debatesHubClaimsTopicIdsAtom,
-  debatesHubMatchesSpaceIdsAtom,
+  debatesHubExploreFilterAtom,
+  debatesHubExploreSpaceIdsAtom,
+  debatesHubExploreSpaceSeedSpentAtom,
+  debatesHubExploreTopicIdsAtom,
+  debatesHubLobbySpaceIdsAtom,
 } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
@@ -102,7 +102,7 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: () => mocks.promptSignIn,
 }));
 
-function renderOpen(tab: 'requests' | 'matches' | 'claims' | 'people' = 'requests') {
+function renderOpen(tab: DebatesHubTab = 'requests') {
   const store = createStore();
   store.set(debatesHubAtom, { tab });
   const view = render(
@@ -143,21 +143,21 @@ describe('DebatesHubPanel', () => {
   // Every atom the bar holds, not a sample of them: this is the isolation test, so an atom left out
   // of `resetDebatesHubFiltersAtom` has to fail here rather than quietly hand B one of A's filters.
   it('clears the filter bar when the account behind it changes', () => {
-    const store = renderOpen('claims');
-    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
-    store.set(debatesHubClaimsTopicIdsAtom, ['topic-a']);
-    store.set(debatesHubClaimsSpaceSeedSpentAtom, true);
-    store.set(debatesHubClaimsFilterAtom, 'mine');
-    store.set(debatesHubMatchesSpaceIdsAtom, ['space-a']);
+    const store = renderOpen('explore');
+    store.set(debatesHubExploreSpaceIdsAtom, ['space-a']);
+    store.set(debatesHubExploreTopicIdsAtom, ['topic-a']);
+    store.set(debatesHubExploreSpaceSeedSpentAtom, true);
+    store.set(debatesHubExploreFilterAtom, 'mine');
+    store.set(debatesHubLobbySpaceIdsAtom, ['space-a']);
 
     mocks.accountKey = 'user-b';
     store.rerender();
 
-    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
-    expect(store.get(debatesHubClaimsTopicIdsAtom)).toEqual([]);
-    expect(store.get(debatesHubClaimsSpaceSeedSpentAtom)).toBe(false);
-    expect(store.get(debatesHubClaimsFilterAtom)).toBe('featured');
-    expect(store.get(debatesHubMatchesSpaceIdsAtom)).toEqual([]);
+    expect(store.get(debatesHubExploreSpaceIdsAtom)).toEqual([]);
+    expect(store.get(debatesHubExploreTopicIdsAtom)).toEqual([]);
+    expect(store.get(debatesHubExploreSpaceSeedSpentAtom)).toBe(false);
+    expect(store.get(debatesHubExploreFilterAtom)).toBe('featured');
+    expect(store.get(debatesHubLobbySpaceIdsAtom)).toEqual([]);
   });
 
   // Signing in is the same person authenticating. The Claims tab prompts for sign-in from inside
@@ -165,15 +165,15 @@ describe('DebatesHubPanel', () => {
   // the tab itself invited — the very complaint GEO-2850 is about.
   it('keeps the filter bar when a signed-out viewer signs in', () => {
     mocks.accountKey = null;
-    const store = renderOpen('claims');
-    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
-    store.set(debatesHubClaimsFilterAtom, 'all');
+    const store = renderOpen('explore');
+    store.set(debatesHubExploreSpaceIdsAtom, ['space-a']);
+    store.set(debatesHubExploreFilterAtom, 'all');
 
     mocks.accountKey = 'user-a';
     store.rerender();
 
-    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual(['space-a']);
-    expect(store.get(debatesHubClaimsFilterAtom)).toBe('all');
+    expect(store.get(debatesHubExploreSpaceIdsAtom)).toEqual(['space-a']);
+    expect(store.get(debatesHubExploreFilterAtom)).toBe('all');
   });
 
   // Signed out there are no memberships for the seed to apply to, so it is never spent by seeding
@@ -181,26 +181,26 @@ describe('DebatesHubPanel', () => {
   // the default GEO-2834 is about lands on its own. Nothing here has to re-arm it.
   it('leaves the membership seed armed through an untouched sign-in', () => {
     mocks.accountKey = null;
-    const store = renderOpen('claims');
+    const store = renderOpen('explore');
 
     mocks.accountKey = 'user-a';
     store.rerender();
 
-    expect(store.get(debatesHubClaimsSpaceSeedSpentAtom)).toBe(false);
+    expect(store.get(debatesHubExploreSpaceSeedSpentAtom)).toBe(false);
   });
 
   // A spent seed means the viewer worked the menu, and forcing it back would overwrite what they
   // did — whether they picked spaces...
   it('leaves the seed spent on sign-in when the viewer has picked spaces', () => {
     mocks.accountKey = null;
-    const store = renderOpen('claims');
-    store.set(debatesHubClaimsSpaceSeedSpentAtom, true);
-    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+    const store = renderOpen('explore');
+    store.set(debatesHubExploreSpaceSeedSpentAtom, true);
+    store.set(debatesHubExploreSpaceIdsAtom, ['space-a']);
 
     mocks.accountKey = 'user-a';
     store.rerender();
 
-    expect(store.get(debatesHubClaimsSpaceSeedSpentAtom)).toBe(true);
+    expect(store.get(debatesHubExploreSpaceSeedSpentAtom)).toBe(true);
   });
 
   // ...or deliberately cleared them, which is indistinguishable from an untouched filter by the
@@ -208,56 +208,56 @@ describe('DebatesHubPanel', () => {
   // unfiltered list, and is not an invitation to fill it back in for them.
   it('leaves the seed spent on sign-in when the viewer cleared the filter themselves', () => {
     mocks.accountKey = null;
-    const store = renderOpen('claims');
+    const store = renderOpen('explore');
     // What pick-then-clear leaves behind: nothing selected, but the seed forfeited.
-    store.set(debatesHubClaimsSpaceSeedSpentAtom, true);
-    store.set(debatesHubClaimsSpaceIdsAtom, []);
+    store.set(debatesHubExploreSpaceSeedSpentAtom, true);
+    store.set(debatesHubExploreSpaceIdsAtom, []);
 
     mocks.accountKey = 'user-a';
     store.rerender();
 
-    expect(store.get(debatesHubClaimsSpaceSeedSpentAtom)).toBe(true);
-    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
+    expect(store.get(debatesHubExploreSpaceSeedSpentAtom)).toBe(true);
+    expect(store.get(debatesHubExploreSpaceIdsAtom)).toEqual([]);
   });
 
   // Signing out must not forget who the state belongs to, or the next viewer to sign in would look
   // like a first sign-in and inherit it.
   it('still clears for a different account that signs in after a sign-out', () => {
-    const store = renderOpen('claims');
-    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+    const store = renderOpen('explore');
+    store.set(debatesHubExploreSpaceIdsAtom, ['space-a']);
 
     mocks.accountKey = null;
     store.rerender();
     mocks.accountKey = 'user-b';
     store.rerender();
 
-    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
+    expect(store.get(debatesHubExploreSpaceIdsAtom)).toEqual([]);
   });
 
   // The reset is a passive effect, so the render that first sees a different account still holds
   // the previous one's bar. Showing the tabs then would put A's filter labels in front of B and
   // fire B's first query with A's space ids.
   it('does not render a tab holding the previous account’s filters', () => {
-    const store = renderOpen('claims');
-    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+    const store = renderOpen('explore');
+    store.set(debatesHubExploreSpaceIdsAtom, ['space-a']);
     expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
 
     mocks.accountKey = 'user-b';
     store.rerender();
 
     // Cleared and back on screen in the same commit the handover lands, so nothing of A's is shown.
-    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
+    expect(store.get(debatesHubExploreSpaceIdsAtom)).toEqual([]);
     expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
   });
 
   // The same viewer reopening the panel must keep what they picked, which is the whole feature.
   it('leaves the filter bar alone for the same account', () => {
-    const store = renderOpen('claims');
-    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+    const store = renderOpen('explore');
+    store.set(debatesHubExploreSpaceIdsAtom, ['space-a']);
 
     store.rerender();
 
-    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual(['space-a']);
+    expect(store.get(debatesHubExploreSpaceIdsAtom)).toEqual(['space-a']);
   });
 
   // `accountKey` is null until Privy resolves. Treating that as "signed out" would clear a
@@ -265,12 +265,12 @@ describe('DebatesHubPanel', () => {
   it('does not clear the filter bar while auth is still resolving', () => {
     mocks.ready = false;
     mocks.accountKey = null;
-    const store = renderOpen('claims');
-    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+    const store = renderOpen('explore');
+    store.set(debatesHubExploreSpaceIdsAtom, ['space-a']);
 
     store.rerender();
 
-    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual(['space-a']);
+    expect(store.get(debatesHubExploreSpaceIdsAtom)).toEqual(['space-a']);
   });
 
   it('stays closed until the hub atom is set', () => {
@@ -286,18 +286,18 @@ describe('DebatesHubPanel', () => {
   it('renders every tab and switches between them', async () => {
     renderOpen();
 
-    for (const label of ['Requests', 'Matches', 'Claims', 'People']) {
+    for (const label of ['Requests', 'Lobby', 'Explore', 'People']) {
       expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
 
     // jsdom has no layout, so reachability at a narrow width can't be asserted directly. The
     // scroll container is the thing that guarantees it, so pin that instead — without it the
     // last tab is clipped by the panel's `overflow-hidden` with no way to get to it.
-    const row = screen.getByRole('button', { name: /^Claims/ }).closest('.overflow-x-auto');
+    const row = screen.getByRole('button', { name: /^Lobby/ }).closest('.overflow-x-auto');
     expect(row).not.toBeNull();
 
     // Order, not just presence: the labels alone stayed green through a reorder.
-    const order = ['Claims', 'People', 'Matches', 'Requests'];
+    const order = ['Lobby', 'People', 'Explore', 'Requests'];
     const rendered = order.map(label => screen.getByRole('button', { name: new RegExp(`^${label}`) }));
     for (const [index, tab] of rendered.slice(0, -1).entries()) {
       const next = rendered[index + 1];
@@ -325,16 +325,16 @@ describe('DebatesHubPanel', () => {
     expect(screen.getByText("Matchmaking isn't available yet.")).toBeInTheDocument();
   });
 
-  // GEO-2725. The hub used to be one sign-in message end to end. Claims and People describe the
+  // GEO-2725. The hub used to be one sign-in message end to end. Explore and People describe the
   // corpus rather than the viewer, so both are readable signed out and are what the row offers.
-  it('offers Claims and People to anonymous visitors, and shows the Claims list', () => {
+  it('offers Explore and People to anonymous visitors, and shows the Explore list', () => {
     mocks.authenticated = false;
     renderOpen();
 
-    expect(screen.getByRole('button', { name: 'Claims' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'People' })).toBeInTheDocument();
     expect(screen.queryByText('Sign in to find people to debate.')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Claims' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
   });
 
@@ -352,26 +352,26 @@ describe('DebatesHubPanel', () => {
   it('hides the tab row until Privy has resolved, rather than drawing the signed-out one', () => {
     mocks.ready = false;
     mocks.authenticated = false;
-    renderOpen('matches');
+    renderOpen('lobby');
 
     // `aria-hidden` takes the row out of the accessibility tree, so it is not reachable at all —
     // which is the point: nothing is announced or focusable until we know which row it should be.
-    expect(screen.queryByRole('button', { name: 'Claims' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Claims', hidden: true })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Explore' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore', hidden: true })).toBeInTheDocument();
   });
 
   it('shows the tab row once Privy has resolved', () => {
-    renderOpen('matches');
+    renderOpen('lobby');
 
-    expect(screen.getByRole('button', { name: 'Claims' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore' })).toBeInTheDocument();
   });
 
   // Signing out with Matches open would otherwise leave a tab body showing with no tab selected.
-  it('falls back to Claims when signed out on a tab that is no longer offered', () => {
+  it('falls back to Explore when signed out on a tab that is no longer offered', () => {
     mocks.authenticated = false;
-    renderOpen('matches');
+    renderOpen('lobby');
 
-    expect(screen.getByRole('button', { name: 'Claims' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-current', 'true');
     expect(screen.queryByRole('button', { name: /Matches/ })).not.toBeInTheDocument();
   });
 
@@ -443,12 +443,12 @@ it.each([
   ["a person's space", '/space/person-space-1'],
   ['the debates feed', '/space/space-1/debates'],
 ])('stays open when the viewer navigates to %s', (_label, pathname) => {
-  const store = renderOpen('claims');
+  const store = renderOpen('explore');
 
   mocks.pathname = pathname;
   store.rerender();
 
-  expect(store.get(debatesHubAtom)).toEqual({ tab: 'claims' });
+  expect(store.get(debatesHubAtom)).toEqual({ tab: 'explore' });
 });
 
 // Desktop only. On mobile the hub is a full-screen `aria-modal` sheet over a backdrop, so staying
@@ -456,7 +456,7 @@ it.each([
 // the destination would be hidden from assistive tech until the sheet was dismissed by hand.
 it('closes on any navigation on mobile, where it covers the destination', () => {
   mocks.isMobile = true;
-  const store = renderOpen('claims');
+  const store = renderOpen('explore');
 
   mocks.pathname = '/space/space-1/entity-1';
   store.rerender();
@@ -468,12 +468,12 @@ it('closes on any navigation on mobile, where it covers the destination', () => 
 it('stays open on mobile when the destination itself asks for the hub', () => {
   mocks.isMobile = true;
   mocks.searchParams = new URLSearchParams(`modal=${DEBATES_MODAL}`);
-  const store = renderOpen('claims');
+  const store = renderOpen('explore');
 
   mocks.pathname = '/space/space-1/entity-1';
   store.rerender();
 
-  expect(store.get(debatesHubAtom)).toEqual({ tab: 'claims' });
+  expect(store.get(debatesHubAtom)).toEqual({ tab: 'explore' });
 });
 
 // `?modal=debates` reached by client-side navigation opens the hub from the same commit that
@@ -496,7 +496,7 @@ it.each<[string, { tab: DebatesHubTab } | null]>([
     const setHub = useSetAtom(debatesHubAtom);
     React.useEffect(() => {
       if (pathname !== DEEP_LINK_PATH) return;
-      setHub({ tab: 'claims' });
+      setHub({ tab: 'explore' });
     }, [pathname, setHub]);
     return null;
   }
@@ -515,5 +515,5 @@ it.each<[string, { tab: DebatesHubTab } | null]>([
   mocks.searchParams = new URLSearchParams({ modal: 'debates' });
   view.rerender(tree());
 
-  expect(store.get(debatesHubAtom)).toEqual({ tab: 'claims' });
+  expect(store.get(debatesHubAtom)).toEqual({ tab: 'explore' });
 });

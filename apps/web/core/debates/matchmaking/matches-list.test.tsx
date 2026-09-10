@@ -8,8 +8,8 @@ import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingMatch } from '../api';
-import { MatchesTab } from './matches-tab';
-import { debatesHubMatchesSpaceIdsAtom } from '~/atoms';
+import { MatchesList } from './matches-list';
+import { debatesHubLobbySpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   matches: [] as MatchmakingMatch[],
@@ -192,9 +192,9 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-describe('MatchesTab', () => {
+describe('MatchesList', () => {
   it('offers exactly two response actions, labelled for the claim', () => {
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /^Agree/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Disagree/ })).toBeInTheDocument();
@@ -205,14 +205,14 @@ describe('MatchesTab', () => {
 
   it('uses the veracity vocabulary for a factual claim', () => {
     mocks.matches = [match({ response_kind: 'veracity', positions: [] })];
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /^Verify/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Dispute/ })).toBeInTheDocument();
   });
 
   it('publishes the opposite response when the other side is chosen', () => {
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
 
@@ -220,7 +220,7 @@ describe('MatchesTab', () => {
   });
 
   it('clears the response when the side already held is chosen again', () => {
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
 
@@ -233,7 +233,7 @@ describe('MatchesTab', () => {
     mocks.submitResponse.mockImplementation((_direction, options) => {
       options?.onError?.(new Error('Transaction reverted.'));
     });
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
 
@@ -243,7 +243,7 @@ describe('MatchesTab', () => {
   // The client knows its own response before geo-chat does, so the button reflects it immediately.
   it('shows the in-flight response rather than the stale server one', () => {
     mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
@@ -254,7 +254,7 @@ describe('MatchesTab', () => {
   it('keeps showing an indexed response while geo-chat is still catching up', () => {
     mocks.indexing = { status: 'indexed', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
     mocks.matches = [match({ viewer_response: null, viewer_debate_ready: false })];
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('Respond to this claim to debate it.')).not.toBeInTheDocument();
@@ -264,14 +264,14 @@ describe('MatchesTab', () => {
   it('hands back to the server copy once it agrees', () => {
     mocks.indexing = { status: 'indexed', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
     mocks.matches = [match({ viewer_response: { position: false, position_label: 'Disagree' } })];
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(mocks.resetIndexing).toHaveBeenCalledWith('run-1');
   });
 
   it('cannot respond without a connected personal space', () => {
     mocks.isConnected = false;
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /^Agree/ })).toBeDisabled();
   });
@@ -290,7 +290,7 @@ describe('MatchesTab', () => {
         },
       }),
     ];
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.queryByRole('button', { name: /^Agree/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Leftover fixture claim' })).not.toBeInTheDocument();
@@ -301,7 +301,7 @@ describe('MatchesTab', () => {
   // action in that state — kept visible here, with the reason, rather than silently missing.
   it('cannot request a debate while the viewer is unavailable', () => {
     mocks.availableToDebate = false;
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     const request = screen.getByRole('button', { name: 'Request debate' });
     expect(request).toBeDisabled();
@@ -311,7 +311,7 @@ describe('MatchesTab', () => {
   });
 
   it('requests a debate on the claim and blocks a second concurrent request', () => {
-    const { rerender } = render(<MatchesTab onTabChange={vi.fn()} />);
+    const { rerender } = render(<MatchesList onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Request debate' }));
     expect(mocks.createRequestMutate).toHaveBeenCalledWith({ space_id: SPACE_ID, claim_entity_id: CLAIM_ENTITY_ID });
@@ -323,7 +323,7 @@ describe('MatchesTab', () => {
       requester: party('user-me', 'You', true, 'Agree'),
       recipient: party('user-them', 'Arturas', false, 'Disagree'),
     };
-    rerender(<MatchesTab onTabChange={vi.fn()} />);
+    rerender(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
   });
@@ -340,7 +340,7 @@ describe('MatchesTab', () => {
       requester: party('user-me', 'You', true, 'Agree'),
       recipient: party('user-them', 'Arturas', false, 'Disagree'),
     };
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     const pinned = screen.getByText('Awaiting response').closest('.sticky');
     expect(pinned).not.toBeNull();
@@ -349,7 +349,7 @@ describe('MatchesTab', () => {
   });
 
   it('still pins the filters with no request outstanding', () => {
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /Any space/ }).closest('.sticky')).not.toBeNull();
   });
@@ -360,8 +360,8 @@ describe('MatchesTab', () => {
   // writes it is covered on the Claims tab, whose menu options carry real names to click.)
   it('applies a space selection the viewer made earlier in the session', () => {
     const store = createStore();
-    store.set(debatesHubMatchesSpaceIdsAtom, [SPACE_ID]);
-    render(<MatchesTab onTabChange={vi.fn()} />, store);
+    store.set(debatesHubLobbySpaceIdsAtom, [SPACE_ID]);
+    render(<MatchesList onTabChange={vi.fn()} />, store);
 
     // The trigger reads the selection back rather than "Any space", and the list is narrowed to it.
     expect(screen.queryByRole('button', { name: /Any space/ })).not.toBeInTheDocument();
@@ -373,9 +373,9 @@ describe('MatchesTab', () => {
   // visible the viewer comes back to an empty list filtered by a space with no row to untick.
   it('keeps a selected space on the menu after its matches are gone', async () => {
     const store = createStore();
-    store.set(debatesHubMatchesSpaceIdsAtom, [SPACE_ID]);
+    store.set(debatesHubLobbySpaceIdsAtom, [SPACE_ID]);
     mocks.matches = [];
-    render(<MatchesTab onTabChange={vi.fn()} />, store);
+    render(<MatchesList onTabChange={vi.fn()} />, store);
 
     fireEvent.click(screen.getByRole('button', { name: /Space|Any space/ }));
 
@@ -387,7 +387,7 @@ describe('MatchesTab', () => {
   // The other direction: a fresh session starts unfiltered, so the atom is not quietly sticky
   // across viewers or page loads.
   it('starts unfiltered in a new session', () => {
-    render(<MatchesTab onTabChange={vi.fn()} />, createStore());
+    render(<MatchesList onTabChange={vi.fn()} />, createStore());
 
     expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
   });
@@ -397,8 +397,8 @@ describe('MatchesTab', () => {
   // that could not help. There are matches; they are just not in the spaces on screen.
   it('blames the space filter, and offers to clear it, when that is what emptied the list', async () => {
     const store = createStore();
-    store.set(debatesHubMatchesSpaceIdsAtom, ['019fedae-72b6-7ab2-927a-df044d57c599']);
-    render(<MatchesTab onTabChange={vi.fn()} />, store);
+    store.set(debatesHubLobbySpaceIdsAtom, ['019fedae-72b6-7ab2-927a-df044d57c599']);
+    render(<MatchesList onTabChange={vi.fn()} />, store);
 
     expect(await screen.findByText('No matches in the spaces you’ve picked.')).toBeInTheDocument();
     expect(screen.queryByText(/Matches appear once you/)).not.toBeInTheDocument();
@@ -413,7 +413,7 @@ describe('MatchesTab', () => {
   // GEO-2840.
   it('adds the debate hours line to the empty state', async () => {
     mocks.matches = [];
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(await screen.findByText(/Matches appear once you/)).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
@@ -426,13 +426,13 @@ describe('MatchesTab', () => {
     mocks.matches = [];
     mocks.availableToDebate = false;
     mocks.activityLoading = true;
-    const { rerender } = render(<MatchesTab onTabChange={vi.fn()} />);
+    const { rerender } = render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.queryByText(/Matches appear once you/)).not.toBeInTheDocument();
     expect(screen.queryByText(/marked unavailable/)).not.toBeInTheDocument();
 
     mocks.activityLoading = false;
-    rerender(<MatchesTab onTabChange={vi.fn()} />);
+    rerender(<MatchesList onTabChange={vi.fn()} />);
 
     // The message is what needed the answer; the note never did. Awaited rather than read
     // synchronously: the note renders nothing until its own mount effect has run, and here it is
@@ -446,7 +446,7 @@ describe('MatchesTab', () => {
   it('still shows the debate hours line when the availability answer never arrives', async () => {
     mocks.matches = [];
     mocks.activityErrored = true;
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(await screen.findByText(/Matches appear once you/)).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
@@ -455,7 +455,7 @@ describe('MatchesTab', () => {
   // Only while there is nothing to show. A list with rows renders on the matches alone.
   it('still renders matches while the availability answer is outstanding', () => {
     mocks.activityLoading = true;
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
   });
@@ -468,7 +468,7 @@ describe('MatchesTab', () => {
   it('still shows the debate hours line to a viewer who is marked unavailable', async () => {
     mocks.matches = [];
     mocks.availableToDebate = false;
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(await screen.findByText(/marked unavailable/)).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
