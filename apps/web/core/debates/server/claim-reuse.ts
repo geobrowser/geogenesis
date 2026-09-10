@@ -1,6 +1,8 @@
 import { Effect } from 'effect';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { TAG_PROPERTY_ID } from '~/core/constants';
+import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 
@@ -37,6 +39,9 @@ export type ExistingClaimEntity = {
    * Optional so injected test lookups predating topics stay valid; absent reads as none.
    */
   topicIds?: string[];
+  /** Targets of the entity's Tags relations in the publication space. Optional for the
+   * same reason as `topicIds`: injected test lookups predating tags stay valid. */
+  tagIds?: string[];
 };
 
 export type ExistingClaimLookup = (entityIds: string[], spaceId: string) => Promise<ExistingClaimEntity[]>;
@@ -56,11 +61,14 @@ const lookupInGraph: ExistingClaimLookup = (entityIds, spaceId) =>
                   topicIds: (entity.topicRelations ?? []).flatMap(relation =>
                     relation?.toEntityId ? [relation.toEntityId] : []
                   ),
+                  tagIds: (entity.tagRelations ?? []).flatMap(relation =>
+                    relation?.toEntityId ? [relation.toEntityId] : []
+                  ),
                 },
               ]
             : []
         ),
-      variables: { ids: entityIds, topicsPropertyId: TOPICS_PROPERTY_ID, spaceId },
+      variables: { ids: entityIds, topicsPropertyId: TOPICS_PROPERTY_ID, tagPropertyId: TAG_PROPERTY_ID, spaceId },
     })
   );
 
@@ -117,7 +125,9 @@ export async function applyClaimReusePolicy(
       claims: claims.length,
       matched: referenced.length,
     });
-    return claims.map(withoutReference);
+    // Shadow mode promises to change nothing but the counters. Minting Debate-tagged
+    // twins of claims that already carry the tag in this space would break that.
+    return claims.map(withoutReferenceOrCandidacy);
   }
 
   // One malformed id would fail the whole batched read (the API rejects the query, not the id), and
@@ -148,6 +158,7 @@ export async function applyClaimReusePolicy(
   ];
   let verified: Set<string>;
   const existingTopicsByEntity = new Map<string, Set<string>>();
+  const alreadyTaggedDebate = new Set<string>();
   try {
     const entities = ids.length > 0 ? await (options.lookup ?? lookupInGraph)(ids, spaceId) : [];
     const spaceKey = uuidToHex(spaceId);
@@ -162,6 +173,9 @@ export async function applyClaimReusePolicy(
     );
     for (const entity of entities) {
       existingTopicsByEntity.set(uuidToHex(entity.id), new Set((entity.topicIds ?? []).map(uuidToHex)));
+      if ((entity.tagIds ?? []).some(tag => uuidToHex(tag) === uuidToHex(DEBATE_TAG_ID))) {
+        alreadyTaggedDebate.add(uuidToHex(entity.id));
+      }
     }
   } catch (error) {
     console.warn('[debate-acceptor] could not verify matched claims; minting all of them instead', {
@@ -169,7 +183,9 @@ export async function applyClaimReusePolicy(
       matched: referenced.length,
       error,
     });
-    return claims.map(withoutReference);
+    // The read that would have told us which targets are already tagged is the one
+    // that failed, so no claim in this sweep may be minted as a motion.
+    return claims.map(withoutReferenceOrCandidacy);
   }
 
   let reused = 0;
@@ -190,12 +206,21 @@ export async function applyClaimReusePolicy(
       // the relation once. That window is the sweep's, not this policy's — deduping across it
       // would need a post-index pass.
       const existingTopics = existingTopicsByEntity.get(uuidToHex(claim.existingClaimEntityId));
+      let next = claim;
       if (existingTopics?.size && claim.topics?.length) {
         const missing = claim.topics.filter(topic => !existingTopics.has(uuidToHex(topic.id)));
-        if (missing.length !== claim.topics.length) return { ...claim, topics: missing };
+        if (missing.length !== claim.topics.length) next = { ...next, topics: missing };
       }
-      return claim;
+      // Same rule for the Debate tag: an entity already listed as a debate claim in this
+      // space must not be tagged a second time.
+      if (next.isContestable && alreadyTaggedDebate.has(uuidToHex(claim.existingClaimEntityId))) {
+        next = { ...next, isContestable: false };
+      }
+      return next;
     }
+    // A reference to the debate's own motion is refused above so a restatement cannot
+    // hijack it; it must not be minted as a rival motion either.
+    if (isMotion(claim.existingClaimEntityId)) return withoutReferenceOrCandidacy(claim);
     return withoutReference(claim);
   });
   const dropped = referenced.length - reused;
@@ -205,6 +230,10 @@ export async function applyClaimReusePolicy(
     matched: referenced.length,
     reused,
     dropped,
+    // Zero here while claims are being published is the signature of the upstream
+    // flag going missing — a renamed field, or a facade that predates the
+    // classification. Without a count, that regression is invisible.
+    debateCandidates: result.filter(candidate => candidate.isContestable).length,
   });
   if (dropped > 0) {
     console.warn('[debate-acceptor] matched claims no longer verifiable as Claims in this space; minted instead', {
@@ -223,4 +252,24 @@ export async function applyClaimReusePolicy(
 
 function withoutReference(claim: DebateClaimInput): DebateClaimInput {
   return claim.existingClaimEntityId ? { ...claim, existingClaimEntityId: null } : claim;
+}
+
+/**
+ * Drop the reference AND the claim's candidacy as a debate motion.
+ *
+ * Tags are space-scoped, so most dropped references are harmless: an entity that was
+ * deleted, re-typed, or lives in another space cannot already be tagged *here*, and
+ * minting a tagged replacement duplicates nothing. Three paths are different, because
+ * they drop the reference without ever learning what the target carries in this space
+ * — the debate's own motion (which is tagged by construction: motions are drawn from
+ * the Debate-tagged claims list), shadow mode, and a failed graph read. Minting a
+ * tagged twin of one of those puts a second candidate motion for the same proposition
+ * in the picker, which is the outcome the tag subtraction exists to prevent.
+ *
+ * Minting the duplicate entity is the long-standing, tolerated failure. Tagging it is
+ * not, so the tag is what gets withheld.
+ */
+function withoutReferenceOrCandidacy(claim: DebateClaimInput): DebateClaimInput {
+  const dropped = withoutReference(claim);
+  return dropped.isContestable ? { ...dropped, isContestable: false } : dropped;
 }
