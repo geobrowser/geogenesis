@@ -67,6 +67,25 @@ export function participantAvatarUrl(
   return participant?.avatar_cid ?? null;
 }
 
+/** Preserves each call site's own participant type; see `useParticipantAvatars`. */
+export type ParticipantAvatarMapper = <T extends ParticipantAvatarSource>(participant: T) => T;
+
+/**
+ * Applies the mapper to a row's `participants`, tolerating its absence.
+ *
+ * Every payload here types `participants` as present, and geo-chat does not always send it — a
+ * partially seeded debate arrives without one, and mapping it unguarded throws the moment the query
+ * resolves. Leaving each call site to remember that is a rule that gets forgotten: it already was
+ * once here, on a line a reformat had moved out from under the edit that was meant to guard it.
+ * This is the rule written down once instead.
+ */
+export function withRowParticipantAvatars<T extends { participants?: ParticipantAvatarSource[] }>(
+  row: T,
+  withAvatar: ParticipantAvatarMapper
+): T {
+  return row.participants ? { ...row, participants: row.participants.map(withAvatar) } : row;
+}
+
 /**
  * A mapper that puts the best-known avatar on a row, for the whole list resolved in one batch.
  *
@@ -89,7 +108,7 @@ export function useParticipantAvatars(
    * surface that has resolved these faces once keeps drawing them.
    */
   enabled = true
-): <T extends ParticipantAvatarSource>(participant: T) => T {
+): ParticipantAvatarMapper {
   // Keyed on the ids themselves rather than the array's identity: these lists are rebuilt from a
   // query result on every render while the people in them are not.
   const spaceIdKey = participants

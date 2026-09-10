@@ -68,7 +68,7 @@ import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
-import { useParticipantAvatars } from './participant-avatars';
+import { useParticipantAvatars, withRowParticipantAvatars } from './participant-avatars';
 import { hasProcessedVideo } from './playback-utils';
 import {
   isRematchClaimsQueryKey,
@@ -433,9 +433,7 @@ export function useDebateActivity(enabled = true) {
       challenge: challenge
         ? { ...challenge, requester: withAvatar(challenge.requester), recipient: withAvatar(challenge.recipient) }
         : challenge,
-      // `participants` is typed as present but is not always sent — a partially seeded debate
-      // arrives without it — so this maps only when there is a list to map.
-      debate: debate?.participants ? { ...debate, participants: debate.participants.map(withAvatar) } : debate,
+      debate: debate ? withRowParticipantAvatars(debate, withAvatar) : debate,
     };
   }, [query.data, withAvatar]);
 
@@ -544,10 +542,7 @@ export function useSpaceDebates(spaceId: string, enabled: boolean) {
       query.data
         ? {
             ...query.data,
-            debates: query.data.debates.map(debate => ({
-              ...debate,
-              participants: debate.participants.map(withAvatar),
-            })),
+            debates: query.data.debates.map(debate => withRowParticipantAvatars(debate, withAvatar)),
           }
         : query.data,
     [query.data, withAvatar]
@@ -575,8 +570,7 @@ export function useDebate(debateId: string, enabled: boolean) {
   const withAvatar = useParticipantAvatars(participants, enabled);
 
   const data = React.useMemo(
-    () =>
-      query.data?.participants ? { ...query.data, participants: query.data.participants.map(withAvatar) } : query.data,
+    () => (query.data ? withRowParticipantAvatars(query.data, withAvatar) : query.data),
     [query.data, withAvatar]
   );
 
@@ -742,8 +736,7 @@ export function useDebateRematch(sessionId: string, enabled = true) {
   const withAvatar = useParticipantAvatars(participants, enabled && Boolean(sessionId));
 
   const data = React.useMemo(
-    () =>
-      query.data?.participants ? { ...query.data, participants: query.data.participants.map(withAvatar) } : query.data,
+    () => (query.data ? withRowParticipantAvatars(query.data, withAvatar) : query.data),
     [query.data, withAvatar]
   );
 

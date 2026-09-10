@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { participantAvatarUrl } from './participant-avatars';
+import { participantAvatarUrl, withRowParticipantAvatars } from './participant-avatars';
 
 const SPACE = 'd077b06b40ed4eb994bfa71c3f6d1146';
 const DASHED = 'd077b06b-40ed-4eb9-94bf-a71c3f6d1146';
@@ -104,5 +104,37 @@ describe('participantAvatarUrl', () => {
     expect(participantAvatarUrl({ profile_space_id: 'not-a-space', avatar_cid: SNAPSHOT }, profiles([]))).toBe(
       SNAPSHOT
     );
+  });
+});
+
+/**
+ * The crash this helper exists to make impossible. `participants` is typed as present on every
+ * payload that carries it, and geo-chat does not always send one — a partially seeded debate
+ * arrives without it, and the browse feed threw on `.map` as soon as the query resolved.
+ */
+describe('withRowParticipantAvatars', () => {
+  const identity = <T>(participant: T) => participant;
+
+  it('leaves a row whose participants are missing exactly as it found it', () => {
+    const row = { id: 'debate-1' } as { id: string; participants?: never[] };
+
+    expect(() => withRowParticipantAvatars(row, identity)).not.toThrow();
+    expect(withRowParticipantAvatars(row, identity)).toBe(row);
+  });
+
+  it('maps the participants when there are some', () => {
+    const row = { id: 'debate-1', participants: [{ profile_space_id: SPACE, avatar_cid: null }] };
+    const stamp = <T extends { avatar_cid?: string | null }>(participant: T) => ({ ...participant, avatar_cid: GRAPH });
+
+    expect(withRowParticipantAvatars(row, stamp).participants).toEqual([
+      { profile_space_id: SPACE, avatar_cid: GRAPH },
+    ]);
+  });
+
+  // An empty list is a real answer, not a missing one, and must not be confused with absence.
+  it('keeps an empty participant list empty', () => {
+    const row = { id: 'debate-1', participants: [] };
+
+    expect(withRowParticipantAvatars(row, identity).participants).toEqual([]);
   });
 });

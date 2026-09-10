@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import { useParticipantAvatars } from '~/core/debates/participant-avatars';
+import { useParticipantAvatars, withRowParticipantAvatars } from '~/core/debates/participant-avatars';
 import { withQueryData } from '~/core/debates/with-query-data';
 
 import {
@@ -159,10 +159,7 @@ export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boo
         ...page,
         claims: page.claims.map(claim => ({
           ...claim,
-          positions: claim.positions.map(position => ({
-            ...position,
-            participants: position.participants.map(withAvatar),
-          })),
+          positions: claim.positions.map(position => withRowParticipantAvatars(position, withAvatar)),
         })),
       })),
     };
@@ -200,10 +197,7 @@ export function useMatchmakingMatches(enabled: boolean) {
       ...query.data,
       matches: query.data.matches.map(match => ({
         ...match,
-        positions: match.positions.map(position => ({
-          ...position,
-          participants: position.participants.map(withAvatar),
-        })),
+        positions: match.positions.map(position => withRowParticipantAvatars(position, withAvatar)),
       })),
     };
   }, [query.data, withAvatar]);
