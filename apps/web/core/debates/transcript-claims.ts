@@ -104,16 +104,21 @@ function resolveClaimNaming(claim: ClaimEntityNaming, debateSpaceId: string): { 
  * Relations are sorted by `position` rather than trusted in list order, so claims read in
  * transcript order inside each speaker's group.
  *
- * A claim id is kept once, under the first block that carries it: the graph can return the same
- * relation twice (duplicate publishes do happen), and a claim repeated across two of a speaker's
- * turns should still be one row. Deduping globally rather than per-block also means a claim quoted
- * by both debaters is attributed to whoever said it first rather than counted twice.
+ * A claim id appears once in `all`, at its first block: the graph can return the same relation twice
+ * (duplicate publishes do happen), and a claim repeated across two of a speaker's turns should still
+ * be one row and one count. Per speaker the unit is the (speaker, claim) pair, so a claim both
+ * debaters stated is listed under each of them. That used to be a rare quotation; with
+ * find-or-create it is the ordinary case, because a transcript claim that already exists in the
+ * space is linked to the existing entity instead of minted again, and dropping the second speaker's
+ * row would silently erase what they said.
  */
 export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId: string): DebateTranscriptClaims {
   const all: TranscriptClaim[] = [];
   const byAuthorSpaceId = new Map<string, TranscriptClaim[]>();
   const unattributed: TranscriptClaim[] = [];
-  const seenClaimIds = new Set<string>();
+  const rowsByClaimId = new Map<string, TranscriptClaim>();
+  /** `${authorKey}:${claimKey}`; the empty author key stands for unattributed. */
+  const seenPairs = new Set<string>();
 
   for (const transcript of presentRelations(data.entity?.transcripts)) {
     for (const block of presentRelations(transcript.toEntity.blocks)) {
@@ -126,24 +131,27 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
       for (const claim of presentRelations(blockEntity.claims)) {
         const claimEntity = claim.toEntity;
         const key = uuidToHex(claimEntity.id);
-        if (seenClaimIds.has(key)) continue;
 
-        const resolved = resolveClaimNaming(claimEntity, spaceId);
-        // A claim with no name has nothing to render — its text *is* its name.
-        if (!resolved.text) continue;
+        let row = rowsByClaimId.get(key);
+        if (!row) {
+          const resolved = resolveClaimNaming(claimEntity, spaceId);
+          // A claim with no name has nothing to render — its text *is* its name.
+          if (!resolved.text) continue;
+          row = { id: claimEntity.id, text: resolved.text, spaceId: resolved.spaceId };
+          rowsByClaimId.set(key, row);
+          all.push(row);
+        }
 
-        seenClaimIds.add(key);
-
-        const row: TranscriptClaim = { id: claimEntity.id, text: resolved.text, spaceId: resolved.spaceId };
-
-        all.push(row);
+        const authorKey = authorSpaceId ? uuidToHex(authorSpaceId) : '';
+        const pairKey = `${authorKey}:${key}`;
+        if (seenPairs.has(pairKey)) continue;
+        seenPairs.add(pairKey);
 
         if (!authorSpaceId) {
           unattributed.push(row);
           continue;
         }
 
-        const authorKey = uuidToHex(authorSpaceId);
         const existing = byAuthorSpaceId.get(authorKey);
         if (existing) existing.push(row);
         else byAuthorSpaceId.set(authorKey, [row]);
@@ -165,16 +173,20 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
 export function unmatchedClaims(claims: DebateTranscriptClaims, participantSpaceIds: string[]): TranscriptClaim[] {
   const known = new Set(participantSpaceIds.map(uuidToHex));
 
-  const claimed = new Set<string>();
+  // The unit is the statement — an (author, claim) pair — not the claim. With reuse one claim can
+  // be stated by a participant and by an author outside the list; the participant's row does not
+  // cover the other statement, which would otherwise vanish from the panel.
+  const unmatched = new Set<string>();
   for (const [authorSpaceId, rows] of claims.byAuthorSpaceId) {
-    if (known.has(authorSpaceId)) for (const row of rows) claimed.add(uuidToHex(row.id));
+    if (!known.has(authorSpaceId)) for (const row of rows) unmatched.add(uuidToHex(row.id));
   }
+  for (const row of claims.unattributed) unmatched.add(uuidToHex(row.id));
 
   // Filtered out of the flat list rather than assembled from the author map: walking the map would
   // emit one unknown author's claims together and then every unattributed one after them, so an
   // A/B/A transcript came out A/A/B. `all` is already in transcript order, which is the order this
   // is documented to fall back to.
-  return claims.all.filter(claim => !claimed.has(uuidToHex(claim.id)));
+  return claims.all.filter(claim => unmatched.has(uuidToHex(claim.id)));
 }
 
 /** The claims a given participant made, in transcript order. */
