@@ -29,7 +29,7 @@ export function EntityPageHeader({
       {showHeading && <EditableHeading spaceId={spaceId} entityId={entityId} />}
       {showHeading && <EntityPageInlineDescription entityId={entityId} spaceId={spaceId} />}
       <div className="flex items-center gap-4 text-text">
-        {showHeader && <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />}
+        {showHeader && <EntityPageMetadataHeader spaceId={spaceId} />}
         <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />
       </div>
     </div>

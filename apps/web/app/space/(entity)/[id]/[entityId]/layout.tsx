@@ -101,7 +101,7 @@ export default async function ProfileLayout(props: Props) {
             <EditableHeading spaceId={spaceId} entityId={entityId} />
             <EntityPageInlineDescription entityId={entityId} spaceId={spaceId} />
             <div className="flex items-center gap-4 text-text">
-              <EntityPageMetadataHeader id={profile.id} spaceId={spaceId} />
+              <EntityPageMetadataHeader spaceId={spaceId} />
               <EntityPageActions entityId={profile.id} spaceId={spaceId} isVoteable />
             </div>
           </div>

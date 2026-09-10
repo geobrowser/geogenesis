@@ -233,7 +233,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                 />
               )}
               <div className="flex items-center gap-4 text-text">
-                {!isRelationPage && <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />}
+                {!isRelationPage && <EntityPageMetadataHeader spaceId={spaceId} />}
                 <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable={!isRelationPage} />
               </div>
             </div>

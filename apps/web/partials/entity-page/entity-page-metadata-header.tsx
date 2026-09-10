@@ -34,11 +34,10 @@ import { RelationsGroup as ReadableRelationsGroup } from './readable-entity-page
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface EntityPageMetadataHeaderProps {
-  id: string;
   spaceId: string;
 }
 
-export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHeaderProps) {
+export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderProps) {
   const { id: entityId } = useEntityStoreInstance();
   const relations = useRelations({
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
@@ -51,7 +50,7 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
     includeDeleted: true,
   });
 
-  const name = useName(id);
+  const name = useName(entityId, spaceId);
 
   const { storage } = useMutate();
 
@@ -273,10 +272,10 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
         />
       )}
       {editable ? (
-        <EditableRelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
+        <EditableRelationsGroup id={entityId} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
       ) : (
         <ReadableRelationsGroup
-          entityId={id}
+          entityId={entityId}
           spaceId={spaceId}
           propertyId={SystemIds.TYPES_PROPERTY}
           isMetadataHeader={true}

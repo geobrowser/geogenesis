@@ -180,7 +180,7 @@ function PowerToolsEntityPanel({
               <div className="px-4">
                 <EditableHeading spaceId={spaceId} entityId={entityId} />
                 <div className="flex items-center gap-4 text-text">
-                  <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />
+                  <EntityPageMetadataHeader spaceId={spaceId} />
                   <EntityPageActions entityId={entityId} spaceId={spaceId} />
                 </div>
                 <Spacer height={16} />
