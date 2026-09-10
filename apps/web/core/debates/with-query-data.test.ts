@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { withQueryData } from './hooks';
+import { withQueryData } from './with-query-data';
 
 /**
  * The wrapper must not read the properties React Query tracks on access: reading them subscribes

@@ -21,6 +21,7 @@ import {
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
   type DebateMediaResponse,
+  type DebateParticipantSummary,
   type DebateRematchClaimsResponse,
   GeoChatRequestError,
   type LocalRecordingCompleteRequest,
@@ -66,6 +67,7 @@ import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
+import { useParticipantAvatars } from './participant-avatars';
 import { hasProcessedVideo } from './playback-utils';
 import {
   isRematchClaimsQueryKey,
@@ -73,6 +75,7 @@ import {
   rematchClaimBatchesWithClaim,
 } from './rematch-claims-query-key';
 import { type SpaceDebateSupport, useSpaceDebateSupport } from './space-debate-support';
+import { withQueryData } from './with-query-data';
 
 export const debateQueryNetworkOptions = {
   retry: false,
@@ -361,6 +364,9 @@ const ACTIVITY_DEGRADED_POLL_MS = 10_000;
  * ask; that is why geo-chat keys reachability (`is_online`) on presence too. This is what was
  * still reported as a ~36 second delivery after GEO-2638 (GEO-2650).
  */
+/** Stable empty reference, so a pending-challenge-free activity does not rebuild the memo. */
+const EMPTY_PARTIES: DebateParticipantSummary[] = [];
+
 export function useDebateActivity(enabled = true) {
   const queryClient = useQueryClient();
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
@@ -401,7 +407,32 @@ export function useDebateActivity(enabled = true) {
     if (returned && queryEnabled) void query.refetch();
   }, [attentive, present, query.refetch, queryEnabled]);
 
-  return query;
+  // The challenge rides here rather than on `useDebateRequests`, so it needs the same treatment:
+  // `RequestsTab`, `PeopleTab` and `DebateChallengeDialog` all draw these two faces straight off
+  // `activity.challenge`. Empty while no challenge is pending, which is the usual case, so this
+  // costs nothing until there is one. See `participant-avatars`.
+  const challengeParties = React.useMemo(
+    () => (query.data?.challenge ? [query.data.challenge.requester, query.data.challenge.recipient] : EMPTY_PARTIES),
+    [query.data]
+  );
+
+  const withAvatar = useParticipantAvatars(challengeParties, queryEnabled);
+
+  const data = React.useMemo(() => {
+    const challenge = query.data?.challenge;
+    if (!query.data || !challenge) return query.data;
+
+    return {
+      ...query.data,
+      challenge: {
+        ...challenge,
+        requester: withAvatar(challenge.requester),
+        recipient: withAvatar(challenge.recipient),
+      },
+    };
+  }, [query.data, withAvatar]);
+
+  return withQueryData(query, data);
 }
 
 export function useUpdateDebateAvailability() {

@@ -55,6 +55,17 @@ vi.mock('~/core/auth/identity-token', () => ({
 }));
 
 // geo-chat only indexes DAO spaces, and the debate hooks hold until they know the space is one.
+// This file asserts which queries these hooks configure, and stubs `useQuery` to do it. The avatar
+// enrichment rides `useQueries`, which the stub above leaves as the real implementation — so
+// without this it reaches for a QueryClient no renderHook here provides. Its own behaviour is
+// covered in `participant-avatars.test.ts`; what matters here is that it adds no `useQuery`.
+vi.mock('./participant-avatars', () => ({
+  useParticipantAvatars:
+    () =>
+    <T,>(participant: T) =>
+      participant,
+}));
+
 vi.mock('./space-debate-support', () => ({
   useSpaceDebateSupport: () => 'indexed',
 }));

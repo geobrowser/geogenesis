@@ -7,12 +7,12 @@ const DASHED = 'd077b06b-40ed-4eb9-94bf-a71c3f6d1146';
 const GRAPH = 'ipfs://QmGraphAvatar';
 const SNAPSHOT = 'ipfs://QmGeoChatSnapshot';
 
-/** A profile the graph actually answered for: it has a name, so its avatar is a real answer. */
+/** A profile the API answered for. `apiProfileToProfile` always sets `profileLink`. */
 const profiles = (entries: Array<[string, string | null]>) =>
-  new Map(entries.map(([id, avatarUrl]) => [id, { name: 'Someone', avatarUrl }]));
+  new Map(entries.map(([id, avatarUrl]) => [id, { profileLink: `/space/${id}`, avatarUrl }]));
 
-/** What `fetchProfileBySpaceId` returns when the lookup fails or the space is unknown. */
-const defaultProfiles = (ids: string[]) => new Map(ids.map(id => [id, { name: null, avatarUrl: null }]));
+/** What the batch loader substitutes when the request fails, decodes badly, or returns no row. */
+const defaultProfiles = (ids: string[]) => new Map(ids.map(id => [id, { profileLink: null, avatarUrl: null }]));
 
 describe('participantAvatarUrl', () => {
   // The reported bug: geo-chat never learned about an avatar uploaded after it first saw the
@@ -60,9 +60,21 @@ describe('participantAvatarUrl', () => {
   // A real profile can carry an avatar without a name; the avatar still wins.
   it('uses a resolved avatar even when the profile has no name', () => {
     const person = { profile_space_id: SPACE, avatar_cid: SNAPSHOT };
-    const nameless = new Map([[SPACE, { name: null, avatarUrl: GRAPH }]]);
+    const nameless = new Map([[SPACE, { profileLink: `/space/${SPACE}`, avatarUrl: GRAPH }]]);
 
     expect(participantAvatarUrl(person, nameless)).toBe(GRAPH);
+  });
+
+  // Second review of GEO-2841. The batch loader maps a returned profile as-is — it does not collapse
+  // a nameless one into a default the way the single-id path does — so a name is not a reliable
+  // "found" signal. Keying on it left an account with no display name showing its old snapshot
+  // forever once the avatar was removed. `profileLink` is set by the mapper and never by the
+  // default, which is what makes it the honest one.
+  it('clears the avatar for a resolved profile that has no name either', () => {
+    const person = { profile_space_id: SPACE, avatar_cid: SNAPSHOT };
+    const namelessAndAvatarless = new Map([[SPACE, { profileLink: `/space/${SPACE}`, avatarUrl: null }]]);
+
+    expect(participantAvatarUrl(person, namelessAndAvatarless)).toBeNull();
   });
 
   // geo-chat and the graph agree on the id but not always on its spelling.

@@ -35,7 +35,7 @@ export type ParticipantAvatarSource = {
   avatar_cid?: string | null;
 };
 
-type ProfileLike = { name?: string | null; avatarUrl?: string | null };
+type ProfileLike = { profileLink?: string | null; avatarUrl?: string | null };
 
 /**
  * Ids are normalized on both sides. geo-chat and the graph agree on the value but not always on the
@@ -43,14 +43,16 @@ type ProfileLike = { name?: string | null; avatarUrl?: string | null };
  * avatars already run them through, so a row that can link to a profile can resolve one.
  *
  * Three outcomes, not two, because "the graph says no avatar" and "the graph could not answer" are
- * different facts that arrive looking alike. `fetchProfileBySpaceId` never rejects: a failed request
- * and an unknown space both come back as `defaultProfile`, which carries a null name *and* a null
- * avatar. Treating every resolved null as authoritative would therefore blank a perfectly good
- * snapshot on any upstream blip.
+ * different facts that arrive looking alike. The batch loader never rejects: a failed request, a
+ * decode failure and an id the API returned nothing for all come back as `defaultProfile`, which
+ * carries nulls in every field. Treating every resolved null as authoritative would therefore blank
+ * a perfectly good snapshot on any upstream blip.
  *
- * A name is what separates them. A profile that resolved with one is a real answer about a real
- * person, so its avatar is trusted including its absence — which is what lets removing an avatar
- * propagate here rather than leaving the old face up indefinitely. Anything else falls back.
+ * `profileLink` is what separates them, and it is the only field that does it reliably.
+ * `apiProfileToProfile` always sets it, `defaultProfile` never does — where a *name* is merely
+ * usually present, so keying on that left a nameless account's avatar stuck on the old snapshot
+ * after they removed it. A profile the API answered for is a real answer, so its avatar is trusted
+ * including its absence, which is what lets a removal propagate here. Anything else falls back.
  */
 export function participantAvatarUrl(
   participant: ParticipantAvatarSource | null | undefined,
@@ -60,7 +62,7 @@ export function participantAvatarUrl(
   const profile = spaceId ? profilesBySpaceId.get(spaceId) : undefined;
 
   if (profile?.avatarUrl) return profile.avatarUrl;
-  if (profile?.name) return null;
+  if (profile?.profileLink) return null;
 
   return participant?.avatar_cid ?? null;
 }
