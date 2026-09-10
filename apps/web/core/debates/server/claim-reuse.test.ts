@@ -42,6 +42,17 @@ afterEach(() => {
 });
 
 describe('applyClaimReusePolicy', () => {
+  it('reads topics scoped to the publication space', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const lookup = vi.fn<ExistingClaimLookup>(async () => graph);
+
+    await applyClaimReusePolicy(claims, SPACE, { enabled: true, lookup });
+
+    // Relations are per-space: a topic the entity carries in another space is not a duplicate
+    // here, so the read has to be scoped or the writer would skip a relation this space needs.
+    expect(lookup.mock.calls[0]?.[1]).toBe(SPACE);
+  });
+
   it('subtracts topics the reused entity already carries and keeps the rest', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const CARRIED = { id: '27b73193ecea48fdaa46fdee40c0b717', name: 'AI and mental health' };

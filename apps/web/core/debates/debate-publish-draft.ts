@@ -364,9 +364,11 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
       // Supported/Opposed-by membership on the Debate.
       //
       // Find-or-create: a claim geo-chat matched to an existing Claim in this space reuses that
-      // entity. Only the two relations are written — the block's Claims and the claim's Sources —
-      // and nothing on the entity itself, so a claim someone else published keeps its own Name,
-      // Types and Is factual even where this extraction would have said otherwise.
+      // entity. Nothing describing the claim is written onto it — no Name, no Types, no Is
+      // factual — so a claim someone else published keeps its own facts even where this
+      // extraction would have said otherwise. What is written is membership: the block's Claims
+      // relation, the claim's Sources relation, and any Topics the entity does not already carry
+      // in this space (the reuse policy subtracts the ones it does).
       for (const claim of claimsByTurnIndex.get(turn.turnIndex) ?? []) {
         const claimEntityText = claim.text.trim();
         if (claimEntityText.length === 0) continue;
@@ -390,7 +392,9 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         // (claim, topic): a reused entity can appear behind several extracted claims carrying the
         // same topic, and `relate` does not dedupe.
         for (const topic of claim.topics ?? []) {
-          const edge = `${claimId}:${topic.id}`;
+          // Keyed on normalized ids so the dedupe agrees with the reuse policy, which compares
+          // topics as hex: the same entity written once dashed and once dashless is one edge.
+          const edge = `${normalizeId(claimId)}:${normalizeId(topic.id)}`;
           if (claimTopicEdges.has(edge)) continue;
           claimTopicEdges.add(edge);
           relate({
@@ -453,6 +457,11 @@ export function mergeTranscriptSegmentsIntoTurns(
     }
   }
   return turns;
+}
+
+/** Dashless, lower-case — the form ids are compared in, so one entity is one key. */
+function normalizeId(id: string): string {
+  return id.replace(/-/g, '').toLowerCase();
 }
 
 const TEXT_DATA_TYPE: DataType = 'TEXT';

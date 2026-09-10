@@ -371,7 +371,13 @@ describe('buildDebatePublishDraft', () => {
           // The same reused entity appears behind both debaters' restatements with the same
           // topic: one relation, not two. (Topics the entity already carries on the graph were
           // subtracted upstream by the reuse policy.)
-          { text: 'A restated point.', isFactual: null, turnIndex: 0, existingClaimEntityId: EXISTING, topics: [TOPIC] },
+          {
+            text: 'A restated point.',
+            isFactual: null,
+            turnIndex: 0,
+            existingClaimEntityId: EXISTING,
+            topics: [TOPIC],
+          },
           { text: 'Restated again.', isFactual: null, turnIndex: 1, existingClaimEntityId: EXISTING, topics: [TOPIC] },
         ],
       }),
@@ -383,6 +389,32 @@ describe('buildDebatePublishDraft', () => {
       [`${mintedId}->${TOPIC.id}`, `${mintedId}->${OTHER.id}`, `${EXISTING}->${TOPIC.id}`].sort()
     );
     expect(topicRelations.find(r => r.fromEntity.id === EXISTING)?.toEntity.name).toBe(TOPIC.name);
+  });
+
+  it('treats dashed and dashless forms of one topic as a single relation', () => {
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claims: [
+          {
+            text: 'Restated once.',
+            isFactual: null,
+            turnIndex: 0,
+            existingClaimEntityId: EXISTING,
+            topics: [{ id: '27b73193-ecea-48fd-aa46-fdee40c0b717', name: 'AI and mental health' }],
+          },
+          {
+            text: 'Restated twice.',
+            isFactual: null,
+            turnIndex: 1,
+            existingClaimEntityId: EXISTING,
+            topics: [{ id: '27b73193ecea48fdaa46fdee40c0b717', name: 'AI and mental health' }],
+          },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+    expect(draft.relations.filter(r => r.type.id === TOPICS_PROPERTY_ID)).toHaveLength(1);
   });
 
   it('writes each relation once when several claims resolve to the same existing entity', () => {

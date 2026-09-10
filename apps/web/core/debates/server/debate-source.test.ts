@@ -183,7 +183,13 @@ describe('loadDebatePublishSource media gating', () => {
     expect(input.transcriptTurns[0].text).toBe('Nuclear program was advancing.');
     // Claims arrive pre-attributed, keyed to the same turn indices.
     expect(input.claims).toEqual([
-      { text: 'The nuclear program was advancing.', isFactual: true, turnIndex: 0, existingClaimEntityId: null, topics: [] },
+      {
+        text: 'The nuclear program was advancing.',
+        isFactual: true,
+        turnIndex: 0,
+        existingClaimEntityId: null,
+        topics: [],
+      },
       { text: 'The action was unjustified.', isFactual: false, turnIndex: 1, existingClaimEntityId: null, topics: [] },
     ]);
   });
