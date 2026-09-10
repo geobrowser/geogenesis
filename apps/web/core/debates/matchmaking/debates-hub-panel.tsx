@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, type PanInfo, motion, useDragControls } from 'framer-motion';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
@@ -19,6 +19,7 @@ import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
 import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
+import { toClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab } from './claims-tab';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { HubSwap } from './hub-motion';
@@ -30,7 +31,14 @@ import { RequestsTab } from './requests-tab';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
 import { useUnexpiredRequests } from './use-request-countdown';
-import { type DebatesHubTab, debatesHubFiltersOwnerAtom, resetDebatesHubFiltersAtom } from '~/atoms';
+import {
+  type DebatesHubTab,
+  debatesHubExploreSearchAtom,
+  debatesHubExploreSpaceIdsAtom,
+  debatesHubExploreTopicIdsAtom,
+  debatesHubFiltersOwnerAtom,
+  resetDebatesHubFiltersAtom,
+} from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
@@ -403,10 +411,17 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
 function ExpandToWorkspaceLink() {
   const { close } = useDebatesHub();
 
+  // Explore's, because that is the variant the workspace mounts. All three are atoms, so they
+  // survive the tab being unmounted — which is the only reason the search used to be left behind.
+  const search = useAtomValue(debatesHubExploreSearchAtom);
+  const spaceIds = useAtomValue(debatesHubExploreSpaceIdsAtom);
+  const topicIds = useAtomValue(debatesHubExploreTopicIdsAtom);
+  const query = toClaimsFilterSearch({ search, spaceIds, topicIds });
+
   return (
     <div className="shrink-0 border-t border-grey-02 px-4 py-2.5">
       <Link
-        href="/matchmaking"
+        href={query ? `/matchmaking?${query}` : '/matchmaking'}
         onClick={close}
         className="flex items-center justify-center gap-1.5 text-metadata text-grey-04 transition-colors hover:text-text"
       >

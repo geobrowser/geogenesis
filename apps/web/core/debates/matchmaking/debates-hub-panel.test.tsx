@@ -677,3 +677,53 @@ describe('the way out to the full-screen hub', () => {
     expect(store.get(debatesHubAtom)).toBeNull();
   });
 });
+
+describe('the filters the expand link carries', () => {
+  it('links to a bare route when nothing is narrowed', () => {
+    renderOpen('explore');
+
+    expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute('href', '/matchmaking');
+  });
+
+  /**
+   * Which list the workspace draws is not the link's to say. It mounts Explore, and the other two
+   * claim lists are tabs in the panel with no counterpart over there — so a `scope` in this URL
+   * could only name something the destination has no way to show.
+   */
+  it('carries no scope, which the workspace has no way to honour', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    store.set(debatesHubExploreSearchAtom, 'nuclear');
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('scope')).toBeNull();
+  });
+
+  it('carries the tab’s narrowing into the URL', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    store.set(debatesHubExploreSearchAtom, 'nuclear');
+    store.set(debatesHubExploreSpaceIdsAtom, ['space-a']);
+    store.set(debatesHubExploreTopicIdsAtom, ['topic-a', 'topic-b']);
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    const params = new URLSearchParams(href.split('?')[1] ?? '');
+    // Carried with the rest: the search is an atom now, so it outlives the tab being unmounted,
+    // which was the one reason this link used to leave it behind.
+    expect(params.get('q')).toBe('nuclear');
+    expect(params.get('spaces')).toBe('space-a');
+    expect(params.get('topics')).toBe('topic-a,topic-b');
+  });
+});

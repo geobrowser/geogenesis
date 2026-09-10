@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { useAtom } from 'jotai';
+import { useSearchParams } from 'next/navigation';
 
 import { claimResponseKind } from '~/core/claims/response-kind';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
@@ -38,6 +39,7 @@ import {
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { claimRowKey } from './claim-row-key';
+import { fromClaimsFilterSearch } from './claims-filter-params';
 import { type AnsweredState, useCollapseAnswered } from './collapse-answered';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests } from './hooks';
@@ -156,8 +158,12 @@ export type ClaimsLayout = 'panel' | 'workspace';
 /**
  * `workspace`: facet rail + grid; panel menus are the narrow fallback.
  *
- * The layouts do not hold their selections apart — the atoms above are keyed by variant, not by
- * surface — so narrowing in the panel and expanding to the workspace arrives at the same list.
+ * Within a session nothing has to be passed: the atoms above are keyed by variant rather than by
+ * surface, so narrowing in the panel and expanding to the workspace arrives at the same list.
+ *
+ * The expand link carries the selection in the URL regardless, and the workspace seeds from it on
+ * mount, because a link is the one way onto this surface with no session behind it — a shared or
+ * reopened `/matchmaking?…` meets those atoms at their defaults. Seeding only; nothing goes back.
  */
 const VARIANT_ATOMS = {
   explore: {
@@ -254,6 +260,22 @@ export function ClaimsTab({
   const [spaceIds, setSpaceIds] = useAtom(atoms.spaceIds);
   const [topicIds, setTopicIds] = useAtom(atoms.topicIds);
   const [spaceSeedSpent, setSpaceSeedSpent] = useAtom(atoms.seedSpent);
+
+  const searchParams = useSearchParams();
+  const urlSeedApplied = React.useRef(false);
+  React.useEffect(() => {
+    if (!workspace || urlSeedApplied.current || !searchParams) return;
+    urlSeedApplied.current = true;
+
+    const seed = fromClaimsFilterSearch(new URLSearchParams(searchParams.toString()));
+
+    if (seed.search) setSearch(seed.search);
+    if (seed.topicIds.length > 0) setTopicIds([...seed.topicIds]);
+    if (seed.spaceIds.length > 0) {
+      setSpaceIds([...seed.spaceIds]);
+      setSpaceSeedSpent(true);
+    }
+  }, [workspace, searchParams, setSearch, setSpaceIds, setTopicIds, setSpaceSeedSpent]);
 
   const {
     allowlist: spaceAllowlist,
