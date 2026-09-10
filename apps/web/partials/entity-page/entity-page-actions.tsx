@@ -81,6 +81,7 @@ export function EntityPageActions({ entityId, spaceId, isVoteable = false }: Ent
       {editable && (
         <Link
           href={NavUtils.toEntity(spaceId, ID.createEntityId())}
+          aria-label="Create new entity"
           className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
         >
           <Create />

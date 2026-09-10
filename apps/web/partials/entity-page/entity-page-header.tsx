@@ -28,10 +28,12 @@ export function EntityPageHeader({
       <EntityPageRelations entityId={entityId} spaceId={spaceId} serverRelations={serverRelations} />
       {showHeading && <EditableHeading spaceId={spaceId} entityId={entityId} />}
       {showHeading && <EntityPageInlineDescription entityId={entityId} spaceId={spaceId} />}
-      <div className="flex items-center gap-4 text-text">
-        {showHeader && <EntityPageMetadataHeader spaceId={spaceId} />}
-        <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />
-      </div>
+      {showHeader && (
+        <div className="flex items-center gap-4 text-text">
+          <EntityPageMetadataHeader spaceId={spaceId} />
+          <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />
+        </div>
+      )}
     </div>
   );
 }
