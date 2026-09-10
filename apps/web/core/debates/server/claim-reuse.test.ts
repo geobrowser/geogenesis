@@ -149,14 +149,16 @@ describe('applyClaimReusePolicy', () => {
 });
 
 describe('isDebateClaimReuseEnabled', () => {
-  it('is off by default and on for the usual truthy spellings, quoted or not', () => {
+  it('is on by default and off for the usual falsy spellings, quoted or not', () => {
     vi.stubEnv('DEBATE_CLAIM_REUSE_ENABLED', '');
-    expect(isDebateClaimReuseEnabled()).toBe(false);
-    vi.stubEnv('DEBATE_CLAIM_REUSE_ENABLED', 'false');
-    expect(isDebateClaimReuseEnabled()).toBe(false);
+    expect(isDebateClaimReuseEnabled()).toBe(true);
     vi.stubEnv('DEBATE_CLAIM_REUSE_ENABLED', 'true');
     expect(isDebateClaimReuseEnabled()).toBe(true);
-    vi.stubEnv('DEBATE_CLAIM_REUSE_ENABLED', '"1"');
-    expect(isDebateClaimReuseEnabled()).toBe(true);
+    vi.stubEnv('DEBATE_CLAIM_REUSE_ENABLED', 'false');
+    expect(isDebateClaimReuseEnabled()).toBe(false);
+    vi.stubEnv('DEBATE_CLAIM_REUSE_ENABLED', '"0"');
+    expect(isDebateClaimReuseEnabled()).toBe(false);
+    vi.stubEnv('DEBATE_CLAIM_REUSE_ENABLED', 'off');
+    expect(isDebateClaimReuseEnabled()).toBe(false);
   });
 });

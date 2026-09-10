@@ -8,8 +8,9 @@
  * published. Submits nothing.
  *
  *   NEXT_PUBLIC_CHAIN_ID=55516 NEXT_PUBLIC_PRIVY_APP_ID=live NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=live \
- *   DEBATE_CLAIM_REUSE_ENABLED=true \
  *   bun run scripts/live-claim-reuse.ts <payload.json> <debate space id> [motion claim entity id]
+ *
+ * Reuse is on by default; add DEBATE_CLAIM_REUSE_ENABLED=false to see the shadow-mode path.
  */
 import { Effect } from 'effect';
 import { readFile } from 'node:fs/promises';

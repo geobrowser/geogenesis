@@ -20,9 +20,9 @@ import { existingClaimsDocument } from './existing-claims-document';
  * before matching existed — a duplicate is the known, tolerable failure; attaching a debater to the
  * wrong entity is not.
  *
- * Behind `DEBATE_CLAIM_REUSE_ENABLED`. With it off (the default) every reference is dropped and only
- * counted, so a deployment can run geo-chat's matching in shadow mode and read its verdicts from
- * `GET /debates/{id}/claims` before a single entity is reused.
+ * On by default. `DEBATE_CLAIM_REUSE_ENABLED=false` turns it off: every reference is then dropped and
+ * only counted, so a deployment can run geo-chat's matching in shadow mode and read its verdicts
+ * from `GET /debates/{id}/claims` without reusing a single entity.
  */
 
 /** What the verifier needs to know about a referenced entity. */
@@ -61,7 +61,7 @@ export function looksLikeEntityId(id: string): boolean {
 }
 
 export function isDebateClaimReuseEnabled(): boolean {
-  return /^(true|1|yes|on)$/i.test(readEnv('DEBATE_CLAIM_REUSE_ENABLED'));
+  return !/^(false|0|no|off)$/i.test(readEnv('DEBATE_CLAIM_REUSE_ENABLED'));
 }
 
 export type ClaimReuseOptions = {
