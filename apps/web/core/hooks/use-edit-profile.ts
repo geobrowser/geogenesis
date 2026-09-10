@@ -165,6 +165,23 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   /** Whether the staging pill on the global status bar is ours to take down. */
   const raisedStagingStatus = React.useRef(false);
 
+  /**
+   * The account context as of the latest render. `publish` awaits an upload, and a
+   * closure captured before that await still holds whoever was signed in when it
+   * started — so anything deciding *after* the await has to read this instead.
+   */
+  const ownerRef = React.useRef({ entityId, spaceId });
+  ownerRef.current = { entityId, spaceId };
+
+  /**
+   * The review state as of the latest render. Read through a ref for the same
+   * reason: `publish` raises the pill and may take it down again within one
+   * invocation, and a callback closing over the render's value would still be
+   * looking at what the bar showed before we touched it.
+   */
+  const reviewStateRef = React.useRef(statusBarState.reviewState);
+  reviewStateRef.current = statusBarState.reviewState;
+
   const bannerUrl = useEntityCoverUrl(entityId || undefined, spaceId);
   const avatarUrl = useEntityAvatarUrl(entityId || undefined, spaceId);
 
@@ -549,6 +566,15 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   const clearStagingStatus = React.useCallback(() => {
     if (!raisedStagingStatus.current) return;
     raisedStagingStatus.current = false;
+    // Having raised it once is not the same as still owning it: an upload can run
+    // long enough for another publish to take the bar over, and clearing then
+    // erases their progress rather than ours.
+    //
+    // Refuse only when the bar has visibly moved to some other operation. Reading
+    // 'idle' here means no render has landed since we raised the pill — which also
+    // means nobody else can have dispatched over it, so it is still ours.
+    const shown = reviewStateRef.current;
+    if (shown !== 'publishing-ipfs' && shown !== 'idle') return;
     dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
   }, [dispatch]);
 
@@ -591,13 +617,32 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         // Only when nothing else is using the bar. It is global and carries no
         // operation identity, so raising ours over another publish's progress would
         // replace its reporting with ours.
-        raisedStagingStatus.current = statusBarState.reviewState === 'idle';
+        raisedStagingStatus.current = reviewStateRef.current === 'idle';
         if (raisedStagingStatus.current) {
           dispatch({ type: 'SET_REVIEW_STATE', payload: 'publishing-ipfs' });
         }
 
         try {
-          stagedRef.current = await stage(draft, baseline);
+          const stagedEdit = await stage(draft, baseline);
+
+          // The account can change while that upload runs. The effect that abandons
+          // an outstanding edit cannot see this one — `stagedRef` was still null
+          // while it was in flight — so the check has to happen here, against the
+          // owner as it stands now rather than the one this closure captured.
+          if (
+            ownerRef.current.entityId !== stagedEdit.owner.entityId ||
+            ownerRef.current.spaceId !== stagedEdit.owner.spaceId
+          ) {
+            console.warn('[edit-profile] discarding an edit staged for a previous account', {
+              owner: stagedEdit.owner,
+            });
+            rollback(stagedEdit.rows, stagedEdit.owner.spaceId);
+            clearStagingStatus();
+            setStatus('idle');
+            return;
+          }
+
+          stagedRef.current = stagedEdit;
         } catch (error) {
           console.error('[edit-profile] failed to stage profile edit', error);
           // `makeProposal` never ran, so nothing else will clear the pill — but only
@@ -641,13 +686,24 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         return;
       }
 
+      // Both callbacks land long after the call, by which time `stagedRef` may hold
+      // a different edit entirely — an account change clears it, the new account
+      // stages its own, and this request then settles or fails *that* one. Identity,
+      // not presence, is what says the result belongs to the edit that asked for it.
+      const inFlight = staged;
+      const isStillInFlight = () => stagedRef.current === inFlight;
+
       await makeProposal({
         values: staged.values,
         relations: staged.relations,
-        spaceId,
+        spaceId: staged.owner.spaceId,
         name: 'Edit profile',
-        onSuccess: settleSuccess,
+        onSuccess: () => {
+          if (!isStillInFlight()) return;
+          settleSuccess();
+        },
         onError: () => {
+          if (!isStillInFlight()) return;
           ownsPendingError.current = true;
           setStatus('error');
           setErrorMessage('Couldn’t publish your profile. Your changes are still here — try again.');
@@ -666,7 +722,6 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       settleSuccess,
       spaceId,
       stage,
-      statusBarState.reviewState,
     ]
   );
 

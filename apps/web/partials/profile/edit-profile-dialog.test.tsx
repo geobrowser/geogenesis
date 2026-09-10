@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   publish: vi.fn(),
   reset: vi.fn(),
   canEdit: true,
+  entityId: 'entity-a',
   isHydrated: true,
   isLoading: false,
   status: 'idle' as EditProfileStatus,
@@ -29,7 +30,7 @@ vi.mock('~/core/hooks/use-edit-profile', () => ({
     canEdit: mocks.canEdit,
     isHydrated: mocks.isHydrated,
     isLoading: mocks.isLoading,
-    entityId: 'entity',
+    entityId: mocks.entityId,
     spaceId: 'space',
     current: mocks.current,
     status: mocks.status,
@@ -52,6 +53,7 @@ beforeEach(() => {
   mocks.publish.mockReset();
   mocks.reset.mockReset();
   mocks.canEdit = true;
+  mocks.entityId = 'entity-a';
   mocks.isHydrated = true;
   mocks.isLoading = false;
   mocks.status = 'idle';
@@ -367,6 +369,23 @@ describe('EditProfileDialog', () => {
 
     expect(saveButton()).toBeDisabled();
     expect(screen.getByText('We couldn’t find your profile to edit. Try reloading the page.')).toBeInTheDocument();
+  });
+
+  // The hook abandons a staged edit on an account change; the form it was typed
+  // into has to go too, or the previous account's draft sits there ready to be
+  // saved into somebody else's space.
+  it('clears the form when the account changes underneath it', async () => {
+    const { rerender } = renderDialog();
+
+    await userEvent.clear(nameField());
+    await userEvent.paste('Half-typed name');
+
+    mocks.entityId = 'entity-b';
+    mocks.current = { name: 'Someone Else', description: '', bannerUrl: undefined, avatarUrl: undefined };
+    rerender(<EditProfileDialog open onOpenChange={vi.fn()} />);
+
+    // Re-seeded from the new profile rather than holding the old draft.
+    expect(nameField()).toHaveValue('Someone Else');
   });
 
   it('rejects a dropped file the picker’s accept filter would never have allowed', async () => {

@@ -44,7 +44,7 @@ type Props = {
  * locks rather than offering to start a second one.
  */
 export function EditProfileDialog({ open, onOpenChange }: Props) {
-  const { canEdit, isHydrated, isLoading, current, status, errorMessage, publish, reset } = useEditProfile({
+  const { canEdit, entityId, isHydrated, isLoading, current, status, errorMessage, publish, reset } = useEditProfile({
     isOpen: open,
   });
 
@@ -66,12 +66,6 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   /** Where the current press began; see the backdrop handler below. */
   const pressStartedOnBackdrop = React.useRef(false);
 
-  React.useEffect(() => {
-    if (!open) return;
-    if (pristineRef.current.name) setName(current.name);
-    if (pristineRef.current.description) setDescription(current.description);
-  }, [open, current.name, current.description]);
-
   const resetForm = React.useCallback(() => {
     pristineRef.current = { name: true, description: true };
     setBanner(previous => {
@@ -84,6 +78,27 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     });
     setRejection(null);
   }, []);
+
+  // Declared before the seeding effect so it runs first in the same commit: it
+  // clears the pristine flags, which is what lets the seed below fill the fields
+  // from the account that just took over.
+  //
+  // The hook abandons a staged edit when the account changes; the form it was typed
+  // into has to go with it. Otherwise the fields stay non-pristine, the new profile
+  // can never seed them, and the previous account's draft sits on screen ready to
+  // be saved into somebody else's space.
+  const ownerRef = React.useRef(entityId);
+  React.useEffect(() => {
+    if (ownerRef.current === entityId) return;
+    ownerRef.current = entityId;
+    resetForm();
+  }, [entityId, resetForm]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    if (pristineRef.current.name) setName(current.name);
+    if (pristineRef.current.description) setDescription(current.description);
+  }, [open, current.name, current.description]);
 
   // A finished publish is the one case where the modal closes itself.
   //

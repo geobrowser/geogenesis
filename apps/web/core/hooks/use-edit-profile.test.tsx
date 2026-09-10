@@ -177,6 +177,10 @@ beforeEach(() => {
       ids.has(v.id) ? ({ ...v, isLocal: true, isDeleted: true } as Value) : v
     );
   });
+  // Mirror the store: dispatching a review state is what the next read sees.
+  mocks.dispatch.mockImplementation((action: { type: string; payload: string }) => {
+    if (action.type === 'SET_REVIEW_STATE') mocks.reviewState = action.payload;
+  });
   mocks.makeProposal.mockResolvedValue(undefined);
   mocks.createAndLink.mockResolvedValue({ imageId: 'new-image', relationId: 'new-relation' });
 });
@@ -595,6 +599,76 @@ describe('useEditProfile', () => {
     expect(mocks.setValue).toHaveBeenCalledWith(
       expect.objectContaining({ value: 'Their name', entity: expect.objectContaining({ id: NEW_ENTITY_ID }) })
     );
+  });
+
+  // `stagedRef` is null while the upload runs, so the owner-change effect cannot
+  // see this edit — the check has to happen after the await, against the owner as
+  // it stands then rather than the one the closure captured.
+  it('discards an edit whose account changed while its upload was running', async () => {
+    let releaseUpload: (v: { imageId: string; relationId: string }) => void = () => {};
+    mocks.createAndLink.mockImplementationOnce(() => new Promise(resolve => (releaseUpload = resolve)));
+    mocks.storeRelations = [relation({ id: 'new-relation' })];
+    const file = new File([''], 'banner.png', { type: 'image/png' });
+
+    const { result, rerender } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    let publishing: Promise<void>;
+    act(() => {
+      publishing = result.current.publish(draft({ banner: { kind: 'replaced', file } }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('publishing'));
+
+    // Someone else signs in mid-upload.
+    mocks.profile = { id: NEW_ENTITY_ID, spaceId: SPACE_ID, name: 'Someone else', avatarUrl: null };
+    mocks.personalEntityId = NEW_ENTITY_ID;
+    rerender();
+
+    await act(async () => {
+      releaseUpload({ imageId: 'new-image', relationId: 'new-relation' });
+      await publishing;
+    });
+
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+    expect(mocks.clearLocalChangesByIds).toHaveBeenCalled();
+    expect(result.current.status).toBe('idle');
+  });
+
+  // An account change clears the staged edit, the new account stages its own, and
+  // the first request then settles — consuming whichever edit happens to be there.
+  it('ignores a publish result that no longer owns the staged edit', async () => {
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
+    let settle: () => void = () => {};
+    mocks.makeProposal.mockImplementationOnce(
+      async ({ onSuccess }: { onSuccess: () => void }) =>
+        new Promise<void>(resolve => {
+          settle = () => {
+            onSuccess();
+            resolve();
+          };
+        })
+    );
+
+    const { result, rerender } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    let publishing: Promise<void>;
+    act(() => {
+      publishing = result.current.publish(draft({ name: 'Preston M' }));
+    });
+    await waitFor(() => expect(result.current.status).toBe('publishing'));
+
+    mocks.profile = { id: NEW_ENTITY_ID, spaceId: SPACE_ID, name: 'Someone else', avatarUrl: null };
+    mocks.personalEntityId = NEW_ENTITY_ID;
+    rerender();
+    await waitFor(() => expect(result.current.status).toBe('idle'));
+
+    await act(async () => {
+      settle();
+      await publishing;
+    });
+
+    // The late result must not report the new account's modal as published.
+    expect(result.current.status).toBe('idle');
+    expect(mocks.setStoredAvatar).not.toHaveBeenCalled();
   });
 
   it('leaves a pending edit made elsewhere on the entity out of the publish', async () => {
