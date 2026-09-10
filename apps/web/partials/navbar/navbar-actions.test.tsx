@@ -2,6 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import * as React from 'react';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NavbarActions } from './navbar-actions';
@@ -16,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   } as { name: string | null; avatarUrl: string | null } | null,
   personalSpaceId: 'personal-space' as string | null,
   isSmartAccountLoading: false,
+  dialogMounts: 0,
   pendingPersonalSpace: { isPending: false, topicId: null as string | null },
   privyUser: {
     id: 'user-a',
@@ -63,7 +66,14 @@ vi.mock('~/partials/onboarding/dialog', () => ({ avatarAtom: {} }));
 // The real dialog pulls in the whole publish chain (which needs an unmocked
 // jotai). The navbar's job is only to mount it, so assert on that.
 vi.mock('~/partials/profile/edit-profile-dialog', () => ({
-  EditProfileDialog: ({ open }: { open: boolean }) => (open ? <div data-testid="edit-profile-dialog" /> : null),
+  // Counts mounts, not renders. The dialog owns the publish state, so surviving a
+  // navbar re-render is not enough — it has to be the *same* component instance.
+  EditProfileDialog: ({ open }: { open: boolean }) => {
+    React.useEffect(() => {
+      mocks.dialogMounts += 1;
+    }, []);
+    return open ? <div data-testid="edit-profile-dialog" /> : null;
+  },
 }));
 vi.mock('~/core/wallet', () => ({ GeoConnectButton: () => <button>Connect</button> }));
 vi.mock('~/design-system/fallback-image', () => ({
@@ -114,6 +124,7 @@ describe('NavbarActions profile menu', () => {
     mocks.profile = { name: 'Max', avatarUrl: 'ipfs://avatar' };
     mocks.personalSpaceId = 'personal-space';
     mocks.isSmartAccountLoading = false;
+    mocks.dialogMounts = 0;
     mocks.pendingPersonalSpace = { isPending: false, topicId: null };
     mocks.privyUser = {
       id: 'user-a',
@@ -222,10 +233,15 @@ describe('NavbarActions profile menu', () => {
     await user.click(screen.getByRole('button', { name: 'Edit profile' }));
     expect(screen.getByTestId('edit-profile-dialog')).toBeInTheDocument();
 
+    expect(mocks.dialogMounts).toBe(1);
+
     mocks.isSmartAccountLoading = true;
     rerender(<NavbarActions />);
 
+    // Presence alone is not the guarantee — a remounted dialog is still in the DOM
+    // but has lost the staged edit it was holding.
     expect(screen.getByTestId('edit-profile-dialog')).toBeInTheDocument();
+    expect(mocks.dialogMounts).toBe(1);
   });
 
   it('leaves sign out working, and no longer offers a second availability switch', async () => {

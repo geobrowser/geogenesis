@@ -59,104 +59,105 @@ export function NavbarActions() {
   // only trigger the logout.
   const { logout } = useLogout();
 
-  // Rendered alongside every branch below, not just the signed-in one. A publish
-  // outlives the modal closing, and `isUserLoading` can flip back to true
-  // mid-session (the smart-account query key includes the wallet address, so a tab
-  // refocus or Privy re-init re-resolves it). Unmounting the dialog there would
-  // tear down `useEditProfile` under an in-flight write: no avatar write-back, no
-  // reopen on failure, and its staged rows stranded in the personal space.
-  const editProfileDialog = hasOpenedEditProfile ? (
-    <EditProfileDialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen} />
-  ) : null;
-
-  if (isUserLoading) {
-    return (
-      <>
-        <div className="flex items-center gap-4">
+  // The navbar's own content is swapped inside one stable tree rather than being
+  // returned from competing branches. Returning a `<div>` from one branch and a
+  // fragment from another changes the root element's type, which makes React
+  // unmount the whole subtree — taking the dialog with it. `isUserLoading` flips
+  // back to true mid-session (the smart-account query key includes the wallet
+  // address, so a tab refocus or Privy re-init re-resolves it), and remounting
+  // `useEditProfile` under an in-flight write loses its staged rows: nothing to
+  // reopen on failure, nothing to roll back, and the rows stranded in the space.
+  // The keys hold each slot's identity as the content beside it changes.
+  const navbarContent = (() => {
+    if (isUserLoading) {
+      return (
+        <div key="navbar-content" className="flex items-center gap-4">
           <Skeleton className="h-7 w-[66px]" radius="rounded-full" />
           <Skeleton className="h-7 w-7" radius="rounded-full" />
         </div>
-        {editProfileDialog}
-      </>
-    );
-  }
+      );
+    }
 
-  if (!address) {
+    if (!address) {
+      return <GeoConnectButton key="navbar-content" />;
+    }
+
+    // Optimistic identity: while the personal space is being created in the
+    // background, show the avatar the user just picked and link the menu item to
+    // the navigable `pending:` page until the real spaceId resolves.
+    const avatarValue = profile?.avatarUrl || (isPending ? pendingAvatar : '');
+    const personalHref = personalSpaceId
+      ? NavUtils.toSpace(personalSpaceId)
+      : isPending && topicId
+        ? `/space/pending/${topicId}`
+        : null;
+    const displayName = profile?.name?.trim() || shortAddress(address);
+    const email = userEmail(user);
+    const identityDetail = email ?? address;
+
     return (
-      <>
-        <GeoConnectButton />
-        {editProfileDialog}
-      </>
-    );
-  }
+      <div key="navbar-content" className="flex items-center gap-4">
+        <ModeToggle />
 
-  // Optimistic identity: while the personal space is being created in the
-  // background, show the avatar the user just picked and link the menu item to
-  // the navigable `pending:` page until the real spaceId resolves.
-  const avatarValue = profile?.avatarUrl || (isPending ? pendingAvatar : '');
-  const personalHref = personalSpaceId
-    ? NavUtils.toSpace(personalSpaceId)
-    : isPending && topicId
-      ? `/space/pending/${topicId}`
-      : null;
-  const displayName = profile?.name?.trim() || shortAddress(address);
-  const email = userEmail(user);
-  const identityDetail = email ?? address;
-  return (
-    <div className="flex items-center gap-4">
-      <ModeToggle />
-
-      <Menu
-        trigger={
-          <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            {avatarValue ? (
-              <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
-            ) : (
-              <Avatar value={address} size={28} />
-            )}
-          </div>
-        }
-        open={open}
-        onOpenChange={onOpenChange}
-        sideOffset={12}
-        className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] sm:w-[322px]"
-      >
-        <IdentityHeader
-          address={address}
-          avatarValue={avatarValue}
-          displayName={displayName}
-          detail={identityDetail}
-          href={personalHref}
-          onNavigate={() => onOpenChange(false)}
-        />
-        {personalSpaceId && (
-          <button
-            type="button"
-            onClick={() => {
-              onOpenChange(false);
-              setHasOpenedEditProfile(true);
-              setIsEditProfileOpen(true);
-            }}
-            className="flex w-full items-center border-t border-grey-02 px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
-          >
-            Edit profile
-          </button>
-        )}
-        {/* Sign out keeps its own group below the divider — the destructive action
+        <Menu
+          trigger={
+            <div className="relative h-7 w-7 overflow-hidden rounded-full">
+              {avatarValue ? (
+                <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
+              ) : (
+                <Avatar value={address} size={28} />
+              )}
+            </div>
+          }
+          open={open}
+          onOpenChange={onOpenChange}
+          sideOffset={12}
+          className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] sm:w-[322px]"
+        >
+          <IdentityHeader
+            address={address}
+            avatarValue={avatarValue}
+            displayName={displayName}
+            detail={identityDetail}
+            href={personalHref}
+            onNavigate={() => onOpenChange(false)}
+          />
+          {personalSpaceId && (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenChange(false);
+                setHasOpenedEditProfile(true);
+                setIsEditProfileOpen(true);
+              }}
+              className="flex w-full items-center border-t border-grey-02 px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+            >
+              Edit profile
+            </button>
+          )}
+          {/* Sign out keeps its own group below the divider — the destructive action
             stays alone at the bottom where people expect it. */}
-        <div className="border-t border-grey-02">
-          <button
-            type="button"
-            onClick={logout}
-            className="flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
-          >
-            Sign out
-          </button>
-        </div>
-      </Menu>
+          <div className="border-t border-grey-02">
+            <button
+              type="button"
+              onClick={logout}
+              className="flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+            >
+              Sign out
+            </button>
+          </div>
+        </Menu>
+      </div>
+    );
+  })();
 
-      {editProfileDialog}
-    </div>
+  return (
+    <>
+      {navbarContent}
+      {hasOpenedEditProfile ? (
+        <EditProfileDialog key="edit-profile-dialog" open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen} />
+      ) : null}
+    </>
   );
 }
 

@@ -14,8 +14,9 @@ import { usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
 import { useStatusBar } from '~/core/state/status-bar-store';
+import { GeoStore } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { getRelations, getValues, useQueryEntity } from '~/core/sync/use-store';
+import { getRelations, getValues } from '~/core/sync/use-store';
 import { store } from '~/core/sync/use-sync-engine';
 import type { Profile, Relation, Value } from '~/core/types';
 import { findMediaUrlValue, useEntityAvatarUrl, useEntityCoverUrl } from '~/core/utils/use-entity-media';
@@ -135,13 +136,17 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
   const entity = useEntity({ id: entityId, spaceId: spaceId || undefined });
 
-  // `isLoading` only says the fetch settled, not that it worked — `useQueryEntity`
-  // derives it from `isFetched`, which is true after a rejected retry too. Reading
-  // the store directly distinguishes them: a hydration that failed leaves nothing
-  // behind, and staging an image replacement against no relations would add a
-  // second edge instead of retargeting the one that is really there.
-  const { entity: hydratedEntity } = useQueryEntity({ id: entityId, spaceId: spaceId || undefined });
-  const isHydrated = hydratedEntity !== null;
+  // Whether the entity's relations are actually loaded, which `isLoading` cannot
+  // answer — `useQueryEntity` derives it from `isFetched`, true after a rejected
+  // retry too. Staging an image replacement without the remote relations adds a
+  // second edge instead of retargeting the one really there.
+  //
+  // Store presence cannot answer it either: `GeoStore.getEntity` synthesises an
+  // entity from local rows alone, so any pending draft from the normal editor
+  // makes a failed fetch look successful. Only the query's own status is the
+  // question being asked. Read rather than subscribed: `useEntity` above already
+  // subscribes to the same key, so a settling fetch re-renders us anyway.
+  const isHydrated = queryClient.getQueryState(GeoStore.queryKey(entityId))?.status === 'success';
 
   const [status, setStatus] = React.useState<EditProfileStatus>('idle');
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -210,7 +215,9 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         .forEach(value => (value.isDeleted ? storage.values.delete(value) : storage.values.set(value)));
       rows.overwrittenRelations
         .filter(relation => clearedRelations.has(relation.id))
-        .forEach(relation => (relation.isDeleted ? storage.relations.delete(relation) : storage.relations.set(relation)));
+        .forEach(relation =>
+          relation.isDeleted ? storage.relations.delete(relation) : storage.relations.set(relation)
+        );
     },
     [spaceId, storage]
   );

@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
   dispatch: vi.fn(),
   reviewState: 'idle' as string,
   entityName: 'Preston' as string | null,
-  hydratedEntity: {} as object | null,
+  hydrationStatus: 'success' as string | null,
   coverUrl: 'ipfs://old-banner' as string | undefined,
   avatarUrl: 'ipfs://old-avatar' as string | undefined,
   entityDescription: 'Working on debates.' as string | null,
@@ -49,8 +49,13 @@ vi.mock('jotai', () => ({ useSetAtom: () => mocks.setStoredAvatar }));
 vi.mock('~/partials/onboarding/dialog', () => ({ avatarAtom: {} }));
 
 vi.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({ setQueryData: mocks.setQueryData }),
+  useQueryClient: () => ({
+    setQueryData: mocks.setQueryData,
+    getQueryState: () => (mocks.hydrationStatus ? { status: mocks.hydrationStatus } : undefined),
+  }),
 }));
+
+vi.mock('~/core/sync/store', () => ({ GeoStore: { queryKey: (id: string) => ['entity', id] } }));
 
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({ smartAccount: { account: { address: ADDRESS } } }),
@@ -98,9 +103,6 @@ vi.mock('~/core/sync/use-mutate', () => ({
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
-  // Non-null means hydration produced an entity; the hook reads this to tell a
-  // settled-but-failed fetch from a successful one.
-  useQueryEntity: () => ({ entity: mocks.hydratedEntity, isLoading: false }),
   getValues: ({ selector }: { selector?: (v: Value) => boolean }) =>
     mocks.storeValues.filter(v => (selector ? selector(v) : true)),
   getRelations: ({ selector }: { selector?: (r: Relation) => boolean }) =>
@@ -158,7 +160,7 @@ beforeEach(() => {
   mocks.entityName = 'Preston';
   mocks.entityDescription = 'Working on debates.';
   mocks.personalEntityId = ENTITY_ID;
-  mocks.hydratedEntity = {};
+  mocks.hydrationStatus = 'success';
   mocks.coverUrl = 'ipfs://old-banner';
   mocks.avatarUrl = 'ipfs://old-avatar';
   mocks.profile = { id: ENTITY_ID, spaceId: SPACE_ID, name: 'Preston', avatarUrl: null };
@@ -212,9 +214,21 @@ describe('resolving the profile entity', () => {
     expect(result.current.entityId).toBe(ENTITY_ID);
   });
 
-  it('reports an unhydrated entity as not ready, even once the fetch has settled', () => {
+  it('reports a failed hydration as not ready, even once the fetch has settled', () => {
     // `isLoading` is derived from isFetched, which is true after a failed retry too.
-    mocks.hydratedEntity = null;
+    mocks.hydrationStatus = 'error';
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    expect(result.current.isHydrated).toBe(false);
+  });
+
+  // `GeoStore.getEntity` synthesises an entity from local rows alone, so a pending
+  // draft from the normal editor made a failed fetch look successful — defeating
+  // this guard in exactly the case it exists for.
+  it('is not fooled into readiness by a local draft after a failed fetch', () => {
+    mocks.hydrationStatus = 'error';
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
 
     const { result } = renderHook(() => useEditProfile({ isOpen: true }));
 
