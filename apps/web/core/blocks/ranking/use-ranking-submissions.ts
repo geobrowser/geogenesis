@@ -7,6 +7,7 @@ import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
+import { type OperationContext, observeOperation } from '~/core/analytics-operations';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { readCachedPersonalSpace, readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
@@ -153,7 +154,10 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   const hasMySubmission = (mySubmission?.orderedEntityIds.length ?? 0) > 0;
 
   const saveMySubmission = React.useCallback(
-    async (slots: RankingSubmissionSlot[]): Promise<RankingSubmissionPublishResult | null> => {
+    async (
+      slots: RankingSubmissionSlot[],
+      opportunity?: OperationContext
+    ): Promise<RankingSubmissionPublishResult | null> => {
       const account = readCachedSmartAccount(queryClient, smartAccount);
       if (!account) {
         setToast(React.createElement('span', null, 'Please connect your wallet to publish your ranking'));
@@ -185,6 +189,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       }
 
       setIsSaving(true);
+      const operation = observeOperation('ranking', 'ranking', blockId, opportunity);
       try {
         const rankName = blockName.trim() || 'My ranking';
 
@@ -212,6 +217,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           ops = result.ops;
           rankId = result.id;
         } catch (error) {
+          operation.failed('invalid_input');
           console.error('[useRankingSubmissions] Building rank ops failed:', error);
           const { message, retry } = toUserFacingError(error, 'Failed to publish ranking: ');
           reportError(message, retry);
@@ -260,6 +266,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
         if (Either.isLeft(result)) {
           const err = result.left;
+          operation.failed(err instanceof Error && err.message.includes('User rejected') ? 'rejected' : 'unknown');
           if (err instanceof Error && err.message.includes('User rejected')) {
             return null;
           }
@@ -269,6 +276,14 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           return null;
         }
 
+        const outcomeProperties = {
+          ranking_id: blockId,
+          rank_id: rankId,
+          mutation_kind: reuseExistingRank ? 'revision' : myRankEntity ? 'new_period' : 'first_submission',
+          user_operation_hash: result.right,
+          item_count: votes.length,
+        };
+        operation.outcome('ranking_submitted', 'submitted', outcomeProperties);
         clearLocalMyRankingDraft(spaceId, blockId);
         setToast(React.createElement('span', null, 'Ranking published!'));
 
@@ -307,6 +322,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
             try {
               const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
               if (rankEntity && matchesExpectedOrder(getMyRankingOrderedEntityIds(rankEntity, personalSpaceId))) {
+                operation.outcome('ranking_submitted', 'indexed', outcomeProperties);
                 break;
               }
             } catch (e) {
