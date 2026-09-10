@@ -51,6 +51,11 @@ const SORT_OPTIONS: { value: ExploreSort; label: string }[] = [
  * answer mean anything. "Best" is ranked server-side and "New" is ordered by recency already, so a
  * window over either is a filter the viewer never asked for and can't see they have. The dropdown
  * is hidden for those, and the range leaves the request with it.
+ *
+ * There is now a performance reason not to widen this without measuring, on top of the product one:
+ * Explore's debate-tag clause roughly doubles a query that also carries a `createdAt` window, and
+ * Top is unaffected only because its own window happens not to hit that path. See
+ * `explore-debate-tag-filter` for the numbers.
  */
 const SORTS_WITH_TIME_RANGE: readonly ExploreSort[] = ['top'];
 

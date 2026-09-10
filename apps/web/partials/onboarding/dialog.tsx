@@ -83,7 +83,7 @@ const ONBOARDING_DESTINATION = NavUtils.toExplore();
 // How long the completion screen shows before we route the user onward. The
 // personal space keeps creating in the background regardless.
 const COMPLETION_ANIMATION_MS = 3000;
-const TERMS_AND_CONDITIONS_URL = 'https://docs.google.com/document/d/106bM0qopWGJ8aAausnO7LYtkkDJz__xc/edit';
+const TERMS_AND_CONDITIONS_URL = 'https://www.geobrowser.io/terms';
 
 const ONBOARDING_PERSONAL_SEARCH_TYPES = [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PERSON_TYPE];
 
