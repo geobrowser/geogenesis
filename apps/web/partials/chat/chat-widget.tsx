@@ -44,6 +44,7 @@ import {
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useReportError } from '~/core/state/status-bar-store';
+import { reportError as captureAssistantError } from '~/core/telemetry/logger';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -312,6 +313,17 @@ export function ChatWidget() {
   // mid-stream Anthropic error) surfaces through the global StatusBar modal —
   // the same surface publish failures use. Deduped by Error instance so
   // re-renders don't re-fire the same error.
+  //
+  // GEO-2510. It also goes to Sentry now. `useReportError` here is the *status bar* one, which
+  // only dispatches to a Jotai atom — despite the name, nothing about it is telemetry, and
+  // nothing else in `partials/chat` or `core/chat` captures either. So every assistant failure
+  // showed the user "An error occurred." and told us nothing: the one report we have (2026-08-05)
+  // came with browser, OS and wallet pasted in by hand, and a month later there was still no way
+  // to tell whether it was rare or constant.
+  //
+  // This effect is the right seam rather than a new one — it already sees the whole class the
+  // ticket describes, and it already dedupes by Error instance, so a capture here cannot fire
+  // twice for one failure.
   const reportError = useReportError();
   const reportedErrorRef = React.useRef<Error | null>(null);
   const regenerateRef = React.useRef(regenerate);
@@ -325,6 +337,9 @@ export function ChatWidget() {
     }
     if (reportedErrorRef.current === error) return;
     reportedErrorRef.current = error;
+    // Tagged so assistant failures are separable from the rest of the app's errors, which is the
+    // question the ticket actually needs answered: how often, and on what.
+    captureAssistantError(error, { tags: { surface: 'ai-assistant' } });
     reportError(describeChatError(error), () => {
       stoppedRef.current = false;
       regenerateRef.current();

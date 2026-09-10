@@ -231,7 +231,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // whether the source is worth showing. Applying it there emptied both tabs in the ordinary case:
   // a debater's claims live in their personal space, which nobody else is a member of, so the
   // opponent's positions and a curator's page were dropped wholesale on the other side.
-  const { allowlist: spaceAllowlist, memberSpaceIds, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
+  const {
+    allowlist: spaceAllowlist,
+    memberSpaceIds,
+    isLoading: allowlistLoading,
+    isSettlingMemberships,
+  } = useClaimSpaceAllowlist();
 
   // While it is still resolving there is no telling an allowed space from one the viewer has
   // nothing to do with. Every list waits for it rather than showing the unfiltered set and
@@ -969,11 +974,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // space offered provisionally and rejected a moment later takes the default with it.
     // `sourceDebateQuery` for the same reason from the other end: the source debate's own claim is
     // one of the exclusions, so until it lands a row-derived menu can still be counting its space.
+    //
+    // `isSettlingMemberships` is the same rule applied to the *viewer's* side of the match rather
+    // than the menu's: sign-up sends one membership proposal per picked space and they land
+    // seconds apart, so the first non-empty answer is a fraction of what they chose (GEO-2834).
     pending:
       tabIsLoading ||
       publishabilityPending ||
       publishableSpacesLoading ||
       sourceDebateQuery.isLoading ||
+      isSettlingMemberships ||
       (graphFiltered && !taggedSpaceFacet.settled),
   });
 
@@ -1573,6 +1583,11 @@ function RematchClaimCard({
       // graph's, and correcting them against an answer nobody gave takes the viewer off the side
       // the graph says they hold (GEO-2807).
       viewerResponseUnknown={chatPosition === undefined}
+      // No second source for the viewer's side here. `viewerResponseUnknown` above covers geo-chat
+      // having no row at all; this also covers a row reporting "no position", where filling the gap
+      // from the indexed response would highlight a side the viewer has withdrawn while the footer
+      // below — which reads `chatPosition` raw — went on refusing the request.
+      reconcileWithIndexedResponse={false}
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
       // rematch behind, so open it beside the picker instead.
       onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}

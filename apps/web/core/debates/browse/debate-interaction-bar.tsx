@@ -66,14 +66,7 @@ export function DebateInteractionBar({
       />
       <PillAction onClick={onComment} icon={<Comment />} label={String(commentCount)} ariaLabel="Comments" />
       <PillAction onClick={onClaims} icon={<InfoSmall />} label={String(claimsCount)} ariaLabel="Claims" />
-      <PillAction
-        onClick={onShare}
-        icon={<Share />}
-        label="Share"
-        ariaLabel="Share debate"
-        expanded={shareOpen}
-        className="ml-auto"
-      />
+      <PillAction onClick={onShare} icon={<Share />} label="Share" ariaLabel="Share debate" expanded={shareOpen} />
     </div>
   );
 }
