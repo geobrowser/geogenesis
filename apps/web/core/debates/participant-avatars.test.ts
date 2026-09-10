@@ -7,8 +7,12 @@ const DASHED = 'd077b06b-40ed-4eb9-94bf-a71c3f6d1146';
 const GRAPH = 'ipfs://QmGraphAvatar';
 const SNAPSHOT = 'ipfs://QmGeoChatSnapshot';
 
+/** A profile the graph actually answered for: it has a name, so its avatar is a real answer. */
 const profiles = (entries: Array<[string, string | null]>) =>
-  new Map(entries.map(([id, avatarUrl]) => [id, { avatarUrl }]));
+  new Map(entries.map(([id, avatarUrl]) => [id, { name: 'Someone', avatarUrl }]));
+
+/** What `fetchProfileBySpaceId` returns when the lookup fails or the space is unknown. */
+const defaultProfiles = (ids: string[]) => new Map(ids.map(id => [id, { name: null, avatarUrl: null }]));
 
 describe('participantAvatarUrl', () => {
   // The reported bug: geo-chat never learned about an avatar uploaded after it first saw the
@@ -35,10 +39,30 @@ describe('participantAvatarUrl', () => {
     expect(participantAvatarUrl(person, profiles([]))).toBe(SNAPSHOT);
   });
 
-  it('falls back to the snapshot when the graph resolved no avatar', () => {
+  // Review of GEO-2841. The graph is the source of truth in both directions: a profile that
+  // resolved with a name has really told us this person has no avatar, so an avatar removed there
+  // has to clear here too rather than leaving the old face up behind a snapshot forever.
+  it('clears the avatar when a resolved profile has none', () => {
     const person = { profile_space_id: SPACE, avatar_cid: SNAPSHOT };
 
-    expect(participantAvatarUrl(person, profiles([[SPACE, null]]))).toBe(SNAPSHOT);
+    expect(participantAvatarUrl(person, profiles([[SPACE, null]]))).toBeNull();
+  });
+
+  // But a failed lookup is not an answer. `fetchProfileBySpaceId` never rejects — a network error
+  // and an unknown space both arrive as `defaultProfile`, with a null name and a null avatar — so
+  // trusting every resolved null would blank a good snapshot on any upstream blip.
+  it('keeps the snapshot when the lookup failed and returned a default profile', () => {
+    const person = { profile_space_id: SPACE, avatar_cid: SNAPSHOT };
+
+    expect(participantAvatarUrl(person, defaultProfiles([SPACE]))).toBe(SNAPSHOT);
+  });
+
+  // A real profile can carry an avatar without a name; the avatar still wins.
+  it('uses a resolved avatar even when the profile has no name', () => {
+    const person = { profile_space_id: SPACE, avatar_cid: SNAPSHOT };
+    const nameless = new Map([[SPACE, { name: null, avatarUrl: GRAPH }]]);
+
+    expect(participantAvatarUrl(person, nameless)).toBe(GRAPH);
   });
 
   // geo-chat and the graph agree on the id but not always on its spelling.
