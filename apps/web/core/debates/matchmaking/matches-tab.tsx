@@ -24,8 +24,17 @@ import { type DebatesHubTab, debatesHubMatchesSpaceIdsAtom } from '~/atoms';
  *
  * Topics are Knowledge Graph data geo-chat doesn't model — `match.topics` is always empty, so this
  * tab filters by space only.
+ *
+ * `dense` (live rail): no chrome; outbound card lives on RequestsTab above to avoid a duplicate.
  */
-export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
+/** `dense` is the live rail (GEO-2726) — see the note on `RequestsTab`. */
+export function MatchesTab({
+  onTabChange,
+  dense = false,
+}: {
+  onTabChange?: (tab: DebatesHubTab) => void;
+  dense?: boolean;
+}) {
   // Session-scoped, like the Claims tab's: the hub closes on an outside pointer-down, so a
   // click-away to dismiss the dropdown unmounted this tab and took the selection with it
   // (GEO-2850).
@@ -77,15 +86,17 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
       {/* One pinned header rather than a pinned card above scrolling filters: two stickies would
           both claim `top-0` and overlap, and the outbound card is conditional so the filters
           couldn't be offset by a known height. */}
-      <HubStickyControls>
-        {outbound ? <OutboundRequestCard request={outbound} /> : null}
-        <SpaceTopicFilters
-          spaceIds={spaceIds}
-          onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
-          onSpacesClear={() => setSpaceIds([])}
-          facetSpaces={facetSpaces}
-        />
-      </HubStickyControls>
+      {!dense && (
+        <HubStickyControls>
+          {outbound ? <OutboundRequestCard request={outbound} /> : null}
+          <SpaceTopicFilters
+            spaceIds={spaceIds}
+            onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
+            onSpacesClear={() => setSpaceIds([])}
+            facetSpaces={facetSpaces}
+          />
+        </HubStickyControls>
+      )}
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
@@ -133,10 +144,14 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           // names for one button in one panel is a difference that implies something.
           // Clearing the filter is the whole answer when the filter is the cause, and browsing claims
           // cannot be — there are matches, just not in the spaces on screen.
+          // Clearing the space picks works anywhere; "Explore claims" does not in the rail, where
+          // `onTabChange` is a no-op and the claims list is already on screen beside this.
           emptyAction={
             filteredBySpace
               ? { label: 'Clear filters', onClick: () => setSpaceIds([]) }
-              : { label: 'Explore claims', onClick: () => onTabChange('claims') }
+              : dense || !onTabChange
+                ? undefined
+                : { label: 'Explore claims', onClick: () => onTabChange('claims') }
           }
         >
           <HubCardList>

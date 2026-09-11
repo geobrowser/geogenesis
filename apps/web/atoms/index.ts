@@ -67,8 +67,13 @@ export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
  * not about what the viewer picked, so it leaves this value alone — which is what lets a viewer who
  * signs in keep the list they had chosen. Changing account is the one thing that clears it; see
  * {@link debatesHubFiltersOwnerAtom}.
+ *
+ * `matches` is a scope the full-screen hub offers and the panel does not — the panel has a tab for
+ * that list instead. It is held here all the same, for the same reason the coercion lives in the
+ * tab: which scopes a surface *shows* is that surface's rule, and a value the viewer picked should
+ * not be spent by moving between them.
  */
-export type DebatesHubClaimsFilter = MatchmakingClaimsFilter | 'featured';
+export type DebatesHubClaimsFilter = MatchmakingClaimsFilter | 'featured' | 'matches';
 export const debatesHubClaimsFilterAtom = atom<DebatesHubClaimsFilter>('featured');
 
 export const debatesHubClaimsSpaceIdsAtom = atom<string[]>([]);

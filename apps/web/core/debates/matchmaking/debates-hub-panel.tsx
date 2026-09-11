@@ -4,7 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, type PanInfo, motion, useDragControls } from 'framer-motion';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
@@ -13,10 +14,12 @@ import { requestsModal } from '~/core/deep-links/modal-deep-link';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { ExpandSmall } from '~/design-system/icons/expand-small';
 import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
 import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
+import { DEFAULT_CLAIMS_SCOPE, toClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab } from './claims-tab';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { HubSwap } from './hub-motion';
@@ -28,7 +31,15 @@ import { RequestsTab } from './requests-tab';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
 import { useUnexpiredRequests } from './use-request-countdown';
-import { type DebatesHubTab, debatesHubFiltersOwnerAtom, resetDebatesHubFiltersAtom } from '~/atoms';
+import {
+  type DebatesHubTab,
+  debatesHubClaimsFilterAtom,
+  debatesHubClaimsSpaceIdsAtom,
+  debatesHubClaimsTopicIdsAtom,
+  debatesHubFiltersOwnerAtom,
+  debatesHubMatchesSpaceIdsAtom,
+  resetDebatesHubFiltersAtom,
+} from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
@@ -361,6 +372,50 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           </HubSwap>
         )}
       </motion.div>
+
+      <ExpandToWorkspaceLink />
+    </div>
+  );
+}
+
+/**
+ * The way out to the full-screen hub at `/matchmaking`.
+ */
+function ExpandToWorkspaceLink() {
+  const { activeTab, close } = useDebatesHub();
+
+  const claimsScope = useAtomValue(debatesHubClaimsFilterAtom);
+  const claimsSpaceIds = useAtomValue(debatesHubClaimsSpaceIdsAtom);
+  const topicIds = useAtomValue(debatesHubClaimsTopicIdsAtom);
+  const matchesSpaceIds = useAtomValue(debatesHubMatchesSpaceIdsAtom);
+
+  // The open tab decides the scope, rather than that tab writing one somewhere for this to read.
+  // Matches is a tab here and a Claims scope over there, so expanding from it should land on that
+  // scope — but writing `matches` into the shared filter would also change what the Claims tab goes
+  // back to, and the panel does not offer that scope, so it would be coerced away and the viewer's
+  // real choice lost. Reading the tab costs nothing and touches no shared state.
+  //
+  // Topics do not travel from Matches: that list carries none, so the Claims tab's would narrow a
+  // scope that cannot answer them.
+  const onMatches = activeTab === 'matches';
+  const scope = onMatches ? 'matches' : claimsScope;
+  const spaceIds = onMatches ? matchesSpaceIds : claimsSpaceIds;
+  // Search is not session-scoped — it stays local to the tab — so it is not carried.
+  const search = toClaimsFilterSearch(
+    { scope, search: '', spaceIds, topicIds: onMatches ? [] : topicIds },
+    DEFAULT_CLAIMS_SCOPE
+  );
+
+  return (
+    <div className="shrink-0 border-t border-grey-02 px-4 py-2.5">
+      <Link
+        href={search ? `/matchmaking?${search}` : '/matchmaking'}
+        onClick={close}
+        className="flex items-center justify-center gap-1.5 text-metadata text-grey-04 transition-colors hover:text-text"
+      >
+        <ExpandSmall />
+        Open full screen
+      </Link>
     </div>
   );
 }

@@ -28,10 +28,23 @@ import { useUnexpiredRequests } from './use-request-countdown';
 import type { DebatesHubTab } from '~/atoms';
 
 /**
- * Everyone online and available right now. The Debate button sends the same claimless challenge as
- * `ProfileDebateButton` on a person's home space — `DebateCoordinator` owns the resulting dialog.
+ * Everyone online and available right now. Debate sends the same claimless challenge as
+ * `ProfileDebateButton`; `DebateCoordinator` owns the dialog.
+ *
+ * `dense` (live rail): no sticky chrome; search stays so you can still find a name.
  */
-export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
+/**
+ * `dense` is the live rail (GEO-2726) — see the note on `RequestsTab`. Search stays: a presence
+ * list is the one of the three you actually scan for a name.
+ */
+export function PeopleTab({
+  onTabChange,
+  dense = false,
+}: {
+  /** Only reached from the empty state's action, so the rail need not pass one. */
+  onTabChange?: (tab: DebatesHubTab) => void;
+  dense?: boolean;
+}) {
   const { authenticated } = useGeoChatAuth();
   const promptSignIn = usePrivySignIn();
   // Undefined when signed in, so every path below keeps behaving exactly as it did.
@@ -103,7 +116,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
           the people you can no longer ask, and search shouldn't either. Two stickies would both
           claim `top-0` and overlap, and the card is conditional so search couldn't be offset by a
           known height. */}
-      <HubStickyControls>
+      <PeopleControls dense={dense}>
         {outboundChallenge ? <DebateChallengeCard challenge={outboundChallenge} role="requester" /> : null}
         <Input
           withSearchIcon
@@ -112,7 +125,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
           placeholder="Search people"
           aria-label="Search people"
         />
-      </HubStickyControls>
+      </PeopleControls>
 
       {/* Matches the other tabs' inset so content doesn't shift when switching between them. */}
       <div className="px-4 py-3">
@@ -140,10 +153,14 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
           // Exactly one action, and which one follows the same question the message and the note do.
           // A search the viewer can undo gets the undo; a room that is genuinely empty gets somewhere
           // to go, because there is nothing to undo and waiting is the only other option (GEO-2840).
+          // In the rail there is no tab to change to and the claims list is already on screen beside
+          // this, so the "somewhere to go" half has nowhere to send anyone.
           emptyAction={
             searchExcludedEveryone
               ? { label: 'Clear search', onClick: () => setSearch('') }
-              : { label: 'Explore claims', onClick: () => onTabChange('claims') }
+              : onTabChange
+                ? { label: 'Explore claims', onClick: () => onTabChange('claims') }
+                : undefined
           }
           signInAction={
             onRequireSignIn
@@ -174,6 +191,15 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
       </div>
     </div>
   );
+}
+
+/**
+ * Pinned in the panel, plain in the rail. Three pinned headers stacked in one column all claim
+ * `top-0` and overlap, which is what made the rail read as several scroll areas side by side.
+ */
+function PeopleControls({ dense, children }: { dense: boolean; children: React.ReactNode }) {
+  if (dense) return <div className="flex flex-col gap-3 px-4 pb-2">{children}</div>;
+  return <HubStickyControls>{children}</HubStickyControls>;
 }
 
 function PersonRow({

@@ -517,3 +517,81 @@ it.each<[string, { tab: DebatesHubTab } | null]>([
 
   expect(store.get(debatesHubAtom)).toEqual({ tab: 'claims' });
 });
+
+describe('the way out to the full-screen hub', () => {
+  it('offers it from every tab, not just the one it was added on', () => {
+    for (const tab of ['requests', 'matches', 'claims', 'people'] as const) {
+      const view = renderOpen(tab);
+
+      expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute(
+        'href',
+        tab === 'matches' ? '/matchmaking?scope=matches' : '/matchmaking'
+      );
+      cleanup();
+      void view;
+    }
+  });
+
+  /**
+   * A real anchor, so a modified click opens a tab and the destination shows on hover. A router
+   * push would give neither, and the whole point of the route is that it can be linked to.
+   */
+  it('is a link rather than a button', () => {
+    renderOpen('claims');
+
+    const link = screen.getByRole('link', { name: /open full screen/i });
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', '/matchmaking');
+  });
+
+  it('closes the panel, so it is not left over the page it navigated to', () => {
+    const store = renderOpen('claims');
+    expect(store.get(debatesHubAtom)).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('link', { name: /open full screen/i }));
+
+    expect(store.get(debatesHubAtom)).toBeNull();
+  });
+});
+
+describe('the filters the expand link carries', () => {
+  it('links to a bare route when nothing is narrowed', () => {
+    renderOpen('claims');
+
+    expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute('href', '/matchmaking');
+  });
+
+  it('carries the tab’s narrowing into the URL', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'claims' });
+    store.set(debatesHubClaimsFilterAtom, 'mine');
+    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+    store.set(debatesHubClaimsTopicIdsAtom, ['topic-a', 'topic-b']);
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    const params = new URLSearchParams(href.split('?')[1] ?? '');
+    expect(params.get('scope')).toBe('mine');
+    // Search is not carried: it is local to the Claims tab rather than session-scoped like the
+    // three below, so there is nothing for this link to read while that tab may be unmounted.
+    expect(params.get('q')).toBeNull();
+    expect(params.get('spaces')).toBe('space-a');
+    expect(params.get('topics')).toBe('topic-a,topic-b');
+  });
+});
+
+describe('expanding from the Matches tab', () => {
+  it('carries the scope, so the workspace opens on Matches', () => {
+    renderOpen('matches');
+
+    expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute(
+      'href',
+      '/matchmaking?scope=matches'
+    );
+  });
+});
