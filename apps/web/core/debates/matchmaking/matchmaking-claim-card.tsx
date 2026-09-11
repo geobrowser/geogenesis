@@ -1084,31 +1084,34 @@ function PositionAvatars({
   // These thresholds are against the pill's *content* box, which is what a container query measures
   // — 24px of `px-3` is already excluded, so they read 24px smaller than the pill widths they
   // correspond to. Inside that box sit the label group (a 12px icon, a 6px gap and 58px of
-  // "Disagree" = 76px) and the 6px gap before the stack — 8px until the pill's groups were merged
-  // into one run (the thresholds below are therefore 2px generous, which sheds a face marginally
-  // earlier than it must rather than a moment too late). A face is 24px, a second adds 16px after
-  // the 8px overlap, and the badge adds another 24px: 108px holds one face, 124px holds two, 148px
-  // holds the lot. 108px is `claim-pills-wide` seen from inside a pill, which is where that
-  // threshold came from. The badge is 24px only because `MAX_OVERFLOW_SHOWN` keeps its text inside
-  // the `min-w-5` floor — without that cap it grows and the arithmetic here stops holding.
+  // "Disagree" = 76px) and the 6px gap before the stack. A face is 16px — a 12px avatar in a 2px
+  // ring, matching the responder faces beside the share on an explore card — a second adds 12px
+  // after the 4px overlap, and the badge adds another 16px: 98px holds one face, 110px holds two,
+  // 126px holds the lot. The badge is 16px only because `MAX_OVERFLOW_SHOWN` keeps its text inside
+  // the `min-w-3` floor — without that cap it grows and the arithmetic here stops holding.
+  //
+  // These were 108/124/148 against 24px faces and an 8px gap. Both changed together: the faces
+  // shrank to match the explore card's, and merging the pill's two groups into one centred run
+  // took the gap to 6px. Anything that moves a face size, a ring, an overlap or that gap moves
+  // these three numbers with it.
   //
   // The badge goes first and a face last, because the faces stay truthful as they are dropped: the
   // count is computed against the participants rendered, so hiding a face would leave a "+N" that
   // no longer adds up, while hiding the badge only stops advertising a remainder.
   return (
-    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-2">
+    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-1">
       {participants.map((participant, index) => (
         <span
           key={participant.user_id}
           className={cx(
-            'relative box-content block size-5 rounded-full border-2 border-white',
-            index === 0 ? '@max-[108px]:hidden' : '@max-[124px]:hidden'
+            'relative box-content block size-3 rounded-full border-2 border-white',
+            index === 0 ? '@max-[98px]:hidden' : '@max-[110px]:hidden'
           )}
         >
           {/* The clip moved inward off the wrapper so the dot can sit on the edge: `overflow-hidden`
               out here would cut the half of it that hangs over the rim. */}
-          <span className="block size-5 overflow-hidden rounded-full">
-            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
+          <span className="block size-3 overflow-hidden rounded-full">
+            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={12} />
           </span>
           {/* Everyone in this stack is present by construction — the sides are built from
               `online_choices` — so the dot needs no condition. It rings in the pill's own colour
@@ -1124,7 +1127,7 @@ function PositionAvatars({
         </span>
       ))}
       {overflow > 0 && (
-        <span className="relative box-content flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[11px] leading-5 text-grey-04 tabular-nums @max-[148px]:hidden">
+        <span className="relative box-content flex h-3 min-w-3 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[8px] leading-3 text-grey-04 tabular-nums @max-[126px]:hidden">
           +{Math.min(overflow, MAX_OVERFLOW_SHOWN)}
         </span>
       )}
