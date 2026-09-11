@@ -9,7 +9,7 @@ import type { TopicUsage } from '~/core/io/subgraph/topic-space-usage';
 import { useSpaceDailyActivityTasks } from '~/core/space/use-space-daily-activities';
 
 import { SpaceCommunityCallsSection } from '~/partials/community-calls/space-community-calls-section';
-import { StickySideRail } from '~/partials/entity-page/sticky-side-rail';
+import { type SideRailSection, SideRailSections } from '~/partials/entity-page/sticky-side-rail';
 
 import { SpaceDailyActivitiesSection } from './space-daily-activities-section';
 import { SubspacesSection } from './subspaces-section';
@@ -34,7 +34,7 @@ export function SpaceOverviewSidePanel({ spaceId, dailyActivities = false, commu
 
   // Built as a list so an absent section never leaves a dangling divider behind it — with three
   // optional sections the hand-written `a && b ? <hr/> : null` pairs stop being readable.
-  const sections: { key: string; node: React.ReactNode }[] = [];
+  const sections: SideRailSection[] = [];
 
   if (subspaces && subspaces.length > 0) {
     // First, because this is where the reader used to meet it: the gallery was the top of the page,
@@ -61,14 +61,5 @@ export function SpaceOverviewSidePanel({ spaceId, dailyActivities = false, commu
 
   if (!hasContent) return null;
 
-  return (
-    <StickySideRail>
-      {sections.map((section, index) => (
-        <React.Fragment key={section.key}>
-          {index > 0 ? <hr className="my-6 border-t border-divider" /> : null}
-          {section.node}
-        </React.Fragment>
-      ))}
-    </StickySideRail>
-  );
+  return <SideRailSections sections={sections} />;
 }

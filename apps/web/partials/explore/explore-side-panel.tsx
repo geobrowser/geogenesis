@@ -13,7 +13,7 @@ import type { TopicUsage } from '~/core/io/subgraph/topic-space-usage';
 import { normId } from '~/core/utils/norm-id';
 
 import { ExploreCommunityCallsSection } from '~/partials/community-calls/explore-community-calls-section';
-import { StickySideRail } from '~/partials/entity-page/sticky-side-rail';
+import { type SideRailSection, SideRailSections } from '~/partials/entity-page/sticky-side-rail';
 import { SubspacesSection } from '~/partials/space-page/subspaces-section';
 
 import { CuratorOnboardingSection } from './curator-onboarding-section';
@@ -81,7 +81,7 @@ export function ExploreSidePanel({
   // Build only the sections that have content, then join them with dividers so
   // an empty section never leaves a dangling <hr> (e.g. join-spaces-only). Each
   // carries a stable key so appearing/disappearing sections don't remount others.
-  const sections: { key: string; node: React.ReactNode }[] = [];
+  const sections: SideRailSection[] = [];
   if (showOnboarding) {
     sections.push({ key: 'curator-onboarding', node: <CuratorOnboardingSection /> });
   }
@@ -119,14 +119,5 @@ export function ExploreSidePanel({
     });
   }
 
-  return (
-    <StickySideRail>
-      {sections.map((section, index) => (
-        <React.Fragment key={section.key}>
-          {index > 0 ? <hr className="my-6 border-t border-divider" /> : null}
-          {section.node}
-        </React.Fragment>
-      ))}
-    </StickySideRail>
-  );
+  return <SideRailSections sections={sections} />;
 }

@@ -67,10 +67,15 @@ export function SpacePillList<T>({ items, keyFor, renderPill }: SpacePillListPro
 }
 
 /**
- * The heading every side panel section uses. Sticky, so it stays put while the rail scrolls under
- * it, and opaque for the same reason.
+ * The heading above a pill section. Sticky, so it holds its place while the rail scrolls under it,
+ * and opaque for the same reason.
+ *
+ * Named for the pills rather than for the rail because it is *not* what every rail section uses:
+ * Featured rankings and Community calls share this type scale but are not sticky, and Daily
+ * activities is a size up. Making those four agree is a design decision rather than a refactor, so
+ * this stays scoped to the two pill sections that genuinely match.
  */
-export function SidePanelSectionHeading({ children }: { children: React.ReactNode }) {
+export function SpacePillSectionHeading({ children }: { children: React.ReactNode }) {
   return (
     <h2 className="sticky top-0 z-20 bg-white pt-1 pb-4 text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text">
       {children}

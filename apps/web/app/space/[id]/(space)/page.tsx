@@ -31,7 +31,7 @@ import { SubtopicGalleryServerContainer } from '~/partials/space-page/subtopic-g
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
-import { resolveSpaceSidebar } from './space-sidebar';
+import { fetchOverviewSubspaces, resolveSpaceSidebar } from './space-sidebar';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -81,14 +81,16 @@ export default async function SpacePage(props0: Props) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
-  const [props, { isRootSpace, communityCalls, subspaces }] = await Promise.all([
-    getSpaceFrontPage(space),
-    resolveSpaceSidebar(spaceId),
-  ]);
-
   // Overview only, which is what `!tabId` means here — a tab gets no rail, and so no subspaces
   // (GEO-2875). The gallery this replaces enforced the same rule client-side by returning null
-  // when `tabId` was set, after the page had already paid for it.
+  // when `tabId` was set, having already paid for the query; skipping the fetch outright is the
+  // same rule applied one step earlier.
+  const [props, { isRootSpace, communityCalls }, subspaces] = await Promise.all([
+    getSpaceFrontPage(space),
+    resolveSpaceSidebar(spaceId),
+    tabId ? [] : fetchOverviewSubspaces(spaceId),
+  ]);
+
   let sidebar: React.ReactNode = null;
   if (!tabId) {
     if (isRootSpace) {

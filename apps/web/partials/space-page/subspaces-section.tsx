@@ -6,7 +6,7 @@ import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { SPACE_PILL_CLASS, SidePanelSectionHeading, SpacePillAvatar, SpacePillList } from '~/design-system/space-pill';
+import { SPACE_PILL_CLASS, SpacePillAvatar, SpacePillList, SpacePillSectionHeading } from '~/design-system/space-pill';
 
 type Props = {
   spaceId: string;
@@ -28,7 +28,7 @@ export function SubspacesSection({ spaceId, subspaces }: Props) {
 
   return (
     <section className="flex flex-col">
-      <SidePanelSectionHeading>Subspaces</SidePanelSectionHeading>
+      <SpacePillSectionHeading>Subspaces</SpacePillSectionHeading>
 
       <SpacePillList
         items={subspaces}

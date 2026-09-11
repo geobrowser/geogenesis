@@ -11,7 +11,7 @@ import { useDeferredJoin } from '~/core/state/pending-join-intents';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Dots } from '~/design-system/dots';
-import { SPACE_PILL_CLASS, SidePanelSectionHeading, SpacePillAvatar, SpacePillList } from '~/design-system/space-pill';
+import { SPACE_PILL_CLASS, SpacePillAvatar, SpacePillList, SpacePillSectionHeading } from '~/design-system/space-pill';
 
 type Props = {
   // Already filtered by the side panel to spaces the user can still join.
@@ -23,7 +23,7 @@ export function JoinSpacesSection({ spaces }: Props) {
 
   return (
     <section className="flex flex-col">
-      <SidePanelSectionHeading>Join spaces</SidePanelSectionHeading>
+      <SpacePillSectionHeading>Join spaces</SpacePillSectionHeading>
 
       <SpacePillList
         items={spaces}
