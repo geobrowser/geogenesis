@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_CLAIMS_SCOPE, fromClaimsFilterSearch, toClaimsFilterSearch } from './claims-filter-params';
 
-const SCOPES = ['featured', 'all', 'mine', 'debate_now'];
+const SCOPES = ['featured', 'all', 'mine', 'debate_now', 'matches'];
 
 const NOTHING_NARROWED = { scope: null, search: '', spaceIds: [], topicIds: [] };
 
@@ -71,8 +71,12 @@ describe('fromClaimsFilterSearch', () => {
     expect(read('')).toEqual(NOTHING_NARROWED);
   });
 
+  it('keeps matches when the surface offers it', () => {
+    expect(read('scope=matches').scope).toBe('matches');
+  });
+
   it('drops a scope it does not recognise', () => {
-    expect(read('scope=matches').scope).toBeNull();
+    expect(read('scope=nope').scope).toBeNull();
   });
 
   it('drops a scope this viewer is not offered', () => {

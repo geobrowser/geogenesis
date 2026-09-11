@@ -45,14 +45,15 @@ describe('HubLiveRail', () => {
   });
 
   // Signed out the rail loses Requests. An empty heading would say nothing, so it keeps People and
-  // explains the account-gated lists.
-  it('keeps People signed out and explains what the other two would offer', () => {
+  // explains that list instead. Matches is a Claims scope on the left, not a rail section.
+  it('keeps People signed out and explains Requests', () => {
     mocks.authenticated = false;
     render(<HubLiveRail />);
 
     expect(screen.getByTestId('people-tab')).toBeInTheDocument();
     expect(screen.queryByTestId('requests-tab')).not.toBeInTheDocument();
-    expect(screen.getByText(/paired with someone who disagrees/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Requests' })).toBeInTheDocument();
+    expect(screen.getByText(/debate requests sent to you/)).toBeInTheDocument();
   });
 
   it('routes the signed-out prompt into Privy', () => {
@@ -72,6 +73,6 @@ describe('HubLiveRail', () => {
     render(<HubLiveRail />);
 
     expect(screen.queryByTestId('people-tab')).not.toBeInTheDocument();
-    expect(screen.queryByText(/paired with someone who disagrees/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/debate requests sent to you/)).not.toBeInTheDocument();
   });
 });

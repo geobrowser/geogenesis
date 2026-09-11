@@ -123,8 +123,6 @@ function filterOptionsFor(authenticated: boolean, workspace: boolean) {
   return authenticated ? forSurface : forSurface.filter(option => !SIGNED_OUT_HIDDEN_FILTERS.includes(option.value));
 }
 
-/** Stable identity so the geo-chat lookups don't restart on every render of a geo-chat list. */
-
 /**
  * Key prefixes for the two lookups behind the graph-sourced list, so "Try again" can reach them.
  *
@@ -150,7 +148,7 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
 export type ClaimsLayout = 'panel' | 'workspace';
 
 /**
- * `workspace`: facet rail + grid; panel menus are the narrow fallback.
+ * `workspace`: facet rail + list; panel menus are the narrow fallback.
  * Filters are passed, not shared: the panel publishes a snapshot that its expand link puts in the
  * URL, and the workspace seeds from that URL on mount. Nothing comes back.
  */
@@ -780,7 +778,9 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
                 ? filter === 'featured'
                   ? 'No featured claims match these filters.'
                   : 'No claims match these filters.'
-                : NOTHING_HERE[filter]
+                : matchesSourced && activity?.available_to_debate === false
+                  ? 'You’re marked unavailable, so nobody can be matched with you.'
+                  : NOTHING_HERE[filter]
             }
             // "Debate now" is the only filter here scored on who is online, so it is the only one an
             // empty list means "nobody is around" for — Featured and All claims are statements about

@@ -35,7 +35,7 @@ export function HubLiveRail() {
   );
 }
 
-/** Signed out: keep People, explain the account-gated lists instead of empty headings. */
+/** Signed out: keep People, explain Requests instead of an empty heading. */
 function SignedOutRail() {
   const promptSignIn = usePrivySignIn();
 
@@ -43,10 +43,10 @@ function SignedOutRail() {
     <>
       <section className="flex flex-col gap-2 rounded-lg border border-grey-02 bg-white p-4">
         <Text as="h3" variant="footnoteMedium" color="text">
-          Requests and matches
+          Requests
         </Text>
         <Text as="p" variant="footnote" color="grey-04">
-          Sign in to be paired with someone who disagrees, and to see debate requests sent to you.
+          Sign in to see debate requests sent to you.
         </Text>
         <div className="pt-1">
           <HubPillButton onClick={promptSignIn}>Sign in</HubPillButton>
