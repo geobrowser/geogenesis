@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import { Effect, Either } from 'effect';
 
 import { ensureSpaceMembership } from '~/core/access/request-space-membership';
-import { observeOperation } from '~/core/analytics-operations';
+import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import {
@@ -544,7 +544,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
     },
     onError: (_error, _direction, context) => {
       context?.operation.failed(
-        _error instanceof Error && _error.message.includes('User rejected') ? 'rejected' : 'unknown'
+        classifyOperationFailure(_error)
       );
       if (!context) return;
       const runs = responseIndexingRegistry.submissionRuns.get(indexingKeyId);

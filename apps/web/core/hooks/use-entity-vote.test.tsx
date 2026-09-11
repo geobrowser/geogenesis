@@ -473,10 +473,11 @@ describe('useEntityResponse indexing reconciliation', () => {
     await act(async () => Promise.resolve());
 
     await act(async () => {
-      secondTransaction.resolve({ _tag: 'Left', left: new Error('rejected') });
+      secondTransaction.resolve({ _tag: 'Left', left: new Error('Transaction failed', { cause: { code: 4001 } }) });
       await Promise.resolve();
       await Promise.resolve();
     });
+    expect(mocks.capture).toHaveBeenCalledWith('action_failed', expect.objectContaining({ failure_code: 'rejected', action_kind: 'vote' }));
     expect(result.current.indexingStatus).toBe('reconciling');
     expect(result.current.first.optimisticResponse).toBe('positive');
 

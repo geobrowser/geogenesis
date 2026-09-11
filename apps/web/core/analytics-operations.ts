@@ -1,5 +1,23 @@
 import { analyticsContextRevision, capture } from './analytics';
 
+/** Only classify outcomes that prove the action did not execute. Network and
+ * receipt timeouts remain unknown: retrying those could duplicate a landed write.
+ * Emit an allowlisted category, never the provider message or request payload.
+ */
+export function classifyOperationFailure(error: unknown): 'rejected' | 'unavailable' | 'unknown' {
+  for (let current = error, depth = 0; current != null && depth < 10; depth++) {
+    if (typeof current !== 'object') break;
+    const failure = current as { code?: unknown; cause?: unknown };
+    if (failure.code === 4001) return 'rejected';
+    if (current instanceof Error) {
+      if (current.name === 'QueuedSendTimeoutError') return 'unavailable';
+      if (/user rejected/i.test(current.message)) return 'rejected';
+    }
+    current = failure.cause;
+  }
+  return 'unknown';
+}
+
 export type OperationContext = { opportunity_id: string; presentation_instance_id: string };
 
 /** One logical client attempt; transport retries reuse the SDK's immutable event ID. */

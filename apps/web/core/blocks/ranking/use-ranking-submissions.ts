@@ -7,7 +7,7 @@ import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
-import { type OperationContext, observeOperation } from '~/core/analytics-operations';
+import { type OperationContext, classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { readCachedPersonalSpace, readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
@@ -302,7 +302,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
         if (Either.isLeft(result)) {
           const err = result.left;
-          operation.failed(err instanceof Error && err.message.includes('User rejected') ? 'rejected' : 'unknown');
+          operation.failed(classifyOperationFailure(err));
           if (err instanceof Error && err.message.includes('User rejected')) {
             return null;
           }
