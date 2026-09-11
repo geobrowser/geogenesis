@@ -243,6 +243,25 @@ Disabling instead sends black frames over one track that stays live for the enti
 cost is that the other side cannot tell a disabled camera from a dark room, which is why there is
 no camera-off state in the UI to get wrong.
 
+## Device pickers stay open during a swap
+
+`devicesLocked` is driven by room state (`connecting` / `reconnecting`) and deliberately **not** by
+`previewBusy`. The device lists are radio groups: ArrowDown moves the selection and every move
+forces a preview restart, and `devicesLocked` closes the popover — so locking on `previewBusy`
+shuts the menu on the first arrow key and ends keyboard device selection. Two tests predating this
+work pin that behaviour (`supports keyboard device selection without closing the desktop menu`,
+`keeps the desktop menu open while a selected input is restarting`).
+
+What keeps a second pick from racing the republish is serialisation, not the lock: `ensurePreview`
+makes a forced restart await the one in flight, and the device-swap reconnect effect returns early
+while `previewBusy` is true, so a pick landing before `connect()` starts prevents that connect
+rather than racing it. Once `connect()` is running, `roomState === 'connecting'` locks the picker
+under the existing rule.
+
+`AudioSettings` takes `devicesLocked` and applies it to the microphone group as defence in depth.
+The speaker group is exempt: it moves over the live room through `switchActiveDevice` and never
+touches the published tracks.
+
 ## What shipped beyond the plan
 
 - Permission state is reported _inside_ the local tile rather than replacing the screen. The old

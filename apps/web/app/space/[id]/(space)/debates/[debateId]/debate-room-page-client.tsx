@@ -398,6 +398,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     debate?.participants.find(participant => participant.user_id === currentUserId) ?? debate?.participants[0] ?? null;
   const preScreenRemoteParticipant =
     debate?.participants.find(participant => participant.user_id !== preScreenLocalParticipant?.user_id) ?? null;
+  /**
+   * A ready preview that went busy again: a device swap is replacing the tracks in place. The
+   * pickers deliberately stay open and arrowable across this — see the device-swap reconnect
+   * effect for what serialises the restart against the republish.
+   */
+  const replacingPreview = previewBusy && previewState === 'ready';
   const localSlot = joinResponse?.participant_slot ?? null;
   const recordingCancelledBy = debate?.recording_cancelled_by ?? null;
   const opponentCancelledRecording = recordingCancelledBy !== null && recordingCancelledBy !== currentUserId;
@@ -2162,7 +2168,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             previewStream={previewStream}
             previewState={previewState}
             previewBusy={previewBusy}
-            switchingDevice={previewBusy && previewState === 'ready'}
+            switchingDevice={replacingPreview}
             error={roomError}
             mediaError={previewError}
             audioInputDevices={audioInputDevices}

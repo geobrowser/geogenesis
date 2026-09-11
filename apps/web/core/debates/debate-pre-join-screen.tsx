@@ -292,6 +292,7 @@ export function DebatePreScreen({
                       selectedAudioOutputId={selectedAudioOutputId}
                       audioOutputSupported={audioOutputSupported}
                       error={audioOutputError}
+                      devicesLocked={devicesLocked}
                       onAudioInputChange={onAudioInputChange}
                       onAudioOutputChange={onAudioOutputChange}
                     />
@@ -385,6 +386,7 @@ export function DebatePreScreen({
               selectedAudioOutputId={selectedAudioOutputId}
               audioOutputSupported={audioOutputSupported}
               error={audioOutputError}
+              devicesLocked={devicesLocked}
               onAudioInputChange={onAudioInputChange}
               onAudioOutputChange={onAudioOutputChange}
             />
