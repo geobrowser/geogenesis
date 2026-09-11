@@ -13,6 +13,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import type { MatchmakingFacetCount, MatchmakingTopic } from '../api';
+import { HubFilterMenu } from './hub-filter-menu';
 import type { HubFilterOption } from './hub-filter-menu';
 
 /** Topics past this are reachable by typing rather than by scrolling a list of hundreds. */
@@ -61,17 +62,16 @@ export function HubFacetRail<TFilter extends string>({
 
   return (
     <div className="flex flex-col gap-6 pb-8">
-      <FacetGroup label="Show">
-        {filterOptions.map(option => (
-          <FacetRow
-            key={option.value}
-            label={option.label}
-            selected={option.value === filter}
-            role="radio"
-            onSelect={() => onFilterChange(option.value)}
+      <section className="flex flex-col gap-1.5">
+        <div className="px-1">
+          <HubFilterMenu
+            label={filterOptions.find(option => option.value === filter)?.label ?? 'All claims'}
+            options={filterOptions}
+            value={filter}
+            onChange={onFilterChange}
           />
-        ))}
-      </FacetGroup>
+        </div>
+      </section>
 
       <FacetGroup
         label="Spaces"
@@ -183,7 +183,6 @@ function FacetRow({
   pending,
   leading,
   onSelect,
-  role,
 }: {
   label: string;
   count?: number;
@@ -191,30 +190,21 @@ function FacetRow({
   pending?: boolean;
   leading?: React.ReactNode;
   onSelect: () => void;
-  role?: 'radio';
 }) {
-  const multiSelect = role !== 'radio';
-
   return (
     <button
       type="button"
-      role={role ?? 'checkbox'}
+      role="checkbox"
       aria-checked={selected}
       onClick={onSelect}
       className={cx(
-        'flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors',
-        multiSelect
-          ? cx('hover:bg-grey-01', selected ? 'text-text' : 'text-grey-04 hover:text-text')
-          : selected
-            ? 'bg-divider text-text'
-            : 'text-grey-04 hover:bg-grey-01 hover:text-text'
+        'flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-grey-01',
+        selected ? 'text-text' : 'text-grey-04 hover:text-text'
       )}
     >
-      {multiSelect && (
-        <span className="shrink-0">
-          <CheckboxVisual checked={selected} />
-        </span>
-      )}
+      <span className="shrink-0">
+        <CheckboxVisual checked={selected} />
+      </span>
       {leading}
       {pending ? (
         <Skeleton className="h-3 w-24" />

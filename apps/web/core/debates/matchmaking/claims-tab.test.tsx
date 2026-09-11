@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 
 import type { ReactElement } from 'react';
 
@@ -702,9 +702,23 @@ describe('where the Matches scope is offered', () => {
 
   it('is offered in the workspace, under Debate now', async () => {
     render(<ClaimsTab layout="workspace" />);
-    await showIndexedClaims();
+    // No `showIndexedClaims()`: that helper drives the scope control with an unscoped query, and in
+    // the workspace there are two of them — the rail's, and the menu row's, which a container query
+    // hides at this width and jsdom has no layout to apply. The rail renders without rows anyway.
+    const railNode = await screen.findByTestId('hub-facet-rail');
 
-    const scopes = screen.getAllByRole('radio').map(option => option.textContent ?? '');
+    // Scoped to the rail. The menu row in the sticky header carries the same scope control and is
+    // hidden by a container query at this width — which jsdom has no layout to apply, so both are
+    // in the document and an unscoped query finds two of everything.
+    //
+    // Scope is a menu rather than a row list here: it is single-select, where the two groups under
+    // it are not, so its options only exist once it is open.
+    const rail = within(railNode);
+    // The trigger is the one menu button in the rail; `getAllBy` because the opened menu adds an
+    // option carrying the same label.
+    fireEvent.click(rail.getAllByRole('button', { name: 'Featured' })[0]);
+
+    const scopes = rail.getAllByRole('button').map(option => option.textContent ?? '');
     const debateNow = scopes.findIndex(label => label.includes('Debate now'));
     const matches = scopes.findIndex(label => label.includes('Matches'));
 
