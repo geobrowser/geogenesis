@@ -13,6 +13,7 @@ import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provi
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { Entities } from '~/core/utils/entity';
+import { firstSearchParamValue } from '~/core/utils/search-params';
 import { Spaces } from '~/core/utils/space';
 import { sortRelations } from '~/core/utils/utils';
 
@@ -26,7 +27,7 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
-import { SpaceOverviewSidePanel } from '~/partials/space-page/space-overview-side-panel';
+import { SpaceOverviewSidePanelContainer } from '~/partials/space-page/space-overview-side-panel-container';
 import { SubtopicGalleryServerContainer } from '~/partials/space-page/subtopic-gallery-server-container';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
@@ -69,7 +70,12 @@ export default async function SpacePage(props0: Props) {
   const params = await props0.params;
   const searchParams = (await props0.searchParams) ?? {};
   const spaceId = params.id;
-  const tabId = typeof searchParams.tabId === 'string' ? searchParams.tabId : undefined;
+  // First value, not "only if there is exactly one". Reading this as `typeof === 'string'` turned a
+  // repeated `?tabId=a&tabId=b` into `undefined`, which reads as Overview and opens the rail on
+  // what the rest of the page treats as a tab — the client half never agreed, since
+  // `useSearchParams().get()` returns the first value, and that is how the gallery this replaces
+  // knew to hide itself.
+  const tabId = firstSearchParamValue(searchParams.tabId);
 
   if (!IdUtils.isValid(spaceId)) {
     notFound();
@@ -86,24 +92,24 @@ export default async function SpacePage(props0: Props) {
     resolveSpaceSidebar(spaceId),
   ]);
 
+  // Overview only, which is what `!tabId` means here — a tab gets no rail, and so no subspaces
+  // (GEO-2875). Both branches are containers under Suspense so the rail's query never delays the
+  // page's own JSX; the gallery this replaces streamed the same way.
   let sidebar: React.ReactNode = null;
   if (!tabId) {
-    if (isRootSpace) {
-      sidebar = (
-        <React.Suspense fallback={null}>
-          <RootExploreSidePanelContainer />
-        </React.Suspense>
-      );
-    } else {
-      sidebar = <SpaceOverviewSidePanel spaceId={spaceId} dailyActivities communityCalls={communityCalls} />;
-    }
+    sidebar = (
+      <React.Suspense fallback={null}>
+        {isRootSpace ? (
+          <RootExploreSidePanelContainer spaceId={spaceId} includeSubspaces />
+        ) : (
+          <SpaceOverviewSidePanelContainer spaceId={spaceId} communityCalls={communityCalls} />
+        )}
+      </React.Suspense>
+    );
   }
 
   return (
     <EntityPageSidebarLayout sidebar={sidebar}>
-      <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-        <SubtopicGalleryServerContainer spaceId={params.id} />
-      </React.Suspense>
       <React.Suspense fallback={null}>
         <Editor spaceId={spaceId} shouldHandleOwnSpacing />
       </React.Suspense>

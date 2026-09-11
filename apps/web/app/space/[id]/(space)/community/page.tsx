@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 
 import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 import { ROOT_SPACE } from '~/core/constants';
+import { SIDE_RAIL_FETCH_TIMEOUT_MS, resolveWithin } from '~/core/utils/resolve-within';
 
 import { CommunityTabPage } from '~/partials/community-tab/community-tab-page';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
@@ -29,10 +30,25 @@ export default async function CommunityPage(props: Props) {
   const sidebar =
     spaceId === ROOT_SPACE ? (
       <React.Suspense fallback={null}>
-        <RootExploreSidePanelContainer />
+        {/*
+          No subspaces here, deliberately: they are an Overview section (GEO-2875) and Community is
+          a tab. Stated rather than left off so the omission reads as a decision on the page rather
+          than a default someone has to go and look up.
+        */}
+        <RootExploreSidePanelContainer spaceId={spaceId} includeSubspaces={false} />
       </React.Suspense>
     ) : (
-      <SpaceOverviewSidePanel spaceId={spaceId} communityCalls={await fetchCommunityCalls(spaceId).catch(() => [])} />
+      <SpaceOverviewSidePanel
+        spaceId={spaceId}
+        // Bounded like the layout's copy. `fetchCommunityCalls` is `cache()`d, so this awaits the
+        // *same promise* the layout started — and a memoised promise that never settles is not made
+        // safe by the layout having given up on it.
+        communityCalls={await resolveWithin(
+          () => fetchCommunityCalls(spaceId).catch(() => []),
+          SIDE_RAIL_FETCH_TIMEOUT_MS,
+          []
+        )}
+      />
     );
 
   return (
