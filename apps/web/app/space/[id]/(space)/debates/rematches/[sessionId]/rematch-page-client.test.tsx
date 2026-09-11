@@ -1282,6 +1282,27 @@ describe('DebateRematchPageClient', () => {
       await waitFor(() => expect(mocks.rematchClaimIds.flat()).toContain(FEATURED));
     });
 
+    /**
+     * GEO-2861 moved the landing tab to the opponent's positions, which left Explore's whole chain
+     * to start from cold on the click that opens it: a paged catalog and two facets, and then
+     * geo-chat's rows keyed on the ids the catalog comes back with, which cannot start until it
+     * has. One warm-up on the tab the viewer landed on is what makes the switch instant.
+     */
+    it('warms the browse catalog once before the viewer opens Explore', async () => {
+      mocks.featuredClaims = [featuredTag()];
+      mocks.entities = [sharedEntity(), featuredEntity()];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      // Asked for from the opponent's tab, which is where the picker opens.
+      await waitFor(() => expect(mocks.featuredEnabledWith).toContain(true));
+      expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-selected', 'true');
+      // Fetched, not shown: the warm-up fills the cache, it does not put the list on this tab.
+      expect(screen.queryByText('A featured claim')).toBeNull();
+
+      // And it is a warm-up rather than a standing query — once it has answered, the tab decides.
+      await waitFor(() => expect(mocks.featuredEnabledWith.at(-1)).toBe(false));
+    });
+
     // A remembered Featured source shouldn't keep a graph query alive behind the opponent's tab,
     // which draws from somewhere else entirely.
     it('stops asking for the tag once the viewer leaves Explore', async () => {

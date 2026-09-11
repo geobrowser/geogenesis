@@ -317,8 +317,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // Gated on the tab too: a remembered source shouldn't keep a graph query alive behind the
   // opponent's positions, which draw from somewhere else entirely.
+  //
+  // Once, before that gate applies. GEO-2861 moved the landing tab to the opponent's positions,
+  // which left Explore's whole chain to start from cold on the click that opens it — a paged
+  // catalog and two facets, and then geo-chat's rows keyed on the ids the catalog comes back with,
+  // which cannot start until it has. On the old landing tab all of that ran while the page was
+  // still painting; behind a click it is a wait with a viewer watching it.
+  //
+  // So the browse source is fetched once while the viewer is on the tab they landed on, and from
+  // then on the tab decides as before — the rule this weakens is "don't keep a query alive behind
+  // the opponent's positions", and one warm-up is not keeping anything alive. It costs a page of
+  // the tag per session for a viewer who never opens Explore, which is what makes Featured the
+  // right thing to land on (see `source` above).
+  //
+  // `isLoading` rather than the facets' `settled`, so a failure ends the warm-up too: react-query
+  // drops `isLoading` on error, where `settled` stays false and would leave this enabled forever.
   const claimsTagId = source === 'featured' ? FEATURED_TAG_ID : DEBATE_TAG_ID;
-  const taggedEnabled = tab === 'explore' && (source === 'featured' || source === 'all') && !sourceUndecided;
+  const [browseWarmed, setBrowseWarmed] = React.useState(false);
+  const taggedEnabled =
+    (tab === 'explore' || !browseWarmed) && (source === 'featured' || source === 'all') && !sourceUndecided;
   // What goes to the server, so the page and both facet menus describe the same set of spaces.
   //
   // Two of the three gates can be sent; one cannot. The viewer's allowlist and the acceptor's
@@ -360,6 +377,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const taggedTopicFacet = useTaggedTopicFacet(claimsTagId, taggedFilters, taggedEnabled && !allowlistPending);
   const taggedSpaceFacet = useTaggedSpaceFacet(claimsTagId, taggedFilters, taggedEnabled && !allowlistPending);
+
+  // The warm-up is over when all three have answered, whatever they answered. Spent once per mount
+  // and never unspent: a viewer who has opened Explore has the cache this exists to fill, and one
+  // who has not is on a tab that reads none of it.
+  React.useEffect(() => {
+    if (browseWarmed || !taggedEnabled || allowlistPending) return;
+    if (taggedCatalogLoading || taggedTopicFacet.isLoading || taggedSpaceFacet.isLoading) return;
+    setBrowseWarmed(true);
+  }, [
+    allowlistPending,
+    browseWarmed,
+    taggedCatalogLoading,
+    taggedEnabled,
+    taggedSpaceFacet.isLoading,
+    taggedTopicFacet.isLoading,
+  ]);
 
   // The ids on screen, for the one geo-chat lookup this tab still makes.
   const taggedClaimIds = React.useMemo(
