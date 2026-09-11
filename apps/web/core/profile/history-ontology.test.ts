@@ -12,8 +12,12 @@ import {
   EMPLOYMENT_PROPERTY,
   EMPLOYMENT_STATUS_OPTION,
   EMPLOYMENT_STATUS_PROPERTY,
+  EMPLOYMENT_TYPE_OPTIONS,
+  EMPLOYMENT_TYPE_PROPERTY,
+  EMPLOYMENT_TYPE_TYPE,
   END_DATE_PROPERTY,
   ROLES_PROPERTY,
+  SKILLS_PROPERTY,
   START_DATE_PROPERTY,
   educationStatusFromOptionId,
   employmentStatusFromOptionId,
@@ -40,6 +44,9 @@ describe('history ontology ids', () => {
     ['End date', END_DATE_PROPERTY, 'b08b8f63dc1e41568b0819946f2b011c'],
     ['Description', DESCRIPTION_PROPERTY, '9b1f76ff9711404c861e59dc3fa7d037'],
     ['Employer type (Project)', EMPLOYER_TYPE, '484a18c5030a499cb0f2ef588ff16d50'],
+    ['Employment type property', EMPLOYMENT_TYPE_PROPERTY, '53a98633a2db40be9f161a4c9da37970'],
+    ['Employment type (type)', EMPLOYMENT_TYPE_TYPE, 'f503bfd283d74e1a9b30294fff9d2d7e'],
+    ['Skills', SKILLS_PROPERTY, 'a38732e33a3d47f9a459fb369c287709'],
   ])('%s resolves to the id the graph has', (_name, actual, expected) => {
     expect(actual).toBe(expected);
   });
@@ -66,5 +73,41 @@ describe('status options', () => {
     expect(employmentStatusFromOptionId(undefined)).toBeNull();
     expect(employmentStatusFromOptionId('something-else')).toBeNull();
     expect(educationStatusFromOptionId(null)).toBeNull();
+  });
+});
+
+describe('employment type options', () => {
+  it('offers the eight LinkedIn types, in that order', () => {
+    expect(EMPLOYMENT_TYPE_OPTIONS.map(option => option.name)).toEqual([
+      'Full-time',
+      'Part-time',
+      'Self-employed',
+      'Freelance',
+      'Contract',
+      'Internship',
+      'Apprenticeship',
+      'Seasonal',
+    ]);
+  });
+
+  // Confirmed against the graph like the rest. Pinned because six other entities
+  // named "Full-time" are typed the same way, so a wrong id here would look
+  // plausible in the data and point at the wrong one.
+  it('pins each option id', () => {
+    expect(Object.fromEntries(EMPLOYMENT_TYPE_OPTIONS.map(o => [o.name, o.id]))).toEqual({
+      'Full-time': 'f4a86b892f094d97894c4bfedd150c30',
+      'Part-time': '5758c248068e44838da7e22109d9993f',
+      'Self-employed': '00f2a3b854f949c7b9f8a1e46872cbcc',
+      Freelance: '75839ffa17ef4d20b4e0621a4780030d',
+      Contract: '80d15f0e3b4f4288b69a1bcb5c3e4a0b',
+      Internship: '6eaed80c39b144f48e31dabf409a0722',
+      Apprenticeship: '946a5333fa084b2aac0c8d89a97b431c',
+      Seasonal: '1a0235d7f32e4cff83f9545f01bd96ba',
+    });
+  });
+
+  it('gives every option a distinct id', () => {
+    const ids = EMPLOYMENT_TYPE_OPTIONS.map(option => option.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

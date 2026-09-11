@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import { type MonthYear, toGraphDate } from '~/core/profile/history-dates';
-import { EMPLOYER_TYPE, JOB_TYPE } from '~/core/profile/history-ontology';
+import { EMPLOYER_TYPE, EMPLOYMENT_TYPE_OPTIONS, JOB_TYPE, SKILL_TYPE } from '~/core/profile/history-ontology';
 import type { EntityChoice, PositionDraft } from '~/core/profile/stage-history';
 
 import { Checkbox } from '~/design-system/checkbox';
@@ -33,6 +33,9 @@ export function AddPositionSheet({ spaceId, company, isSaving, onCancel, onSave 
   const [title, setTitle] = React.useState<EntityChoice | null>(null);
   const [start, setStart] = React.useState<MonthYear | null>(null);
   const [end, setEnd] = React.useState<MonthYear | null>(null);
+  const [employmentType, setEmploymentType] = React.useState<{ id: string; name: string } | null>(null);
+  const [skills, setSkills] = React.useState<EntityChoice[]>([]);
+  const [isAddingSkill, setIsAddingSkill] = React.useState(false);
   const [isCurrent, setIsCurrent] = React.useState(false);
   const [description, setDescription] = React.useState('');
 
@@ -44,6 +47,8 @@ export function AddPositionSheet({ spaceId, company, isSaving, onCancel, onSave 
     onSave({
       company: pickedCompany,
       title,
+      employmentType,
+      skills,
       startDate: start ? toGraphDate(start) : null,
       // A role still held has no end date, whatever the picker was left showing.
       endDate: isCurrent || !end ? null : toGraphDate(end),
@@ -98,6 +103,25 @@ export function AddPositionSheet({ spaceId, company, isSaving, onCancel, onSave 
         )}
       </div>
 
+      <label className="flex flex-col gap-1.5">
+        <span className="text-metadataMedium text-grey-04">Employment type</span>
+        <select
+          value={employmentType?.id ?? ''}
+          disabled={isSaving}
+          onChange={event =>
+            setEmploymentType(EMPLOYMENT_TYPE_OPTIONS.find(option => option.id === event.currentTarget.value) ?? null)
+          }
+          className={inputStyles()}
+        >
+          <option value="">Please select</option>
+          {EMPLOYMENT_TYPE_OPTIONS.map(option => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <div className="flex flex-wrap items-end gap-4">
         <MonthYearField label="Start" value={start} onChange={setStart} disabled={isSaving} />
         <MonthYearField label="End" value={end} onChange={setEnd} disabled={isSaving || isCurrent} />
@@ -119,7 +143,7 @@ export function AddPositionSheet({ spaceId, company, isSaving, onCancel, onSave 
       </div>
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Description</span>
+        <span className="text-metadataMedium text-grey-04">Highlights</span>
         <textarea
           value={description}
           onChange={event => setDescription(event.currentTarget.value)}
@@ -129,6 +153,52 @@ export function AddPositionSheet({ spaceId, company, isSaving, onCancel, onSave 
           className={`${inputStyles()} resize-none`}
         />
       </label>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-metadataMedium text-grey-04">Skills</span>
+        {skills.length > 0 && (
+          <ul className="flex flex-wrap gap-1.5">
+            {skills.map(skill => (
+              <li key={skill.id} className="flex items-center gap-1.5 rounded bg-divider px-2 py-1">
+                <span className="text-footnote text-text">{skill.name ?? 'Untitled'}</span>
+                {skill.isNew && <span className="text-footnote text-ctaPrimary">NEW</span>}
+                <button
+                  type="button"
+                  onClick={() => setSkills(current => current.filter(item => item.id !== skill.id))}
+                  aria-label={`Remove skill ${skill.name ?? 'skill'}`}
+                  className="text-footnote text-grey-04 hover:underline"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {isAddingSkill || skills.length === 0 ? (
+          <SelectEntity
+            spaceId={spaceId}
+            relationValueTypes={[{ id: SKILL_TYPE, name: 'Skill' }]}
+            onDone={(result, fromCreateFn) => {
+              setSkills(current =>
+                current.some(skill => skill.id === result.id)
+                  ? current
+                  : [...current, { id: result.id, name: result.name, isNew: Boolean(fromCreateFn) }]
+              );
+              setIsAddingSkill(false);
+            }}
+            width="full"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsAddingSkill(true)}
+            className="self-start text-footnote text-ctaPrimary hover:underline"
+          >
+            + Add skill
+          </button>
+        )}
+      </div>
     </HistorySheet>
   );
 }

@@ -31,6 +31,8 @@ const created = (id: string, name: string) => ({ id, name, isNew: true });
 const position = (overrides: Partial<PositionDraft> = {}): PositionDraft => ({
   company: picked('coinbase', 'Coinbase'),
   title: picked('analyst', 'Data Analyst'),
+  employmentType: null,
+  skills: [],
   startDate: '2019-03-01Z',
   endDate: '2021-01-01Z',
   status: 'former',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatDateRange, fromGraphDate, toGraphDate, yearOptions } from './history-dates';
+import { formatDateRange, formatDuration, fromGraphDate, toGraphDate, yearOptions } from './history-dates';
 
 describe('toGraphDate', () => {
   it('writes the shape the graph already uses', () => {
@@ -61,5 +61,35 @@ describe('yearOptions', () => {
 
     expect(years[0]).toBe(2026);
     expect(years.at(-1)).toBe(1950);
+  });
+});
+
+describe('formatDuration', () => {
+  const now = new Date('2026-09-11T00:00:00Z');
+
+  it('reads a closed stretch the way a CV states it', () => {
+    expect(formatDuration('2022-06-01Z', '2024-01-01Z', now)).toBe('1 yr 8 mos');
+  });
+
+  it('counts an open stretch up to today', () => {
+    expect(formatDuration('2025-02-01Z', null, now)).toBe('1 yr 8 mos');
+  });
+
+  // Inclusive of the month it started in, so a job begun and left in the same
+  // month reads as a month rather than as nothing at all.
+  it('counts a single month as a month', () => {
+    expect(formatDuration('2024-03-01Z', '2024-03-01Z', now)).toBe('1 mo');
+  });
+
+  it('drops the months when it lands on a whole year', () => {
+    expect(formatDuration('2023-01-01Z', '2023-12-01Z', now)).toBe('1 yr');
+  });
+
+  it('says nothing without a start', () => {
+    expect(formatDuration(null, '2024-01-01Z', now)).toBeNull();
+  });
+
+  it('says nothing when the dates run backwards', () => {
+    expect(formatDuration('2024-01-01Z', '2022-01-01Z', now)).toBeNull();
   });
 });

@@ -133,8 +133,9 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     if (status !== 'published') return;
     resetForm();
     reset();
+    history.settle();
     if (open) onOpenChange(false);
-  }, [status, open, onOpenChange, resetForm, reset]);
+  }, [status, open, onOpenChange, resetForm, reset, history]);
 
   // A failure that lands after the user closed has nowhere else to go. The status
   // bar's generic publish error carries no Retry — `toUserFacingError` only
@@ -207,6 +208,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     if (!isPublishing) {
       reset();
       resetForm();
+      history.discard();
     }
     onOpenChange(false);
   };
@@ -231,7 +233,10 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     //
     // No `resetForm()` here: the draft has to survive in case the publish fails
     // and the modal is reopened on it.
-    void publish({ name: publishName, description: publishDescription, banner: banner.edit, avatar: avatar.edit });
+    void publish(
+      { name: publishName, description: publishDescription, banner: banner.edit, avatar: avatar.edit },
+      history.stagePending()
+    );
     onOpenChange(false);
   };
 
@@ -267,7 +272,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                 <AddPositionSheet
                   spaceId={spaceId}
                   company={sheet.company}
-                  isSaving={history.status === 'saving'}
+                  isSaving={false}
                   onCancel={() => setSheet(null)}
                   onSave={async draft => {
                     await history.addPosition(draft);
@@ -278,7 +283,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                 <AddEducationSheet
                   spaceId={spaceId}
                   school={sheet.school}
-                  isSaving={history.status === 'saving'}
+                  isSaving={false}
                   onCancel={() => setSheet(null)}
                   onSave={async draft => {
                     await history.addEducation(draft);
@@ -381,7 +386,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   <HistorySection
                     kind="employment"
                     cards={history.employment}
-                    disabled={isPublishing || history.status === 'saving'}
+                    disabled={isPublishing}
                     onAdd={() => openSheetFor('employment')}
                     onAddTo={card => openSheetFor('employment', card)}
                     onRemoveEntry={(card, entry) => void history.removeEntry(card, entry, 'employment')}
@@ -391,7 +396,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   <HistorySection
                     kind="education"
                     cards={history.education}
-                    disabled={isPublishing || history.status === 'saving'}
+                    disabled={isPublishing}
                     onAdd={() => openSheetFor('education')}
                     onAddTo={card => openSheetFor('education', card)}
                     onRemoveEntry={(card, entry) => void history.removeEntry(card, entry, 'education')}

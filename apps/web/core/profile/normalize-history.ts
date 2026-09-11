@@ -4,11 +4,13 @@ import {
   DESCRIPTION_PROPERTY,
   EDUCATION_STATUS_PROPERTY,
   EMPLOYMENT_STATUS_PROPERTY,
+  EMPLOYMENT_TYPE_PROPERTY,
   END_DATE_PROPERTY,
   type EducationStatus,
   type EmploymentStatus,
   LEGACY_FIELD_OF_STUDY_PROPERTY,
   ROLES_PROPERTY,
+  SKILLS_PROPERTY,
   START_DATE_PROPERTY,
   educationStatusFromOptionId,
   employmentStatusFromOptionId,
@@ -26,7 +28,11 @@ export type HistoryRelationNode = {
 export type HistoryEdgeNode = {
   id: string;
   entityId: string;
-  toEntity: { id: string; name: string | null } | null;
+  toEntity: {
+    id: string;
+    name: string | null;
+    relationsList?: { toEntity: { valuesList: HistoryValueNode[] } | null }[];
+  } | null;
   entity: { valuesList: HistoryValueNode[]; relationsList: HistoryRelationNode[] } | null;
 };
 
@@ -50,7 +56,11 @@ export type HistoryEntry = {
   isLegacy: boolean;
 };
 
-export type EmploymentEntry = HistoryEntry & { status: EmploymentStatus | null };
+export type EmploymentEntry = HistoryEntry & {
+  status: EmploymentStatus | null;
+  employmentType: NamedRef | null;
+  skills: NamedRef[];
+};
 export type EducationEntry = HistoryEntry & { status: EducationStatus | null; fields: NamedRef[] };
 
 /** An organisation and everything held there. One card in the resting state. */
@@ -60,6 +70,8 @@ export type HistoryCard<TEntry> = {
   /** Its entity, which every row hangs off. */
   stintId: string;
   organization: NamedRef;
+  /** The organisation's own avatar, where it has one. */
+  avatarUrl?: string | null;
   entries: TEntry[];
 };
 
@@ -122,6 +134,15 @@ function readEntry(
   };
 }
 
+/** The image entity's URL, which is whichever of its values looks like one. */
+function readAvatar(edge: HistoryEdgeNode): string | null {
+  for (const relation of edge.toEntity?.relationsList ?? []) {
+    const url = relation.toEntity?.valuesList.find(value => typeof value.text === 'string' && value.text !== '');
+    if (url?.text) return url.text;
+  }
+  return null;
+}
+
 function readCard<TEntry>(
   edge: HistoryEdgeNode,
   readEntries: (stintValues: HistoryValueNode[], stintRelations: HistoryRelationNode[]) => TEntry[]
@@ -133,6 +154,7 @@ function readCard<TEntry>(
     relationId: edge.id,
     stintId: edge.entityId,
     organization: edge.toEntity ?? { id: edge.entityId, name: null },
+    avatarUrl: readAvatar(edge),
     entries: readEntries(stintValues, stintRelations),
   };
 }
@@ -149,7 +171,17 @@ export function normalizeEmployment(edges: HistoryEdgeNode[]): EmploymentCard[] 
             stintRelations,
             EMPLOYMENT_STATUS_PROPERTY
           );
-          return { ...entry, status: employmentStatusFromOptionId(statusOptionId) };
+          const tenureRelations = relation.entity?.relationsList ?? [];
+
+          return {
+            ...entry,
+            status: employmentStatusFromOptionId(statusOptionId),
+            employmentType: relationTo(tenureRelations, EMPLOYMENT_TYPE_PROPERTY),
+            skills: tenureRelations
+              .filter(skill => skill.type.id === SKILLS_PROPERTY)
+              .map(skill => skill.toEntity)
+              .filter((skill): skill is NamedRef => skill !== null),
+          };
         })
         .sort(byMostRecent)
     )

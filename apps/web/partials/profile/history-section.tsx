@@ -2,10 +2,13 @@
 
 import * as React from 'react';
 
-import { formatDateRange } from '~/core/profile/history-dates';
+import cx from 'classnames';
+
+import { formatDateRange, formatDuration } from '~/core/profile/history-dates';
 import type { EducationCard, EmploymentCard, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
+import { FallbackImage } from '~/design-system/fallback-image';
 import { Trash } from '~/design-system/icons/trash';
 
 type Kind = 'employment' | 'education';
@@ -39,12 +42,13 @@ const COPY: Record<Kind, { title: string; add: string; addHere: string; empty: s
 
 /**
  * The resting state: one card per organisation, every role or degree held there
- * as a dated row beneath it.
+ * beneath it.
  *
- * The nesting underneath — a relation carrying an entity carrying another
- * relation — surfaces nowhere except "Add another role here". Someone with one
- * job at one company adds a position, sees a card, and never learns there was a
- * level below it.
+ * Two or more rows are drawn against a spine, the way a run of promotions reads
+ * on LinkedIn — the organisation is stated once and the roles are what change.
+ * That grouping is the only place the nesting underneath surfaces: someone with
+ * one job at one company adds a position, sees a card, and never learns there
+ * was a level below it.
  */
 export function HistorySection({ kind, cards, disabled, onAdd, onAddTo, onRemoveEntry, onRemoveCard }: Props) {
   const copy = COPY[kind];
@@ -66,46 +70,95 @@ export function HistorySection({ kind, cards, disabled, onAdd, onAddTo, onRemove
         <ul className="flex flex-col gap-2">
           {cards.map(card => (
             <li key={card.relationId} className="rounded-lg border border-grey-02 p-3">
-              <div className="flex items-start justify-between gap-2">
-                <p className="min-w-0 truncate text-metadataMedium text-text">{card.organization.name ?? 'Untitled'}</p>
-                {/* Removing the organisation takes every row with it. Offered
-                    separately from the per-row delete so leaving one employer
-                    does not mean deleting each role there one at a time. */}
-                <SmallButton
-                  onClick={() => onRemoveCard(card)}
-                  disabled={disabled}
-                  aria-label={`${copy.removeCard} ${card.organization.name ?? 'Untitled'}`}
-                >
-                  {copy.removeCard}
-                </SmallButton>
-              </div>
+              <div className="flex items-start gap-2.5">
+                <OrganizationAvatar name={card.organization.name} url={card.avatarUrl} />
 
-              <ul className="mt-2 flex flex-col gap-1.5">
-                {card.entries.map(entry => (
-                  <EntryRow
-                    key={entry.relationId}
-                    kind={kind}
-                    entry={entry}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-metadataMedium text-text">{card.organization.name ?? 'Untitled'}</p>
+                      {/* Total time at the employer — the number a run of roles is
+                          actually read for. Only where there is a run. */}
+                      {card.entries.length > 1 && <CardDuration entries={card.entries} />}
+                    </div>
+
+                    {/* Removing the organisation takes every row with it. Offered
+                        separately so leaving one employer does not mean deleting
+                        each role there one at a time. */}
+                    <SmallButton
+                      onClick={() => onRemoveCard(card)}
+                      disabled={disabled}
+                      aria-label={`${copy.removeCard} ${card.organization.name ?? 'Untitled'}`}
+                    >
+                      {copy.removeCard}
+                    </SmallButton>
+                  </div>
+
+                  <ul
+                    className={cx(
+                      'mt-2 flex flex-col gap-2.5',
+                      card.entries.length > 1 && 'border-l border-grey-02 pl-3'
+                    )}
+                  >
+                    {card.entries.map(entry => (
+                      <EntryRow
+                        key={entry.relationId}
+                        kind={kind}
+                        entry={entry}
+                        disabled={disabled}
+                        onRemove={() => onRemoveEntry(card, entry)}
+                      />
+                    ))}
+                  </ul>
+
+                  <button
+                    type="button"
+                    onClick={() => onAddTo(card)}
                     disabled={disabled}
-                    onRemove={() => onRemoveEntry(card, entry)}
-                  />
-                ))}
-              </ul>
-
-              <button
-                type="button"
-                onClick={() => onAddTo(card)}
-                disabled={disabled}
-                className="mt-2 text-footnote text-ctaPrimary hover:underline disabled:text-grey-03 disabled:no-underline"
-              >
-                + {copy.addHere}
-              </button>
+                    className="mt-2 text-footnote text-ctaPrimary hover:underline disabled:text-grey-03 disabled:no-underline"
+                  >
+                    + {copy.addHere}
+                  </button>
+                </div>
+              </div>
             </li>
           ))}
         </ul>
       )}
     </section>
   );
+}
+
+/** The organisation's logo, or its initial where it has none. */
+function OrganizationAvatar({ name, url }: { name: string | null; url?: string | null }) {
+  if (url) {
+    return (
+      <div className="relative size-9 shrink-0 overflow-hidden rounded bg-grey-01">
+        <FallbackImage value={url} sizes="36px" className="object-cover" />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      aria-hidden
+      className="flex size-9 shrink-0 items-center justify-center rounded bg-divider text-metadataMedium text-grey-04"
+    >
+      {(name ?? '?').trim().charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
+function CardDuration({ entries }: { entries: HistoryEntry[] }) {
+  const starts = entries.map(entry => entry.startDate).filter((date): date is string => date !== null);
+  if (starts.length === 0) return null;
+
+  // Open at the employer if any role there is still held.
+  const isOpen = entries.some(entry => entry.startDate !== null && entry.endDate === null);
+  const ends = entries.map(entry => entry.endDate).filter((date): date is string => date !== null);
+
+  const duration = formatDuration([...starts].sort()[0], isOpen ? null : ([...ends].sort().at(-1) ?? null));
+  return duration ? <p className="text-footnote text-grey-04">{duration}</p> : null;
 }
 
 function EntryRow({
@@ -120,17 +173,38 @@ function EntryRow({
   onRemove: () => void;
 }) {
   const dates = formatDateRange(entry.startDate, entry.endDate);
-  const fields = 'fields' in entry ? (entry as { fields: { name: string | null }[] }).fields : [];
+  const duration = formatDuration(entry.startDate, entry.endDate);
   const subject = entry.subject.name ?? 'Untitled';
+
+  const fields = 'fields' in entry ? (entry as { fields: { name: string | null }[] }).fields : [];
+  const employmentType =
+    'employmentType' in entry ? (entry as { employmentType: { name: string | null } | null }).employmentType : null;
+  const skills = 'skills' in entry ? (entry as { skills: { name: string | null }[] }).skills : [];
+
   const heading = fields.length > 0 ? `${subject}, ${fields.map(field => field.name).join(', ')}` : subject;
 
   return (
     <li className="flex items-start justify-between gap-2">
       <div className="min-w-0">
         <p className="truncate text-footnote text-text">{heading}</p>
+        {employmentType?.name && <p className="text-footnote text-grey-04">{employmentType.name}</p>}
+
         {/* About a third of records carry no dates. A lone dash there reads as a
             rendering fault rather than as missing data, so the line is dropped. */}
-        {dates && <p className="text-footnote text-grey-04">{dates}</p>}
+        {dates && (
+          <p className="text-footnote text-grey-04">
+            {dates}
+            {duration && ` · ${duration}`}
+          </p>
+        )}
+
+        {entry.description && <p className="mt-1 text-footnote text-text">{entry.description}</p>}
+
+        {skills.length > 0 && (
+          <p className="mt-1 text-footnote text-grey-04">
+            <span className="text-text">Skills:</span> {skills.map(skill => skill.name).join(', ')}
+          </p>
+        )}
       </div>
 
       <SquareButton

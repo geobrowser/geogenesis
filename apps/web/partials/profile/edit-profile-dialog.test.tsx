@@ -32,13 +32,14 @@ vi.mock('~/core/hooks/use-profile-history', () => ({
     employment: [],
     education: [],
     isLoading: false,
-    status: 'idle',
-    errorMessage: null,
+    hasPendingChanges: false,
     addPosition: vi.fn(),
     addEducation: vi.fn(),
     removeEntry: vi.fn(),
     removeCard: vi.fn(),
-    dismissError: vi.fn(),
+    stagePending: () => ({ values: [], relations: [] }),
+    settle: vi.fn(),
+    discard: vi.fn(),
   }),
 }));
 
@@ -143,12 +144,17 @@ describe('EditProfileDialog', () => {
     await userEvent.paste('  Preston  ');
     await userEvent.click(saveButton());
 
-    expect(mocks.publish).toHaveBeenCalledWith({
-      name: 'Preston',
-      description: 'Working on debates.',
-      banner: { kind: 'unchanged' },
-      avatar: { kind: 'unchanged' },
-    });
+    // Second argument is the work and education rows, which go out in the same
+    // edit as the header fields.
+    expect(mocks.publish).toHaveBeenCalledWith(
+      {
+        name: 'Preston',
+        description: 'Working on debates.',
+        banner: { kind: 'unchanged' },
+        avatar: { kind: 'unchanged' },
+      },
+      { values: [], relations: [] }
+    );
   });
 
   // The status bar carries the upload, the publish and the result, and a failure
@@ -376,7 +382,7 @@ describe('EditProfileDialog', () => {
     await userEvent.click(saveButton());
 
     // The name goes out exactly as stored, not silently re-trimmed.
-    expect(mocks.publish).toHaveBeenCalledWith(expect.objectContaining({ name: 'Preston Mantel ' }));
+    expect(mocks.publish).toHaveBeenCalledWith(expect.objectContaining({ name: 'Preston Mantel ' }), expect.anything());
   });
 
   it('holds save until hydration actually produced an entity', () => {

@@ -77,3 +77,32 @@ export function formatDateRange(start: string | null, end: string | null): strin
 function formatMonthYear({ month, year }: MonthYear): string {
   return `${MONTH_NAMES[month - 1].slice(0, 3)} ${year}`;
 }
+
+/**
+ * How long a stretch ran, the way a CV states it: `4 yrs 2 mos`.
+ *
+ * Rounded to whole months from the first of each, which is all the stored
+ * precision supports. An open range runs to today, so a role still held keeps
+ * counting.
+ */
+export function formatDuration(start: string | null, end: string | null, now = new Date()): string | null {
+  const from = fromGraphDate(start);
+  if (!from) return null;
+
+  const to = fromGraphDate(end) ?? { month: now.getUTCMonth() + 1, year: now.getUTCFullYear() };
+
+  const months = (to.year - from.year) * 12 + (to.month - from.month);
+  if (months < 0) return null;
+
+  // Inclusive of the month it started in, so a job begun and left in March reads
+  // as a month rather than as nothing at all.
+  const total = months + 1;
+  const years = Math.floor(total / 12);
+  const remainder = total % 12;
+
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years} ${years === 1 ? 'yr' : 'yrs'}`);
+  if (remainder > 0) parts.push(`${remainder} ${remainder === 1 ? 'mo' : 'mos'}`);
+
+  return parts.join(' ') || null;
+}

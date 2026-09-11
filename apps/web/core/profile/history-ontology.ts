@@ -82,6 +82,37 @@ export const DESCRIPTION_PROPERTY = SystemIds.DESCRIPTION_PROPERTY;
  */
 export const LEGACY_FIELD_OF_STUDY_PROPERTY = '8c22d2cd3b0a4a9189f0da6027cf5830';
 
+/** tenure ──▶ Full-time | Part-time | … */
+export const EMPLOYMENT_TYPE_PROPERTY = '53a98633a2db40be9f161a4c9da37970';
+export const EMPLOYMENT_TYPE_TYPE = 'f503bfd283d74e1a9b30294fff9d2d7e';
+
+/**
+ * The LinkedIn set, published to Geo separately from this work and verified
+ * against the graph on 2026-09-11 — all eight resolve, with these names.
+ *
+ * Worth knowing when reading the graph rather than writing it: six *other*
+ * entities named "Full-time" are also typed `Employment type`, alongside a
+ * "Temporary" and an unnamed one. These eight are the set this modal offers;
+ * older records may point at any of the others.
+ */
+export const EMPLOYMENT_TYPE_OPTIONS = [
+  { id: 'f4a86b892f094d97894c4bfedd150c30', name: 'Full-time' },
+  { id: '5758c248068e44838da7e22109d9993f', name: 'Part-time' },
+  { id: '00f2a3b854f949c7b9f8a1e46872cbcc', name: 'Self-employed' },
+  { id: '75839ffa17ef4d20b4e0621a4780030d', name: 'Freelance' },
+  { id: '80d15f0e3b4f4288b69a1bcb5c3e4a0b', name: 'Contract' },
+  { id: '6eaed80c39b144f48e31dabf409a0722', name: 'Internship' },
+  { id: '946a5333fa084b2aac0c8d89a97b431c', name: 'Apprenticeship' },
+  { id: '1a0235d7f32e4cff83f9545f01bd96ba', name: 'Seasonal' },
+] as const;
+
+/** tenure ──▶ skill. A relation, and it repeats. */
+export const SKILLS_PROPERTY = ContentIds.SKILLS_PROPERTY;
+export const SKILL_TYPE = ContentIds.SKILL_TYPE;
+
+/** What the avatar of a company or school is stored under. */
+export const AVATAR_PROPERTY = ContentIds.AVATAR_PROPERTY;
+
 export type EmploymentStatus = 'current' | 'former';
 export type EducationStatus = 'studying' | 'completed' | 'incomplete';
 

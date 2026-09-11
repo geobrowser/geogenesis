@@ -255,15 +255,19 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   );
 
   const stage = React.useCallback(
-    async (draft: ProfileDraft, baseline: StagedEdit['baseline']): Promise<StagedEdit> => {
+    async (
+      draft: ProfileDraft,
+      baseline: StagedEdit['baseline'],
+      extra: { values: Value[]; relations: Relation[] } = { values: [], relations: [] }
+    ): Promise<StagedEdit> => {
       // Row ids this modal wrote, tracked as it goes so a failed upload can undo
       // the writes that already landed. Scoping the collection below to these —
       // rather than to everything unpublished on the person entity — keeps an
       // unrelated pending edit from riding along on the publish, and from being
       // rolled back when this one is abandoned.
       const written = {
-        valueIds: new Set<string>(),
-        relationIds: new Set<string>(),
+        valueIds: new Set<string>(extra.values.map(value => value.id)),
+        relationIds: new Set<string>(extra.relations.map(relation => relation.id)),
         overwritten: [] as Value[],
         overwrittenRelations: [] as Relation[],
       };
@@ -579,7 +583,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   }, [dispatch]);
 
   const publish = React.useCallback(
-    async (draft: ProfileDraft) => {
+    async (draft: ProfileDraft, extraRows?: { values: Value[]; relations: Relation[] }) => {
       if (!canEdit) return;
 
       // Retry re-sends the staged rows so the uploads inside only run once — but
@@ -608,6 +612,16 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       setErrorMessage(null);
       ownsPendingError.current = false;
 
+      // Rows from elsewhere in the modal — the work and education sections — go
+      // out in the same edit as the four header fields, because Save means all of
+      // it. Written into the store here so staging collects them like its own, and
+      // so a failure rolls them back with the rest.
+      const extra = extraRows ?? { values: [], relations: [] };
+      extra.values.forEach(value => storage.values.set(value));
+      extra.relations.forEach(relation =>
+        relation.isDeleted ? storage.relations.delete(relation) : storage.relations.set(relation)
+      );
+
       if (!stagedRef.current) {
         // Staging uploads to IPFS before `makeProposal` touches the status bar, and
         // that upload can be long. Closing during it is meant to hand off to the
@@ -623,7 +637,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         }
 
         try {
-          const stagedEdit = await stage(draft, baseline);
+          const stagedEdit = await stage(draft, baseline, extra);
 
           // The account can change while that upload runs. The effect that abandons
           // an outstanding edit cannot see this one — `stagedRef` was still null

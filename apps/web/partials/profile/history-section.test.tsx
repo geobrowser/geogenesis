@@ -19,6 +19,8 @@ const entry = (name: string, startDate: string | null, endDate: string | null) =
   description: null,
   isLegacy: false,
   status: null,
+  employmentType: null,
+  skills: [],
 });
 
 const card = (org: string, entries: ReturnType<typeof entry>[]): EmploymentCard => ({
@@ -62,8 +64,8 @@ describe('HistorySection', () => {
     expect(cards).toHaveLength(1);
 
     expect(screen.getByText('Product Lead')).toBeInTheDocument();
-    expect(screen.getByText('Jan 2024 – Present')).toBeInTheDocument();
-    expect(screen.getByText('Jun 2022 – Jan 2024')).toBeInTheDocument();
+    expect(screen.getByText(/Jan 2024 – Present/)).toBeInTheDocument();
+    expect(screen.getByText(/Jun 2022 – Jan 2024/)).toBeInTheDocument();
   });
 
   // "Add another role here" is the entire disclosure of the level underneath.

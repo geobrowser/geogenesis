@@ -1,7 +1,7 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
-import { EDUCATION_PROPERTY, EMPLOYMENT_PROPERTY } from '~/core/profile/history-ontology';
+import { AVATAR_PROPERTY, EDUCATION_PROPERTY, EMPLOYMENT_PROPERTY } from '~/core/profile/history-ontology';
 import {
   type EducationCard,
   type EmploymentCard,
@@ -48,19 +48,29 @@ const nested = `
   }
 `;
 
+/**
+ * The organisation's own avatar, two hops down: the Avatar relation points at an
+ * image entity, and the URL is a value on that.
+ */
+const orgAvatar = `
+  relationsList(filter: { typeId: { is: ${JSON.stringify(AVATAR_PROPERTY)} } }) {
+    toEntity { valuesList { property { id } text } }
+  }
+`;
+
 const profileHistoryQuery = (entityId: string) => `
   {
     entity(id: ${JSON.stringify(entityId)}) {
       employment: relationsList(filter: { typeId: { is: ${JSON.stringify(EMPLOYMENT_PROPERTY)} } }) {
         id
         entityId
-        toEntity { id name }
+        toEntity { id name ${orgAvatar} }
         entity { ${nested} }
       }
       education: relationsList(filter: { typeId: { is: ${JSON.stringify(EDUCATION_PROPERTY)} } }) {
         id
         entityId
-        toEntity { id name }
+        toEntity { id name ${orgAvatar} }
         entity { ${nested} }
       }
     }

@@ -15,11 +15,14 @@ import {
   EMPLOYMENT_PROPERTY,
   EMPLOYMENT_STATUS_OPTION,
   EMPLOYMENT_STATUS_PROPERTY,
+  EMPLOYMENT_TYPE_PROPERTY,
   END_DATE_PROPERTY,
   type EducationStatus,
   type EmploymentStatus,
   JOB_TYPE,
   ROLES_PROPERTY,
+  SKILLS_PROPERTY,
+  SKILL_TYPE,
   START_DATE_PROPERTY,
 } from './history-ontology';
 
@@ -29,6 +32,10 @@ export type EntityChoice = { id: string; name: string | null; isNew: boolean };
 export type PositionDraft = {
   company: EntityChoice;
   title: EntityChoice;
+  /** Full-time, Contract, and so on. Optional — LinkedIn leaves it unset too. */
+  employmentType: { id: string; name: string } | null;
+  /** Repeats, so it is a relation rather than a value. */
+  skills: EntityChoice[];
   startDate: string | null;
   endDate: string | null;
   status: EmploymentStatus;
@@ -249,8 +256,33 @@ export function stagePosition(draft: PositionDraft, { personEntityId, spaceId }:
     to: { id: EMPLOYMENT_STATUS_OPTION[draft.status], name: draft.status === 'current' ? 'Current' : 'Former' },
   });
 
-  return merge(company, title, employment, {
-    relations: [roles, status],
+  // Both hang off the tenure, beside the dates: a promotion can be full-time
+  // where the role before it was an internship, and the skills differ with it.
+  const employmentType = draft.employmentType
+    ? [
+        relationRow({
+          spaceId,
+          typeId: EMPLOYMENT_TYPE_PROPERTY,
+          typeName: 'Employment type',
+          fromId: tenureId,
+          to: draft.employmentType,
+        }),
+      ]
+    : [];
+
+  const skillRows = draft.skills.map(skill => newEntityRows(skill, spaceId, SKILL_TYPE));
+  const skillEdges = draft.skills.map(skill =>
+    relationRow({
+      spaceId,
+      typeId: SKILLS_PROPERTY,
+      typeName: 'Skills',
+      fromId: tenureId,
+      to: skill,
+    })
+  );
+
+  return merge(company, title, ...skillRows, employment, {
+    relations: [roles, status, ...employmentType, ...skillEdges],
     values: datesAndDescription({
       spaceId,
       tenureId,
