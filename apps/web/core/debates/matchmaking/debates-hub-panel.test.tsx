@@ -344,6 +344,12 @@ describe('DebatesHubPanel', () => {
     mocks.authenticated = false;
     renderOpen();
 
+    // Explore leads: it is the one the panel opens on, and a row that led with the tab you are not
+    // on was `SIGNED_OUT_TABS` naming the contents while `TABS` quietly decided the order.
+    const row = screen.getByRole('button', { name: 'Explore' }).closest('.overflow-x-auto');
+    const labels = [...(row?.querySelectorAll('button') ?? [])].map(button => button.textContent?.trim());
+    expect(labels).toEqual(['Explore', 'People']);
+
     expect(screen.getByRole('button', { name: 'Explore' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'People' })).toBeInTheDocument();
     expect(screen.queryByText('Sign in to find people to debate.')).not.toBeInTheDocument();

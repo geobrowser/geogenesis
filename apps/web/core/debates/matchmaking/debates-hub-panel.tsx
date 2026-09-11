@@ -53,11 +53,18 @@ const TABS: { id: DebatesHubTab; label: string }[] = [
  * a side on. Explore and People describe the world rather than the viewer, so both read fine
  * anonymously and are what the hub offers before sign-in (GEO-2861) — Explore's own viewer-relative
  * source, "My positions", leaves its menu signed out for the same reason.
+ *
+ * In the order the anonymous row draws them, and it is read that way below rather than used to
+ * filter the signed-in order. Filtered, this list said what the row contained and `TABS` quietly
+ * decided how it was arranged: the row led with People while the panel opened on Explore, which is
+ * the one an anonymous visitor is actually here for and the one `visibleTab` falls back to.
  */
 const SIGNED_OUT_TABS: DebatesHubTab[] = ['explore', 'people'];
 
 function tabsFor(authenticated: boolean) {
-  return authenticated ? TABS : TABS.filter(tab => SIGNED_OUT_TABS.includes(tab.id));
+  if (authenticated) return TABS;
+
+  return SIGNED_OUT_TABS.flatMap(id => TABS.filter(tab => tab.id === id));
 }
 
 /**

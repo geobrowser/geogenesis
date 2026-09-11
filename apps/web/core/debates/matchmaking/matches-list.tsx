@@ -128,9 +128,20 @@ export function MatchesList({
    * search that left one claim in space A still offered space B with a count beside it, and picking
    * it produced nothing. The topic one was narrowed by space but not by search, the same way.
    *
-   * The rule the counts follow is the one the hub's server facets follow: a menu is counted over the
-   * rows every *other* dimension allows, never its own. Counting a menu by its own selection would
-   * collapse it to the option already picked, and there would be no way back off it.
+   * What a menu does with its *own* selection follows from how that dimension combines, and the two
+   * here combine differently:
+   *
+   * Space is OR within the dimension — a row matches if it is in any picked space — so its menu is
+   * counted over the rows the other dimensions allow and *not* its own. Each count then answers
+   * "how many rows would ticking this add", and `keepSelectedVisible` keeps a picked space on the
+   * menu so it can be unticked.
+   *
+   * Topics are AND: {@link carriesEveryTopic} asks for every picked one, so a topic the current
+   * selection has no claim in common with would empty the list. Its menu is co-occurrence, counted
+   * over the rows that already carry the selection — "what else do these claims carry" — which is
+   * what `topic-facets` documents and what the hub's server facet does (GEO-2696). Excluding its own
+   * selection, as the space menu does, is what offered a mutually exclusive topic with a count
+   * beside it.
    */
   const passesSpace = React.useCallback(
     (match: MatchmakingMatch) => spaceIds.length === 0 || spaceIds.includes(match.claim.space_id),
@@ -177,14 +188,14 @@ export function MatchesList({
         keepSelectedVisible(
           countBy(
             matches
-              .filter(match => passesSpace(match) && passesSearch(match))
+              .filter(match => passesSpace(match) && passesSearch(match) && passesTopics(match))
               .flatMap(match => topicsByClaimId.get(match.claim.claim_entity_id) ?? [])
           ),
           topicIds
         ),
         topicIds
       ),
-    [matches, passesSearch, passesSpace, topicIds, topicsByClaimId]
+    [matches, passesSearch, passesSpace, passesTopics, topicIds, topicsByClaimId]
   );
 
   const filtered = React.useMemo(

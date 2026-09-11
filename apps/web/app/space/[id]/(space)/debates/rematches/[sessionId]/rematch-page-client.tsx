@@ -1068,9 +1068,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * about "Matches only" when it arrived, so with either of those on, a menu could offer an option
    * with a count beside it that produced nothing when picked.
    *
-   * Never its own dimension, though: a menu counted by its own selection collapses to the option
-   * already picked, and there is no way back off it. That is the rule the server facets follow
-   * (GEO-2796) and it is the one these follow now.
+   * What a menu does with its own selection follows from how that dimension combines. Space is OR
+   * within the dimension, so its menu leaves its own selection out and each count answers "how many
+   * rows would ticking this add". Topics are AND — {@link carriesEveryTopic} asks for every picked
+   * one — so the topic menu is co-occurrence over the rows that already carry the selection, or it
+   * would offer a topic with no claim in common with what is picked and empty the list (GEO-2696).
    */
   const passesMatchesOnly = React.useCallback(
     (claim: DebateRematchClaim) => !matchesOnlyHere || isRematchable(claim),

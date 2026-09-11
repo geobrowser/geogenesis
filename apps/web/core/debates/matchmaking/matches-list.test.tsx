@@ -554,6 +554,32 @@ describe('MatchesList', () => {
       expect(spacesOffered()).toBe(1);
     });
 
+    /**
+     * The topic filter is AND, so a topic with no claim in common with the one already picked is a
+     * dead option: ticking it asks for both and gets nothing. The menu is counted over the rows
+     * that already carry the selection for that reason — the same co-occurrence the hub's server
+     * facet does (GEO-2696) — rather than over everything the other filters allow, which is the
+     * right rule for the space menu and the wrong one here.
+     */
+    it('offers only the topics that co-occur with the one already picked', () => {
+      twoMatchesInTwoSpaces();
+      mocks.claimEntities = [
+        { id: CLAIM_ENTITY_ID, relations: [topicRelation('topic-food', 'Food')] },
+        { id: OTHER_CLAIM_ENTITY_ID, relations: [topicRelation('topic-health', 'Health')] },
+      ];
+      const store = createStore();
+      store.set(debatesHubLobbyTopicIdsAtom, ['topic-food']);
+      render(<MatchesList onTabChange={vi.fn()} />, store);
+
+      // The trigger takes the name of the one picked topic, so that is what opens the menu.
+      fireEvent.click(screen.getByRole('button', { name: /Food/ }));
+      const menu = screen.getByRole('dialog');
+
+      // Still offered, so it can be unticked; the one that shares no claim with it is not.
+      expect(within(menu).getByRole('button', { name: /Food/ })).toBeInTheDocument();
+      expect(within(menu).queryByRole('button', { name: /Health/ })).not.toBeInTheDocument();
+    });
+
     it('offers only the topics the search leaves on the list', async () => {
       twoMatchesInTwoSpaces();
       mocks.claimEntities = [
