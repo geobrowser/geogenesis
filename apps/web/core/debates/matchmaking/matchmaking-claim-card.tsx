@@ -1084,13 +1084,13 @@ function PositionAvatars({
   // These thresholds are against the pill's *content* box, which is what a container query measures
   // — 24px of `px-3` is already excluded, so they read 24px smaller than the pill widths they
   // correspond to. Inside that box sit the label group (a 12px icon, a 6px gap and 58px of
-  // "Disagree" = 76px) and the 6px gap before the stack. A face is a 16px picture in a 2px ring
-  // that sits outside it — 20px of box — and they overlap by 3px, so the first costs 20px and each
-  // one after it 17px, the badge likewise: 98px holds one face, 110px holds two, 126px holds the
-  // lot. These are deliberately a few pixels loose rather than exact, because erring toward
-  // shedding a face early is the safe direction — the failure they exist to prevent is the label
-  // truncating to "Dis...". The badge only fits that budget because `MAX_OVERFLOW_SHOWN` keeps its
-  // text inside the `min-w-4` floor; without that cap it grows and this stops holding.
+  // "Disagree" = 76px) and the 6px gap before the stack. A face is 16px including its ring and they
+  // overlap by 3px — Figma's numbers — so the first costs 16px and each one after it 13px, the
+  // badge likewise: 98px holds one face, 110px holds two, 126px holds the lot. These are
+  // deliberately a few pixels loose rather than exact, because erring toward shedding a face early
+  // is the safe direction — the failure they exist to prevent is the label truncating to "Dis...".
+  // The badge only fits that budget because `MAX_OVERFLOW_SHOWN` keeps its text inside the
+  // `min-w-4` floor; without that cap it grows and this stops holding.
   //
   // These were 108/124/148 against 24px faces and an 8px gap. Both changed together: the faces
   // shrank to match the explore card's, and merging the pill's two groups into one centred run
@@ -1106,11 +1106,11 @@ function PositionAvatars({
         <span
           key={participant.user_id}
           className={cx(
-            // `box-content` so the ring sits *outside* the 16px picture. Without it the border eats
-            // into the 16px box, leaving a 12px content area that the clip below overflows — which
-            // is how a ringed face ended up both larger and higher than the bare one beside it,
-            // carrying its dot up with it.
-            'relative box-content block size-4 rounded-full border-2',
+            // 16px *including* the ring, which is how Figma measures these — the ring is drawn
+            // inside the box, leaving a 12px picture. Putting it outside instead (`box-content`)
+            // made each face 20px and the stack 4px looser per face than the design, which is what
+            // read as too little overlap.
+            'relative block size-4 rounded-full border-2',
             // Figma leaves the ring off the leading face, which overlaps nothing. Transparent
             // rather than absent, so every face keeps identical geometry: a ring that is not drawn
             // must not also change the size of the thing it is not drawn on.
@@ -1118,10 +1118,12 @@ function PositionAvatars({
             index === 0 ? '@max-[98px]:hidden' : '@max-[110px]:hidden'
           )}
         >
-          {/* The clip moved inward off the wrapper so the dot can sit on the edge: `overflow-hidden`
-              out here would cut the half of it that hangs over the rim. */}
-          <span className="block size-4 overflow-hidden rounded-full">
-            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={16} />
+          {/* Sized to the content box the ring leaves, not to the wrapper: a 16px clip inside a
+              12px content box overflows, which is how a ringed face once rendered larger and higher
+              than the bare one beside it. The clip is here rather than on the wrapper so the dot
+              can hang over the rim without being cut. */}
+          <span className="block size-3 overflow-hidden rounded-full">
+            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={12} />
           </span>
           {/* Everyone in this stack is present by construction — the sides are built from
               `online_choices` — so the dot needs no condition. It rings in the pill's own colour
@@ -1140,7 +1142,7 @@ function PositionAvatars({
       {overflow > 0 && (
         <span
           className={cx(
-            'relative box-content flex h-4 min-w-4 items-center justify-center rounded-full border-2 bg-grey-02 px-1 text-[9px] leading-4 text-grey-04 tabular-nums @max-[126px]:hidden',
+            'relative flex h-4 min-w-4 items-center justify-center rounded-full border-2 bg-grey-02 px-1 text-[8px] leading-3 text-grey-04 tabular-nums @max-[126px]:hidden',
             ringClassName
           )}
         >
