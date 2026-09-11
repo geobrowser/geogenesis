@@ -1110,9 +1110,13 @@ function PositionAvatars({
           {/* Everyone in this stack is present by construction — the sides are built from
               `online_choices` — so the dot needs no condition. It rings in the pill's own colour
               rather than white, which is the surface actually behind it here. */}
+          {/* Top-left, per the Figma card: the dot's 4px body sits on the face's own top-left
+              corner and its 2px ring bleeds outside, so the avatar reads as notched rather than
+              badged. `-translate-*-0.5` is that 2px, which is what puts the *green* on the corner
+              instead of the ring. */}
           <OnlineDot
             ringClassName={ringClassName}
-            className="absolute right-0 bottom-0 translate-x-px translate-y-px"
+            className="absolute top-0 left-0 -translate-x-0.5 -translate-y-0.5"
           />
         </span>
       ))}

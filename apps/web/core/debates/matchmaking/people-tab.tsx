@@ -7,6 +7,7 @@ import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { Input } from '~/design-system/input';
+import { OnlineDot } from '~/design-system/online-dot';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
@@ -204,8 +205,15 @@ function PersonRow({
     // three tracks centre on the row: hanging them from the top clustered everything up there and
     // left the join date trailing under an empty right-hand side.
     <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
-      <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
-        <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
+      {/* Everyone in this list is online by definition — the tab is "everyone online and available
+          right now" — so the dot needs no condition, and it ties the faces here to the ones inside
+          the claim pills, which mean the same thing. The clip sits on the inner span: on the
+          wrapper it would cut the half of the dot that hangs over the rim. */}
+      <div className="relative h-8 w-8 shrink-0">
+        <div className="h-8 w-8 overflow-hidden rounded-full">
+          <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
+        </div>
+        <OnlineDot className="absolute top-0 left-0 -translate-x-0.5 -translate-y-0.5" />
       </div>
       <div className="flex min-w-0 flex-col gap-0.5">
         {/* The name goes to their personal space, which is the profile page GEO-2611 settled on.
