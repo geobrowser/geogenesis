@@ -212,6 +212,7 @@ export function MatchmakingClaimCard({
           onRequireSignIn={onRequireSignIn}
           hideEndSlot={hideEndSlot}
           endSlot={endSlot}
+          hasFooter={Boolean(footer)}
         />
       ) : (
         <UnresolvableControls
@@ -514,11 +515,20 @@ function RespondableControls({
   onRequireSignIn,
   hideEndSlot,
   endSlot,
+  hasFooter,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: Debate | boolean | null;
+  /**
+   * Whether the host renders anything after these controls.
+   *
+   * Only the footer band cares: it bleeds past the card's padding to sit on the base, which is only
+   * true when nothing follows it. The rematch picker's error alert does, and would land under a
+   * band that had already claimed the bottom edge.
+   */
+  hasFooter?: boolean;
   answersReady?: boolean;
   responseBlockedReason?: string | null;
   /** False while the card is still far enough below the fold that its reads are not worth making. */
@@ -664,7 +674,13 @@ function RespondableControls({
           responseKind={readiness.response_kind}
           summary={summary}
           layout="inline"
-          className="-mx-3 mt-3 -mb-3 rounded-b-[inherit] border-t border-divider bg-grey-01 px-3 py-2"
+          className={cx(
+            '-mx-3 mt-3 border-t border-divider bg-grey-01 px-3 py-2',
+            // Only reaches the card's base when nothing follows it. A host that passes a footer —
+            // the rematch picker's error alert — renders after this, and a band bled past the
+            // padding would sit under it.
+            !hasFooter && '-mb-3 rounded-b-[inherit]'
+          )}
         />
       )}
     </>
@@ -1051,12 +1067,13 @@ export function presentCount(summary: Pick<DebateClaimPositionSummary, 'present_
 /**
  * Largest remainder the badge will print.
  *
- * The badge is `min-w-5` with `px-1`, so it sits at exactly 32px until its text outgrows that
- * floor — measured, that happens between "+99" (32px) and "+100" (34.9px). The shedding rules below
- * are written against a 32px badge, so an uncapped count would widen a `shrink-0` stack and start
+ * The badge is `min-w-4` with no padding — a circle the size of a face, 16px of content in a 2px
+ * ring — and 8px type keeps "+99" (about 14px) inside that floor. The shedding rules below are
+ * written against that fixed width, so an uncapped count would widen a `shrink-0` stack and start
  * taking width back off the label, which is the whole thing they exist to prevent. Capping here
- * rather than widening the rule keeps the badge a fixed size for every claim instead of sizing all
- * of them for a crowd that almost never turns up.
+ * rather than widening the rule keeps the badge one size for every claim instead of sizing all of
+ * them for a crowd that almost never turns up. `overflow-hidden` is the backstop if this cap is
+ * ever raised.
  *
  * Understating is safe: the stack is `aria-hidden`, decorative beside a count the row states
  * exactly, and a badge that reads "and at least this many more" is the convention anyway.
