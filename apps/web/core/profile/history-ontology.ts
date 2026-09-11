@@ -58,7 +58,11 @@ export const ACADEMIC_FIELD_TYPE = SystemIds.ACADEMIC_FIELD_TYPE;
  * apiece under those names with no obvious canonical one, so those two pickers
  * search unscoped rather than guess an id — a wrong type here is worse than none.
  */
-export const COMPANY_TYPE = SystemIds.COMPANY_TYPE;
+/**
+ * What an Employment edge points at. `Project` rather than `Company`: the graph
+ * models the thing you were employed on, and plenty of them are not companies.
+ */
+export const EMPLOYER_TYPE = SystemIds.PROJECT_TYPE;
 export const JOB_TYPE = ContentIds.JOB_TYPE;
 
 /**

@@ -17,20 +17,23 @@ type Props = {
   onAdd: () => void;
   onAddTo: (card: HistoryCard<HistoryEntry>) => void;
   onRemoveEntry: (card: HistoryCard<HistoryEntry>, entry: HistoryEntry) => void;
+  onRemoveCard: (card: HistoryCard<HistoryEntry>) => void;
 };
 
-const COPY: Record<Kind, { title: string; add: string; addHere: string; empty: string }> = {
+const COPY: Record<Kind, { title: string; add: string; addHere: string; empty: string; removeCard: string }> = {
   employment: {
     title: 'Work',
     add: 'Add position',
     addHere: 'Add another role here',
     empty: 'Nothing here yet. Add a position and it appears on your profile.',
+    removeCard: 'Remove employer',
   },
   education: {
     title: 'Education',
     add: 'Add education',
     addHere: 'Add another degree here',
     empty: 'Nothing here yet. Add a school and it appears on your profile.',
+    removeCard: 'Remove school',
   },
 };
 
@@ -43,7 +46,7 @@ const COPY: Record<Kind, { title: string; add: string; addHere: string; empty: s
  * job at one company adds a position, sees a card, and never learns there was a
  * level below it.
  */
-export function HistorySection({ kind, cards, disabled, onAdd, onAddTo, onRemoveEntry }: Props) {
+export function HistorySection({ kind, cards, disabled, onAdd, onAddTo, onRemoveEntry, onRemoveCard }: Props) {
   const copy = COPY[kind];
 
   return (
@@ -63,7 +66,19 @@ export function HistorySection({ kind, cards, disabled, onAdd, onAddTo, onRemove
         <ul className="flex flex-col gap-2">
           {cards.map(card => (
             <li key={card.relationId} className="rounded-lg border border-grey-02 p-3">
-              <p className="text-metadataMedium text-text">{card.organization.name ?? 'Untitled'}</p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="min-w-0 truncate text-metadataMedium text-text">{card.organization.name ?? 'Untitled'}</p>
+                {/* Removing the organisation takes every row with it. Offered
+                    separately from the per-row delete so leaving one employer
+                    does not mean deleting each role there one at a time. */}
+                <SmallButton
+                  onClick={() => onRemoveCard(card)}
+                  disabled={disabled}
+                  aria-label={`${copy.removeCard} ${card.organization.name ?? 'Untitled'}`}
+                >
+                  {copy.removeCard}
+                </SmallButton>
+              </div>
 
               <ul className="mt-2 flex flex-col gap-1.5">
                 {card.entries.map(entry => (
@@ -122,7 +137,7 @@ function EntryRow({
         onClick={onRemove}
         disabled={disabled}
         icon={<Trash />}
-        aria-label={`Remove ${subject}${kind === 'employment' ? '' : ' degree'}`}
+        aria-label={`Remove ${kind === 'employment' ? 'position' : 'degree'} ${subject}`}
       />
     </li>
   );

@@ -6,12 +6,12 @@ import type { Relation, Value } from '~/core/types';
 import {
   ACADEMIC_FIELDS_PROPERTY,
   ACADEMIC_FIELD_TYPE,
-  COMPANY_TYPE,
   DEGREE_PROPERTY,
   DESCRIPTION_PROPERTY,
   EDUCATION_PROPERTY,
   EDUCATION_STATUS_OPTION,
   EDUCATION_STATUS_PROPERTY,
+  EMPLOYER_TYPE,
   EMPLOYMENT_PROPERTY,
   EMPLOYMENT_STATUS_OPTION,
   EMPLOYMENT_STATUS_PROPERTY,
@@ -211,7 +211,7 @@ function merge(...parts: StagedRows[]): StagedRows {
  * attached to with nothing to say about it, which is worse than no entry.
  */
 export function stagePosition(draft: PositionDraft, { personEntityId, spaceId }: Context): StagedRows {
-  const company = newEntityRows(draft.company, spaceId, COMPANY_TYPE);
+  const company = newEntityRows(draft.company, spaceId, EMPLOYER_TYPE);
   const title = newEntityRows(draft.title, spaceId, JOB_TYPE);
 
   let stintId = draft.existingStintId;

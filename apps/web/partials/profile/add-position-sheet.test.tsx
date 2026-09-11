@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { COMPANY_TYPE, JOB_TYPE } from '~/core/profile/history-ontology';
+import { EMPLOYER_TYPE, JOB_TYPE } from '~/core/profile/history-ontology';
 
 import { AddPositionSheet } from './add-position-sheet';
 
@@ -70,7 +70,7 @@ describe('AddPositionSheet', () => {
     renderSheet();
 
     const scopes = screen.getAllByRole('button', { name: /pick existing/ }).map(b => b.getAttribute('data-scoped-to'));
-    expect(scopes).toContain(COMPANY_TYPE);
+    expect(scopes).toContain(EMPLOYER_TYPE);
     expect(scopes).toContain(JOB_TYPE);
   });
 

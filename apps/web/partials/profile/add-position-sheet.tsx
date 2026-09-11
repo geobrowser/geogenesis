@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import { type MonthYear, toGraphDate } from '~/core/profile/history-dates';
-import { COMPANY_TYPE, JOB_TYPE } from '~/core/profile/history-ontology';
+import { EMPLOYER_TYPE, JOB_TYPE } from '~/core/profile/history-ontology';
 import type { EntityChoice, PositionDraft } from '~/core/profile/stage-history';
 
 import { Checkbox } from '~/design-system/checkbox';
@@ -73,7 +73,7 @@ export function AddPositionSheet({ spaceId, company, isSaving, onCancel, onSave 
         ) : (
           <SelectEntity
             spaceId={spaceId}
-            relationValueTypes={[{ id: COMPANY_TYPE, name: 'Company' }]}
+            relationValueTypes={[{ id: EMPLOYER_TYPE, name: 'Project' }]}
             onDone={(result, fromCreateFn) =>
               setPickedCompany({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
             }

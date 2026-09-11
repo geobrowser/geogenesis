@@ -35,6 +35,7 @@ function renderSection(cards: EmploymentCard[] = [], overrides: Partial<Paramete
     onAdd: vi.fn(),
     onAddTo: vi.fn(),
     onRemoveEntry: vi.fn(),
+    onRemoveCard: vi.fn(),
     ...overrides,
   };
   render(<HistorySection {...props} />);
@@ -88,9 +89,30 @@ describe('HistorySection', () => {
     const cards = [card('Geo', [entry('Product Lead', '2024-01-01Z', null), entry('Engineer', '2022-06-01Z', null)])];
     const props = renderSection(cards);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Remove Engineer' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove position Engineer' }));
 
     expect(props.onRemoveEntry).toHaveBeenCalledWith(cards[0], cards[0].entries[1]);
+  });
+
+  it('removes a single position from the row it sits on', async () => {
+    const cards = [card('Geo', [entry('Product Lead', '2024-01-01Z', null), entry('Engineer', '2022-06-01Z', null)])];
+    const props = renderSection(cards);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove position Product Lead' }));
+
+    expect(props.onRemoveEntry).toHaveBeenCalledWith(cards[0], cards[0].entries[0]);
+    expect(props.onRemoveCard).not.toHaveBeenCalled();
+  });
+
+  // Leaving an employer should not mean deleting each role there one at a time.
+  it('removes a whole employer and everything under it', async () => {
+    const cards = [card('Geo', [entry('Product Lead', '2024-01-01Z', null), entry('Engineer', '2022-06-01Z', null)])];
+    const props = renderSection(cards);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove employer Geo' }));
+
+    expect(props.onRemoveCard).toHaveBeenCalledWith(cards[0]);
+    expect(props.onRemoveEntry).not.toHaveBeenCalled();
   });
 
   // About a third of records carry no dates. A lone dash reads as a rendering
@@ -107,7 +129,8 @@ describe('HistorySection', () => {
 
     expect(screen.getByRole('button', { name: '+ Add position' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '+ Add another role here' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Remove Engineer' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Remove employer Geo' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Remove position Engineer' })).toBeDisabled();
   });
 
   it('uses the education wording for the education section', () => {

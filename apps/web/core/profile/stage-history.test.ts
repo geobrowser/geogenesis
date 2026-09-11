@@ -6,12 +6,12 @@ import type { Relation } from '~/core/types';
 
 import {
   ACADEMIC_FIELDS_PROPERTY,
-  COMPANY_TYPE,
   DEGREE_PROPERTY,
   DESCRIPTION_PROPERTY,
   EDUCATION_PROPERTY,
   EDUCATION_STATUS_COMPLETED,
   EDUCATION_STATUS_PROPERTY,
+  EMPLOYER_TYPE,
   EMPLOYMENT_PROPERTY,
   EMPLOYMENT_STATUS_CURRENT,
   EMPLOYMENT_STATUS_FORMER,
@@ -129,7 +129,7 @@ describe('stagePosition', () => {
     const types = byType(relations, SystemIds.TYPES_PROPERTY);
     expect(types.map(relation => [relation.fromEntity.id, relation.toEntity.id])).toEqual(
       expect.arrayContaining([
-        ['new-co', COMPANY_TYPE],
+        ['new-co', EMPLOYER_TYPE],
         ['new-title', JOB_TYPE],
       ])
     );

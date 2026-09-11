@@ -8,6 +8,7 @@ import {
   EDUCATION_PROPERTY,
   EDUCATION_STATUS_OPTION,
   EDUCATION_STATUS_PROPERTY,
+  EMPLOYER_TYPE,
   EMPLOYMENT_PROPERTY,
   EMPLOYMENT_STATUS_OPTION,
   EMPLOYMENT_STATUS_PROPERTY,
@@ -38,6 +39,7 @@ describe('history ontology ids', () => {
     ['Start date', START_DATE_PROPERTY, 'eed03a040acd4a9e81e08272ed70a817'],
     ['End date', END_DATE_PROPERTY, 'b08b8f63dc1e41568b0819946f2b011c'],
     ['Description', DESCRIPTION_PROPERTY, '9b1f76ff9711404c861e59dc3fa7d037'],
+    ['Employer type (Project)', EMPLOYER_TYPE, '484a18c5030a499cb0f2ef588ff16d50'],
   ])('%s resolves to the id the graph has', (_name, actual, expected) => {
     expect(actual).toBe(expected);
   });

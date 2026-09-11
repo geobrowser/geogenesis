@@ -385,6 +385,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                     onAdd={() => openSheetFor('employment')}
                     onAddTo={card => openSheetFor('employment', card)}
                     onRemoveEntry={(card, entry) => void history.removeEntry(card, entry, 'employment')}
+                    onRemoveCard={card => void history.removeCard(card, 'employment')}
                   />
 
                   <HistorySection
@@ -394,6 +395,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                     onAdd={() => openSheetFor('education')}
                     onAddTo={card => openSheetFor('education', card)}
                     onRemoveEntry={(card, entry) => void history.removeEntry(card, entry, 'education')}
+                    onRemoveCard={card => void history.removeCard(card, 'education')}
                   />
                 </div>
 
