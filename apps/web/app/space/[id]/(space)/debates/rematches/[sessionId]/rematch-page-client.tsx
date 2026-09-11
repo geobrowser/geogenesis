@@ -165,7 +165,23 @@ function firstNamePossessive(name: string) {
 
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
+  const { authenticated: geoChatAuthenticated } = useGeoChatAuth();
   const currentUserId = useCurrentGeoChatUserId();
+  /**
+   * The viewer's geo-chat id is still coming.
+   *
+   * `useCurrentGeoChatUserId` answers from the stored session synchronously, and exchanges a token
+   * for it when there is none — a fresh tab, cleared storage, the first visit after signing in. In
+   * that window neither participant can be picked out of the session, so every list keyed on one of
+   * them comes back empty for a reason that has nothing to do with what anybody holds. The lists
+   * wait it out rather than reporting it: "they haven't responded yet" and a badge reading `0` are
+   * both specific claims, and on the tab the picker opens on they are the first thing a returning
+   * pair reads.
+   *
+   * Gated on being signed in, not merely on the id being absent. Signed out it never arrives, and a
+   * list that waited on it would wait for the whole visit.
+   */
+  const viewerIdentityUnresolved = geoChatAuthenticated && currentUserId === null;
   const exitStartedRef = React.useRef(false);
   const sessionQuery = useDebateRematch(sessionId);
   const [search, setSearch] = React.useState('');
@@ -773,7 +789,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [canPublishDebateIn, excludedClaimIds, rowFromEntity]
   );
 
-  const opponentClaimsSettling = opponentClaimsQuery.isLoading || opponentEntitiesQuery.isLoading;
+  const opponentClaimsSettling =
+    viewerIdentityUnresolved || opponentClaimsQuery.isLoading || opponentEntitiesQuery.isLoading;
   const opponentClaimsNow = React.useMemo(
     () =>
       opponentClaimsSettling
@@ -808,7 +825,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // `positions.isLoading` is part of the settling state rather than only the two lookups below it.
   // Those are keyed on ids that come *from* positions, so while positions is in flight the id list
   // is empty, they are disabled rather than loading, and nothing here would report as pending.
-  const viewerClaimsSettling = positions.isLoading || viewerEntitiesQuery.isLoading || viewerClaimsQuery.isLoading;
+  const viewerClaimsSettling =
+    viewerIdentityUnresolved || positions.isLoading || viewerEntitiesQuery.isLoading || viewerClaimsQuery.isLoading;
   const viewerClaimsNow = React.useMemo(
     () =>
       viewerClaimsSettling
@@ -1212,7 +1230,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const tabIsLoading =
     sessionQuery.isLoading ||
     (tab === 'opponent'
-      ? positions.isLoading || opponentEntitiesQuery.isLoading || opponentClaimsQuery.isLoading
+      ? // Through `opponentClaimsSettling` rather than listing its queries again, so the tab and the
+        // badge above cannot come to different answers about the same list.
+        positions.isLoading || opponentClaimsSettling
       : sourceUndecided ||
         (source === 'recommended'
           ? recommendedLoading || curatedClaimsQuery.isLoading
@@ -1334,7 +1354,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //   debater's own claims live there, and the tab starts empty precisely in the case this is
   //   about — the opponent taking their *first* position — so there would be no claim to derive the
   //   scope from at the moment it matters.
-  const { authenticated: geoChatAuthenticated } = useGeoChatAuth();
   const scopedSpaceIds = React.useMemo(() => {
     const ids = new Set<string>();
     for (const claim of [...opponentClaims, ...viewerClaims, ...curatedClaims, ...taggedClaims])

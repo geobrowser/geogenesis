@@ -135,6 +135,7 @@ const mocks = vi.hoisted(() => ({
   savedClaims: null as DebateRematchClaim[] | null,
   browsedLookupLoading: false,
   currentUserId: 'user-local' as string | null,
+  geoChatAuthenticated: true,
   spaceAllowlist: null as Set<string> | null,
   memberSpaceIds: null as Set<string> | null,
   isSettlingMemberships: false,
@@ -264,7 +265,12 @@ vi.mock('~/core/debates/hooks', () => ({
     matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
-  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
+  useGeoChatAuth: () => ({
+    ready: true,
+    authenticated: mocks.geoChatAuthenticated,
+    accountKey: 'account-a',
+    getPrivyIdentityToken: vi.fn(),
+  }),
 }));
 
 function rematchClaimsLookup(claimIds: string[]) {
@@ -752,6 +758,7 @@ beforeEach(() => {
   mocks.savedClaims = null;
   mocks.browsedLookupLoading = false;
   mocks.currentUserId = 'user-local';
+  mocks.geoChatAuthenticated = true;
   mocks.responseIndexingStatus = null;
   mocks.spaceAllowlist = null;
   mocks.memberSpaceIds = null;
@@ -1437,6 +1444,19 @@ describe('DebateRematchPageClient', () => {
       await waitFor(() => expect(mocks.rematchClaimIds.flat()).toContain(VIEWER_ONLY));
     });
 
+    // The same window the opponent's tab waits out, on the other side of it: the ids here are the
+    // viewer's own, so until their geo-chat id lands there are none, and "you haven't taken a
+    // position" is a statement about them made before anyone knew who they were.
+    it('waits for the viewer’s identity rather than saying they have answered nothing', async () => {
+      viewerOnlyClaim();
+      mocks.currentUserId = null;
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showExplore();
+      await chooseSource('My positions');
+
+      expect(screen.queryByText('You haven’t taken a position on any claims yet.')).toBeNull();
+    });
+
     // A viewer who has answered nothing cannot fill this list from here, so the empty state offers
     // the way through — the same shape as the opponent's tab pointing at Explore.
     it('offers the whole corpus when the viewer has answered nothing', async () => {
@@ -1753,6 +1773,33 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Salina’s positions/ })).not.toHaveTextContent('0');
+  });
+
+  /**
+   * The same hole one step further out: the ids come from positions, and *which* rows of positions
+   * belong to whom comes from the viewer's geo-chat id, which is exchanged over the wire when no
+   * session is stored — a fresh tab, cleared storage, the first visit after signing in.
+   *
+   * In that window neither participant can be picked out, both id lists are empty, and every lookup
+   * keyed on them is idle rather than loading. The landing tab then reported that the opponent had
+   * not responded and drew a `0`, of a pair who may have been arguing all week.
+   */
+  it('counts nothing, and claims nothing, until it knows who the viewer is', async () => {
+    mocks.currentUserId = null;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+    expect(screen.queryByText(/hasn’t responded yet/)).toBeNull();
+  });
+
+  // And it has to be a wait, not a permanent one: signed out the id never arrives, so a gate on its
+  // absence alone would hold the tab for the whole visit rather than for a round trip.
+  it('does not wait on an identity that is never coming', async () => {
+    mocks.currentUserId = null;
+    mocks.geoChatAuthenticated = false;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByLabelText('Counting positions')).toBeNull();
   });
 
   // The count is derived from ids that come *from* positions, so while that query is in flight the
