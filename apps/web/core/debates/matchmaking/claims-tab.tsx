@@ -26,7 +26,7 @@ import type {
   MatchmakingClaimsQuery,
 } from '../api';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
-import { debateClaimRowKey, useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
+import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import {
   type TaggedClaim,
   type TaggedClaimFilters,
@@ -492,23 +492,8 @@ export function ClaimsTab({
   // a press on the side they already hold republishes it instead of clearing it. Signed *out* is a
   // real answer: they have no side, and their press opens the sign-in prompt.
   //
-  // Asked per row, not of the whole list and not of a space.
-  //
-  // The rows lookup fans out one request per space the loaded page reaches, and the aggregate
-  // `isLoading`/`isError` is true while *any* of them is outstanding — so on All claims, which
-  // spans every space the viewer can see, one slow or failed batch left every pill on the tab dead.
-  // Per space fixed the blast radius but not the shape: this list pages, and appending a page mints
-  // a new chunk whose space then covers every card already answered and on screen. The viewer
-  // watched the cards they were reading go dead each time they scrolled.
-  //
-  // Only the rows actually being asked about wait, which is what `pendingRowKeys` names.
-  const pendingRowKeys = React.useMemo(() => new Set(taggedRows.pendingRowKeys), [taggedRows.pendingRowKeys]);
-  const answersReadyFor = React.useCallback(
-    (spaceId: string, claimId: string) =>
-      !graphSourced ||
-      (authenticated ? Boolean(accountKey) && !pendingRowKeys.has(debateClaimRowKey(spaceId, claimId)) : true),
-    [accountKey, authenticated, graphSourced, pendingRowKeys]
-  );
+  const taggedAnswersReady =
+    !graphSourced || (authenticated ? Boolean(accountKey) && !taggedRows.isLoading && !taggedRows.isError : true);
 
   // The space menu, from the server's own count over the tag — narrowed by the search and the
   // topics, never by the space selection, which is what lets a picked space be un-picked and what
@@ -720,10 +705,9 @@ export function ClaimsTab({
           //
           // Their consequences are handled where they land instead, and both are pinned by tests:
           // `facetsSettled` refuses to reconcile against a menu those lookups never filled, so the
-          // viewer's topic selection is not spent, and `answersReadyFor` keeps a card unpressable
-          // until its own row has arrived — its own, so a failing batch costs the cards it was
-          // asked about rather than the tab. A short list beats a blank one; a wrong publish beats
-          // neither, and is what those guard.
+          // viewer's topic selection is not spent, and `taggedKindResolvedFor` keeps a card
+          // unpressable until its vocabulary and the viewer's own side have actually arrived. A
+          // short list beats a blank one; a wrong publish beats neither, and is what those guard.
           error={graphSourced ? taggedError : claimsQuery.error}
           // Retries whatever failed, not just the catalog. The error above can come from either of
           // the two lookups behind the list, and neither is keyed on the catalog — so refetching
@@ -794,7 +778,7 @@ export function ClaimsTab({
                 activeDebate={entry.active_debate}
                 // The paged list is geo-chat's own, so every row carries its kind already; only the
                 // tagged list has to wait for one.
-                answersReady={answersReadyFor(entry.claim.space_id, entry.claim.claim_entity_id)}
+                answersReady={taggedAnswersReady}
                 onRequireSignIn={onRequireSignIn}
               />
             ))}

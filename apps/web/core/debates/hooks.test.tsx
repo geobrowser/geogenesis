@@ -13,7 +13,6 @@ import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySpaceScopes } from './debate-gateway';
 import {
-  debateClaimRowKey,
   debateQueryKeys,
   useAcceptDebateRematchRequest,
   useClearDebateActivity,
@@ -187,78 +186,6 @@ describe('useDebateClaimsBySpaces', () => {
     expect(new Set(requestedIds.flat())).toEqual(new Set(ids));
     expect(requestedIds.flat()).toHaveLength(101);
     expect(new Set(result.current.claims.map(claim => claim.claim_entity_id))).toEqual(new Set(ids));
-  });
-
-  /**
-   * The aggregate `isLoading` is true while *any* batch is outstanding, which is the wrong shape
-   * for a caller asking "may this card be answered": on a list spanning every space the viewer can
-   * see, one slow batch spoke for all of them.
-   */
-  it('names only the rows whose own batch has not settled', async () => {
-    mocks.listDebateClaims.mockImplementation((spaceId: string, claimIds: string[]) =>
-      spaceId === 'space-slow'
-        ? new Promise(() => {})
-        : Promise.resolve({ claims: claimIds.map(claim_entity_id => ({ claim_entity_id })) })
-    );
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-
-    const { result } = renderHook(
-      () =>
-        useDebateClaimsBySpaces([
-          { spaceId: 'space-fast', claimIds: ['claim-a'] },
-          { spaceId: 'space-slow', claimIds: ['claim-b'] },
-        ]),
-      {
-        wrapper: ({ children }: { children: ReactNode }) => (
-          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-        ),
-      }
-    );
-
-    await waitFor(() => expect(result.current.claims).toHaveLength(1));
-    expect(result.current.pendingRowKeys).toEqual([debateClaimRowKey('space-slow', 'claim-b')]);
-    // The aggregate is unchanged and still says the lookup as a whole is unsettled.
-    expect(result.current.isLoading).toBe(true);
-  });
-
-  /**
-   * The grain that matters for a list that pages.
-   *
-   * A new page joins the chunk its ids sort into, so that chunk re-keys and goes out again. Per
-   * space, everything in the space went back to unknown with it — every card already answered and
-   * on screen — which is what a viewer scrolling the hub sees as the cards they are reading going
-   * dead. Per row, only the chunk actually in flight waits.
-   */
-  it('leaves rows in the settled batches alone while a later one is out', async () => {
-    const settled = Array.from({ length: 60 }, (_, index) => `claim-${String(index).padStart(3, '0')}`);
-    const last = settled.at(-1)!;
-    // Sorts ahead of every existing id, so it joins the first chunk and leaves the rest alone.
-    const arriving = 'claim-000-a';
-    mocks.listDebateClaims.mockImplementation((_spaceId: string, claimIds: string[]) =>
-      claimIds.includes(arriving)
-        ? new Promise(() => {})
-        : Promise.resolve({ claims: claimIds.map(claim_entity_id => ({ claim_entity_id })) })
-    );
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-
-    const { result, rerender } = renderHook(
-      ({ claimIds }: { claimIds: string[] }) => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds }]),
-      {
-        initialProps: { claimIds: settled },
-        wrapper: ({ children }: { children: ReactNode }) => (
-          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-        ),
-      }
-    );
-
-    await waitFor(() => expect(result.current.pendingRowKeys).toEqual([]));
-
-    // A page arrives, carrying a claim whose batch never answers.
-    rerender({ claimIds: [arriving, ...settled] });
-
-    await waitFor(() => expect(result.current.pendingRowKeys).toContain(debateClaimRowKey('space-1', arriving)));
-    // The rows in the batches that never moved are still answered, in the same space.
-    expect(result.current.pendingRowKeys).not.toContain(debateClaimRowKey('space-1', last));
   });
 
   it('keeps existing batches cached when a claim is inserted ahead of them', async () => {
@@ -1354,6 +1281,7 @@ function rematchSession(): DebateRematchSession {
     updated_at: '2026-07-02T00:00:01.000Z',
   };
 }
+
 
 /**
  * The rows behind these keys carry `viewer_response`, `viewer_debate_ready` and the readiness
