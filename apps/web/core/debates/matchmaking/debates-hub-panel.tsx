@@ -37,6 +37,7 @@ import {
   debatesHubClaimsSpaceIdsAtom,
   debatesHubClaimsTopicIdsAtom,
   debatesHubFiltersOwnerAtom,
+  debatesHubMatchesSpaceIdsAtom,
   resetDebatesHubFiltersAtom,
 } from '~/atoms';
 
@@ -381,13 +382,29 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
  * The way out to the full-screen hub at `/matchmaking`.
  */
 function ExpandToWorkspaceLink() {
-  const { close } = useDebatesHub();
+  const { activeTab, close } = useDebatesHub();
 
-  const scope = useAtomValue(debatesHubClaimsFilterAtom);
-  const spaceIds = useAtomValue(debatesHubClaimsSpaceIdsAtom);
+  const claimsScope = useAtomValue(debatesHubClaimsFilterAtom);
+  const claimsSpaceIds = useAtomValue(debatesHubClaimsSpaceIdsAtom);
   const topicIds = useAtomValue(debatesHubClaimsTopicIdsAtom);
+  const matchesSpaceIds = useAtomValue(debatesHubMatchesSpaceIdsAtom);
+
+  // The open tab decides the scope, rather than that tab writing one somewhere for this to read.
+  // Matches is a tab here and a Claims scope over there, so expanding from it should land on that
+  // scope — but writing `matches` into the shared filter would also change what the Claims tab goes
+  // back to, and the panel does not offer that scope, so it would be coerced away and the viewer's
+  // real choice lost. Reading the tab costs nothing and touches no shared state.
+  //
+  // Topics do not travel from Matches: that list carries none, so the Claims tab's would narrow a
+  // scope that cannot answer them.
+  const onMatches = activeTab === 'matches';
+  const scope = onMatches ? 'matches' : claimsScope;
+  const spaceIds = onMatches ? matchesSpaceIds : claimsSpaceIds;
   // Search is not session-scoped — it stays local to the tab — so it is not carried.
-  const search = toClaimsFilterSearch({ scope, search: '', spaceIds, topicIds }, DEFAULT_CLAIMS_SCOPE);
+  const search = toClaimsFilterSearch(
+    { scope, search: '', spaceIds, topicIds: onMatches ? [] : topicIds },
+    DEFAULT_CLAIMS_SCOPE
+  );
 
   return (
     <div className="shrink-0 border-t border-grey-02 px-4 py-2.5">

@@ -48,7 +48,7 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
+import { countBy, keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
@@ -278,6 +278,10 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
   const graphSourced = TAG_FOR_FILTER[filter] !== undefined;
   const matchesSourced = filter === 'matches';
 
+  React.useEffect(() => {
+    if (matchesSourced && search !== '') setSearch('');
+  }, [matchesSourced, search]);
+
   // A graph-sourced filter draws its own list, so the index isn't asked for one. The query keeps
   // saying `all` rather than going undefined: switching to one of those and back then lands on the
   // pages already cached instead of paging the corpus again from the top.
@@ -330,13 +334,21 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
   const indexedCountsPending = !graphSourced && (claimsQuery.countsPending || topicsSettling || spacesSettling);
 
   const matchesQuery = useMatchmakingMatches(matchesSourced && authenticated);
-  const matchEntries = React.useMemo(() => {
+
+  const allowedMatches = React.useMemo(() => {
     if (!matchesSourced) return [];
     return (matchesQuery.data?.matches ?? [])
       .filter(match => spaceShowsClaims(match.claim.space_id))
-      .filter(match => debouncedSpaceIds.length === 0 || debouncedSpaceIds.includes(match.claim.space_id))
       .map(match => ({ ...match, score: 0, active_debate: false }));
-  }, [matchesSourced, matchesQuery.data, spaceShowsClaims, debouncedSpaceIds]);
+  }, [matchesSourced, matchesQuery.data, spaceShowsClaims]);
+
+  const matchEntries = React.useMemo(
+    () =>
+      debouncedSpaceIds.length === 0
+        ? allowedMatches
+        : allowedMatches.filter(match => debouncedSpaceIds.includes(match.claim.space_id)),
+    [allowedMatches, debouncedSpaceIds]
+  );
 
   const serverClaims = React.useMemo(
     () => pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id)),
@@ -516,10 +528,14 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
   // to nothing.
   const offeredSpaces = React.useMemo(
     () =>
-      graphSourced
-        ? spaceFacet.spaces.filter(space => spaceShowsClaims(space.id)).map(space => ({ ...space, name: null }))
-        : (facets?.space_facets ?? []).filter(facet => spaceShowsClaims(facet.id)),
-    [facets?.space_facets, graphSourced, spaceFacet.spaces, spaceShowsClaims]
+      matchesSourced
+        ? countBy(allowedMatches.map(entry => ({ id: entry.claim.space_id, name: null }))).filter(space =>
+            spaceShowsClaims(space.id)
+          )
+        : graphSourced
+          ? spaceFacet.spaces.filter(space => spaceShowsClaims(space.id)).map(space => ({ ...space, name: null }))
+          : (facets?.space_facets ?? []).filter(facet => spaceShowsClaims(facet.id)),
+    [facets?.space_facets, graphSourced, matchesSourced, allowedMatches, spaceFacet.spaces, spaceShowsClaims]
   );
 
   // Settled when the *counts* have answered, which is what a selection is reconciled against — the
@@ -636,7 +652,7 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
   // What "Clear filters" should undo is wider, and does include the position filter — resetting to
   // All claims is exactly what a viewer stuck on an empty My positions wants.
   const hasNarrowingFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
-  const hasFilters = hasNarrowingFilters || (!graphSourced && filter !== 'all');
+  const hasFilters = hasNarrowingFilters || (!graphSourced && !matchesSourced && filter !== 'all');
 
   // Both lists page now, so the sentinel follows whichever one is on screen (GEO-2798). The tagged
   // lists used to arrive whole, which is why this was the index's alone.
@@ -669,7 +685,8 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
           />
         </aside>
       )}
-      <div className={workspace ? '@container/claims flex min-w-0 flex-1 flex-col' : 'contents'}>
+
+      <div className={workspace ? 'flex min-w-0 flex-1 flex-col' : 'contents'}>
         <HubStickyControls workspaceStickyOffset={workspace}>
           {/* Pinned above the filters, the way the Matches tab pins it. A request sent from here used
             to vanish the moment it was sent — the card that sent it looks exactly as it did before,
@@ -738,13 +755,15 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
             // both combine their results, and a fresh closure in a `combine` would be a new identity
             // on every render, which is the one thing those hooks document that they must not be.
             onRetry={() =>
-              void (graphSourced
-                ? Promise.all([
-                    refetchTagged(),
-                    queryClient.invalidateQueries({ queryKey: CLAIM_ENTITIES_QUERY_PREFIX }),
-                    queryClient.invalidateQueries({ queryKey: DEBATE_CLAIMS_QUERY_PREFIX }),
-                  ])
-                : claimsQuery.refetch())
+              void (matchesSourced
+                ? matchesQuery.refetch()
+                : graphSourced
+                  ? Promise.all([
+                      refetchTagged(),
+                      queryClient.invalidateQueries({ queryKey: CLAIM_ENTITIES_QUERY_PREFIX }),
+                      queryClient.invalidateQueries({ queryKey: DEBATE_CLAIMS_QUERY_PREFIX }),
+                    ])
+                  : claimsQuery.refetch())
             }
             isEmpty={visibleClaims.length === 0}
             signInAction={
@@ -790,15 +809,7 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
             {/* One list, in the server's order. Splitting out the claims you'd already answered
             re-ranked the tab by something the Position filter in the dropdown already covers, and
             it moved a card between two sections the moment you took a side. */}
-            <HubCardList
-              className={
-                workspace
-                  ? // Reflows on the centre column's own width, so the rails collapsing gives the
-                    // grid its columns back without a second set of breakpoints.
-                    'grid grid-cols-1 gap-3 @[30rem]/claims:grid-cols-2 @[46rem]/claims:grid-cols-3'
-                  : undefined
-              }
-            >
+            <HubCardList>
               {visibleClaims.map(entry => (
                 <MatchmakingClaimCard
                   key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}

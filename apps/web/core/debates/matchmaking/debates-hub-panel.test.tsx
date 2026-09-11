@@ -522,7 +522,11 @@ describe('the way out to the full-screen hub', () => {
   it('offers it from every tab, not just the one it was added on', () => {
     for (const tab of ['requests', 'matches', 'claims', 'people'] as const) {
       const view = renderOpen(tab);
-      expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute('href', '/matchmaking');
+
+      expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute(
+        'href',
+        tab === 'matches' ? '/matchmaking?scope=matches' : '/matchmaking'
+      );
       cleanup();
       void view;
     }
@@ -578,5 +582,16 @@ describe('the filters the expand link carries', () => {
     expect(params.get('q')).toBeNull();
     expect(params.get('spaces')).toBe('space-a');
     expect(params.get('topics')).toBe('topic-a,topic-b');
+  });
+});
+
+describe('expanding from the Matches tab', () => {
+  it('carries the scope, so the workspace opens on Matches', () => {
+    renderOpen('matches');
+
+    expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute(
+      'href',
+      '/matchmaking?scope=matches'
+    );
   });
 });
