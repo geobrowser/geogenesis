@@ -188,6 +188,38 @@ describe('useDebateClaimsBySpaces', () => {
     expect(new Set(result.current.claims.map(claim => claim.claim_entity_id))).toEqual(new Set(ids));
   });
 
+  /**
+   * The aggregate `isLoading` is true while *any* batch is outstanding, which is the wrong shape
+   * for a caller asking "may this card be answered": on a list spanning every space the viewer can
+   * see, one slow batch spoke for all of them. A batch is scoped to a space, and so is a card.
+   */
+  it('names only the spaces whose own batch has not settled', async () => {
+    mocks.listDebateClaims.mockImplementation((spaceId: string, claimIds: string[]) =>
+      spaceId === 'space-slow'
+        ? new Promise(() => {})
+        : Promise.resolve({ claims: claimIds.map(claim_entity_id => ({ claim_entity_id })) })
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(
+      () =>
+        useDebateClaimsBySpaces([
+          { spaceId: 'space-fast', claimIds: ['claim-a'] },
+          { spaceId: 'space-slow', claimIds: ['claim-b'] },
+        ]),
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      }
+    );
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+    expect(result.current.pendingSpaceIds).toEqual(['space-slow']);
+    // The aggregate is unchanged and still says the lookup as a whole is unsettled.
+    expect(result.current.isLoading).toBe(true);
+  });
+
   it('keeps existing batches cached when a claim is inserted ahead of them', async () => {
     const ids = Array.from({ length: 101 }, (_, index) => `claim-${String(index).padStart(3, '0')}`);
     mocks.listDebateClaims.mockImplementation((_spaceId: string, claimIds: string[]) =>
@@ -1281,7 +1313,6 @@ function rematchSession(): DebateRematchSession {
     updated_at: '2026-07-02T00:00:01.000Z',
   };
 }
-
 
 /**
  * The rows behind these keys carry `viewer_response`, `viewer_debate_ready` and the readiness

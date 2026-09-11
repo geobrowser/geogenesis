@@ -484,8 +484,18 @@ export function ClaimsTab({
   // with no side". The pills would go live over a viewer whose existing side is still unknown, and
   // a press on the side they already hold republishes it instead of clearing it. Signed *out* is a
   // real answer: they have no side, and their press opens the sign-in prompt.
-  const taggedAnswersReady =
-    !graphSourced || (authenticated ? Boolean(accountKey) && !taggedRows.isLoading && !taggedRows.isError : true);
+  //
+  // Asked per space, not of the whole list. The rows lookup fans out one request per space the
+  // loaded page reaches, and the aggregate `isLoading`/`isError` is true while *any* of them is
+  // outstanding — so on All claims, which spans every space the viewer can see, one slow or failed
+  // batch left every pill on the tab dead, including cards whose own space had answered long since.
+  // A batch is scoped to a space and so is a card, which is the level this question belongs at.
+  const pendingRowSpaceIds = React.useMemo(() => new Set(taggedRows.pendingSpaceIds), [taggedRows.pendingSpaceIds]);
+  const answersReadyIn = React.useCallback(
+    (spaceId: string) =>
+      !graphSourced || (authenticated ? Boolean(accountKey) && !pendingRowSpaceIds.has(spaceId) : true),
+    [accountKey, authenticated, graphSourced, pendingRowSpaceIds]
+  );
 
   // The space menu, from the server's own count over the tag — narrowed by the search and the
   // topics, never by the space selection, which is what lets a picked space be un-picked and what
@@ -692,9 +702,10 @@ export function ClaimsTab({
           //
           // Their consequences are handled where they land instead, and both are pinned by tests:
           // `facetsSettled` refuses to reconcile against a menu those lookups never filled, so the
-          // viewer's topic selection is not spent, and `taggedKindResolvedFor` keeps a card
-          // unpressable until its vocabulary and the viewer's own side have actually arrived. A
-          // short list beats a blank one; a wrong publish beats neither, and is what those guard.
+          // viewer's topic selection is not spent, and `answersReadyIn` keeps a card unpressable
+          // until its own space's rows have arrived — that space's alone, so a failing batch costs
+          // the cards in it rather than the tab. A short list beats a blank one; a wrong publish
+          // beats neither, and is what those guard.
           error={graphSourced ? taggedError : claimsQuery.error}
           // Retries whatever failed, not just the catalog. The error above can come from either of
           // the two lookups behind the list, and neither is keyed on the catalog — so refetching
@@ -765,7 +776,7 @@ export function ClaimsTab({
                 activeDebate={entry.active_debate}
                 // The paged list is geo-chat's own, so every row carries its kind already; only the
                 // tagged list has to wait for one.
-                answersReady={taggedAnswersReady}
+                answersReady={answersReadyIn(entry.claim.space_id)}
                 onRequireSignIn={onRequireSignIn}
               />
             ))}

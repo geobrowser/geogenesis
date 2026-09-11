@@ -43,6 +43,8 @@ const mocks = vi.hoisted(() => ({
   claimEntityLookups: [] as string[][],
   /** A failed per-space geo-chat lookup — reported as a flag, as the real hook does. */
   taggedRowsError: false,
+  /** Overrides the all-or-nothing flags below: the spaces whose own batch has not settled. */
+  taggedRowsPendingSpaceIds: null as string[] | null,
   /** The per-space lookup still in flight, which is where the viewer's own side comes from. */
   taggedRowsLoading: false,
   /** What the tab asked the server to narrow by, in order. */
@@ -282,11 +284,19 @@ vi.mock('../hooks', () => ({
           group.claimIds.some(id => norm(id) === norm(row.claim_entity_id))
       )
     );
+    // The real hook answers per batch, and a batch is scoped to a space. The flags here are the
+    // whole lookup's, so by default every space it was asked about is unsettled together;
+    // `taggedRowsPendingSpaceIds` is how a case says only some of them are.
+    const pendingSpaceIds =
+      mocks.taggedRowsPendingSpaceIds ??
+      (mocks.taggedRowsLoading || mocks.taggedRowsError ? [...new Set(groups.map(group => group.spaceId))].sort() : []);
+
     // Answerless while loading, as react-query is on a cold key.
     return {
       claims: mocks.taggedRowsLoading ? [] : claims,
-      isLoading: mocks.taggedRowsLoading,
+      isLoading: mocks.taggedRowsLoading || pendingSpaceIds.length > 0,
       isError: mocks.taggedRowsError,
+      pendingSpaceIds,
     };
   },
 }));
@@ -456,11 +466,19 @@ vi.mock('../hooks', () => ({
           group.claimIds.some(id => norm(id) === norm(row.claim_entity_id))
       )
     );
+    // The real hook answers per batch, and a batch is scoped to a space. The flags here are the
+    // whole lookup's, so by default every space it was asked about is unsettled together;
+    // `taggedRowsPendingSpaceIds` is how a case says only some of them are.
+    const pendingSpaceIds =
+      mocks.taggedRowsPendingSpaceIds ??
+      (mocks.taggedRowsLoading || mocks.taggedRowsError ? [...new Set(groups.map(group => group.spaceId))].sort() : []);
+
     // Answerless while loading, as react-query is on a cold key.
     return {
       claims: mocks.taggedRowsLoading ? [] : claims,
-      isLoading: mocks.taggedRowsLoading,
+      isLoading: mocks.taggedRowsLoading || pendingSpaceIds.length > 0,
       isError: mocks.taggedRowsError,
+      pendingSpaceIds,
     };
   },
 }));
@@ -645,6 +663,7 @@ beforeEach(() => {
   mocks.accountKey = 'account-1' as string | null;
   mocks.taggedRowsError = false;
   mocks.taggedRowsLoading = false;
+  mocks.taggedRowsPendingSpaceIds = null;
   mocks.claimEntitiesError = null;
   mocks.taggedCatalogError = null;
   mocks.taggedFiltersAskedFor = [];
@@ -1217,6 +1236,56 @@ describe('All claims reads the Debate tag', () => {
 
     const agree = await screen.findByRole('button', { name: /^Agree/ });
     expect(agree).toBeDisabled();
+  });
+
+  /**
+   * Reported: every Agree/Disagree on Explore drawn dim and unpressable.
+   *
+   * The hold above used to be asked of the whole list — `taggedRows.isLoading || isError`, which is
+   * true while *any* of its per-space batches is outstanding. All claims spans every space the
+   * viewer can see, so one slow or failed batch killed the pills on every card on the tab, and a
+   * failed one killed them until a refetch. A batch is scoped to a space and so is a card, which is
+   * the level the question belongs at.
+   */
+  it('holds only the cards in a space whose rows are still in flight', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Tagged in the settled space', SPACE_ID),
+      featuredClaim(FEATURED_B, 'Tagged in the waiting space', OTHER_SPACE_ID),
+    ];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Tagged in the settled space',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [],
+      },
+      {
+        id: FEATURED_B,
+        name: 'Tagged in the waiting space',
+        description: null,
+        spaces: [OTHER_SPACE_ID],
+        values: [],
+        relations: [],
+      },
+    ];
+    mocks.taggedRowsPendingSpaceIds = [OTHER_SPACE_ID];
+
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    await screen.findByText('Tagged in the settled space');
+    const agrees = screen.getAllByRole('button', { name: /^Agree/ });
+    const live = agrees.filter(button => !button.hasAttribute('disabled'));
+    const held = agrees.filter(button => button.hasAttribute('disabled'));
+
+    expect(live).toHaveLength(1);
+    expect(held).toHaveLength(1);
+    // And each on the card it belongs to, rather than one of each in some order.
+    expect(live[0]!.closest('article')).toHaveTextContent('Tagged in the settled space');
+    expect(held[0]!.closest('article')).toHaveTextContent('Tagged in the waiting space');
+    expect(held[0]).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
   });
 
   // `fetchDebateClaims` sends `auth: 'optional'` with no account, so a request made before Privy

@@ -242,28 +242,54 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
   const spaceIds = React.useMemo(() => groups.map(group => group.spaceId), [groups]);
   useDebateGatewaySpaceScopes(spaceIds, authenticated && spaceIds.length > 0);
 
-  // Stable by contract: react-query re-runs `combine` whenever its identity changes and diffs the
-  // result with `replaceEqualDeep`, so a fresh closure each render would defeat callers' memos.
-  //
-  // Status rides along with the claims deliberately. Flattening to a bare list makes a pending or
-  // failed lookup indistinguishable from "no readiness on this claim", and callers rendering a
-  // readiness switch would then draw it off — misreporting a claim the viewer is standing ready on
-  // for as long as the failure lasts.
-  const combine = React.useCallback(
-    (results: UseQueryResult<DebateClaimsResponse>[]) => ({
-      claims: results.flatMap(result => result.data?.claims ?? []),
-      isLoading: results.some(result => result.isLoading),
-      isError: results.some(result => result.isError),
-    }),
-    []
-  );
-
   const batches = React.useMemo(
     () =>
       groups.flatMap(group =>
         stableClaimIdChunks(group.claimIds).map(claimIds => ({ spaceId: group.spaceId, claimIds }))
       ),
     [groups]
+  );
+
+  // Stable between id changes: react-query re-runs `combine` whenever its identity changes and diffs
+  // the result with `replaceEqualDeep`, so a fresh closure each render would defeat callers' memos.
+  // It depends on `batches` because `pendingSpaceIds` has to map a result back to the batch that
+  // asked for it, and that mapping is positional — which changes exactly when the ids do, and a
+  // render that changes the ids has invalidated everything downstream anyway.
+  //
+  // Status rides along with the claims deliberately. Flattening to a bare list makes a pending or
+  // failed lookup indistinguishable from "no readiness on this claim", and callers rendering a
+  // readiness switch would then draw it off — misreporting a claim the viewer is standing ready on
+  // for as long as the failure lasts.
+  const combine = React.useCallback(
+    (results: UseQueryResult<DebateClaimsResponse>[]) => {
+      const unsettled = new Set<string>();
+      results.forEach((result, index) => {
+        if (!result.isLoading && !result.isError) return;
+        const batch = batches[index];
+        if (batch) unsettled.add(batch.spaceId);
+      });
+
+      return {
+        claims: results.flatMap(result => result.data?.claims ?? []),
+        isLoading: results.some(result => result.isLoading),
+        isError: results.some(result => result.isError),
+        /**
+         * The spaces this lookup cannot yet speak for: one of their batches is in flight, or failed.
+         *
+         * Split out from `isLoading` because the aggregate is the wrong shape for a caller asking
+         * "may this card be answered". A claim absent from a *settled* batch genuinely has no row —
+         * nobody has taken a side on it — while a claim absent from one still in flight is simply
+         * unknown, and the two are the same absence in the flattened list. Read per space rather
+         * than per claim because that is what a batch is scoped to, and it is what a card knows
+         * about itself.
+         *
+         * A sorted array rather than a `Set` so `replaceEqualDeep` can see that nothing changed;
+         * a fresh `Set` every render is a fresh identity every render.
+         */
+        pendingSpaceIds: [...unsettled].sort(),
+      };
+    },
+    [batches]
   );
 
   return useQueries({

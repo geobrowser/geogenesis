@@ -1129,18 +1129,18 @@ describe('DebateRematchPageClient', () => {
       mocks.recommendedEntities = [sharedEntity()];
     }
 
-    // The whole tagged corpus is the wider net; the curated cut is one pick below it, which is the
-    // order the hub's Explore menu opens in too.
-    it('opens on All claims when no curator has a page for this pairing', async () => {
+    // Featured, even though All claims leads the menu. The order is the hub's so the same list
+    // means the same thing on both surfaces; what the picker *opens* on is the narrow, curated cut
+    // — the same job Recommended does where one exists, and the list that can answer quickly.
+    it('opens on Featured when no curator has a page for this pairing', async () => {
       mocks.featuredClaims = [featuredTag()];
-      mocks.entities = [sharedEntity(), publishedEntity(), featuredEntity()];
+      mocks.entities = [sharedEntity(), featuredEntity()];
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       await showExplore();
 
       expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getByRole('button', { name: 'All claims' })).toBeInTheDocument();
-      expect(screen.getByText('A newly published claim')).toBeInTheDocument();
-      expect(screen.queryByText('A featured claim')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Featured' })).toBeInTheDocument();
+      expect(screen.getByText('A featured claim')).toBeInTheDocument();
     });
 
     // A curator's page for this exact pairing beats a tag anyone's space can carry.
@@ -1167,7 +1167,7 @@ describe('DebateRematchPageClient', () => {
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       await showExplore();
 
-      const sourceMenu = screen.getByRole('button', { name: 'All claims' });
+      const sourceMenu = screen.getByRole('button', { name: 'Featured' });
       const spaceMenu = screen.getByRole('button', { name: /Any space/ });
       const topicMenu = screen.getByRole('button', { name: /Any topic/ });
       const row = sourceMenu.parentElement;
@@ -1216,8 +1216,7 @@ describe('DebateRematchPageClient', () => {
       openSourceMenu();
 
       expect(screen.queryByRole('button', { name: 'Recommended' })).toBeNull();
-      // Twice: the trigger reads All claims, and so does the option it opened onto.
-      expect(screen.getAllByRole('button', { name: 'All claims' })).toHaveLength(2);
+      expect(screen.getByRole('button', { name: 'All claims' })).toBeInTheDocument();
     });
 
     // Unlike Recommended, Featured is a tag any space can carry, so it fans out across the corpus
@@ -1227,7 +1226,7 @@ describe('DebateRematchPageClient', () => {
       mocks.featuredClaims = [featuredTag()];
       mocks.entities = [sharedEntity(), featuredEntity()];
       render(<DebateRematchPageClient sessionId="rematch-1" />);
-      await showFeatured();
+      await showExplore();
 
       await settleTabSwap();
 
@@ -1254,7 +1253,7 @@ describe('DebateRematchPageClient', () => {
         },
       ];
       render(<DebateRematchPageClient sessionId="rematch-1" />);
-      await showFeatured();
+      await showExplore();
 
       await settleTabSwap();
 
@@ -1330,7 +1329,7 @@ describe('DebateRematchPageClient', () => {
       mocks.featuredClaims = [];
       mocks.entities = [sharedEntity()];
       render(<DebateRematchPageClient sessionId="rematch-1" />);
-      await showFeatured();
+      await showExplore();
 
       await settleTabSwap();
 
@@ -2968,13 +2967,13 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     await showExplore();
-    await waitFor(() => expect(screen.getByText('A newly published claim')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Only featured')).toBeInTheDocument());
 
-    // Featured's tag has never been fetched, so switching to it starts a load.
+    // The Debate tag has never been fetched, so switching to All starts a load.
     mocks.featuredCatalogLoading = true;
-    await chooseSource('Featured');
+    await showAllClaims();
 
-    await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('Only featured')).toBeNull());
   });
 
   // Every other entity lookup on this page is gated by the source that shows its rows. Ungated, this
@@ -3522,12 +3521,6 @@ async function chooseSource(next: string) {
   openSourceMenu();
   fireEvent.click(screen.getAllByRole('button', { name: next }).at(-1)!);
   await settleTabSwap();
-}
-
-/** Explore opens on All claims since the two menus were aligned, so Featured is a pick away. */
-async function showFeatured() {
-  fireEvent.click(screen.getByRole('button', { name: 'Explore' }));
-  await chooseSource('Featured');
 }
 
 /** The picker opens on the opponent's positions (GEO-2861); most assertions want the browse index. */

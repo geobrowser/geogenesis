@@ -278,9 +278,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // default turns on exactly that. The list waits rather than showing Featured and swapping it for
   // Recommended a moment later.
   const sourceUndecided = chosenSource === null && recommendedLoading;
-  // All claims where there is no curated page, matching the hub's Explore: the menu should open on
-  // the option at the top of it, and the whole tagged corpus is the wider net.
-  const source: ClaimsSource = chosenSource ?? (hasRecommended ? 'recommended' : 'all');
+  /**
+   * Featured where there is no curated page — not All claims, which leads the menu.
+   *
+   * The menu's order is the hub's, deliberately, so the same list means the same thing on both
+   * surfaces. What the picker opens on is a different question, and the answer is the same one
+   * Recommended gives when it exists: the narrow, curated cut. Featured is a few hundred claims;
+   * All claims is the whole Debate tag, and it pays for that twice over here — a paged catalog
+   * plus two server facets over the whole tag, and geo-chat's rows for every claim on the page.
+   * Landing on it made opening Explore a wait, on the one surface where the viewer arrived with
+   * someone already on the other end of the line.
+   */
+  const source: ClaimsSource = chosenSource ?? (hasRecommended ? 'recommended' : 'featured');
 
   /**
    * "My positions": the viewer's own side of the lookup the opponent's tab reads.
