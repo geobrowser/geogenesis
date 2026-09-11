@@ -75,7 +75,8 @@ function RankingRankedByAvatarGroup({
         <li
           key="extra-count"
           className={cx(
-            'relative box-content flex shrink-0 list-none items-center justify-center rounded-full border-2 border-white bg-grey-02 text-grey-04 tabular-nums',
+            // Same ring as the faces beside it, so the overflow badge follows the surface too.
+            'relative box-content flex shrink-0 list-none items-center justify-center rounded-full border-2 border-[color:var(--avatar-group-ring,var(--color-white))] bg-grey-02 text-grey-04 tabular-nums',
             isCompact ? 'h-3 px-1 text-[9px]' : 'h-5 px-1.5 text-[11px]'
           )}
         >

@@ -108,7 +108,13 @@ export function ClaimSummary({
 
   if (layout === 'inline') {
     return (
-      <div className={cx('flex items-center gap-3', className)}>
+      // The responder faces sit on this band, not on white, so the rings they draw have to be the
+      // band's colour. Set here rather than passed down: the stack is five components away, through
+      // ranking code that has no opinion about what it is standing on.
+      <div
+        className={cx('flex items-center gap-3', className)}
+        style={{ '--avatar-group-ring': 'var(--color-grey-01)' } as React.CSSProperties}
+      >
         {share}
         {/* The bar takes the middle and gives way first: `min-w-0` so a narrow card shortens the
             rail rather than wrapping the reading off the end of it. Thinner than the stacked one —

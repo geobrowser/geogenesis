@@ -1100,12 +1100,16 @@ function PositionAvatars({
   // count is computed against the participants rendered, so hiding a face would leave a "+N" that
   // no longer adds up, while hiding the badge only stops advertising a remainder.
   return (
-    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-1">
+    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-[3px]">
       {participants.map((participant, index) => (
         <span
           key={participant.user_id}
           className={cx(
             'relative block size-4 rounded-full',
+            // Figma rings every face but the first, in the pill's own colour — the ring is what
+            // separates one picture from the one it overlaps, so the leading face, overlapping
+            // nothing, does not need it. White here would be a halo on a grey pill.
+            index > 0 && `border-2 ${ringClassName}`,
             index === 0 ? '@max-[98px]:hidden' : '@max-[110px]:hidden'
           )}
         >
@@ -1129,7 +1133,12 @@ function PositionAvatars({
         </span>
       ))}
       {overflow > 0 && (
-        <span className="relative flex h-4 min-w-4 items-center justify-center rounded-full bg-grey-02 px-1 text-[9px] leading-4 text-grey-04 tabular-nums @max-[126px]:hidden">
+        <span
+          className={cx(
+            'relative flex h-4 min-w-4 items-center justify-center rounded-full border-2 bg-grey-02 px-1 text-[9px] leading-4 text-grey-04 tabular-nums @max-[126px]:hidden',
+            ringClassName
+          )}
+        >
           +{Math.min(overflow, MAX_OVERFLOW_SHOWN)}
         </span>
       )}
