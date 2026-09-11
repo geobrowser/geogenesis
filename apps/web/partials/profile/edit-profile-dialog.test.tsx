@@ -25,13 +25,30 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+// The sections have their own hook and their own publishes; these tests are about
+// the four header fields, so it is stubbed to empty rather than exercised here.
+vi.mock('~/core/hooks/use-profile-history', () => ({
+  useProfileHistory: () => ({
+    employment: [],
+    education: [],
+    isLoading: false,
+    status: 'idle',
+    errorMessage: null,
+    addPosition: vi.fn(),
+    addEducation: vi.fn(),
+    removeEntry: vi.fn(),
+    removeCard: vi.fn(),
+    dismissError: vi.fn(),
+  }),
+}));
+
 vi.mock('~/core/hooks/use-edit-profile', () => ({
   useEditProfile: () => ({
     canEdit: mocks.canEdit,
     isHydrated: mocks.isHydrated,
     isLoading: mocks.isLoading,
     entityId: mocks.entityId,
-    spaceId: 'space',
+    spaceId: 'space-1',
     current: mocks.current,
     status: mocks.status,
     errorMessage: mocks.errorMessage,

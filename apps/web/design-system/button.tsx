@@ -107,6 +107,11 @@ export const SquareButton = forwardRef(function SquareButton(
       ref={ref}
       className={squareButtonClassNames({ className, isActive, disabled })}
       style={{ fontFeatureSettings: '"tnum" 1', ...style }}
+      // `disabled` was destructured for the styling and never reached the
+      // element, so the button looked disabled and stayed clickable. Both
+      // existing callers passing it — a remove button with no image, a menu
+      // trigger mid-request — meant it to block the click.
+      disabled={disabled}
       {...rest}
     >
       {icon ? icon : <>{children}</>}

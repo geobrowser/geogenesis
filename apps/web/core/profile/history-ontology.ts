@@ -51,6 +51,17 @@ export const ACADEMIC_FIELDS_PROPERTY = '11692db4ddf54a69bfa044fb6b12f401';
 export const ACADEMIC_FIELD_TYPE = SystemIds.ACADEMIC_FIELD_TYPE;
 
 /**
+ * Types to scope the find-or-create pickers, and to stamp on anything created
+ * through them so the next person finds it instead of making a second one.
+ *
+ * Only the two that could be verified. School and Degree have several entities
+ * apiece under those names with no obvious canonical one, so those two pickers
+ * search unscoped rather than guess an id — a wrong type here is worse than none.
+ */
+export const COMPANY_TYPE = SystemIds.COMPANY_TYPE;
+export const JOB_TYPE = ContentIds.JOB_TYPE;
+
+/**
  * Dates. The SDK names these `RANK_*` after the first thing that used them, but
  * they are the graph's general-purpose Start date / End date properties — the
  * repo already aliases them a second time in `ranking-block-ids.ts`.
