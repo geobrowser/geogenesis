@@ -189,24 +189,31 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [topicIds, setTopicIds] = React.useState<string[]>([]);
-  // Left unset until the viewer picks one: Recommended is the best landing tab when a curator has
-  // put something together for this pairing, and it doesn't exist otherwise. Deciding in state
-  // would fix the default before that lookup settles.
-  const [chosenTab, setChosenTab] = React.useState<PickerTab | null>(null);
+  /**
+   * The tab the viewer picked, and the session they picked it on.
+   *
+   * Left unset until they pick, so the landing tab below stays a derivation rather than a value
+   * fixed before the lookups it depends on have settled.
+   *
+   * Kept with its session for the same reason the warm-up below is: the route reuses this component
+   * when it moves between rematches, and this is the one piece of state that is *about the pair*.
+   * A viewer who opened Explore with one opponent arrived at the next one still on Explore — past
+   * the tab that exists to say what that person has already taken a side on, which is the whole
+   * reason the picker opens there.
+   */
+  const [chosenTab, setChosenTab] = React.useState<{ sessionId: string; tab: PickerTab } | null>(null);
   const [matchesOnly, setMatchesOnly] = useAtom(rematchMatchesOnlyAtom);
   // Left unset until the viewer picks one: Recommended is the best default when a curator has put
   // something together for this pairing, and it doesn't exist otherwise. Deciding in state would
   // fix the default before that lookup settles.
   const [chosenSource, setChosenSource] = React.useState<ClaimsSource | null>(null);
 
-  // Claims is where the picker opens, whatever its source turns out to be. The strip no longer
-  // shifts under the viewer as lookups land: which claims Claims shows is the menu's business now,
-  // and the menu says so in words rather than by growing a tab.
   // The opponent's positions is where this opens (GEO-2861). A returning pair are here *because*
   // they just debated each other, so a general catalogue is not the first thing they came for —
-  // the claims their opponent has already taken a side on are.
-  const tab: PickerTab = chosenTab ?? 'opponent';
-  const setTab = setChosenTab;
+  // the claims their opponent has already taken a side on are. And it opens there for *each* pair:
+  // a choice made about the last opponent is not a choice about this one.
+  const tab: PickerTab = chosenTab?.sessionId === sessionId ? chosenTab.tab : 'opponent';
+  const setTab = React.useCallback((next: PickerTab) => setChosenTab({ sessionId, tab: next }), [sessionId]);
 
   const savedClaimsQuery = useDebateRematchClaims(sessionId);
   const createRequest = useCreateDebateRematchRequest(sessionId);

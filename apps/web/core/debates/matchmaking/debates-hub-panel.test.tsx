@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
-import { Provider, createStore, useSetAtom } from 'jotai';
+import { type PrimitiveAtom, Provider, createStore, useSetAtom } from 'jotai';
 import { usePathname } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,11 +14,16 @@ import {
   type DebatesHubTab,
   debatesHubAtom,
   debatesHubExploreFilterAtom,
+  debatesHubExploreSearchAtom,
   debatesHubExploreSpaceIdsAtom,
   debatesHubExploreSpaceSeedSpentAtom,
   debatesHubExploreTopicIdsAtom,
+  debatesHubLobbySearchAtom,
   debatesHubLobbySpaceIdsAtom,
+  debatesHubLobbySpaceSeedSpentAtom,
+  debatesHubLobbyTopicIdsAtom,
 } from '~/atoms';
+import * as atomsModule from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -135,6 +140,29 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+/**
+ * Every atom the filter bar holds, paired with a value that is not its default.
+ *
+ * Must match `resetDebatesHubFiltersAtom` exactly — the test below this one holds it to that
+ * against the module's exports, because the hand-kept version fell behind once already.
+ */
+const FILTER_ATOMS = [
+  { name: 'debatesHubExploreFilterAtom', atom: debatesHubExploreFilterAtom, dirty: 'featured', cleared: 'all' },
+  { name: 'debatesHubExploreSpaceIdsAtom', atom: debatesHubExploreSpaceIdsAtom, dirty: ['space-a'], cleared: [] },
+  { name: 'debatesHubExploreTopicIdsAtom', atom: debatesHubExploreTopicIdsAtom, dirty: ['topic-a'], cleared: [] },
+  { name: 'debatesHubExploreSearchAtom', atom: debatesHubExploreSearchAtom, dirty: 'nuclear', cleared: '' },
+  {
+    name: 'debatesHubExploreSpaceSeedSpentAtom',
+    atom: debatesHubExploreSpaceSeedSpentAtom,
+    dirty: true,
+    cleared: false,
+  },
+  { name: 'debatesHubLobbySpaceIdsAtom', atom: debatesHubLobbySpaceIdsAtom, dirty: ['space-a'], cleared: [] },
+  { name: 'debatesHubLobbyTopicIdsAtom', atom: debatesHubLobbyTopicIdsAtom, dirty: ['topic-a'], cleared: [] },
+  { name: 'debatesHubLobbySearchAtom', atom: debatesHubLobbySearchAtom, dirty: 'nuclear', cleared: '' },
+  { name: 'debatesHubLobbySpaceSeedSpentAtom', atom: debatesHubLobbySpaceSeedSpentAtom, dirty: true, cleared: false },
+] as const;
+
 describe('DebatesHubPanel', () => {
   // GEO-2850. The filter bar is session state now, and a session outlives a sign-in. A spent seed
   // carried across one would keep GEO-2834's brand-new-account default from ever landing, and a
@@ -157,20 +185,33 @@ describe('DebatesHubPanel', () => {
 
   it('clears the filter bar when the account behind it changes', () => {
     const store = renderOpen('explore');
-    store.set(debatesHubExploreSpaceIdsAtom, ['space-a']);
-    store.set(debatesHubExploreTopicIdsAtom, ['topic-a']);
-    store.set(debatesHubExploreSpaceSeedSpentAtom, true);
-    store.set(debatesHubExploreFilterAtom, 'featured');
-    store.set(debatesHubLobbySpaceIdsAtom, ['space-a']);
+    for (const { atom, dirty } of FILTER_ATOMS) store.set(atom as PrimitiveAtom<unknown>, dirty);
 
     mocks.accountKey = 'user-b';
     store.rerender();
 
-    expect(store.get(debatesHubExploreSpaceIdsAtom)).toEqual([]);
-    expect(store.get(debatesHubExploreTopicIdsAtom)).toEqual([]);
-    expect(store.get(debatesHubExploreSpaceSeedSpentAtom)).toBe(false);
-    expect(store.get(debatesHubExploreFilterAtom)).toBe('all');
-    expect(store.get(debatesHubLobbySpaceIdsAtom)).toEqual([]);
+    for (const { name, atom, cleared } of FILTER_ATOMS) {
+      expect({ [name]: store.get(atom as PrimitiveAtom<unknown>) }).toEqual({ [name]: cleared });
+    }
+  });
+
+  /**
+   * The guard on the list above, which is the only thing standing between a new filter atom and one
+   * account's search or selection reaching another's.
+   *
+   * The list was hand-kept and fell behind exactly once: the search atoms were added to
+   * `resetDebatesHubFiltersAtom` and not here, so dropping either reset would have stayed green.
+   * Matching it against the module's own exports is what makes "every atom, not a sample" true by
+   * construction rather than by remembering.
+   *
+   * `debatesHubMatchesOnlyAtom` is deliberately outside the pattern and outside the reset: it is a
+   * stored preference about how you like to arrive at a debate, not working state, and handing a
+   * new account the previous one's *preference* is what every other stored setting here does.
+   */
+  it('covers every Explore and Lobby filter atom', () => {
+    const exported = Object.keys(atomsModule).filter(name => /^debatesHub(Explore|Lobby).*Atom$/.test(name));
+
+    expect(new Set(exported)).toEqual(new Set(FILTER_ATOMS.map(entry => entry.name)));
   });
 
   // Signing in is the same person authenticating. The Claims tab prompts for sign-in from inside

@@ -1337,6 +1337,25 @@ describe('DebateRematchPageClient', () => {
     });
 
     /**
+     * The same reuse, and the piece of state that is actually *about the pair*.
+     *
+     * The picker opens on the opponent's positions because a returning pair came for what that
+     * person has already taken a side on — which is a statement about one opponent. A viewer who
+     * opened Explore with the last one arrived at the next one still on Explore, past the tab the
+     * whole default exists to put in front of them.
+     */
+    it('opens each rematch on its own opponent’s positions', async () => {
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showExplore();
+      expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-selected', 'true');
+
+      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+      await settleTabSwap();
+
+      expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    /**
      * And once per *session*, not once per mount.
      *
      * The route reuses this component when it moves between rematches — `useLastSettled` takes
