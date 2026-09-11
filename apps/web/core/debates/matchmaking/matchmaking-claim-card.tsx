@@ -986,23 +986,24 @@ function PositionButton({
   // band. Figma names this colour "Secondary/Line dividers", which is the same name this token
   // already has — the two systems agree, and the pill borrows it rather than inventing a shade.
   const className = cx(
-    '@container flex min-h-7 items-center justify-between gap-2 rounded-full border px-3 text-button text-text',
+    '@container flex min-h-7 items-center justify-center rounded-full border px-3 text-button text-text',
     selected ? 'border-transparent bg-divider' : 'border-dashed border-grey-03 bg-white'
   );
+  // Icon, label and faces are one centred group at a single 6px gap, per the Figma card. They used
+  // to be two groups pushed to opposite ends by `justify-between`, which left the faces adrift at
+  // the far edge of a wide pill instead of reading as part of the label they belong to.
   const content = (
-    <>
-      <span className="flex min-w-0 items-center gap-1.5">
-        {/* Filled once it's the side you hold, so the pill reads as taken even in a screenshot. */}
-        <span className="shrink-0">{position ? <ThumbUp filled={selected} /> : <ThumbDown filled={selected} />}</span>
-        <span className="truncate">
-          {label}
-          {selected ? <span className="sr-only"> — your response</span> : null}
-        </span>
+    <span className="flex min-w-0 items-center gap-1.5">
+      {/* Filled once it's the side you hold, so the pill reads as taken even in a screenshot. */}
+      <span className="shrink-0">{position ? <ThumbUp filled={selected} /> : <ThumbDown filled={selected} />}</span>
+      <span className="truncate">
+        {label}
+        {selected ? <span className="sr-only"> — your response</span> : null}
       </span>
       {summary && presentCount(summary) > 0 ? (
         <PositionAvatars summary={summary} ringClassName={selected ? 'border-divider' : 'border-white'} />
       ) : null}
-    </>
+    </span>
   );
 
   if (!onRespond) return <div className={className}>{content}</div>;
@@ -1083,7 +1084,9 @@ function PositionAvatars({
   // These thresholds are against the pill's *content* box, which is what a container query measures
   // — 24px of `px-3` is already excluded, so they read 24px smaller than the pill widths they
   // correspond to. Inside that box sit the label group (a 12px icon, a 6px gap and 58px of
-  // "Disagree" = 76px) and the 8px gap before the stack. A face is 24px, a second adds 16px after
+  // "Disagree" = 76px) and the 6px gap before the stack — 8px until the pill's groups were merged
+  // into one run (the thresholds below are therefore 2px generous, which sheds a face marginally
+  // earlier than it must rather than a moment too late). A face is 24px, a second adds 16px after
   // the 8px overlap, and the badge adds another 24px: 108px holds one face, 124px holds two, 148px
   // holds the lot. 108px is `claim-pills-wide` seen from inside a pill, which is where that
   // threshold came from. The badge is 24px only because `MAX_OVERFLOW_SHOWN` keeps its text inside
