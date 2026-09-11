@@ -81,29 +81,36 @@ export default async function SpacePage(props0: Props) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
-  const [props, { isRootSpace, communityCalls }] = await Promise.all([
+  const [props, { isRootSpace, communityCalls, subspaces }] = await Promise.all([
     getSpaceFrontPage(space),
     resolveSpaceSidebar(spaceId),
   ]);
 
+  // Overview only, which is what `!tabId` means here — a tab gets no rail, and so no subspaces
+  // (GEO-2875). The gallery this replaces enforced the same rule client-side by returning null
+  // when `tabId` was set, after the page had already paid for it.
   let sidebar: React.ReactNode = null;
   if (!tabId) {
     if (isRootSpace) {
       sidebar = (
         <React.Suspense fallback={null}>
-          <RootExploreSidePanelContainer />
+          <RootExploreSidePanelContainer spaceId={spaceId} subspaces={subspaces} />
         </React.Suspense>
       );
     } else {
-      sidebar = <SpaceOverviewSidePanel spaceId={spaceId} dailyActivities communityCalls={communityCalls} />;
+      sidebar = (
+        <SpaceOverviewSidePanel
+          spaceId={spaceId}
+          dailyActivities
+          communityCalls={communityCalls}
+          subspaces={subspaces}
+        />
+      );
     }
   }
 
   return (
     <EntityPageSidebarLayout sidebar={sidebar}>
-      <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-        <SubtopicGalleryServerContainer spaceId={params.id} />
-      </React.Suspense>
       <React.Suspense fallback={null}>
         <Editor spaceId={spaceId} shouldHandleOwnSpacing />
       </React.Suspense>
