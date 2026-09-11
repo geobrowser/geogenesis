@@ -15,10 +15,13 @@ import { GEOGENESIS } from '~/core/wallet/geo-chain';
 import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EditGovernanceSettings } from '~/partials/governance/edit-governance-settings';
+import { GovernanceProposalFilters } from '~/partials/governance/governance-proposal-filters';
 import {
-  type GovernanceProposalType,
-  GovernanceProposalTypeFilter,
-} from '~/partials/governance/governance-proposal-type-filter';
+  type GovernanceProposalCategory,
+  type GovernanceProposalStatusFilter,
+  parseGovernanceCategory,
+  parseGovernanceStatus,
+} from '~/partials/governance/governance-proposal-query';
 import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
 import { GovernanceProposalsListInfiniteScroll } from '~/partials/governance/governance-proposals-list-infinite-scroll';
 import type { VotingSettingsSnapshot } from '~/partials/governance/voting-settings';
@@ -27,7 +30,13 @@ import { cachedFetchSpace } from '../../cached-fetch-space';
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ proposalId?: string; proposalType?: GovernanceProposalType }>;
+  searchParams: Promise<{
+    proposalId?: string;
+    proposalCategory?: string;
+    proposalStatus?: string;
+    /** Legacy space filter: all | proposals | requests */
+    proposalType?: string;
+  }>;
 }
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
@@ -139,7 +148,11 @@ export default async function GovernancePage(props: Props) {
 
   const canEditGovernance = space?.type === 'DAO' && Boolean(space.address) && votingSettingsSnapshot !== null;
 
-  const proposalType = searchParams.proposalType;
+  const proposalCategory = parseGovernanceCategory(
+    searchParams.proposalCategory,
+    searchParams.proposalType as 'all' | 'proposals' | 'requests' | undefined
+  );
+  const proposalStatus = parseGovernanceStatus(searchParams.proposalStatus);
 
   return (
     <>
@@ -168,15 +181,15 @@ export default async function GovernancePage(props: Props) {
             </GovernanceMetadataBox>
           </div>
           <div className="flex items-center justify-between">
-            <GovernanceProposalTypeFilter spaceId={params.id} />
+            <GovernanceProposalFilters spaceId={params.id} category={proposalCategory} status={proposalStatus} />
             {/* space.address gates on the space being a deployed DAO — the proposal no longer
-                carries the address, but a space without one can't be governed. */}
+              carries the address, but a space without one can't be governed. */}
             {canEditGovernance && space?.address && votingSettingsSnapshot && (
               <EditGovernanceSettings spaceId={params.id} snapshot={votingSettingsSnapshot} />
             )}
           </div>
           <React.Suspense fallback="Loading initial...">
-            <InitialGovernanceProposals spaceId={params.id} proposalType={proposalType} />
+            <InitialGovernanceProposals spaceId={params.id} category={proposalCategory} status={proposalStatus} />
           </React.Suspense>
         </div>
       </EntityPageContentContainer>
@@ -194,22 +207,26 @@ function GovernanceMetadataBox({ children }: { children: React.ReactNode }) {
 
 async function InitialGovernanceProposals({
   spaceId,
-  proposalType,
+  category,
+  status,
 }: {
   spaceId: string;
-  proposalType?: GovernanceProposalType;
+  category: GovernanceProposalCategory;
+  status: GovernanceProposalStatusFilter;
 }) {
-  const { node, hasMore } = await GovernanceProposalsList({ spaceId, page: 0, proposalType });
+  const { node, hasMore } = await GovernanceProposalsList({ spaceId, page: 0, category, status });
 
   return (
     <>
       {node}
       {hasMore && (
         <GovernanceProposalsListInfiniteScroll
+          key={`${spaceId}:${category}:${status}`}
           spaceId={spaceId}
           page={0}
           initialHasMore={hasMore}
-          proposalType={proposalType}
+          category={category}
+          status={status}
         />
       )}
     </>
