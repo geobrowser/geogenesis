@@ -53,9 +53,11 @@ import { useStableListOrder } from './use-stable-list-order';
 import {
   type DebatesHubExploreFilter,
   debatesHubExploreFilterAtom,
+  debatesHubExploreSearchAtom,
   debatesHubExploreSpaceIdsAtom,
   debatesHubExploreSpaceSeedSpentAtom,
   debatesHubExploreTopicIdsAtom,
+  debatesHubLobbySearchAtom,
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
@@ -158,11 +160,15 @@ const VARIANT_ATOMS = {
   explore: {
     spaceIds: debatesHubExploreSpaceIdsAtom,
     topicIds: debatesHubExploreTopicIdsAtom,
+    search: debatesHubExploreSearchAtom,
     seedSpent: debatesHubExploreSpaceSeedSpentAtom,
   },
   lobby: {
     spaceIds: debatesHubLobbySpaceIdsAtom,
     topicIds: debatesHubLobbyTopicIdsAtom,
+    // Shared with the matches list, so flipping "Matches only" narrows what the viewer typed
+    // rather than discarding it — the same reason the two selections above are shared.
+    search: debatesHubLobbySearchAtom,
     seedSpent: debatesHubLobbySpaceSeedSpentAtom,
   },
 } as const;
@@ -193,7 +199,7 @@ export function ClaimsTab({
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
   const filterOptions = React.useMemo(() => filterOptionsFor(authenticated), [authenticated]);
 
-  const [search, setSearch] = React.useState('');
+  const [search, setSearch] = useAtom(atoms.search);
   const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
   // All claims is where the tab opens: the whole tagged corpus is the wider net, and the curated
   // cut of it is one pick below rather than the thing you land on (GEO-2861). Read by Explore

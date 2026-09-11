@@ -26,7 +26,12 @@ import {
 } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useStableListOrder } from './use-stable-list-order';
-import { type DebatesHubTab, debatesHubLobbySpaceIdsAtom, debatesHubLobbyTopicIdsAtom } from '~/atoms';
+import {
+  type DebatesHubTab,
+  debatesHubLobbySearchAtom,
+  debatesHubLobbySpaceIdsAtom,
+  debatesHubLobbyTopicIdsAtom,
+} from '~/atoms';
 
 /**
  * Claims where you're ready to debate and someone holding the opposite response is online and
@@ -57,7 +62,10 @@ export function MatchesList({
   // Shared with Lobby's other list too, so narrowing survives the switch rather than being undone
   // by it.
   const [topicIds, setTopicIds] = useAtom(debatesHubLobbyTopicIdsAtom);
-  const [search, setSearch] = React.useState('');
+  // And the search with them. Flipping the toggle unmounts one of Lobby's two lists and mounts the
+  // other, so a search held in either one's `useState` was cleared by a switch that presents itself
+  // as narrowing what is on screen.
+  const [search, setSearch] = useAtom(debatesHubLobbySearchAtom);
   const { value: debouncedSearch } = useDebouncedSearch(search);
 
   const matchesQuery = useMatchmakingMatches(true);
@@ -73,23 +81,6 @@ export function MatchesList({
     serverMatches,
     match => `${match.claim.space_id}:${match.claim.claim_entity_id}`,
     spaceIds.join(',')
-  );
-
-  // Counted from the matches themselves — this tab has no server facet, and the whole list is in
-  // hand, so the rows are the complete answer.
-  //
-  // A selected space is kept on the menu even once nothing counts towards it, the same way
-  // `useSpaceFilterMenu` does it for Explore. The selection outlives this mount now
-  // (GEO-2850), so it can outlive the match that put the space on the menu in the first place —
-  // the other side goes offline while the panel is closed, and reopening it would otherwise show
-  // an empty list filtered by a space with no row left to untick it by.
-  const facetSpaces = React.useMemo(
-    () =>
-      orderFacetOptions(
-        keepSelectedVisible(countBy(serverMatches.map(match => ({ id: match.claim.space_id, name: null }))), spaceIds),
-        spaceIds
-      ),
-    [serverMatches, spaceIds]
   );
 
   // Topics are Knowledge Graph data that `/matchmaking/matches` does not carry — `match.topics` is
@@ -128,34 +119,77 @@ export function MatchesList({
    */
   const topicsResolved = !topicsLoading && !topicsError;
 
-  // Counted over the rows the *other* filters already allow, so the menu answers "what else is in
-  // what I am looking at" rather than offering a topic that would empty the list.
+  /**
+   * The three dimensions this list narrows by, each testable on its own.
+   *
+   * One predicate each because they are read three times — the list, and a menu per dimension — and
+   * the three readings have to agree or a menu stops describing the list under it. Both menus did
+   * exactly that: the space one counted every match whatever was typed in the search box, so a
+   * search that left one claim in space A still offered space B with a count beside it, and picking
+   * it produced nothing. The topic one was narrowed by space but not by search, the same way.
+   *
+   * The rule the counts follow is the one the hub's server facets follow: a menu is counted over the
+   * rows every *other* dimension allows, never its own. Counting a menu by its own selection would
+   * collapse it to the option already picked, and there would be no way back off it.
+   */
+  const passesSpace = React.useCallback(
+    (match: MatchmakingMatch) => spaceIds.length === 0 || spaceIds.includes(match.claim.space_id),
+    [spaceIds]
+  );
+  const passesTopics = React.useCallback(
+    (match: MatchmakingMatch) =>
+      !topicsResolved || carriesEveryTopic(topicsByClaimId.get(match.claim.claim_entity_id), topicIds),
+    [topicIds, topicsByClaimId, topicsResolved]
+  );
+  const passesSearch = React.useCallback(
+    (match: MatchmakingMatch) =>
+      !debouncedSearch || match.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase()),
+    [debouncedSearch]
+  );
+
+  // Counted from the matches themselves — this tab has no server facet, and the whole list is in
+  // hand, so the rows are the complete answer.
+  //
+  // A selected space is kept on the menu even once nothing counts towards it, the same way
+  // `useSpaceFilterMenu` does it for Explore. The selection outlives this mount now (GEO-2850), so
+  // it can outlive the match that put the space on the menu in the first place — the other side
+  // goes offline while the panel is closed, and reopening it would otherwise show an empty list
+  // filtered by a space with no row left to untick it by.
+  const facetSpaces = React.useMemo(
+    () =>
+      orderFacetOptions(
+        keepSelectedVisible(
+          countBy(
+            matches
+              .filter(match => passesTopics(match) && passesSearch(match))
+              .map(match => ({ id: match.claim.space_id, name: null }))
+          ),
+          spaceIds
+        ),
+        spaceIds
+      ),
+    [matches, passesSearch, passesTopics, spaceIds]
+  );
+
   const facetTopics = React.useMemo(
     () =>
       orderFacetOptions(
         keepSelectedVisible(
           countBy(
             matches
-              .filter(match => spaceIds.length === 0 || spaceIds.includes(match.claim.space_id))
+              .filter(match => passesSpace(match) && passesSearch(match))
               .flatMap(match => topicsByClaimId.get(match.claim.claim_entity_id) ?? [])
           ),
           topicIds
         ),
         topicIds
       ),
-    [matches, spaceIds, topicIds, topicsByClaimId]
+    [matches, passesSearch, passesSpace, topicIds, topicsByClaimId]
   );
 
   const filtered = React.useMemo(
-    () =>
-      matches.filter(match => {
-        if (spaceIds.length > 0 && !spaceIds.includes(match.claim.space_id)) return false;
-        if (topicsResolved && !carriesEveryTopic(topicsByClaimId.get(match.claim.claim_entity_id), topicIds))
-          return false;
-        if (debouncedSearch && !match.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
-        return true;
-      }),
-    [debouncedSearch, matches, spaceIds, topicIds, topicsByClaimId, topicsResolved]
+    () => matches.filter(match => passesSpace(match) && passesTopics(match) && passesSearch(match)),
+    [matches, passesSearch, passesSpace, passesTopics]
   );
 
   // The viewer's own filters emptied a list that has something in it — the one empty state here

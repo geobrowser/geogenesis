@@ -346,8 +346,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // by the viewer's eligible spaces before they count anything. What a viewer who never opens
   // Explore pays for is a page and two counts, not a corpus.
   //
-  // `isLoading` rather than the facets' `settled`, so a failure ends the warm-up too: react-query
-  // drops `isLoading` on error, where `settled` stays false and would leave this enabled forever.
+  // The effect that ends it is below `taggedClaimsQuery`, which is the last hop it waits for.
   const claimsTagId = source === 'featured' ? FEATURED_TAG_ID : DEBATE_TAG_ID;
   const [browseWarmed, setBrowseWarmed] = React.useState(false);
   const taggedEnabled =
@@ -394,22 +393,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const taggedTopicFacet = useTaggedTopicFacet(claimsTagId, taggedFilters, taggedEnabled && !allowlistPending);
   const taggedSpaceFacet = useTaggedSpaceFacet(claimsTagId, taggedFilters, taggedEnabled && !allowlistPending);
 
-  // The warm-up is over when all three have answered, whatever they answered. Spent once per mount
-  // and never unspent: a viewer who has opened Explore has the cache this exists to fill, and one
-  // who has not is on a tab that reads none of it.
-  React.useEffect(() => {
-    if (browseWarmed || !taggedEnabled || allowlistPending) return;
-    if (taggedCatalogLoading || taggedTopicFacet.isLoading || taggedSpaceFacet.isLoading) return;
-    setBrowseWarmed(true);
-  }, [
-    allowlistPending,
-    browseWarmed,
-    taggedCatalogLoading,
-    taggedEnabled,
-    taggedSpaceFacet.isLoading,
-    taggedTopicFacet.isLoading,
-  ]);
-
   // The ids on screen, for the one geo-chat lookup this tab still makes.
   const taggedClaimIds = React.useMemo(
     () => taggedCatalog.map(claim => claim.entity.id).filter(validateEntityId),
@@ -431,6 +414,36 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const viewerClaimsQuery = useDebateRematchClaimsForIds(sessionId, viewerClaimIds);
   const curatedClaimsQuery = useDebateRematchClaimsForIds(sessionId, recommendedClaimIds);
   const taggedClaimsQuery = useDebateRematchClaimsForIds(sessionId, taggedClaimIds);
+
+  // The warm-up is over when every query behind the tab has answered, whatever it answered.
+  //
+  // `taggedClaimsQuery` included, and that is the whole reason this sits down here rather than
+  // beside the catalog. It is keyed on ids the catalog produces, so it has not started when the
+  // catalog lands — and marking the warm-up done at that moment turns the tag source off on the
+  // opponent's tab, which masks the catalog, empties `taggedClaimIds` and disables this query
+  // before it ever runs. The click on Explore would then still wait for the last hop, which is the
+  // one the warm-up exists to hide.
+  //
+  // `isLoading` rather than the facets' `settled`, so a failure ends the warm-up too: react-query
+  // drops `isLoading` on error, where `settled` stays false and would leave these enabled for the
+  // whole session.
+  //
+  // Spent once per mount and never unspent: a viewer who has opened Explore has the cache this
+  // exists to fill, and one who has not is on a tab that reads none of it.
+  React.useEffect(() => {
+    if (browseWarmed || !taggedEnabled || allowlistPending) return;
+    if (taggedCatalogLoading || taggedTopicFacet.isLoading || taggedSpaceFacet.isLoading) return;
+    if (taggedClaimsQuery.isLoading) return;
+    setBrowseWarmed(true);
+  }, [
+    allowlistPending,
+    browseWarmed,
+    taggedCatalogLoading,
+    taggedClaimsQuery.isLoading,
+    taggedEnabled,
+    taggedSpaceFacet.isLoading,
+    taggedTopicFacet.isLoading,
+  ]);
 
   // A claim's sides, from the graph. The shape the rest of the page was already drawing.
   const sidesOf = React.useCallback(
@@ -1038,6 +1051,45 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Whether the list on screen was narrowed by its own query. Only the tagged sources are.
   const graphFiltered = tab === 'explore' && (source === 'featured' || source === 'all');
 
+  // Only the tagged sources are narrowed by their query. The opponent's tab, Recommended and My
+  // positions are lists fetched by id, so nothing narrowed them on the way in and the filters below
+  // run here.
+  //
+  // Only on the opponent's tab: Explore is the wider catalogue by definition, and a claim there
+  // that neither of you has answered is the normal case rather than one to hide.
+  const matchesOnlyHere = matchesOnly && tab === 'opponent';
+
+  /**
+   * The four dimensions the client-side lists narrow by, each testable on its own.
+   *
+   * One predicate each because they are read three times — the list, and a menu per dimension — and
+   * a menu counted over anything other than the rows its *siblings* allow stops describing the list
+   * under it. Both of these menus did that: neither knew about the search box, and neither knew
+   * about "Matches only" when it arrived, so with either of those on, a menu could offer an option
+   * with a count beside it that produced nothing when picked.
+   *
+   * Never its own dimension, though: a menu counted by its own selection collapses to the option
+   * already picked, and there is no way back off it. That is the rule the server facets follow
+   * (GEO-2796) and it is the one these follow now.
+   */
+  const passesMatchesOnly = React.useCallback(
+    (claim: DebateRematchClaim) => !matchesOnlyHere || isRematchable(claim),
+    [isRematchable, matchesOnlyHere]
+  );
+  const passesSpace = React.useCallback(
+    (claim: DebateRematchClaim) => spaceIds.length === 0 || spaceIds.includes(claim.claim.space_id),
+    [spaceIds]
+  );
+  const passesTopics = React.useCallback(
+    (claim: DebateRematchClaim) => carriesPickedTopics(claim.claim.claim_entity_id),
+    [carriesPickedTopics]
+  );
+  const passesSearch = React.useCallback(
+    (claim: DebateRematchClaim) =>
+      !debouncedSearch || claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase()),
+    [debouncedSearch]
+  );
+
   // Both menus come from the server's own count over the tag, each narrowed by every dimension but
   // its own (GEO-2796). Counting from the rows could only ever describe the page in hand, which is
   // the thing paging makes wrong.
@@ -1065,8 +1117,21 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         ? taggedSpaceFacet.spaces
             .filter(space => canPublishDebateIn(space.id) && isClaimSpaceAllowed(space.id, spaceAllowlist))
             .map(space => ({ id: space.id, name: null, count: space.count }))
-        : countBy(claims.map(claim => ({ id: claim.claim.space_id, name: null }))),
-    [canPublishDebateIn, claims, graphFiltered, spaceAllowlist, taggedSpaceFacet.spaces]
+        : countBy(
+            claims
+              .filter(claim => passesMatchesOnly(claim) && passesTopics(claim) && passesSearch(claim))
+              .map(claim => ({ id: claim.claim.space_id, name: null }))
+          ),
+    [
+      canPublishDebateIn,
+      claims,
+      graphFiltered,
+      passesMatchesOnly,
+      passesSearch,
+      passesTopics,
+      spaceAllowlist,
+      taggedSpaceFacet.spaces,
+    ]
   );
 
   // A space picked while the gates were still passing everything has to be let go once they reject
@@ -1092,31 +1157,33 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     if (graphFiltered) return orderFacetOptions(taggedTopicFacet.topics, topicIds);
     const source = countBy(
       claims
-        .filter(claim => carriesPickedTopics(claim.claim.claim_entity_id))
+        .filter(claim => passesMatchesOnly(claim) && passesSpace(claim) && passesSearch(claim) && passesTopics(claim))
         .flatMap(claim =>
           (topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).map(topic => ({ id: topic.id, name: topic.name }))
         )
     );
     return orderFacetOptions(source, topicIds);
-  }, [carriesPickedTopics, claims, graphFiltered, taggedTopicFacet.topics, topicIds, topicsByClaimId]);
+  }, [
+    claims,
+    graphFiltered,
+    passesMatchesOnly,
+    passesSearch,
+    passesSpace,
+    passesTopics,
+    taggedTopicFacet.topics,
+    topicIds,
+    topicsByClaimId,
+  ]);
 
-  // Only the tagged sources are narrowed by their query. The opponent's tab and Recommended are
-  // both lists fetched by id — the opponent's positions, a curator's page — so nothing narrowed
-  // them on the way in and the filters still run here.
-  // Only on the opponent's tab: Explore is the wider catalogue by definition, and a claim there
-  // that neither of you has answered is the normal case rather than one to hide.
-  const matchesOnlyHere = matchesOnly && tab === 'opponent';
-
-  const visibleClaims = React.useMemo(() => {
-    if (graphFiltered) return claims;
-    return claims.filter(claim => {
-      if (matchesOnlyHere && !isRematchable(claim)) return false;
-      if (spaceIds.length > 0 && !spaceIds.includes(claim.claim.space_id)) return false;
-      if (!carriesPickedTopics(claim.claim.claim_entity_id)) return false;
-      if (debouncedSearch && !claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
-      return true;
-    });
-  }, [carriesPickedTopics, claims, debouncedSearch, graphFiltered, isRematchable, matchesOnlyHere, spaceIds]);
+  const visibleClaims = React.useMemo(
+    () =>
+      graphFiltered
+        ? claims
+        : claims.filter(
+            claim => passesMatchesOnly(claim) && passesSpace(claim) && passesTopics(claim) && passesSearch(claim)
+          ),
+    [claims, graphFiltered, passesMatchesOnly, passesSearch, passesSpace, passesTopics]
+  );
 
   const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
 

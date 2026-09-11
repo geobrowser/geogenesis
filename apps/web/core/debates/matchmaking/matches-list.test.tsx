@@ -1,15 +1,17 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 
 import type { ReactElement } from 'react';
 
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+
 import type { MatchmakingMatch } from '../api';
 import { MatchesList } from './matches-list';
-import { debatesHubLobbySpaceIdsAtom, debatesHubLobbyTopicIdsAtom } from '~/atoms';
+import { debatesHubLobbySearchAtom, debatesHubLobbySpaceIdsAtom, debatesHubLobbyTopicIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   matches: [] as MatchmakingMatch[],
@@ -148,6 +150,8 @@ function render(ui: ReactElement, sharedStore?: ReturnType<typeof createStore>) 
 // refuses to touch the graph for anything else.
 const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
 const CLAIM_ENTITY_ID = '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419';
+const OTHER_SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c599';
+const OTHER_CLAIM_ENTITY_ID = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 
 function party(userId: string, displayName: string, position: boolean, positionLabel: string) {
   return {
@@ -162,6 +166,10 @@ function party(userId: string, displayName: string, position: boolean, positionL
     position,
     position_label: positionLabel,
   };
+}
+
+function topicRelation(id: string, name: string) {
+  return { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id, name } };
 }
 
 function match(overrides: Partial<MatchmakingMatch> = {}): MatchmakingMatch {
@@ -493,6 +501,95 @@ describe('MatchesList', () => {
 
     expect(await screen.findByText(/marked unavailable/)).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
+  });
+
+  /**
+   * A menu that does not describe the list under it offers an option that empties it.
+   *
+   * Both of these counted the wrong set: the space menu counted every match whatever was in the
+   * search box, and the topic menu was narrowed by space but not by search. So a search leaving one
+   * claim on screen still offered the other one's space and the other one's topic, each with a
+   * count beside it, and picking either produced nothing.
+   */
+  describe('the filter menus', () => {
+    function twoMatchesInTwoSpaces() {
+      mocks.matches = [
+        match(),
+        match({
+          claim: {
+            id: 'debate-claim-2',
+            space_id: OTHER_SPACE_ID,
+            claim_entity_id: OTHER_CLAIM_ENTITY_ID,
+            claim: 'Fries are better than chips',
+            description: null,
+          },
+        }),
+      ];
+    }
+
+    /**
+     * How many spaces the menu offers. Counted inside the popover: the position pills on the cards
+     * carry `aria-pressed` too, so a document-wide count is mostly cards.
+     */
+    function spacesOffered() {
+      fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+      const menu = screen.getByRole('dialog');
+      const offered = within(menu)
+        .getAllByRole('button')
+        .filter(button => button.hasAttribute('aria-pressed')).length;
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      return offered;
+    }
+
+    it('offers only the spaces the search leaves on the list', async () => {
+      twoMatchesInTwoSpaces();
+      render(<MatchesList onTabChange={vi.fn()} />);
+
+      expect(spacesOffered()).toBe(2);
+
+      fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'Chips are' } });
+      await waitFor(() => expect(screen.queryByText('Fries are better than chips')).toBeNull());
+
+      expect(spacesOffered()).toBe(1);
+    });
+
+    it('offers only the topics the search leaves on the list', async () => {
+      twoMatchesInTwoSpaces();
+      mocks.claimEntities = [
+        { id: CLAIM_ENTITY_ID, relations: [topicRelation('topic-food', 'Food')] },
+        { id: OTHER_CLAIM_ENTITY_ID, relations: [topicRelation('topic-health', 'Health')] },
+      ];
+      render(<MatchesList onTabChange={vi.fn()} />);
+
+      fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'Chips are' } });
+      await waitFor(() => expect(screen.queryByText('Fries are better than chips')).toBeNull());
+
+      fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+      expect(screen.getByRole('button', { name: /Food/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Health/ })).not.toBeInTheDocument();
+    });
+  });
+
+  // GEO-2850 held the space and topic selections outside these components because the panel closing
+  // took them with it. The search box is the third control in the same bar and was still local, so
+  // flipping "Matches only" — which unmounts one of Lobby's lists and mounts the other — threw away
+  // what the viewer had typed and widened the list they were narrowing.
+  it('writes the search where Lobby’s other list will read it', async () => {
+    const { store } = render(<MatchesList onTabChange={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'chips' } });
+
+    await waitFor(() => expect(store.get(debatesHubLobbySearchAtom)).toBe('chips'));
+  });
+
+  it('reads back the search the other list was left on', () => {
+    const store = createStore();
+    store.set(debatesHubLobbySearchAtom, 'chips');
+    render(<MatchesList onTabChange={vi.fn()} />, store);
+
+    expect(screen.getByLabelText('Search claims')).toHaveValue('chips');
   });
 
   /**

@@ -1305,6 +1305,30 @@ describe('DebateRematchPageClient', () => {
       await waitFor(() => expect(mocks.featuredEnabledWith.at(-1)).toBe(false));
     });
 
+    /**
+     * All the way through, not just the catalog.
+     *
+     * geo-chat's rows are keyed on ids the catalog produces, so that query has not started when the
+     * catalog lands. Ending the warm-up there turns the tag source off on this tab, which masks the
+     * catalog, empties the ids and disables the rows query before it ever runs — leaving the click
+     * on Explore waiting for exactly the hop the warm-up exists to hide.
+     *
+     * Read off `featuredEnabledWith`, because that is what ending the warm-up *does*: the tag goes
+     * back to being the tab's business, and on this tab that means off. So while the rows are still
+     * out, the last thing it was asked is `true`.
+     */
+    it('waits for the rows behind the catalog before ending the warm-up', async () => {
+      // The catalog answers; geo-chat's rows for what it returned do not, yet.
+      mocks.browsedLookupLoading = true;
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await waitFor(() => expect(mocks.featuredEnabledWith).toContain(true));
+      await act(async () => {});
+
+      expect(mocks.featuredEnabledWith.at(-1)).toBe(true);
+      expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-selected', 'true');
+    });
+
     // A remembered Featured source shouldn't keep a graph query alive behind the opponent's tab,
     // which draws from somewhere else entirely.
     it('stops asking for the tag once the viewer leaves Explore', async () => {
@@ -1557,6 +1581,40 @@ describe('DebateRematchPageClient', () => {
       expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
       expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
       expect(screen.getByText('A claim you both agree on')).toBeInTheDocument();
+    });
+
+    /**
+     * The space menu has to describe the list under it, and "Matches only" is one of the things
+     * that decides what is on it. Counted over every position the opponent held, it went on
+     * offering a space whose only claim the toggle had just hidden — with a count beside it — and
+     * picking that space emptied the list.
+     */
+    it('stops offering a space whose only claim the toggle hides', async () => {
+      threeClaims();
+      // The claim only they answered lives somewhere else, so the menu has two spaces to be wrong
+      // about — and the toggle leaves only the first.
+      mocks.entities = [
+        sharedEntity(),
+        publishedEntity(OPPONENT_ONLY, 'A claim only Salina answered'),
+        { ...sharedEntity(), id: AGREED, name: 'A claim you both agree on' },
+      ];
+      mocks.positions = [
+        position('profile-local', CLAIM_SHARED, SPACE_1, true),
+        position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+        position('profile-remote', OPPONENT_ONLY, SPACE_2, true),
+        position('profile-local', AGREED, SPACE_1, true),
+        position('profile-remote', AGREED, SPACE_1, true),
+      ];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      expect(await screen.findByText('A claim only Salina answered')).toBeInTheDocument();
+      expect(spacesOffered()).toBe(2);
+
+      pressMatchesOnly();
+      await waitFor(() => expect(screen.queryByText('A claim only Salina answered')).toBeNull());
+
+      expect(spacesOffered()).toBe(1);
     });
 
     it('keeps only the claims you hold opposite sides on when toggled on', async () => {
@@ -3569,6 +3627,21 @@ function appearsBefore(first: string, second: string) {
   const a = screen.getByText(first);
   const b = screen.getByText(second);
   return Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+}
+
+/**
+ * How many spaces the menu offers. Counted inside the popover: the position pills on every card
+ * carry `aria-pressed` too, so a document-wide count is mostly cards.
+ */
+function spacesOffered() {
+  fireEvent.click(screen.getByRole('button', { name: /Any space|space[s]?$/ }));
+  const menu = screen.getByRole('dialog');
+  const offered = within(menu)
+    .getAllByRole('button')
+    .filter(button => button.hasAttribute('aria-pressed')).length;
+  fireEvent.keyDown(document, { key: 'Escape' });
+
+  return offered;
 }
 
 /**

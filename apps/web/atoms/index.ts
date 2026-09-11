@@ -82,6 +82,21 @@ export const debatesHubExploreSpaceIdsAtom = atom<string[]>([]);
 export const debatesHubExploreTopicIdsAtom = atom<string[]>([]);
 
 /**
+ * The search box, which is part of the same filter bar as the menus above it.
+ *
+ * Held out here for Lobby's sake first: its two lists are separate components, so flipping "Matches
+ * only" unmounts one and mounts the other, and a search living in either one's `useState` was
+ * cleared by a toggle that presents itself as narrowing the list. The space and topic selections
+ * were already shared across that switch for exactly this reason; the search is the third thing in
+ * the bar and belongs with them.
+ *
+ * Explore's is here too rather than left as local state, so one surface's bar is not held in two
+ * different places — and so it survives a click-away that closes the panel, which is the whole of
+ * GEO-2850.
+ */
+export const debatesHubExploreSearchAtom = atom('');
+
+/**
  * Lobby's own space selection (GEO-2861).
  *
  * One selection, not two. Claims and Matches each kept their own while they were separate tabs;
@@ -95,6 +110,7 @@ export const debatesHubExploreTopicIdsAtom = atom<string[]>([]);
  */
 export const debatesHubLobbySpaceIdsAtom = atom<string[]>([]);
 export const debatesHubLobbyTopicIdsAtom = atom<string[]>([]);
+export const debatesHubLobbySearchAtom = atom('');
 
 /**
  * Whether each browse surface's membership default has been applied or forfeited this session.
@@ -134,9 +150,11 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubExploreFilterAtom, 'all');
   set(debatesHubExploreSpaceIdsAtom, []);
   set(debatesHubExploreTopicIdsAtom, []);
+  set(debatesHubExploreSearchAtom, '');
   set(debatesHubExploreSpaceSeedSpentAtom, false);
   set(debatesHubLobbySpaceIdsAtom, []);
   set(debatesHubLobbyTopicIdsAtom, []);
+  set(debatesHubLobbySearchAtom, '');
   set(debatesHubLobbySpaceSeedSpentAtom, false);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than
   // working state, which is the whole reason it is stored rather than session-scoped. Handing a new
