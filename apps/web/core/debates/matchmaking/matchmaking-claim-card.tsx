@@ -29,6 +29,7 @@ import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
+import { OnlineDot } from '~/design-system/online-dot';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
@@ -618,7 +619,8 @@ function RespondableControls({
         onOpenClaim={onOpenClaim}
         isControversial={summary.isControversial}
         endSlot={
-          endSlot ?? (hideEndSlot ? null : (
+          endSlot ??
+          (hideEndSlot ? null : (
             <ClaimEndSlot
               claimId={claim.claim_entity_id}
               spaceId={claim.space_id}
@@ -652,12 +654,17 @@ function RespondableControls({
           answered yet" — a disabled hook reports a total of zero, and that is the absence of an
           answer rather than an answer of none. */}
       {!readResponses || summary.isLoading ? null : (
+        // The card's own footer band (Figma 76081-15715): grey, full-bleed to the card's edge, with
+        // the share, the split and the faces on one line. It was a rule and two stacked rows, which
+        // read as more card rather than as the card's base — and the split bar, at full width above
+        // its own reading, was the loudest thing on a card whose subject is the claim.
         <ClaimSummary
           entityId={claim.claim_entity_id}
           spaceId={claim.space_id}
           responseKind={readiness.response_kind}
           summary={summary}
-          className="mt-3 border-t border-divider pt-3"
+          layout="inline"
+          className="-mx-3 mt-3 -mb-3 rounded-b-[inherit] border-t border-divider bg-grey-01 px-3 py-2"
         />
       )}
     </>
@@ -829,7 +836,8 @@ function UnresolvableControls({
              hardest to reach any other way: every card there is a match by definition, and the
              footer button that used to offer it is gone. Masking an action the server would accept
              is not the safe direction to be wrong in. */
-          endSlot ?? (hideEndSlot ? null : (
+          endSlot ??
+          (hideEndSlot ? null : (
             <ClaimEndSlot
               claimId={claim.claim_entity_id}
               spaceId={claim.space_id}
@@ -964,9 +972,17 @@ function PositionButton({
 }) {
   // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
   // which sheds faces rather than letting the label truncate.
+  // Grey when held, a dashed outline when not (the Figma card). The side you picked used to be
+  // green or red, which made the pill argue the position as well as record it — and put white-ish
+  // text on two saturated fills that nothing else in the product uses this way. Which side is
+  // yours is said by the fill and the filled thumb; which side is *which* is said by the summary
+  // bar below, where the colours still mean something.
+  //
+  // `border` on both states, transparent when held, so picking a side cannot change the pill's
+  // width and shuffle the row.
   const className = cx(
-    '@container flex min-h-7 items-center justify-between gap-2 rounded-full px-3 text-button text-text',
-    selected ? (position ? 'bg-green' : 'bg-red-01') : 'bg-grey-01'
+    '@container flex min-h-7 items-center justify-between gap-2 rounded-full border px-3 text-button text-text',
+    selected ? 'border-transparent bg-grey-01' : 'border-dashed border-grey-03 bg-white'
   );
   const content = (
     <>
@@ -978,7 +994,9 @@ function PositionButton({
           {selected ? <span className="sr-only"> — your response</span> : null}
         </span>
       </span>
-      {summary && presentCount(summary) > 0 ? <PositionAvatars summary={summary} /> : null}
+      {summary && presentCount(summary) > 0 ? (
+        <PositionAvatars summary={summary} ringClassName={selected ? 'border-grey-01' : 'border-white'} />
+      ) : null}
     </>
   );
 
@@ -991,7 +1009,7 @@ function PositionButton({
       disabled={disabled}
       title={title}
       onClick={() => onRespond(position)}
-      className={cx(className, 'transition-colors disabled:opacity-60', !selected && !disabled && 'hover:bg-grey-01')}
+      className={cx(className, 'transition-colors disabled:opacity-60', !selected && !disabled && 'hover:border-text')}
     >
       {content}
     </button>
@@ -1039,7 +1057,14 @@ export function presentCount(summary: Pick<DebateClaimPositionSummary, 'present_
  */
 const MAX_OVERFLOW_SHOWN = 99;
 
-function PositionAvatars({ summary }: { summary: DebateClaimPositionSummary }) {
+function PositionAvatars({
+  summary,
+  ringClassName = 'border-white',
+}: {
+  summary: DebateClaimPositionSummary;
+  /** The pill's own background, so the dot's ring reads as a hole punched in it rather than a rim. */
+  ringClassName?: string;
+}) {
   const participants = summary.participants.slice(0, 2);
   const overflow = Math.max(0, presentCount(summary) - participants.length);
 
@@ -1068,11 +1093,22 @@ function PositionAvatars({ summary }: { summary: DebateClaimPositionSummary }) {
         <span
           key={participant.user_id}
           className={cx(
-            'relative box-content block size-5 overflow-hidden rounded-full border-2 border-white',
+            'relative box-content block size-5 rounded-full border-2 border-white',
             index === 0 ? '@max-[108px]:hidden' : '@max-[124px]:hidden'
           )}
         >
-          <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
+          {/* The clip moved inward off the wrapper so the dot can sit on the edge: `overflow-hidden`
+              out here would cut the half of it that hangs over the rim. */}
+          <span className="block size-5 overflow-hidden rounded-full">
+            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
+          </span>
+          {/* Everyone in this stack is present by construction — the sides are built from
+              `online_choices` — so the dot needs no condition. It rings in the pill's own colour
+              rather than white, which is the surface actually behind it here. */}
+          <OnlineDot
+            ringClassName={ringClassName}
+            className="absolute right-0 bottom-0 translate-x-px translate-y-px"
+          />
         </span>
       ))}
       {overflow > 0 && (
