@@ -2527,6 +2527,41 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText('Not recording')).not.toBeInTheDocument();
   });
 
+  // A recorder can end without `stopLocalRecorder`: a disconnect stops the local tracks, the
+  // stream goes inactive and it stops itself. `capturing` outlives the modal, so it has to be
+  // cleared from the recorder's own events.
+  it('clears the recording pill when the recorder stops on its own', async () => {
+    const recorders = installRecordingMocks();
+
+    await renderLiveDebate();
+
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    expect(await screen.findByText('Recording')).toBeInTheDocument();
+
+    act(() => {
+      recorders[0]?.dispatchEvent(new Event('stop'));
+    });
+
+    expect(await screen.findByText('Not recording')).toBeInTheDocument();
+    expect(screen.queryByText('Recording')).not.toBeInTheDocument();
+  });
+
+  it('clears the recording pill when the recorder errors', async () => {
+    const recorders = installRecordingMocks();
+
+    await renderLiveDebate();
+
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    expect(await screen.findByText('Recording')).toBeInTheDocument();
+
+    act(() => {
+      recorders[0]?.dispatchEvent(new Event('error'));
+    });
+
+    expect(await screen.findByText('Not recording')).toBeInTheDocument();
+    expect(screen.queryByText('Recording')).not.toBeInTheDocument();
+  });
+
   it('enables Krisp by default and records the processed microphone track', async () => {
     const audioTrack = createLocalAudioTrack();
     mocks.createLocalTracks.mockResolvedValue([
@@ -4185,7 +4220,9 @@ function debateVideoTile(participant: 'local' | 'remote') {
   return tile;
 }
 
+/** Returns the recorders as they are constructed, so a test can drive `stop` / `error` itself. */
 function installRecordingMocks() {
+  const recorders: EventTarget[] = [];
   vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
   vi.stubGlobal(
     'MediaRecorder',
@@ -4200,6 +4237,7 @@ function installRecordingMocks() {
 
       constructor(stream: MediaStream) {
         super();
+        recorders.push(this);
         mocks.mediaRecorderConstruct(stream);
       }
 
@@ -4220,6 +4258,7 @@ function installRecordingMocks() {
     }
   );
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+  return recorders;
 }
 
 function createLocalAudioTrack() {
