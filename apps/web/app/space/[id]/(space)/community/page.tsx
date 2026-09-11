@@ -6,7 +6,7 @@ import { notFound } from 'next/navigation';
 
 import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 import { ROOT_SPACE } from '~/core/constants';
-import { SIDE_RAIL_FETCH_TIMEOUT_MS, withTimeout } from '~/core/utils/with-timeout';
+import { SIDE_RAIL_FETCH_TIMEOUT_MS, resolveWithin } from '~/core/utils/resolve-within';
 
 import { CommunityTabPage } from '~/partials/community-tab/community-tab-page';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
@@ -43,8 +43,8 @@ export default async function CommunityPage(props: Props) {
         // Bounded like the layout's copy. `fetchCommunityCalls` is `cache()`d, so this awaits the
         // *same promise* the layout started — and a memoised promise that never settles is not made
         // safe by the layout having given up on it.
-        communityCalls={await withTimeout(
-          fetchCommunityCalls(spaceId).catch(() => []),
+        communityCalls={await resolveWithin(
+          () => fetchCommunityCalls(spaceId).catch(() => []),
           SIDE_RAIL_FETCH_TIMEOUT_MS,
           []
         )}
