@@ -1,5 +1,6 @@
 import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { TAG_PROPERTY_ID } from '~/core/constants';
 import { ID } from '~/core/id';
 import type { Relation } from '~/core/types';
 
@@ -14,6 +15,7 @@ export type BuildClaimDraftInput = {
   spaceId: string;
   claimText: string;
   topics?: ClaimDraftSelection[];
+  tags?: ClaimDraftSelection[];
 };
 
 export type ClaimDraft = {
@@ -88,6 +90,17 @@ export function buildClaimDraft(input: BuildClaimDraftInput, options: BuildClaim
         propertyName: 'Topics',
         toEntityId: topic.id,
         toEntityName: topic.name,
+      })
+    );
+  }
+
+  for (const tag of input.tags ?? []) {
+    relations.push(
+      makeRelation({
+        propertyId: TAG_PROPERTY_ID,
+        propertyName: 'Tags',
+        toEntityId: tag.id,
+        toEntityName: tag.name,
       })
     );
   }

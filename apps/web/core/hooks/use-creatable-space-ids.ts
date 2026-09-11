@@ -56,7 +56,8 @@ export function useCreatableSpaceIds(spaceIds: string[], enabled: boolean) {
     [spaceIds]
   );
 
-  const canLoad = enabled && hydrated && Boolean(personalSpaceId) && spaceIdsKey.length > 0;
+  const hasSpaceIds = spaceIdsKey.length > 0;
+  const canLoad = enabled && hydrated && Boolean(personalSpaceId) && hasSpaceIds;
 
   const query = useQuery({
     queryKey: ['creatable-space-ids', personalSpaceId, spaceIdsKey],
@@ -73,9 +74,20 @@ export function useCreatableSpaceIds(spaceIds: string[], enabled: boolean) {
     [query.data, query.isSuccess]
   );
 
+  // Settled once we have an answer, know we cannot ask (no personal space), or there is nothing to ask.
+  const isResolved =
+    !enabled ||
+    !hasSpaceIds ||
+    query.isSuccess ||
+    query.isError ||
+    (hydrated && !isLoadingPersonalSpaceId && !personalSpaceId);
+
+  const isLoading =
+    enabled && hasSpaceIds && hydrated && !isResolved && (isLoadingPersonalSpaceId || Boolean(personalSpaceId));
+
   return {
     canCreateInSpace,
-    isLoading: canLoad && (query.isLoading || isLoadingPersonalSpaceId),
-    isResolved: query.isSuccess,
+    isLoading,
+    isResolved,
   };
 }

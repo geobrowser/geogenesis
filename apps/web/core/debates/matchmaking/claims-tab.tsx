@@ -17,6 +17,8 @@ import { ID } from '~/core/id';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { validateEntityId } from '~/core/utils/utils';
 
+import { Button } from '~/design-system/button';
+import { Plus } from '~/design-system/icons/plus';
 import { Input } from '~/design-system/input';
 
 import type {
@@ -27,6 +29,9 @@ import type {
   MatchmakingClaimsQuery,
 } from '../api';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
+import { CreateDebateClaimForm } from '../create-claim/create-debate-claim-form';
+import { PendingClaimCard } from '../create-claim/pending-claim-card';
+import { usePendingDebateClaims } from '../create-claim/use-pending-debate-claims';
 import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import {
   type TaggedClaim,
@@ -175,6 +180,7 @@ export function ClaimsTab() {
   const [spaceIds, setSpaceIds] = useAtom(debatesHubClaimsSpaceIdsAtom);
   const [topicIds, setTopicIds] = useAtom(debatesHubClaimsTopicIdsAtom);
   const [spaceSeedSpent, setSpaceSeedSpent] = useAtom(debatesHubClaimsSpaceSeedSpentAtom);
+  const [creatingClaim, setCreatingClaim] = React.useState(false);
 
   const {
     allowlist: spaceAllowlist,
@@ -514,6 +520,26 @@ export function ClaimsTab() {
   // Nothing left to filter here: both lists are narrowed by their server now.
   const visibleClaims = claims;
 
+  // Claims the viewer just created inline, held as optimistic "publishing" rows until the graph has
+  // them. Pinned above the list regardless of the active filters
+  const { pendingClaims, dismissPendingClaim } = usePendingDebateClaims();
+  const listedClaimId = React.useCallback(
+    (claimId: string) => visibleClaims.some(entry => ID.equals(entry.claim.claim_entity_id, claimId)),
+    [visibleClaims]
+  );
+  const pinnedPendingClaims = React.useMemo(
+    () => pendingClaims.filter(claim => !listedClaimId(claim.claimId)),
+    [pendingClaims, listedClaimId]
+  );
+  React.useEffect(() => {
+    for (const claim of pendingClaims) {
+      if (listedClaimId(claim.claimId)) dismissPendingClaim(claim.claimId);
+    }
+  }, [pendingClaims, listedClaimId, dismissPendingClaim]);
+
+  // Signed-out visitors can't publish, so the button prompts sign-in the same way the pills do.
+  const onNewClaim = onRequireSignIn ? onRequireSignIn : () => setCreatingClaim(true);
+
   // The topic menu, from the server's count over the tag. It describes every claim the current
   // filters allow rather than the pages loaded so far — which is what a client-side version could
   // never do: it read topics off the loaded claims, so the menu grew as the viewer scrolled and a
@@ -634,6 +660,40 @@ export function ClaimsTab() {
       </HubStickyControls>
 
       <div className="flex flex-col gap-3 px-4 py-3">
+        {creatingClaim ? (
+          <CreateDebateClaimForm
+            candidateSpaceIds={spacesPending ? null : eligibleSpaceIds}
+            defaultSpaceId={spaceIds[0] ?? null}
+            onCreated={({ spaceId }) => {
+              setCreatingClaim(false);
+              setSearch('');
+              setTopicIds([]);
+              setSpaceIds(current =>
+                current.length === 0 || current.includes(spaceId) ? current : [...current, spaceId]
+              );
+            }}
+            onCancel={() => setCreatingClaim(false)}
+          />
+        ) : (
+          <div className="flex justify-end">
+            <Button type="button" variant="secondary" icon={<Plus />} onClick={onNewClaim}>
+              New claim
+            </Button>
+          </div>
+        )}
+
+        {pinnedPendingClaims.length > 0 ? (
+          <HubCardList>
+            {pinnedPendingClaims.map(claim => (
+              <PendingClaimCard
+                key={claim.claimId}
+                claim={claim}
+                onDismiss={() => dismissPendingClaim(claim.claimId)}
+              />
+            ))}
+          </HubCardList>
+        ) : null}
+
         <HubQueryState
           isLoading={spacesPending || (graphSourced ? taggedLoading : claimsQuery.isLoading)}
           // The catalog only. It is the list — without it there is nothing to show, and an error is

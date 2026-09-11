@@ -33,6 +33,7 @@ type Props<T extends string> = {
   showImages?: boolean;
   /** As {@link HubFilterOption.pending}, for the name in the trigger pill. */
   labelPending?: boolean;
+  viewportClassName?: string;
 };
 
 /**
@@ -50,6 +51,7 @@ export function HubFilterMenu<T extends string>({
   onChange,
   showImages,
   labelPending,
+  viewportClassName,
 }: Props<T>) {
   const [open, setOpen] = React.useState(false);
 
@@ -59,6 +61,7 @@ export function HubFilterMenu<T extends string>({
       onOpenChange={setOpen}
       asChild
       className="max-w-[280px]"
+      viewportClassName={viewportClassName}
       // Space names come from the knowledge graph and can be long enough to burst the pill.
       trigger={
         <SmallButton icon={<ChevronDownSmall />} className="max-w-[160px]">
