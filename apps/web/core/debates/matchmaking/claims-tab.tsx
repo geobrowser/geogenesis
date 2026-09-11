@@ -643,7 +643,12 @@ export function ClaimsTab({
   // What "Clear filters" should undo is wider, and does include the position filter — resetting to
   // All claims is exactly what a viewer stuck on an empty My positions wants.
   const hasNarrowingFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
-  const hasFilters = hasNarrowingFilters || (!graphSourced && filter !== 'all');
+  // Explore's alone. Lobby's source is fixed rather than chosen — it is `debate_now` and nothing
+  // else — so an empty Lobby was offering to clear a filter the viewer had not set and could not
+  // see. Worse, clearing it ran `setFilter`, which writes *Explore's* source atom: Lobby does not
+  // read that value, so the button quietly put someone else's tab back to All claims.
+  const hasClearableSource = !isLobby && !graphSourced && filter !== 'all';
+  const hasFilters = hasNarrowingFilters || hasClearableSource;
 
   // Both lists page now, so the sentinel follows whichever one is on screen (GEO-2798). The tagged
   // lists used to arrive whole, which is why this was the index's alone.
@@ -760,7 +765,7 @@ export function ClaimsTab({
                   label: 'Clear filters',
                   onClick: () => {
                     setSearch('');
-                    if (!graphSourced) setFilter('all');
+                    if (hasClearableSource) setFilter('all');
                     // The menu's own clear row, so this counts as choosing the unfiltered list and
                     // the default cannot put its spaces back.
                     onSpacesClear();

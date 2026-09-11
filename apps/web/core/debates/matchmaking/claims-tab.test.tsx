@@ -1739,6 +1739,42 @@ describe('All claims reads the Debate tag', () => {
     expect(await screen.findByText('Nobody is ready to debate you on a claim right now.')).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
   });
+
+  /**
+   * Lobby's source is fixed rather than chosen, so there is nothing there for a viewer to clear.
+   *
+   * It counted as a filter because the test was "not `all`, and not graph-sourced", which
+   * `debate_now` answers — so an untouched empty Lobby offered "Clear filters" over a filter nobody
+   * had set, next to a message correctly saying nobody was available.
+   */
+  it('offers nothing to clear on an untouched Lobby', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [];
+    mocks.claims = [];
+    render(<ClaimsTab variant="lobby" />);
+
+    await screen.findByText('Nobody is ready to debate you on a claim right now.');
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+  });
+
+  /**
+   * And clearing Lobby's real filters leaves Explore's source where the viewer left it.
+   *
+   * `setFilter` writes `debatesHubExploreFilterAtom`, which Lobby never reads — so running it from
+   * here put another tab back to All claims without anything on screen saying so.
+   */
+  it('does not reset Explore’s source when clearing Lobby’s filters', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [];
+    mocks.claims = [];
+    const store = createStore();
+    store.set(debatesHubExploreFilterAtom, 'featured');
+    render(<ClaimsTab variant="lobby" />, store);
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nothing matches this' } });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }));
+
+    expect(store.get(debatesHubExploreFilterAtom)).toBe('featured');
+  });
 });
 
 // GEO-2653. The menu is the server's topic facet, which describes every claim the current

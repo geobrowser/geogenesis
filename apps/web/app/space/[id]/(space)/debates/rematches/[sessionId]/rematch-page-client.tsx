@@ -430,6 +430,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // Spent once per mount and never unspent: a viewer who has opened Explore has the cache this
   // exists to fill, and one who has not is on a tab that reads none of it.
+  //
+  // What it warms is the *unfiltered* key, and for a viewer with member spaces on the menu that is
+  // not the key Explore settles on: the membership default lands on arrival and re-keys the catalog
+  // and the topic facet once more. That second request is deliberate and predates this — see
+  // `offeredSpaces` below, where the seed is drawn from the menu rather than from the eligible set
+  // precisely so it cannot tick a space the tag has nothing in. The seeded key is therefore
+  // unknowable until the unfiltered one has been fetched: the menu comes from the facet *and* the
+  // publishability gate, and that gate is built from the catalog's own rows.
+  //
+  // So the warm-up cannot remove that wave, and is not trying to. What it removes is the first one:
+  // the click lands on rows rather than on a skeleton, and `keepPreviousData` holds them while the
+  // narrowed page arrives, so the seed reads as a filter applying rather than as a reload.
   React.useEffect(() => {
     if (browseWarmed || !taggedEnabled || allowlistPending) return;
     if (taggedCatalogLoading || taggedTopicFacet.isLoading || taggedSpaceFacet.isLoading) return;
