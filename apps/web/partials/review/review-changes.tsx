@@ -614,8 +614,14 @@ export const ReviewChanges = () => {
 
   const discardSelectedEntities = React.useCallback(() => {
     const count = selectedEntityIds.size;
+    const discardsEverything = count > 0 && count === ownershipIndex.displayIds.size;
     discardEntities(selectedEntityIds, count === 1 ? '1 edit' : `${count} edits`);
-  }, [discardEntities, selectedEntityIds]);
+    if (discardsEverything) {
+      resetSuggestedTasks({ bio: false, work: false, education: false, skills: false, post: false });
+      resetSuggestedDismiss({ forever: false, softDismissCount: 0 });
+      clearPersonalProfileSessionDismissStorage();
+    }
+  }, [discardEntities, selectedEntityIds, ownershipIndex.displayIds.size, resetSuggestedTasks, resetSuggestedDismiss]);
 
   const publishSelection = React.useMemo(
     () => selectOpsForPublish(ownershipIndex, selectedEntityIds, valuesFromSpace, relationsFromSpace),
@@ -959,16 +965,6 @@ export const ReviewChanges = () => {
     )
   );
 
-  const handleDeleteAll = () => {
-    if (!activeSpace) return;
-    store.clearLocalChangesForSpace(activeSpace);
-    // Force the TipTap editor to recreate with fresh server content.
-    bumpEditorContentVersion(v => v + 1);
-    resetSuggestedTasks({ bio: false, work: false, education: false, skills: false, post: false });
-    resetSuggestedDismiss({ forever: false, softDismissCount: 0 });
-    clearPersonalProfileSessionDismissStorage();
-  };
-
   React.useEffect(() => {
     setIsBountyLinkingOpen(false);
     setSelectedBountyIds(new Set());
@@ -1113,17 +1109,8 @@ export const ReviewChanges = () => {
                             className="w-full bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-none"
                           />
                         </div>
-                        <div className="flex items-center gap-2 pt-2">
-                          <SmallButton onClick={handleDeleteAll}>Discard all edits</SmallButton>
-                        </div>
-                      </div>
-                      {hasVisibleEntities && (
-                        <div className="mt-8 flex items-center justify-between gap-4 border-t border-grey-02 py-4">
-                          <Text variant="metadata" color="grey-04">
-                            {selectedEntityCount} of {totalEntityCount} {totalEntityCount === 1 ? 'entity' : 'entities'}{' '}
-                            selected · {selectedChangeCount} {selectedChangeCount === 1 ? 'change' : 'changes'}
-                          </Text>
-                          <div className="flex shrink-0 items-center gap-2">
+                        {hasVisibleEntities && (
+                          <div className="flex shrink-0 items-center gap-2 pt-2">
                             {isPartialPublish && <SmallButton onClick={selectAllEntities}>Select all</SmallButton>}
                             {hasSelectedEntities && (
                               <SmallButton onClick={unselectAllEntities}>Unselect all</SmallButton>
@@ -1132,6 +1119,14 @@ export const ReviewChanges = () => {
                               <SmallButton onClick={discardSelectedEntities}>Discard selected</SmallButton>
                             )}
                           </div>
+                        )}
+                      </div>
+                      {hasVisibleEntities && (
+                        <div className="mt-8 flex items-center justify-between gap-4 border-t border-grey-02 py-4">
+                          <Text variant="metadata" color="grey-04">
+                            {selectedEntityCount} of {totalEntityCount} {totalEntityCount === 1 ? 'entity' : 'entities'}{' '}
+                            selected · {selectedChangeCount} {selectedChangeCount === 1 ? 'change' : 'changes'}
+                          </Text>
                         </div>
                       )}
                     </div>
