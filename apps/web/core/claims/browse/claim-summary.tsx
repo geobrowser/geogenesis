@@ -210,6 +210,10 @@ export function ClaimSides({
  * `text-red-01` is the design's `#ff523a` exactly, and the flame inherits it through
  * `currentColor`, so the two cannot drift apart.
  *
+ * `whitespace-nowrap` is what keeps the flame attached to the word: it pins this item's min-content
+ * to the whole unbroken run, so a flex parent cannot compress it and the icon needs no shrink guard
+ * of its own. Removing it would let the two separate before anything else gave way.
+ *
  * Only ever rendered past the response floor, because "contested" off two responses is not a fact
  * about the claim, it is a fact about how few people have read it.
  */
@@ -221,11 +225,7 @@ export function ControversialTag({ className }: { className?: string }) {
         className
       )}
     >
-      {/* `shrink-0` because these rows are flex with `min-w-0` ancestors: a long space name beside
-          it would otherwise squeeze the flame before the text it belongs to. */}
-      <span className="shrink-0">
-        <Fire />
-      </span>
+      <Fire />
       Controversial
     </span>
   );

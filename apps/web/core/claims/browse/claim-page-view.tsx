@@ -123,7 +123,8 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
               <MetaChip key={tag.id}>{tag.toEntity.name ?? tag.toEntity.id}</MetaChip>
             ))}
             {/* Among the chips that say what this is, which is what "contested" is — and the same
-                component the cards use, rather than a second span at a size the scale lacks. */}
+                component the cards use, so all three surfaces move together. Not a chip itself:
+                the flame and red are what make it findable among neutral ones. */}
             {summary.isControversial ? <ControversialTag /> : null}
           </div>
         </header>
