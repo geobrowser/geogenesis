@@ -29,7 +29,12 @@ export default async function CommunityPage(props: Props) {
   const sidebar =
     spaceId === ROOT_SPACE ? (
       <React.Suspense fallback={null}>
-        <RootExploreSidePanelContainer />
+        {/*
+          No subspaces here, deliberately: they are an Overview section (GEO-2875) and Community is
+          a tab. Passed empty rather than left off so the omission is a decision on the page rather
+          than a default someone has to go and look up.
+        */}
+        <RootExploreSidePanelContainer spaceId={spaceId} subspaces={[]} />
       </React.Suspense>
     ) : (
       <SpaceOverviewSidePanel spaceId={spaceId} communityCalls={await fetchCommunityCalls(spaceId).catch(() => [])} />
