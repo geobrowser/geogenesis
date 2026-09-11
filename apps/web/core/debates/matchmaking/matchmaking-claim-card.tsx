@@ -1147,7 +1147,11 @@ function PositionAvatars({
       {overflow > 0 && (
         <span
           className={cx(
-            'relative box-content flex h-4 min-w-4 items-center justify-center rounded-full border-2 bg-grey-02 px-1 text-[8px] leading-4 text-grey-04 tabular-nums @max-[128px]:hidden',
+            // A circle the size of a face, which is what Figma draws and what the stack read as
+            // before: `px-1` made it a wide pill sitting beside two small circles. `min-w-4` with
+            // no padding keeps it round — "+99", the most `MAX_OVERFLOW_SHOWN` allows, is about
+            // 14px of 8px type and still fits inside the 16px floor.
+            'relative box-content flex h-4 min-w-4 items-center justify-center overflow-hidden rounded-full border-2 bg-grey-02 text-[8px] leading-4 text-grey-04 tabular-nums @max-[128px]:hidden',
             ringClassName
           )}
         >
