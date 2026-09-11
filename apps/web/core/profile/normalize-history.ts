@@ -1,3 +1,5 @@
+import { findMediaUrlValue } from '~/core/utils/media-url';
+
 import {
   ACADEMIC_FIELDS_PROPERTY,
   DEGREE_PROPERTY,
@@ -38,12 +40,20 @@ export type HistoryEdgeNode = {
 
 export type NamedRef = { id: string; name: string | null };
 
+/** One Employment/Education relation and the entity it carries. */
+export type HistoryEdgeRef = { relationId: string; stintId: string };
+
 /** One dated row under an organisation — a role held, or a degree read. */
 export type HistoryEntry = {
   /** The Roles/Degree relation, which is what removing this row deletes. */
   relationId: string;
   /** That relation's own entity, which carries the dates and status. */
   tenureId: string;
+  /**
+   * The Employment/Education edge this row hangs off. Carried per row rather
+   * than per card because one employer can have several edges — see the card.
+   */
+  edge: HistoryEdgeRef;
   subject: NamedRef;
   startDate: string | null;
   endDate: string | null;
@@ -65,11 +75,17 @@ export type EducationEntry = HistoryEntry & { status: EducationStatus | null; fi
 
 /** An organisation and everything held there. One card in the resting state. */
 export type HistoryCard<TEntry> = {
-  /** The Employment/Education relation — removing this drops the whole card. */
-  relationId: string;
-  /** Its entity, which every row hangs off. */
-  stintId: string;
   organization: NamedRef;
+  /**
+   * Every Employment/Education edge pointing at this organisation.
+   *
+   * Usually one. More where the same employer was added twice — by an older
+   * version of this modal, by another tool, or by anyone who did not know a
+   * second edge was not wanted. Those read as one employer here regardless,
+   * since two cards for one company is a rendering fault as far as the person
+   * looking at their own profile is concerned.
+   */
+  edges: HistoryEdgeRef[];
   /** The organisation's own avatar, where it has one. */
   avatarUrl?: string | null;
   entries: TEntry[];
@@ -134,92 +150,124 @@ function readEntry(
   };
 }
 
-/** The image entity's URL, which is whichever of its values looks like one. */
+/**
+ * The organisation's avatar, picked the way every other image in the app is.
+ *
+ * Not simply the first value that holds a string: an image entity carries its own
+ * name and a couple of dimensions alongside the URL, so that picked "Geo avatar"
+ * and rendered nothing.
+ */
 function readAvatar(edge: HistoryEdgeNode): string | null {
   for (const relation of edge.toEntity?.relationsList ?? []) {
-    const url = relation.toEntity?.valuesList.find(value => typeof value.text === 'string' && value.text !== '');
-    if (url?.text) return url.text;
+    const values = relation.toEntity?.valuesList ?? [];
+    const url = findMediaUrlValue(values.map(value => ({ value: value.text, property: value.property })));
+    if (url) return url;
   }
   return null;
 }
 
-function readCard<TEntry>(
-  edge: HistoryEdgeNode,
-  readEntries: (stintValues: HistoryValueNode[], stintRelations: HistoryRelationNode[]) => TEntry[]
-): HistoryCard<TEntry> {
-  const stintValues = edge.entity?.valuesList ?? [];
-  const stintRelations = edge.entity?.relationsList ?? [];
+/**
+ * Edges to cards, one card per organisation.
+ *
+ * A second edge to an employer already listed folds into the card that is there
+ * rather than starting another: someone with two roles at one company means one
+ * employer, however many relations happen to record it.
+ */
+function readCards<TEntry extends HistoryEntry>(
+  edges: HistoryEdgeNode[],
+  readEntries: (
+    edgeRef: HistoryEdgeRef,
+    stintValues: HistoryValueNode[],
+    stintRelations: HistoryRelationNode[]
+  ) => TEntry[]
+): HistoryCard<TEntry>[] {
+  const byOrganization = new Map<string, HistoryCard<TEntry>>();
 
-  return {
-    relationId: edge.id,
-    stintId: edge.entityId,
-    organization: edge.toEntity ?? { id: edge.entityId, name: null },
-    avatarUrl: readAvatar(edge),
-    entries: readEntries(stintValues, stintRelations),
-  };
+  for (const edge of edges) {
+    const edgeRef: HistoryEdgeRef = { relationId: edge.id, stintId: edge.entityId };
+    const organization = edge.toEntity ?? { id: edge.entityId, name: null };
+    const entries = readEntries(edgeRef, edge.entity?.valuesList ?? [], edge.entity?.relationsList ?? []);
+
+    const existing = byOrganization.get(organization.id);
+    if (existing) {
+      existing.edges.push(edgeRef);
+      existing.entries = [...existing.entries, ...entries].sort(byMostRecent);
+      // Whichever edge's organisation resolved an image first; they are the same
+      // entity, so the second look adds nothing but can only be emptier.
+      existing.avatarUrl = existing.avatarUrl ?? readAvatar(edge);
+      continue;
+    }
+
+    byOrganization.set(organization.id, {
+      organization,
+      edges: [edgeRef],
+      avatarUrl: readAvatar(edge),
+      entries,
+    });
+  }
+
+  return [...byOrganization.values()];
 }
 
 export function normalizeEmployment(edges: HistoryEdgeNode[]): EmploymentCard[] {
-  return edges.map(edge =>
-    readCard<EmploymentEntry>(edge, (stintValues, stintRelations) =>
-      stintRelations
-        .filter(relation => relation.type.id === ROLES_PROPERTY)
-        .map(relation => {
-          const { statusOptionId, ...entry } = readEntry(
-            relation,
-            stintValues,
-            stintRelations,
-            EMPLOYMENT_STATUS_PROPERTY
-          );
-          const tenureRelations = relation.entity?.relationsList ?? [];
+  return readCards<EmploymentEntry>(edges, (edgeRef, stintValues, stintRelations) =>
+    stintRelations
+      .filter(relation => relation.type.id === ROLES_PROPERTY)
+      .map(relation => {
+        const { statusOptionId, ...entry } = readEntry(
+          relation,
+          stintValues,
+          stintRelations,
+          EMPLOYMENT_STATUS_PROPERTY
+        );
+        const tenureRelations = relation.entity?.relationsList ?? [];
 
-          return {
-            ...entry,
-            status: employmentStatusFromOptionId(statusOptionId),
-            employmentType: relationTo(tenureRelations, EMPLOYMENT_TYPE_PROPERTY),
-            skills: tenureRelations
-              .filter(skill => skill.type.id === SKILLS_PROPERTY)
-              .map(skill => skill.toEntity)
-              .filter((skill): skill is NamedRef => skill !== null),
-          };
-        })
-        .sort(byMostRecent)
-    )
+        return {
+          ...entry,
+          edge: edgeRef,
+          status: employmentStatusFromOptionId(statusOptionId),
+          employmentType: relationTo(tenureRelations, EMPLOYMENT_TYPE_PROPERTY),
+          skills: tenureRelations
+            .filter(skill => skill.type.id === SKILLS_PROPERTY)
+            .map(skill => skill.toEntity)
+            .filter((skill): skill is NamedRef => skill !== null),
+        };
+      })
+      .sort(byMostRecent)
   );
 }
 
 export function normalizeEducation(edges: HistoryEdgeNode[]): EducationCard[] {
-  return edges.map(edge =>
-    readCard<EducationEntry>(edge, (stintValues, stintRelations) =>
-      stintRelations
-        .filter(relation => relation.type.id === DEGREE_PROPERTY)
-        .map(relation => {
-          const { statusOptionId, ...entry } = readEntry(
-            relation,
-            stintValues,
-            stintRelations,
-            EDUCATION_STATUS_PROPERTY
-          );
+  return readCards<EducationEntry>(edges, (edgeRef, stintValues, stintRelations) =>
+    stintRelations
+      .filter(relation => relation.type.id === DEGREE_PROPERTY)
+      .map(relation => {
+        const { statusOptionId, ...entry } = readEntry(
+          relation,
+          stintValues,
+          stintRelations,
+          EDUCATION_STATUS_PROPERTY
+        );
 
-          const enrolmentRelations = relation.entity?.relationsList ?? [];
-          const fields = enrolmentRelations
-            .filter(field => field.type.id === ACADEMIC_FIELDS_PROPERTY)
-            .map(field => field.toEntity)
-            .filter((field): field is NamedRef => field !== null);
+        const enrolmentRelations = relation.entity?.relationsList ?? [];
+        const fields = enrolmentRelations
+          .filter(field => field.type.id === ACADEMIC_FIELDS_PROPERTY)
+          .map(field => field.toEntity)
+          .filter((field): field is NamedRef => field !== null);
 
-          // Eleven records predate `Academic fields` and keep the discipline as
-          // text on the stint. Shown, never written — they are the seed for real
-          // Academic field entities rather than a second way to store one.
-          const legacyField = textFor(stintValues, LEGACY_FIELD_OF_STUDY_PROPERTY);
+        // Eleven records predate `Academic fields` and keep the discipline as
+        // text on the stint. Shown, never written — they are the seed for real
+        // Academic field entities rather than a second way to store one.
+        const legacyField = textFor(stintValues, LEGACY_FIELD_OF_STUDY_PROPERTY);
 
-          return {
-            ...entry,
-            status: educationStatusFromOptionId(statusOptionId),
-            fields: fields.length > 0 || legacyField === null ? fields : [{ id: '', name: legacyField }],
-          };
-        })
-        .sort(byMostRecent)
-    )
+        return {
+          ...entry,
+          edge: edgeRef,
+          status: educationStatusFromOptionId(statusOptionId),
+          fields: fields.length > 0 || legacyField === null ? fields : [{ id: '', name: legacyField }],
+        };
+      })
+      .sort(byMostRecent)
   );
 }
 

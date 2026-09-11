@@ -8,7 +8,8 @@ import cx from 'classnames';
 
 import { type ProfileImageEdit, useEditProfile } from '~/core/hooks/use-edit-profile';
 import { useProfileHistory } from '~/core/hooks/use-profile-history';
-import type { HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
+import type { EducationEntry, EmploymentEntry, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
+import { educationDraftFromEntry, positionDraftFromEntry } from '~/core/profile/stage-history';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
@@ -58,16 +59,31 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
    * Which sheet is open, if any. A sheet replaces the modal's body rather than
    * stacking over it — the four fields underneath have nothing to do with the
    * position being added, and two scroll areas fighting is worse than one.
+   *
+   * `editing` is the row the sheet was opened on, where it was opened on one.
+   * Saving then replaces that row rather than adding beside it.
    */
+  type Organization = { id: string; name: string | null; stintId: string };
+  type Editing = { card: HistoryCard<HistoryEntry>; entry: HistoryEntry };
+
   const [sheet, setSheet] = React.useState<
-    | { kind: 'position'; company?: { id: string; name: string | null; stintId: string } }
-    | { kind: 'education'; school?: { id: string; name: string | null; stintId: string } }
+    | { kind: 'position'; company?: Organization; editing?: Editing }
+    | { kind: 'education'; school?: Organization; editing?: Editing }
     | null
   >(null);
 
   const openSheetFor = (kind: 'employment' | 'education', card?: HistoryCard<HistoryEntry>) => {
-    const org = card ? { id: card.organization.id, name: card.organization.name, stintId: card.stintId } : undefined;
+    // Any of the card's edges will do as the one to hang a new row off; a card
+    // holds more than one only where the same employer was recorded twice.
+    const org = card?.edges[0]
+      ? { id: card.organization.id, name: card.organization.name, stintId: card.edges[0].stintId }
+      : undefined;
     setSheet(kind === 'employment' ? { kind: 'position', company: org } : { kind: 'education', school: org });
+  };
+
+  const openSheetOn = (kind: 'employment' | 'education', card: HistoryCard<HistoryEntry>, entry: HistoryEntry) => {
+    const editing = { card, entry };
+    setSheet(kind === 'employment' ? { kind: 'position', editing } : { kind: 'education', editing });
   };
 
   const [name, setName] = React.useState('');
@@ -189,7 +205,10 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     publishName !== current.name ||
     publishDescription !== current.description ||
     changesImage(banner, current.bannerUrl) ||
-    changesImage(avatar, current.avatarUrl);
+    changesImage(avatar, current.avatarUrl) ||
+    // Work and education write nothing until this Save, so a position added with
+    // the four fields left alone is the whole of the edit.
+    history.hasPendingChanges;
 
   // A failed save has already written its rows to the local store, so the entity
   // now reads back the edit and `hasChanges` goes false. Retry has to stay live
@@ -272,10 +291,16 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                 <AddPositionSheet
                   spaceId={spaceId}
                   company={sheet.company}
+                  initial={
+                    sheet.editing &&
+                    positionDraftFromEntry(sheet.editing.card.organization, sheet.editing.entry as EmploymentEntry)
+                  }
                   isSaving={false}
                   onCancel={() => setSheet(null)}
-                  onSave={async draft => {
-                    await history.addPosition(draft);
+                  onSave={draft => {
+                    const editing = sheet.editing;
+                    if (editing) history.editEntry(editing.card, editing.entry, 'employment', draft);
+                    else history.addPosition(draft);
                     setSheet(null);
                   }}
                 />
@@ -283,10 +308,16 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                 <AddEducationSheet
                   spaceId={spaceId}
                   school={sheet.school}
+                  initial={
+                    sheet.editing &&
+                    educationDraftFromEntry(sheet.editing.card.organization, sheet.editing.entry as EducationEntry)
+                  }
                   isSaving={false}
                   onCancel={() => setSheet(null)}
-                  onSave={async draft => {
-                    await history.addEducation(draft);
+                  onSave={draft => {
+                    const editing = sheet.editing;
+                    if (editing) history.editEntry(editing.card, editing.entry, 'education', draft);
+                    else history.addEducation(draft);
                     setSheet(null);
                   }}
                 />
@@ -389,8 +420,8 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                     disabled={isPublishing}
                     onAdd={() => openSheetFor('employment')}
                     onAddTo={card => openSheetFor('employment', card)}
-                    onRemoveEntry={(card, entry) => void history.removeEntry(card, entry, 'employment')}
-                    onRemoveCard={card => void history.removeCard(card, 'employment')}
+                    onEditEntry={(card, entry) => openSheetOn('employment', card, entry)}
+                    onRemoveEntry={(card, entry) => history.removeEntry(card, entry, 'employment')}
                   />
 
                   <HistorySection
@@ -399,8 +430,8 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                     disabled={isPublishing}
                     onAdd={() => openSheetFor('education')}
                     onAddTo={card => openSheetFor('education', card)}
-                    onRemoveEntry={(card, entry) => void history.removeEntry(card, entry, 'education')}
-                    onRemoveCard={card => void history.removeCard(card, 'education')}
+                    onEditEntry={(card, entry) => openSheetOn('education', card, entry)}
+                    onRemoveEntry={(card, entry) => history.removeEntry(card, entry, 'education')}
                   />
                 </div>
 

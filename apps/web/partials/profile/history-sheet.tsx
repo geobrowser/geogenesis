@@ -53,6 +53,23 @@ export function HistorySheet({ title, saveLabel, isSaving, canSave, onCancel, on
 }
 
 /**
+ * Turns a `SelectEntity` search box into the find-or-create the rest of the app
+ * uses.
+ *
+ * Its "Create new" footer only renders when an `onCreateEntity` is supplied —
+ * the prop is there so a caller can decorate the new entity, but its presence is
+ * also what offers the option at all. Without it these pickers could only find a
+ * company that somebody else had already entered.
+ *
+ * Nothing to decorate here: the sheet types and names what it creates when the
+ * modal saves, so this only has to exist. Returning nothing keeps the id
+ * `SelectEntity` minted, which is the one it hands back to `onDone`.
+ */
+export function findOrCreate() {
+  return undefined;
+}
+
+/**
  * What a picker shows once it has an answer. `SelectEntity` is a search box, so
  * without this the chosen company disappears back into a placeholder the moment
  * focus leaves it.

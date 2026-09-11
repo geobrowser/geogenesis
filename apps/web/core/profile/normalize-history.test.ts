@@ -22,6 +22,9 @@ import {
   normalizeEmployment,
 } from './normalize-history';
 
+const NAME_PROPERTY = 'a126ca530c8e48d5b88882c734c38935';
+const IPFS_URL_PROPERTY = '8a743832c0944a62b6650c3cc2f9c7bc';
+
 const dateValue = (propertyId: string, date: string): HistoryValueNode => ({
   property: { id: propertyId },
   date,
@@ -251,5 +254,68 @@ describe('normalizeEducation', () => {
 
     expect(card.entries[0].status).toBeNull();
     expect(card.entries[0].endDate).toBeNull();
+  });
+});
+
+describe('one card per organisation', () => {
+  // Two Employment edges to one company, which is what an older version of the
+  // modal wrote and what any other tool is free to write. Two cards for one
+  // employer is a rendering fault to the person looking at their own profile.
+  it('folds a second edge to the same employer into one card', () => {
+    const cards = normalizeEmployment([
+      edge('Geo', {
+        relations: [role('Product Manager', { values: [dateValue(START_DATE_PROPERTY, '2026-07-01Z')] })],
+      }),
+      { ...edge('Geo', { relations: [role('Senior Product Designer')] }), id: 'edge-Geo-2', entityId: 'stint-Geo-2' },
+    ]);
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0].entries.map(entry => entry.subject.name)).toEqual(['Product Manager', 'Senior Product Designer']);
+    expect(cards[0].edges.map(cardEdge => cardEdge.stintId)).toEqual(['stint-Geo', 'stint-Geo-2']);
+  });
+
+  // Removing a row has to know which of the employer's edges it hung off, since
+  // a sibling under the other one cannot keep this one alive.
+  it('tells each row which edge it hangs off', () => {
+    const cards = normalizeEmployment([
+      edge('Geo', { relations: [role('Product Manager')] }),
+      { ...edge('Geo', { relations: [role('Designer')] }), id: 'edge-Geo-2', entityId: 'stint-Geo-2' },
+    ]);
+
+    const byName = Object.fromEntries(cards[0].entries.map(entry => [entry.subject.name, entry.edge.stintId]));
+    expect(byName).toEqual({ 'Product Manager': 'stint-Geo', Designer: 'stint-Geo-2' });
+  });
+
+  it('keeps two different employers apart', () => {
+    const cards = normalizeEmployment([
+      edge('Geo', { relations: [role('Product Manager')] }),
+      edge('Coinbase', { relations: [role('Data Analyst')] }),
+    ]);
+
+    expect(cards.map(card => card.organization.name)).toEqual(['Geo', 'Coinbase']);
+  });
+});
+
+describe('the organisation avatar', () => {
+  const withImage = (org: string, values: HistoryValueNode[]): HistoryEdgeNode => ({
+    ...edge(org, { relations: [role('Engineer')] }),
+    toEntity: { id: `org-${org}`, name: org, relationsList: [{ toEntity: { valuesList: values } }] },
+  });
+
+  // An image entity carries its own name and a couple of dimensions beside the
+  // URL. Taking the first value that held a string picked "Geo avatar" and
+  // rendered nothing at all.
+  it('reads the URL rather than the image entity’s name', () => {
+    const cards = normalizeEmployment([
+      withImage('Geo', [textValue(NAME_PROPERTY, 'Geo avatar'), textValue(IPFS_URL_PROPERTY, 'ipfs://bafyavatar')]),
+    ]);
+
+    expect(cards[0].avatarUrl).toBe('ipfs://bafyavatar');
+  });
+
+  it('has none where the image entity holds no URL', () => {
+    const cards = normalizeEmployment([withImage('Geo', [textValue(NAME_PROPERTY, 'Geo avatar')])]);
+
+    expect(cards[0].avatarUrl).toBeNull();
   });
 });

@@ -4,19 +4,21 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { type MonthYear, toGraphDate } from '~/core/profile/history-dates';
+import { type MonthYear, fromGraphDate, toGraphDate } from '~/core/profile/history-dates';
 import { ACADEMIC_FIELD_TYPE, type EducationStatus } from '~/core/profile/history-ontology';
 import type { EducationDraft, EntityChoice } from '~/core/profile/stage-history';
 
 import { inputStyles } from '~/design-system/input';
 import { SelectEntity } from '~/design-system/select-entity';
 
-import { HistorySheet, PickedEntity } from './history-sheet';
+import { HistorySheet, PickedEntity, findOrCreate } from './history-sheet';
 import { MonthYearField } from './month-year-field';
 
 type Props = {
   spaceId: string;
   school?: { id: string; name: string | null; stintId: string };
+  /** The row being changed, when this is an edit rather than an addition. */
+  initial?: EducationDraft;
   isSaving: boolean;
   onCancel: () => void;
   onSave: (draft: EducationDraft) => void;
@@ -36,17 +38,19 @@ const STATUS_OPTIONS: { value: EducationStatus; label: string }[] = [
  * is made explicitly here, and "Still studying" writes no status at all rather
  * than inventing an option the ontology does not have.
  */
-export function AddEducationSheet({ spaceId, school, isSaving, onCancel, onSave }: Props) {
-  const locked = school ? { id: school.id, name: school.name, isNew: false } : null;
+export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel, onSave }: Props) {
+  const locked = !initial && school ? { id: school.id, name: school.name, isNew: false } : null;
 
-  const [pickedSchool, setPickedSchool] = React.useState<EntityChoice | null>(locked);
-  const [degree, setDegree] = React.useState<EntityChoice | null>(null);
-  const [fields, setFields] = React.useState<EntityChoice[]>([]);
+  const [pickedSchool, setPickedSchool] = React.useState<EntityChoice | null>(
+    initial ? initial.school : (locked ?? null)
+  );
+  const [degree, setDegree] = React.useState<EntityChoice | null>(initial?.degree ?? null);
+  const [fields, setFields] = React.useState<EntityChoice[]>(initial?.fields ?? []);
   const [isAddingField, setIsAddingField] = React.useState(false);
-  const [status, setStatus] = React.useState<EducationStatus>('studying');
-  const [start, setStart] = React.useState<MonthYear | null>(null);
-  const [end, setEnd] = React.useState<MonthYear | null>(null);
-  const [description, setDescription] = React.useState('');
+  const [status, setStatus] = React.useState<EducationStatus>(initial?.status ?? 'studying');
+  const [start, setStart] = React.useState<MonthYear | null>(fromGraphDate(initial?.startDate));
+  const [end, setEnd] = React.useState<MonthYear | null>(fromGraphDate(initial?.endDate));
+  const [description, setDescription] = React.useState(initial?.description ?? '');
 
   const canSave = pickedSchool !== null && degree !== null && !isSaving;
 
@@ -67,7 +71,7 @@ export function AddEducationSheet({ spaceId, school, isSaving, onCancel, onSave 
 
   return (
     <HistorySheet
-      title="Add education"
+      title={initial ? 'Edit education' : 'Add education'}
       isSaving={isSaving}
       canSave={canSave}
       saveLabel="Save education"
@@ -86,6 +90,8 @@ export function AddEducationSheet({ spaceId, school, isSaving, onCancel, onSave 
           // hide every real school from the search.
           <SelectEntity
             spaceId={spaceId}
+            placeholder="Find or create a school..."
+            onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) =>
               setPickedSchool({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
             }
@@ -101,6 +107,8 @@ export function AddEducationSheet({ spaceId, school, isSaving, onCancel, onSave 
         ) : (
           <SelectEntity
             spaceId={spaceId}
+            placeholder="Find or create a degree..."
+            onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) =>
               setDegree({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
             }
@@ -134,6 +142,8 @@ export function AddEducationSheet({ spaceId, school, isSaving, onCancel, onSave 
           <SelectEntity
             spaceId={spaceId}
             relationValueTypes={[{ id: ACADEMIC_FIELD_TYPE, name: 'Academic field' }]}
+            placeholder="Find or create a field..."
+            onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) => {
               setFields(current =>
                 current.some(field => field.id === result.id)

@@ -217,7 +217,16 @@ function merge(...parts: StagedRows[]): StagedRows {
  * at all: a stint with no role under it renders as a company you are somehow
  * attached to with nothing to say about it, which is worse than no entry.
  */
-export function stagePosition(draft: PositionDraft, { personEntityId, spaceId }: Context): StagedRows {
+export function stagePosition(
+  draft: PositionDraft,
+  { personEntityId, spaceId }: Context,
+  /**
+   * The stint to mint when this is a first role at the company. Supplied by the
+   * caller so two roles added at the same new employer in one sitting share an
+   * Employment edge rather than each opening their own.
+   */
+  newStintId: string = ID.createEntityId()
+): StagedRows {
   const company = newEntityRows(draft.company, spaceId, EMPLOYER_TYPE);
   const title = newEntityRows(draft.title, spaceId, JOB_TYPE);
 
@@ -225,7 +234,7 @@ export function stagePosition(draft: PositionDraft, { personEntityId, spaceId }:
   const employment: StagedRows = { values: [], relations: [] };
 
   if (!stintId) {
-    stintId = ID.createEntityId();
+    stintId = newStintId;
     employment.relations.push(
       relationRow({
         spaceId,
@@ -297,7 +306,11 @@ export function stagePosition(draft: PositionDraft, { personEntityId, spaceId }:
  * One education record, as one edit. A level heavier than a position, because
  * `Academic fields` is a relation and can repeat for a joint honours degree.
  */
-export function stageEducation(draft: EducationDraft, { personEntityId, spaceId }: Context): StagedRows {
+export function stageEducation(
+  draft: EducationDraft,
+  { personEntityId, spaceId }: Context,
+  newStintId: string = ID.createEntityId()
+): StagedRows {
   const school = newEntityRows(draft.school, spaceId);
   const degree = newEntityRows(draft.degree, spaceId);
 
@@ -305,7 +318,7 @@ export function stageEducation(draft: EducationDraft, { personEntityId, spaceId 
   const education: StagedRows = { values: [], relations: [] };
 
   if (!recordId) {
-    recordId = ID.createEntityId();
+    recordId = newStintId;
     education.relations.push(
       relationRow({
         spaceId,
@@ -366,4 +379,68 @@ export function stageEducation(draft: EducationDraft, { personEntityId, spaceId 
       description: draft.description,
     }),
   });
+}
+
+/**
+ * A saved row back into the sheet that wrote it.
+ *
+ * Editing reuses the add sheet, so a row has to be able to answer the same
+ * questions it was filled in from. Everything here was picked from the graph, so
+ * nothing is `isNew` — the entities all exist already.
+ */
+export function positionDraftFromEntry(
+  organization: { id: string; name: string | null },
+  entry: {
+    subject: { id: string; name: string | null };
+    employmentType: { id: string; name: string | null } | null;
+    skills: { id: string; name: string | null }[];
+    startDate: string | null;
+    endDate: string | null;
+    status: EmploymentStatus | null;
+    description: string | null;
+  }
+): PositionDraft {
+  return {
+    company: { id: organization.id, name: organization.name, isNew: false },
+    title: { id: entry.subject.id, name: entry.subject.name, isNew: false },
+    // Kept as it stands even when it is not one of the eight the dropdown offers.
+    // The select shows nothing for an id it does not know, but the draft still
+    // carries it, so editing the dates of an older record does not quietly drop
+    // an employment type somebody else recorded.
+    employmentType: entry.employmentType
+      ? { id: entry.employmentType.id, name: entry.employmentType.name ?? '' }
+      : null,
+    skills: entry.skills.map(skill => ({ id: skill.id, name: skill.name, isNew: false })),
+    startDate: entry.startDate,
+    endDate: entry.endDate,
+    // An older row may carry no status at all. An open end date is what said
+    // "current" before the status property existed, so it still does here.
+    status: entry.status ?? (entry.endDate === null ? 'current' : 'former'),
+    description: entry.description ?? '',
+  };
+}
+
+export function educationDraftFromEntry(
+  organization: { id: string; name: string | null },
+  entry: {
+    subject: { id: string; name: string | null };
+    fields: { id: string; name: string | null }[];
+    startDate: string | null;
+    endDate: string | null;
+    status: EducationStatus | null;
+    description: string | null;
+  }
+): EducationDraft {
+  return {
+    school: { id: organization.id, name: organization.name, isNew: false },
+    degree: { id: entry.subject.id, name: entry.subject.name, isNew: false },
+    // The legacy field-of-study text is shown with no id behind it. There is no
+    // entity to relate to, so it cannot come back into a draft — it stays where
+    // it is, on the stint, until someone picks a real Academic field.
+    fields: entry.fields.filter(field => field.id !== '').map(field => ({ ...field, isNew: false })),
+    startDate: entry.startDate,
+    endDate: entry.endDate,
+    status: entry.status ?? (entry.endDate === null ? 'studying' : 'completed'),
+    description: entry.description ?? '',
+  };
 }

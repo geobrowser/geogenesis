@@ -19,24 +19,24 @@ type Props = {
   disabled?: boolean;
   onAdd: () => void;
   onAddTo: (card: HistoryCard<HistoryEntry>) => void;
+  onEditEntry: (card: HistoryCard<HistoryEntry>, entry: HistoryEntry) => void;
   onRemoveEntry: (card: HistoryCard<HistoryEntry>, entry: HistoryEntry) => void;
-  onRemoveCard: (card: HistoryCard<HistoryEntry>) => void;
 };
 
-const COPY: Record<Kind, { title: string; add: string; addHere: string; empty: string; removeCard: string }> = {
+const COPY: Record<Kind, { title: string; add: string; addHere: string; empty: string; noun: string }> = {
   employment: {
     title: 'Work',
     add: 'Add position',
     addHere: 'Add another role here',
     empty: 'Nothing here yet. Add a position and it appears on your profile.',
-    removeCard: 'Remove employer',
+    noun: 'position',
   },
   education: {
     title: 'Education',
     add: 'Add education',
     addHere: 'Add another degree here',
     empty: 'Nothing here yet. Add a school and it appears on your profile.',
-    removeCard: 'Remove school',
+    noun: 'degree',
   },
 };
 
@@ -49,8 +49,13 @@ const COPY: Record<Kind, { title: string; add: string; addHere: string; empty: s
  * That grouping is the only place the nesting underneath surfaces: someone with
  * one job at one company adds a position, sees a card, and never learns there
  * was a level below it.
+ *
+ * Removal is per row and nowhere else. A card-level "Remove employer" sat beside
+ * it for a while and read as a second, different thing on a card with one role,
+ * where the two buttons did exactly the same work — so the last role standing
+ * takes its employer with it, and that is the only way an employer leaves.
  */
-export function HistorySection({ kind, cards, disabled, onAdd, onAddTo, onRemoveEntry, onRemoveCard }: Props) {
+export function HistorySection({ kind, cards, disabled, onAdd, onAddTo, onEditEntry, onRemoveEntry }: Props) {
   const copy = COPY[kind];
 
   return (
@@ -69,30 +74,15 @@ export function HistorySection({ kind, cards, disabled, onAdd, onAddTo, onRemove
       ) : (
         <ul className="flex flex-col gap-2">
           {cards.map(card => (
-            <li key={card.relationId} className="rounded-lg border border-grey-02 p-3">
+            <li key={card.organization.id} className="rounded-lg border border-grey-02 p-3">
               <div className="flex items-start gap-2.5">
                 <OrganizationAvatar name={card.organization.name} url={card.avatarUrl} />
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-metadataMedium text-text">{card.organization.name ?? 'Untitled'}</p>
-                      {/* Total time at the employer — the number a run of roles is
-                          actually read for. Only where there is a run. */}
-                      {card.entries.length > 1 && <CardDuration entries={card.entries} />}
-                    </div>
-
-                    {/* Removing the organisation takes every row with it. Offered
-                        separately so leaving one employer does not mean deleting
-                        each role there one at a time. */}
-                    <SmallButton
-                      onClick={() => onRemoveCard(card)}
-                      disabled={disabled}
-                      aria-label={`${copy.removeCard} ${card.organization.name ?? 'Untitled'}`}
-                    >
-                      {copy.removeCard}
-                    </SmallButton>
-                  </div>
+                  <p className="truncate text-metadataMedium text-text">{card.organization.name ?? 'Untitled'}</p>
+                  {/* Total time at the employer — the number a run of roles is
+                      actually read for. Only where there is a run. */}
+                  {card.entries.length > 1 && <CardDuration entries={card.entries} />}
 
                   <ul
                     className={cx(
@@ -103,9 +93,10 @@ export function HistorySection({ kind, cards, disabled, onAdd, onAddTo, onRemove
                     {card.entries.map(entry => (
                       <EntryRow
                         key={entry.relationId}
-                        kind={kind}
+                        noun={copy.noun}
                         entry={entry}
                         disabled={disabled}
+                        onEdit={() => onEditEntry(card, entry)}
                         onRemove={() => onRemoveEntry(card, entry)}
                       />
                     ))}
@@ -162,14 +153,16 @@ function CardDuration({ entries }: { entries: HistoryEntry[] }) {
 }
 
 function EntryRow({
-  kind,
+  noun,
   entry,
   disabled,
+  onEdit,
   onRemove,
 }: {
-  kind: Kind;
+  noun: string;
   entry: HistoryEntry;
   disabled?: boolean;
+  onEdit: () => void;
   onRemove: () => void;
 }) {
   const dates = formatDateRange(entry.startDate, entry.endDate);
@@ -185,7 +178,16 @@ function EntryRow({
 
   return (
     <li className="flex items-start justify-between gap-2">
-      <div className="min-w-0">
+      {/* The row itself opens it. Everything shown here was typed into the sheet,
+          so the sheet is where it is changed — a separate pencil would only be a
+          smaller target for the same thing. */}
+      <button
+        type="button"
+        onClick={onEdit}
+        disabled={disabled}
+        aria-label={`Edit ${noun} ${subject}`}
+        className="min-w-0 flex-1 text-left"
+      >
         <p className="truncate text-footnote text-text">{heading}</p>
         {employmentType?.name && <p className="text-footnote text-grey-04">{employmentType.name}</p>}
 
@@ -205,14 +207,9 @@ function EntryRow({
             <span className="text-text">Skills:</span> {skills.map(skill => skill.name).join(', ')}
           </p>
         )}
-      </div>
+      </button>
 
-      <SquareButton
-        onClick={onRemove}
-        disabled={disabled}
-        icon={<Trash />}
-        aria-label={`Remove ${kind === 'employment' ? 'position' : 'degree'} ${subject}`}
-      />
+      <SquareButton onClick={onRemove} disabled={disabled} icon={<Trash />} aria-label={`Remove ${noun} ${subject}`} />
     </li>
   );
 }

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { type MonthYear, toGraphDate } from '~/core/profile/history-dates';
+import { type MonthYear, fromGraphDate, toGraphDate } from '~/core/profile/history-dates';
 import { EMPLOYER_TYPE, EMPLOYMENT_TYPE_OPTIONS, JOB_TYPE, SKILL_TYPE } from '~/core/profile/history-ontology';
 import type { EntityChoice, PositionDraft } from '~/core/profile/stage-history';
 
@@ -10,13 +10,15 @@ import { Checkbox } from '~/design-system/checkbox';
 import { inputStyles } from '~/design-system/input';
 import { SelectEntity } from '~/design-system/select-entity';
 
-import { HistorySheet, PickedEntity } from './history-sheet';
+import { HistorySheet, PickedEntity, findOrCreate } from './history-sheet';
 import { MonthYearField } from './month-year-field';
 
 type Props = {
   spaceId: string;
   /** Pre-filled and locked when adding a second role at a company already listed. */
   company?: { id: string; name: string | null; stintId: string };
+  /** The row being changed, when this is an edit rather than an addition. */
+  initial?: PositionDraft;
   isSaving: boolean;
   onCancel: () => void;
   onSave: (draft: PositionDraft) => void;
@@ -25,19 +27,27 @@ type Props = {
 /**
  * Four questions, which become three relations, two entities and two or three
  * values. None of that appears here — that is the entire point.
+ *
+ * The same sheet edits a row as adds one: everything shown on a card was typed
+ * in here, so there is nothing a separate edit form could offer that this one
+ * does not already ask.
  */
-export function AddPositionSheet({ spaceId, company, isSaving, onCancel, onSave }: Props) {
-  const locked = company ? { id: company.id, name: company.name, isNew: false } : null;
+export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel, onSave }: Props) {
+  const locked = !initial && company ? { id: company.id, name: company.name, isNew: false } : null;
 
-  const [pickedCompany, setPickedCompany] = React.useState<EntityChoice | null>(locked);
-  const [title, setTitle] = React.useState<EntityChoice | null>(null);
-  const [start, setStart] = React.useState<MonthYear | null>(null);
-  const [end, setEnd] = React.useState<MonthYear | null>(null);
-  const [employmentType, setEmploymentType] = React.useState<{ id: string; name: string } | null>(null);
-  const [skills, setSkills] = React.useState<EntityChoice[]>([]);
+  const [pickedCompany, setPickedCompany] = React.useState<EntityChoice | null>(
+    initial ? initial.company : (locked ?? null)
+  );
+  const [title, setTitle] = React.useState<EntityChoice | null>(initial?.title ?? null);
+  const [start, setStart] = React.useState<MonthYear | null>(fromGraphDate(initial?.startDate));
+  const [end, setEnd] = React.useState<MonthYear | null>(fromGraphDate(initial?.endDate));
+  const [employmentType, setEmploymentType] = React.useState<{ id: string; name: string } | null>(
+    initial?.employmentType ?? null
+  );
+  const [skills, setSkills] = React.useState<EntityChoice[]>(initial?.skills ?? []);
   const [isAddingSkill, setIsAddingSkill] = React.useState(false);
-  const [isCurrent, setIsCurrent] = React.useState(false);
-  const [description, setDescription] = React.useState('');
+  const [isCurrent, setIsCurrent] = React.useState(initial ? initial.status === 'current' : false);
+  const [description, setDescription] = React.useState(initial?.description ?? '');
 
   const canSave = pickedCompany !== null && title !== null && !isSaving;
 
@@ -60,7 +70,7 @@ export function AddPositionSheet({ spaceId, company, isSaving, onCancel, onSave 
 
   return (
     <HistorySheet
-      title="Add position"
+      title={initial ? 'Edit position' : 'Add position'}
       isSaving={isSaving}
       canSave={canSave}
       saveLabel="Save position"
@@ -79,6 +89,8 @@ export function AddPositionSheet({ spaceId, company, isSaving, onCancel, onSave 
           <SelectEntity
             spaceId={spaceId}
             relationValueTypes={[{ id: EMPLOYER_TYPE, name: 'Project' }]}
+            placeholder="Find or create a company..."
+            onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) =>
               setPickedCompany({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
             }
@@ -95,6 +107,8 @@ export function AddPositionSheet({ spaceId, company, isSaving, onCancel, onSave 
           <SelectEntity
             spaceId={spaceId}
             relationValueTypes={[{ id: JOB_TYPE, name: 'Job' }]}
+            placeholder="Find or create a job title..."
+            onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) =>
               setTitle({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
             }
@@ -122,11 +136,8 @@ export function AddPositionSheet({ spaceId, company, isSaving, onCancel, onSave 
         </select>
       </label>
 
-      <div className="flex flex-wrap items-end gap-4">
-        <MonthYearField label="Start" value={start} onChange={setStart} disabled={isSaving} />
-        <MonthYearField label="End" value={end} onChange={setEnd} disabled={isSaving || isCurrent} />
-      </div>
-
+      {/* Above the dates, because it decides what the End picker is for: ticking
+          it puts the role in the present and leaves End with nothing to say. */}
       <div className="flex items-center gap-2">
         {/* The shared Checkbox renders a bare button with no checkbox semantics.
             Supplied here rather than fixed there: several callers assert on it
@@ -140,6 +151,11 @@ export function AddPositionSheet({ spaceId, company, isSaving, onCancel, onSave 
           aria-label="I’m in this role now"
         />
         <span className="text-footnote text-text">I’m in this role now</span>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-4">
+        <MonthYearField label="Start" value={start} onChange={setStart} disabled={isSaving} />
+        <MonthYearField label="End" value={end} onChange={setEnd} disabled={isSaving || isCurrent} />
       </div>
 
       <label className="flex flex-col gap-1.5">
@@ -179,6 +195,8 @@ export function AddPositionSheet({ spaceId, company, isSaving, onCancel, onSave 
           <SelectEntity
             spaceId={spaceId}
             relationValueTypes={[{ id: SKILL_TYPE, name: 'Skill' }]}
+            placeholder="Find or create a skill..."
+            onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) => {
               setSkills(current =>
                 current.some(skill => skill.id === result.id)

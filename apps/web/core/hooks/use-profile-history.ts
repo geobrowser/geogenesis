@@ -22,6 +22,8 @@ import {
   isPending,
   mergePendingEducation,
   mergePendingEmployment,
+  replacePendingAddition,
+  shareStintsByOrganization,
 } from '~/core/profile/pending-history';
 import {
   type EducationDraft,
@@ -34,13 +36,20 @@ import type { Relation } from '~/core/types';
 
 type Params = { entityId: string; spaceId: string; enabled?: boolean };
 
+type Kind = 'employment' | 'education';
+
+const PROPERTIES: Record<Kind, { entry: string; card: string }> = {
+  employment: { entry: ROLES_PROPERTY, card: EMPLOYMENT_PROPERTY },
+  education: { entry: DEGREE_PROPERTY, card: EDUCATION_PROPERTY },
+};
+
 /**
  * Work and education on the viewer's own profile (GEO-2858).
  *
- * Nothing here writes on its own. Adding a position, adding a degree and removing
- * either are collected, and the modal's Save publishes them alongside the four
- * header fields as a single edit — so correcting four things costs one ~10s wait
- * rather than four, and nothing lands until the user says so.
+ * Nothing here writes on its own. Adding a position, editing one, adding a degree
+ * and removing either are collected, and the modal's Save publishes them
+ * alongside the four header fields as a single edit — so correcting four things
+ * costs one ~10s wait rather than four, and nothing lands until the user says so.
  *
  * The resting state shows saved records merged with whatever is still pending, so
  * the list reads as the profile they are about to have.
@@ -72,60 +81,95 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     }));
   }, []);
 
+  /**
+   * What removing one row costs: the row itself, and the organisation edge it
+   * hung off once nothing saved is left under it.
+   *
+   * Counted over that row's own edge rather than the whole card — a card can
+   * group several edges to one employer, and a sibling under a different edge
+   * cannot keep this one alive.
+   */
+  const removalsFor = React.useCallback((card: HistoryCard<HistoryEntry>, entry: HistoryEntry, kind: Kind) => {
+    const properties = PROPERTIES[kind];
+
+    const savedSiblings = card.entries.filter(
+      other =>
+        other.relationId !== entry.relationId &&
+        other.edge.stintId === entry.edge.stintId &&
+        !isPending(other.relationId)
+    );
+
+    const removals: PendingRemoval[] = [
+      { relationId: entry.relationId, entityId: entry.tenureId, typeId: properties.entry },
+    ];
+
+    if (savedSiblings.length === 0 && !isPending(entry.edge.relationId)) {
+      removals.push({
+        relationId: entry.edge.relationId,
+        entityId: entry.edge.stintId,
+        typeId: properties.card,
+      });
+    }
+
+    return removals;
+  }, []);
+
   const removeEntry = React.useCallback(
-    (card: HistoryCard<HistoryEntry>, entry: HistoryEntry, kind: 'employment' | 'education') => {
+    (card: HistoryCard<HistoryEntry>, entry: HistoryEntry, kind: Kind) => {
       // Never written, so there is nothing to delete — just forget it.
       if (isPending(entry.relationId)) {
         setPending(current => dropPendingAddition(current, entry.relationId));
         return;
       }
 
-      const entryType = kind === 'employment' ? ROLES_PROPERTY : DEGREE_PROPERTY;
-      const cardType = kind === 'employment' ? EMPLOYMENT_PROPERTY : EDUCATION_PROPERTY;
-
-      // The last row takes its organisation with it: an organisation with nothing
-      // under it is not a record of anything. Counted over saved rows only — a
-      // sibling that is itself unwritten cannot keep the edge alive.
-      const savedSiblings = card.entries.filter(
-        other => other.relationId !== entry.relationId && !isPending(other.relationId)
-      );
-
-      const removals: PendingRemoval[] = [
-        { relationId: entry.relationId, entityId: entry.tenureId, typeId: entryType },
-      ];
-      if (savedSiblings.length === 0 && !isPending(card.relationId)) {
-        removals.push({ relationId: card.relationId, entityId: card.stintId, typeId: cardType });
-      }
-
+      const removals = removalsFor(card, entry, kind);
       setPending(current => ({ ...current, removals: [...current.removals, ...removals] }));
     },
-    []
+    [removalsFor]
   );
 
-  const removeCard = React.useCallback((card: HistoryCard<HistoryEntry>, kind: 'employment' | 'education') => {
-    const entryType = kind === 'employment' ? ROLES_PROPERTY : DEGREE_PROPERTY;
-    const cardType = kind === 'employment' ? EMPLOYMENT_PROPERTY : EDUCATION_PROPERTY;
-
-    setPending(current => {
-      let next = current;
-      for (const entry of card.entries) {
-        if (isPending(entry.relationId)) next = dropPendingAddition(next, entry.relationId);
+  /**
+   * Editing a saved row is a replacement: the old row goes, a new one takes its
+   * place under the same employer.
+   *
+   * The tenure is an anonymous relation entity that nothing else points at, so
+   * rewriting it and minting a fresh one come to the same thing — and a
+   * replacement is the only one of the two that can also move the row to a
+   * different company, or clear a date that used to be set.
+   */
+  const editEntry = React.useCallback(
+    (card: HistoryCard<HistoryEntry>, entry: HistoryEntry, kind: Kind, draft: PositionDraft | EducationDraft) => {
+      if (isPending(entry.relationId)) {
+        setPending(current => replacePendingAddition(current, entry.relationId, draft));
+        return;
       }
 
-      if (isPending(card.relationId)) return next;
+      const organizationId = 'company' in draft ? draft.company.id : draft.school.id;
+      const staysPut = organizationId === card.organization.id;
 
-      return {
-        ...next,
-        removals: [
-          ...next.removals,
-          ...card.entries
-            .filter(entry => !isPending(entry.relationId))
-            .map(entry => ({ relationId: entry.relationId, entityId: entry.tenureId, typeId: entryType })),
-          { relationId: card.relationId, entityId: card.stintId, typeId: cardType },
-        ],
-      };
-    });
-  }, []);
+      // Only the row when the employer is unchanged — the edge it hangs off is
+      // still wanted, and the replacement attaches straight back to it.
+      const removals = staysPut
+        ? [{ relationId: entry.relationId, entityId: entry.tenureId, typeId: PROPERTIES[kind].entry }]
+        : removalsFor(card, entry, kind);
+
+      const next = { ...draft, existingStintId: staysPut ? entry.edge.stintId : undefined };
+
+      setPending(current => ({
+        ...current,
+        removals: [...current.removals, ...removals],
+        positions:
+          kind === 'employment'
+            ? [...current.positions, { key: ID.createEntityId(), draft: next as PositionDraft }]
+            : current.positions,
+        education:
+          kind === 'education'
+            ? [...current.education, { key: ID.createEntityId(), draft: next as EducationDraft }]
+            : current.education,
+      }));
+    },
+    [removalsFor]
+  );
 
   /**
    * Everything pending, as rows for the modal's Save to publish with its own.
@@ -136,10 +180,15 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    */
   const stagePending = React.useCallback((): StagedRows => {
     const context = { personEntityId: entityId, spaceId };
+    const mint = () => ID.createEntityId();
 
     const additions = [
-      ...pending.positions.map(addition => stagePosition(addition.draft, context)),
-      ...pending.education.map(addition => stageEducation(addition.draft, context)),
+      ...shareStintsByOrganization(pending.positions, mint).map(({ draft, newStintId }) =>
+        stagePosition(draft, context, newStintId)
+      ),
+      ...shareStintsByOrganization(pending.education, mint).map(({ draft, newStintId }) =>
+        stageEducation(draft, context, newStintId)
+      ),
     ];
 
     const tombstones: Relation[] = pending.removals.map(removal => ({
@@ -185,7 +234,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     addPosition,
     addEducation,
     removeEntry,
-    removeCard,
+    editEntry,
     stagePending,
     settle,
     discard,

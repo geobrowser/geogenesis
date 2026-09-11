@@ -10,9 +10,10 @@ import { HistorySection } from './history-section';
 
 afterEach(cleanup);
 
-const entry = (name: string, startDate: string | null, endDate: string | null) => ({
+const entry = (name: string, startDate: string | null, endDate: string | null, org = 'Geo') => ({
   relationId: `rel-${name}`,
   tenureId: `tenure-${name}`,
+  edge: { relationId: `edge-${org}`, stintId: `stint-${org}` },
   subject: { id: `subject-${name}`, name },
   startDate,
   endDate,
@@ -24,9 +25,8 @@ const entry = (name: string, startDate: string | null, endDate: string | null) =
 });
 
 const card = (org: string, entries: ReturnType<typeof entry>[]): EmploymentCard => ({
-  relationId: `edge-${org}`,
-  stintId: `stint-${org}`,
   organization: { id: `org-${org}`, name: org },
+  edges: [{ relationId: `edge-${org}`, stintId: `stint-${org}` }],
   entries,
 });
 
@@ -36,8 +36,8 @@ function renderSection(cards: EmploymentCard[] = [], overrides: Partial<Paramete
     cards,
     onAdd: vi.fn(),
     onAddTo: vi.fn(),
+    onEditEntry: vi.fn(),
     onRemoveEntry: vi.fn(),
-    onRemoveCard: vi.fn(),
     ...overrides,
   };
   render(<HistorySection {...props} />);
@@ -96,31 +96,30 @@ describe('HistorySection', () => {
     expect(props.onRemoveEntry).toHaveBeenCalledWith(cards[0], cards[0].entries[1]);
   });
 
-  it('removes a single position from the row it sits on', async () => {
+  // Everything on a row was typed into the sheet, so the row is the way back to it.
+  it('opens the row that was clicked for editing', async () => {
     const cards = [card('Geo', [entry('Product Lead', '2024-01-01Z', null), entry('Engineer', '2022-06-01Z', null)])];
     const props = renderSection(cards);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Remove position Product Lead' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Edit position Engineer' }));
 
-    expect(props.onRemoveEntry).toHaveBeenCalledWith(cards[0], cards[0].entries[0]);
-    expect(props.onRemoveCard).not.toHaveBeenCalled();
+    expect(props.onEditEntry).toHaveBeenCalledWith(cards[0], cards[0].entries[1]);
+    expect(props.onRemoveEntry).not.toHaveBeenCalled();
   });
 
-  // Leaving an employer should not mean deleting each role there one at a time.
-  it('removes a whole employer and everything under it', async () => {
-    const cards = [card('Geo', [entry('Product Lead', '2024-01-01Z', null), entry('Engineer', '2022-06-01Z', null)])];
-    const props = renderSection(cards);
+  // A card-level "Remove employer" sat beside this and did exactly the same work
+  // on a card with one role, which read as two different things.
+  it('offers removal on the row and nowhere else', () => {
+    renderSection([card('Geo', [entry('Engineer', '2022-06-01Z', null)])]);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Remove employer Geo' }));
-
-    expect(props.onRemoveCard).toHaveBeenCalledWith(cards[0]);
-    expect(props.onRemoveEntry).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Remove position Engineer' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Remove employer/ })).not.toBeInTheDocument();
   });
 
   // About a third of records carry no dates. A lone dash reads as a rendering
   // fault rather than as missing data.
   it('shows no date line at all when a row has no dates', () => {
-    renderSection([card('Apple', [entry('Engineer', null, null)])]);
+    renderSection([card('Apple', [entry('Engineer', null, null, 'Apple')])]);
 
     expect(screen.getByText('Engineer')).toBeInTheDocument();
     expect(screen.queryByText('–')).not.toBeInTheDocument();
@@ -131,7 +130,7 @@ describe('HistorySection', () => {
 
     expect(screen.getByRole('button', { name: '+ Add position' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '+ Add another role here' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Remove employer Geo' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Edit position Engineer' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Remove position Engineer' })).toBeDisabled();
   });
 

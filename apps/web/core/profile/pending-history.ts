@@ -4,6 +4,7 @@ import type {
   EmploymentCard,
   EmploymentEntry,
   HistoryCard,
+  HistoryEdgeRef,
   HistoryEntry,
 } from './normalize-history';
 import type { EducationDraft, PositionDraft } from './stage-history';
@@ -34,9 +35,11 @@ export function hasPendingChanges(pending: PendingHistory) {
   return pending.positions.length > 0 || pending.education.length > 0 || pending.removals.length > 0;
 }
 
+const keyOf = (relationId: string) => relationId.slice(PENDING_PREFIX.length);
+
 /** Forgets an unsaved row. Nothing was written, so there is nothing to delete. */
 export function dropPendingAddition(pending: PendingHistory, relationId: string): PendingHistory {
-  const key = relationId.slice(PENDING_PREFIX.length);
+  const key = keyOf(relationId);
   return {
     ...pending,
     positions: pending.positions.filter(addition => addition.key !== key),
@@ -44,14 +47,35 @@ export function dropPendingAddition(pending: PendingHistory, relationId: string)
   };
 }
 
+/**
+ * Rewrites an unsaved row in place, keeping its key.
+ *
+ * Editing something never written is just a different draft under the same key —
+ * no removal, no second row, and the same position in the list it was already
+ * sitting in.
+ */
+export function replacePendingAddition<TDraft extends PositionDraft | EducationDraft>(
+  pending: PendingHistory,
+  relationId: string,
+  draft: TDraft
+): PendingHistory {
+  const key = keyOf(relationId);
+  const swap = <T>(additions: PendingAddition<T>[]) =>
+    additions.map(addition => (addition.key === key ? { ...addition, draft: draft as unknown as T } : addition));
+
+  return { ...pending, positions: swap(pending.positions), education: swap(pending.education) };
+}
+
 function entryFromDraft(
   key: string,
   draft: PositionDraft | EducationDraft,
-  subject: { id: string; name: string | null }
+  subject: { id: string; name: string | null },
+  edge: HistoryEdgeRef
 ): HistoryEntry {
   return {
     relationId: `${PENDING_PREFIX}${key}`,
     tenureId: `${PENDING_PREFIX}${key}-tenure`,
+    edge,
     subject,
     startDate: draft.startDate,
     endDate: draft.endDate,
@@ -59,6 +83,11 @@ function entryFromDraft(
     isLegacy: false,
   };
 }
+
+const organizationOf = (draft: PositionDraft | EducationDraft) =>
+  'company' in draft
+    ? { id: draft.company.id, name: draft.company.name }
+    : { id: draft.school.id, name: draft.school.name };
 
 /**
  * Saved records with everything still pending folded in, so the list reads as the
@@ -72,50 +101,42 @@ function entryFromDraft(
  */
 function merge<TEntry extends HistoryEntry>(
   saved: HistoryCard<TEntry>[],
-  additions: { key: string; draft: PositionDraft | EducationDraft; entry: TEntry }[],
+  additions: { key: string; draft: PositionDraft | EducationDraft; entry: (edge: HistoryEdgeRef) => TEntry }[],
   removals: PendingRemoval[]
 ): HistoryCard<TEntry>[] {
   const removed = new Set(removals.map(removal => removal.relationId));
 
   const cards: HistoryCard<TEntry>[] = saved.map(card => ({
     ...card,
+    edges: card.edges.filter(edge => !removed.has(edge.relationId)),
     entries: card.entries.filter(entry => !removed.has(entry.relationId)),
   }));
 
-  const byStint = new Map(cards.map(card => [card.stintId, card] as const));
-
   for (const addition of additions) {
-    const organization =
-      'company' in addition.draft
-        ? { id: addition.draft.company.id, name: addition.draft.company.name }
-        : { id: addition.draft.school.id, name: addition.draft.school.name };
+    const organization = organizationOf(addition.draft);
+    const existing = cards.find(card => card.organization.id === organization.id);
 
-    const existing = addition.draft.existingStintId
-      ? byStint.get(addition.draft.existingStintId)
-      : cards.find(card => card.organization.id === organization.id && !removed.has(card.relationId));
+    // A row added against a card that still has a saved edge hangs off that edge;
+    // one at an employer with nothing saved left gets a synthetic edge of its own,
+    // which `stagePending` turns into the single Employment relation they share.
+    const edge: HistoryEdgeRef = existing?.edges[0] ?? {
+      relationId: `${PENDING_PREFIX}${organization.id}-edge`,
+      stintId: addition.draft.existingStintId ?? `${PENDING_PREFIX}${organization.id}-stint`,
+    };
 
-    // Newest first, matching how the saved rows are sorted. The lookup is by
-    // organisation rather than by saved edge, so a second role added at an
-    // employer that is itself still unsaved joins the same card instead of
-    // producing a duplicate that would only merge after a save and a refetch.
+    // Newest first, matching how the saved rows are sorted.
     if (existing) {
-      existing.entries = [addition.entry, ...existing.entries];
+      existing.entries = [addition.entry(edge), ...existing.entries];
       continue;
     }
 
-    const card: HistoryCard<TEntry> = {
-      relationId: `${PENDING_PREFIX}${addition.key}-card`,
-      stintId: `${PENDING_PREFIX}${addition.key}-stint`,
-      organization,
-      entries: [addition.entry],
-    };
-    cards.push(card);
+    cards.push({ organization, edges: [edge], entries: [addition.entry(edge)] });
   }
 
   // A card whose rows have all gone is dropped: the organisation edge goes with
   // the last row, so leaving it on screen would promise something the save will
   // not deliver.
-  return cards.filter(card => !removed.has(card.relationId) && card.entries.length > 0);
+  return cards.filter(card => card.entries.length > 0);
 }
 
 export function mergePendingEmployment(
@@ -127,12 +148,12 @@ export function mergePendingEmployment(
     saved,
     additions.map(addition => ({
       ...addition,
-      entry: {
-        ...entryFromDraft(addition.key, addition.draft, addition.draft.title),
+      entry: (edge: HistoryEdgeRef) => ({
+        ...entryFromDraft(addition.key, addition.draft, addition.draft.title, edge),
         status: addition.draft.status,
         employmentType: addition.draft.employmentType,
         skills: addition.draft.skills,
-      },
+      }),
     })),
     removals
   );
@@ -147,12 +168,48 @@ export function mergePendingEducation(
     saved,
     additions.map(addition => ({
       ...addition,
-      entry: {
-        ...entryFromDraft(addition.key, addition.draft, addition.draft.degree),
+      entry: (edge: HistoryEdgeRef) => ({
+        ...entryFromDraft(addition.key, addition.draft, addition.draft.degree, edge),
         status: addition.draft.status,
         fields: addition.draft.fields,
-      },
+      }),
     })),
     removals
   );
+}
+
+/**
+ * One Employment/Education edge per organisation, across everything pending.
+ *
+ * Drafts are staged one at a time, and a draft with no `existingStintId` opens an
+ * edge of its own — so two roles added at the same new employer in one sitting
+ * would publish two edges and read back as two employers. Deciding the stint here
+ * rather than inside the staging keeps that grouping in one place.
+ */
+export function shareStintsByOrganization<TDraft extends PositionDraft | EducationDraft>(
+  additions: PendingAddition<TDraft>[],
+  mintId: () => string
+): { draft: TDraft; newStintId: string }[] {
+  const stintByOrganization = new Map<string, string>();
+
+  // An explicit stint wins over a minted one, whichever order the drafts are in:
+  // a role added to a saved employer has a real edge to attach to, and the new
+  // roles beside it should attach to the same one rather than opening a second.
+  for (const addition of additions) {
+    const stintId = addition.draft.existingStintId;
+    // A pending stint is the placeholder `merge` hands the resting state so rows
+    // group on screen. It names nothing in the graph, so it is minted here like
+    // any other first role rather than written out as a target.
+    if (stintId && !isPending(stintId)) stintByOrganization.set(organizationOf(addition.draft).id, stintId);
+  }
+
+  return additions.map(addition => {
+    const organizationId = organizationOf(addition.draft).id;
+    const shared = stintByOrganization.get(organizationId);
+    if (shared) return { draft: { ...addition.draft, existingStintId: shared }, newStintId: shared };
+
+    const minted = mintId();
+    stintByOrganization.set(organizationId, minted);
+    return { draft: { ...addition.draft, existingStintId: undefined }, newStintId: minted };
+  });
 }

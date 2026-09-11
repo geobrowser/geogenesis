@@ -23,21 +23,24 @@ const mocks = vi.hoisted(() => ({
     bannerUrl: undefined as string | undefined,
     avatarUrl: undefined as string | undefined,
   },
+  hasPendingHistory: false,
+  stagedHistory: { values: [], relations: [] } as { values: unknown[]; relations: unknown[] },
 }));
 
-// The sections have their own hook and their own publishes; these tests are about
-// the four header fields, so it is stubbed to empty rather than exercised here.
+// The sections keep their own pending state and their own tests; these are about
+// the four header fields and what the sections owe them at Save, so it is stubbed
+// to empty except where a test says otherwise.
 vi.mock('~/core/hooks/use-profile-history', () => ({
   useProfileHistory: () => ({
     employment: [],
     education: [],
     isLoading: false,
-    hasPendingChanges: false,
+    hasPendingChanges: mocks.hasPendingHistory,
     addPosition: vi.fn(),
     addEducation: vi.fn(),
     removeEntry: vi.fn(),
-    removeCard: vi.fn(),
-    stagePending: () => ({ values: [], relations: [] }),
+    editEntry: vi.fn(),
+    stagePending: () => mocks.stagedHistory,
     settle: vi.fn(),
     discard: vi.fn(),
   }),
@@ -76,6 +79,8 @@ beforeEach(() => {
   mocks.isLoading = false;
   mocks.status = 'idle';
   mocks.errorMessage = null;
+  mocks.hasPendingHistory = false;
+  mocks.stagedHistory = { values: [], relations: [] };
   mocks.current = {
     name: 'Preston Mantel',
     description: 'Working on debates.',
@@ -135,6 +140,30 @@ describe('EditProfileDialog', () => {
 
     expect(descriptionField()).toHaveValue(long);
     expect(saveButton()).toBeEnabled();
+  });
+
+  // Work and education write nothing of their own, so a position added with the
+  // four fields left alone is the whole of the edit — and Save has to offer it.
+  describe('work and education', () => {
+    it('offers to save an edit that is only a position', async () => {
+      mocks.hasPendingHistory = true;
+      renderDialog();
+
+      expect(saveButton()).toBeEnabled();
+    });
+
+    it('publishes those rows in the same edit as the header fields', async () => {
+      mocks.hasPendingHistory = true;
+      mocks.stagedHistory = { values: [{ id: 'value-1' }], relations: [{ id: 'relation-1' }] };
+      renderDialog();
+
+      await userEvent.click(saveButton());
+
+      expect(mocks.publish).toHaveBeenCalledWith(expect.anything(), {
+        values: [{ id: 'value-1' }],
+        relations: [{ id: 'relation-1' }],
+      });
+    });
   });
 
   it('publishes the trimmed draft', async () => {
