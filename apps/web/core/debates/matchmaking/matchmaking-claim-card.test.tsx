@@ -444,6 +444,45 @@ describe('position avatar stack', () => {
     });
   });
 
+  /**
+   * GEO-2825. A host whose offer is not the card's offer — the rematch picker — passes its own
+   * control into the end slot. Both branches have to honour it: an unresolvable claim falling back
+   * to the card's own `ClaimEndSlot` would quietly send `create_debate_request_as` instead of the
+   * session-scoped rematch request, which is the whole reason the override exists.
+   *
+   * `match` is set so the card's own slot would render if the override were ignored, which is what
+   * makes the second assertion mean anything.
+   */
+  describe('a host can replace the card’s offer with its own', () => {
+    const hostOffer = <button type="button">Host offer</button>;
+
+    it('on a resolvable claim', () => {
+      // Agreeing with the viewer's own side, so the offer is not withheld for contradicting it.
+      mocks.match = { id: 'match-1', viewer_position: true };
+      renderCard(
+        <MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} endSlot={hostOffer} />
+      );
+
+      expect(screen.getByRole('button', { name: 'Host offer' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    });
+
+    it('on an unresolvable claim, where the fallback would send the wrong mutation', () => {
+      mocks.match = { id: 'match-1', viewer_position: true };
+      renderCard(
+        <MatchmakingClaimCard
+          claim={{ ...claim, claim_entity_id: 'not-a-valid-entity-id' }}
+          positions={positions}
+          readiness={readiness()}
+          endSlot={hostOffer}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: 'Host offer' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    });
+  });
+
   // The regression that caused the revert. Drawing the stack from `available_now_count` looked
   // right until you noticed it is viewer-relative: it excludes the viewer and anyone they have
   // already debated on this claim. So a claim you had actually argued showed an empty stack — to

@@ -12,6 +12,7 @@ import Link from 'next/link';
 import type { Debate } from '~/core/debates/api';
 import { debatePath } from '~/core/debates/debate-routes';
 
+import { RequestDebateControl, claimSlotPillClass } from '~/core/debates/request-debate-control';
 import { useClaimMatchup } from './use-claim-matchup';
 
 /**
@@ -104,23 +105,9 @@ export function ClaimEndSlot({
     enabled,
   });
 
-  // Sized to the row it sits in rather than to itself.
-  //
-  // It was the explore page's "Rank" CTA — 16px in a 28px pill — which is right for a standalone
-  // call to action in a panel and wrong here: the meta row is 14px text about 20px tall, so a 28px
-  // control grew the row by 8px the moment the match lookup answered. That is the layout shift, and
-  // no amount of reserving height fixes it without holding every claim card 8px taller than its
-  // neighbours to no purpose.
-  //
-  // So it follows the Join button instead, which is the control already living in this row: 14px at
-  // `leading-none` in a 20px pill. Same height as its neighbour, so the row cannot grow.
-  const base = cx(
-    'items-center gap-1.5 rounded-full transition-colors',
-    variant === 'block'
-      ? // The position pills' own metrics: `min-h-7` and `text-button`, full width beneath them.
-        'flex min-h-7 w-full justify-center px-3 text-button'
-      : 'inline-flex h-5 shrink-0 px-2.5 text-[14px] leading-none'
-  );
+  // The live-debate link below shares its shape with this offer, so both read the size from one
+  // place — see `claimSlotPillClass` for the metrics and for why it is not the debates pill.
+  const base = claimSlotPillClass(variant);
 
   // Whether the match is still about the side the viewer is on.
   //
@@ -153,53 +140,15 @@ export function ClaimEndSlot({
   // draws a live button. Which is why the refusal below is rendered rather than swallowed.
   if (match && !contradictsViewerSide) {
     return (
-      <span className={cx('flex flex-col gap-1', variant === 'block' ? 'w-full' : 'shrink-0 items-end', className)}>
-        <button
-          type="button"
-          onClick={request}
-          disabled={Boolean(blockedReason) || isRequesting}
-          // Shown rather than left to a `title`: native tooltips never appear on touch and are
-          // unreliable on a disabled button, which is exactly when the explanation matters.
-          title={blockedReason}
-          className={cx(
-            base,
-            // Filled dark, not red. In this product red is Dispute — it fills the negative pill an
-            // inch below this and the negative half of the bar beneath that — so a red button here
-            // reads as a side rather than an action. Dark is the only weight left that means
-            // "primary" without borrowing a meaning that is already taken.
-            'bg-text text-white hover:bg-text/90 disabled:cursor-default disabled:opacity-50'
-          )}
-        >
-          {/* Both labels stacked in one grid cell, so the button is always as wide as the longer of
-              them. "Requesting…" is the shorter, and a button that shrinks the moment you press it
-              reads as something having gone wrong. The grid is on this span rather than the button
-              so it cannot fight the button's own `inline-flex`. */}
-          <span className="grid place-items-center">
-            <span className="invisible col-start-1 row-start-1" aria-hidden>
-              Request debate
-            </span>
-            <span className="col-start-1 row-start-1">{isRequesting ? 'Requesting…' : 'Request debate'}</span>
-          </span>
-        </button>
-        {/* A blocked reason is a standing condition the reader can see for themselves, so it is
-            ordinary text. A failed request is an event that happens after they press, with nothing
-            on screen to mark it — `role="alert"` is what makes it reach anyone not watching this
-            corner. The Matches tab's old button announced it; losing that when the button moved
-            would have been a silent regression. */}
-        {blockedReason ? (
-          <span className={cx('text-footnote text-grey-04', variant === 'block' ? 'text-left' : 'text-right')}>
-            {blockedReason}
-          </span>
-        ) : null}
-        {requestError ? (
-          <span
-            role="alert"
-            className={cx('text-footnote text-red-01', variant === 'block' ? 'text-left' : 'text-right')}
-          >
-            {requestError}
-          </span>
-        ) : null}
-      </span>
+      <RequestDebateControl
+        onRequest={request}
+        disabled={Boolean(blockedReason)}
+        isRequesting={isRequesting}
+        blockedReason={blockedReason}
+        requestError={requestError}
+        variant={variant}
+        className={className}
+      />
     );
   }
 
