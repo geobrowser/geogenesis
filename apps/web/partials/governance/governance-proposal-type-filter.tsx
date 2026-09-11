@@ -49,7 +49,7 @@ export function GovernanceProposalTypeFilter({ spaceId }: Props) {
         </Text>
       </Link>
       <Link
-        href={baseHref}
+        href={`${baseHref}?proposalType=proposals`}
         onClick={() => setIsMenuOpen(false)}
         className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
       >
