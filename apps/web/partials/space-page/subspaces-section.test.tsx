@@ -75,6 +75,20 @@ describe('SubspacesSection', () => {
     expect(screen.getAllByRole('link')).toHaveLength(9);
   });
 
+  it('tells assistive tech whether the overflow is open', async () => {
+    const user = userEvent.setup();
+    const many = Array.from({ length: 12 }, (_, i) => subspace({ id: `topic-${i}`, name: `Topic ${i}` }));
+
+    render(<SubspacesSection spaceId={SPACE_ID} subspaces={many} />);
+
+    // A changing label says what the control does, not what state the list is in. The list is
+    // shared with Join spaces, so this covers both.
+    expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(screen.getByRole('button'));
+    expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('offers no overflow control when everything already fits', () => {
     const nine = Array.from({ length: 9 }, (_, i) => subspace({ id: `topic-${i}`, name: `Topic ${i}` }));
 

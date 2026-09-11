@@ -37,8 +37,9 @@ export function SpaceOverviewSidePanel({ spaceId, dailyActivities = false, commu
   const sections: SideRailSection[] = [];
 
   if (subspaces && subspaces.length > 0) {
-    // First, because this is where the reader used to meet it: the gallery was the top of the page,
-    // above the editor.
+    // First in this rail, because that is where the reader used to meet it: the gallery was the top
+    // of the page, above the editor. Not a rule across rails — root's puts curator onboarding above
+    // it, for the reason given there.
     sections.push({ key: 'subspaces', node: <SubspacesSection spaceId={spaceId} subspaces={subspaces} /> });
   }
   if (dailyActivities && tasks.length > 0) {

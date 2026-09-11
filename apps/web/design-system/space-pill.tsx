@@ -54,8 +54,14 @@ export function SpacePillList<T>({ items, keyFor, renderPill }: SpacePillListPro
       ))}
 
       {hasMore ? (
+        // A disclosure, so it has to say whether it is open rather than only changing its label —
+        // a screen reader announcing "Show more, button" tells you what it does, not what state
+        // the list is in. Matches how the repo's other toggles are wired (comment threads, the
+        // block menus). Fixing it here fixes it for Join spaces too, which is the point of the
+        // list being shared.
         <button
           type="button"
+          aria-expanded={showAll}
           onClick={() => setShowAll(prev => !prev)}
           className="inline-flex items-center rounded-full border border-grey-02 py-1.5 pr-2.5 pl-2 text-[16px] leading-[18px] text-grey-04 transition-colors hover:border-text hover:text-text"
         >

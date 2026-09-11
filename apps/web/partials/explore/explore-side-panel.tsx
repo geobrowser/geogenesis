@@ -86,6 +86,10 @@ export function ExploreSidePanel({
     sections.push({ key: 'curator-onboarding', node: <CuratorOnboardingSection /> });
   }
   if (showSubspaces) {
+    // Below onboarding, unlike the space rail where subspaces lead. Deliberate: onboarding is a
+    // short-lived prompt shown to a curator once and dismissed, so it earns the top slot while it
+    // is there, and subspaces are permanent. The space rail has nothing above them because it has
+    // no equivalent.
     sections.push({
       key: 'subspaces',
       node: <SubspacesSection spaceId={spaceId as string} subspaces={subspaces as TopicUsage[]} />,

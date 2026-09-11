@@ -26,12 +26,12 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
-import { SpaceOverviewSidePanel } from '~/partials/space-page/space-overview-side-panel';
+import { SpaceOverviewSidePanelContainer } from '~/partials/space-page/space-overview-side-panel-container';
 import { SubtopicGalleryServerContainer } from '~/partials/space-page/subtopic-gallery-server-container';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
-import { fetchOverviewSubspaces, resolveSpaceSidebar } from './space-sidebar';
+import { resolveSpaceSidebar } from './space-sidebar';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -81,34 +81,25 @@ export default async function SpacePage(props0: Props) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
-  // Overview only, which is what `!tabId` means here — a tab gets no rail, and so no subspaces
-  // (GEO-2875). The gallery this replaces enforced the same rule client-side by returning null
-  // when `tabId` was set, having already paid for the query; skipping the fetch outright is the
-  // same rule applied one step earlier.
-  const [props, { isRootSpace, communityCalls }, subspaces] = await Promise.all([
+  const [props, { isRootSpace, communityCalls }] = await Promise.all([
     getSpaceFrontPage(space),
     resolveSpaceSidebar(spaceId),
-    tabId ? [] : fetchOverviewSubspaces(spaceId),
   ]);
 
+  // Overview only, which is what `!tabId` means here — a tab gets no rail, and so no subspaces
+  // (GEO-2875). Both branches are containers under Suspense so the rail's query never delays the
+  // page's own JSX; the gallery this replaces streamed the same way.
   let sidebar: React.ReactNode = null;
   if (!tabId) {
-    if (isRootSpace) {
-      sidebar = (
-        <React.Suspense fallback={null}>
-          <RootExploreSidePanelContainer spaceId={spaceId} subspaces={subspaces} />
-        </React.Suspense>
-      );
-    } else {
-      sidebar = (
-        <SpaceOverviewSidePanel
-          spaceId={spaceId}
-          dailyActivities
-          communityCalls={communityCalls}
-          subspaces={subspaces}
-        />
-      );
-    }
+    sidebar = (
+      <React.Suspense fallback={null}>
+        {isRootSpace ? (
+          <RootExploreSidePanelContainer spaceId={spaceId} includeSubspaces />
+        ) : (
+          <SpaceOverviewSidePanelContainer spaceId={spaceId} communityCalls={communityCalls} />
+        )}
+      </React.Suspense>
+    );
   }
 
   return (
