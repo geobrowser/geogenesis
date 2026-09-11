@@ -1084,12 +1084,13 @@ function PositionAvatars({
   // These thresholds are against the pill's *content* box, which is what a container query measures
   // — 24px of `px-3` is already excluded, so they read 24px smaller than the pill widths they
   // correspond to. Inside that box sit the label group (a 12px icon, a 6px gap and 58px of
-  // "Disagree" = 76px) and the 6px gap before the stack. A face is 16px — the whole 16px is the
-  // avatar now, where it used to be a 12px avatar inside a 2px white ring — a second adds 12px
-  // after the 4px overlap, and the badge adds another 16px: 98px holds one face, 110px holds two,
-  // 126px holds the lot. The footprint did not change when the ring came off, so these numbers did
-  // not either. The badge is 16px only because `MAX_OVERFLOW_SHOWN` keeps its text inside the
-  // `min-w-4` floor — without that cap it grows and the arithmetic here stops holding.
+  // "Disagree" = 76px) and the 6px gap before the stack. A face is a 16px picture in a 2px ring
+  // that sits outside it — 20px of box — and they overlap by 3px, so the first costs 20px and each
+  // one after it 17px, the badge likewise: 98px holds one face, 110px holds two, 126px holds the
+  // lot. These are deliberately a few pixels loose rather than exact, because erring toward
+  // shedding a face early is the safe direction — the failure they exist to prevent is the label
+  // truncating to "Dis...". The badge only fits that budget because `MAX_OVERFLOW_SHOWN` keeps its
+  // text inside the `min-w-4` floor; without that cap it grows and this stops holding.
   //
   // These were 108/124/148 against 24px faces and an 8px gap. Both changed together: the faces
   // shrank to match the explore card's, and merging the pill's two groups into one centred run
@@ -1105,11 +1106,15 @@ function PositionAvatars({
         <span
           key={participant.user_id}
           className={cx(
-            'relative block size-4 rounded-full',
-            // Figma rings every face but the first, in the pill's own colour — the ring is what
-            // separates one picture from the one it overlaps, so the leading face, overlapping
-            // nothing, does not need it. White here would be a halo on a grey pill.
-            index > 0 && `border-2 ${ringClassName}`,
+            // `box-content` so the ring sits *outside* the 16px picture. Without it the border eats
+            // into the 16px box, leaving a 12px content area that the clip below overflows — which
+            // is how a ringed face ended up both larger and higher than the bare one beside it,
+            // carrying its dot up with it.
+            'relative box-content block size-4 rounded-full border-2',
+            // Figma leaves the ring off the leading face, which overlaps nothing. Transparent
+            // rather than absent, so every face keeps identical geometry: a ring that is not drawn
+            // must not also change the size of the thing it is not drawn on.
+            index === 0 ? 'border-transparent' : ringClassName,
             index === 0 ? '@max-[98px]:hidden' : '@max-[110px]:hidden'
           )}
         >
@@ -1135,7 +1140,7 @@ function PositionAvatars({
       {overflow > 0 && (
         <span
           className={cx(
-            'relative flex h-4 min-w-4 items-center justify-center rounded-full border-2 bg-grey-02 px-1 text-[9px] leading-4 text-grey-04 tabular-nums @max-[126px]:hidden',
+            'relative box-content flex h-4 min-w-4 items-center justify-center rounded-full border-2 bg-grey-02 px-1 text-[9px] leading-4 text-grey-04 tabular-nums @max-[126px]:hidden',
             ringClassName
           )}
         >
