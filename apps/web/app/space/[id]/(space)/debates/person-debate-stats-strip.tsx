@@ -30,13 +30,6 @@ export function PersonDebateStatsStrip({ stats, isWinRateLoading }: Props) {
         label="Won"
         loading={isWinRateLoading}
         value={stats.winRate ? `${stats.winRate.percent}%` : '—'}
-        sub={
-          stats.winRate
-            ? `${stats.winRate.wins} of the ${stats.winRate.judged} that were voted on`
-            : isWinRateLoading
-              ? undefined
-              : 'None voted on yet'
-        }
       />
       <SpacesCell spaceIds={stats.spaceIds} />
     </div>
@@ -49,19 +42,16 @@ const cellClasses =
 function StatCell({
   label,
   value,
-  sub,
   loading = false,
 }: {
   label: string;
   value: string;
-  sub?: string;
   loading?: boolean;
 }) {
   return (
     <div className={cellClasses}>
       {loading ? <Skeleton className="h-[1.375rem] w-12" /> : <p className="text-mediumTitle tabular-nums">{value}</p>}
       <p className="text-metadata text-grey-04">{label}</p>
-      {sub ? <p className="text-footnote text-grey-04">{sub}</p> : null}
     </div>
   );
 }
