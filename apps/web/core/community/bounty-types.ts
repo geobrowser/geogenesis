@@ -14,6 +14,11 @@ export type SpaceBounty = {
   skills: string[];
   isFeatured: boolean;
   contributors: BountyContributor[];
+  /** ISO datetime; drives the card's "Ended" state. */
+  deadline?: string | null;
+  maxContributors?: number | null;
+  /** Distinct allocation targets; with maxContributors, drives "Spots filled". */
+  allocatedCount?: number;
 };
 
 export type SpaceBountiesResult = {

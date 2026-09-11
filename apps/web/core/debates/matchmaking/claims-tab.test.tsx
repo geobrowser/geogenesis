@@ -4,10 +4,12 @@ import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@
 
 import type { ReactElement } from 'react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
+import { debatesHubClaimsSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -70,6 +72,7 @@ const mocks = vi.hoisted(() => ({
   spaceAllowlist: null as Set<string> | null,
   memberSpaceIds: null as Set<string> | null,
   allowlistLoading: false,
+  isSettlingMemberships: false,
   publishableSpaceIds: null as Set<string> | null,
   publishableLoading: false,
   scopeHeldOver: false,
@@ -105,6 +108,7 @@ vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
     // about the member default set it explicitly.
     memberSpaceIds: mocks.memberSpaceIds,
     isLoading: mocks.allowlistLoading,
+    isSettlingMemberships: mocks.isSettlingMemberships,
   }),
 }));
 
@@ -512,15 +516,24 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: () => mocks.promptSignIn,
 }));
 
-function render(ui: ReactElement) {
+function render(ui: ReactElement, sharedStore?: ReturnType<typeof createStore>) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const wrap = (node: ReactElement) => <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>;
+  // A fresh jotai store per render, unless a case passes one in to model a viewer closing the
+  // panel and reopening it — the same session, a new mount. The filter selections are atoms since GEO-2850, so they are
+  // module-global by default — one case's picks would be the next case's starting state, and the
+  // order the suite happened to run in would decide what each test saw.
+  const store = sharedStore ?? createStore();
+  const wrap = (node: ReactElement) => (
+    <Provider store={store}>
+      <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>
+    </Provider>
+  );
   const view = rtlRender(wrap(ui));
   // Testing Library's own `rerender` replaces the whole tree with what it is handed, which drops
   // the provider — so a re-render of the same component crashes on a missing QueryClient rather
   // than showing what changed. Re-wrapped here so a test can move the world and render again.
   // The client comes back too, so a test can watch what a retry asks it to refetch.
-  return { ...view, queryClient, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
+  return { ...view, queryClient, store, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
 }
 
 const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
@@ -624,6 +637,7 @@ beforeEach(() => {
   mocks.spaceAllowlist = null;
   mocks.memberSpaceIds = null;
   mocks.allowlistLoading = false;
+  mocks.isSettlingMemberships = false;
   // Same shape, same reason: settled-with-no-answer does not filter, which is what every
   // pre-existing case here runs under.
   mocks.publishableSpaceIds = null;
@@ -1652,6 +1666,23 @@ describe('All claims reads the Debate tag', () => {
 
     expect(screen.getByText('No claims have been tagged for debate yet.')).toBeInTheDocument();
   });
+
+  // GEO-2840. "Debate now" is the only filter on this tab scored on who is online, so it is the
+  // only one whose empty list means "nobody is around" — the other three are statements about
+  // curation or about the viewer's own positions, and debate hours would not explain any of them.
+  it('adds the debate hours line under Debate now, and not under All claims', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [];
+    mocks.claims = [];
+    render(<ClaimsTab />);
+
+    await showAllClaims();
+    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).toBeNull();
+
+    chooseFilter('All claims', 'Debate now');
+
+    expect(await screen.findByText('Nobody is ready to debate you on a claim right now.')).toBeInTheDocument();
+    expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
+  });
 });
 
 // GEO-2653. The menu is the server's topic facet, which describes every claim the current
@@ -1830,6 +1861,96 @@ describe('topic menu', () => {
     expect(screen.queryByRole('button', { name: /^AI/ })).toBeNull();
   });
 
+  // GEO-2850. The hub closes on any outside pointer-down, so dismissing a dropdown by clicking away
+  // — rather than by clicking back into the trigger — unmounts this tab. The selection used to be
+  // `useState` and went with it, which is the "the filters disappear" the ticket reports.
+  it('keeps a space selection when the panel is closed and reopened', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    const store = createStore();
+    render(<ClaimsTab />, store);
+    await showIndexedClaims();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Any space/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Crypto/ }));
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] }));
+
+    // The panel closing and reopening: this tab unmounts and a new one mounts in the same session.
+    // No need to pick the list again — that dropdown persists too, so the tab comes back on it.
+    cleanup();
+    render(<ClaimsTab />, store);
+
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID], filter: 'mine' }));
+  });
+
+  // Topics are the other half of what GEO-2850 names, and they have their own atom — so they need
+  // their own case. A regression that reset only the topic atom would pass every other test here.
+  it('keeps a topic selection when the panel is closed and reopened', async () => {
+    mocks.claims = [
+      claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [{ id: 'topic-ai', name: 'AI' }]),
+      claim('claim-plain', 'A claim with no topics', false, false, SPACE_ID),
+    ];
+    const store = createStore();
+    render(<ClaimsTab />, store);
+    await showIndexedClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^AI/ }));
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ topicIds: ['topic-ai'] }));
+
+    cleanup();
+    render(<ClaimsTab />, store);
+
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ topicIds: ['topic-ai'] }));
+  });
+
+  // The list selector is the same filter bar, dismissed the same way, so it sticks with the rest.
+  it('keeps the chosen list when the panel is closed and reopened', async () => {
+    const store = createStore();
+    render(<ClaimsTab />, store);
+    await showIndexedClaims();
+
+    cleanup();
+    render(<ClaimsTab />, store);
+
+    // Back on "My positions" rather than reset to Featured — the trigger says so, and so does the
+    // query behind it.
+    expect(await screen.findByRole('button', { name: 'My positions' })).toBeInTheDocument();
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ filter: 'mine' }));
+  });
+
+  // The other half of persisting the selection: a viewer who clears the filter is asking for the
+  // unfiltered list, and reopening the panel must not decide they meant otherwise. The membership
+  // seed is spent once per session now rather than once per mount (GEO-2789 + GEO-2850).
+  it('does not re-seed the membership default over a filter the viewer cleared', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    const store = createStore();
+    render(<ClaimsTab />, store);
+    await showIndexedClaims();
+
+    // The seed lands first, unasked.
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] }));
+
+    fireEvent.click(await screen.findByRole('button', { name: /Crypto/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Any space/ }));
+    // Cleared: the query goes back to the whole eligible set rather than one space.
+    await waitFor(() => expect((mocks.lastQuery as { spaceIds: string[] }).spaceIds).toHaveLength(2));
+
+    cleanup();
+    render(<ClaimsTab />, store);
+    // Open the menu and wait for a real option. That is exactly the seed's own precondition — it
+    // is held against a menu with nothing on it — so once a space is offered, the seed has had its
+    // chance. Asserting any earlier would pass on the moment *before* a re-seed rather than on its
+    // absence, which is how the first draft of this test passed against the bug.
+    fireEvent.click(await screen.findByRole('button', { name: /Any space/ }));
+    expect(await screen.findByRole('button', { name: /Crypto/ })).toBeInTheDocument();
+    await act(async () => {});
+
+    // Read from the store rather than the query: this is about what the viewer's selection *is*,
+    // and an empty selection and a re-seeded one both send a `spaceIds` to the server.
+    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
+  });
+
   // GEO-2789. The filter opens on the spaces the viewer belongs to rather than on everything they
   // are allowed to see, which are different sets: the allowlist also carries featured spaces.
   it('opens on the spaces the viewer belongs to', async () => {
@@ -1900,6 +2021,28 @@ describe('topic menu', () => {
 
     // Seeded with theirs, which a seed taken against the partial list would have missed.
     await waitFor(() => expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull());
+  });
+
+  // GEO-2834. The other half of "the menu has finished arriving": so has the *viewer's* side of it.
+  // Sign-up sends one membership proposal per picked space and they land seconds apart, so the
+  // first non-empty answer is a fraction of what the reader chose — and the seed is spent on it.
+  it('holds the default while more of their memberships are still landing', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.isSettlingMemberships = true;
+    const view = render(<ClaimsTab />);
+    await showIndexedClaims();
+
+    await waitFor(() => expect(mocks.lastQuery).toBeTruthy());
+    expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
+
+    // The rest of what they picked lands.
+    mocks.memberSpaceIds = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.isSettlingMemberships = false;
+    view.rerender(<ClaimsTab />);
+
+    // Both of theirs, which a seed taken against the partial answer would have missed.
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID, OTHER_SPACE_ID] }));
   });
 
   // A default, not a policy: once it has applied, the viewer's own choice stands — including the

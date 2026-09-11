@@ -18,7 +18,14 @@ import {
   decodeExploreCardEntity,
 } from './explore-card-item';
 import { EXPLORE_ENTITY_NAME_PROPERTY_ID, EXPLORE_PAGE_SIZE } from './explore-constants';
-import { EXPLORE_DIVERSITY_WINDOW_SIZE, applyDiversityCap, exploreItemTypeKey } from './explore-diversity';
+import { claimsRequireDebateTagFilter } from './explore-debate-tag-filter';
+import {
+  EXPLORE_DIVERSITY_WINDOW_SIZE,
+  applyDiversityCap,
+  applyPerSpaceQuota,
+  exploreItemSpaceKey,
+  exploreItemTypeKey,
+} from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
@@ -67,6 +74,24 @@ const FEED_EXCLUDED_RELATIONS_FILTER = {
     },
   },
 } satisfies EntityFilter;
+
+/**
+ * How long one request will keep scanning for a window with something in it, and the hard stop on
+ * how many it will look at. See the loop in `fetchExploreFeed` for why the scan happens here.
+ *
+ * A clock rather than a count, because a window's cost is not a constant and a count budget prices
+ * it as one. Measured cold, one shot per cursor, which is what a reader scrolling actually does: a
+ * window near the top of the ranking is 0.3-2s, and by offset 300 it is 11-12s — the ranked
+ * connection's own cost at depth, present before any of this and unchanged by it. A flat budget of
+ * six windows therefore meant a 2-second request near the top and an *81-second* one at depth,
+ * measured, which is a worse failure than the empty-page loop it was meant to fix.
+ *
+ * Checked before each additional fetch, so the budget buys many windows where they are cheap —
+ * which is where the crossable thin patches are — and at most one where they are not. The hard cap
+ * bounds the cheap end, where the clock alone would allow a great many.
+ */
+const MAX_EMPTY_WINDOW_SCAN_MS = 3_000;
+const MAX_EMPTY_WINDOW_SCANS = 6;
 
 function timeThresholdSec(filter: ExploreTime): number | null {
   const now = Math.floor(Date.now() / 1000);
@@ -130,11 +155,13 @@ function buildFeedFilter(args: {
   time: ExploreTime;
   typeIds?: readonly string[];
   requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
   includeEntityScopeInFilter?: boolean;
 }): EntityFilter {
   const t = timeThresholdSec(args.time);
   return {
     ...FEED_EXCLUDED_RELATIONS_FILTER,
+    ...(args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : {}),
     ...(args.includeEntityScopeInFilter
       ? {
           spaceIds: { overlaps: [...args.spaceIds] },
@@ -164,6 +191,7 @@ async function fetchExploreEntitiesPage(args: {
   orderBy: EntitiesOrderBy[];
   typeIds?: readonly string[];
   requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
 }): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
@@ -190,6 +218,7 @@ async function fetchTopEntitiesPage(args: {
   after: string | null;
   typeIds?: readonly string[];
   requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
 }): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
@@ -216,11 +245,16 @@ async function fetchTopEntitiesPage(args: {
 
 // "Best" sort: the Phase A ranked feed via `entitiesRankedForFeedConnection`.
 //
-// Unlike the other two this passes no `filter`. Candidate generation inside
-// `entities_ranked_for_feed` already enforces every clause `buildFeedFilter` builds —
-// name presence, system entities, excluded block types — and takes space, type and
-// recency as its own arguments. See explore-best-document for why sending them twice is
-// not merely redundant.
+// Unlike the other two this sends no `buildFeedFilter`. Candidate generation inside
+// `entities_ranked_for_feed` already enforces every clause it builds — name presence,
+// system entities, excluded block types — and takes space, type and recency as its own
+// arguments. See explore-best-document for why sending them twice is not merely
+// redundant.
+//
+// The debate-tag clause is the one thing that connection does not already know about, so
+// it is the only `filter` this sort ever sends (GEO-2835). It could not be applied to the
+// rows here instead: the tag is not part of the card selection, and a page that dropped
+// most of its claims after the fact would serve short pages and page unevenly.
 //
 // `requireName` is therefore not honoured here: an entity with no name is never a
 // candidate, server-side, and cannot be opted back in. Nothing passes
@@ -234,6 +268,7 @@ async function fetchBestEntitiesPage(args: {
   time: ExploreTime;
   limit: number;
   after: string | null;
+  requireDebateTagOnClaims?: boolean;
 }): Promise<ExploreEntitiesPageResponse> {
   const t = timeThresholdSec(args.time);
   return Effect.runPromise(
@@ -256,6 +291,9 @@ async function fetchBestEntitiesPage(args: {
         // are 1.7x and 2.3x slower with the argument rather than 135x, and they have no
         // equivalent cliff, so New and Top keep filtering server-side where it is exact.
         createdAfter: t != null ? String(t) : undefined,
+        // Left undefined when the caller does not ask for the tag gate, so the sort keeps its
+        // no-filter fast path unless there is a clause the connection genuinely does not know.
+        filter: args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
         spaceIdsForLists: args.spaceIds,
       },
     })
@@ -294,6 +332,13 @@ export async function fetchExploreFeed(args: {
   typeIds?: readonly string[];
   /** If true (default), filter out entities with null or empty `name`. */
   requireName?: boolean;
+  /**
+   * If true, a Claim reaches the feed only if it carries the `Debate` tag (GEO-2835). Every other
+   * type is unaffected. Off by default, and off for the one caller that is not Explore: a space's
+   * activity feed is a log of what has been edited there, and a claim nobody has curated yet is
+   * precisely the kind of edit it exists to show.
+   */
+  requireDebateTagOnClaims?: boolean;
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
   const wanted = args.spaceFilterIds === null ? null : new Set(args.spaceFilterIds.map(normId));
@@ -361,64 +406,125 @@ export async function fetchExploreFeed(args: {
   const windowSize =
     args.sort === 'best' && (args.typeIds?.length ?? 0) !== 1 ? EXPLORE_DIVERSITY_WINDOW_SIZE : scanChunk;
 
-  const page =
+  const fetchWindow = (windowAfter: string | null) =>
     args.sort === 'best'
-      ? await fetchBestEntitiesPage({
+      ? fetchBestEntitiesPage({
           spaceIds: baseIds,
           time: args.time,
           limit: windowSize,
-          after,
+          after: windowAfter,
+          requireDebateTagOnClaims: args.requireDebateTagOnClaims,
         })
       : args.sort === 'top'
-        ? await fetchTopEntitiesPage({
+        ? fetchTopEntitiesPage({
             spaceIds: baseIds,
             time: args.time,
             limit: windowSize,
-            after,
+            after: windowAfter,
             typeIds: args.typeIds,
             requireName: args.requireName,
+            requireDebateTagOnClaims: args.requireDebateTagOnClaims,
           })
-        : await fetchExploreEntitiesPage({
+        : fetchExploreEntitiesPage({
             spaceIds: baseIds,
             time: args.time,
             limit: windowSize,
-            after,
+            after: windowAfter,
             orderBy: [EntitiesOrderBy.CreatedAtDesc],
             typeIds: args.typeIds,
             requireName: args.requireName,
+            requireDebateTagOnClaims: args.requireDebateTagOnClaims,
           });
 
-  const allRows = buildExploreFeedRows(page.entities, allowed, memberOrEditorSet);
+  const orderWindow = (entities: ExploreCardEntity[]): ExploreFeedRow[] => {
+    const allRows = buildExploreFeedRows(entities, allowed, memberOrEditorSet);
 
-  // Best filters by type here rather than in the query (see `fetchBestEntitiesPage`). The other
-  // sorts already came back filtered, so re-checking them would be redundant — and worse than
-  // redundant: a card's types are the TYPES relations *in its display space*, while the server's
-  // predicate is not space-scoped, so the two can disagree at the margin. Applying it only where
-  // the server no longer does keeps exactly one source of truth per sort.
-  const typeFiltered =
-    args.sort === 'best' && (args.typeIds?.length ?? 0) > 0
-      ? allRows.filter(row => entityMatchesExploreTypeIds(row, args.typeIds ?? []))
-      : allRows;
-  const rows = typeFiltered;
+    // Best filters by type here rather than in the query (see `fetchBestEntitiesPage`). The other
+    // sorts already came back filtered, so re-checking them would be redundant — and worse than
+    // redundant: a card's types are the TYPES relations *in its display space*, while the server's
+    // predicate is not space-scoped, so the two can disagree at the margin. Applying it only where
+    // the server no longer does keeps exactly one source of truth per sort.
+    const rows =
+      args.sort === 'best' && (args.typeIds?.length ?? 0) > 0
+        ? allRows.filter(row => entityMatchesExploreTypeIds(row, args.typeIds ?? []))
+        : allRows;
 
-  // "Best" is the only sort that reorders (GEO-2690). "New" is reverse-chronological and
-  // an activity log that shuffles is simply wrong; "Top" is an explicit "rank by score"
-  // request, and the crowding-out was measured on Best, which is also the default tab.
-  const ordered = args.sort === 'best' ? applyDiversityCap(rows, exploreItemTypeKey) : rows;
+    // "Best" is the only sort that reorders (GEO-2690). "New" is reverse-chronological and
+    // an activity log that shuffles is simply wrong; "Top" is an explicit "rank by score"
+    // request, and the crowding-out was measured on Best, which is also the default tab.
+    // Two different crowding problems, two passes (GEO-2690 for type, GEO-2841 for space).
+    // The space quota runs last so its guarantee is the one that holds outright; see
+    // `applyPerSpaceQuota` for why that trade is the right way round.
+    return args.sort === 'best'
+      ? applyPerSpaceQuota(applyDiversityCap(rows, exploreItemTypeKey), exploreItemSpaceKey)
+      : rows;
+  };
+
+  // A window that survives none of the above is not the end of the feed, and returning it as an
+  // empty page is what makes it behave like one — badly (GEO-2835 review). The client's sentinel
+  // has an 8000px rootMargin, so with nothing rendered it stays intersecting and refires the
+  // instant the request settles; an empty page that still carries a cursor is therefore an
+  // unbounded loop of round trips that get slower with depth, not a pause.
+  //
+  // Reachable since the debate-tag gate: Best cannot filter by type in the query (GEO-2793), so it
+  // scans a window and applies the whitelist here — and past the ranked depth where tagged claims
+  // run thin, a Claim-only selection matches nothing in a 30-row window while the connection still
+  // reports another page. Measured over the eleven spaces that hold tagged claims: at offset 600 a
+  // gated window held 0 claims against 13 ungated. Claim is one of the three default types, so
+  // unticking the other two is all it takes.
+  //
+  // So the scan continues here, where one round trip covers it, rather than being handed back to a
+  // client that will only ask again. Bounded because the alternative is unbounded: the ranked
+  // connection reports `hasNextPage` for a long way past the last tagged claim, and the offset cap
+  // that would end it applies only to the explicit `offset` argument, not to the `after` cursor
+  // this uses — `["natural",1200]` as `after` still returns a full window.
+  //
+  // Budget spent with nothing found is reported as the end of the feed. That can end it while
+  // something is still reachable further down — measured, offset 757 found nothing and offset 907
+  // held 13 — so it is a real cost, taken because the alternative is a feed that scrolls forever
+  // and because a reader this deep into a one-type selection can still widen the filter. There is
+  // no third option here: the empty page has to either stop or be retried, and only the client can
+  // do the latter without spinning.
+  let windowAfter = after;
+  let windowOffset = offset;
+  let extraScans = 0;
+  let scanBudgetSpent = false;
+  let page = await fetchWindow(windowAfter);
+  let ordered = orderWindow(page.entities);
+
+  const scanDeadline = Date.now() + MAX_EMPTY_WINDOW_SCAN_MS;
+
+  while (ordered.length <= windowOffset) {
+    // The connection itself says there is nothing further: a genuine end, not a thin patch.
+    if (!page.hasNextPage || !page.endCursor) break;
+    if (extraScans >= MAX_EMPTY_WINDOW_SCANS || Date.now() >= scanDeadline) {
+      scanBudgetSpent = true;
+      break;
+    }
+    extraScans += 1;
+    windowAfter = page.endCursor;
+    // A fresh window is served from its start; the offset only ever indexed the window the
+    // cursor named.
+    windowOffset = 0;
+    page = await fetchWindow(windowAfter);
+    ordered = orderWindow(page.entities);
+  }
 
   // Serving a prefix and advancing the cursor past the whole scan is what dropped ranks
   // 23-30 of every page before (GEO-2695). The offset keeps the rest reachable.
-  const slice = ordered.slice(offset, offset + pageSize);
+  const slice = ordered.slice(windowOffset, windowOffset + pageSize);
 
   return {
     items: await attachMeta(slice),
-    nextCursor: nextExploreWindowCursor({
-      after,
-      offset,
-      served: slice.length,
-      windowLength: ordered.length,
-      hasNextPage: page.hasNextPage,
-      endCursor: page.endCursor,
-    }),
+    nextCursor: scanBudgetSpent
+      ? null
+      : nextExploreWindowCursor({
+          after: windowAfter,
+          offset: windowOffset,
+          served: slice.length,
+          windowLength: ordered.length,
+          hasNextPage: page.hasNextPage,
+          endCursor: page.endCursor,
+        }),
   };
 }
