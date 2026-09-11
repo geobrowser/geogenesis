@@ -4,6 +4,14 @@ import cx from 'classnames';
 
 type Props = {
   /**
+   * `'md'` is Figma's dot at Figma's avatar: 4px of green in a 2px ring, on a 16px face.
+   *
+   * `'sm'` holds that ratio on the 12px faces inside the claim pills — 3px of green in a 1px ring.
+   * Carried forward literally, the `md` dot covers a third of a 12px face and reads as a badge
+   * stuck on it rather than a status on it.
+   */
+  size?: 'sm' | 'md';
+  /**
    * The surface the dot sits on, as a Tailwind *border* colour.
    *
    * The ring is not decoration: the dot sits on the edge of a face, so without a band of the
@@ -32,11 +40,16 @@ type Props = {
  * session rather than about the picture. Only the stacks built from presence pass it, so an avatar
  * cannot pick up a green dot by being rendered somewhere that never knew whether they were online.
  */
-export function OnlineDot({ ringClassName = 'border-white', className }: Props) {
+export function OnlineDot({ size = 'md', ringClassName = 'border-white', className }: Props) {
   return (
     <span
       aria-hidden
-      className={cx('box-content block size-1 rounded-full border-2 bg-green', ringClassName, className)}
+      className={cx(
+        'box-content block rounded-full bg-green',
+        size === 'sm' ? 'size-[3px] border' : 'size-1 border-2',
+        ringClassName,
+        className
+      )}
     />
   );
 }

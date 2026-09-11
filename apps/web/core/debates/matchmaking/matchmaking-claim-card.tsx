@@ -1121,8 +1121,9 @@ function PositionAvatars({
               badged. `-translate-*-0.5` is that 2px, which is what puts the *green* on the corner
               instead of the ring. */}
           <OnlineDot
+            size="sm"
             ringClassName={ringClassName}
-            className="absolute top-0 left-0 -translate-x-0.5 -translate-y-0.5"
+            className="absolute top-0 left-0 -translate-x-px -translate-y-px"
           />
         </span>
       ))}
