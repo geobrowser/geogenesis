@@ -662,7 +662,7 @@ export function ClaimsTab() {
       <div className="flex flex-col gap-3 px-4 py-3">
         {creatingClaim ? (
           <CreateDebateClaimForm
-            candidateSpaceIds={eligibleSpaceIds}
+            candidateSpaceIds={spacesPending ? null : eligibleSpaceIds}
             defaultSpaceId={spaceIds[0] ?? null}
             onCreated={({ spaceId }) => {
               setCreatingClaim(false);

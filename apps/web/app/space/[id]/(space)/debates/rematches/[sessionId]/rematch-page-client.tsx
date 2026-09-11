@@ -1296,7 +1296,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           <div className="mb-3 flex flex-col gap-3">
             {creatingClaim ? (
               <CreateDebateClaimForm
-                candidateSpaceIds={eligibleSpaceIds}
+                candidateSpaceIds={allowlistPending ? null : eligibleSpaceIds}
                 defaultSpaceId={spaceIds[0] ?? session?.source_space_id ?? null}
                 onCreated={({ claimId, spaceId, alreadyExisted }) => {
                   setCreatingClaim(false);

@@ -13,6 +13,8 @@ import { Text } from '~/design-system/text';
 import { HubFilterMenu, type HubFilterOption } from '../matchmaking/hub-filter-menu';
 import { usePublishDebateClaim } from './use-publish-debate-claim';
 
+const PENDING_ROW_COUNT = 3;
+
 export type CreateDebateClaimResult = {
   claimId: string;
   spaceId: string;
@@ -33,10 +35,15 @@ type Props = {
 export function CreateDebateClaimForm({ candidateSpaceIds, defaultSpaceId, onCreated, onCancel }: Props) {
   const { publishClaim } = usePublishDebateClaim();
 
+  const candidatesPending = candidateSpaceIds == null;
   const candidates = React.useMemo(() => candidateSpaceIds ?? [], [candidateSpaceIds]);
-  const { canCreateInSpace, isResolved: creatableResolved } = useCreatableSpaceIds(candidates, true);
+  const {
+    canCreateInSpace,
+    isResolved: creatableResolved,
+    isLoading: creatableLoading,
+  } = useCreatableSpaceIds(candidates, !candidatesPending);
   const creatableSpaceIds = React.useMemo(() => candidates.filter(canCreateInSpace), [candidates, canCreateInSpace]);
-  const { labelsById } = useSpaceLabels(creatableSpaceIds);
+  const { labelsById, isLoading: labelsLoading } = useSpaceLabels(creatableSpaceIds);
 
   const [claimText, setClaimText] = React.useState('');
   const [spaceId, setSpaceId] = React.useState<string | null>(null);
@@ -51,14 +58,29 @@ export function CreateDebateClaimForm({ candidateSpaceIds, defaultSpaceId, onCre
     setSpaceId(preferred);
   }, [creatableSpaceIds, defaultSpaceId, spaceId]);
 
-  const spaceOptions = React.useMemo<HubFilterOption<string>[]>(
-    () =>
-      creatableSpaceIds.map(id => {
-        const label = spaceLabel(labelsById, id);
-        return { value: id, label: label?.name ?? 'Space', image: label?.image ?? null };
-      }),
-    [creatableSpaceIds, labelsById]
-  );
+  const spacesLoading = candidatesPending || creatableLoading || (candidates.length > 0 && !creatableResolved);
+
+  const spaceOptions = React.useMemo<HubFilterOption<string>[]>(() => {
+    if (spacesLoading) {
+      const count = candidatesPending ? PENDING_ROW_COUNT : Math.min(Math.max(candidates.length, 1), PENDING_ROW_COUNT);
+      return Array.from({ length: count }, (_, index) => ({
+        value: `__pending-${index}`,
+        label: '',
+        pending: true,
+      }));
+    }
+    return creatableSpaceIds.map(id => {
+      const label = spaceLabel(labelsById, id);
+      return {
+        value: id,
+        label: label?.name ?? 'Space',
+        image: label?.image ?? null,
+        pending: labelsLoading && !label,
+      };
+    });
+  }, [candidates.length, candidatesPending, creatableSpaceIds, labelsById, labelsLoading, spacesLoading]);
+
+  const selectedLabelPending = spacesLoading || (Boolean(spaceId) && labelsLoading && !spaceLabel(labelsById, spaceId));
 
   const addTopic = (selection: SelectEntityCompactResult) =>
     setTopics(current => (current.some(topic => topic.id === selection.id) ? current : [...current, selection]));
@@ -83,8 +105,9 @@ export function CreateDebateClaimForm({ candidateSpaceIds, defaultSpaceId, onCre
     }
   };
 
-  // No creatable space among the candidates — say so instead of an empty dropdown.
-  const noCreatableSpaces = candidates.length === 0 || (creatableResolved && creatableSpaceIds.length === 0);
+  // Only after both the candidate set and the access check have settled.
+  const noCreatableSpaces =
+    !candidatesPending && (candidates.length === 0 || (creatableResolved && creatableSpaceIds.length === 0));
 
   return (
     <form onSubmit={handleSubmit} className="rounded-lg border border-grey-02 bg-white p-4 shadow-light">
@@ -119,6 +142,9 @@ export function CreateDebateClaimForm({ candidateSpaceIds, defaultSpaceId, onCre
               options={spaceOptions}
               value={spaceId ?? ''}
               onChange={setSpaceId}
+              labelPending={selectedLabelPending}
+              showImages
+              viewportClassName="w-full max-h-[180px] min-h-0 min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box]"
             />
           )}
         </div>
