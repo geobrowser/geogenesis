@@ -25,7 +25,7 @@ import { type DebatesHubTab, debatesHubMatchesOnlyAtom } from '~/atoms';
  * The two states are different queries rather than one list filtered two ways — `useMatchmakingMatches`
  * is the server's authoritative match list, and narrowing the paged `debate_now` list on the client
  * would be a weaker, quietly different answer. So this swaps the source and keeps everything else in
- * place: the toggle sits in the filter bar's leading slot on both sides, which is what keeps it from
+ * place: the switch sits at the end of the filter row on both sides, which is what keeps it from
  * moving under the pointer as the list changes.
  */
 export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {

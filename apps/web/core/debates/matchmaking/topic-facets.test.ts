@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { MatchmakingTopic } from '~/core/debates/api';
 
 import {
   availableTopics,
   carriesEveryTopic,
+  claimTopicsById,
   formatFacetCount,
   keepSelectableTopic,
   keepSelectableTopics,
@@ -22,6 +24,56 @@ const topicsByClaimId = new Map<string, MatchmakingTopic[]>([
   ['claim-in-both', [ai, health]],
   ['claim-unnamed-topic', [unnamed]],
 ]);
+
+describe('claimTopicsById', () => {
+  const TYPE_PROPERTY = '8f151ba4de204e3c9cb499ddf96f48f1';
+
+  function entity(id: string, relations: { topicId: string; name?: string | null; isDeleted?: boolean }[]) {
+    return {
+      id,
+      relations: relations.map(relation => ({
+        type: { id: relation.topicId === 'not-a-topic' ? TYPE_PROPERTY : TOPICS_PROPERTY_ID },
+        isDeleted: relation.isDeleted,
+        toEntity: { id: relation.topicId, name: relation.name ?? null },
+      })),
+    };
+  }
+
+  it('keys each claim entity by id, carrying the topics it points at', () => {
+    const map = claimTopicsById([entity('claim-1', [{ topicId: 'topic-ai', name: 'AI' }])]);
+
+    expect(map.get('claim-1')).toEqual([ai]);
+  });
+
+  // The rule the three call sites were each spelling out: a relation of another type is not a
+  // topic, and a deleted one is not one either.
+  it('reads only live topic relations', () => {
+    const map = claimTopicsById([
+      entity('claim-1', [
+        { topicId: 'topic-ai', name: 'AI' },
+        { topicId: 'topic-health', name: 'Health', isDeleted: true },
+        { topicId: 'not-a-topic', name: 'Claim' },
+      ]),
+    ]);
+
+    expect(map.get('claim-1')).toEqual([ai]);
+  });
+
+  // So `get(id) ?? []` and `carriesEveryTopic(get(id), …)` read "none" the same way whether the
+  // claim was looked up and carries nothing or was never looked up at all.
+  it('leaves out a claim carrying no topics rather than mapping it to an empty list', () => {
+    const map = claimTopicsById([entity('claim-1', []), entity('claim-2', [{ topicId: 'topic-ai', name: 'AI' }])]);
+
+    expect(map.has('claim-1')).toBe(false);
+    expect([...map.keys()]).toEqual(['claim-2']);
+  });
+
+  it('carries an unnamed topic as null rather than dropping it', () => {
+    const map = claimTopicsById([entity('claim-1', [{ topicId: 'topic-unnamed' }])]);
+
+    expect(map.get('claim-1')).toEqual([unnamed]);
+  });
+});
 
 describe('availableTopics', () => {
   it('offers only the topics carried by the claims it is given', () => {

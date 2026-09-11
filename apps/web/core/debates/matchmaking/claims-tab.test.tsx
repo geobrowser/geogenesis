@@ -421,68 +421,6 @@ vi.mock('../tagged-claims', async importOriginal => ({
   },
 }));
 
-// The cards report their own responses now, which is a graph read per card and not what this tab's
-// tests are about.
-vi.mock('~/core/claims/browse/claim-response-summary', () => ({
-  useClaimResponseSummary: () => ({
-    positive: 0,
-    negative: 0,
-    total: 0,
-    percent: null,
-    meetsFloor: false,
-    isControversial: false,
-    isLoading: true,
-    isViewerResponseLoading: true,
-    hasCounts: false,
-    viewerDirection: null,
-    indexedViewerDirection: null,
-    viewerSpaceId: null,
-  }),
-}));
-
-vi.mock('../hooks', () => ({
-  // Mirrors the real key factory: `vi.mock` replaces the whole module, so every query key read
-  // below this needs one here.
-  debateQueryKeys: {
-    matchmakingClaimsRoot: (accountKey: string | null) =>
-      ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
-    matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
-    rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
-  },
-  useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
-  // Read by the end slot's match lookup; the tab's tests do not exercise availability.
-  useDebateActivity: () => ({ data: null, isLoading: false, error: null }),
-  // Featured rows are hydrated by the per-space debate-claims lookup. Records what it was asked
-  // for so the suites can assert the tab only asks about spaces it may show.
-  useDebateClaimsBySpaces: (groups: Array<{ spaceId: string; claimIds: string[] }>) => {
-    mocks.debateClaimGroups.push(groups);
-    // Answers per space, as the real hook does: it asks geo-chat once per group and flattens the
-    // results, so a claim tagged in two spaces comes back twice with each space's own row.
-    const norm = (id: string) => id.replace(/-/g, '').toLowerCase();
-    const claims = mocks.debateClaimRows.filter(row =>
-      groups.some(
-        group =>
-          norm(group.spaceId) === norm(row.space_id) &&
-          group.claimIds.some(id => norm(id) === norm(row.claim_entity_id))
-      )
-    );
-    // The real hook answers per batch, and a batch is scoped to a space. The flags here are the
-    // whole lookup's, so by default every space it was asked about is unsettled together;
-    // `taggedRowsPendingSpaceIds` is how a case says only some of them are.
-    const pendingSpaceIds =
-      mocks.taggedRowsPendingSpaceIds ??
-      (mocks.taggedRowsLoading || mocks.taggedRowsError ? [...new Set(groups.map(group => group.spaceId))].sort() : []);
-
-    // Answerless while loading, as react-query is on a cold key.
-    return {
-      claims: mocks.taggedRowsLoading ? [] : claims,
-      isLoading: mocks.taggedRowsLoading || pendingSpaceIds.length > 0,
-      isError: mocks.taggedRowsError,
-      pendingSpaceIds,
-    };
-  },
-}));
-
 // Featured reads topics and the "Is factual" value through the picker's narrow projection.
 vi.mock('../claim-picker-page', () => ({
   useClaimEntitiesByIds: (ids: string[]) => {

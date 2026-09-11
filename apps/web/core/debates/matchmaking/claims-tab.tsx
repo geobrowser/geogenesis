@@ -185,7 +185,7 @@ export function ClaimsTab({
   const promptSignIn = usePrivySignIn();
   const onRequireSignIn = authenticated ? undefined : promptSignIn;
 
-  // The account's open request, from the same two sources the Matches tab reads it from — the
+  // The account's open request, from the same two sources the matches list reads it from — the
   // requests lookup, or the activity payload where that has not landed. Gated on being signed in:
   // a signed-out visitor has no request to have sent.
   const requestsQuery = useDebateRequests(authenticated);
@@ -195,9 +195,10 @@ export function ClaimsTab({
 
   const [search, setSearch] = React.useState('');
   const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
-  // Featured is where the tab opens. The whole corpus is the wider net but the shallower one — a
-  // curator's pick is a better first thing to put in front of someone than whatever the index
-  // ranked highest, and All claims is one option below.
+  // All claims is where the tab opens: the whole tagged corpus is the wider net, and the curated
+  // cut of it is one pick below rather than the thing you land on (GEO-2861). Read by Explore
+  // alone — Lobby has no source picker, and coerces to `debate_now` below.
+  //
   // Session-scoped like the space and topic selections below, and for the same reason: it is the
   // same filter bar, dismissed the same way (GEO-2850).
   const [selectedFilter, setFilter] = useAtom(debatesHubExploreFilterAtom);
@@ -649,7 +650,7 @@ export function ClaimsTab({
   return (
     <div className="flex flex-col">
       <HubStickyControls>
-        {/* Pinned above the filters, the way the Matches tab pins it. A request sent from here used
+        {/* Pinned above the filters, the way the matches list pins it. A request sent from here used
             to vanish the moment it was sent — the card that sent it looks exactly as it did before,
             and the only evidence was on another tab. It rides inside the sticky block rather than
             above it because two stickies would both claim `top-0` and overlap, and this one is

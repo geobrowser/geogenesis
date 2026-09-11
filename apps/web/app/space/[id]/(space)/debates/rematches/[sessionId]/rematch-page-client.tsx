@@ -8,7 +8,6 @@ import cx from 'classnames';
 import { useAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import { FEATURED_TAG_ID } from '~/core/constants';
 import {
@@ -19,7 +18,6 @@ import {
   type DebateRematchSession,
   type DebateResponseKind,
   type MatchmakingReadiness,
-  type MatchmakingTopic,
 } from '~/core/debates/api';
 import { type ClaimPickerEntity, useClaimEntitiesByIds } from '~/core/debates/claim-picker-page';
 import { isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
@@ -50,6 +48,7 @@ import { MatchesOnlySwitch } from '~/core/debates/matchmaking/matches-only-switc
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import {
   carriesEveryTopic,
+  claimTopicsById,
   countBy,
   keepSelectableTopics,
   orderFacetOptions,
@@ -60,7 +59,11 @@ import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-
 import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
-import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
+import {
+  type ParticipantPositionsByClaim,
+  participantSidesOn,
+  useParticipantPositions,
+} from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
 import {
@@ -134,6 +137,24 @@ const CLAIMS_SOURCE_LABELS: Record<ClaimsSource, string> = {
 /** Stable identity so the hydration below doesn't restart whenever Featured isn't the source. */
 
 /**
+ * The claims one participant has taken a side on, newest response first — the order the graph
+ * returns them in, which the grouping keeps.
+ *
+ * Both the opponent's tab and Explore's "My positions" are this question asked about one of the two
+ * debaters, and `positions` already covers both, so neither costs a lookup of its own.
+ */
+function claimIdsAnsweredBy(byClaim: ParticipantPositionsByClaim, profileSpaceId: string | null): string[] {
+  if (!profileSpaceId) return [];
+
+  const ids: string[] = [];
+  for (const [claimId, rows] of byClaim) {
+    if (rows.some(row => idEquals(row.profileSpaceId, profileSpaceId))) ids.push(claimId);
+  }
+
+  return ids;
+}
+
+/**
  * The tab is narrow, so it carries the opponent's first name only: "Jenna Ruiz" -> "Jenna’s".
  * A name already ending in s takes the bare apostrophe: "Chris" -> "Chris’".
  */
@@ -198,14 +219,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   // The claims the opponent has taken a side on, newest response first — the graph returns them in
   // that order, and the grouping keeps it.
-  const opponentClaimIds = React.useMemo(() => {
-    if (!remoteParticipant) return [];
-    const ids: string[] = [];
-    for (const [claimId, rows] of positions.byClaim) {
-      if (rows.some(row => idEquals(row.profileSpaceId, remoteParticipant.profile_space_id))) ids.push(claimId);
-    }
-    return ids;
-  }, [positions.byClaim, remoteParticipant]);
+  const opponentClaimIds = React.useMemo(
+    () => claimIdsAnsweredBy(positions.byClaim, remoteParticipant?.profile_space_id ?? null),
+    [positions.byClaim, remoteParticipant]
+  );
 
   // Those ids are all the graph hands back; the claim itself — name, description, home space,
   // whether it is factual, topics — is a second, narrow lookup.
@@ -300,14 +317,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * behind a lookup for a list nobody has asked for. Same shape as `taggedEnabled` below.
    */
   const viewerSourced = tab === 'explore' && source === 'mine';
-  const viewerClaimIds = React.useMemo(() => {
-    if (!viewerSourced || !localParticipant) return [];
-    const ids: string[] = [];
-    for (const [claimId, rows] of positions.byClaim) {
-      if (rows.some(row => idEquals(row.profileSpaceId, localParticipant.profile_space_id))) ids.push(claimId);
-    }
-    return ids;
-  }, [localParticipant, positions.byClaim, viewerSourced]);
+  const viewerClaimIds = React.useMemo(
+    () => (viewerSourced ? claimIdsAnsweredBy(positions.byClaim, localParticipant?.profile_space_id ?? null) : []),
+    [localParticipant, positions.byClaim, viewerSourced]
+  );
   const viewerEntitiesQuery = useClaimEntitiesByIds(viewerClaimIds);
   // Both graph-sourced options, one pipeline (GEO-2771).
   //
@@ -671,29 +684,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Topics live on the KG claim entity, so resolve them here to label each card and drive the
   // "Any topic" filter. A claim can carry several topics.
   //
-  // Graph-backed claims only. The browsed rows do *not* bring their own, whatever their type says:
-  // geo-chat fills `topics: []` on every row and answers about topics in the facet beside them.
-  // Reading that the other way round is what emptied the list in GEO-2714, so nothing here should
-  // suggest this map can speak for a browsed row — `carriesPickedTopics` below is where they are
-  // accounted for.
-  const topicsByClaimId = React.useMemo(() => {
-    const map = new Map<string, MatchmakingTopic[]>();
-    for (const entity of [
-      ...opponentEntitiesQuery.entities,
-      ...viewerEntitiesQuery.entities,
-      ...recommendedEntities,
-      ...taggedCatalog.map(claim => claim.entity),
-    ]) {
-      const topics = entity.relations
-        .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
-        .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
-      if (topics.length > 0) map.set(entity.id, topics);
-    }
-    return map;
-    // Graph entities only, and now every row's. geo-chat sends its rows back with `topics: []`, so
-    // folding those in never added anything — the topics have to come from the entity or not at all,
-    // which is why the saved claims are hydrated above rather than trusted to carry their own.
-  }, [opponentEntitiesQuery.entities, viewerEntitiesQuery.entities, recommendedEntities, taggedCatalog]);
+  // Every row's, from graph entities alone. geo-chat sends its rows back with `topics: []`, so
+  // folding those in never added anything — the topics have to come from the entity or not at all,
+  // which is why the saved claims are hydrated above rather than trusted to carry their own, and
+  // why reading that empty array the other way round emptied the list in GEO-2714.
+  const topicsByClaimId = React.useMemo(
+    () =>
+      claimTopicsById([
+        ...opponentEntitiesQuery.entities,
+        ...viewerEntitiesQuery.entities,
+        ...recommendedEntities,
+        ...taggedCatalog.map(claim => claim.entity),
+      ]),
+    [opponentEntitiesQuery.entities, viewerEntitiesQuery.entities, recommendedEntities, taggedCatalog]
+  );
 
   /**
    * Whether a claim survives the topic filter.
@@ -716,30 +720,42 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // The opponent's tab: every claim they hold a side on, newest first. Held until the session's
   // exclusions are in, so nothing lists and then vanishes. Not narrowed by the space allowlist —
   // see it above.
+  /**
+   * One participant's positions as picker rows, shared-preference first.
+   *
+   * The opponent's tab and Explore's "My positions" are the same list asked about two people, so
+   * they are the same code asked about two people: `holdsSide` is the whole of the difference.
+   *
+   * It tests the *row's* sides rather than trusting the ids, and that is not belt-and-braces. The
+   * ids come from the graph, so the claim is certainly answered — but a response recorded in a
+   * space other than the one the card is drawn under is dropped by `participantSidesOn`, and such a
+   * row would list here with nobody's position on it.
+   */
+  const participantClaimRows = React.useCallback(
+    (claimIds: string[], entities: ClaimPickerEntity[], holdsSide: (userId: string) => boolean) => {
+      const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
+      const rows: DebateRematchClaim[] = [];
+      for (const claimId of claimIds) {
+        if (excludedClaimIds.has(claimId)) continue;
+        const entity = entitiesById.get(claimId);
+        const row = entity ? rowFromEntity(entity) : null;
+        if (row && row.participants.some(side => holdsSide(side.user_id) && side.position !== null)) rows.push(row);
+      }
+      return rows
+        .filter(row => canPublishDebateIn(row.claim.space_id))
+        .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
+    },
+    [canPublishDebateIn, excludedClaimIds, rowFromEntity]
+  );
+
   const opponentClaimsSettling = opponentClaimsQuery.isLoading || opponentEntitiesQuery.isLoading;
-  const opponentClaimsNow = React.useMemo(() => {
-    if (opponentClaimsSettling) return [];
-    const entitiesById = new Map(opponentEntitiesQuery.entities.map(entity => [entity.id, entity]));
-    const rows: DebateRematchClaim[] = [];
-    for (const claimId of opponentClaimIds) {
-      if (excludedClaimIds.has(claimId)) continue;
-      const entity = entitiesById.get(claimId);
-      const row = entity ? rowFromEntity(entity) : null;
-      if (row && row.participants.some(side => side.user_id !== currentUserId && side.position !== null))
-        rows.push(row);
-    }
-    return rows
-      .filter(row => canPublishDebateIn(row.claim.space_id))
-      .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
-  }, [
-    canPublishDebateIn,
-    currentUserId,
-    excludedClaimIds,
-    opponentClaimIds,
-    opponentClaimsSettling,
-    opponentEntitiesQuery.entities,
-    rowFromEntity,
-  ]);
+  const opponentClaimsNow = React.useMemo(
+    () =>
+      opponentClaimsSettling
+        ? []
+        : participantClaimRows(opponentClaimIds, opponentEntitiesQuery.entities, userId => userId !== currentUserId),
+    [currentUserId, opponentClaimIds, opponentClaimsSettling, opponentEntitiesQuery.entities, participantClaimRows]
+  );
   // A new response from the opponent adds an id, and the lookups keyed on the id list start over.
   // The list they were drawn from is still right for every claim already on it, so it stays up
   // until the new one lands rather than dropping to nothing in between.
@@ -760,41 +776,21 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     sessionId
   );
 
-  // My positions: every claim the *viewer* holds a side on, built exactly as the opponent's list is
-  // and held the same way. Not narrowed by the space allowlist either, and for the same reason —
-  // a debater's own claims live in their personal space, which nobody else has joined.
+  // My positions: the same list asked about the viewer. Not narrowed by the space allowlist either,
+  // and for the same reason — a debater's own claims live in their personal space, which nobody
+  // else has joined.
   //
   // `positions.isLoading` is part of the settling state rather than only the two lookups below it.
   // Those are keyed on ids that come *from* positions, so while positions is in flight the id list
   // is empty, they are disabled rather than loading, and nothing here would report as pending.
   const viewerClaimsSettling = positions.isLoading || viewerEntitiesQuery.isLoading || viewerClaimsQuery.isLoading;
-  const viewerClaimsNow = React.useMemo(() => {
-    if (viewerClaimsSettling) return [];
-    const entitiesById = new Map(viewerEntitiesQuery.entities.map(entity => [entity.id, entity]));
-    const rows: DebateRematchClaim[] = [];
-    for (const claimId of viewerClaimIds) {
-      if (excludedClaimIds.has(claimId)) continue;
-      const entity = entitiesById.get(claimId);
-      const row = entity ? rowFromEntity(entity) : null;
-      // The mirror of the opponent's test. `sidesOf` reads the graph, and the ids came from it, so
-      // this is a claim the viewer has answered — but a response recorded in a space other than the
-      // one the card is drawn under is dropped by `participantSidesOn`, and that row would then be
-      // a claim on this list with nobody's position on it.
-      if (row && row.participants.some(side => side.user_id === currentUserId && side.position !== null))
-        rows.push(row);
-    }
-    return rows
-      .filter(row => canPublishDebateIn(row.claim.space_id))
-      .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
-  }, [
-    canPublishDebateIn,
-    currentUserId,
-    excludedClaimIds,
-    rowFromEntity,
-    viewerClaimIds,
-    viewerClaimsSettling,
-    viewerEntitiesQuery.entities,
-  ]);
+  const viewerClaimsNow = React.useMemo(
+    () =>
+      viewerClaimsSettling
+        ? []
+        : participantClaimRows(viewerClaimIds, viewerEntitiesQuery.entities, userId => userId === currentUserId),
+    [currentUserId, participantClaimRows, viewerClaimIds, viewerClaimsSettling, viewerEntitiesQuery.entities]
+  );
   const viewerClaimsHeld = useLastSettled(viewerClaimsNow, viewerClaimsSettling, sessionId);
   // Held against the viewer's own acting on it, exactly as the opponent's list is: taking a side
   // flips `shared_preference`, and re-sorting would send the row they just acted on to the top and

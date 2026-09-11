@@ -53,12 +53,19 @@ export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
  * membership-based default meaningful — it seeds once per session rather than once per device,
  * ever — and spares a viewer a filter they set days ago and have forgotten.
  *
- * Split per surface because the two menus describe different lists: the Claims facets are the
- * whole tagged corpus, the Matches ones are only what the viewer has a match on.
+ * Split per surface because the two menus describe different lists: Explore's facets are the whole
+ * tagged corpus, Lobby's are only what the viewer can debate right now.
  */
+
 /**
- * Which list the Claims tab is showing. `featured` is the tab's own rather than geo-chat's, which
- * is why this is not just {@link MatchmakingClaimsFilter} — typed off it so the two cannot drift.
+ * Which list Explore is showing, and what its source picker offers.
+ *
+ * `featured` is the tab's own rather than geo-chat's, which is why this is not just
+ * {@link MatchmakingClaimsFilter} — typed off it so the two cannot drift. Only `debate_now` left the
+ * menu, for Lobby: that list is scored on who is available to debate *you*, which is a question
+ * about arranging a debate rather than about the corpus. `mine` stayed — it is the viewer's own cut
+ * of the same catalogue, and reads as one more answer to "which claims?" rather than as a surface
+ * of its own (GEO-2861).
  *
  * Persisted with the rest of the filter bar (GEO-2850): it is the same dropdown, dismissed the same
  * way, and losing it on a click-away was the same surprise.
@@ -67,12 +74,6 @@ export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
  * not about what the viewer picked, so it leaves this value alone — which is what lets a viewer who
  * signs in keep the list they had chosen. Changing account is the one thing that clears it; see
  * {@link debatesHubFiltersOwnerAtom}.
- */
-/**
- * What Explore's source picker offers. Only `debate_now` left it, for Lobby: that list is scored on
- * who is available to debate *you*, which is a question about arranging a debate rather than about
- * the corpus. `mine` stayed — it is the viewer's own cut of the same catalogue, and reads as one
- * more answer to "which claims?" rather than as a surface of its own.
  */
 export type DebatesHubExploreFilter = Exclude<MatchmakingClaimsFilter, 'debate_now'> | 'featured';
 export const debatesHubExploreFilterAtom = atom<DebatesHubExploreFilter>('all');
@@ -96,7 +97,7 @@ export const debatesHubLobbySpaceIdsAtom = atom<string[]>([]);
 export const debatesHubLobbyTopicIdsAtom = atom<string[]>([]);
 
 /**
- * Whether the Claims tab's membership default has been applied or forfeited this session.
+ * Whether each browse surface's membership default has been applied or forfeited this session.
  *
  * `useMemberSpaceDefault` spends its seed once per *mount*, which was the right lifetime while the
  * selection died with the mount too. Now that the selection outlives the panel, the seed has to as
@@ -113,7 +114,7 @@ export const debatesHubLobbySpaceSeedSpentAtom = atom(false);
  * to be recorded rather than assumed. Two transitions, and they want opposite answers:
  *
  * A viewer signing in is the same person authenticating, and keeps the bar they were just using —
- * the Claims tab prompts for sign-in from inside its own empty state, so clearing it there would
+ * Explore prompts for sign-in from inside its own empty state, so clearing it there would
  * lose picks made seconds earlier. `owner` being null marks that case, and nothing is reset.
  *
  * A different established account is a different viewer, and inherits nothing: without this,

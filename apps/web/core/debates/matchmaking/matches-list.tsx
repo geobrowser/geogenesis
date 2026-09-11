@@ -4,11 +4,9 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-
 import { Input } from '~/design-system/input';
 
-import type { MatchmakingMatch, MatchmakingTopic } from '../api';
+import type { MatchmakingMatch } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateActivity } from '../hooks';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
@@ -18,7 +16,14 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { carriesEveryTopic, countBy, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
+import {
+  carriesEveryTopic,
+  claimTopicsById,
+  countBy,
+  keepSelectedVisible,
+  orderFacetOptions,
+  toggleId,
+} from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useStableListOrder } from './use-stable-list-order';
 import { type DebatesHubTab, debatesHubLobbySpaceIdsAtom, debatesHubLobbyTopicIdsAtom } from '~/atoms';
@@ -28,8 +33,8 @@ import { type DebatesHubTab, debatesHubLobbySpaceIdsAtom, debatesHubLobbyTopicId
  * ready too. Requesting sends to whoever has been online longest; the server advances to the next
  * candidate if they pass, so this list never has to pick a person.
  *
- * Topics are Knowledge Graph data geo-chat doesn't model — `match.topics` is always empty, so this
- * filters by space only.
+ * Topics are Knowledge Graph data geo-chat doesn't model — `match.topics` is empty on every row —
+ * so they are resolved from the claim entities rather than read off the rows (GEO-2861).
  *
  * No longer a tab of its own (GEO-2861): this is Lobby with "Matches only" on. Lobby owns the
  * toggle and passes it down, so this renders the same filter bar in the same place either way and
@@ -63,7 +68,7 @@ export function MatchesList({
   const serverMatches = React.useMemo(() => matchesQuery.data?.matches ?? [], [matchesQuery.data]);
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
 
-  // Same hold as the Claims tab: standing down from one claim shouldn't reshuffle the rest.
+  // Same hold as Explore's list: standing down from one claim shouldn't reshuffle the rest.
   const matches = useStableListOrder(
     serverMatches,
     match => `${match.claim.space_id}:${match.claim.claim_entity_id}`,
@@ -74,7 +79,7 @@ export function MatchesList({
   // hand, so the rows are the complete answer.
   //
   // A selected space is kept on the menu even once nothing counts towards it, the same way
-  // `useSpaceFilterMenu` does it for the Claims tab. The selection outlives this mount now
+  // `useSpaceFilterMenu` does it for Explore. The selection outlives this mount now
   // (GEO-2850), so it can outlive the match that put the space on the menu in the first place —
   // the other side goes offline while the panel is closed, and reopening it would otherwise show
   // an empty list filtered by a space with no row left to untick it by.
@@ -89,25 +94,15 @@ export function MatchesList({
 
   // Topics are Knowledge Graph data that `/matchmaking/matches` does not carry — `match.topics` is
   // empty on every row, the same way `MatchmakingClaim.topics` is — and there is no facet beside it
-  // either. So they are resolved from the claim entities, which is what the rematch picker already
-  // does for its own by-id lists.
+  // either. So they are resolved from the claim entities, the same lookup and the same
+  // `claimTopicsById` the rematch picker uses for its own by-id lists.
   //
   // Safe to count and filter client-side here in a way it would not be for a paged list: this whole
   // list is in hand, so the rows *are* the complete answer (see `facetSpaces` above for the same
   // reasoning about spaces).
   const claimEntityIds = React.useMemo(() => serverMatches.map(match => match.claim.claim_entity_id), [serverMatches]);
   const { entities: claimEntities } = useClaimEntitiesByIds(claimEntityIds);
-
-  const topicsByClaimId = React.useMemo(() => {
-    const map = new Map<string, MatchmakingTopic[]>();
-    for (const entity of claimEntities) {
-      const topics = entity.relations
-        .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
-        .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
-      if (topics.length > 0) map.set(entity.id, topics);
-    }
-    return map;
-  }, [claimEntities]);
+  const topicsByClaimId = React.useMemo(() => claimTopicsById(claimEntities), [claimEntities]);
 
   // Counted over the rows the *other* filters already allow, so the menu answers "what else is in
   // what I am looking at" rather than offering a topic that would empty the list.
