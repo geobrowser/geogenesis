@@ -19,13 +19,8 @@ import { useUnexpiredRequests } from './use-request-countdown';
 export function HubLiveRail() {
   const { authenticated, ready } = useGeoChatAuth();
 
-  // Requests only appears when there is one. Nothing is pending most of the time, and an empty
-  // heading pushes Available now down the rail to say so — which costs the list that *does* have
-  // something in it the height to show it.
-  //
-  // Same sources `RequestsTab` reads, expiry included: claim requests plus a pending claimless
-  // challenge. A lapsed one must not hold the section open, and `useUnexpiredRequests` does not
-  // start its clock on an empty list.
+  // Hide Requests when nothing is pending so People sits at the top. Same sources as RequestsTab,
+  // including expiry and pending challenges.
   const requestsQuery = useDebateRequests(authenticated);
   const { data: activity } = useDebateActivity(authenticated);
   const incoming = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
@@ -56,7 +51,9 @@ export function HubLiveRail() {
   );
 }
 
-/** Signed out: keep People, explain Requests instead of an empty heading. */
+/**
+ * Signed out: keep People, and say what Requests would offer.
+ */
 function SignedOutRail() {
   const promptSignIn = usePrivySignIn();
 
