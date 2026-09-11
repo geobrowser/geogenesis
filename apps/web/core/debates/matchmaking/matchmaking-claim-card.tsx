@@ -1084,9 +1084,9 @@ function PositionAvatars({
   // These thresholds are against the pill's *content* box, which is what a container query measures
   // — 24px of `px-3` is already excluded, so they read 24px smaller than the pill widths they
   // correspond to. Inside that box sit the label group (a 12px icon, a 6px gap and 58px of
-  // "Disagree" = 76px) and the 6px gap before the stack. A face is 16px including its ring and they
-  // overlap by 3px — Figma's numbers — so the first costs 16px and each one after it 13px, the
-  // badge likewise: 98px holds one face, 110px holds two, 126px holds the lot. These are
+  // "Disagree" = 76px) and the 6px gap before the stack. A face is a 16px picture in a 2px ring
+  // outside it — 20px of box — pitched 13px apart, so the first costs 20px and each one after it
+  // 13px, the badge likewise: 102px holds one face, 115px holds two, 128px holds the lot. These are
   // deliberately a few pixels loose rather than exact, because erring toward shedding a face early
   // is the safe direction — the failure they exist to prevent is the label truncating to "Dis...".
   // The badge only fits that budget because `MAX_OVERFLOW_SHOWN` keeps its text inside the
@@ -1101,29 +1101,31 @@ function PositionAvatars({
   // count is computed against the participants rendered, so hiding a face would leave a "+N" that
   // no longer adds up, while hiding the badge only stops advertising a remainder.
   return (
-    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-[3px]">
+    // `-7px`, not Figma's `-3px`. Figma's stroke is drawn outside the node and does not lay out, so
+    // its faces are 16px apart less 3px = a 13px pitch. A CSS border *does* lay out, so a face here
+    // is 20px wide and needs -7px to land that same 13px pitch. Copying the -3px across was the bug:
+    // same number, box 4px wider, four pixels of overlap lost per face.
+    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-[7px]">
       {participants.map((participant, index) => (
         <span
           key={participant.user_id}
           className={cx(
-            // 16px *including* the ring, which is how Figma measures these — the ring is drawn
-            // inside the box, leaving a 12px picture. Putting it outside instead (`box-content`)
-            // made each face 20px and the stack 4px looser per face than the design, which is what
-            // read as too little overlap.
-            'relative block size-4 rounded-full border-2',
+            // The picture stays 16px and the ring sits outside it, which is what Figma draws: the
+            // ring's job is to cut the face behind, so it has to be *over* that face rather than
+            // inside its own. 11px of a 16px face shows before the next one's ring bites into it.
+            'relative box-content block size-4 rounded-full border-2',
             // Figma leaves the ring off the leading face, which overlaps nothing. Transparent
             // rather than absent, so every face keeps identical geometry: a ring that is not drawn
             // must not also change the size of the thing it is not drawn on.
             index === 0 ? 'border-transparent' : ringClassName,
-            index === 0 ? '@max-[98px]:hidden' : '@max-[110px]:hidden'
+            index === 0 ? '@max-[102px]:hidden' : '@max-[115px]:hidden'
           )}
         >
-          {/* Sized to the content box the ring leaves, not to the wrapper: a 16px clip inside a
-              12px content box overflows, which is how a ringed face once rendered larger and higher
-              than the bare one beside it. The clip is here rather than on the wrapper so the dot
-              can hang over the rim without being cut. */}
-          <span className="block size-3 overflow-hidden rounded-full">
-            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={12} />
+          {/* Matches the picture, which `box-content` keeps at a full 16px whether or not the face
+              carries a ring — so every face is the same size and sits on one baseline. The clip is
+              here rather than on the wrapper so the dot can hang over the rim without being cut. */}
+          <span className="block size-4 overflow-hidden rounded-full">
+            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={16} />
           </span>
           {/* Everyone in this stack is present by construction — the sides are built from
               `online_choices` — so the dot needs no condition. It rings in the pill's own colour
@@ -1132,17 +1134,20 @@ function PositionAvatars({
               corner and its 2px ring bleeds outside, so the avatar reads as notched rather than
               badged. `-translate-*-0.5` is that 2px, which is what puts the *green* on the corner
               instead of the ring. */}
+          {/* Figma's ellipse is `r=3` under an opaque `stroke-width=2`, so the green reads 4px
+              across inside a 2px ring — 8px overall, which is `OnlineDot`'s default. Its 4px box
+              sits on the picture's top-left corner and the svg overhangs it by half, so the element
+              starts 2px up and left of that corner. */}
           <OnlineDot
-            size="sm"
             ringClassName={ringClassName}
-            className="absolute top-0 left-0 -translate-x-px -translate-y-px"
+            className="absolute top-0 left-0 -translate-x-0.5 -translate-y-0.5"
           />
         </span>
       ))}
       {overflow > 0 && (
         <span
           className={cx(
-            'relative flex h-4 min-w-4 items-center justify-center rounded-full border-2 bg-grey-02 px-1 text-[8px] leading-3 text-grey-04 tabular-nums @max-[126px]:hidden',
+            'relative box-content flex h-4 min-w-4 items-center justify-center rounded-full border-2 bg-grey-02 px-1 text-[8px] leading-4 text-grey-04 tabular-nums @max-[128px]:hidden',
             ringClassName
           )}
         >

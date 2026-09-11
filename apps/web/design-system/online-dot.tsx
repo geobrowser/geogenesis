@@ -4,14 +4,6 @@ import cx from 'classnames';
 
 type Props = {
   /**
-   * `'md'` is Figma's dot at Figma's avatar: 4px of green in a 2px ring, on a 16px face.
-   *
-   * `'sm'` holds that ratio on the 12px faces inside the claim pills — 3px of green in a 1px ring.
-   * Carried forward literally, the `md` dot covers a third of a 12px face and reads as a badge
-   * stuck on it rather than a status on it.
-   */
-  size?: 'sm' | 'md';
-  /**
    * The surface the dot sits on, as a Tailwind *border* colour.
    *
    * The ring is not decoration: the dot sits on the edge of a face, so without a band of the
@@ -26,9 +18,10 @@ type Props = {
 /**
  * The green "online now" dot on a face.
  *
- * `bg-green` is the design's `#2ACE9D` exactly, already a token here. Sized 8px overall — a 4px
- * dot inside a 2px ring — which is what the Figma card draws at its 16px avatars and holds at the
- * 20px ones these stacks use.
+ * `bg-green` is the design's `#2ACE9D` exactly, already a token here. 8px overall — 4px of green
+ * in a 2px ring — which is Figma's `r=3` circle under an opaque `stroke-width=2`: the stroke
+ * straddles the radius, so it eats the outer third of the fill and the green reads 4px, not 6px.
+ * One size: the 12px faces that briefly wanted a smaller one are 16px again.
  *
  * `box-content` is load-bearing and its absence is silent. Tailwind's preflight makes everything
  * `border-box`, so a 4px box with a 2px border on each side has a *zero-width* content box: the
@@ -40,16 +33,11 @@ type Props = {
  * session rather than about the picture. Only the stacks built from presence pass it, so an avatar
  * cannot pick up a green dot by being rendered somewhere that never knew whether they were online.
  */
-export function OnlineDot({ size = 'md', ringClassName = 'border-white', className }: Props) {
+export function OnlineDot({ ringClassName = 'border-white', className }: Props) {
   return (
     <span
       aria-hidden
-      className={cx(
-        'box-content block rounded-full bg-green',
-        size === 'sm' ? 'size-[3px] border' : 'size-1 border-2',
-        ringClassName,
-        className
-      )}
+      className={cx('box-content block size-1 rounded-full border-2 bg-green', ringClassName, className)}
     />
   );
 }
