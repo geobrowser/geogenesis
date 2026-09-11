@@ -24,13 +24,29 @@ type UseSpacesByIdsResult = {
 
 type UseSpacesByIdsData = Omit<UseSpacesByIdsResult, 'isLoading' | 'isPlaceholderData'>;
 
+const SPACE_ID_REQUEST_LIMIT = 100;
+
+function chunkSpaceIds(spaceIds: string[]): string[][] {
+  const batches: string[][] = [];
+  for (let start = 0; start < spaceIds.length; start += SPACE_ID_REQUEST_LIMIT) {
+    batches.push(spaceIds.slice(start, start + SPACE_ID_REQUEST_LIMIT));
+  }
+  return batches;
+}
+
 export function useSpacesByIds(spaceIds: string[] = [], enabled = true): UseSpacesByIdsResult {
   const requestedIds = [...new Set(spaceIds.filter(Boolean))];
   const normalizedIds = [...requestedIds].sort();
 
   const { data, isLoading, isPlaceholderData } = useQuery({
     queryKey: spacesByIdsQueryKey(normalizedIds),
-    queryFn: ({ signal }) => Effect.runPromise(getSpaces({ spaceIds: normalizedIds }, signal)),
+    queryFn: async ({ signal }) => {
+      const batches = chunkSpaceIds(normalizedIds);
+      const results = await Promise.all(
+        batches.map(batch => Effect.runPromise(getSpaces({ spaceIds: batch }, signal)))
+      );
+      return results.flat();
+    },
     select: (fetchedSpaces): UseSpacesByIdsData => {
       const spacesById = new Map(fetchedSpaces.map(space => [space.id, space]));
       const spaces = requestedIds.map(id => spacesById.get(id)).filter((space): space is Space => Boolean(space));

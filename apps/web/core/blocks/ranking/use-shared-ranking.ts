@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -43,6 +43,7 @@ export function useSharedRanking({
     queryKey: ['shared-ranking', rankEntityId, authorSpaceId, blockEntityId, blockEntitySpaceId],
     enabled,
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<RankingSubmissionRecord | null> => {
       const rankEntity = await Effect.runPromise(getEntity(rankEntityId, authorSpaceId));
       if (!rankEntity || !isRankSubmittedToBlock(rankEntity, authorSpaceId, blockEntityId)) return null;
