@@ -6,10 +6,12 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 
 import { Text } from '~/design-system/text';
 
-import { useGeoChatAuth } from '../hooks';
+import { useDebateActivity, useGeoChatAuth } from '../hooks';
+import { useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
+import { useUnexpiredRequests } from './use-request-countdown';
 
 /**
  * The workspace's right rail: requests and presence, useful while browsing claims.
@@ -17,13 +19,32 @@ import { RequestsTab } from './requests-tab';
 export function HubLiveRail() {
   const { authenticated, ready } = useGeoChatAuth();
 
+  // Requests only appears when there is one. Nothing is pending most of the time, and an empty
+  // heading pushes Available now down the rail to say so — which costs the list that *does* have
+  // something in it the height to show it.
+  //
+  // Same sources `RequestsTab` reads, expiry included: claim requests plus a pending claimless
+  // challenge. A lapsed one must not hold the section open, and `useUnexpiredRequests` does not
+  // start its clock on an empty list.
+  const requestsQuery = useDebateRequests(authenticated);
+  const { data: activity } = useDebateActivity(authenticated);
+  const incoming = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
+  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
+  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
+  const liveChallenges = useUnexpiredRequests(
+    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
+  );
+  const hasPendingRequests = incoming.length > 0 || outbound !== null || liveChallenges.length > 0;
+
   return (
     <div className="flex flex-col gap-6 pb-8" data-testid="hub-live-rail">
       {!ready ? null : authenticated ? (
         <>
-          <RailSection label="Requests">
-            <RequestsTab dense />
-          </RailSection>
+          {hasPendingRequests && (
+            <RailSection label="Requests">
+              <RequestsTab dense />
+            </RailSection>
+          )}
           <RailSection label="Available now">
             <PeopleTab dense />
           </RailSection>
