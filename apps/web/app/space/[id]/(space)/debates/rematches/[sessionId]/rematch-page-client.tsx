@@ -328,8 +328,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * started from cold on the click. That is answered where it happens rather than by landing
    * somewhere cheaper: `browseWarmed` below fetches it while the viewer is still on the opponent's
    * positions, so the click lands on a warm cache either way.
+   *
+   * And a Recommended *choice* does not outlive the pairing it was made for. The route reuses this
+   * component between rematches, and a curator's page is assembled for one pair — so a viewer who
+   * picked Recommended with one opponent arrived at the next one on a source that pairing has no
+   * page for: the trigger read "Recommended", the menu no longer offered it, and the list under it
+   * said nothing was recommended. The other three sources are cuts of the corpus and mean the same
+   * thing whoever you are facing, so only this one is let go.
+   *
+   * Derived rather than written back, so the choice survives: returning to the pairing that *does*
+   * have a page opens on it again, which is what the viewer asked for when they picked it.
+   *
+   * Only once the lookup has settled, for the same reason `sourceUndecided` above waits — "no
+   * curator page" and "not yet" are one answer until it lands, and coercing on it would drop the
+   * viewer off Recommended and put them back a moment later.
    */
-  const source: ClaimsSource = chosenSource ?? (hasRecommended ? 'recommended' : 'all');
+  const chosenRecommendedIsGone = chosenSource === 'recommended' && !recommendedLoading && !hasRecommended;
+  const source: ClaimsSource = chosenRecommendedIsGone
+    ? 'all'
+    : (chosenSource ?? (hasRecommended ? 'recommended' : 'all'));
 
   /**
    * "My positions": the viewer's own side of the lookup the opponent's tab reads.

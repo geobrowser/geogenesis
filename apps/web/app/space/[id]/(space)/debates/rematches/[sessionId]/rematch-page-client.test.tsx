@@ -1166,6 +1166,53 @@ describe('DebateRematchPageClient', () => {
       expect(screen.queryByRole('heading', { name: 'Geopolitics & chips' })).toBeNull();
     });
 
+    // Held rather than dropped while the new pairing's lookup is still out: "no curator page" and
+    // "not yet" are one answer until it settles, so coercing on it would flick the viewer off
+    // Recommended and put them back a moment later.
+    it('holds a Recommended choice while the next pairing’s lookup is still out', async () => {
+      curatedPage();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showExplore();
+      await chooseSource('Recommended');
+
+      mocks.recommendedSections = [];
+      mocks.recommendedEntities = [];
+      mocks.recommendedLoading = true;
+      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+      await showExplore();
+
+      expect(screen.getByRole('button', { name: 'Recommended' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'All claims' })).toBeNull();
+    });
+
+    /**
+     * A curator's page is assembled for one pair, so a Recommended *choice* cannot outlive them.
+     *
+     * The route reuses this component between rematches. Picking Recommended with one opponent and
+     * moving to a pairing with no page of its own left the trigger reading "Recommended" while the
+     * menu no longer offered it, over a list saying nothing was recommended — a source the viewer
+     * could see but not leave.
+     */
+    it('lets go of a Recommended choice when the next pairing has no page', async () => {
+      curatedPage();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showExplore();
+      await chooseSource('Recommended');
+
+      expect(screen.getByRole('button', { name: 'Recommended' })).toBeInTheDocument();
+
+      // The next pair have no curator page between them.
+      mocks.recommendedSections = [];
+      mocks.recommendedEntities = [];
+      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+      // The landing tab is the opponent's again, so Explore has to be reached a second time.
+      await showExplore();
+
+      expect(screen.queryByRole('button', { name: 'Recommended' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'All claims' })).toBeInTheDocument();
+      expect(screen.queryByText(/Nothing recommended/)).toBeNull();
+    });
+
     // The topic menu used to be pushed to the far end here, on the grounds that a full page has
     // width to spare. Once "Matches only" arrived at that end the two sat together there, reading
     // as one control — so the menus go back to being a run on the left, and the end of the row
