@@ -5,7 +5,8 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
-import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
+import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
+import { ClaimSides, ClaimSplitBar, ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
@@ -14,6 +15,7 @@ import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Text } from '~/design-system/text';
@@ -241,19 +243,7 @@ export function ClaimExploreFeedCard({
             component. */}
         {hasVerdict ? (
           <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 claim-card-narrow:col-start-1 claim-card-narrow:row-span-1 claim-card-narrow:row-start-3 claim-card-narrow:border-l-0 claim-card-narrow:pl-0">
-            {/* The same component the debates side panel and the claim page use, at every width.
-                This column used to draw its own arrangement of the same three facts — a share, a
-                bar, and who responded — scaled up on a phone and down for the 220px rail. Two
-                copies of one module drift, and these had: the phone grew a "N responses" line no
-                other surface showed, and the rail split the faces per side where the panel merges
-                them, so a reader moving between explore, the panel and the claim page met three
-                readings of one number.
-
-                The per-side split goes with it. `ClaimSides` answered "who agreed" and "who
-                disagreed" separately; `ClaimSummary` answers "who responded" — the panel's answer,
-                and matching the panel is the point. The breakdown is still a press away on the
-                claim page. */}
-            <ClaimSummary
+            <ClaimVerdictColumn
               entityId={item.entityId}
               spaceId={item.spaceId}
               responseKind={responseKind}
@@ -263,5 +253,83 @@ export function ClaimExploreFeedCard({
         ) : null}
       </div>
     </article>
+  );
+}
+
+/**
+ * The share, the split and who answered — or an invitation where nobody has.
+ *
+ * The tier is `claimSummaryTier`'s, so this column and the claim page cannot describe the same
+ * claim differently.
+ *
+ * Two arrangements of one set of facts, chosen by the card's own width:
+ *
+ *   * **Wide** keeps this column's own layout — drawn here rather than reusing `ClaimSummary`
+ *     because the feed gives it a column to stand in rather than a strip, so the number can be set
+ *     large, which is the whole reason to spend 186px on it.
+ *   * **Narrow** hands over to `ClaimSummary`, the module the debates panel and the claim page use.
+ *     A phone has no column to spend, and the expanded version there was the widest reading of the
+ *     number on the smallest surface showing it.
+ *
+ * Both are mounted and one is hidden, which costs nothing it would not otherwise: `ClaimSides` and
+ * `ClaimSummary`'s responder cluster read the *same* `entityRespondersQueryKey`, so react-query
+ * serves both from one cache entry and one request. That is worth knowing before either side is
+ * repointed at a query of its own.
+ */
+function ClaimVerdictColumn({
+  entityId,
+  spaceId,
+  responseKind,
+  summary,
+}: {
+  entityId: string;
+  spaceId: string;
+  responseKind: 'stance' | 'veracity';
+  summary: ClaimResponseSummary;
+}) {
+  const copy = ENTITY_RESPONSE_COPY[responseKind];
+
+  const percent = summary.percent ?? 0;
+
+  // The share and its verb on one line, the bar under it, then the two sides — the claim page's own
+  // arrangement, through the claim page's own component. Two sides rather than one merged cluster
+  // because the faces then belong to a side: pressing Agree opens who agreed, not a mixed list to
+  // read through. Stacked rather than pushed to opposite ends, which is what the page does with the
+  // width to do it; at 220px they would wrap into each other.
+  return (
+    <>
+      {/* Wide: this column's own arrangement. The narrow-width rules that used to enlarge it here
+          are gone — a phone gets `ClaimSummary` below instead of a bigger version of this. */}
+      <div className="claim-card-narrow:hidden">
+        {/* The claim page's own top row, narrowed for the rail: the share and its verb on one
+          baseline. No response count — this is the 220px rail, where it wrapped onto a line of its
+          own. It used to be kept for the phone; the phone reads `ClaimSummary` now. */}
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[2rem] leading-none font-semibold tracking-[-0.8px] text-text tabular-nums">
+            {percent}%
+          </span>
+          <Text as="span" variant="metadata" color="grey-04">
+            {copy.positiveAction.toLowerCase()}
+          </Text>
+        </div>
+        <ClaimSplitBar percent={percent} responseKind={responseKind} className="mt-3 h-1.5" />
+        {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
+          what kind of claim this is rather than adding a second voice to the split. */}
+        {/* Stacked, because this is the 220px rail and it cannot hold both across. The phone's
+          side-by-side arrangement went with the phone, which no longer draws this block. */}
+        <ClaimSides
+          entityId={entityId}
+          spaceId={spaceId}
+          responseKind={responseKind}
+          summary={summary}
+          className="mt-3 flex flex-col gap-1.5"
+        />
+      </div>
+
+      {/* Narrow: the same module the debates side panel draws, so the two agree on a phone. */}
+      <div className="hidden claim-card-narrow:block">
+        <ClaimSummary entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
+      </div>
+    </>
   );
 }
