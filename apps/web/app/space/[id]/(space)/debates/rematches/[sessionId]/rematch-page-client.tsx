@@ -314,20 +314,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // this build trusts by id; Featured is a tag anyone's space can carry, so it fans out across the
   // corpus the way All claims does and is bounded the same way.
   const hasRecommended = recommendedSections.length > 0;
-  // Until the curated lookup settles there is no telling "no curator page" from "not yet", and the
-  // default turns on exactly that. The list waits rather than showing Featured and swapping it for
-  // Recommended a moment later.
-  const sourceUndecided = chosenSource === null && recommendedLoading;
   /**
-   * All claims where there is no curated page — the option that leads the menu, and the hub's
-   * default, so Explore means the same thing on both surfaces from the first render as well as in
-   * the order it offers.
+   * All claims, always — the option that leads the menu, and the hub's default, so Explore means the
+   * same thing on both surfaces from the first render as well as in the order it offers.
    *
-   * It is the dearer of the two, and landing on it is what made opening Explore a wait: the whole
-   * chain — a page of the tag, two facets, then geo-chat's rows keyed on the ids that come back —
-   * started from cold on the click. That is answered where it happens rather than by landing
-   * somewhere cheaper: `browseWarmed` below fetches it while the viewer is still on the opponent's
-   * positions, so the click lands on a warm cache either way.
+   * Recommended is offered *first* where a curator has made a page for this pair, and is not what
+   * the tab opens on. It used to be, and that cost more than it was worth: the landing source could
+   * not be decided until the curated lookup settled — "no curator page" and "not yet" being one
+   * answer until it lands — so every viewer waited on a lookup most of them would find nothing in,
+   * before the list they were going to see could even start. Leading the menu says the same thing
+   * about a curator's work without holding the tab up to say it.
    *
    * And a Recommended *choice* does not outlive the pairing it was made for. The route reuses this
    * component between rematches, and a curator's page is assembled for one pair — so a viewer who
@@ -339,14 +335,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * Derived rather than written back, so the choice survives: returning to the pairing that *does*
    * have a page opens on it again, which is what the viewer asked for when they picked it.
    *
-   * Only once the lookup has settled, for the same reason `sourceUndecided` above waits — "no
-   * curator page" and "not yet" are one answer until it lands, and coercing on it would drop the
-   * viewer off Recommended and put them back a moment later.
+   * Only once the lookup has settled, because that same ambiguity applies to letting go of it:
+   * coercing while it is in flight would drop the viewer off Recommended and put them back a moment
+   * later.
    */
   const chosenRecommendedIsGone = chosenSource === 'recommended' && !recommendedLoading && !hasRecommended;
-  const source: ClaimsSource = chosenRecommendedIsGone
-    ? 'all'
-    : (chosenSource ?? (hasRecommended ? 'recommended' : 'all'));
+  const source: ClaimsSource = chosenRecommendedIsGone ? 'all' : (chosenSource ?? 'all');
 
   /**
    * "My positions": the viewer's own side of the lookup the opponent's tab reads.
@@ -395,8 +389,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // would open Explore cold. The rows lookup is keyed on the session; the warm-up has to be too.
   const [warmedSessionId, setWarmedSessionId] = React.useState<string | null>(null);
   const browseWarmed = warmedSessionId === sessionId;
-  const taggedEnabled =
-    (tab === 'explore' || !browseWarmed) && (source === 'featured' || source === 'all') && !sourceUndecided;
+  const taggedEnabled = (tab === 'explore' || !browseWarmed) && (source === 'featured' || source === 'all');
   // What goes to the server, so the page and both facet menus describe the same set of spaces.
   //
   // Two of the three gates can be sent; one cannot. The viewer's allowlist and the acceptor's
@@ -1264,12 +1257,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ? // Through `opponentClaimsSettling` rather than listing its queries again, so the tab and the
         // badge above cannot come to different answers about the same list.
         positions.isLoading || opponentClaimsSettling
-      : sourceUndecided ||
-        (source === 'recommended'
-          ? recommendedLoading || curatedClaimsQuery.isLoading
-          : source === 'mine'
-            ? viewerClaimsSettling
-            : taggedClaimsSettling));
+      : source === 'recommended'
+        ? recommendedLoading || curatedClaimsQuery.isLoading
+        : source === 'mine'
+          ? viewerClaimsSettling
+          : taggedClaimsSettling);
 
   // The menu, and the handlers that drive it. Defaults to the spaces the viewer belongs to
   // (GEO-2789).

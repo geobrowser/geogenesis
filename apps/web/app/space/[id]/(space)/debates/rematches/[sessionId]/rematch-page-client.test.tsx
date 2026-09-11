@@ -1150,20 +1150,28 @@ describe('DebateRematchPageClient', () => {
       expect(screen.queryByText('A featured claim')).toBeNull();
     });
 
-    // A curator's page for this exact pairing beats a tag anyone's space can carry.
-    it('opens on Recommended when a curator has a page, keeping Featured a pick away', async () => {
+    /**
+     * A curator's page for this exact pairing leads the menu — and the tab still opens on All
+     * claims.
+     *
+     * It used to open on Recommended, which meant the landing source could not be decided until the
+     * curated lookup settled: "no curator page" and "not yet" are one answer until it lands, so
+     * every viewer waited on a lookup most pairs have nothing in before the list they were going to
+     * see could start. Leading the menu says the same thing about a curator's work without holding
+     * the tab up to say it.
+     */
+    it('leads the menu with Recommended where a curator has a page, and still opens on All claims', async () => {
       curatedPage();
-      mocks.featuredClaims = [featuredTag()];
-      mocks.entities = [sharedEntity(), featuredEntity()];
+      mocks.entities = [sharedEntity(), publishedEntity()];
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       await showExplore();
 
-      expect(screen.getByRole('heading', { name: 'Geopolitics & chips' })).toBeInTheDocument();
-
-      await chooseSource('Featured');
-
-      expect(screen.getByText('A featured claim')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'All claims' })).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: 'Geopolitics & chips' })).toBeNull();
+
+      await chooseSource('Recommended');
+
+      expect(screen.getByRole('heading', { name: 'Geopolitics & chips' })).toBeInTheDocument();
     });
 
     // Held rather than dropped while the new pairing's lookup is still out: "no curator page" and
@@ -1325,15 +1333,16 @@ describe('DebateRematchPageClient', () => {
       mocks.entities = [sharedEntity(), featuredEntity()];
       render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-      // Recommended is the default here, so Featured's claim is never asked about. There is no
-      // entity lookup to hold off any more — the page carries what a row is built from — so what
-      // must stay quiet is the tag query itself and the geo-chat rows behind it.
-      expect(mocks.featuredEnabledWith.every(enabled => enabled === false)).toBe(true);
+      // Read by *tag* rather than by the enabled flag: the tab opens on All claims, so the same
+      // hook is legitimately running — for the Debate tag. What must stay quiet is Featured's tag
+      // and the geo-chat rows behind it. There is no entity lookup to hold off any more; the page
+      // carries what a row is built from.
+      expect(mocks.taggedClaimsAskedFor).not.toContain('ec3086a54ddf43d8aaefd6cc6e1b0556');
       expect(mocks.rematchClaimIds.flat()).not.toContain(FEATURED);
 
       await chooseSource('Featured');
 
-      expect(mocks.featuredEnabledWith.at(-1)).toBe(true);
+      expect(mocks.taggedClaimsAskedFor).toContain('ec3086a54ddf43d8aaefd6cc6e1b0556');
       await waitFor(() => expect(mocks.rematchClaimIds.flat()).toContain(FEATURED));
     });
 
@@ -1587,7 +1596,7 @@ describe('DebateRematchPageClient', () => {
     ];
     mocks.recommendedEntities = [sharedEntity(), publishedEntity()];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showExplore();
+    await showRecommended();
 
     expect(screen.getByRole('button', { name: 'Recommended' })).toBeInTheDocument();
     const geopolitics = screen.getByRole('heading', { name: 'Geopolitics & chips' });
@@ -1606,7 +1615,7 @@ describe('DebateRematchPageClient', () => {
     ];
     mocks.recommendedEntities = [sharedEntity(), publishedEntity()];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showExplore();
+    await showRecommended();
 
     fireEvent.click(screen.getByRole('button', { name: /Geopolitics & chips/ }));
 
@@ -1777,7 +1786,7 @@ describe('DebateRematchPageClient', () => {
     ];
     mocks.recommendedEntities = [sharedEntity(), publishedEntity()];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showExplore();
+    await showRecommended();
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'newly' } });
 
@@ -1808,7 +1817,7 @@ describe('DebateRematchPageClient', () => {
     mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CURATED] }];
     mocks.recommendedEntities = [publishedEntity(CURATED, 'A curated claim from elsewhere')];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showExplore();
+    await showRecommended();
 
     expect(screen.getByText('A curated claim from elsewhere')).toBeInTheDocument();
     // And it goes into the id lookup, so the session can report positions on it.
@@ -1828,7 +1837,7 @@ describe('DebateRematchPageClient', () => {
     mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] }];
     mocks.recommendedEntities = [sharedEntity()];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showExplore();
+    await showRecommended();
 
     expect(screen.getByRole('heading', { name: 'Geopolitics & chips' })).toBeInTheDocument();
     // Not just the card: its sides come from the graph, so nothing here waits on the browsed list.
@@ -2049,23 +2058,30 @@ describe('DebateRematchPageClient', () => {
     });
   });
 
-  // Until the curated lookup settles there is no telling "no curator page" from "not yet", and the
-  // default source turns on exactly that. So the list waits rather than showing Featured and
-  // swapping it for Recommended a moment later.
-  it('waits on the curated lookup rather than defaulting to Featured and swapping', async () => {
+  /**
+   * And nothing waits on that lookup any more.
+   *
+   * The tab used to hold its list until the curated one settled, because the landing source depended
+   * on the answer — a wait every viewer paid for a page most pairs have nothing in. All claims does
+   * not depend on it, so the list starts immediately and Recommended simply appears at the top of
+   * the menu if it turns out to exist.
+   */
+  it('does not hold its list for the curated lookup', async () => {
     mocks.recommendedLoading = true;
     const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showExplore();
 
     expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByText('No featured claims are available to debate yet.')).toBeNull();
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
 
+    // And the option arrives when the lookup does, without moving the list under the viewer.
     mocks.recommendedLoading = false;
     mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_MORE] }];
     mocks.recommendedEntities = [publishedEntity()];
     rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(await screen.findByRole('heading', { name: 'Geopolitics & chips' })).toBeInTheDocument();
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Geopolitics & chips' })).toBeNull();
   });
 
   // A viewer who has picked a source keeps it: the curated lookup settling afterwards is not a
@@ -2442,23 +2458,24 @@ describe('DebateRematchPageClient', () => {
     expect(rows[0]).toHaveAttribute('aria-pressed', 'true');
   });
 
-  // The picker does not open on All. `source` falls back to Recommended whenever there is anything
-  // to recommend, and that is a curator's page — its spaces say nothing about who is looking. The
-  // seed used to be spent there, on a menu it could not match, so by the time the viewer reached
-  // the list the default was written for it was already gone. This is the ordinary path, not an
-  // edge: any viewer with recommendations took it.
-  it('still opens All on the viewer’s spaces after starting on Recommended', async () => {
+  /**
+   * GEO-2789's seed is spent on whatever menu it sees, and a curator's page is not a menu that can
+   * answer it — its spaces say nothing about who is looking.
+   *
+   * That used to be the ordinary path rather than an edge: the tab opened on Recommended whenever
+   * there was anything to recommend, so any viewer with a curated page had their one seed spent
+   * against it and reached All claims with the default already gone. Opening on All claims means
+   * the seed meets a menu about the corpus first, whatever a curator has done.
+   */
+  it('spends the seed on All claims even when a curated page exists', async () => {
     mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
-    // A curated page in a space that is nobody's membership, so its menu cannot answer the seed.
+    // A curated page in a space that is nobody's membership, so its menu could not answer the seed.
     mocks.recommendedSections = [{ id: 'section-1', name: 'Curated', claimIds: [CLAIM_FRESH] }];
     mocks.recommendedEntities = [publishedEntity(CLAIM_FRESH, 'A curated claim')];
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     await showExplore();
-    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
-
-    await showAllClaims();
 
     await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
@@ -2792,7 +2809,7 @@ describe('DebateRematchPageClient', () => {
     mocks.curatedIds = [CLAIM_MORE];
     mocks.spaceAllowlist = new Set([SPACE_1.replace(/-/g, '')]);
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showExplore();
+    await showRecommended();
 
     // The published claim sits in Governance space, which the allowlist leaves out.
     expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
@@ -2847,7 +2864,7 @@ describe('DebateRematchPageClient', () => {
       mocks.curatedIds = [PERSONAL_CLAIM, CLAIM_MORE];
       mocks.spaceTypes = { [SPACE_1]: 'PERSONAL' };
       render(<DebateRematchPageClient sessionId="rematch-1" />);
-      await showExplore();
+      await showRecommended();
 
       expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
       expect(screen.getByText('Politics')).toBeInTheDocument();
@@ -2877,7 +2894,7 @@ describe('DebateRematchPageClient', () => {
       mocks.curatedIds = [BOTH];
       mocks.spaceTypes = { [SPACE_1]: 'PERSONAL' };
       render(<DebateRematchPageClient sessionId="rematch-1" />);
-      await showExplore();
+      await showRecommended();
 
       // Resolving to the personal space would have filtered it out entirely.
       expect(await screen.findByText('A claim in two spaces')).toBeInTheDocument();
@@ -3734,6 +3751,12 @@ async function chooseSource(next: string) {
   openSourceMenu();
   fireEvent.click(screen.getAllByRole('button', { name: next }).at(-1)!);
   await settleTabSwap();
+}
+
+/** Explore opens on All claims whatever else is offered, so the curated cases have to pick it. */
+async function showRecommended() {
+  fireEvent.click(screen.getByRole('button', { name: 'Explore' }));
+  await chooseSource('Recommended');
 }
 
 /** Explore opens on All claims since the two menus were aligned, so Featured is a pick away. */
