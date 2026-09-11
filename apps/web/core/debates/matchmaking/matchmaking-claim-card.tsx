@@ -980,9 +980,14 @@ function PositionButton({
   //
   // `border` on both states, transparent when held, so picking a side cannot change the pill's
   // width and shuffle the row.
+  //
+  // `divider` (#F0F0F0) and not `grey-01` (#F6F6F6): the card's footer band is the lighter of the
+  // two and these sit directly above it, so using one grey for both flattens the pill into the
+  // band. Figma names this colour "Secondary/Line dividers", which is the same name this token
+  // already has — the two systems agree, and the pill borrows it rather than inventing a shade.
   const className = cx(
     '@container flex min-h-7 items-center justify-between gap-2 rounded-full border px-3 text-button text-text',
-    selected ? 'border-transparent bg-grey-01' : 'border-dashed border-grey-03 bg-white'
+    selected ? 'border-transparent bg-divider' : 'border-dashed border-grey-03 bg-white'
   );
   const content = (
     <>
@@ -995,7 +1000,7 @@ function PositionButton({
         </span>
       </span>
       {summary && presentCount(summary) > 0 ? (
-        <PositionAvatars summary={summary} ringClassName={selected ? 'border-grey-01' : 'border-white'} />
+        <PositionAvatars summary={summary} ringClassName={selected ? 'border-divider' : 'border-white'} />
       ) : null}
     </>
   );
