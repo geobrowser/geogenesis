@@ -101,8 +101,32 @@ export function MatchesList({
   // list is in hand, so the rows *are* the complete answer (see `facetSpaces` above for the same
   // reasoning about spaces).
   const claimEntityIds = React.useMemo(() => serverMatches.map(match => match.claim.claim_entity_id), [serverMatches]);
-  const { entities: claimEntities } = useClaimEntitiesByIds(claimEntityIds);
+  const {
+    entities: claimEntities,
+    isLoading: topicsLoading,
+    error: topicsError,
+  } = useClaimEntitiesByIds(claimEntityIds);
   const topicsByClaimId = React.useMemo(() => claimTopicsById(claimEntities), [claimEntities]);
+
+  /**
+   * Whether the topic filter can be honoured yet, and what to do when it cannot.
+   *
+   * This lookup is the only source for these topics, so until it answers every match looks
+   * topicless — and `carriesEveryTopic` rejects a topicless claim whenever a topic is picked. That
+   * is the whole list gone, under "No matches match these filters", said of a filter that had
+   * nothing to do with it. A failed lookup would say it for as long as the failure lasted.
+   *
+   * So an unresolved lookup does not filter, which is the same call `canPublishDebateIn` makes
+   * about an unresolved space type in the rematch picker: a list that is briefly wider than the
+   * filter asks for beats one that is confidently and wrongly empty, and this one narrows itself
+   * the moment the entities land.
+   *
+   * Deliberately not an error state on the list either. The matches are geo-chat's and they are
+   * here; the topics are metadata beside them, and blanking the tab over metadata is the trade
+   * `claims-tab` refuses for the same lookups. The picked topic stays on the menu at zero
+   * (`keepSelectedVisible` below), so there is always a way to untick it.
+   */
+  const topicsResolved = !topicsLoading && !topicsError;
 
   // Counted over the rows the *other* filters already allow, so the menu answers "what else is in
   // what I am looking at" rather than offering a topic that would empty the list.
@@ -126,11 +150,12 @@ export function MatchesList({
     () =>
       matches.filter(match => {
         if (spaceIds.length > 0 && !spaceIds.includes(match.claim.space_id)) return false;
-        if (!carriesEveryTopic(topicsByClaimId.get(match.claim.claim_entity_id), topicIds)) return false;
+        if (topicsResolved && !carriesEveryTopic(topicsByClaimId.get(match.claim.claim_entity_id), topicIds))
+          return false;
         if (debouncedSearch && !match.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
         return true;
       }),
-    [debouncedSearch, matches, spaceIds, topicIds, topicsByClaimId]
+    [debouncedSearch, matches, spaceIds, topicIds, topicsByClaimId, topicsResolved]
   );
 
   // The viewer's own filters emptied a list that has something in it — the one empty state here

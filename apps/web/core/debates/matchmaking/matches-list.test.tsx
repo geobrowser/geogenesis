@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingMatch } from '../api';
 import { MatchesList } from './matches-list';
-import { debatesHubLobbySpaceIdsAtom } from '~/atoms';
+import { debatesHubLobbySpaceIdsAtom, debatesHubLobbyTopicIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   matches: [] as MatchmakingMatch[],
@@ -30,11 +30,25 @@ const mocks = vi.hoisted(() => ({
   activityErrored: false,
   /** What the shared summary reports for every claim in the fixture. */
   responseCounts: { positive: 0, negative: 0 },
+  /** The claim entities the topic filter is resolved from, and whether that lookup has answered. */
+  claimEntities: [] as Array<{
+    id: string;
+    relations: Array<{ type: { id: string }; toEntity: { id: string; name: string | null } }>;
+  }>,
+  claimEntitiesLoading: false,
+  claimEntitiesError: null as Error | null,
 }));
 
-// Topics come from the claim entities now (GEO-2861), which is a real request. This file asserts
-// on matches and their space filter, not on topics.
-vi.mock('../claim-picker-page', () => ({ useClaimEntitiesByIds: () => ({ entities: [], isLoading: false }) }));
+// Topics come from the claim entities now (GEO-2861), which is a real request. Answerless while
+// loading or failed, exactly as react-query reports it — which is the state the topic filter has to
+// tell apart from "this claim carries no topics".
+vi.mock('../claim-picker-page', () => ({
+  useClaimEntitiesByIds: () => ({
+    entities: mocks.claimEntitiesLoading || mocks.claimEntitiesError ? [] : mocks.claimEntities,
+    isLoading: mocks.claimEntitiesLoading,
+    error: mocks.claimEntitiesError,
+  }),
+}));
 
 vi.mock('../hooks', () => ({
   useDebateActivity: () => ({
@@ -184,6 +198,9 @@ beforeEach(() => {
   mocks.availableToDebate = true;
   mocks.activityLoading = false;
   mocks.activityErrored = false;
+  mocks.claimEntities = [];
+  mocks.claimEntitiesLoading = false;
+  mocks.claimEntitiesError = null;
 
   // The dropdown measures itself to pick a placement. Stubbed the way the Claims suite does it,
   // because a case that opens the menu is the only thing that reaches it.
@@ -476,5 +493,48 @@ describe('MatchesList', () => {
 
     expect(await screen.findByText(/marked unavailable/)).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
+  });
+
+  /**
+   * The topics come from a lookup behind the rows, and `carriesEveryTopic` rejects a claim it has
+   * no topics for — so an unanswered lookup and a claim that genuinely carries nothing are the same
+   * answer to it. With a topic picked, reading the first as the second empties the whole list under
+   * "No matches match these filters", which is a filter being blamed for something it did not do.
+   */
+  describe('while the topics behind the filter are unresolved', () => {
+    function renderWithTopic() {
+      const store = createStore();
+      store.set(debatesHubLobbyTopicIdsAtom, ['topic-ai']);
+
+      return render(<MatchesList onTabChange={vi.fn()} />, store);
+    }
+
+    it('lists the matches rather than reporting the filter emptied them', async () => {
+      mocks.claimEntitiesLoading = true;
+      renderWithTopic();
+
+      expect(await screen.findByText('Chips are better than fries')).toBeInTheDocument();
+      expect(screen.queryByText('No matches match these filters.')).toBeNull();
+    });
+
+    // The same answer on failure, and for longer: without this the list stays empty for as long as
+    // the lookup keeps failing, which is a permanent lie rather than a slow truth.
+    it('lists them after a failed lookup too, rather than staying empty', async () => {
+      mocks.claimEntitiesError = new Error('entities exploded');
+      renderWithTopic();
+
+      expect(await screen.findByText('Chips are better than fries')).toBeInTheDocument();
+      expect(screen.queryByText('No matches match these filters.')).toBeNull();
+    });
+
+    // And the guard is a hold, not a hole: once the entities land the filter applies, or the tab
+    // would simply have stopped filtering by topic.
+    it('narrows once the entities land', async () => {
+      mocks.claimEntities = [{ id: CLAIM_ENTITY_ID, relations: [] }];
+      renderWithTopic();
+
+      expect(await screen.findByText('No matches match these filters.')).toBeInTheDocument();
+      expect(screen.queryByText('Chips are better than fries')).toBeNull();
+    });
   });
 });
