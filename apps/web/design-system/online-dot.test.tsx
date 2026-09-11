@@ -32,6 +32,16 @@ describe('OnlineDot', () => {
     expect(container.firstChild).not.toHaveClass('border-white');
   });
 
+  it('keeps the ring outside the dot, so the green has somewhere to paint', () => {
+    const { container } = render(<OnlineDot />);
+
+    // The bug this pins shipped once and showed nothing at all: preflight makes everything
+    // `border-box`, so 4px of box with a 2px border each side leaves a zero-width content box. The
+    // ring paints, the green has no area, and the dot renders as a disc in the colour of whatever
+    // is already behind it — invisible on every avatar, with no error anywhere.
+    expect(container.firstChild).toHaveClass('box-content');
+  });
+
   it('is hidden from assistive tech', () => {
     const { container } = render(<OnlineDot />);
 
