@@ -364,7 +364,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // The effect that ends it is below `taggedClaimsQuery`, which is the last hop it waits for.
   const claimsTagId = source === 'featured' ? FEATURED_TAG_ID : DEBATE_TAG_ID;
-  const [browseWarmed, setBrowseWarmed] = React.useState(false);
+  // Kept with the session it was spent on, the way `useCurrentGeoChatUserId` keeps its id with the
+  // account. The route reuses this component when it moves between rematches — `useLastSettled`
+  // takes `sessionId` as its reset key for the same reason — so a bare boolean would say "already
+  // warm" for a session whose rows had never been asked for, and the second rematch of a sitting
+  // would open Explore cold. The rows lookup is keyed on the session; the warm-up has to be too.
+  const [warmedSessionId, setWarmedSessionId] = React.useState<string | null>(null);
+  const browseWarmed = warmedSessionId === sessionId;
   const taggedEnabled =
     (tab === 'explore' || !browseWarmed) && (source === 'featured' || source === 'all') && !sourceUndecided;
   // What goes to the server, so the page and both facet menus describe the same set of spaces.
@@ -444,8 +450,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // drops `isLoading` on error, where `settled` stays false and would leave these enabled for the
   // whole session.
   //
-  // Spent once per mount and never unspent: a viewer who has opened Explore has the cache this
-  // exists to fill, and one who has not is on a tab that reads none of it.
+  // Spent once per session and never unspent within it: a viewer who has opened Explore has the
+  // cache this exists to fill, and one who has not is on a tab that reads none of it.
   //
   // What it warms is the *unfiltered* key, and for a viewer with member spaces on the menu that is
   // not the key Explore settles on: the membership default lands on arrival and re-keys the catalog
@@ -462,10 +468,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     if (browseWarmed || !taggedEnabled || allowlistPending) return;
     if (taggedCatalogLoading || taggedTopicFacet.isLoading || taggedSpaceFacet.isLoading) return;
     if (taggedClaimsQuery.isLoading) return;
-    setBrowseWarmed(true);
+    setWarmedSessionId(sessionId);
   }, [
     allowlistPending,
     browseWarmed,
+    sessionId,
     taggedCatalogLoading,
     taggedClaimsQuery.isLoading,
     taggedEnabled,

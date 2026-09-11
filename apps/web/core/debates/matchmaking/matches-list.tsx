@@ -25,11 +25,13 @@ import {
   toggleId,
 } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
+import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { useStableListOrder } from './use-stable-list-order';
 import {
   type DebatesHubTab,
   debatesHubLobbySearchAtom,
   debatesHubLobbySpaceIdsAtom,
+  debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
 } from '~/atoms';
 
@@ -59,6 +61,13 @@ export function MatchesList({
   // Session-scoped, like Explore's: the hub closes on an outside pointer-down, so a click-away to
   // dismiss the dropdown unmounted this list and took the selection with it (GEO-2850).
   const [spaceIds, setSpaceIds] = useAtom(debatesHubLobbySpaceIdsAtom);
+  // The marker that says the membership default has been spent or forfeited, shared with Lobby's
+  // other list for the same reason the selection is. This list never seeds — it did not on master
+  // and a confirmed match is not a browse surface — but it edits the selection the *other* list
+  // seeds, so a space picked here has to forfeit the default there. Without it, choosing a space
+  // with "Matches only" on and then toggling it off mounted `ClaimsTab` with the seed still armed,
+  // and the default landed on top of a choice the viewer had just made.
+  const [spaceSeedSpent, setSpaceSeedSpent] = useAtom(debatesHubLobbySpaceSeedSpentAtom);
   // Shared with Lobby's other list too, so narrowing survives the switch rather than being undone
   // by it.
   const [topicIds, setTopicIds] = useAtom(debatesHubLobbyTopicIdsAtom);
@@ -166,21 +175,31 @@ export function MatchesList({
   // it can outlive the match that put the space on the menu in the first place — the other side
   // goes offline while the panel is closed, and reopening it would otherwise show an empty list
   // filtered by a space with no row left to untick it by.
-  const facetSpaces = React.useMemo(
+  const offeredSpaces = React.useMemo(
     () =>
-      orderFacetOptions(
-        keepSelectedVisible(
-          countBy(
-            matches
-              .filter(match => passesTopics(match) && passesSearch(match))
-              .map(match => ({ id: match.claim.space_id, name: null }))
-          ),
-          spaceIds
-        ),
-        spaceIds
+      countBy(
+        matches
+          .filter(match => passesTopics(match) && passesSearch(match))
+          .map(match => ({ id: match.claim.space_id, name: null }))
       ),
-    [matches, passesSearch, passesTopics, spaceIds]
+    [matches, passesSearch, passesTopics]
   );
+
+  // Through the shared menu rather than by hand, which is what it is for: it folds the selection
+  // back in, orders the rows, and — the part this list was missing — hands back handlers that have
+  // already forfeited the default. Its own doc names the failure: three call sites per surface, and
+  // forgetting one is silent and turns a default into a policy.
+  //
+  // `memberSpaceIds: null` so it never seeds here, only forfeits.
+  const { facetSpaces, onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
+    offeredSpaces,
+    spaceIds,
+    setSpaceIds,
+    memberSpaceIds: null,
+    pending: matchesQuery.isLoading,
+    seedSpent: spaceSeedSpent,
+    onSeedSpend: () => setSpaceSeedSpent(true),
+  });
 
   const facetTopics = React.useMemo(
     () =>
@@ -224,8 +243,8 @@ export function MatchesList({
 
         <SpaceTopicFilters
           spaceIds={spaceIds}
-          onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
-          onSpacesClear={() => setSpaceIds([])}
+          onSpaceToggle={onSpaceToggle}
+          onSpacesClear={onSpacesClear}
           topicIds={topicIds}
           onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
           onTopicsClear={() => setTopicIds([])}
@@ -287,7 +306,9 @@ export function MatchesList({
                   label: 'Clear filters',
                   onClick: () => {
                     setSearch('');
-                    setSpaceIds([]);
+                    // The menu's own clear row, so this counts as choosing the unfiltered list and
+                    // the default cannot put its spaces back.
+                    onSpacesClear();
                     setTopicIds([]);
                   },
                 }

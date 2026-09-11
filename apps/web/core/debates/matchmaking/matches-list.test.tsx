@@ -11,7 +11,12 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 
 import type { MatchmakingMatch } from '../api';
 import { MatchesList } from './matches-list';
-import { debatesHubLobbySearchAtom, debatesHubLobbySpaceIdsAtom, debatesHubLobbyTopicIdsAtom } from '~/atoms';
+import {
+  debatesHubLobbySearchAtom,
+  debatesHubLobbySpaceIdsAtom,
+  debatesHubLobbySpaceSeedSpentAtom,
+  debatesHubLobbyTopicIdsAtom,
+} from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   matches: [] as MatchmakingMatch[],
@@ -595,6 +600,43 @@ describe('MatchesList', () => {
 
       expect(screen.getByRole('button', { name: /Food/ })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Health/ })).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * Lobby's two lists share one space selection, so they have to share the marker that says the
+   * membership default is spent.
+   *
+   * This list never seeds — a confirmed match is not a browse surface, and it did not seed before
+   * the two were joined — but it edits the selection the *other* list seeds. With "Matches only"
+   * stored on, this is the list that mounts first: pick a space here, toggle off, and `ClaimsTab`
+   * mounted with the seed still armed and put its member spaces over the choice just made.
+   */
+  describe('the membership default', () => {
+    it('is forfeited by picking a space here, not only on the other list', async () => {
+      const store = createStore();
+      render(<MatchesList onTabChange={vi.fn()} />, store);
+
+      fireEvent.click(await screen.findByRole('button', { name: /Any space/ }));
+      const row = screen
+        .getAllByRole('button')
+        .find(button => button.hasAttribute('aria-pressed') && button.closest('[role="dialog"]'));
+      fireEvent.click(row!);
+
+      expect(store.get(debatesHubLobbySpaceSeedSpentAtom)).toBe(true);
+    });
+
+    // Clearing counts too: an empty selection the viewer asked for means the unfiltered list, and is
+    // not an invitation to fill it back in for them.
+    it('is forfeited by clearing the filters from the empty state', async () => {
+      const store = createStore();
+      store.set(debatesHubLobbySpaceIdsAtom, [OTHER_SPACE_ID]);
+      render(<MatchesList onTabChange={vi.fn()} />, store);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }));
+
+      expect(store.get(debatesHubLobbySpaceIdsAtom)).toEqual([]);
+      expect(store.get(debatesHubLobbySpaceSeedSpentAtom)).toBe(true);
     });
   });
 

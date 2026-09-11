@@ -1336,6 +1336,25 @@ describe('DebateRematchPageClient', () => {
       expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-selected', 'true');
     });
 
+    /**
+     * And once per *session*, not once per mount.
+     *
+     * The route reuses this component when it moves between rematches — `useLastSettled` takes
+     * `sessionId` as its reset key for exactly that reason — and the geo-chat rows behind the
+     * catalog are session-keyed. A warm-up marked done on the first session claimed the second one
+     * was warm when its rows had never been asked for, so the second rematch of a sitting opened
+     * Explore cold.
+     */
+    it('warms again when the route moves to another rematch', async () => {
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await waitFor(() => expect(mocks.featuredEnabledWith.at(-1)).toBe(false));
+
+      mocks.featuredEnabledWith.length = 0;
+      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+
+      await waitFor(() => expect(mocks.featuredEnabledWith).toContain(true));
+    });
+
     // A remembered Featured source shouldn't keep a graph query alive behind the opponent's tab,
     // which draws from somewhere else entirely.
     it('stops asking for the tag once the viewer leaves Explore', async () => {
