@@ -26,7 +26,7 @@ import type {
   MatchmakingClaimsQuery,
 } from '../api';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
-import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
+import { debateClaimRowKey, useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import {
   type TaggedClaim,
   type TaggedClaimFilters,
@@ -492,16 +492,22 @@ export function ClaimsTab({
   // a press on the side they already hold republishes it instead of clearing it. Signed *out* is a
   // real answer: they have no side, and their press opens the sign-in prompt.
   //
-  // Asked per space, not of the whole list. The rows lookup fans out one request per space the
-  // loaded page reaches, and the aggregate `isLoading`/`isError` is true while *any* of them is
-  // outstanding — so on All claims, which spans every space the viewer can see, one slow or failed
-  // batch left every pill on the tab dead, including cards whose own space had answered long since.
-  // A batch is scoped to a space and so is a card, which is the level this question belongs at.
-  const pendingRowSpaceIds = React.useMemo(() => new Set(taggedRows.pendingSpaceIds), [taggedRows.pendingSpaceIds]);
-  const answersReadyIn = React.useCallback(
-    (spaceId: string) =>
-      !graphSourced || (authenticated ? Boolean(accountKey) && !pendingRowSpaceIds.has(spaceId) : true),
-    [accountKey, authenticated, graphSourced, pendingRowSpaceIds]
+  // Asked per row, not of the whole list and not of a space.
+  //
+  // The rows lookup fans out one request per space the loaded page reaches, and the aggregate
+  // `isLoading`/`isError` is true while *any* of them is outstanding — so on All claims, which
+  // spans every space the viewer can see, one slow or failed batch left every pill on the tab dead.
+  // Per space fixed the blast radius but not the shape: this list pages, and appending a page mints
+  // a new chunk whose space then covers every card already answered and on screen. The viewer
+  // watched the cards they were reading go dead each time they scrolled.
+  //
+  // Only the rows actually being asked about wait, which is what `pendingRowKeys` names.
+  const pendingRowKeys = React.useMemo(() => new Set(taggedRows.pendingRowKeys), [taggedRows.pendingRowKeys]);
+  const answersReadyFor = React.useCallback(
+    (spaceId: string, claimId: string) =>
+      !graphSourced ||
+      (authenticated ? Boolean(accountKey) && !pendingRowKeys.has(debateClaimRowKey(spaceId, claimId)) : true),
+    [accountKey, authenticated, graphSourced, pendingRowKeys]
   );
 
   // The space menu, from the server's own count over the tag — narrowed by the search and the
@@ -714,10 +720,10 @@ export function ClaimsTab({
           //
           // Their consequences are handled where they land instead, and both are pinned by tests:
           // `facetsSettled` refuses to reconcile against a menu those lookups never filled, so the
-          // viewer's topic selection is not spent, and `answersReadyIn` keeps a card unpressable
-          // until its own space's rows have arrived — that space's alone, so a failing batch costs
-          // the cards in it rather than the tab. A short list beats a blank one; a wrong publish
-          // beats neither, and is what those guard.
+          // viewer's topic selection is not spent, and `answersReadyFor` keeps a card unpressable
+          // until its own row has arrived — its own, so a failing batch costs the cards it was
+          // asked about rather than the tab. A short list beats a blank one; a wrong publish beats
+          // neither, and is what those guard.
           error={graphSourced ? taggedError : claimsQuery.error}
           // Retries whatever failed, not just the catalog. The error above can come from either of
           // the two lookups behind the list, and neither is keyed on the catalog — so refetching
@@ -788,7 +794,7 @@ export function ClaimsTab({
                 activeDebate={entry.active_debate}
                 // The paged list is geo-chat's own, so every row carries its kind already; only the
                 // tagged list has to wait for one.
-                answersReady={answersReadyIn(entry.claim.space_id)}
+                answersReady={answersReadyFor(entry.claim.space_id, entry.claim.claim_entity_id)}
                 onRequireSignIn={onRequireSignIn}
               />
             ))}

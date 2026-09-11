@@ -252,7 +252,7 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
 
   // Stable between id changes: react-query re-runs `combine` whenever its identity changes and diffs
   // the result with `replaceEqualDeep`, so a fresh closure each render would defeat callers' memos.
-  // It depends on `batches` because `pendingSpaceIds` has to map a result back to the batch that
+  // It depends on `batches` because `pendingRowKeys` has to map a result back to the batch that
   // asked for it, and that mapping is positional — which changes exactly when the ids do, and a
   // render that changes the ids has invalidated everything downstream anyway.
   //
@@ -262,11 +262,11 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
   // for as long as the failure lasts.
   const combine = React.useCallback(
     (results: UseQueryResult<DebateClaimsResponse>[]) => {
-      const unsettled = new Set<string>();
+      const unsettled: string[] = [];
       results.forEach((result, index) => {
         if (!result.isLoading && !result.isError) return;
         const batch = batches[index];
-        if (batch) unsettled.add(batch.spaceId);
+        if (batch) for (const claimId of batch.claimIds) unsettled.push(debateClaimRowKey(batch.spaceId, claimId));
       });
 
       return {
@@ -274,19 +274,28 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
         isLoading: results.some(result => result.isLoading),
         isError: results.some(result => result.isError),
         /**
-         * The spaces this lookup cannot yet speak for: one of their batches is in flight, or failed.
+         * The rows this lookup cannot yet speak for: their batch is in flight, or it failed.
          *
          * Split out from `isLoading` because the aggregate is the wrong shape for a caller asking
          * "may this card be answered". A claim absent from a *settled* batch genuinely has no row —
          * nobody has taken a side on it — while a claim absent from one still in flight is simply
-         * unknown, and the two are the same absence in the flattened list. Read per space rather
-         * than per claim because that is what a batch is scoped to, and it is what a card knows
-         * about itself.
+         * unknown, and the two are the same absence in the flattened list.
          *
-         * A sorted array rather than a `Set` so `replaceEqualDeep` can see that nothing changed;
-         * a fresh `Set` every render is a fresh identity every render.
+         * Per row rather than per space, which is what this was first. A space is the wrong grain
+         * for a list that pages: appending a page mints one new chunk, and while that chunk is out,
+         * a space-level answer holds every card in the space — including the ones already answered
+         * and on screen, which the viewer watches go dead as they scroll. Only the new rows are
+         * unknown, and only they wait.
+         *
+         * Keyed by space *and* claim, because a batch is scoped to both: geo-chat answers per space,
+         * so a claim tagged in two of them is asked about twice and can be settled in one while
+         * still outstanding in the other.
+         *
+         * A sorted array rather than a `Set` so `replaceEqualDeep` can see that nothing changed; a
+         * fresh `Set` every render is a fresh identity every render. It holds the *unsettled* rows,
+         * which is normally none of them and never more than the batches actually in flight.
          */
-        pendingSpaceIds: [...unsettled].sort(),
+        pendingRowKeys: unsettled.sort(),
       };
     },
     [batches]
@@ -308,6 +317,16 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
     })),
     combine,
   });
+}
+
+/**
+ * How {@link useDebateClaimsBySpaces} names one row, so callers ask with the same key it answers in.
+ *
+ * The caller's own ids, echoed back rather than normalized: both sides of the comparison come from
+ * the list the caller handed over, so a shape it never used cannot appear on either.
+ */
+export function debateClaimRowKey(spaceId: string, claimId: string): string {
+  return `${spaceId}:${claimId}`;
 }
 
 /** Maximum number of ids accepted by geo-chat's per-space debate-claims endpoint. */
