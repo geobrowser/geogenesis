@@ -279,17 +279,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Recommended a moment later.
   const sourceUndecided = chosenSource === null && recommendedLoading;
   /**
-   * Featured where there is no curated page — not All claims, which leads the menu.
+   * All claims where there is no curated page — the option that leads the menu, and the hub's
+   * default, so Explore means the same thing on both surfaces from the first render as well as in
+   * the order it offers.
    *
-   * The menu's order is the hub's, deliberately, so the same list means the same thing on both
-   * surfaces. What the picker opens on is a different question, and the answer is the same one
-   * Recommended gives when it exists: the narrow, curated cut. Featured is a few hundred claims;
-   * All claims is the whole Debate tag, and it pays for that twice over here — a paged catalog
-   * plus two server facets over the whole tag, and geo-chat's rows for every claim on the page.
-   * Landing on it made opening Explore a wait, on the one surface where the viewer arrived with
-   * someone already on the other end of the line.
+   * It is the dearer of the two, and landing on it is what made opening Explore a wait: the whole
+   * chain — a page of the tag, two facets, then geo-chat's rows keyed on the ids that come back —
+   * started from cold on the click. That is answered where it happens rather than by landing
+   * somewhere cheaper: `browseWarmed` below fetches it while the viewer is still on the opponent's
+   * positions, so the click lands on a warm cache either way.
    */
-  const source: ClaimsSource = chosenSource ?? (hasRecommended ? 'recommended' : 'featured');
+  const source: ClaimsSource = chosenSource ?? (hasRecommended ? 'recommended' : 'all');
 
   /**
    * "My positions": the viewer's own side of the lookup the opponent's tab reads.
@@ -326,9 +326,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // So the browse source is fetched once while the viewer is on the tab they landed on, and from
   // then on the tab decides as before — the rule this weakens is "don't keep a query alive behind
-  // the opponent's positions", and one warm-up is not keeping anything alive. It costs a page of
-  // the tag per session for a viewer who never opens Explore, which is what makes Featured the
-  // right thing to land on (see `source` above).
+  // the opponent's positions", and one warm-up is not keeping anything alive.
+  //
+  // It costs the same whichever tag is showing, which is why it can carry All claims as the landing
+  // source: the catalog is one page of fifty however large the tag is, and both facets are narrowed
+  // by the viewer's eligible spaces before they count anything. What a viewer who never opens
+  // Explore pays for is a page and two counts, not a corpus.
   //
   // `isLoading` rather than the facets' `settled`, so a failure ends the warm-up too: react-query
   // drops `isLoading` on error, where `settled` stays false and would leave this enabled forever.
