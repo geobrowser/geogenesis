@@ -145,7 +145,11 @@ describe('useEntityResponse indexing reconciliation', () => {
         ([name, properties]) => name === 'vote_cast' && properties.outcome_phase === 'submitted'
       );
       expect(votes).toHaveLength(1);
-      expect(mocks.capture.mock.calls.filter(([name, properties]) => name === 'vote_cast' && properties.outcome_phase === 'indexed')).toHaveLength(1);
+      expect(
+        mocks.capture.mock.calls.filter(
+          ([name, properties]) => name === 'vote_cast' && properties.outcome_phase === 'indexed'
+        )
+      ).toHaveLength(1);
       expect(votes[0][1]).toMatchObject({
         vote_direction: direction === 'positive' ? 'up' : direction === 'negative' ? 'down' : 'none',
         response_kind: 'curation',
@@ -473,10 +477,14 @@ describe('useEntityResponse indexing reconciliation', () => {
     await act(async () => Promise.resolve());
 
     await act(async () => {
-      secondTransaction.resolve({ _tag: 'Left', left: new Error('rejected') });
+      secondTransaction.resolve({ _tag: 'Left', left: new Error('Transaction failed', { cause: { code: 4001 } }) });
       await Promise.resolve();
       await Promise.resolve();
     });
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'action_failed',
+      expect.objectContaining({ failure_code: 'rejected', action_kind: 'vote' })
+    );
     expect(result.current.indexingStatus).toBe('reconciling');
     expect(result.current.first.optimisticResponse).toBe('positive');
 
