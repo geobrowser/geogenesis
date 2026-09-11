@@ -343,12 +343,7 @@ export function DebateRow({
                     )}
                     aria-current={isHighlighted ? 'true' : undefined}
                   >
-                    <span
-                      className={cx(
-                        'block size-5 shrink-0 overflow-hidden rounded-full bg-grey-02',
-                        isHighlighted && 'ring-2 ring-text ring-offset-1'
-                      )}
-                    >
+                    <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-grey-02">
                       <Avatar
                         avatarUrl={profilesBySpaceId.get(side.spaceId)?.avatarUrl}
                         value={side.spaceId}
