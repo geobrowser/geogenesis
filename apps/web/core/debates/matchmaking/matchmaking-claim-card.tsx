@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
-import type { DebateRequestPosition } from '~/core/debates/request-gate';
+import { viewerResponseFromDirection } from '~/core/claims/browse/claim-position-summaries';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
@@ -100,6 +100,12 @@ type Props = {
   /** The host has no answer about the viewer's side, rather than an answer of "none" — see below. */
   viewerResponseUnknown?: boolean;
   /**
+   * False where geo-chat's silence about the viewer's side must not be filled in from the indexed
+   * response (GEO-2823). Only the rematch picker sets it: its sides are the graph's, so an answer
+   * from a second source contradicts the pair it is comparing rather than completing it.
+   */
+  reconcileWithIndexedResponse?: boolean;
+  /**
    * Sends a signed-out viewer to Privy instead of publishing. Set by hosts that render to signed-out
    * viewers — the hub's Claims tab and the claim page — and left unset when signing in is not a
    * possibility the host has to handle, which keeps the response path unchanged for everyone else.
@@ -142,6 +148,7 @@ export function MatchmakingClaimCard({
   onOpenClaim,
   viewerIdentityPending,
   viewerResponseUnknown,
+  reconcileWithIndexedResponse,
   onRequireSignIn,
   hideEndSlot,
   endSlot,
@@ -200,6 +207,7 @@ export function MatchmakingClaimCard({
           onOpenClaim={onOpenClaim}
           viewerIdentityPending={viewerIdentityPending}
           viewerResponseUnknown={viewerResponseUnknown}
+          reconcileWithIndexedResponse={reconcileWithIndexedResponse}
           onRequireSignIn={onRequireSignIn}
           hideEndSlot={hideEndSlot}
           endSlot={endSlot}
@@ -479,16 +487,6 @@ export function useClaimPositionControl({
     actionTitle,
     responseError,
     /**
-     * Both clocks a request offer needs, composed here rather than at each `ClaimEndSlot`. Four
-     * surfaces render that control and every one was spelling this out identically — the same
-     * duplicated derivation that let the card and its own footer disagree (GEO-2808).
-     */
-    requestPosition: {
-      chat: readiness.viewer_response?.position ?? null,
-      local: viewerPosition,
-      indexingDelayed: responseIndexing.status === 'delayed',
-    } satisfies DebateRequestPosition,
-    /**
      * False only while the account genuinely cannot publish, never while one is in flight.
      *
      * Being signed out doesn't disable the pills where a sign-in prompt was supplied: a disabled
@@ -511,6 +509,7 @@ function RespondableControls({
   onOpenClaim,
   viewerIdentityPending,
   viewerResponseUnknown,
+  reconcileWithIndexedResponse = true,
   onRequireSignIn,
   hideEndSlot,
   endSlot,
@@ -526,33 +525,19 @@ function RespondableControls({
   onOpenClaim?: () => void;
   viewerIdentityPending?: boolean;
   viewerResponseUnknown?: boolean;
+  /**
+   * False where geo-chat's silence about the viewer's side must not be filled in from the indexed
+   * response (GEO-2823). Only the rematch picker sets it: its sides are the graph's, so an answer
+   * from a second source contradicts the pair it is comparing rather than completing it.
+   */
+  reconcileWithIndexedResponse?: boolean;
   onRequireSignIn?: () => void;
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
 }) {
-  const {
-    viewerPosition,
-    optimisticPositions,
-    respond,
-    actionTitle,
-    responseError,
-    canRespond,
-    requestPosition,
-  } = useClaimPositionControl({
-    claim,
-    positions,
-    readiness,
-      answersReady,
-      responseBlockedReason,
-      viewerIdentityPending,
-      viewerResponseUnknown,
-      onRequireSignIn,
-      // The faces the match implies belong with the offer the match makes. Where the slot is hidden
-      // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`.
-      offersDebate: !hideEndSlot,
-    });
-  // One read for the card. The header flags a contested claim and the footer reports the split, and
-  // deciding that twice is how the two would eventually disagree.
+  // One read for the card, and now the second half of what the card draws from. The header flags a
+  // contested claim, the footer reports the split, and — since GEO-2823 — the viewer's own response
+  // is reconciled against it too. Deciding any of that twice is how surfaces drift.
   //
   // Held on `answersReady` as well as proximity, because the response kind is part of both query
   // keys. Asking under the `stance` fallback does not merely waste a pair of requests on a factual
@@ -571,6 +556,60 @@ function RespondableControls({
     readResponses && answersReady
   );
 
+  /**
+   * The viewer's own side, with the indexed read standing in where geo-chat has no answer.
+   *
+   * The half of GEO-2823 that was actually costing people their position. The optimistic snapshot
+   * is a *shared* store keyed on the claim, so whichever surface first sees geo-chat confirm the
+   * response retires the optimism for all of them — and a surface whose only source is geo-chat
+   * then falls back to an endpoint that has not caught up. Take a side in the hub panel and it
+   * vanished about ten seconds later while the explore card, which already had this fallback
+   * through `useClaimResponseState`, went on showing it.
+   *
+   * `indexedViewerDirection`, emphatically not `viewerDirection`. The latter folds the in-flight
+   * snapshot in, so substituting it here would make this an echo of the client's own write: the
+   * retire effect below compares geo-chat's copy against what it expected, and against an echo that
+   * comparison is trivially true. It would then bin the optimism the instant indexing reported
+   * done, before anything independent had confirmed it — which is the symptom this memo exists to
+   * remove, re-created one layer down.
+   *
+   * Held while that read is still in flight, because `null` is its answer for "no side" *and* for
+   * "not yet". Substituting on "not yet" draws both pills unselected for someone who holds one, and
+   * a press then republishes their side instead of clearing it. The hub tabs are where that bites:
+   * their `answersReady` waits on geo-chat's rows and knows nothing about this second source.
+   *
+   * `reconcileWithIndexedResponse={false}` opts a host out. The rematch picker does, because its
+   * sides are the graph's and geo-chat's silence there is not the same fact — see
+   * `viewerResponseUnknown` and GEO-2807.
+   */
+  const resolvedReadiness = React.useMemo(() => {
+    if (!reconcileWithIndexedResponse || viewerResponseUnknown || readiness.viewer_response) return readiness;
+    if (summary.isViewerResponseLoading) return readiness;
+    const indexed = viewerResponseFromDirection(summary.indexedViewerDirection ?? null, readiness.response_kind);
+    return indexed ? { ...readiness, viewer_response: indexed } : readiness;
+  }, [
+    readiness,
+    reconcileWithIndexedResponse,
+    summary.indexedViewerDirection,
+    summary.isViewerResponseLoading,
+    viewerResponseUnknown,
+  ]);
+
+  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
+    useClaimPositionControl({
+      claim,
+      positions,
+      readiness: resolvedReadiness,
+      answersReady,
+      responseBlockedReason,
+      viewerIdentityPending,
+      viewerResponseUnknown,
+      onRequireSignIn,
+      // The faces the match implies belong with the offer the match makes. Where the slot is hidden
+      // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`.
+      offersDebate: !hideEndSlot,
+    });
+
   return (
     <>
       <ClaimHeader
@@ -584,7 +623,9 @@ function RespondableControls({
               claimId={claim.claim_entity_id}
               spaceId={claim.space_id}
               activeDebate={activeDebate}
-              position={requestPosition}
+              // `undefined` until the reads have landed, so a card that cannot yet say which side
+              // the viewer holds does not read as saying they hold none.
+              viewerPosition={answersReady ? viewerPosition : undefined}
             />
           ))
         }
@@ -666,7 +707,16 @@ export function withViewerPosition({
   const listedOnAnotherSide = positions.some(
     side => side.position !== viewerPosition && side.participants.some(heldByViewer)
   );
-  if (viewerPosition === serverPosition && !listedOnAnotherSide) return positions;
+  // ...and they may lag behind it on the side the viewer actually holds, which is the half this
+  // used to miss (GEO-2821). Agreeing about the *position* was treated as nothing left to do, so
+  // the viewer's own face was left to geo-chat's presence view — and that view lists a viewer only
+  // where it has a readiness row for them, which pre-GEO-2740 positions do not have until
+  // something backfills one. Same viewer, same online status, face on the claims that had been
+  // repaired and no face on the rest. The client knows which side it holds; assert it.
+  const listedOnHeldSide =
+    viewerPosition === null ||
+    positions.some(side => side.position === viewerPosition && side.participants.some(heldByViewer));
+  if (viewerPosition === serverPosition && !listedOnAnotherSide && listedOnHeldSide) return positions;
 
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const viewer = {
@@ -700,6 +750,11 @@ export function withViewerPosition({
   const countsViewer = (side: DebateClaimPositionSummary) =>
     (serverPosition === side.position && !listedOnAnotherSide) || side.participants.some(heldByViewer);
 
+  // Both counts answered by `countsViewer`, deliberately — `participants` is a *capped* preview
+  // (see `DebateOnlineChoice`), so "absent from the list" does not mean "absent from the count".
+  // Asking the list about `present_count` guesses, and guesses wrong in both directions: it invents
+  // a person on a side whose preview simply ran out, and after a side switch it fails to take the
+  // viewer off the side they left while adding them to the new one — counting them twice.
   const withViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => {
     const missing = countsViewer(side) ? 0 : 1;
     return {
@@ -779,15 +834,12 @@ function UnresolvableControls({
               claimId={claim.claim_entity_id}
               spaceId={claim.space_id}
               activeDebate={activeDebate}
-              // This card draws no response control, so it has no optimistic side of its own and
-              // both readings are geo-chat's. That is not the self-comparison GEO-2808 removed —
-              // there the fallback was the *graph*, a different source from the one that validates
-              // the request. Here it is the validating source agreeing with itself, which is the
-              // honest answer to "does geo-chat hold a position for this viewer".
-              position={{
-                chat: readiness.viewer_response?.position ?? null,
-                local: readiness.viewer_response?.position ?? null,
-              }}
+              // No response control here, so there is no optimistic side to read — geo-chat's is
+              // the only answer this card has about where the viewer stands, and where it is silent
+              // this card genuinely does not know. Not `?? null`: on the Matches tab this readiness
+              // *is* the match, and reading silence as "holds none" would contradict the match's own
+              // side and take the offer off the one tab where every card is a match by definition.
+              viewerPosition={readiness.viewer_response?.position}
             />
           ))
         }

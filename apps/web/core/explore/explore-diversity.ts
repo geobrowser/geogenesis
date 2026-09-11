@@ -142,6 +142,121 @@ export function applyDiversityCap<T>(
   return ordered;
 }
 
+/**
+ * At most this many items from one space may appear in any `EXPLORE_PAGE_SIZE` consecutive
+ * items — one screen (GEO-2841).
+ *
+ * Sized from two measurements on the same query, two days apart. On 2026-09-08 the
+ * Relationships space held **14 of the top 20** and 28 of the top 50; on 2026-09-10, after
+ * the debate-tag gate landed, still **12 of 20** and 24 of 50. So this is not a batch working
+ * its way out of the feed, and the ranking will not resolve it: `rankingScore` has no decay
+ * term at all, and the participation those claims carry never erodes.
+ *
+ * **5, not the 4 that was proposed, because 4 is not reachable.** The bound here is supply,
+ * not the algorithm. The 66-row window measured on 2026-09-10 holds six spaces —
+ * 38 / 14 / 6 / 4 / 3 / 1 — so the most a page can draw at `q` per space is
+ * `sum(min(count, q))`:
+ *
+ *   * q=3 -> 16 items, six short of a 22-slot page
+ *   * q=4 -> 20 items, two short
+ *   * q=5 -> 23 items, the first value that fills a page at all
+ *
+ * At q=4 the quota would be silently violated on every single page, because the alternative
+ * is a short screen. 5 is therefore the tightest honest setting for the feed as it is today.
+ * Reaching 4 needs *more spaces in the window*, not a smaller number here — either a deeper
+ * scan (GEO-2853 option 1, at proportional payload cost) or more spaces publishing
+ * debate-tagged claims.
+ */
+export const EXPLORE_SPACE_MAX_PER_PAGE = 5;
+
+/**
+ * The space a feed item is shown in. Unlike {@link exploreItemTypeKey} there is nothing to
+ * classify: a card is rendered in exactly one space, and that is the one crowding the screen.
+ */
+export function exploreItemSpaceKey(item: { spaceId: string }): string {
+  return normId(item.spaceId);
+}
+
+/**
+ * Reorder a ranked list so no `groupSize` consecutive items hold more than `quota` from one
+ * space, *while other spaces still have items to offer*. Nothing is dropped — an item over
+ * quota is deferred, and reappears once the window has moved past enough of its space-mates.
+ *
+ * The qualifier is not hedging, it is arithmetic. `quota x distinct spaces` has to reach
+ * `groupSize` for the quota to be satisfiable at all, and each space has to actually supply
+ * its share; when it cannot, this emits the best-ranked remaining item rather than leaving
+ * the screen short. A feed with one space and a hard quota would otherwise be empty. See
+ * `EXPLORE_SPACE_MAX_PER_PAGE` for the measured numbers that set the default.
+ *
+ * Separate from {@link applyDiversityCap} on purpose, because they bound different things and
+ * only one of them addresses the reported problem:
+ *
+ *   * `applyDiversityCap` bounds a **run** of one *type*. A space holding 12 of 20 satisfies
+ *     it completely as long as those 12 are interleaved — which, measured, they are. It also
+ *     keys on type, so it says nothing about spaces at all, and with every row in the top 50
+ *     typed `Claim` its key is constant and it is a no-op.
+ *   * this bounds the **share** held by one *space* over a window.
+ *
+ * Applied *after* the type cap in `fetchExploreFeed`, so the space guarantee is the one that
+ * holds outright. That order can locally weaken the type cap's run guarantee once the type cap
+ * has real input again (GEO-2853) — the trade is deliberate: an over-long run of one type is
+ * an aesthetic complaint, one space owning the screen is the bug that was reported.
+ */
+export function applyPerSpaceQuota<T>(
+  items: readonly T[],
+  keyOf: (item: T) => string,
+  quota: number = EXPLORE_SPACE_MAX_PER_PAGE,
+  groupSize: number = EXPLORE_PAGE_SIZE
+): T[] {
+  if (quota <= 0 || groupSize <= 1 || items.length <= quota) return [...items];
+
+  const remaining = items.slice();
+  const ordered: T[] = [];
+
+  while (remaining.length > 0) {
+    // The trailing window the next item joins. Requiring `< quota` here means that after it is
+    // appended, no `groupSize` window holds more than `quota` of its space.
+    const trailing = ordered.slice(Math.max(0, ordered.length - (groupSize - 1)));
+    const counts = new Map<string, number>();
+    for (const item of trailing) {
+      const key = keyOf(item);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    // Highest-ranked item still under quota. `remaining` is in rank order and stays that way,
+    // so this preserves the ranking wherever the quota does not bind.
+    let index = remaining.findIndex(item => (counts.get(keyOf(item)) ?? 0) < quota);
+    // -1 means every remaining item is from a space already at quota: emit the best of them
+    // rather than dropping or stalling. Reachable whenever the tail of the window is one space,
+    // which is exactly the case being fixed.
+    if (index < 0) index = 0;
+
+    const [picked] = remaining.splice(index, 1);
+    ordered.push(picked);
+  }
+
+  return ordered;
+}
+
+/** Largest share one key holds in any `groupSize` window — the property the quota bounds. */
+export function largestWindowShare<T>(
+  items: readonly T[],
+  keyOf: (item: T) => string,
+  groupSize: number = EXPLORE_PAGE_SIZE
+): number {
+  let largest = 0;
+  for (let start = 0; start < items.length; start += 1) {
+    const counts = new Map<string, number>();
+    for (const item of items.slice(start, start + groupSize)) {
+      const key = keyOf(item);
+      const next = (counts.get(key) ?? 0) + 1;
+      counts.set(key, next);
+      if (next > largest) largest = next;
+    }
+  }
+  return largest;
+}
+
 /** Longest run of one type in a list — the property the cap exists to bound. */
 export function longestTypeRun<T>(items: readonly T[], keyOf: (item: T) => string): number {
   let longest = 0;

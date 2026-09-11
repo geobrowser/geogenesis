@@ -36,9 +36,11 @@ export const NavUtils = {
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => (spaceId === ROOT_SPACE ? `/root` : `/space/${spaceId}`),
+  toBounties: () => '/bounties',
+  toNewBounty: (spaceId: string) => `/space/${spaceId}/bounties/new`,
+  // A bounty is a regular entity; its detail page is the entity page.
+  toBounty: (spaceId: string, bountyId: string) => `/space/${spaceId}/${bountyId}`,
   toCommunity: (spaceId: string) => `${NavUtils.toSpace(spaceId)}/community`,
-  toCommunityBounties: (spaceId: string, status: 'completed' | 'in-progress' | 'available') =>
-    `${NavUtils.toSpace(spaceId)}/community/bounties/${status}`,
   toProposal: (spaceId: string, proposalId: string, from?: string, governanceHomeReturnSearch?: string) => {
     const params = new URLSearchParams();
     params.set('proposalId', proposalId);

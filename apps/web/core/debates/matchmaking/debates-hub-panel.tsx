@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, type PanInfo, motion, useDragControls } from 'framer-motion';
+import { useAtom, useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
@@ -27,7 +28,7 @@ import { RequestsTab } from './requests-tab';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
 import { useUnexpiredRequests } from './use-request-countdown';
-import type { DebatesHubTab } from '~/atoms';
+import { type DebatesHubTab, debatesHubFiltersOwnerAtom, resetDebatesHubFiltersAtom } from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
@@ -246,7 +247,8 @@ type SurfaceProps = {
 };
 
 function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: SurfaceProps) {
-  const { authenticated, ready } = useGeoChatAuth();
+  const { authenticated, ready, accountKey } = useGeoChatAuth();
+  const filtersReconciled = useFilterOwner(accountKey, ready);
   const tabs = tabsFor(authenticated);
   const activeTab = visibleTab(requestedTab, authenticated);
   const { data: activity } = useDebateActivity(authenticated);
@@ -340,7 +342,12 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         data-debates-hub-scroll
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6"
       >
-        {!ready ? null : (
+        {/* `filtersReconciled` joins the Privy gate rather than becoming a second one: the reset
+            below runs in a passive effect, so the render that first sees a new account still holds
+            the previous one's filter bar. Rendering the tabs then would show B the labels A had
+            picked and fire B's first query with A's space ids, an instant before the effect
+            corrects both. One render, but it is the wrong viewer's data. */}
+        {!ready || !filtersReconciled ? null : (
           <HubSwap activeKey={activeTab}>
             {activeTab === 'requests' ? (
               <RequestsTab />
@@ -349,7 +356,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
             ) : activeTab === 'claims' ? (
               <ClaimsTab />
             ) : (
-              <PeopleTab />
+              <PeopleTab onTabChange={changeTab} />
             )}
           </HubSwap>
         )}
@@ -399,4 +406,47 @@ function AvailabilityToggle() {
       </span>
     </button>
   );
+}
+
+/**
+ * Keeps the hub's filter bar attributed to the viewer who set it.
+ *
+ * The selections are session-scoped (GEO-2850), and a session outlives a sign-in — so "whose are
+ * these" has to be tracked rather than assumed. Three transitions, and they do not want the same
+ * answer:
+ *
+ * Signing in is the *same person* authenticating, not a new one. The Claims tab offers a sign-in
+ * prompt from inside its own empty state, so wiping the bar there would lose the picks a viewer
+ * made seconds earlier on the flow the tab itself invited — which is the complaint GEO-2850 exists
+ * to fix. Nothing is cleared, and nothing is re-armed either: an untouched session still has its
+ * seed, so the membership default GEO-2834 is about lands on its own once the account's spaces
+ * arrive. A session whose seed is spent is one where the viewer worked the menu, and forcing it
+ * back would overwrite what they did — including the deliberate clear that GEO-2789 says must
+ * never be second-guessed, which looks identical to an untouched filter from here.
+ *
+ * A different account is a different viewer, and inherits nothing.
+ *
+ * Signing *out* changes nothing here. `owner` keeps naming the last account seen, so the next
+ * sign-in is still compared against it — otherwise A could sign out, B sign in, and B be treated
+ * as a first sign-in and handed A's filters.
+ *
+ * Held until Privy has resolved, because `accountKey` is null before that and a null mid-resolve
+ * is not someone signing out.
+ */
+function useFilterOwner(accountKey: string | null, ready: boolean) {
+  const [owner, setOwner] = useAtom(debatesHubFiltersOwnerAtom);
+  const resetFilters = useSetAtom(resetDebatesHubFiltersAtom);
+
+  // Only a handover between two established accounts leaves anything on screen that is not this
+  // viewer's. Every other case — signed out, first sign-in, the same account — keeps the bar it
+  // already has by design, so there is nothing to wait for and the tabs render immediately.
+  const awaitingHandover = ready && accountKey !== null && owner !== null && owner !== accountKey;
+
+  React.useEffect(() => {
+    if (!ready || accountKey === null || owner === accountKey) return;
+    if (owner !== null) resetFilters();
+    setOwner(accountKey);
+  }, [accountKey, owner, ready, resetFilters, setOwner]);
+
+  return !awaitingHandover;
 }

@@ -24,6 +24,7 @@ export function AudioSettings({
   audioOutputSupported,
   error,
   framed = false,
+  devicesLocked = false,
   onAudioInputChange,
   onAudioOutputChange,
 }: {
@@ -34,6 +35,12 @@ export function AudioSettings({
   audioOutputSupported: boolean;
   error: string | null;
   framed?: boolean;
+  /**
+   * Picking a microphone restarts the preview and republishes, so it has to be unreachable while a
+   * restart or reconnect is already in flight. The speaker is not covered: it moves over the live
+   * room through `switchActiveDevice` and never touches the published tracks.
+   */
+  devicesLocked?: boolean;
   onAudioInputChange: (deviceId: string) => void;
   onAudioOutputChange: (deviceId: string) => void;
 }) {
@@ -43,6 +50,7 @@ export function AudioSettings({
         label="Select a microphone"
         options={audioInputDevices}
         selectedDeviceId={selectedAudioInputId}
+        disabled={devicesLocked}
         framed={framed}
         onChange={onAudioInputChange}
       />

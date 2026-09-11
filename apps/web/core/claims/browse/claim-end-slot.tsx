@@ -13,7 +13,6 @@ import type { Debate } from '~/core/debates/api';
 import { debatePath } from '~/core/debates/debate-routes';
 
 import { RequestDebateControl, claimSlotPillClass } from '~/core/debates/request-debate-control';
-import { type DebateRequestPosition, debateRequestGate } from '~/core/debates/request-gate';
 import { useClaimMatchup } from './use-claim-matchup';
 
 /**
@@ -45,22 +44,27 @@ export function ClaimEndSlot({
   activeDebate,
   enabled = true,
   variant = 'inline',
-  position,
+  viewerPosition,
   className,
 }: {
   claimId: string;
   spaceId: string;
   /**
-   * The viewer's position on this claim, from both clocks, so the offer only appears once geo-chat
-   * will honour it (GEO-2808).
+   * The side the viewer holds: a boolean, `null` for "holds none", `undefined` for "not known yet".
    *
-   * geo-chat validates a request against its *own* copy of the position and rejects an early one
-   * with `claim_response_required`. Every host of this slot already runs `useClaimPositionControl`,
-   * which holds both readings — so this is required rather than optional: a host that could not
-   * answer would be offering a debate it has no way to know is valid, which is what the hub and the
-   * feed cards were doing.
+   * Three values rather than two, because collapsing the last two is what makes this check either
+   * useless or harmful. Withdrawing on "holds none" is the point — clearing your position has to
+   * take the offer resting on it away. Withdrawing on "not known yet" hides an offer the server
+   * would accept, on a card whose reads have simply not landed, which is the direction #2376
+   * reverted a different check for.
+   *
+   * Not the position check #2354 added and #2376 took back out. That one compared the local side
+   * against geo-chat's copy and waited for them to agree, which is a wait this endpoint never needed
+   * — see the note above the match check. This never waits on geo-chat at all: it reads the side the
+   * *match* was already computed for, which is in hand, and asks whether it contradicts the side the
+   * reader is on. Silence is not a contradiction.
    */
-  position: DebateRequestPosition;
+  viewerPosition: boolean | null | undefined;
   /**
    * The live debate on this claim.
    *
@@ -101,35 +105,45 @@ export function ClaimEndSlot({
     enabled,
   });
 
-  // `match` is this surface's opponent half — somebody standing ready on the other side. The
-  // position half is the shared rule, so every surface waits on the same fact and names it the
-  // same way.
-  const gate = debateRequestGate({
-    chatPosition: position.chat,
-    localPosition: position.local,
-    opponentReady: match !== null,
-    indexingDelayed: position.indexingDelayed,
-  });
-
-  // The live-debate link below shares its shape with the offer, so both read the size from one
-  // place — see `claimSlotPillClass` for why it is not the debates pill.
+  // The live-debate link below shares its shape with this offer, so both read the size from one
+  // place — see `claimSlotPillClass` for the metrics and for why it is not the debates pill.
   const base = claimSlotPillClass(variant);
 
-  // A match is derived from the same `debate_claim_readiness` rows `create_debate_request_as` reads,
-  // so no additional position check belongs here — one against the graph would only be slower.
+  // Whether the match is still about the side the viewer is on.
+  //
+  // Not a second position check — it never asks geo-chat anything. `/matchmaking/matches` is one
+  // account-level query, fetched once with `refetchOnWindowFocus` off, so its rows keep describing
+  // the side the viewer held when it was fetched. Switch sides and the "opponent" it names is now
+  // standing on the *same* side; press the offer and geo-chat refuses, correctly, as nobody holding
+  // the opposite position being available — an error the reader has no way to connect to the side
+  // they just changed. The match carries the side it was computed for, so this is answerable from
+  // what is already in hand.
+  //
+  // `viewer_response` is the richer field and `viewer_position` the one a match always carries.
+  //
+  // Hiding rather than disabling: a greyed button still says a debate is on offer here. On a side
+  // the reader has stepped off, there is none to make.
+  //
+  // Only a positive contradiction withdraws it. Both readings have to be known and they have to
+  // disagree — an unknown local side, or a match that names none, leaves the offer alone.
+  const matchedSide = match ? (match.viewer_response?.position ?? match.viewer_position) : null;
+  const contradictsViewerSide =
+    matchedSide !== null && matchedSide !== undefined && viewerPosition !== undefined && matchedSide !== viewerPosition;
+
+  // A match is otherwise derived from the same `debate_claim_readiness` rows
+  // `create_debate_request_as` reads, so nothing further about the position belongs here — a check
+  // against the graph would only be slower, which is why #2376 took one back out.
   //
   // Not a guarantee the request will be accepted: the match query omits that endpoint's
   // `validation_failed_at IS NULL` / `last_validated_at IS NOT NULL` predicates and its
   // attempted-recipient exclusion, so a failed validation sweep or an already-tried opponent still
   // draws a live button. Which is why the refusal below is rendered rather than swallowed.
-  if (match) {
+  if (match && !contradictsViewerSide) {
     return (
       <RequestDebateControl
         onRequest={request}
-        disabled={Boolean(blockedReason) || !gate.canRequest}
+        disabled={Boolean(blockedReason)}
         isRequesting={isRequesting}
-        pending={gate.pending}
-        pendingLabel={gate.pendingLabel}
         blockedReason={blockedReason}
         requestError={requestError}
         variant={variant}

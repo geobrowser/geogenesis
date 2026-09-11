@@ -1,0 +1,125 @@
+import { act, cleanup, render, screen } from '@testing-library/react';
+
+import * as React from 'react';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { DebateHoursNote } from './debate-hours-note';
+
+/**
+ * Pinned to Pacific so "9-10am local" is a fact rather than a coincidence of the machine running
+ * the suite — the copy is the same shape everywhere, but only here can it be asserted literally.
+ * `TZ` has to be set before jsdom's `Date` is first used for the process to honour it, which is why
+ * every case reaches for it through the shared setup below.
+ */
+const originalTimeZone = process.env.TZ;
+
+beforeEach(() => {
+  process.env.TZ = 'America/Los_Angeles';
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  // Deleted rather than assigned back when there was nothing to restore: `process.env.TZ = undefined`
+  // stores the *string* `"undefined"`, which is not a zone, and leaves the process running in the
+  // UTC fallback for anything that shares it.
+  if (originalTimeZone === undefined) delete process.env.TZ;
+  else process.env.TZ = originalTimeZone;
+});
+
+function renderAt(iso: string, { live = true }: { live?: boolean } = {}) {
+  vi.setSystemTime(new Date(iso));
+  // The note renders nothing until its mount effect has run, so flush it the way the browser would.
+  act(() => {
+    render(<DebateHoursNote live={live} />);
+  });
+}
+
+describe('DebateHoursNote', () => {
+  it('points an outside-hours viewer at the window in their own local time', () => {
+    // 15:00Z is 08:00 PDT — an hour before the window opens.
+    renderAt('2026-09-08T15:00:00Z');
+
+    expect(
+      screen.getByText('Debate hours are every day between 9-10am. Come back then to join a debate!')
+    ).toBeTruthy();
+  });
+
+  it('tells a viewer inside the window to stay', () => {
+    renderAt('2026-09-08T16:30:00Z');
+
+    expect(screen.getByText('Stay here — this list fills in as people come online.')).toBeTruthy();
+  });
+
+  // Signed out on People there is no gateway scope, so the list will not fill itself in while the
+  // viewer waits. "Stay here" would promise exactly the thing that cannot happen.
+  it('tells a viewer whose list does not update itself to check back instead', () => {
+    renderAt('2026-09-08T16:30:00Z', { live: false });
+
+    expect(screen.getByText('Check back in a few minutes to find a debate!')).toBeTruthy();
+    expect(screen.queryByText(/Stay here/)).toBeNull();
+  });
+
+  // Outside the window nothing is coming for anyone, so both viewers get the same answer.
+  it('gives the same outside-hours line either way', () => {
+    renderAt('2026-09-08T15:00:00Z', { live: false });
+
+    expect(
+      screen.getByText('Debate hours are every day between 9-10am. Come back then to join a debate!')
+    ).toBeTruthy();
+  });
+
+  // The boundary requirement: 8:59 shows one variant and 9:00 the other, with no refresh in between.
+  it('flips at the start of the window without being re-rendered', () => {
+    renderAt('2026-09-08T15:59:00Z');
+    expect(screen.getByText(/Come back then/)).toBeTruthy();
+
+    act(() => {
+      // Just past the boundary, not a second past it: the flip has to be effectively immediate.
+      vi.advanceTimersByTime(60_000 + 100);
+    });
+
+    expect(screen.queryByText(/Come back then/)).toBeNull();
+    expect(screen.getByText('Stay here — this list fills in as people come online.')).toBeTruthy();
+  });
+
+  it('flips back when the window closes', () => {
+    renderAt('2026-09-08T16:59:00Z');
+    expect(screen.getByText(/Stay here/)).toBeTruthy();
+
+    act(() => {
+      // Just past the boundary, not a second past it: the flip has to be effectively immediate.
+      vi.advanceTimersByTime(60_000 + 100);
+    });
+
+    expect(screen.getByText(/Come back then/)).toBeTruthy();
+  });
+
+  // A throttled or sleeping tab can miss its callback entirely, so returning to the tab has to be
+  // enough on its own.
+  it('re-reads the clock when the tab becomes visible again', () => {
+    renderAt('2026-09-08T15:59:00Z');
+    expect(screen.getByText(/Come back then/)).toBeTruthy();
+
+    act(() => {
+      // Time moved on without the timer firing, which is what a sleeping machine looks like.
+      vi.setSystemTime(new Date('2026-09-08T16:30:00Z'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(screen.getByText(/Stay here/)).toBeTruthy();
+  });
+
+  it('stops its timer when unmounted', () => {
+    renderAt('2026-09-08T15:59:00Z');
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+
+    act(() => {
+      cleanup();
+    });
+
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+  });
+});

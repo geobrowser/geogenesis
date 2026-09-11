@@ -11,7 +11,7 @@ import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 
-import { downvoted, trackPrivyAuth, upvoted, voteCast } from '~/core/analytics';
+import { trackPrivyAuth } from '~/core/analytics';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import {
@@ -236,25 +236,7 @@ export function EntityVoteButtons({
       queueResponse('positive');
       return;
     }
-    if (activeResponse === 'positive') {
-      submitResponse('clear', {
-        onSuccess: () => {
-          voteCast('none', voteProperties('remove', 'up'));
-        },
-      });
-    } else {
-      const previousResponse = activeResponse ?? null;
-      submitResponse('positive', {
-        onSuccess: () => {
-          upvoted(
-            voteProperties(
-              previousResponse === 'negative' ? 'switch' : 'cast',
-              previousResponse === 'negative' ? 'down' : undefined
-            )
-          );
-        },
-      });
-    }
+    submitResponse(activeResponse === 'positive' ? 'clear' : 'positive');
   }
 
   function handleNegativeResponse() {
@@ -262,35 +244,7 @@ export function EntityVoteButtons({
       queueResponse('negative');
       return;
     }
-    if (activeResponse === 'negative') {
-      submitResponse('clear', {
-        onSuccess: () => {
-          voteCast('none', voteProperties('remove', 'down'));
-        },
-      });
-    } else {
-      const previousResponse = activeResponse ?? null;
-      submitResponse('negative', {
-        onSuccess: () => {
-          downvoted(
-            voteProperties(
-              previousResponse === 'positive' ? 'switch' : 'cast',
-              previousResponse === 'positive' ? 'up' : undefined
-            )
-          );
-        },
-      });
-    }
-  }
-
-  function voteProperties(action: 'cast' | 'switch' | 'remove', previousDirection?: 'up' | 'down') {
-    return {
-      vote_action: action,
-      previous_vote_direction: previousDirection,
-      entity_id: entityId,
-      space_id: spaceId,
-      object_type: ENTITY_RESPONSE_OBJECT_TYPE,
-    };
+    submitResponse(activeResponse === 'negative' ? 'clear' : 'negative');
   }
 
   const scoreLabel = formatScore(displayScore);

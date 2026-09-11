@@ -14,22 +14,12 @@
  * The debates hub does not use this gate, deliberately. Its match data and `create_debate_request_as`
  * both read `debate_claim_readiness`, which the in-flight response notification writes, so a
  * graph-backed position check there would hold a button the server would have accepted.
- */
-/**
- * The viewer's position on a claim, read from both clocks, as a request offer needs it.
  *
- * Derived once by `useClaimPositionControl`, which already holds both readings, and passed straight
- * to `ClaimEndSlot`. Every surface that offers a debate needs the same three values, and deriving
- * them per surface is how the two clocks drifted apart in the first place (GEO-2808).
+ * That was tried, in #2354, and reverted. Wiring this into `ClaimEndSlot` re-asked a question
+ * `match` had already answered, using a field that can disagree with it — so a viewer with a live
+ * match and no `viewer_response` got a rendered, permanently disabled "Request debate" with nothing
+ * saying why. The warning above and the one in `claim-end-slot.tsx` both predate that attempt.
  */
-export type DebateRequestPosition = {
-  /** geo-chat's copy. `undefined` when it has no row for this claim yet. */
-  chat: boolean | null | undefined;
-  /** What the viewer believes they hold — optimistic while a response is in flight. */
-  local: boolean | null;
-  indexingDelayed?: boolean;
-};
-
 export type DebateRequestGateInput = {
   /**
    * The position the request will be validated against, as the surface last heard it.
@@ -79,8 +69,8 @@ export function debateRequestGate({
   const positionSettled = held && chatPosition === localPosition;
   // Waiting means something is actually in flight. A viewer who has not answered at all is not
   // waiting for anything, and saying "Publishing your position…" at them names work nobody
-  // started — which is what this did on the hub, where the opponent half does not already
-  // require a position the way the picker's `opposing` does.
+  // started. The picker's `opposing` already requires a position, so this is unreachable from the
+  // one caller — it is guarded for any future caller whose opponent half does not.
   const pending = opponentReady && held && !positionSettled;
 
   return {

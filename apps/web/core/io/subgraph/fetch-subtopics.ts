@@ -85,14 +85,20 @@ const subtopicsQuery = (spaceId: string) => `
  * Returns topics declared as subtopics of this space (governance subspace-topic links).
  * Used by the space overview gallery — not the Subtopics relation tree in the dialog.
  */
-export async function fetchSubtopics(spaceId: string): Promise<TopicUsage[]> {
+export async function fetchSubtopics(spaceId: string, signal?: AbortSignal): Promise<TopicUsage[]> {
   if (!validateSpaceId(spaceId)) {
     throw new Error(`Invalid space ID provided for subtopics fetch: ${spaceId}`);
   }
 
+  // `signal` lets a caller that has given up actually cancel the request rather than abandon it.
+  // The side rail bounds this fetch with `resolveWithin` (`core/utils/resolve-within`), and without
+  // a signal a timed-out request keeps its socket and its retries for as long as the upstream holds
+  // them — so during an outage every page view leaves another one behind. Optional because the
+  // gallery, which is on the page's own path, has nothing to cancel on behalf of.
   const queryEffect = graphql<NetworkResult>({
     query: subtopicsQuery(spaceId),
     endpoint: Environment.getConfig().api,
+    signal,
   });
 
   const resultOrError = await Effect.runPromise(Effect.either(queryEffect));

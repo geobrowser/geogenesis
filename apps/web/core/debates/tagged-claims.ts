@@ -12,6 +12,7 @@ import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { ClaimPickerEntity } from '~/core/debates/claim-picker-page';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
+import { type RelationFacetCount, decodeRelationFacet, relationFacetDocument } from '~/core/io/relation-facet';
 
 /**
  * Claims carrying a curation tag — a `Tags` relation pointing at one entity — ranked, filtered and
@@ -410,73 +411,26 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
  * Facet menus (GEO-2796)
  * -----------------------------------------------------------------------------------------------*/
 
-/**
- * Counts for one dimension of the menu, from the server.
+/*
+ * Counts for one dimension of the menu come from the shared relation-facet
+ * query (core/io/relation-facet.ts — grown here for GEO-2796/2798, extracted
+ * once the data-table dropdowns adopted the same mechanism). Grouped over the
+ * *relations* rather than the entities: a topic count is "how many distinct
+ * claims point at this topic". The entity filter rides along on `fromEntity`,
+ * which is what keeps the count describing the same set the list does — and
+ * it is not optional: unfiltered, the group-by runs over every relation in
+ * the graph (4.2M) and is the only slow path there is; filtered, both facets
+ * answer in about a third of a second.
  *
- * Grouped over the *relations* rather than the entities: a topic count is "how many distinct claims
- * point at this topic", which is a `distinctCount { fromEntityId }` grouped by the relation's other
- * end. The entity filter rides along on `fromEntity`, which is what keeps the count describing the
- * same set the list does.
- *
- * That filter is not optional. An unfiltered group-by runs over every relation in the graph — 4.2M
- * of them — and is the only slow path there is; with the filter applied both facets answer in about
- * a third of a second.
+ * Ids come out of the shared decode dashless, which is the spelling
+ * everything else in the app speaks. That matters because these ids do not
+ * stay inside the menu: they become the viewer's selection, and the
+ * selection outlives the source that produced it — switching from a tagged
+ * list to the opponent's tab hands the id to `carriesEveryTopic` and
+ * `keepSelectableTopics`, which compare with `Set.has` against dashless
+ * relation targets.
  */
-const TAGGED_FACET_SOURCE = /* GraphQL */ `
-  query TaggedClaimFacet(
-    $relationTypeId: UUID!
-    $toEntityId: UUID
-    $fromEntity: EntityFilter!
-    $groupBy: [RelationsGroupBy!]!
-  ) {
-    relationsConnection(
-      filter: { typeId: { is: $relationTypeId }, toEntityId: { is: $toEntityId }, fromEntity: $fromEntity }
-    ) {
-      groupedAggregates(groupBy: $groupBy) {
-        keys
-        distinctCount {
-          fromEntityId
-        }
-      }
-    }
-  }
-`;
-
-type TaggedFacetQuery = {
-  relationsConnection: {
-    groupedAggregates: Array<{
-      keys: string[] | null;
-      distinctCount: { fromEntityId: string | null } | null;
-    } | null> | null;
-  } | null;
-};
-
-export type TaggedFacetCount = { id: string; count: number };
-
-/**
- * Ids come out of here dashless, which is the spelling everything else in the app speaks.
- *
- * `groupedAggregates` answers in dashed UUIDs while entity ids, relation targets and geo-chat rows
- * are all dashless — and these ids do not stay inside the menu. They become the viewer's selection,
- * and the selection outlives the source that produced it: switching from a tagged list to the
- * opponent's tab hands a dashed topic id to `carriesEveryTopic` and `keepSelectableTopics`, which
- * compare with `Set.has` against dashless relation targets. Nothing matches, so the list empties
- * and the reconciliation effect then discards the selection as no longer offered.
- *
- * Normalized here rather than at each comparison, because there is one boundary and five callers.
- * The server accepts either spelling on the way back out, which was measured before relying on it.
- */
-function decodeTaggedFacet(data: TaggedFacetQuery): TaggedFacetCount[] {
-  const counts: TaggedFacetCount[] = [];
-  for (const group of data.relationsConnection?.groupedAggregates ?? []) {
-    const id = group?.keys?.[0];
-    if (!id) continue;
-    counts.push({ id: uuidToHex(id), count: Number(group?.distinctCount?.fromEntityId ?? 0) });
-  }
-  return counts;
-}
-
-const taggedFacetDocument = parse(TAGGED_FACET_SOURCE) as TypedDocumentNode<TaggedFacetQuery, Record<string, unknown>>;
+export type TaggedFacetCount = RelationFacetCount;
 
 /**
  * Names for the topic ids a facet came back with.
@@ -537,10 +491,10 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
     queryFn: ({ signal }) =>
       Effect.runPromise(
         graphql({
-          query: taggedFacetDocument,
-          decoder: decodeTaggedFacet,
+          query: relationFacetDocument,
+          decoder: decodeRelationFacet,
           variables: {
-            relationTypeId: TOPICS_PROPERTY_ID,
+            typeId: TOPICS_PROPERTY_ID,
             toEntityId: null,
             fromEntity: { typeIds: { in: [CLAIM_TYPE_ID] }, ...taggedEntityFilter(tagId, filters) },
             groupBy: ['TO_ENTITY_ID'],
@@ -619,10 +573,10 @@ export function useTaggedSpaceFacet(tagId: string, filters: TaggedClaimFilters, 
     queryFn: ({ signal }) =>
       Effect.runPromise(
         graphql({
-          query: taggedFacetDocument,
-          decoder: decodeTaggedFacet,
+          query: relationFacetDocument,
+          decoder: decodeRelationFacet,
           variables: {
-            relationTypeId: TAG_PROPERTY_ID,
+            typeId: TAG_PROPERTY_ID,
             toEntityId: tagId,
             fromEntity: { typeIds: { in: [CLAIM_TYPE_ID] }, ...taggedEntityFilter(tagId, filters, 'spaces') },
             groupBy: ['SPACE_ID'],

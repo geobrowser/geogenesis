@@ -6,15 +6,17 @@ import cx from 'classnames';
 
 import type { Filter, ModesByColumn } from '~/core/blocks/data/filters';
 import {
+  DropdownSelectionMode,
+  DropdownSelectionModes,
   DropdownSelections,
   effectiveDropdownSelection,
   filterDefaultsForColumn,
   toggleDropdownSelection,
 } from '~/core/blocks/data/table-dropdown-selections';
 import type { BlockDropdownConfig } from '~/core/blocks/data/use-block-dropdowns';
+import { useDropdownOptionNames } from '~/core/blocks/data/use-dropdown-option-names';
 import type { DropdownOption } from '~/core/blocks/data/use-dropdown-options';
 import { useDropdownOptions } from '~/core/blocks/data/use-dropdown-options';
-import { useExactOptionCounts } from '~/core/blocks/data/use-exact-option-counts';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { ID } from '~/core/id';
@@ -43,7 +45,10 @@ type TableBlockDropdownsProps = {
   baseFilterState: Filter[];
   baseModesByColumn: ModesByColumn;
   selections: DropdownSelections;
+  /** Per-dropdown union/intersection choices (stored per user, like selections). */
+  selectionModes: DropdownSelectionModes;
   updateSelections: (updater: (current: DropdownSelections) => DropdownSelections) => void;
+  setColumnMode: (columnId: string, mode: DropdownSelectionMode | null) => void;
   hydrated: boolean;
   /** COLLECTION blocks: the ordered item ids forming the population; null for query sources. */
   collectionItemIds: string[] | null;
@@ -66,7 +71,9 @@ export function TableBlockDropdowns({
   baseFilterState,
   baseModesByColumn,
   selections,
+  selectionModes,
   updateSelections,
+  setColumnMode,
   hydrated,
   collectionItemIds,
   populationReady,
@@ -94,7 +101,9 @@ export function TableBlockDropdowns({
           baseFilterState={baseFilterState}
           baseModesByColumn={baseModesByColumn}
           selections={selections}
+          selectionModes={selectionModes}
           updateSelections={updateSelections}
+          setColumnMode={setColumnMode}
           hydrated={hydrated}
           facetColumnIds={appliedColumnIds}
           collectionItemIds={collectionItemIds}
@@ -115,7 +124,9 @@ function TableBlockDropdown({
   baseFilterState,
   baseModesByColumn,
   selections,
+  selectionModes,
   updateSelections,
+  setColumnMode,
   hydrated,
   facetColumnIds,
   collectionItemIds,
@@ -142,7 +153,10 @@ function TableBlockDropdown({
     [baseFilterState, columnId]
   );
   const selected = effectiveDropdownSelection(selections, columnId, filterDefaults);
-  const isOverridden = selections[columnId] !== undefined;
+  // A personal override is selections OR a stored Any/All choice — both
+  // must light the pill and offer the reset path, or a mode-only override
+  // becomes invisible and unclearable.
+  const isOverridden = selections[columnId] !== undefined || selectionModes[columnId] !== undefined;
 
   // Names for the preset values come straight from the resolved filters, so
   // the pill reads correctly before (or without) any fetch.
@@ -158,66 +172,63 @@ function TableBlockDropdown({
   const [listEl, setListEl] = React.useState<HTMLDivElement | null>(null);
   const [rawQuery, setRawQuery] = React.useState('');
   const query = useDebouncedValue(rawQuery, 200).trim();
-  // Reading past the auto-walk window requires intent, granted one bounded
-  // window at a time: crossing INTO the list's end zone grants once (again
-  // only after leaving and returning), and the "Scan more rows" control
-  // grants explicitly — reachable even when the loaded list is too short to
-  // scroll. A typed search walks continuously instead.
-  const [demandGrants, setDemandGrants] = React.useState(0);
-  const atListEndRef = React.useRef(false);
   // Restore trigger focus on keyboard (Escape) closes only; pointer closes
   // suppress it so switching between sibling menus doesn't steal focus.
   const closedByEscapeRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (!open) {
-      setRawQuery('');
-      setDemandGrants(0);
-      atListEndRef.current = false;
-    }
+    if (!open) setRawQuery('');
   }, [open]);
 
   // The dropdown's one scope: this property's values across the table's
-  // population; the first pages load on their own, the rest on demand.
-  const { options, nameOf, population, isWalking, hasMoreInScope, scopeExhausted, isError, retry, scannedCount } =
-    useDropdownOptions({
-      columnId,
-      baseFilterState,
-      baseModesByColumn,
-      selections,
-      facetColumnIds,
-      collectionItemIds,
-      pinned,
-      enabled: open && populationReady,
-      searchDemand: query.length > 0,
-      demandGrants,
-    });
+  // population — ONE grouped-aggregation query returns the whole list with
+  // exact counts, so there is no partial "scanned so far" state anymore.
+  const { options, ownMode, isLoading, countsPending, isError, retry } = useDropdownOptions({
+    columnId,
+    baseFilterState,
+    baseModesByColumn,
+    selections,
+    selectionModes,
+    facetColumnIds,
+    collectionItemIds,
+    pinned,
+    enabled: open && populationReady,
+  });
 
-  const showLoading = isWalking || (open && !populationReady);
+  const showLoading = isLoading || (open && !populationReady);
 
-  const visibleOptions = React.useMemo(() => {
-    if (!query) return options;
-    const needle = query.toLowerCase();
-    return options.filter(option => (option.name ?? option.id).toLowerCase().includes(needle));
-  }, [options, query]);
-
-  // Infinite scroll reveals the loaded list in steps; loading itself is the
-  // hook's walk, so scrolling never triggers network work.
+  // Infinite scroll reveals the loaded list in steps; the data is already
+  // complete, so scrolling never triggers option-list network work.
   const [visibleCount, setVisibleCount] = React.useState(REVEAL_STEP);
   React.useEffect(() => {
     setVisibleCount(REVEAL_STEP);
   }, [query, open]);
+
+  // The facet answers in ids; names resolve lazily — for the revealed window
+  // while browsing, and for the WHOLE list while a search is typed (matching
+  // needs every name). Resolved names live in a shared cache, so this only
+  // costs network the first time an id is seen.
+  const searching = query.length > 0;
+  const nameIds = React.useMemo(() => {
+    const source = searching ? options : options.slice(0, visibleCount);
+    return source.filter(option => option.name === null).map(option => option.id);
+  }, [options, searching, visibleCount]);
+  const { nameOf, loadingNames } = useDropdownOptionNames({
+    ids: nameIds,
+    enabled: open && populationReady,
+  });
+
+  const visibleOptions = React.useMemo(() => {
+    if (!query) return options;
+    const needle = query.toLowerCase();
+    // Options whose names haven't arrived yet can't match; they join the
+    // results as their name batches resolve (the footer shows the progress).
+    // `loadingNames` is the dependency because `nameOf` reads a mutable
+    // cache behind a stable-enough identity — the flag flips as batches land.
+    return options.filter(option => (option.name ?? nameOf(option.id))?.toLowerCase().includes(needle));
+  }, [options, query, nameOf, loadingNames]);
   const renderedOptions = React.useMemo(() => visibleOptions.slice(0, visibleCount), [visibleOptions, visibleCount]);
 
-  // Exact counts for just the revealed options, resolving in the background;
-  // skipped entirely once the walk's own tally is exact.
-  const revealedIds = React.useMemo(() => renderedOptions.map(option => option.id), [renderedOptions]);
-  const { counts: exactCounts, pendingIds: pendingCountIds } = useExactOptionCounts({
-    columnId,
-    population,
-    optionIds: revealedIds,
-    enabled: open && populationReady && !scopeExhausted,
-  });
   const hasMoreToReveal = visibleCount < visibleOptions.length;
   const revealMore = React.useCallback(() => setVisibleCount(count => count + REVEAL_STEP), []);
   const sentinelRef = useInfiniteScrollSentinel({
@@ -228,16 +239,15 @@ function TableBlockDropdown({
     root: listEl,
   });
 
-  // The search bar appears once more than SEARCH_BAR_THRESHOLD values have
-  // loaded, or whenever more of the scope remains unread — searching is the
-  // way to reach it — and stays for as long as a query is typed.
-  const showSearch = query.length > 0 || options.length > SEARCH_BAR_THRESHOLD || hasMoreInScope;
+  // The search bar appears once the list is big enough that scrolling stops
+  // being the way to find a value, and stays for as long as a query is typed.
+  const showSearch = query.length > 0 || options.length > SEARCH_BAR_THRESHOLD;
 
   // A stored override survives reloads as bare ids; resolve their names even
   // while the menu is closed so the pill never reads "…" over a filtered table.
   const unresolvedSelectedIds = React.useMemo(
     () => selected.filter(id => !nameOf(id) && !pinned.some(pin => ID.equals(pin.id, id) && pin.name)),
-    [selected, nameOf, pinned]
+    [selected, pinned, nameOf, loadingNames]
   );
   const { entities: resolvedEntities } = useQueryEntities({
     where: { id: { in: unresolvedSelectedIds } },
@@ -267,6 +277,7 @@ function TableBlockDropdown({
       delete next[columnId];
       return next;
     });
+    setColumnMode(columnId, null);
   };
 
   return (
@@ -317,16 +328,34 @@ function TableBlockDropdown({
             />
           </div>
         )}
+        {!isError && (options.length > 1 || selectionModes[columnId] !== undefined) && (
+          <div className="flex shrink-0 items-center justify-between gap-2 px-2 pt-2 pb-1">
+            <span className="text-footnote text-grey-04">Show rows matching</span>
+            <div
+              className="flex shrink-0 overflow-hidden rounded border border-grey-02"
+              aria-label="Combine checked options"
+            >
+              {(['OR', 'AND'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={ownMode === mode}
+                  onClick={() => setColumnMode(columnId, mode)}
+                  className={cx(
+                    'px-2 py-0.5 text-footnote transition-colors',
+                    ownMode === mode ? 'bg-grey-02 text-text' : 'bg-white text-grey-04 hover:text-text'
+                  )}
+                >
+                  {mode === 'OR' ? 'Any' : 'All'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div
           ref={setListEl}
           role="group"
           aria-label={`${label} options`}
-          onScroll={e => {
-            const el = e.currentTarget;
-            const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 200;
-            if (atEnd && !atListEndRef.current) setDemandGrants(grants => grants + 1);
-            atListEndRef.current = atEnd;
-          }}
           onWheel={e => {
             // The Menu's own wheel trap would cancel scrolling here because
             // its viewport no longer scrolls; trap against this list instead
@@ -357,41 +386,49 @@ function TableBlockDropdown({
                 ? "Couldn't load values"
                 : showLoading
                   ? 'Loading…'
-                  : hasMoreInScope
-                    ? `No values in the first ${scannedCount.toLocaleString()} rows scanned`
-                    : query
-                      ? 'No matches'
-                      : 'No values in this table'}
+                  : query
+                    ? loadingNames
+                      ? 'Searching…'
+                      : 'No matches'
+                    : 'No values in this table'}
             </p>
           )}
           {renderedOptions.map(option => {
             const checked = selected.some(id => ID.equals(id, option.id));
-            // Only exact numbers are ever shown: the walk's tally once the
-            // scope is fully read (collections, small tables), otherwise the
-            // option's own server-side count as it resolves — never a lower
-            // bound. A definite zero is shown but inert (bounty-board facet
-            // behavior) — unless checked, so it can still be unselected.
-            const count = scopeExhausted ? (option.count ?? 0) : exactCounts.get(option.id);
-            const isInertZero = count === 0 && !checked;
+            const name = option.name ?? nameOf(option.id);
+            // Counts are always exact — the facet is the count. They read as
+            // pending (skeleton) only while a re-keyed population or the
+            // All-mode facet resolves. A definite zero is shown but inert
+            // (bounty-board facet behavior) — unless checked, so it can
+            // still be unselected. The hook decides which those are, and
+            // sinks exactly the same rows to the end of the list.
+            const count = option.count;
+            const isExhausted = option.isExhausted ?? false;
             return (
               <button
                 key={option.id}
                 type="button"
                 role="checkbox"
                 aria-checked={checked}
-                disabled={isInertZero}
+                disabled={isExhausted}
                 onClick={() => toggle(option.id)}
                 className={cx(
                   'flex items-center gap-2 rounded px-2 py-2 text-left text-sm text-text hover:bg-grey-01',
-                  isInertZero && 'opacity-50 hover:bg-transparent'
+                  isExhausted && 'opacity-50 hover:bg-transparent'
                 )}
               >
                 <CheckboxVisual checked={checked} />
-                <span className="min-w-0 truncate">{option.name ?? option.id}</span>
+                {name !== null ? (
+                  <span className="min-w-0 truncate">{name}</span>
+                ) : loadingNames ? (
+                  <Skeleton className="h-3 w-24" aria-hidden />
+                ) : (
+                  <span className="min-w-0 truncate">{option.id}</span>
+                )}
                 {count !== undefined ? (
                   <span className="ml-auto shrink-0 pl-2 text-footnote text-grey-04">{count.toLocaleString()}</span>
-                ) : pendingCountIds.has(option.id) ? (
-                  // Reserve the badge slot while this option's count resolves,
+                ) : countsPending ? (
+                  // Reserve the badge slot while the counts facet resolves,
                   // so the number lands without a layout shift.
                   <span className="ml-auto shrink-0 pl-2">
                     <Skeleton className="h-3 w-5" aria-hidden />
@@ -410,19 +447,8 @@ function TableBlockDropdown({
             </button>
           )}
           {hasMoreToReveal && <div ref={sentinelRef} className="h-px w-full shrink-0" aria-hidden />}
-          {showLoading && renderedOptions.length > 0 && (
-            <p className="px-2 pt-1 text-footnote text-grey-04">
-              {scannedCount >= 2000 ? `Loading… (${scannedCount.toLocaleString()} rows scanned)` : 'Loading…'}
-            </p>
-          )}
-          {!showLoading && !isError && hasMoreInScope && (
-            <button
-              type="button"
-              onClick={() => setDemandGrants(grants => grants + 1)}
-              className="rounded px-2 py-1.5 text-left text-footnote text-grey-04 underline hover:bg-grey-01 hover:text-text"
-            >
-              {`Scan more rows (${scannedCount.toLocaleString()} scanned)`}
-            </button>
+          {query && loadingNames && visibleOptions.length > 0 && (
+            <p className="px-2 pt-1 text-footnote text-grey-04">Searching…</p>
           )}
         </div>
       </div>

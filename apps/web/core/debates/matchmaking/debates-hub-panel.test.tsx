@@ -10,12 +10,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GeoChatRequestError } from '../api';
 import { DEBATES_MODAL } from '../debates-panel-deep-link';
 import { DebatesHubPanel } from './debates-hub-panel';
-import { type DebatesHubTab, debatesHubAtom } from '~/atoms';
+import {
+  type DebatesHubTab,
+  debatesHubAtom,
+  debatesHubClaimsFilterAtom,
+  debatesHubClaimsSpaceIdsAtom,
+  debatesHubClaimsSpaceSeedSpentAtom,
+  debatesHubClaimsTopicIdsAtom,
+  debatesHubMatchesSpaceIdsAtom,
+} from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
   ready: true,
   authenticated: true,
+  accountKey: 'user-a' as string | null,
   available: false,
   updateAvailability: vi.fn(),
   peopleError: null as unknown,
@@ -33,7 +42,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => mocks.isMobile }));
 
 vi.mock('../hooks', () => ({
-  useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: 'user-a' }),
+  useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   useDebateActivity: () => ({ data: { available_to_debate: mocks.available, incoming_request_count: 0 } }),
   useUpdateDebateAvailability: () => ({ mutate: mocks.updateAvailability, isPending: false }),
   useCreateDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
@@ -114,6 +123,7 @@ function renderOpen(tab: 'requests' | 'matches' | 'claims' | 'people' = 'request
 beforeEach(() => {
   mocks.ready = true;
   mocks.authenticated = true;
+  mocks.accountKey = 'user-a';
   mocks.available = false;
   mocks.people = [];
   mocks.peopleError = null;
@@ -126,6 +136,143 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('DebatesHubPanel', () => {
+  // GEO-2850. The filter bar is session state now, and a session outlives a sign-in. A spent seed
+  // carried across one would keep GEO-2834's brand-new-account default from ever landing, and a
+  // carried selection would show one viewer the spaces another had picked.
+  //
+  // Every atom the bar holds, not a sample of them: this is the isolation test, so an atom left out
+  // of `resetDebatesHubFiltersAtom` has to fail here rather than quietly hand B one of A's filters.
+  it('clears the filter bar when the account behind it changes', () => {
+    const store = renderOpen('claims');
+    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+    store.set(debatesHubClaimsTopicIdsAtom, ['topic-a']);
+    store.set(debatesHubClaimsSpaceSeedSpentAtom, true);
+    store.set(debatesHubClaimsFilterAtom, 'mine');
+    store.set(debatesHubMatchesSpaceIdsAtom, ['space-a']);
+
+    mocks.accountKey = 'user-b';
+    store.rerender();
+
+    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
+    expect(store.get(debatesHubClaimsTopicIdsAtom)).toEqual([]);
+    expect(store.get(debatesHubClaimsSpaceSeedSpentAtom)).toBe(false);
+    expect(store.get(debatesHubClaimsFilterAtom)).toBe('featured');
+    expect(store.get(debatesHubMatchesSpaceIdsAtom)).toEqual([]);
+  });
+
+  // Signing in is the same person authenticating. The Claims tab prompts for sign-in from inside
+  // its own empty state, so wiping the bar here would lose picks made seconds earlier on the flow
+  // the tab itself invited — the very complaint GEO-2850 is about.
+  it('keeps the filter bar when a signed-out viewer signs in', () => {
+    mocks.accountKey = null;
+    const store = renderOpen('claims');
+    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+    store.set(debatesHubClaimsFilterAtom, 'all');
+
+    mocks.accountKey = 'user-a';
+    store.rerender();
+
+    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual(['space-a']);
+    expect(store.get(debatesHubClaimsFilterAtom)).toBe('all');
+  });
+
+  // Signed out there are no memberships for the seed to apply to, so it is never spent by seeding
+  // — only by working the menu. An untouched session therefore arrives at sign-in still armed, and
+  // the default GEO-2834 is about lands on its own. Nothing here has to re-arm it.
+  it('leaves the membership seed armed through an untouched sign-in', () => {
+    mocks.accountKey = null;
+    const store = renderOpen('claims');
+
+    mocks.accountKey = 'user-a';
+    store.rerender();
+
+    expect(store.get(debatesHubClaimsSpaceSeedSpentAtom)).toBe(false);
+  });
+
+  // A spent seed means the viewer worked the menu, and forcing it back would overwrite what they
+  // did — whether they picked spaces...
+  it('leaves the seed spent on sign-in when the viewer has picked spaces', () => {
+    mocks.accountKey = null;
+    const store = renderOpen('claims');
+    store.set(debatesHubClaimsSpaceSeedSpentAtom, true);
+    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+
+    mocks.accountKey = 'user-a';
+    store.rerender();
+
+    expect(store.get(debatesHubClaimsSpaceSeedSpentAtom)).toBe(true);
+  });
+
+  // ...or deliberately cleared them, which is indistinguishable from an untouched filter by the
+  // selection alone. GEO-2789 is explicit that an empty selection the viewer asked for means the
+  // unfiltered list, and is not an invitation to fill it back in for them.
+  it('leaves the seed spent on sign-in when the viewer cleared the filter themselves', () => {
+    mocks.accountKey = null;
+    const store = renderOpen('claims');
+    // What pick-then-clear leaves behind: nothing selected, but the seed forfeited.
+    store.set(debatesHubClaimsSpaceSeedSpentAtom, true);
+    store.set(debatesHubClaimsSpaceIdsAtom, []);
+
+    mocks.accountKey = 'user-a';
+    store.rerender();
+
+    expect(store.get(debatesHubClaimsSpaceSeedSpentAtom)).toBe(true);
+    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
+  });
+
+  // Signing out must not forget who the state belongs to, or the next viewer to sign in would look
+  // like a first sign-in and inherit it.
+  it('still clears for a different account that signs in after a sign-out', () => {
+    const store = renderOpen('claims');
+    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+
+    mocks.accountKey = null;
+    store.rerender();
+    mocks.accountKey = 'user-b';
+    store.rerender();
+
+    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
+  });
+
+  // The reset is a passive effect, so the render that first sees a different account still holds
+  // the previous one's bar. Showing the tabs then would put A's filter labels in front of B and
+  // fire B's first query with A's space ids.
+  it('does not render a tab holding the previous account’s filters', () => {
+    const store = renderOpen('claims');
+    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+    expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
+
+    mocks.accountKey = 'user-b';
+    store.rerender();
+
+    // Cleared and back on screen in the same commit the handover lands, so nothing of A's is shown.
+    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual([]);
+    expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
+  });
+
+  // The same viewer reopening the panel must keep what they picked, which is the whole feature.
+  it('leaves the filter bar alone for the same account', () => {
+    const store = renderOpen('claims');
+    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+
+    store.rerender();
+
+    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual(['space-a']);
+  });
+
+  // `accountKey` is null until Privy resolves. Treating that as "signed out" would clear a
+  // signed-in viewer's filters on every reopen.
+  it('does not clear the filter bar while auth is still resolving', () => {
+    mocks.ready = false;
+    mocks.accountKey = null;
+    const store = renderOpen('claims');
+    store.set(debatesHubClaimsSpaceIdsAtom, ['space-a']);
+
+    store.rerender();
+
+    expect(store.get(debatesHubClaimsSpaceIdsAtom)).toEqual(['space-a']);
+  });
+
   it('stays closed until the hub atom is set', () => {
     render(
       <Provider store={createStore()}>

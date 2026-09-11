@@ -468,17 +468,50 @@ export function getRelationEntityRelations(entityId: string, spaceId: string, si
   });
 }
 
+const RELATIONS_PAGE_SIZE = 500;
+
+/**
+ * Backlink rows for a set of target entities. The id list is chunked under the
+ * API's per-request cap, and every chunk drains pages — the root `relations`
+ * field truncates at the server's 100-row default otherwise, which silently
+ * drops rows for well-linked entities (verified against the live API).
+ */
 export function getRelationsByToEntityIds(
   toEntityIds: string[],
   typeId?: string,
   spaceId?: string,
   signal?: AbortController['signal']
 ) {
-  return graphql({
-    query: relationsByToEntityIdsQuery,
-    decoder: data => data.relations ?? [],
-    variables: { toEntityIds, typeId, spaceId },
-    signal,
+  return Effect.gen(function* () {
+    // Dedupe (dash-insensitively) before chunking: the same id in two chunks
+    // would return its rows twice and inflate downstream counts.
+    const uniqueIds = [...new Map(toEntityIds.map(id => [id.replace(/-/g, '').toLowerCase(), id])).values()];
+    if (uniqueIds.length === 0) return [];
+
+    type Row = { id: string; toEntityId: string; spaceId: string; fromEntityId: string };
+    type RelationsPage = { nodes: Row[]; pageInfo: { hasNextPage: boolean; endCursor?: string | null } } | null;
+    const rows: Row[] = [];
+
+    for (let start = 0; start < uniqueIds.length; start += ENTITY_ID_BATCH_SIZE) {
+      const chunk = uniqueIds.slice(start, start + ENTITY_ID_BATCH_SIZE);
+      // Cursor pagination, not offset: the server rejects offsets above 1000,
+      // and well-linked chunks (e.g. submission backlinks) can exceed that.
+      let after: string | null = null;
+      for (;;) {
+        const page: RelationsPage = yield* graphql({
+          query: relationsByToEntityIdsQuery,
+          decoder: data => (data.relationsConnection ?? null) as RelationsPage,
+          variables: { toEntityIds: chunk, typeId, spaceId, first: RELATIONS_PAGE_SIZE, after },
+          signal,
+        });
+        if (!page) break;
+        rows.push(...page.nodes);
+        if (!page.pageInfo.hasNextPage || !page.pageInfo.endCursor) break;
+        after = page.pageInfo.endCursor;
+      }
+    }
+
+    return rows;
   });
 }
 

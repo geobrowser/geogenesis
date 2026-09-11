@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   summaryKindCalls: [] as string[],
   positive: 0,
   negative: 0,
+  notifyClaimResponseIndexed: vi.fn(),
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -40,6 +41,22 @@ vi.mock('~/core/debates/hooks', () => ({
   useDebateClaims: (_spaceId: string, _ids: string[], enabled: boolean) => {
     mocks.rowEnabledCalls.push(enabled);
     return { data: mocks.row ? { claims: [mocks.row] } : { claims: [] }, isLoading: false, error: null };
+  },
+  // Signed in, so the readiness backfill actually runs. Mocked signed-out first, which made the
+  // card's call to it inert — deleting the call outright would have passed.
+  useGeoChatAuth: () => ({
+    ready: true,
+    authenticated: true,
+    accountKey: 'account-1',
+    getPrivyIdentityToken: async () => 'token',
+  }),
+}));
+
+vi.mock('~/core/debates/api', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/debates/api')>()),
+  notifyClaimResponseIndexed: (...args: unknown[]) => {
+    mocks.notifyClaimResponseIndexed(...args);
+    return Promise.resolve({});
   },
 }));
 
@@ -92,7 +109,6 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     actionTitle: () => (answersReady ? '' : 'Loading this claim’s responses…'),
     responseError: null,
     // Mirrors the hook: the request offer reads this to decide whether to make itself.
-    requestPosition: { chat: null, local: null, indexingDelayed: false },
     canRespond: answersReady,
   }),
 }));
@@ -165,6 +181,7 @@ beforeEach(() => {
   mocks.summaryKindCalls = [];
   mocks.positive = 0;
   mocks.negative = 0;
+  mocks.notifyClaimResponseIndexed.mockClear();
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -325,6 +342,47 @@ describe('ClaimExploreFeedCard', () => {
     // Count first and the verb lowercase, matching the share above it: "75% agree", "9 agree".
     expect(screen.getByText('9 agree')).toBeInTheDocument();
     expect(screen.getByText('3 disagree')).toBeInTheDocument();
+  });
+
+  /**
+   * GEO-2821's server-side half. Readiness is what puts a viewer in geo-chat's presence view, and a
+   * position taken before GEO-2740 has none — so the feed, which draws held positions by the
+   * screenful, cannot be the one surface that renders one without standing the viewer up on it.
+   */
+  it('tells geo-chat about a held position it has no readiness for', async () => {
+    mocks.row = {
+      claim_entity_id: CLAIM_ID,
+      space_id: 'space-1',
+      response_kind: 'stance',
+      viewer_response: { position: true, position_label: 'Agree' },
+      viewer_debate_ready: false,
+      readiness_disabled_reason: null,
+      online_choices: [],
+    } as unknown as DebateClaim;
+    render(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
+
+    await waitFor(() => expect(mocks.notifyClaimResponseIndexed).toHaveBeenCalledTimes(1));
+    expect(mocks.notifyClaimResponseIndexed.mock.calls[0]?.slice(0, 4)).toEqual(['space-1', CLAIM_ID, 'stance', true]);
+  });
+
+  // Only where geo-chat is the one silent about readiness. A row that already reports the viewer
+  // standing ready needs no repair, and sending one anyway is a write per card per feed.
+  it('says nothing when geo-chat already has the readiness', async () => {
+    mocks.row = {
+      claim_entity_id: CLAIM_ID,
+      space_id: 'space-1',
+      response_kind: 'stance',
+      viewer_response: { position: true, position_label: 'Agree' },
+      viewer_debate_ready: true,
+      readiness_disabled_reason: null,
+      online_choices: [],
+    } as unknown as DebateClaim;
+    render(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
+
+    await waitFor(() => expect(screen.getByTestId('pills')).toBeInTheDocument());
+    expect(mocks.notifyClaimResponseIndexed).not.toHaveBeenCalled();
   });
 
   it('flags a contested claim beside the space rather than in the verdict', () => {

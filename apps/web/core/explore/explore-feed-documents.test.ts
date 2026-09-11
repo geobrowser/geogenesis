@@ -61,19 +61,21 @@ describe('explore feed documents', () => {
   describe('the Best sort', () => {
     it('passes space, type and recency scoping as connection arguments', () => {
       expect(argNames(rootField(exploreBestConnectionDocument))).toEqual(
-        ['after', 'createdAfter', 'first', 'spaceIds', 'typeIds'].sort()
+        ['after', 'createdAfter', 'filter', 'first', 'spaceIds', 'typeIds'].sort()
       );
     });
 
-    it('sends no `filter`', () => {
+    it('can carry a `filter`, for the one clause the ranked function does not know', () => {
       // Every clause buildFeedFilter would add is enforced inside
       // entities_ranked_for_feed: name presence (0075), system entities (0076),
-      // excluded block types (config), space/type/recency (0077 arguments).
+      // excluded block types (config), space/type/recency (0077 arguments) — and none of
+      // them is sent here.
       //
-      // Re-adding one is not merely redundant: `filter` together with `totalCount` and
-      // `edges` on this connection exceeds the statement timeout.
-      expect(variableNames(exploreBestConnectionDocument)).not.toContain('filter');
-      expect(argNames(rootField(exploreBestConnectionDocument))).not.toContain('filter');
+      // The debate-tag gate on claims is not among them, so it goes through `filter`
+      // (GEO-2835). What made a filter dangerous on this connection was pairing it with
+      // `totalCount`, which the test below still pins.
+      expect(variableNames(exploreBestConnectionDocument)).toContain('filter');
+      expect(argNames(rootField(exploreBestConnectionDocument))).toContain('filter');
     });
 
     it('requests no top-level totalCount', () => {

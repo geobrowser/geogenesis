@@ -8,6 +8,7 @@ import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import { usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
+import { bountiesEnabledForNetwork, isBountyEntity } from '~/core/bounties/config';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
@@ -40,6 +41,7 @@ import { Fullscreen } from '~/design-system/icons/full-screen';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
+import { BountyDetailHeader, BountyDetailSections } from '~/partials/bounties';
 import { EntityPageBody } from '~/partials/entity-page/entity-page-body';
 import { useEntityPageSurfaceData } from '~/partials/entity-page/hooks/use-entity-page-surface-data';
 import { NavbarBreadcrumb } from '~/partials/navbar/navbar-breadcrumb';
@@ -243,6 +245,15 @@ function EntitySidePanelBody({
           previewImageUrl={previewImageUrl}
           previewName={previewName}
           previewDescription={previewDescription}
+          // A bounty reads the same in the panel as on its page: facts card + interest
+          // above the body, submissions/payouts/allocation below, no properties sheet.
+          {...(bountiesEnabledForNetwork && isBountyEntity(entity.types)
+            ? {
+                notice: <BountyDetailHeader spaceId={entitySpaceId} bountyId={entityId} />,
+                belowBodySlot: <BountyDetailSections spaceId={entitySpaceId} bountyId={entityId} />,
+                hideProperties: true,
+              }
+            : {})}
         />
       </SidePanelEditorProvider>
     </EntityStoreProvider>

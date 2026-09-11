@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   activeDebate: null as unknown,
   currentUserId: 'user-me' as string | null,
   createChallenge: vi.fn(),
+  onTabChange: vi.fn(),
   cancelChallenge: vi.fn(),
   cancelPending: false,
   cancelError: null as Error | null,
@@ -125,6 +126,7 @@ beforeEach(() => {
   mocks.activeDebate = null;
   mocks.currentUserId = 'user-me';
   mocks.createChallenge.mockReset();
+  mocks.onTabChange.mockReset();
   mocks.cancelChallenge.mockReset();
   mocks.cancelPending = false;
   mocks.cancelError = null;
@@ -138,7 +140,7 @@ describe('PeopleTab', () => {
   // Filtered client-side: the endpoint has no search parameter and returns everyone available in
   // one unpaginated list, so there is nothing to page back for.
   it('narrows the list to people matching the search', () => {
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByText('Arturas')).toBeInTheDocument();
     expect(screen.getByText('Vytautas')).toBeInTheDocument();
@@ -152,7 +154,7 @@ describe('PeopleTab', () => {
   it('says so when a search matches nobody, and offers a way back', async () => {
     // Distinct from the "nobody is available" state: one is a filter the viewer can undo, the
     // other is the room being empty.
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'nobody-by-this-name' } });
 
@@ -164,11 +166,102 @@ describe('PeopleTab', () => {
     expect(await screen.findByText('Arturas')).toBeInTheDocument();
   });
 
+  // GEO-2840. The debate-hours line belongs to the nobody-online state only; a list the viewer
+  // emptied with their own search is a different problem, and pointing at 9am does not answer it.
+  it('adds the debate hours line when nobody is online, but not when a search emptied the list', async () => {
+    mocks.people = [];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(await screen.findByText('Nobody is available to debate right now.')).toBeInTheDocument();
+    expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
+
+    cleanup();
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'nobody-by-this-name' } });
+
+    expect(await screen.findByText('Nobody available matches that search.')).toBeInTheDocument();
+    expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).not.toBeInTheDocument();
+  });
+
+  // GEO-2840. Waiting is the only other thing to do while the room is empty, so the empty state
+  // offers somewhere to go instead — the Claims tab, which is full whether or not anyone is online.
+  it('offers a way through to claims when nobody is online', async () => {
+    mocks.people = [];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Explore claims' }));
+
+    expect(mocks.onTabChange).toHaveBeenCalledWith('claims');
+  });
+
+  // A search the viewer can undo gets the undo instead: there is something to do here, so sending
+  // them to another tab would be answering a question they did not ask.
+  it('offers the undo rather than claims when a search emptied the list', async () => {
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'nobody-by-this-name' } });
+
+    expect(await screen.findByRole('button', { name: 'Clear search' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Explore claims' })).not.toBeInTheDocument();
+  });
+
+  // Both states are reachable with text in the search box, so the box cannot be what tells them
+  // apart: search for a name at 3am, or be mid-search when the last person drops off, and the
+  // reason the list is empty is that nobody is online — which is the state GEO-2840 is about.
+  it('blames nobody being online rather than the search when there is nobody to search', async () => {
+    mocks.people = [];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'artur' } });
+
+    expect(await screen.findByText('Nobody is available to debate right now.')).toBeInTheDocument();
+    expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
+    // Clearing a search that excluded nobody would put the same empty list back.
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+  });
+
+  // People is the one tab a signed-out viewer can reach this note from (GEO-2725), and their list
+  // is static: `useMatchmakingScope` gates the gateway on a session. Waiting will not fill it, and
+  // they could not be matched from it either, so "stay here and you'll be matched" would promise
+  // both. The clock is pinned inside debate hours because that is the only variant that differs.
+  it('does not tell a signed-out viewer to wait for a list that cannot update', async () => {
+    // Real time still advances, so testing-library's async helpers are not frozen out.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // 16:30Z is 09:30 PDT — inside the window, whatever zone this suite runs in.
+    vi.setSystemTime(new Date('2026-09-08T16:30:00Z'));
+    mocks.authenticated = false;
+    mocks.people = [];
+
+    try {
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      expect(await screen.findByText('Check back in a few minutes to find a debate!')).toBeInTheDocument();
+      expect(screen.queryByText(/Stay here/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('tells a signed-in viewer to stay, because their list does update', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-09-08T16:30:00Z'));
+    mocks.people = [];
+
+    try {
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      expect(await screen.findByText('Stay here — this list fills in as people come online.')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('pins search alongside a sent request rather than in a second sticky', () => {
     // Two stickies would both claim top-0 and overlap; the card is conditional, so search could
     // not be offset by a known height either.
     mocks.challenge = challenge('requester');
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     const pinned = screen.getByLabelText('Search people').closest('.sticky');
     expect(pinned).not.toBeNull();
@@ -176,7 +269,7 @@ describe('PeopleTab', () => {
   });
 
   it('shows no request card when nothing is outstanding', () => {
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(card()).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
@@ -186,7 +279,7 @@ describe('PeopleTab', () => {
   // stays in view rather than scrolling away behind people you can no longer ask.
   it('puts a sticky card above the list for a request you sent', () => {
     mocks.challenge = challenge('requester');
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     const request = card();
     expect(request).toBeInTheDocument();
@@ -197,7 +290,7 @@ describe('PeopleTab', () => {
 
   it('names the person you asked, without a claim or space to show', () => {
     mocks.challenge = challenge('requester');
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     const request = card()!;
     expect(within(request).getByText('You')).toBeInTheDocument();
@@ -207,7 +300,7 @@ describe('PeopleTab', () => {
 
   it('still greys out every Request debate button while the request is open', () => {
     mocks.challenge = challenge('requester');
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     for (const button of screen.getAllByRole('button', { name: 'Request debate' })) {
       expect(button).toBeDisabled();
@@ -218,7 +311,7 @@ describe('PeopleTab', () => {
   // request you sent, so it keeps the sentence rather than claiming you're waiting on a reply.
   it('keeps the sentence when the challenge is one you received', () => {
     mocks.challenge = challenge('recipient');
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(card()).not.toBeInTheDocument();
     expect(screen.getByText(awaitingText)).toBeInTheDocument();
@@ -229,7 +322,7 @@ describe('PeopleTab', () => {
   it('holds the card back until the viewer is identified', () => {
     mocks.challenge = challenge('requester');
     mocks.currentUserId = null;
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(card()).not.toBeInTheDocument();
     expect(screen.getByText(awaitingText)).toBeInTheDocument();
@@ -238,7 +331,7 @@ describe('PeopleTab', () => {
   // The clock and what you can do about it lead the card, above the pairing they apply to.
   it('leads with the countdown and the cancel action, before the two people', () => {
     mocks.challenge = challenge('requester');
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     const request = card()!;
     const countdown = within(request).getByText(/Expires in/);
@@ -254,7 +347,7 @@ describe('PeopleTab', () => {
   // it the tab sat on an "Expired" card with every Request debate button still dead underneath it.
   it('drops an expired challenge instead of waiting for the server to say so', () => {
     mocks.challenge = challenge('requester', -1_000);
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(card()).not.toBeInTheDocument();
     expect(screen.queryByText('Expired')).not.toBeInTheDocument();
@@ -262,14 +355,14 @@ describe('PeopleTab', () => {
 
   it('re-enables the Request debate buttons once the request has expired', () => {
     mocks.challenge = challenge('requester', -1_000);
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
   });
 
   it('drops an expired incoming challenge too, sentence and all', () => {
     mocks.challenge = challenge('recipient', -1_000);
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.queryByText(awaitingText)).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
@@ -278,7 +371,7 @@ describe('PeopleTab', () => {
   // The same action the Requests tab offers on this challenge, reachable without leaving People.
   it('cancels the request from the card', () => {
     mocks.challenge = challenge('requester');
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     fireEvent.click(within(card()!).getByRole('button', { name: 'Cancel request' }));
 
@@ -288,7 +381,7 @@ describe('PeopleTab', () => {
   it('holds the cancel button while it is in flight', () => {
     mocks.challenge = challenge('requester');
     mocks.cancelPending = true;
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(within(card()!).getByRole('button', { name: 'Cancelling…' })).toBeDisabled();
   });
@@ -296,14 +389,14 @@ describe('PeopleTab', () => {
   it('announces a failed cancel rather than only drawing it', () => {
     mocks.challenge = challenge('requester');
     mocks.cancelError = new Error('Challenge already answered.');
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByRole('alert')).toHaveTextContent('Challenge already answered.');
   });
 
   it('leaves the other blocked reasons alone', () => {
     mocks.outboundRequest = { id: 'request-1' };
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(card()).not.toBeInTheDocument();
     expect(
@@ -315,7 +408,7 @@ describe('PeopleTab', () => {
   // rather than sending a request that could only fail at the token exchange.
   it('sends a signed-out visitor to sign in instead of requesting a debate', () => {
     mocks.authenticated = false;
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Request debate' })[0]);
 
@@ -339,7 +432,7 @@ describe('PeopleTab', () => {
         },
       ],
     ]);
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByText('119 positions')).toBeInTheDocument();
     expect(screen.getByText('Won 8 of 11 debates')).toBeInTheDocument();
@@ -352,7 +445,7 @@ describe('PeopleTab', () => {
   it('keeps the button live signed out when only the viewer-relative flag is off', () => {
     mocks.authenticated = false;
     mocks.people = [{ ...person('user-them', 'Arturas'), can_challenge: false }];
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByRole('button', { name: 'Request debate' })).not.toBeDisabled();
   });
@@ -362,7 +455,7 @@ describe('PeopleTab', () => {
   it('still refuses a person already in a debate when signed out', () => {
     mocks.authenticated = false;
     mocks.people = [{ ...person('user-them', 'Arturas'), in_debate: true }];
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByRole('button', { name: 'In a debate' })).toBeDisabled();
   });
@@ -372,7 +465,7 @@ describe('PeopleTab', () => {
 // way — which is why this needs no click handler and so keeps cmd-click and middle click working.
 describe('the person link', () => {
   it("points the name at the person's space", () => {
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByRole('link', { name: 'Arturas' })).toHaveAttribute(
       'href',
@@ -389,7 +482,7 @@ describe('the person link', () => {
   // `defaultPrevented` check would only describe the mock and would pass whether or not the real
   // component ever received a handler.
   it('adds no click handler of its own to the name', () => {
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     const nameLink = mocks.linkProps.find(props => props.href === NavUtils.toSpace(PROFILE_SPACE_IDS['user-them']));
     expect(nameLink).toBeDefined();
@@ -399,7 +492,7 @@ describe('the person link', () => {
   // An anchor to `/space/undefined` looks identical until it is clicked.
   it('leaves the name unlinked when there is no space to point at', () => {
     mocks.people = [person('user-nospace', 'Nameless')];
-    render(<PeopleTab />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByText('Nameless')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Nameless' })).toBeNull();
