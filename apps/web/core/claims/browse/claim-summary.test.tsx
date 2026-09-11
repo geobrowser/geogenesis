@@ -136,6 +136,14 @@ describe('ControversialTag', () => {
     expect(flame?.querySelector('path')).toHaveAttribute('fill', 'currentColor');
   });
 
+  it('hides the flame from assistive tech, which already has the word', () => {
+    const { container } = render(<ControversialTag />);
+
+    // Decoration: the label sits right beside it and says the same thing, so an unnamed graphic
+    // announced first is only noise.
+    expect(container.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+  });
+
   it('sets no background of its own', () => {
     render(<ControversialTag />);
 
