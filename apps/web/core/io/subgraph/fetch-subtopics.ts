@@ -91,10 +91,10 @@ export async function fetchSubtopics(spaceId: string, signal?: AbortSignal): Pro
   }
 
   // `signal` lets a caller that has given up actually cancel the request rather than abandon it.
-  // The side rail bounds this fetch (see `withTimeout`), and without a signal a timed-out request
-  // keeps its socket and its retries for as long as the upstream holds them — so during an outage
-  // every page view leaves another one behind. Optional because the gallery, which is on the page's
-  // own path, has nothing to cancel on behalf of.
+  // The side rail bounds this fetch with `resolveWithin` (`core/utils/resolve-within`), and without
+  // a signal a timed-out request keeps its socket and its retries for as long as the upstream holds
+  // them — so during an outage every page view leaves another one behind. Optional because the
+  // gallery, which is on the page's own path, has nothing to cancel on behalf of.
   const queryEffect = graphql<NetworkResult>({
     query: subtopicsQuery(spaceId),
     endpoint: Environment.getConfig().api,

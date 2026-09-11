@@ -13,6 +13,7 @@ import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provi
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { Entities } from '~/core/utils/entity';
+import { firstSearchParamValue } from '~/core/utils/search-params';
 import { Spaces } from '~/core/utils/space';
 import { sortRelations } from '~/core/utils/utils';
 
@@ -69,7 +70,12 @@ export default async function SpacePage(props0: Props) {
   const params = await props0.params;
   const searchParams = (await props0.searchParams) ?? {};
   const spaceId = params.id;
-  const tabId = typeof searchParams.tabId === 'string' ? searchParams.tabId : undefined;
+  // First value, not "only if there is exactly one". Reading this as `typeof === 'string'` turned a
+  // repeated `?tabId=a&tabId=b` into `undefined`, which reads as Overview and opens the rail on
+  // what the rest of the page treats as a tab — the client half never agreed, since
+  // `useSearchParams().get()` returns the first value, and that is how the gallery this replaces
+  // knew to hide itself.
+  const tabId = firstSearchParamValue(searchParams.tabId);
 
   if (!IdUtils.isValid(spaceId)) {
     notFound();
