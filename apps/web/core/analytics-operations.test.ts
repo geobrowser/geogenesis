@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { classifyOperationFailure, observeOperation } from './analytics-operations';
+import { ReceiptConfirmationTimeoutError } from './errors';
 
 const { capture, revision } = vi.hoisted(() => ({ capture: vi.fn(), revision: vi.fn(() => 0) }));
 vi.mock('./analytics', () => ({ capture, analyticsContextRevision: revision }));
@@ -48,18 +49,27 @@ describe('operation evidence', () => {
 });
 
 describe('operation failure classification', () => {
+  it('keeps a submitted operation unknown when its receipt query was rejected', () => {
+    const receipt = new ReceiptConfirmationTimeoutError('Receipt unavailable', { cause: { code: 4001 } });
+    expect(classifyOperationFailure(receipt)).toBe('unknown');
+    expect(classifyOperationFailure(new Error('User rejected receipt request', { cause: receipt }))).toBe('unknown');
+  });
   it('recognizes wrapped wallet rejection', () => {
     expect(classifyOperationFailure(new Error('Transaction failed', { cause: { code: 4001 } }))).toBe('rejected');
-    expect(classifyOperationFailure(new Error('Transaction failed', { cause: new Error('User rejected the request.') }))).toBe('rejected');
+    expect(
+      classifyOperationFailure(new Error('Transaction failed', { cause: new Error('User rejected the request.') }))
+    ).toBe('rejected');
   });
   it('distinguishes an unsent queue timeout from an uncertain submitted transaction', () => {
-    const queued = new Error('never submitted'); queued.name = 'QueuedSendTimeoutError';
+    const queued = new Error('never submitted');
+    queued.name = 'QueuedSendTimeoutError';
     expect(classifyOperationFailure(new Error('Transaction failed', { cause: queued }))).toBe('unavailable');
     expect(classifyOperationFailure(new Error('receipt timeout'))).toBe('unknown');
     expect(classifyOperationFailure(new Error('network unavailable'))).toBe('unknown');
   });
   it('bounds cyclic causes and handles non-errors conservatively', () => {
-    const cycle: { cause?: unknown } = {}; cycle.cause = cycle;
+    const cycle: { cause?: unknown } = {};
+    cycle.cause = cycle;
     expect(classifyOperationFailure(cycle)).toBe('unknown');
     expect(classifyOperationFailure(null)).toBe('unknown');
   });

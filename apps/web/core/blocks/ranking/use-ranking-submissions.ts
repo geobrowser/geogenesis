@@ -279,16 +279,15 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
             retrySchedule('publishEdit', Duration.minutes(1))
           );
 
-          const txHash = yield* Effect.retry(
-            Effect.tryPromise({
-              try: () =>
-                account.sendUserOperation({
-                  calls: [{ to: result.to, value: 0n, data: result.calldata }],
-                }),
-              catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
-            }),
-            retrySchedule('sendUserOperation', Duration.seconds(10))
-          );
+          // Safe submission retries belong to the wallet. An uncertain response
+          // must not cause another ranking write here.
+          const txHash = yield* Effect.tryPromise({
+            try: () =>
+              account.sendUserOperation({
+                calls: [{ to: result.to, value: 0n, data: result.calldata }],
+              }),
+            catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
+          });
 
           return txHash;
         });

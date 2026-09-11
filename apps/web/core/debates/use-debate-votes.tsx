@@ -340,13 +340,12 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           retrySchedule(Duration.minutes(1))
         );
 
-        return yield* Effect.retry(
-          Effect.tryPromise({
-            try: () => smartAccount.sendUserOperation({ calls: [{ to: result.to, value: 0n, data: result.calldata }] }),
-            catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
-          }),
-          retrySchedule(Duration.seconds(10))
-        );
+        // The wallet retries known pre-submission failures. Repeating this whole
+        // call after an uncertain response could submit the vote twice.
+        return yield* Effect.tryPromise({
+          try: () => smartAccount.sendUserOperation({ calls: [{ to: result.to, value: 0n, data: result.calldata }] }),
+          catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
+        });
       });
 
       try {

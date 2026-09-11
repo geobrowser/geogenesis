@@ -543,9 +543,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       }
     },
     onError: (_error, _direction, context) => {
-      context?.operation.failed(
-        classifyOperationFailure(_error)
-      );
+      context?.operation.failed(classifyOperationFailure(_error));
       if (!context) return;
       const runs = responseIndexingRegistry.submissionRuns.get(indexingKeyId);
       const failedRun = runs?.get(context.runId);
