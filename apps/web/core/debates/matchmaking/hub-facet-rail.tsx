@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 
 import { Avatar } from '~/design-system/avatar';
+import { CheckboxVisual } from '~/design-system/checkbox';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
@@ -192,6 +193,8 @@ function FacetRow({
   onSelect: () => void;
   role?: 'radio';
 }) {
+  const multiSelect = role !== 'radio';
+
   return (
     <button
       type="button"
@@ -200,9 +203,18 @@ function FacetRow({
       onClick={onSelect}
       className={cx(
         'flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors',
-        selected ? 'bg-divider text-text' : 'text-grey-04 hover:bg-grey-01 hover:text-text'
+        multiSelect
+          ? cx('hover:bg-grey-01', selected ? 'text-text' : 'text-grey-04 hover:text-text')
+          : selected
+            ? 'bg-divider text-text'
+            : 'text-grey-04 hover:bg-grey-01 hover:text-text'
       )}
     >
+      {multiSelect && (
+        <span className="shrink-0">
+          <CheckboxVisual checked={selected} />
+        </span>
+      )}
       {leading}
       {pending ? (
         <Skeleton className="h-3 w-24" />
