@@ -22,6 +22,20 @@ type Props = {
  *
  * Nothing about the underlying data changes: these are the same subtopic relations the gallery
  * read, still owned by the space's editors. Only where they are drawn moved.
+ *
+ * Two things the gallery did that this deliberately does not, both put to Preston and confirmed
+ * rather than overlooked:
+ *
+ *   * **Nothing renders below 1024px.** `StickySideRail` is `lg:hidden`, and `lg` is a *max-width*
+ *     variant here, so the whole rail is dropped on phones and narrow windows. The gallery was
+ *     responsive and visible there. Every other rail section behaves this way — daily activities,
+ *     community calls, Join spaces — so subspaces follow the rail rather than growing a mobile
+ *     fallback none of their neighbours have.
+ *   * **No vote buttons.** The gallery gave each card an `EntityVoteButtons`. A pill has nowhere
+ *     to put one, and Join spaces — the element this is modelled on — has none.
+ *
+ * Both are consequences of being a pill in the rail. Reopening either is a product decision, not a
+ * regression to quietly repair.
  */
 export function SubspacesSection({ spaceId, subspaces }: Props) {
   if (subspaces.length === 0) return null;
