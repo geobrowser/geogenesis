@@ -11,46 +11,31 @@ import { useDeferredJoin } from '~/core/state/pending-join-intents';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Dots } from '~/design-system/dots';
-import { FallbackImage } from '~/design-system/fallback-image';
+import {
+  SPACE_PILL_CLASS,
+  SpacePillAvatar,
+  SpacePillLabel,
+  SpacePillList,
+  SpacePillSectionHeading,
+} from '~/design-system/space-pill';
 
 type Props = {
   // Already filtered by the side panel to spaces the user can still join.
   spaces: FeaturedSpace[];
 };
 
-// Match the design: nine space pills, with a tenth "Show more" pill that
-// reveals the rest.
-const INITIAL_VISIBLE_COUNT = 9;
-
 export function JoinSpacesSection({ spaces }: Props) {
-  const [showAll, setShowAll] = React.useState(false);
-
   if (spaces.length === 0) return null;
-
-  const visible = showAll ? spaces : spaces.slice(0, INITIAL_VISIBLE_COUNT);
-  const hasMore = spaces.length > INITIAL_VISIBLE_COUNT;
 
   return (
     <section className="flex flex-col">
-      <h2 className="sticky top-0 z-20 bg-white pt-1 pb-4 text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text">
-        Join spaces
-      </h2>
+      <SpacePillSectionHeading>Join spaces</SpacePillSectionHeading>
 
-      <div className="flex flex-wrap gap-2">
-        {visible.map(space => (
-          <JoinSpacePill key={space.spaceId} space={space} />
-        ))}
-
-        {hasMore ? (
-          <button
-            type="button"
-            onClick={() => setShowAll(prev => !prev)}
-            className="inline-flex items-center rounded-full border border-grey-02 py-1.5 pr-2.5 pl-2 text-[16px] leading-[18px] text-grey-04 transition-colors hover:border-text hover:text-text"
-          >
-            {showAll ? 'Show less' : 'Show more'}
-          </button>
-        ) : null}
-      </div>
+      <SpacePillList
+        items={spaces}
+        keyFor={space => space.spaceId}
+        renderPill={space => <JoinSpacePill space={space} />}
+      />
     </section>
   );
 }
@@ -107,17 +92,15 @@ function JoinSpacePill({ space }: { space: FeaturedSpace }) {
       aria-label={`Join ${space.name}`}
       disabled={status !== 'idle' || optimisticRequested}
       onClick={handleClick}
-      className="inline-flex items-center gap-1.5 rounded-full border border-grey-02 py-1.5 pr-2.5 pl-2 text-[16px] leading-[18px] text-text transition-colors hover:border-text disabled:cursor-default"
+      className={SPACE_PILL_CLASS}
     >
-      <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-full bg-grey-01">
-        <FallbackImage value={space.image} sizes="16px" className="object-cover" />
-      </span>
+      <SpacePillAvatar value={space.image} />
       {isPending ? (
         <span className="flex h-[18px] items-center px-1">
           <Dots />
         </span>
       ) : (
-        <span className="truncate">{space.name}</span>
+        <SpacePillLabel>{space.name}</SpacePillLabel>
       )}
     </button>
   );
