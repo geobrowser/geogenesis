@@ -764,6 +764,36 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Video settings' })).toBeEnabled());
   });
 
+  // `disconnect()` defaults to stopping every published track, and `localTracksRef` still holds
+  // them — a retry from a live room would republish ended tracks and send nothing.
+  it('keeps the published tracks alive when a retry replaces a live room', async () => {
+    const videoTrack = { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() };
+    mocks.createLocalTracks.mockResolvedValue([createLocalAudioTrack(), videoTrack]);
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
+
+    await waitFor(() => expect(mocks.roomDisconnect).toHaveBeenCalled());
+    expect(mocks.roomDisconnect).toHaveBeenCalledWith(false);
+  });
+
+  // Once ready, the opponent's ready can flip the debate to `connecting` at any moment. The
+  // republish effect only runs while `ready`, so a device swap still settling when that lands
+  // would strand the debate on tracks `ensurePreview` stopped.
+  it('locks the device pickers once this participant is ready', async () => {
+    mocks.debate = readyDebate({ localReady: true, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Video settings' })).toBeDisabled());
+    expect(screen.getByRole('button', { name: 'Audio settings' })).toBeDisabled();
+  });
+
   it('shows the opponent as still joining until they reach the room', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 

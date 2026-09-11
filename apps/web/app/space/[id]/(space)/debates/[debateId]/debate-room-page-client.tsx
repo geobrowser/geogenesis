@@ -146,7 +146,7 @@ type RemoteTrackLike = {
 
 type RoomLike = {
   connect: (url: string, token: string, options?: RoomConnectOptions) => Promise<void>;
-  disconnect: () => void;
+  disconnect: (stopTracks?: boolean) => void;
   localParticipant: {
     publishTrack: (track: unknown) => Promise<unknown>;
   };
@@ -619,13 +619,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    */
   React.useEffect(() => {
     if (!audioOutputSupported || !selectedAudioOutputId) return;
+    // Only a connected room can route: this effect also runs on `reconnecting`, where the engine
+    // is closed and the switch rejects for a speaker the user never touched.
+    if (roomState !== 'connected') return;
     const room = roomRef.current;
     if (!room?.switchActiveDevice) return;
     // Reported rather than swallowed: `changeAudioOutput` surfaces its own failures, so a silent
-    // one here left the picker showing a speaker that nothing was being played through.
-    void room.switchActiveDevice('audiooutput', selectedAudioOutputId).catch(() => {
-      reportAudioOutputFailure('Could not move audio to that speaker. Sound is still on the previous one.');
-    });
+    // one here left the picker showing a speaker that nothing was being played through. Cleared on
+    // success for the same reason — the retry after a blip has to be able to take the notice back.
+    void room
+      .switchActiveDevice('audiooutput', selectedAudioOutputId)
+      .then(() => reportAudioOutputFailure(null))
+      .catch(() => {
+        reportAudioOutputFailure('Could not move audio to that speaker. Sound is still on the previous one.');
+      });
   }, [audioOutputSupported, reportAudioOutputFailure, roomState, selectedAudioOutputId]);
 
   /**
@@ -1105,10 +1112,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       // An intro device change reconnects from a live room, and leaving the old session up evicts
       // the new one on duplicate identity. Null the ref first so the Disconnected handler does not
       // read our own teardown as a dropped call.
+      // `disconnect(false)` because the default stops every published track while `localTracksRef`
+      // still holds them, so a retry from a live room would republish ended tracks and send
+      // nothing. The tracks are the media session's to release.
       const previousRoom = roomRef.current;
       if (previousRoom) {
         roomRef.current = null;
-        previousRoom.disconnect();
+        previousRoom.disconnect(false);
       }
 
       setConnectionConflictSource(null);
@@ -2184,7 +2194,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             onAudioOutputChange={changeAudioOutput}
             onVideoInputChange={changeVideoInput}
             onRetryMedia={() => void ensureLocalPreview({ forceRestart: true }).catch(() => undefined)}
-            devicesLocked={roomState === 'connecting' || roomState === 'reconnecting'}
+            devicesLocked={
+              Boolean(preScreenLocalParticipant?.ready_at) ||
+              roomState === 'connecting' ||
+              roomState === 'reconnecting'
+            }
             connectionSettling={roomState === 'connecting' || roomState === 'reconnecting'}
             canRetryConnection={roomState === 'idle' && roomError !== null && !connectionConflict}
             onRetryConnection={retryConnection}

@@ -50,10 +50,10 @@ debate on exactly as it does today.
 4. Each side hits **I'm ready**; when the second lands, the server flips to `connecting`, the
    client fires `/joined` on the connection it already holds, and the debate proceeds.
 5. A status pill sits in the same position on both screens: neutral **Not recording** during the
-   intro, red **Recording** once capture actually starts. It is rendered once, above both screens,
-   and positioned `fixed` — an `absolute` child of these scroll containers scrolled out of view
-   before the reader reached the ready button, and remounting it per screen meant its live region
-   was never announced at the transition.
+   intro, red **Recording** once capture actually starts. It is positioned `fixed` — an `absolute`
+   child of these scroll containers scrolled out of view before the reader reached the ready
+   button. It is rendered inside each screen rather than once above both; see "Recording pill:
+   per-screen, not hoisted" for why, and for what that costs.
 
 ## Steps
 
@@ -228,6 +228,14 @@ device choices that used to happen entirely _before_ any connection now happen o
 7. `MediaRecorder` is never constructed while `status === 'ready'`.
 8. Pill reads "Not recording" during `ready` and "Recording" once the recorder's `start` fires.
 9. `ParticipantDisconnected` during `ready` shows the "left" placeholder.
+
+## Recording pill: per-screen, not hoisted
+
+Hoisting the pill above both screens was the first implementation and is the better answer for
+announcement, but both screens are `aria-modal`, so a sibling can be pruned from the accessibility
+tree entirely. It renders inside each dialog instead: the live region remounts at the swap and that
+one transition may go unannounced, which beats an indicator assistive technology cannot reach at
+all. A single persistent dialog wrapper would buy both and is worth a follow-up.
 
 ## Camera toggles stay `enabled`-only
 

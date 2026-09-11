@@ -66,7 +66,8 @@ type DebateMediaSession = {
    * picker's own failures; this is for the caller that owns a live room, where the route is applied
    * separately and can fail on its own.
    */
-  reportAudioOutputFailure: (message: string) => void;
+  /** `null` clears the reported failure, so a successful retry can take the notice back. */
+  reportAudioOutputFailure: (message: string | null) => void;
   changeVideoInput: (deviceId: string) => void;
 };
 
@@ -328,7 +329,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     [ensurePreview]
   );
 
-  const reportAudioOutputFailure = React.useCallback((message: string) => {
+  const reportAudioOutputFailure = React.useCallback((message: string | null) => {
     setAudioOutputError(message);
   }, []);
 
