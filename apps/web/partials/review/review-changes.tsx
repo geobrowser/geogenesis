@@ -637,12 +637,6 @@ export const ReviewChanges = () => {
   const hasSelectedEntities = selectedEntityIds.size > 0;
   const isReadyToPublish = proposalName.length > 0 && hasSelectedEntities;
 
-  const publishBlockedReason = !hasSelectedEntities
-    ? 'Select at least one edit to publish.'
-    : proposalName.length === 0
-      ? 'Name your proposal to publish.'
-      : null;
-
   // Fast/slow path selection (design 62501-94092). Every DAO-space submitter gets the
   // choice — members as well as editors. Personal spaces don't vote at all.
   const canChoosePath = activeSpaceMetadata?.type === 'DAO';
@@ -805,8 +799,8 @@ export const ReviewChanges = () => {
         publish_flow: 'review_changes',
         publish_kind: activeSpaceMetadata?.type === 'PERSONAL' ? 'edit' : 'proposal',
         space_id: activeSpace,
-        value_count: valuesFromSpace.length,
-        relation_count: relationsFromSpace.length,
+        value_count: publishSelection.values.length,
+        relation_count: publishSelection.relations.length,
       });
     }
 
@@ -1072,11 +1066,6 @@ export const ReviewChanges = () => {
                     votingSettings={activeSpaceVotingSettings}
                     isFastPathRestricted={isFastPathRestricted}
                   />
-                )}
-                {publishBlockedReason && !isPublishGatedByPendingSetup && (
-                  <Text variant="footnote" color="grey-04">
-                    {publishBlockedReason}
-                  </Text>
                 )}
                 <Button
                   variant="primary"
