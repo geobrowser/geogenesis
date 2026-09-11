@@ -140,7 +140,19 @@ export function ClaimExploreFeedCard({
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
 
   return (
-    <article ref={setContainer} className="@container flex flex-col gap-4 border-b border-divider py-4 last:border-b-0">
+    <article
+      ref={setContainer}
+      className={cx(
+        '@container flex flex-col gap-4',
+        // Wide: a feed row, separated from the next by a rule.
+        'border-b border-divider py-4 last:border-b-0',
+        // Narrow: the debates panel's card — boxed, rounded, and clipped so the grey footer band
+        // takes the bottom corners with it. `pb-0` leaves the band flush against the base instead
+        // of floating above a strip of white; the rule between rows goes, since a bordered card
+        // already separates itself.
+        'claim-card-narrow:rounded-2xl claim-card-narrow:overflow-hidden claim-card-narrow:border claim-card-narrow:border-grey-02 claim-card-narrow:p-4 claim-card-narrow:pb-0'
+      )}
+    >
       {/*
         Two zones, divided by a rule that runs the whole height: everything you can *do* to the claim
         on the left, everything describing its *state* on the right, with the meta row inside the
@@ -215,10 +227,10 @@ export function ClaimExploreFeedCard({
         <div
           className={cx(
             'col-start-1 row-start-3 mt-4 max-w-[360px] claim-card-narrow:mt-0',
-            // Row 4 only when the verdict is in row 3. Without it the pills would sit a row below an
-            // empty one, and an implicit row of zero height still costs the `gap-y-4` on either side
-            // of it — so the space between the claim and the pills would silently double.
-            hasVerdict && 'claim-card-narrow:row-start-4'
+            // Row 3 on a phone, above the verdict rather than below it — the order the debates
+            // panel uses, where what you can *do* comes before what everyone else did. On a wide
+            // card the verdict is a column beside this, so the question does not arise.
+            hasVerdict && 'claim-card-narrow:row-start-3'
           )}
         >
           <PositionRow
@@ -242,7 +254,7 @@ export function ClaimExploreFeedCard({
             The narrow variant drops the rule rather than rotating it — see the note on the
             component. */}
         {hasVerdict ? (
-          <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 claim-card-narrow:col-start-1 claim-card-narrow:row-span-1 claim-card-narrow:row-start-3 claim-card-narrow:border-l-0 claim-card-narrow:pl-0">
+          <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 claim-card-narrow:col-start-1 claim-card-narrow:row-span-1 claim-card-narrow:row-start-4 claim-card-narrow:border-l-0 claim-card-narrow:pl-0">
             <ClaimVerdictColumn
               entityId={item.entityId}
               spaceId={item.spaceId}
@@ -326,9 +338,19 @@ function ClaimVerdictColumn({
         />
       </div>
 
-      {/* Narrow: the same module the debates side panel draws, so the two agree on a phone. */}
+      {/* Narrow: the debates panel's footer band — share, split and faces on one line, on grey,
+          bled to the card's edges by `-mx-4` against its `p-4`. The card carries `pb-0` so this
+          reaches the base, and `overflow-hidden` so the band is clipped to the rounded corners
+          rather than squaring them off. */}
       <div className="hidden claim-card-narrow:block">
-        <ClaimSummary entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
+        <ClaimSummary
+          entityId={entityId}
+          spaceId={spaceId}
+          responseKind={responseKind}
+          summary={summary}
+          layout="inline"
+          className="-mx-4 border-t border-divider bg-grey-01 px-4 py-2"
+        />
       </div>
     </>
   );
