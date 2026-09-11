@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClaimResponseSummary } from './claim-response-summary';
 import { summarizeClaimResponses } from './claim-response-summary';
-import { ClaimSummary } from './claim-summary';
+import { ClaimSummary, ControversialTag } from './claim-summary';
 
 // The faces and the list each run their own responder query, which is not what this is about. The
 // avatars still render something pressable, because where the popover lands is.
@@ -107,5 +107,46 @@ describe('the responder list’s portal', () => {
     fireEvent.click(screen.getByTestId('responder-avatars').closest('button') as HTMLElement);
 
     await waitFor(() => expect(screen.getByTestId('responders-list')).toBeInTheDocument());
+  });
+});
+
+/**
+ * This change is entirely visual, so these pin the two things a later refactor would drop without
+ * anything failing: the flame, and the red that is the design's `#ff523a`. There is no behaviour to
+ * assert in their place.
+ */
+describe('ControversialTag', () => {
+  afterEach(cleanup);
+
+  it('reads as Controversial in the design’s red', () => {
+    render(<ControversialTag />);
+
+    // `text-red-01` is `#ff523a`, the colour on the Figma card — named rather than inlined so the
+    // token stays the one place it is defined.
+    expect(screen.getByText('Controversial')).toHaveClass('text-red-01');
+  });
+
+  it('carries the flame, drawn in the same colour as the word', () => {
+    const { container } = render(<ControversialTag />);
+
+    const flame = container.querySelector('svg');
+    expect(flame).not.toBeNull();
+    // `currentColor` rather than a second copy of the hex, so the flame and the word cannot drift
+    // apart and a caller recolouring the tag moves both.
+    expect(flame?.querySelector('path')).toHaveAttribute('fill', 'currentColor');
+  });
+
+  it('sets no background of its own', () => {
+    render(<ControversialTag />);
+
+    // It used to be a tinted pill. The design is plain text beside its neighbours, so a surviving
+    // `bg-` would be the old treatment left behind.
+    expect(screen.getByText('Controversial').className).not.toMatch(/bg-/);
+  });
+
+  it('keeps a caller’s className', () => {
+    render(<ControversialTag className="ml-2" />);
+
+    expect(screen.getByText('Controversial')).toHaveClass('ml-2');
   });
 });
