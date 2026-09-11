@@ -11,7 +11,13 @@ import { useDeferredJoin } from '~/core/state/pending-join-intents';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Dots } from '~/design-system/dots';
-import { SPACE_PILL_CLASS, SpacePillAvatar, SpacePillList, SpacePillSectionHeading } from '~/design-system/space-pill';
+import {
+  SPACE_PILL_CLASS,
+  SpacePillAvatar,
+  SpacePillLabel,
+  SpacePillList,
+  SpacePillSectionHeading,
+} from '~/design-system/space-pill';
 
 type Props = {
   // Already filtered by the side panel to spaces the user can still join.
@@ -94,7 +100,7 @@ function JoinSpacePill({ space }: { space: FeaturedSpace }) {
           <Dots />
         </span>
       ) : (
-        <span className="truncate">{space.name}</span>
+        <SpacePillLabel>{space.name}</SpacePillLabel>
       )}
     </button>
   );

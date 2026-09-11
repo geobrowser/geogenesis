@@ -9,8 +9,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TopicUsage } from '~/core/io/subgraph/topic-space-usage';
 
 // The real one reaches for the sync engine to warm a route; the destination is what matters here.
+// `className` is forwarded because the pill's width constraint lives on it — a mock that dropped it
+// would quietly make the truncation assertion below unfalsifiable.
 vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  PrefetchLink: ({ children, href, className }: { children: React.ReactNode; href: string; className?: string }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  ),
 }));
 
 const { SubspacesSection } = await import('./subspaces-section');
@@ -87,6 +93,23 @@ describe('SubspacesSection', () => {
 
     await user.click(screen.getByRole('button'));
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('constrains a long name so it ellipsises instead of widening the pill past the rail', () => {
+    render(
+      <SubspacesSection
+        spaceId={SPACE_ID}
+        subspaces={[subspace({ id: 'topic-long', name: 'A subspace with a genuinely very long name indeed' })]}
+      />
+    );
+
+    // Both classes are needed and neither is obvious: `truncate` alone does nothing to a flex item,
+    // which defaults to `min-width: auto` and refuses to shrink below its text. Shared with Join
+    // spaces, which had the same gap.
+    const label = screen.getByText('A subspace with a genuinely very long name indeed');
+    expect(label).toHaveClass('truncate');
+    expect(label).toHaveClass('min-w-0');
+    expect(screen.getByRole('link')).toHaveClass('max-w-full');
   });
 
   it('offers no overflow control when everything already fits', () => {

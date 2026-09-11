@@ -1,4 +1,5 @@
 import { fetchExploreSidePanelData } from '~/core/explore/fetch-explore-side-panel-data';
+import { SIDE_RAIL_FETCH_TIMEOUT_MS, withTimeout } from '~/core/utils/with-timeout';
 
 import { ExploreSidePanel } from './explore-side-panel';
 import { fetchOverviewSubspaces } from '~/app/space/[id]/(space)/space-sidebar';
@@ -20,8 +21,15 @@ export async function RootExploreSidePanelContainer({
    */
   includeSubspaces: boolean;
 }) {
+  // Both bounded: this rail is one Suspense boundary, so either request hanging keeps *all* of it
+  // off the screen — onboarding, Join spaces, rankings and calls included. Catching covers a
+  // rejection; it does not cover a request that never answers.
   const [data, subspaces] = await Promise.all([
-    fetchExploreSidePanelData().catch(() => null),
+    withTimeout(
+      fetchExploreSidePanelData().catch(() => null),
+      SIDE_RAIL_FETCH_TIMEOUT_MS,
+      null
+    ),
     includeSubspaces ? fetchOverviewSubspaces(spaceId) : [],
   ]);
 

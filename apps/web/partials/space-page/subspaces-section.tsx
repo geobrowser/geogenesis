@@ -6,7 +6,13 @@ import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { SPACE_PILL_CLASS, SpacePillAvatar, SpacePillList, SpacePillSectionHeading } from '~/design-system/space-pill';
+import {
+  SPACE_PILL_CLASS,
+  SpacePillAvatar,
+  SpacePillLabel,
+  SpacePillList,
+  SpacePillSectionHeading,
+} from '~/design-system/space-pill';
 
 type Props = {
   spaceId: string;
@@ -50,7 +56,7 @@ export function SubspacesSection({ spaceId, subspaces }: Props) {
         renderPill={subspace => (
           <Link href={subspaceHref(spaceId, subspace)} className={SPACE_PILL_CLASS}>
             <SpacePillAvatar value={subspaceImage(subspace)} />
-            <span className="truncate">{subspace.name}</span>
+            <SpacePillLabel>{subspace.name}</SpacePillLabel>
           </Link>
         )}
       />

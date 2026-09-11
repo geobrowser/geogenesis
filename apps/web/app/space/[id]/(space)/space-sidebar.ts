@@ -5,6 +5,7 @@ import { ROOT_SPACE } from '~/core/constants';
 import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { reportError } from '~/core/telemetry/logger';
 import { Spaces } from '~/core/utils/space';
+import { SIDE_RAIL_FETCH_TIMEOUT_MS, withTimeout } from '~/core/utils/with-timeout';
 
 import { cachedFetchSpace } from '../cached-fetch-space';
 
@@ -22,7 +23,15 @@ import { cachedFetchSpace } from '../cached-fetch-space';
 export const resolveSpaceSidebar = cache(async (spaceId: string) => {
   const isRootSpace = spaceId === ROOT_SPACE;
   const space = await cachedFetchSpace(spaceId);
-  const communityCalls = isRootSpace ? [] : await fetchCommunityCalls(spaceId).catch(() => []);
+  // Bounded, not just caught. This is awaited by the `(space)` layout, so it gates every route
+  // beneath it — a wedged upstream here is a blank space page, not a rail without calls.
+  const communityCalls = isRootSpace
+    ? []
+    : await withTimeout(
+        fetchCommunityCalls(spaceId).catch(() => []),
+        SIDE_RAIL_FETCH_TIMEOUT_MS,
+        []
+      );
   const isExternalTopic = Spaces.hasExternalTopic(space);
   const hasSidebar = !isExternalTopic && !isRootSpace && communityCalls.length > 0;
 
@@ -43,10 +52,13 @@ export const resolveSpaceSidebar = cache(async (spaceId: string) => {
  * Reported as handled: the signal is worth keeping, an unhandled render crash is not.
  */
 export const fetchOverviewSubspaces = cache(async (spaceId: string) => {
-  try {
-    return await fetchSubtopics(spaceId);
-  } catch (error) {
+  const subspaces = fetchSubtopics(spaceId).catch(error => {
     reportError(error, { tags: { surface: 'space-sidebar-subspaces' }, contexts: { space: { spaceId } } });
     return [];
-  }
+  });
+
+  // Bounded as well as caught: the containers that call this hold the whole rail behind it, so an
+  // upstream that never answers would keep community calls and daily activities off the screen
+  // too, behind a Suspense fallback that never resolves.
+  return withTimeout(subspaces, SIDE_RAIL_FETCH_TIMEOUT_MS, []);
 });

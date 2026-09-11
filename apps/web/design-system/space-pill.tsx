@@ -14,7 +14,23 @@ import { FallbackImage } from '~/design-system/fallback-image';
  * caller renders its own element inside.
  */
 export const SPACE_PILL_CLASS =
-  'inline-flex items-center gap-1.5 rounded-full border border-grey-02 py-1.5 pr-2.5 pl-2 text-[16px] leading-[18px] text-text transition-colors hover:border-text disabled:cursor-default';
+  'inline-flex max-w-full items-center gap-1.5 rounded-full border border-grey-02 py-1.5 pr-2.5 pl-2 text-[16px] leading-[18px] text-text transition-colors hover:border-text disabled:cursor-default';
+
+/**
+ * The pill's name, ellipsised rather than allowed to push the pill wider than the rail.
+ *
+ * Two classes, both load-bearing, which is why this is a component and not a `truncate` spelled out
+ * at each call site. `truncate` needs an ancestor with a width to shrink against — hence `max-w-full`
+ * on {@link SPACE_PILL_CLASS} — and a flex item defaults to `min-width: auto`, so without `min-w-0`
+ * it refuses to shrink below its text and the ellipsis never appears. Missing either, a long space
+ * name grows the pill past the rail and the rail's `overflow-x-hidden` clips it mid-word.
+ *
+ * The rail is narrow and getting narrower (GEO-2774), so this is the common case rather than the
+ * edge one.
+ */
+export function SpacePillLabel({ children }: { children: React.ReactNode }) {
+  return <span className="min-w-0 truncate">{children}</span>;
+}
 
 /** The pill's avatar. `FallbackImage` walks gateways and covers a value that will not load. */
 export function SpacePillAvatar({ value }: { value: string }) {
