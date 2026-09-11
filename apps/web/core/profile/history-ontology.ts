@@ -63,7 +63,24 @@ export const ACADEMIC_FIELD_TYPE = SystemIds.ACADEMIC_FIELD_TYPE;
  * models the thing you were employed on, and plenty of them are not companies.
  */
 export const EMPLOYER_TYPE = SystemIds.PROJECT_TYPE;
-export const JOB_TYPE = ContentIds.JOB_TYPE;
+
+/**
+ * What a Roles relation points at, taken from what the property itself declares
+ * rather than from the name that reads best.
+ *
+ * `Roles` declares `To entity types: Person role`, and the graph agrees: 4,014
+ * entities carry that type against 32 carrying `Job`. The picker searched `Job`
+ * until this was checked, which is why typing a real job title returned three
+ * hand-entered rows and none of the 2,905 occupations the ESCO import added.
+ */
+export const JOB_TYPE = 'e4e366e9d5554b6892bf7358e824afd2';
+
+/**
+ * What `Roles` declares its *relation* entity is — the tenure. Typing it is what
+ * lets anything else find a tenure by its type; an untyped one is reachable only
+ * by walking in from the person who holds it.
+ */
+export const ROLE_INFORMATION_TYPE = '343952488d4a4bc088aae611b931ac0e';
 
 /**
  * Dates. The SDK names these `RANK_*` after the first thing that used them, but
@@ -109,6 +126,26 @@ export const EMPLOYMENT_TYPE_OPTIONS = [
 /** tenure ──▶ skill. A relation, and it repeats. */
 export const SKILLS_PROPERTY = ContentIds.SKILLS_PROPERTY;
 export const SKILL_TYPE = ContentIds.SKILL_TYPE;
+
+/**
+ * The ESCO occupation taxonomy, which hangs off the same `Skills` property a
+ * tenure uses: role ──Skills──▶ skill, 112,114 of them across 2,905 occupations.
+ *
+ * Two things sit off to the side of that edge, and both are needed to recommend
+ * anything worth reading. Whether a skill is essential to the role is on the
+ * relation's own entity — not on the role, and not on the skill. How widely the
+ * skill transfers is on the skill, one hop further out, as a `Skill scope`
+ * pointing at one of four ranked entities.
+ *
+ * Rank is what separates a useful suggestion from a merely true one: in live
+ * data `troubleshoot` is essential to 236 occupations, so a list topped by it is
+ * accurate and tells the reader nothing.
+ *
+ * Verified against the graph on 2026-09-11.
+ */
+export const IS_REQUIRED_PROPERTY = '3d60051c488f4a5ebae67a8264ade8bd';
+export const SKILL_SCOPE_PROPERTY = '7426f8535dc84776bd7abce1d069fa06';
+export const SCOPE_RANK_PROPERTY = '3ae1e15935864c0f9425652125d03772';
 
 /** What the avatar of a company or school is stored under. */
 export const AVATAR_PROPERTY = ContentIds.AVATAR_PROPERTY;

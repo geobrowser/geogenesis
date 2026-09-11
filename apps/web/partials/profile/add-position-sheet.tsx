@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useSuggestedSkills } from '~/core/hooks/use-suggested-skills';
 import { type MonthYear, fromGraphDate, toGraphDate } from '~/core/profile/history-dates';
 import { EMPLOYER_TYPE, EMPLOYMENT_TYPE_OPTIONS, JOB_TYPE, SKILL_TYPE } from '~/core/profile/history-ontology';
 import type { EntityChoice, PositionDraft } from '~/core/profile/stage-history';
@@ -48,6 +49,16 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
   const [isAddingSkill, setIsAddingSkill] = React.useState(false);
   const [isCurrent, setIsCurrent] = React.useState(initial ? initial.status === 'current' : false);
   const [description, setDescription] = React.useState(initial?.description ?? '');
+
+  // Only ESCO occupations carry these; a title somebody typed in themselves has
+  // none, and the row simply does not appear.
+  const { suggestions } = useSuggestedSkills({
+    roleId: title?.id,
+    picked: React.useMemo(() => skills.map(skill => skill.id), [skills]),
+  });
+
+  const addSkill = (skill: EntityChoice) =>
+    setSkills(current => (current.some(picked => picked.id === skill.id) ? current : [...current, skill]));
 
   const canSave = pickedCompany !== null && title !== null && !isSaving;
 
@@ -106,7 +117,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
         ) : (
           <SelectEntity
             spaceId={spaceId}
-            relationValueTypes={[{ id: JOB_TYPE, name: 'Job' }]}
+            relationValueTypes={[{ id: JOB_TYPE, name: 'Person role' }]}
             placeholder="Find or create a job title..."
             onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) =>
@@ -198,11 +209,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
             placeholder="Find or create a skill..."
             onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) => {
-              setSkills(current =>
-                current.some(skill => skill.id === result.id)
-                  ? current
-                  : [...current, { id: result.id, name: result.name, isNew: Boolean(fromCreateFn) }]
-              );
+              addSkill({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) });
               setIsAddingSkill(false);
             }}
             width="full"
@@ -215,6 +222,29 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
           >
             + Add skill
           </button>
+        )}
+
+        {/* What the occupation itself says the job needs, essential first and
+            most distinctive within that. Offered rather than applied: they are a
+            shortcut past typing, not a claim about what this person did. */}
+        {suggestions.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-footnote text-grey-04">Common for this role</span>
+            <ul className="flex flex-wrap gap-1.5">
+              {suggestions.map(suggestion => (
+                <li key={suggestion.id}>
+                  <button
+                    type="button"
+                    onClick={() => addSkill({ id: suggestion.id, name: suggestion.name, isNew: false })}
+                    disabled={isSaving}
+                    className="rounded border border-grey-02 px-2 py-1 text-footnote text-text transition-colors hover:border-text disabled:text-grey-03"
+                  >
+                    + {suggestion.name ?? 'Untitled'}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     </HistorySheet>

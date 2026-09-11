@@ -8,6 +8,22 @@ import { EMPLOYER_TYPE, JOB_TYPE } from '~/core/profile/history-ontology';
 
 import { AddPositionSheet } from './add-position-sheet';
 
+const mocks = vi.hoisted(() => ({
+  suggestions: [] as { id: string; name: string | null; isRequired: boolean; rank: number }[],
+  suggestedFor: undefined as string | undefined,
+  alreadyPicked: [] as string[],
+}));
+
+// The taxonomy read behind the suggestions. Stubbed to record what it was asked
+// about, since which role the sheet asks for is the part this file owns.
+vi.mock('~/core/hooks/use-suggested-skills', () => ({
+  useSuggestedSkills: ({ roleId, picked }: { roleId: string | undefined; picked: string[] }) => {
+    mocks.suggestedFor = roleId;
+    mocks.alreadyPicked = picked;
+    return { suggestions: roleId ? mocks.suggestions : [], isLoading: false };
+  },
+}));
+
 /**
  * `SelectEntity` is a search box over the graph. Stubbed down to the three things
  * this sheet depends on: which types it was scoped to, whether the result came
@@ -41,7 +57,12 @@ vi.mock('~/design-system/select-entity', () => ({
   ),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mocks.suggestions = [];
+  mocks.suggestedFor = undefined;
+  mocks.alreadyPicked = [];
+});
 
 function renderSheet(overrides: Partial<Parameters<typeof AddPositionSheet>[0]> = {}) {
   const props = {
@@ -211,6 +232,61 @@ describe('AddPositionSheet', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Save position' }));
 
       expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining(initial));
+    });
+  });
+
+  describe('skills suggested for the role', () => {
+    const suggestion = (name: string) => ({ id: `skill-${name}`, name, isRequired: true, rank: 3 });
+
+    it('asks about the role only once one has been picked', async () => {
+      renderSheet();
+
+      expect(mocks.suggestedFor).toBeUndefined();
+
+      await pickCompany();
+      await pickTitle();
+
+      expect(mocks.suggestedFor).toBe('picked-id');
+    });
+
+    // Marked as existing rather than new: the taxonomy owns these entities, and
+    // minting a second `Debug software` is exactly what suggesting them avoids.
+    it('adds a suggestion to the draft as an existing entity', async () => {
+      mocks.suggestions = [suggestion('Debug software')];
+      const props = renderSheet();
+
+      await pickCompany();
+      await pickTitle();
+      await userEvent.click(screen.getByRole('button', { name: '+ Debug software' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Save position' }));
+
+      expect(props.onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skills: [{ id: 'skill-Debug software', name: 'Debug software', isNew: false }],
+        })
+      );
+    });
+
+    it('tells the reader what is already on the draft so it is not offered again', async () => {
+      mocks.suggestions = [suggestion('Debug software')];
+      renderSheet();
+
+      await pickCompany();
+      await pickTitle();
+      await userEvent.click(screen.getByRole('button', { name: '+ Debug software' }));
+
+      expect(mocks.alreadyPicked).toEqual(['skill-Debug software']);
+    });
+
+    // A job title somebody typed in themselves has no taxonomy behind it, and an
+    // empty row would read as something failing to load.
+    it('shows nothing at all when the role has no skills', async () => {
+      renderSheet();
+
+      await pickCompany();
+      await pickTitle();
+
+      expect(screen.queryByText('Common for this role')).not.toBeInTheDocument();
     });
   });
 

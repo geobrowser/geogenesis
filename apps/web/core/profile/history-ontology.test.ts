@@ -16,8 +16,14 @@ import {
   EMPLOYMENT_TYPE_PROPERTY,
   EMPLOYMENT_TYPE_TYPE,
   END_DATE_PROPERTY,
+  IS_REQUIRED_PROPERTY,
+  JOB_TYPE,
   ROLES_PROPERTY,
+  ROLE_INFORMATION_TYPE,
+  SCOPE_RANK_PROPERTY,
   SKILLS_PROPERTY,
+  SKILL_SCOPE_PROPERTY,
+  SKILL_TYPE,
   START_DATE_PROPERTY,
   educationStatusFromOptionId,
   employmentStatusFromOptionId,
@@ -47,8 +53,23 @@ describe('history ontology ids', () => {
     ['Employment type property', EMPLOYMENT_TYPE_PROPERTY, '53a98633a2db40be9f161a4c9da37970'],
     ['Employment type (type)', EMPLOYMENT_TYPE_TYPE, 'f503bfd283d74e1a9b30294fff9d2d7e'],
     ['Skills', SKILLS_PROPERTY, 'a38732e33a3d47f9a459fb369c287709'],
+    ['Skill type', SKILL_TYPE, '9ca6ab1f3a114e49bbaf72e0c9a985cf'],
+    // What `Roles` declares it points at, and what its relation entity is. The
+    // picker searched `Job` until these were read off the property itself.
+    ['Title type (Person role)', JOB_TYPE, 'e4e366e9d5554b6892bf7358e824afd2'],
+    ['Role information', ROLE_INFORMATION_TYPE, '343952488d4a4bc088aae611b931ac0e'],
+    ['Is required?', IS_REQUIRED_PROPERTY, '3d60051c488f4a5ebae67a8264ade8bd'],
+    ['Skill scope', SKILL_SCOPE_PROPERTY, '7426f8535dc84776bd7abce1d069fa06'],
+    ['Scope rank', SCOPE_RANK_PROPERTY, '3ae1e15935864c0f9425652125d03772'],
   ])('%s resolves to the id the graph has', (_name, actual, expected) => {
     expect(actual).toBe(expected);
+  });
+
+  // The reason the Title picker was wrong: `Job` is a real type with 32 entities
+  // behind it, so scoping to it looked right and quietly hid the 2,905
+  // occupations that `Roles` actually points at.
+  it('does not search the type the SDK names Job', () => {
+    expect(JOB_TYPE).not.toBe('5ab7946f82bc42899d02a5f13bd40935');
   });
 });
 

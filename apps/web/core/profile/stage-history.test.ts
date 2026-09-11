@@ -19,6 +19,7 @@ import {
   END_DATE_PROPERTY,
   JOB_TYPE,
   ROLES_PROPERTY,
+  ROLE_INFORMATION_TYPE,
   START_DATE_PROPERTY,
 } from './history-ontology';
 import { type EducationDraft, type PositionDraft, stageEducation, stagePosition } from './stage-history';
@@ -137,10 +138,28 @@ describe('stagePosition', () => {
     );
   });
 
-  it('writes nothing extra for an entity that already existed', () => {
+  it('names and types nothing for entities that already existed', () => {
+    const { values, relations } = stagePosition(position(), context);
+
+    expect(values.filter(value => value.property.id === SystemIds.NAME_PROPERTY)).toHaveLength(0);
+
+    // The tenure's own type is the exception, and it is not about either picked
+    // entity: it is minted here, so nothing else is going to type it.
+    const types = byType(relations, SystemIds.TYPES_PROPERTY);
+    expect(types.map(relation => relation.toEntity.id)).toEqual([ROLE_INFORMATION_TYPE]);
+  });
+
+  // `Roles` declares `Role information` as its relation entity type. An untyped
+  // tenure is reachable only by walking in from the person who holds it.
+  it('types the tenure as Role information', () => {
     const { relations } = stagePosition(position(), context);
 
-    expect(byType(relations, SystemIds.TYPES_PROPERTY)).toHaveLength(0);
+    const roles = relations.find(relation => relation.type.id === ROLES_PROPERTY);
+    const tenureType = byType(relations, SystemIds.TYPES_PROPERTY).find(
+      relation => relation.toEntity.id === ROLE_INFORMATION_TYPE
+    );
+
+    expect(tenureType?.fromEntity.id).toBe(roles?.entityId);
   });
 
   it('gives every row the space being published to', () => {

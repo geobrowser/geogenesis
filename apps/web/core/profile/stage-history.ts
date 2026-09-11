@@ -21,6 +21,7 @@ import {
   type EmploymentStatus,
   JOB_TYPE,
   ROLES_PROPERTY,
+  ROLE_INFORMATION_TYPE,
   SKILLS_PROPERTY,
   SKILL_TYPE,
   START_DATE_PROPERTY,
@@ -257,6 +258,18 @@ export function stagePosition(
     entityId: tenureId,
   });
 
+  // The tenure says what it is. `Roles` declares `Role information` as its
+  // relation entity type, and an untyped tenure is reachable only by walking in
+  // from the person holding it — which is exactly how the dates on it stayed
+  // invisible to everything else.
+  const tenureType = relationRow({
+    spaceId,
+    typeId: SystemIds.TYPES_PROPERTY,
+    typeName: 'Types',
+    fromId: tenureId,
+    to: { id: ROLE_INFORMATION_TYPE, name: 'Role information' },
+  });
+
   const status = relationRow({
     spaceId,
     typeId: EMPLOYMENT_STATUS_PROPERTY,
@@ -291,7 +304,7 @@ export function stagePosition(
   );
 
   return merge(company, title, ...skillRows, employment, {
-    relations: [roles, status, ...employmentType, ...skillEdges],
+    relations: [roles, tenureType, status, ...employmentType, ...skillEdges],
     values: datesAndDescription({
       spaceId,
       tenureId,
