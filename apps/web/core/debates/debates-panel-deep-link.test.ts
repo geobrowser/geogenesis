@@ -27,10 +27,10 @@ describe('toDebatesPanel', () => {
   });
 
   it('round-trips through the scheme’s readers', () => {
-    const built = new URL(toDebatesPanel({ tab: 'matches' }), 'https://geobrowser.io');
+    const built = new URL(toDebatesPanel({ tab: 'lobby' }), 'https://geobrowser.io');
 
     expect(requestsModal(built.searchParams, DEBATES_MODAL)).toBe(true);
-    expect(debatesPanelTab(modalTarget(built.searchParams))).toBe('matches');
+    expect(debatesPanelTab(modalTarget(built.searchParams))).toBe('lobby');
   });
 
   // Both links share the trigger param, so the value has to be the thing that tells them apart —
@@ -44,7 +44,18 @@ describe('toDebatesPanel', () => {
 });
 
 describe('debatesPanelTab', () => {
-  it.each(['claims', 'people', 'matches', 'requests'])('reads the %s tab', tab => {
+  // GEO-2861 renamed the tabs. These links are written by hand and pasted into emails, so the ones
+  // already sent outlive the rename: `claims` was the browse surface and is Explore, `matches` was
+  // one of the two ways to find a debate now and is Lobby's toggled-on state. A link lands on Lobby
+  // rather than flipping the toggle, which is the viewer's own standing preference.
+  it.each([
+    ['claims', 'explore'],
+    ['matches', 'lobby'],
+  ])('redirects the old %s link to %s', (old, next) => {
+    expect(debatesPanelTab(old)).toBe(next);
+  });
+
+  it.each(['lobby', 'people', 'explore', 'requests'])('reads the %s tab', tab => {
     expect(debatesPanelTab(tab)).toBe(tab);
   });
 

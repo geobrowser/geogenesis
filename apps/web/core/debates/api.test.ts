@@ -506,6 +506,30 @@ describe('debate claim hydration authentication', () => {
   const claimRequests = (fetch: ReturnType<typeof vi.fn>) =>
     fetch.mock.calls.filter(([url]) => String(url).includes('/debate-claims'));
 
+  /**
+   * The coalescing above is what makes this necessary: callers that each capped themselves at fifty
+   * still add up past the cap once their ids are merged for a space, and geo-chat answers a longer
+   * list with `400 too_many_claim_ids` — "at most 50 claim IDs may be requested".
+   *
+   * That failure is worse than one request: `debateQueryNetworkOptions` sets `retry: false`, so the
+   * rejection is permanent for its key, and the hub's readiness gate reads `isError` across every
+   * batch — one over-long request left every response pill on the tab dead until a refetch.
+   *
+   * Fifty is the server's number, written out rather than read from the constant, so that the two
+   * cannot be wrong together the way they were.
+   */
+  it('splits a coalesced batch at the cap geo-chat actually enforces', async () => {
+    const fetch = stubFreshJson({ claims: [] });
+    const ids = Array.from({ length: 120 }, (_, index) => `claim-${index}`);
+
+    await Promise.all(ids.map(claimId => listDebateClaims('space-1', [claimId])));
+
+    const sent = claimRequests(fetch).map(([url]) => new URL(String(url)).searchParams.get('claim_ids')!.split(','));
+    expect(sent.every(chunk => chunk.length <= 50)).toBe(true);
+    // Every id still asked for, once.
+    expect(sent.flat().sort()).toEqual([...ids].sort());
+  });
+
   it('keeps a whole-space read out of the id batch', async () => {
     const fetch = stubFreshJson({ claims: [] });
 

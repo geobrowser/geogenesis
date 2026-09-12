@@ -815,8 +815,23 @@ async function fetchDebateClaims(
  */
 const CLAIM_BATCH_WINDOW_MS = 10;
 
-/** Caps the query string. Fifty ids is roughly 1.7KB of URL; this leaves generous headroom. */
-const CLAIM_BATCH_LIMIT = 100;
+/**
+ * The most claim ids geo-chat will accept in one request, on any endpoint that takes a list of them.
+ *
+ * It answers a longer list with `400 too_many_claim_ids` — "at most 50 claim IDs may be requested" —
+ * and `debate-gateway` classifies that as deterministic, because no amount of reconnecting makes a
+ * request that is simply too big succeed. With `retry: false` on these queries, one such rejection
+ * is permanent for its key.
+ *
+ * This lived here as a URL-length cap of a hundred — "fifty ids is roughly 1.7KB of URL; this leaves
+ * generous headroom" — which was sizing for the wrong constraint. The query string was never what
+ * the server objected to.
+ *
+ * Exported so the callers that pre-chunk for their own reasons measure against the same number.
+ * Chunking below the cap is always safe; the only unsafe thing is a second opinion about what the
+ * cap is, which is what this had.
+ */
+export const GEO_CHAT_CLAIM_IDS_PER_REQUEST = 50;
 
 type ClaimBatchCaller = {
   claimIds: string[];
@@ -879,8 +894,11 @@ function flushClaimBatch(key: string, spaceId: string) {
 
   const ids = [...batch.ids];
   const chunks: string[][] = [];
-  for (let index = 0; index < ids.length; index += CLAIM_BATCH_LIMIT) {
-    chunks.push(ids.slice(index, index + CLAIM_BATCH_LIMIT));
+  // Re-chunked here rather than trusted from the callers: this coalesces every caller for a space
+  // inside the window above, so a batch can hold more ids than any one of them asked for — which is
+  // how lists that were each correctly capped still added up to a rejected request.
+  for (let index = 0; index < ids.length; index += GEO_CHAT_CLAIM_IDS_PER_REQUEST) {
+    chunks.push(ids.slice(index, index + GEO_CHAT_CLAIM_IDS_PER_REQUEST));
   }
 
   // Deliberately unsignalled. One row unmounting must not abort the request its siblings are

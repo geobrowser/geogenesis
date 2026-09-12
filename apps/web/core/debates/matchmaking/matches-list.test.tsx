@@ -1,15 +1,22 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 
 import type { ReactElement } from 'react';
 
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+
 import type { MatchmakingMatch } from '../api';
-import { MatchesTab } from './matches-tab';
-import { debatesHubMatchesSpaceIdsAtom } from '~/atoms';
+import { MatchesList } from './matches-list';
+import {
+  debatesHubLobbySearchAtom,
+  debatesHubLobbySpaceIdsAtom,
+  debatesHubLobbySpaceSeedSpentAtom,
+  debatesHubLobbyTopicIdsAtom,
+} from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   matches: [] as MatchmakingMatch[],
@@ -30,6 +37,24 @@ const mocks = vi.hoisted(() => ({
   activityErrored: false,
   /** What the shared summary reports for every claim in the fixture. */
   responseCounts: { positive: 0, negative: 0 },
+  /** The claim entities the topic filter is resolved from, and whether that lookup has answered. */
+  claimEntities: [] as Array<{
+    id: string;
+    relations: Array<{ type: { id: string }; toEntity: { id: string; name: string | null } }>;
+  }>,
+  claimEntitiesLoading: false,
+  claimEntitiesError: null as Error | null,
+}));
+
+// Topics come from the claim entities now (GEO-2861), which is a real request. Answerless while
+// loading or failed, exactly as react-query reports it — which is the state the topic filter has to
+// tell apart from "this claim carries no topics".
+vi.mock('../claim-picker-page', () => ({
+  useClaimEntitiesByIds: () => ({
+    entities: mocks.claimEntitiesLoading || mocks.claimEntitiesError ? [] : mocks.claimEntities,
+    isLoading: mocks.claimEntitiesLoading,
+    error: mocks.claimEntitiesError,
+  }),
 }));
 
 vi.mock('../hooks', () => ({
@@ -130,6 +155,8 @@ function render(ui: ReactElement, sharedStore?: ReturnType<typeof createStore>) 
 // refuses to touch the graph for anything else.
 const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
 const CLAIM_ENTITY_ID = '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419';
+const OTHER_SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c599';
+const OTHER_CLAIM_ENTITY_ID = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 
 function party(userId: string, displayName: string, position: boolean, positionLabel: string) {
   return {
@@ -144,6 +171,10 @@ function party(userId: string, displayName: string, position: boolean, positionL
     position,
     position_label: positionLabel,
   };
+}
+
+function topicRelation(id: string, name: string) {
+  return { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id, name } };
 }
 
 function match(overrides: Partial<MatchmakingMatch> = {}): MatchmakingMatch {
@@ -180,6 +211,9 @@ beforeEach(() => {
   mocks.availableToDebate = true;
   mocks.activityLoading = false;
   mocks.activityErrored = false;
+  mocks.claimEntities = [];
+  mocks.claimEntitiesLoading = false;
+  mocks.claimEntitiesError = null;
 
   // The dropdown measures itself to pick a placement. Stubbed the way the Claims suite does it,
   // because a case that opens the menu is the only thing that reaches it.
@@ -192,9 +226,9 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-describe('MatchesTab', () => {
+describe('MatchesList', () => {
   it('offers exactly two response actions, labelled for the claim', () => {
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /^Agree/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Disagree/ })).toBeInTheDocument();
@@ -205,14 +239,14 @@ describe('MatchesTab', () => {
 
   it('uses the veracity vocabulary for a factual claim', () => {
     mocks.matches = [match({ response_kind: 'veracity', positions: [] })];
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /^Verify/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Dispute/ })).toBeInTheDocument();
   });
 
   it('publishes the opposite response when the other side is chosen', () => {
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
 
@@ -220,7 +254,7 @@ describe('MatchesTab', () => {
   });
 
   it('clears the response when the side already held is chosen again', () => {
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
 
@@ -233,7 +267,7 @@ describe('MatchesTab', () => {
     mocks.submitResponse.mockImplementation((_direction, options) => {
       options?.onError?.(new Error('Transaction reverted.'));
     });
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
 
@@ -243,7 +277,7 @@ describe('MatchesTab', () => {
   // The client knows its own response before geo-chat does, so the button reflects it immediately.
   it('shows the in-flight response rather than the stale server one', () => {
     mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
@@ -254,7 +288,7 @@ describe('MatchesTab', () => {
   it('keeps showing an indexed response while geo-chat is still catching up', () => {
     mocks.indexing = { status: 'indexed', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
     mocks.matches = [match({ viewer_response: null, viewer_debate_ready: false })];
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('Respond to this claim to debate it.')).not.toBeInTheDocument();
@@ -264,14 +298,14 @@ describe('MatchesTab', () => {
   it('hands back to the server copy once it agrees', () => {
     mocks.indexing = { status: 'indexed', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
     mocks.matches = [match({ viewer_response: { position: false, position_label: 'Disagree' } })];
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(mocks.resetIndexing).toHaveBeenCalledWith('run-1');
   });
 
   it('cannot respond without a connected personal space', () => {
     mocks.isConnected = false;
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /^Agree/ })).toBeDisabled();
   });
@@ -290,7 +324,7 @@ describe('MatchesTab', () => {
         },
       }),
     ];
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.queryByRole('button', { name: /^Agree/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Leftover fixture claim' })).not.toBeInTheDocument();
@@ -301,7 +335,7 @@ describe('MatchesTab', () => {
   // action in that state — kept visible here, with the reason, rather than silently missing.
   it('cannot request a debate while the viewer is unavailable', () => {
     mocks.availableToDebate = false;
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     const request = screen.getByRole('button', { name: 'Request debate' });
     expect(request).toBeDisabled();
@@ -311,7 +345,7 @@ describe('MatchesTab', () => {
   });
 
   it('requests a debate on the claim and blocks a second concurrent request', () => {
-    const { rerender } = render(<MatchesTab onTabChange={vi.fn()} />);
+    const { rerender } = render(<MatchesList onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Request debate' }));
     expect(mocks.createRequestMutate).toHaveBeenCalledWith({ space_id: SPACE_ID, claim_entity_id: CLAIM_ENTITY_ID });
@@ -323,7 +357,7 @@ describe('MatchesTab', () => {
       requester: party('user-me', 'You', true, 'Agree'),
       recipient: party('user-them', 'Arturas', false, 'Disagree'),
     };
-    rerender(<MatchesTab onTabChange={vi.fn()} />);
+    rerender(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
   });
@@ -340,7 +374,7 @@ describe('MatchesTab', () => {
       requester: party('user-me', 'You', true, 'Agree'),
       recipient: party('user-them', 'Arturas', false, 'Disagree'),
     };
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     const pinned = screen.getByText('Awaiting response').closest('.sticky');
     expect(pinned).not.toBeNull();
@@ -349,7 +383,7 @@ describe('MatchesTab', () => {
   });
 
   it('still pins the filters with no request outstanding', () => {
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /Any space/ }).closest('.sticky')).not.toBeNull();
   });
@@ -360,8 +394,8 @@ describe('MatchesTab', () => {
   // writes it is covered on the Claims tab, whose menu options carry real names to click.)
   it('applies a space selection the viewer made earlier in the session', () => {
     const store = createStore();
-    store.set(debatesHubMatchesSpaceIdsAtom, [SPACE_ID]);
-    render(<MatchesTab onTabChange={vi.fn()} />, store);
+    store.set(debatesHubLobbySpaceIdsAtom, [SPACE_ID]);
+    render(<MatchesList onTabChange={vi.fn()} />, store);
 
     // The trigger reads the selection back rather than "Any space", and the list is narrowed to it.
     expect(screen.queryByRole('button', { name: /Any space/ })).not.toBeInTheDocument();
@@ -373,9 +407,9 @@ describe('MatchesTab', () => {
   // visible the viewer comes back to an empty list filtered by a space with no row to untick.
   it('keeps a selected space on the menu after its matches are gone', async () => {
     const store = createStore();
-    store.set(debatesHubMatchesSpaceIdsAtom, [SPACE_ID]);
+    store.set(debatesHubLobbySpaceIdsAtom, [SPACE_ID]);
     mocks.matches = [];
-    render(<MatchesTab onTabChange={vi.fn()} />, store);
+    render(<MatchesList onTabChange={vi.fn()} />, store);
 
     fireEvent.click(screen.getByRole('button', { name: /Space|Any space/ }));
 
@@ -387,7 +421,7 @@ describe('MatchesTab', () => {
   // The other direction: a fresh session starts unfiltered, so the atom is not quietly sticky
   // across viewers or page loads.
   it('starts unfiltered in a new session', () => {
-    render(<MatchesTab onTabChange={vi.fn()} />, createStore());
+    render(<MatchesList onTabChange={vi.fn()} />, createStore());
 
     expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
   });
@@ -397,10 +431,10 @@ describe('MatchesTab', () => {
   // that could not help. There are matches; they are just not in the spaces on screen.
   it('blames the space filter, and offers to clear it, when that is what emptied the list', async () => {
     const store = createStore();
-    store.set(debatesHubMatchesSpaceIdsAtom, ['019fedae-72b6-7ab2-927a-df044d57c599']);
-    render(<MatchesTab onTabChange={vi.fn()} />, store);
+    store.set(debatesHubLobbySpaceIdsAtom, ['019fedae-72b6-7ab2-927a-df044d57c599']);
+    render(<MatchesList onTabChange={vi.fn()} />, store);
 
-    expect(await screen.findByText('No matches in the spaces you’ve picked.')).toBeInTheDocument();
+    expect(await screen.findByText('No matches match these filters.')).toBeInTheDocument();
     expect(screen.queryByText(/Matches appear once you/)).not.toBeInTheDocument();
     // Debate hours would be the wrong answer: people are around, the filter is hiding them.
     expect(screen.queryByText(/Debate hours are every day between|Stay here —/)).not.toBeInTheDocument();
@@ -413,7 +447,7 @@ describe('MatchesTab', () => {
   // GEO-2840.
   it('adds the debate hours line to the empty state', async () => {
     mocks.matches = [];
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(await screen.findByText(/Matches appear once you/)).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
@@ -426,13 +460,13 @@ describe('MatchesTab', () => {
     mocks.matches = [];
     mocks.availableToDebate = false;
     mocks.activityLoading = true;
-    const { rerender } = render(<MatchesTab onTabChange={vi.fn()} />);
+    const { rerender } = render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.queryByText(/Matches appear once you/)).not.toBeInTheDocument();
     expect(screen.queryByText(/marked unavailable/)).not.toBeInTheDocument();
 
     mocks.activityLoading = false;
-    rerender(<MatchesTab onTabChange={vi.fn()} />);
+    rerender(<MatchesList onTabChange={vi.fn()} />);
 
     // The message is what needed the answer; the note never did. Awaited rather than read
     // synchronously: the note renders nothing until its own mount effect has run, and here it is
@@ -446,7 +480,7 @@ describe('MatchesTab', () => {
   it('still shows the debate hours line when the availability answer never arrives', async () => {
     mocks.matches = [];
     mocks.activityErrored = true;
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(await screen.findByText(/Matches appear once you/)).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
@@ -455,7 +489,7 @@ describe('MatchesTab', () => {
   // Only while there is nothing to show. A list with rows renders on the matches alone.
   it('still renders matches while the availability answer is outstanding', () => {
     mocks.activityLoading = true;
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
   });
@@ -468,9 +502,204 @@ describe('MatchesTab', () => {
   it('still shows the debate hours line to a viewer who is marked unavailable', async () => {
     mocks.matches = [];
     mocks.availableToDebate = false;
-    render(<MatchesTab onTabChange={vi.fn()} />);
+    render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(await screen.findByText(/marked unavailable/)).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
+  });
+
+  /**
+   * A menu that does not describe the list under it offers an option that empties it.
+   *
+   * Both of these counted the wrong set: the space menu counted every match whatever was in the
+   * search box, and the topic menu was narrowed by space but not by search. So a search leaving one
+   * claim on screen still offered the other one's space and the other one's topic, each with a
+   * count beside it, and picking either produced nothing.
+   */
+  describe('the filter menus', () => {
+    function twoMatchesInTwoSpaces() {
+      mocks.matches = [
+        match(),
+        match({
+          claim: {
+            id: 'debate-claim-2',
+            space_id: OTHER_SPACE_ID,
+            claim_entity_id: OTHER_CLAIM_ENTITY_ID,
+            claim: 'Fries are better than chips',
+            description: null,
+          },
+        }),
+      ];
+    }
+
+    /**
+     * How many spaces the menu offers. Counted inside the popover: the position pills on the cards
+     * carry `aria-pressed` too, so a document-wide count is mostly cards.
+     */
+    function spacesOffered() {
+      fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+      const menu = screen.getByRole('dialog');
+      const offered = within(menu)
+        .getAllByRole('button')
+        .filter(button => button.hasAttribute('aria-pressed')).length;
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      return offered;
+    }
+
+    it('offers only the spaces the search leaves on the list', async () => {
+      twoMatchesInTwoSpaces();
+      render(<MatchesList onTabChange={vi.fn()} />);
+
+      expect(spacesOffered()).toBe(2);
+
+      fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'Chips are' } });
+      await waitFor(() => expect(screen.queryByText('Fries are better than chips')).toBeNull());
+
+      expect(spacesOffered()).toBe(1);
+    });
+
+    /**
+     * The topic filter is AND, so a topic with no claim in common with the one already picked is a
+     * dead option: ticking it asks for both and gets nothing. The menu is counted over the rows
+     * that already carry the selection for that reason — the same co-occurrence the hub's server
+     * facet does (GEO-2696) — rather than over everything the other filters allow, which is the
+     * right rule for the space menu and the wrong one here.
+     */
+    it('offers only the topics that co-occur with the one already picked', () => {
+      twoMatchesInTwoSpaces();
+      mocks.claimEntities = [
+        { id: CLAIM_ENTITY_ID, relations: [topicRelation('topic-food', 'Food')] },
+        { id: OTHER_CLAIM_ENTITY_ID, relations: [topicRelation('topic-health', 'Health')] },
+      ];
+      const store = createStore();
+      store.set(debatesHubLobbyTopicIdsAtom, ['topic-food']);
+      render(<MatchesList onTabChange={vi.fn()} />, store);
+
+      // The trigger takes the name of the one picked topic, so that is what opens the menu.
+      fireEvent.click(screen.getByRole('button', { name: /Food/ }));
+      const menu = screen.getByRole('dialog');
+
+      // Still offered, so it can be unticked; the one that shares no claim with it is not.
+      expect(within(menu).getByRole('button', { name: /Food/ })).toBeInTheDocument();
+      expect(within(menu).queryByRole('button', { name: /Health/ })).not.toBeInTheDocument();
+    });
+
+    it('offers only the topics the search leaves on the list', async () => {
+      twoMatchesInTwoSpaces();
+      mocks.claimEntities = [
+        { id: CLAIM_ENTITY_ID, relations: [topicRelation('topic-food', 'Food')] },
+        { id: OTHER_CLAIM_ENTITY_ID, relations: [topicRelation('topic-health', 'Health')] },
+      ];
+      render(<MatchesList onTabChange={vi.fn()} />);
+
+      fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'Chips are' } });
+      await waitFor(() => expect(screen.queryByText('Fries are better than chips')).toBeNull());
+
+      fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+      expect(screen.getByRole('button', { name: /Food/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Health/ })).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * Lobby's two lists share one space selection, so they have to share the marker that says the
+   * membership default is spent.
+   *
+   * This list never seeds — a confirmed match is not a browse surface, and it did not seed before
+   * the two were joined — but it edits the selection the *other* list seeds. With "Matches only"
+   * stored on, this is the list that mounts first: pick a space here, toggle off, and `ClaimsTab`
+   * mounted with the seed still armed and put its member spaces over the choice just made.
+   */
+  describe('the membership default', () => {
+    it('is forfeited by picking a space here, not only on the other list', async () => {
+      const store = createStore();
+      render(<MatchesList onTabChange={vi.fn()} />, store);
+
+      fireEvent.click(await screen.findByRole('button', { name: /Any space/ }));
+      const row = screen
+        .getAllByRole('button')
+        .find(button => button.hasAttribute('aria-pressed') && button.closest('[role="dialog"]'));
+      fireEvent.click(row!);
+
+      expect(store.get(debatesHubLobbySpaceSeedSpentAtom)).toBe(true);
+    });
+
+    // Clearing counts too: an empty selection the viewer asked for means the unfiltered list, and is
+    // not an invitation to fill it back in for them.
+    it('is forfeited by clearing the filters from the empty state', async () => {
+      const store = createStore();
+      store.set(debatesHubLobbySpaceIdsAtom, [OTHER_SPACE_ID]);
+      render(<MatchesList onTabChange={vi.fn()} />, store);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }));
+
+      expect(store.get(debatesHubLobbySpaceIdsAtom)).toEqual([]);
+      expect(store.get(debatesHubLobbySpaceSeedSpentAtom)).toBe(true);
+    });
+  });
+
+  // GEO-2850 held the space and topic selections outside these components because the panel closing
+  // took them with it. The search box is the third control in the same bar and was still local, so
+  // flipping "Matches only" — which unmounts one of Lobby's lists and mounts the other — threw away
+  // what the viewer had typed and widened the list they were narrowing.
+  it('writes the search where Lobby’s other list will read it', async () => {
+    const { store } = render(<MatchesList onTabChange={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'chips' } });
+
+    await waitFor(() => expect(store.get(debatesHubLobbySearchAtom)).toBe('chips'));
+  });
+
+  it('reads back the search the other list was left on', () => {
+    const store = createStore();
+    store.set(debatesHubLobbySearchAtom, 'chips');
+    render(<MatchesList onTabChange={vi.fn()} />, store);
+
+    expect(screen.getByLabelText('Search claims')).toHaveValue('chips');
+  });
+
+  /**
+   * The topics come from a lookup behind the rows, and `carriesEveryTopic` rejects a claim it has
+   * no topics for — so an unanswered lookup and a claim that genuinely carries nothing are the same
+   * answer to it. With a topic picked, reading the first as the second empties the whole list under
+   * "No matches match these filters", which is a filter being blamed for something it did not do.
+   */
+  describe('while the topics behind the filter are unresolved', () => {
+    function renderWithTopic() {
+      const store = createStore();
+      store.set(debatesHubLobbyTopicIdsAtom, ['topic-ai']);
+
+      return render(<MatchesList onTabChange={vi.fn()} />, store);
+    }
+
+    it('lists the matches rather than reporting the filter emptied them', async () => {
+      mocks.claimEntitiesLoading = true;
+      renderWithTopic();
+
+      expect(await screen.findByText('Chips are better than fries')).toBeInTheDocument();
+      expect(screen.queryByText('No matches match these filters.')).toBeNull();
+    });
+
+    // The same answer on failure, and for longer: without this the list stays empty for as long as
+    // the lookup keeps failing, which is a permanent lie rather than a slow truth.
+    it('lists them after a failed lookup too, rather than staying empty', async () => {
+      mocks.claimEntitiesError = new Error('entities exploded');
+      renderWithTopic();
+
+      expect(await screen.findByText('Chips are better than fries')).toBeInTheDocument();
+      expect(screen.queryByText('No matches match these filters.')).toBeNull();
+    });
+
+    // And the guard is a hold, not a hole: once the entities land the filter applies, or the tab
+    // would simply have stopped filtering by topic.
+    it('narrows once the entities land', async () => {
+      mocks.claimEntities = [{ id: CLAIM_ENTITY_ID, relations: [] }];
+      renderWithTopic();
+
+      expect(await screen.findByText('No matches match these filters.')).toBeInTheDocument();
+      expect(screen.queryByText('Chips are better than fries')).toBeNull();
+    });
   });
 });
