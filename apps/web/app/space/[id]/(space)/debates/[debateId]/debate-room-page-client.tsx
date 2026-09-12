@@ -72,6 +72,7 @@ import {
   useSetThankingDebate,
 } from '~/core/debates/thanking-debate-store';
 import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
+import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { useFeatureFlag } from '~/core/state/feature-flags';
@@ -392,6 +393,22 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     Boolean(debate?.rematch_session_id) && debate?.status !== 'cancelled'
   );
   const leaveRematch = useLeaveDebateRematch(debate?.rematch_session_id ?? '');
+
+  /**
+   * GEO-2758. Asked here and thrown away: when this debate ends, the pair are offered another, and
+   * the picker's Related tab is the claims sharing a topic with the one being argued right now.
+   * Finding them is three serial requests, which is a second of the picker settling after it has
+   * already drawn — so it is spent here instead, where there is a debate in front of the viewer and
+   * nothing waiting on the answer. `useRelatedDebateClaims` warms the keys the picker reads.
+   *
+   * Only once the debate is actually under way. Before that it may never happen — a preflight that
+   * times out, a room nobody joins — and a warm cache for a debate that did not take place is a
+   * request spent on nothing.
+   */
+  useRelatedDebateClaims({
+    claim: debate?.claim,
+    enabled: debate?.status === 'in_progress' || debate?.status === 'thanking' || debate?.status === 'complete',
+  });
   const countdown = useDebateCountdown(countdownDebate, serverClock.now);
   debateStatusRef.current = countdown.effectiveStatus;
   const currentUserId = getCurrentGeoChatUserId();
@@ -2195,9 +2212,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             onVideoInputChange={changeVideoInput}
             onRetryMedia={() => void ensureLocalPreview({ forceRestart: true }).catch(() => undefined)}
             devicesLocked={
-              Boolean(preScreenLocalParticipant?.ready_at) ||
-              roomState === 'connecting' ||
-              roomState === 'reconnecting'
+              Boolean(preScreenLocalParticipant?.ready_at) || roomState === 'connecting' || roomState === 'reconnecting'
             }
             connectionSettling={roomState === 'connecting' || roomState === 'reconnecting'}
             canRetryConnection={roomState === 'idle' && roomError !== null && !connectionConflict}

@@ -8,8 +8,6 @@ import cx from 'classnames';
 import { useAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import { relatedClaimsWhere } from '~/core/claims/related-claims';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import { FEATURED_TAG_ID } from '~/core/constants';
 import {
@@ -78,14 +76,13 @@ import {
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
-import { EntitiesOrderBy } from '~/core/gql/graphql';
+import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
-import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { validateEntityId } from '~/core/utils/utils';
 
@@ -131,18 +128,6 @@ function useLastSettled<T>(value: T, settling: boolean, resetKey: string): T {
  * why it is also where the pair land.
  */
 type PickerTab = 'related' | 'explore' | 'opponent';
-/** How many neighbours the Related tab offers. */
-export const RELATED_CLAIMS_LIMIT = 25;
-
-/**
- * Extra rows discovery asks for, to absorb the ones dropped before the limit applies: the debated
- * claim itself, and any neighbour whose name has not indexed.
- */
-const RELATED_DROPPED_ROW_SLACK = 8;
-
-/** Stable empty list, so a skipped discovery is not a new array each render. */
-const NO_RELATED_IDS: string[] = [];
-
 /**
  * GEO-2683. Where Explore draws its list from. Recommended, All claims, Featured and the viewer's
  * own positions are four answers to one question — "which claims?" — so they belong in a menu
@@ -332,116 +317,28 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   /* -----------------------------------------------------------------------------------------------
    * GEO-2758. Related claims: the tab the pair land on straight out of a debate.
    *
-   * Three lookups stand between arriving and a list: the source debate, that claim's entity — for
-   * its topics — and the topic query itself. Each needs the one before it, so this is a chain rather
-   * than a fan-out, and nothing here can be known until it finishes.
+   * Discovery lives in `useRelatedDebateClaims` rather than here, because the debate room runs the
+   * same hook while the debate is still going. The chain from a claim to a list of neighbours is
+   * three serial requests, and run from here it is a second of tab strip arriving after the page
+   * did — the thing that made the tab flash into place. Run from the room, the answer is already in
+   * the cache by the time the pair get here.
    * ---------------------------------------------------------------------------------------------*/
 
-  /**
-   * geo-chat hands out dashed uuids where the graph stores bare hex, so the boundary is crossed once,
-   * here. Everything downstream is a graph question — the entity, the topic clause, the space it is
-   * scoped to — and converting per use is how one missed call becomes a silently empty list.
-   */
-  // Each field guarded on its own rather than on the claim existing. A summary can arrive without a
-  // space — and `uuidToHex` normalizes with `String.replace`, so a missing one throws rather than
-  // reading as absent.
-  const sourceClaim = sourceDebateQuery.data?.claim ?? null;
-  const relatedSourceClaimId = sourceClaim?.claim_entity_id ? uuidToHex(sourceClaim.claim_entity_id) : null;
-  const relatedSourceSpaceId = sourceClaim?.space_id ? uuidToHex(sourceClaim.space_id) : null;
-
-  /**
-   * Topics live on the graph entity rather than geo-chat's claim summary, and they are assigned *per
-   * space* — so the claim is hydrated with the debate's space, the same way the claim page hydrates
-   * it for the same purpose.
-   *
-   * `useClaimEntitiesByIds` was the obvious hook and is the wrong one: its projection selects
-   * relations with no space filter, so a topic assigned only in some other space would come back and
-   * pull in neighbours the claim's own Related gallery does not show.
-   */
-  const relatedSourceQuery = useQueryEntity({
-    id: relatedSourceClaimId ?? '',
-    spaceId: relatedSourceSpaceId ?? undefined,
-    enabled: relatedSourceClaimId !== null,
-  });
-
-  const relatedTopicIds = React.useMemo(() => {
-    const entity = relatedSourceQuery.entity;
-    if (!entity) return NO_RELATED_IDS;
-    return entity.relations
-      .filter(relation => relation.isDeleted !== true && idEquals(relation.type.id, TOPICS_PROPERTY_ID))
-      .map(relation => relation.toEntity.id);
-  }, [relatedSourceQuery.entity]);
-
-  /**
-   * The same clause the claim page's Related gallery runs, so the two surfaces cannot disagree about
-   * which claims are related to this one — and narrowed further to the Debate tag, because this tab
-   * asks "what should this pair argue next" rather than "where else can I go from here".
-   *
-   * Skipped with no topics rather than asked with an empty `in`, which matches no relation and would
-   * quietly return the space's entire claim list. Skipped too when the debated claim's own space
-   * cannot carry a published debate: every row here is drawn in that space, so there is nothing to
-   * ask for.
-   */
-  const relatedEnabled =
-    relatedSourceClaimId !== null &&
-    relatedSourceSpaceId !== null &&
-    relatedTopicIds.length > 0 &&
-    isSpaceDebatePublishable(relatedSourceSpaceId, publishableSpaceIds);
-
-  const relatedEntitiesQuery = useQueryEntities({
-    where: relatedClaimsWhere({
-      spaceId: relatedSourceSpaceId ?? '',
-      topicIds: relatedTopicIds,
-      requireTagId: DEBATE_TAG_ID,
-    }),
-    // Sized against what this page drops before the limit applies — the debated claim itself, which
-    // carries the topics the clause matches on, and any neighbour whose name has not indexed and so
-    // cannot be drawn. Slack rather than a second request: this tab does not page.
-    first: RELATED_CLAIMS_LIMIT + RELATED_DROPPED_ROW_SLACK,
-    // Without this, `useQueryEntities` answers from the local store before the first fetch resolves,
-    // and those ids fire the row lookups below a moment before the real answer replaces them.
-    deferUntilFetched: true,
-    prefetchNextPage: false,
-    orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: relatedEnabled,
-  });
-
-  /**
-   * The debated claim carries its own topics, so the graph returns it in its own related list — and,
-   * having just been debated, near the front of it. Dropped here rather than left to
-   * `excludedClaimIds`, because the count below decides whether the tab exists at all: leaving it in
-   * makes a claim with no neighbours look like a claim with one.
-   *
-   * Unnamed neighbours go for the same reason — `rowFromEntity` cannot draw them, and a missing name
-   * is knowable from this very query.
-   */
-  const relatedClaimIds = React.useMemo(
-    () =>
-      relatedEnabled && relatedSourceClaimId
-        ? relatedEntitiesQuery.entities
-            .filter(entity => Boolean(entity.name))
-            .map(entity => entity.id)
-            .filter(id => !idEquals(id, relatedSourceClaimId))
-            .slice(0, RELATED_CLAIMS_LIMIT)
-        : NO_RELATED_IDS,
-    [relatedEnabled, relatedEntitiesQuery.entities, relatedSourceClaimId]
-  );
+  const related = useRelatedDebateClaims({ claim: sourceDebateQuery.data?.claim });
+  const relatedSourceSpaceId = related.spaceId;
+  const relatedClaimIds = related.claimIds;
 
   const relatedEntitiesByIdQuery = useClaimEntitiesByIds(relatedClaimIds);
   const relatedClaimsQuery = useDebateRematchClaimsForIds(sessionId, relatedClaimIds);
 
-  // Every lookup in the chain, so the gates below cannot enumerate a different subset each — the
-  // mistake that let one gate pass while another was still waiting.
-  const relatedDiscoveryLookups: ReadonlyArray<{ isLoading: boolean; error: unknown }> = [
-    sourceDebateQuery,
-    relatedSourceQuery,
-    relatedEntitiesQuery,
-  ];
-  const relatedDiscoveryError = relatedDiscoveryLookups.find(lookup => lookup.error)?.error ?? null;
-  const relatedDiscoveryPending = relatedDiscoveryLookups.some(lookup => lookup.isLoading);
+  // The whole chain, enumerated once, so the gates below cannot each wait on a different subset of
+  // it — the mistake that let one gate pass while another was still waiting. The source debate is
+  // this page's own hop; the rest belongs to the hook.
+  const relatedDiscoveryError = sourceDebateQuery.error ?? related.error ?? null;
+  const relatedDiscoveryPending = sourceDebateQuery.isLoading || related.isLoading;
 
   /**
-   * Whether the tab exists at all.
+   * Whether it has rows.
    *
    * A discovery failure reads as "no related claims" rather than surfacing an error, the same way a
    * failed curator lookup leaves Recommended out of the Explore menu: this tab is an enhancement on
@@ -451,30 +348,42 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const hasRelated = relatedDiscoveryError === null && relatedClaimIds.length > 0;
 
   /**
-   * Whether that answer can be trusted yet — and so whether the landing tab is known.
+   * Whether it is still being counted. A failure decides it as surely as an answer does, so nothing
+   * still in flight is waited on past that point.
    *
-   * Until the chain lands, "no related claims" and "not yet" are the same observation, and the tab
-   * strip would name one landing place and then move the viewer to another. Only waited on when
-   * there is a source debate to wait for: without one this tab can never appear.
-   *
-   * A failure decides it as surely as an answer does, so nothing still in flight is waited on past
-   * that point.
+   * Nothing to discover reads as decided, without asking the session whether it came out of a
+   * debate: a session from a profile challenge disables the source-debate query, and no claim
+   * disables the two behind it, so there is nothing in flight to be undecided about. The gate on
+   * `source_debate_id` this used to carry was the same question asked twice.
    */
-  const relatedUndecided =
-    sessionQuery.isLoading ||
-    (Boolean(session?.source_debate_id) && relatedDiscoveryError === null && relatedDiscoveryPending);
+  const relatedPending = relatedDiscoveryError === null && relatedDiscoveryPending;
+
+  /**
+   * Whether the tab is offered — and it is offered while still being counted, not only once it has
+   * rows.
+   *
+   * This is the one place the tab deliberately gets ahead of what is known, and it is the lesser of
+   * two flickers. Withholding it until the count landed meant the strip rendered without Related and
+   * the pair started on the opponent's positions, then a moment later the tab appeared and moved
+   * them — on every rematch out of a debate, which is the common case. Holding the slot instead
+   * costs a tab that goes away when a debated claim turns out to have no neighbours left to argue,
+   * which is the rare one. Both are a reflow; only one of them happens most of the time.
+   *
+   * Cheap to hold because the room has usually already answered it — see `useRelatedDebateClaims`.
+   */
+  const relatedOffered = hasRelated || relatedPending;
 
   /**
    * Where the pair land, and it is not a fixed answer.
    *
-   * Related when this session came out of a debate that has neighbours to argue next — the
-   * continuation of what just happened is closer to what they came for than any catalogue. The
-   * opponent's positions otherwise, which is where GEO-2861 put it and remains right when there is no
-   * debate behind the session.
+   * Related when this session came out of a debate with neighbours to argue next — the continuation
+   * of what just happened is closer to what they came for than any catalogue. The opponent's
+   * positions otherwise, which is where GEO-2861 put it and remains right when there is no debate
+   * behind the session.
    *
    * Per pair, not per viewer: a choice made about the last opponent is not a choice about this one.
    */
-  const tab: PickerTab = chosenTab?.sessionId === sessionId ? chosenTab.tab : hasRelated ? 'related' : 'opponent';
+  const tab: PickerTab = chosenTab?.sessionId === sessionId ? chosenTab.tab : relatedOffered ? 'related' : 'opponent';
 
   // GEO-2683. Fetched only when Featured is the source on screen — it is one option in a menu, and
   // the other two answer for themselves.
@@ -1067,7 +976,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    *
    * Held while its lookups settle so a refetch does not blank a list that is still right.
    */
-  const relatedClaimsSettling = relatedUndecided || relatedEntitiesByIdQuery.isLoading || relatedClaimsQuery.isLoading;
+  const relatedClaimsSettling =
+    sessionQuery.isLoading || relatedPending || relatedEntitiesByIdQuery.isLoading || relatedClaimsQuery.isLoading;
   const relatedClaimsNow = React.useMemo(
     () =>
       relatedClaimsSettling
@@ -1699,6 +1609,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 gives those tabs somewhere to go, and `overscroll-x-contain` stops a swipe that
                 reaches the end from chaining into the browser's back gesture. */}
             <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-5 overflow-x-auto overscroll-x-contain">
+              {/* First, because it is where the pair land: a tab strip that opens on its second
+                  item reads as though something moved. Rendered while the count is still out too —
+                  see `relatedOffered` for why the slot is held rather than filled late. */}
+              {relatedOffered ? (
+                <TabButton active={tab === 'related'} onClick={() => setTab('related')}>
+                  Related
+                </TabButton>
+              ) : null}
               <TabButton active={tab === 'opponent'} onClick={() => setTab('opponent')}>
                 <span className="max-w-[10rem] truncate">{firstNamePossessive(remoteName)} positions</span>
                 <span
@@ -1717,16 +1635,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   )}
                 </span>
               </TabButton>
-              {/* Only while it has something in it, which is the same condition that lands the pair
-                  here: an empty Related tab would be a place to go that says nothing, and the tab
-                  strip is not where a viewer should learn that a lookup came back empty. Withheld
-                  while discovery is still out for the same reason the landing tab waits on it —
-                  appearing a moment late is better than appearing and then vanishing. */}
-              {hasRelated && !relatedUndecided ? (
-                <TabButton active={tab === 'related'} onClick={() => setTab('related')}>
-                  Related
-                </TabButton>
-              ) : null}
               {/* Named for the hub's browse tab: the wider catalogue you reach for once neither the
                   opponent's positions nor the debate you just had is what you want. */}
               <TabButton active={tab === 'explore'} onClick={() => setTab('explore')}>

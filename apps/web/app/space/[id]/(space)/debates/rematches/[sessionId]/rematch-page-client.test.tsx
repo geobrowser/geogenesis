@@ -256,7 +256,15 @@ vi.mock('~/core/debates/hooks', () => ({
   // The source debate, and the head of the Related tab's discovery chain. Carries the claim's space
   // as the real payload does: topics are assigned per space, so the space is what the claim is
   // hydrated with.
-  useDebate: () => ({ data: mocks.sourceDebate, isLoading: mocks.sourceDebateLoading, error: null }),
+  //
+  // Answerless and idle when disabled, as react-query is: a session with no debate behind it passes
+  // `enabled: false` here, and a double that answered anyway would run a whole discovery chain the
+  // page never runs — the states that exist because there is nothing to discover would be untestable.
+  useDebate: (_debateId: string, enabled: boolean) => ({
+    data: enabled ? mocks.sourceDebate : undefined,
+    isLoading: enabled && mocks.sourceDebateLoading,
+    error: null,
+  }),
   useDebateClaimsBySpaces: (groups: Array<{ spaceId: string; claimIds: string[] }>) => {
     mocks.perSpaceReadinessGroups.push(groups);
     return {
@@ -4118,11 +4126,34 @@ describe('the Related tab', () => {
   });
 
   /**
-   * Three round trips stand between arriving and knowing whether Related exists — the source debate,
-   * that claim's topics, and the topic query. Until they land, "no neighbours" and "not yet" are the
-   * same observation, so the strip must not name a landing place it will move away from.
+   * Discovery is three serial requests, and the tab does not wait for them.
+   *
+   * It used to: the strip rendered without Related, the pair started on the opponent's positions,
+   * and a moment later the tab appeared and moved them — on every rematch out of a debate. Holding
+   * the slot instead costs a tab that goes away when the claim turns out to have no neighbours,
+   * which is the rarer case. The room warms the same query while the debate runs, so this window is
+   * usually not reached at all.
    */
-  it('withholds the tab while discovery is still out', async () => {
+  it('holds the tab’s place while the count is still out', async () => {
+    debateWithRelated();
+    mocks.relatedEntitiesLoading = true;
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    const related = await screen.findByRole('button', { name: 'Related' });
+    // And the pair are on it, rather than being moved onto it once the count lands.
+    expect(related).toHaveAttribute('aria-selected', 'true');
+  });
+
+  /**
+   * The slot is held for a session still counting its neighbours, not for every session — and what
+   * separates them is that a session from a profile challenge has no debated claim, so discovery
+   * never starts and there is nothing to hold a place for. Asserted because the reservation is the
+   * one place this tab gets ahead of what is known, and getting ahead of it here would mean a tab
+   * appearing and vanishing on a session that could never have had one.
+   */
+  it('holds no place for a session with no debate behind it', async () => {
+    mocks.session = session({ source_debate_id: null });
     debateWithRelated();
     mocks.relatedEntitiesLoading = true;
 
@@ -4130,6 +4161,25 @@ describe('the Related tab', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: /positions/ })).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+  });
+
+  // Related is where the pair land, and a strip that opens on its second item reads as though
+  // something moved.
+  it('puts Related ahead of the opponent’s positions', async () => {
+    debateWithRelated();
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByRole('button', { name: 'Related' });
+
+    // The strip's tabs are the buttons carrying a selected state; Leave is the only other button
+    // in the header and carries none.
+    const tabs = screen
+      .getAllByRole('button')
+      .filter(button => button.hasAttribute('aria-selected'))
+      .map(button => button.textContent ?? '');
+    expect(tabs[0]).toBe('Related');
+    expect(tabs[1]).toMatch(/positions/);
+    expect(tabs[2]).toBe('Explore');
   });
 
   /**
