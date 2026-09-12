@@ -25,7 +25,13 @@ const DEBATES_PATHNAME = '/explore';
  * `DebatesHubTab` show up here, instead of letting it silently become the one tab no link can
  * reach — `readonly DebatesHubTab[]` type-checks each entry but never that they are all present.
  */
-const TABS: Record<DebatesHubTab, true> = { lobby: true, people: true, explore: true, requests: true };
+const TABS: Record<DebatesHubTab, true> = {
+  lobby: true,
+  people: true,
+  explore: true,
+  positions: true,
+  requests: true,
+};
 
 /**
  * The names the tabs used before GEO-2861, kept resolvable.

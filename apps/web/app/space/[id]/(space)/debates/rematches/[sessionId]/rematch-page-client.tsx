@@ -40,6 +40,8 @@ import {
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
+import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
+import { FilterSwitch } from '~/core/debates/matchmaking/filter-switch';
 import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
 import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
@@ -55,6 +57,7 @@ import {
 } from '~/core/debates/matchmaking/topic-facets';
 import { useDebouncedSearch } from '~/core/debates/matchmaking/use-debounced-search';
 import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-selection';
+import { useNarrowedDefault } from '~/core/debates/matchmaking/use-narrowed-default';
 import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
@@ -91,7 +94,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { RematchVoicePill } from './rematch-voice';
-import { rematchMatchesOnlyAtom } from '~/atoms';
+import { rematchHideMyPositionsAtom, rematchMatchesOnlyAtom } from '~/atoms';
 
 const NO_PARTICIPANTS: DebateRematchParticipant[] = [];
 
@@ -203,6 +206,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const [chosenTab, setChosenTab] = React.useState<{ sessionId: string; tab: PickerTab } | null>(null);
   const [matchesOnly, setMatchesOnly] = useAtom(rematchMatchesOnlyAtom);
+  const [hideMyPositions, setHideMyPositions] = useAtom(rematchHideMyPositionsAtom);
   // Left unset until the viewer picks one: Recommended is the best default when a curator has put
   // something together for this pairing, and it doesn't exist otherwise. Deciding in state would
   // fix the default before that lookup settles.
@@ -1111,7 +1115,47 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // Only on the opponent's tab: Explore is the wider catalogue by definition, and a claim there
   // that neither of you has answered is the normal case rather than one to hide.
-  const matchesOnlyHere = matchesOnly && tab === 'opponent';
+  /**
+   * "Matches only" is on by default, and steps back rather than opening onto nothing.
+   *
+   * A rematch needs both of you holding opposite sides of the same claim, which a returning pair
+   * often does not have yet — so the setting most people want is also the one most likely to have
+   * nothing behind it. `useNarrowedDefault` keeps the preference and decides only whether it
+   * applies on arrival; the switch reports what actually happened, and a viewer who presses it
+   * outranks the guess.
+   *
+   * Settled and without an error, both. Mid-load every list is empty, and react-query drops
+   * `isLoading` on failure — so an outage reads from here exactly like a pair with nothing to go
+   * again on, and stepping back on it would swap away the list that carries the retry.
+   */
+  // The opponent tab's own three sources rather than `tabError`, which is declared below and is a
+  // composite over every tab's. Same set, asked here because this runs before it.
+  const opponentTabError = sessionQuery.error ?? positions.error ?? opponentEntitiesQuery.error;
+  const opponentTabSettled = tab === 'opponent' && !positions.isLoading && !opponentClaimsSettling && !opponentTabError;
+  const noRematchAtAll = opponentTabSettled && !claims.some(isRematchable);
+  const {
+    narrowed: matchesNarrowed,
+    steppedBack: steppedBackFromMatches,
+    rearm: rearmMatchesDefault,
+  } = useNarrowedDefault(matchesOnly, noRematchAtAll);
+
+  const matchesOnlyHere = matchesNarrowed && tab === 'opponent';
+
+  /**
+   * The last rung: no rematch to be had, and no positions of theirs to make one out of either.
+   *
+   * There is nothing on this tab in that state, and Explore is the half of the flow that always has
+   * something — it is the corpus rather than this pair. Only on the automatic path, because a
+   * viewer who turned the switch off themselves and found an empty tab asked a question and got an
+   * answer; moving them would be answering a different one.
+   */
+  const nothingOnTheirTab = opponentTabSettled && claims.length === 0;
+  const leftForExplore = React.useRef(false);
+  React.useEffect(() => {
+    if (!steppedBackFromMatches || !nothingOnTheirTab || leftForExplore.current) return;
+    leftForExplore.current = true;
+    setTab('explore');
+  }, [nothingOnTheirTab, setTab, steppedBackFromMatches]);
 
   /**
    * The four dimensions the client-side lists narrow by, each testable on its own.
@@ -1231,7 +1275,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     topicsByClaimId,
   ]);
 
-  const visibleClaims = React.useMemo(
+  const narrowedClaims = React.useMemo(
     () =>
       graphFiltered
         ? claims
@@ -1240,6 +1284,49 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           ),
     [claims, graphFiltered, passesMatchesOnly, passesSearch, passesSpace, passesTopics]
   );
+
+  /**
+   * "Hide my positions" (GEO-2863): the viewer's answered backlog, out of the way.
+   *
+   * A toggle here where the hub collapses outright, because the same fact means opposite things on
+   * the two surfaces. The hub hides an answered claim because browsing is about finding something
+   * new and a claim you have taken a side on is one you are done with. Here `debateRequestGate`
+   * refuses a request from someone holding no position — "with no position at all there is nothing
+   * to agree about" — so an answered claim is precisely the one you can act on, and hiding it by
+   * default would empty the page of everything it exists to do. It would also strand claims: one
+   * the viewer answered and the opponent did not is on no other tab in the flow.
+   *
+   * What made it worth offering anyway is that a reader with a long history of positions has to
+   * scroll past all of them to reach a claim they have not seen, which is the opposite failure and
+   * the one people actually reported. So it is theirs to switch on, off by default, and remembered.
+   *
+   * Never on "My positions", which is that backlog by definition and would be left permanently
+   * empty — a broken tab rather than a filter. The switch is not drawn there either, so the state
+   * cannot be set from a tab where it does nothing.
+   */
+  const hidesAnswered = tab === 'explore' && source !== 'mine' && hideMyPositions;
+
+  const answeredStateOf = React.useCallback(
+    (claim: DebateRematchClaim): AnsweredState => {
+      const position = chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id);
+      // `undefined` is "geo-chat holds no row for this claim in this space", which over a tag
+      // catalogue is the ordinary shape of a claim nobody has answered rather than a lookup still
+      // running — and either way it is not the viewer's position, so it is never a reason to hide.
+      if (position === undefined) return 'unknown';
+      return position === null ? 'unanswered' : 'answered';
+    },
+    [chatPositionFor]
+  );
+
+  // Kept for good rather than folded after a moment — see `holdMs`. A claim answered here is one
+  // the viewer is a press away from requesting a debate on, so the switch hides the backlog they
+  // arrived with and never the position they just took.
+  const visibleClaims = useCollapseAnswered(narrowedClaims, {
+    keyOf: claim => `${claim.claim.space_id}:${claim.claim.claim_entity_id}`,
+    answeredStateOf,
+    enabled: hidesAnswered,
+    holdMs: null,
+  });
 
   const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
 
@@ -1555,8 +1642,23 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               // a menu offering three others there would read as filtering a list it can't reach.
               // The switch belongs to the opponent's tab, where it means something; Explore is the
               // wider catalogue and has its source picker here instead.
+              // One switch per tab, because each tab has exactly one setting worth a switch.
+              // "Matches only" belongs to the opponent's tab, where a match is the thing being
+              // looked for; "Hide my positions" belongs to Explore, where the backlog is what gets
+              // in the way. Neither is drawn on "My positions", which is that backlog itself.
               trailing={
-                tab === 'opponent' ? <MatchesOnlySwitch checked={matchesOnly} onChange={setMatchesOnly} /> : null
+                tab === 'opponent' ? (
+                  <MatchesOnlySwitch
+                    // The effective value, not the stored one — see `useNarrowedDefault`.
+                    checked={matchesNarrowed}
+                    onChange={next => {
+                      rearmMatchesDefault();
+                      setMatchesOnly(next);
+                    }}
+                  />
+                ) : source === 'mine' ? null : (
+                  <FilterSwitch label="Hide my positions" checked={hideMyPositions} onChange={setHideMyPositions} />
+                )
               }
               leading={
                 tab === 'explore' ? (

@@ -126,6 +126,7 @@ const mocks = vi.hoisted(() => ({
   /** Both participants' graph positions. */
   positions: [] as ParticipantPosition[],
   positionsLoading: false,
+  positionsError: null as unknown,
   positionParticipants: [] as string[][],
   recommendedSections: [] as Array<{ id: string; name: string; claimIds: string[] }>,
   recommendedEntities: [] as Array<Record<string, unknown>>,
@@ -462,7 +463,7 @@ vi.mock('~/core/debates/participant-positions', async importOriginal => {
       return {
         byClaim: actual.groupParticipantPositions(mocks.positions),
         isLoading: mocks.positionsLoading,
-        error: null,
+        error: mocks.positionsError,
       };
     },
   };
@@ -693,6 +694,13 @@ function mutation(mutate = mocks.mutate) {
 
 beforeEach(() => {
   localStorage.clear();
+  // Both standing preferences off, so every list below is the whole of what its fixture put in it.
+  //
+  // They ship *on* (GEO-2863), and the cases that are about the defaults set them back. Every other
+  // case here is about something else — search, topics, sections, allowed spaces — and one that has
+  // to reason about which of its own rows a default removed is a case about two things.
+  localStorage.setItem('rematchMatchesOnly', 'false');
+  localStorage.setItem('rematchHideMyPositions', 'false');
 
   clearDebateReturnDestination();
   mocks.replace.mockReset();
@@ -749,6 +757,7 @@ beforeEach(() => {
     position('profile-remote', CLAIM_SHARED, SPACE_1, false),
   ];
   mocks.positionsLoading = false;
+  mocks.positionsError = null;
   mocks.positionParticipants.length = 0;
   mocks.recommendedSections = [];
   mocks.recommendedEntities = [];
@@ -1255,8 +1264,17 @@ describe('DebateRematchPageClient', () => {
 
       expect(topicMenu.parentElement).toBe(spaceMenu.parentElement);
       expect(topicMenu.className).not.toContain('ml-auto');
-      expect(toggle.closest('.ml-auto')).not.toBeNull();
       expect(topicMenu.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+      // The far end only where the row is wide enough to have one. Narrow, the switch wraps to a
+      // line of its own, and pinned right it read as a stray control rather than as the end of the
+      // filter row — so it goes full width and left-aligned there instead.
+      //
+      // A container query and not a viewport one, which is the part worth pinning: the two narrow
+      // cases are not both small screens. The debates side panel is ~400px wide on any desktop.
+      const end = toggle.parentElement;
+      expect(end?.className).toContain('@lg:ml-auto');
+      expect(end?.className).toContain('w-full');
     });
 
     // A fixed order, so a source that appears doesn't reshuffle the ones already in the menu.
@@ -1515,8 +1533,10 @@ describe('DebateRematchPageClient', () => {
       await chooseSource('My positions');
 
       expect(await screen.findByText('Only mine')).toBeInTheDocument();
-      // A claim nobody has answered belongs to the corpus, not to this list.
-      expect(screen.queryByText('A newly published claim')).toBeNull();
+      // A claim nobody has answered belongs to the corpus, not to this list. Waited for rather than
+      // asserted outright: the previous source's cards fade out on a switch, so one can still be on
+      // screen for a couple of frames after the new list has drawn.
+      await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
     });
 
     /**
@@ -3956,3 +3976,219 @@ function publishedEntity(id = CLAIM_MORE, name = 'A newly published claim') {
 function claimSummary(id: string, claim: string) {
   return { id, space_id: SPACE_1, claim_entity_id: id, claim, description: null };
 }
+
+/**
+ * "Hide my positions" (GEO-2863).
+ *
+ * The hub collapses answered claims outright; this page offers it as a switch, because here the
+ * same fact means the opposite. `debateRequestGate` refuses a request from someone holding no
+ * position, so an answered claim is the one this page can act on — hiding them by default would
+ * empty it of everything it exists for, and strand any claim the viewer answered and the opponent
+ * did not, which is on no other tab in the flow.
+ *
+ * What made it worth offering is the complaint behind it: a reader with a long history of positions
+ * scrolls past all of them to reach anything new.
+ */
+describe('Hide my positions', () => {
+  const SWITCH = { name: 'Hide my positions' } as const;
+
+  /** The row the browse list carries for a claim, with the viewer's side on it or without. */
+  function browsedClaim(viewerPosition: boolean | null) {
+    return {
+      ...sharedClaim(),
+      claim: {
+        id: CLAIM_MORE,
+        space_id: SPACE_2,
+        claim_entity_id: CLAIM_MORE,
+        claim: 'A newly published claim',
+        description: null,
+      },
+      // Emptied so the viewer's side comes from `viewer_position` alone, the way geo-chat's own row
+      // carries it — `sharedClaim` fills this in for both participants.
+      participants: [],
+      viewer_position: viewerPosition,
+    };
+  }
+
+  // The outer fixture turns both standing preferences off so the rest of the suite sees whole
+  // lists; these cases are the ones about the shipped default, so they put it back.
+  beforeEach(() => {
+    localStorage.setItem('rematchHideMyPositions', 'true');
+  });
+
+  it('is on by default', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('brings the answered claims back when it is turned off', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('switch', SWITCH));
+
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+  });
+
+  it('drops the claims the viewer has already answered', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    // Kept, and not by luck: geo-chat holds no row for this one, which is what a claim nobody has
+    // answered looks like. A switch that read that as an answer would hide the whole corpus.
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  /**
+   * The half that makes the switch safe to offer.
+   *
+   * Answering here is the first move of requesting a debate rather than the end of an interaction,
+   * so the row the viewer has just acted on must stay — folding it away would take the "Request
+   * debate" button they were reaching for with it.
+   *
+   * That it stays *for good* rather than for a moment is `useCollapseAnswered`'s own suite, which
+   * owns the clock. This asserts the half that is this page's: the row does not leave on the answer.
+   */
+  it('keeps a position the viewer takes while it is on', async () => {
+    mocks.claims = [sharedClaim(), browsedClaim(null)];
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+
+    mocks.claims = [sharedClaim(), browsedClaim(true)];
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  // It is that backlog by definition, so the switch could only ever empty it — a broken tab rather
+  // than a filter. Not drawn rather than drawn and ignored, so the state cannot be set from a tab
+  // where it does nothing.
+  it('is not offered on My positions', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showExplore();
+    await chooseSource('My positions');
+
+    expect(screen.queryByRole('switch', SWITCH)).toBeNull();
+  });
+
+  // One switch per tab. The opponent's tab has its own, and everything on it is a claim they
+  // answered — hiding the ones the viewer answered too would take the matches away.
+  it('is not offered on the opponent tab, which has its own switch', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(screen.queryByRole('switch', SWITCH)).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Matches only' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * "Matches only" ships on, and steps back rather than opening onto nothing.
+ *
+ * A rematch needs both of you holding opposite sides of the same claim, which a returning pair
+ * often does not have yet — so the setting most people want is also the one most likely to have
+ * nothing behind it. The preference stands; only whether it applies on arrival is decided here.
+ */
+describe('the matches-only default', () => {
+  const OPPONENT_ONLY = '019fedb7-5b96-7e83-9f66-7bc2ad4f9953';
+  const switchNode = () => screen.getByRole('switch', { name: 'Matches only' });
+
+  beforeEach(() => {
+    localStorage.setItem('rematchMatchesOnly', 'true');
+  });
+
+  /** One position of theirs and none of the viewer's: nothing to go again on, something to show. */
+  function nothingToRematch() {
+    mocks.savedClaims = [];
+    mocks.claims = [];
+    mocks.entities = [{ ...sharedEntity(), id: OPPONENT_ONLY, name: 'A claim only Salina answered' }];
+    mocks.positions = [position('profile-remote', OPPONENT_ONLY, SPACE_1, true)];
+  }
+
+  it('opens on the matches, which is what the page is for', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+    expect(switchNode()).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('steps back to their positions when there is no rematch to be had', async () => {
+    nothingToRematch();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('A claim only Salina answered')).toBeInTheDocument();
+  });
+
+  // Or the switch describes something other than the list beneath it, and pressing it appears to do
+  // nothing — it would be setting the preference to the value it already held.
+  it('says so on the switch, and lets the viewer ask for the empty list anyway', async () => {
+    nothingToRematch();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('A claim only Salina answered');
+
+    expect(switchNode()).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(switchNode());
+
+    await waitFor(() => expect(screen.queryByText('A claim only Salina answered')).toBeNull());
+    expect(switchNode()).toHaveAttribute('aria-checked', 'true');
+  });
+
+  /**
+   * One quiet evening is not a change of mind. Writing the step back would make it one, and over
+   * enough evenings would walk every viewer off the setting they chose.
+   */
+  it('leaves the stored preference alone when it steps back', async () => {
+    nothingToRematch();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('A claim only Salina answered');
+
+    expect(localStorage.getItem('rematchMatchesOnly')).toBe('true');
+  });
+
+  /**
+   * A failed lookup is not an answer about this pair.
+   *
+   * react-query drops `isLoading` on failure, so an outage reads from here exactly like two people
+   * with nothing to go again on. Stepping back on it would swap away the list that carries the
+   * retry, for a list that cannot explain why it is the one on screen — and the same outage would
+   * then walk the viewer to Explore on the rung below.
+   */
+  it('holds the matches list when the lookup failed rather than answered', async () => {
+    nothingToRematch();
+    mocks.positionsError = new Error('positions exploded');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(switchNode()).toHaveAttribute('aria-checked', 'true'));
+    expect(screen.queryByText('A claim only Salina answered')).toBeNull();
+  });
+
+  it('does not walk the viewer to Explore on a failed lookup either', async () => {
+    mocks.savedClaims = [];
+    mocks.claims = [];
+    mocks.entities = [];
+    mocks.positions = [];
+    mocks.positionsError = new Error('positions exploded');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(switchNode()).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'All claims' })).toBeNull();
+  });
+
+  // The last rung. No rematch to be had and no positions of theirs to make one out of, so there is
+  // no version of this tab with anything on it — and Explore is the corpus rather than this pair.
+  it('moves on to Explore when they have no positions either', async () => {
+    mocks.savedClaims = [];
+    mocks.claims = [];
+    mocks.entities = [];
+    mocks.positions = [];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: 'All claims' })).toBeInTheDocument();
+  });
+});
