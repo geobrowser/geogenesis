@@ -12,14 +12,14 @@ function row(id: string, state: AnsweredState): Row {
   return { id, state };
 }
 
-function render(initial: Row[], enabled = true) {
+function render(initial: Row[], enabled = true, holdMs: number | null = HOLD) {
   return renderHook(
     ({ rows }: { rows: Row[] }) =>
       useCollapseAnswered(rows, {
         keyOf: candidate => candidate.id,
         answeredStateOf: candidate => candidate.state,
         enabled,
-        holdMs: HOLD,
+        holdMs,
       }),
     { initialProps: { rows: initial } }
   );
@@ -118,6 +118,42 @@ describe('useCollapseAnswered', () => {
 
   // A list that is *about* the viewer's positions collapses to nothing, which is not a filter but a
   // broken tab.
+  /**
+   * The debate-again flow's half of the same switch.
+   *
+   * There, answering is the first half of an action rather than the end of one — the claim you just
+   * took a side on is the one you are about to request a debate on — so the backlog goes and the
+   * answer you just gave stays. Same rule, same hook, one value different.
+   */
+  describe('with an indefinite hold', () => {
+    it('keeps a row answered under the viewer, however long they stay', () => {
+      const { result, rerender } = render([row('a', 'unanswered')], true, null);
+
+      rerender({ rows: [row('a', 'answered')] });
+      act(() => void vi.advanceTimersByTime(HOLD * 60));
+
+      expect(ids(result.current)).toEqual(['a']);
+    });
+
+    // The half that still has to go, or the switch does nothing for the viewer who asked for it.
+    it('still drops the backlog they arrived with', () => {
+      const { result } = render([row('a', 'answered'), row('b', 'unanswered')], true, null);
+
+      expect(ids(result.current)).toEqual(['b']);
+    });
+
+    // A kept row is kept because the viewer acted on it, not because the hook stopped watching: take
+    // the answer away and it is an ordinary unanswered row again.
+    it('goes on tracking a row it is keeping', () => {
+      const { result, rerender } = render([row('a', 'unanswered')], true, null);
+      rerender({ rows: [row('a', 'answered')] });
+
+      rerender({ rows: [row('a', 'unanswered')] });
+
+      expect(ids(result.current)).toEqual(['a']);
+    });
+  });
+
   it('does nothing at all when it is off', () => {
     const { result } = render([row('a', 'answered'), row('b', 'unanswered')], false);
 

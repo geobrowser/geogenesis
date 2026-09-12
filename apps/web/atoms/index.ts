@@ -184,6 +184,17 @@ export const debatesHubMatchesOnlyAtom = atomWithStorage('debatesHubMatchesOnly'
  */
 export const rematchMatchesOnlyAtom = atomWithStorage('rematchMatchesOnly', false);
 
+/**
+ * "Hide my positions" on the debate-again flow's Explore tab (GEO-2863).
+ *
+ * Stored rather than session-scoped, and off by default. Off because the claims it hides are the
+ * ones this page can act on — `debateRequestGate` refuses a request from someone holding no
+ * position — so a viewer who arrives here to request a debate must not find that list emptied for
+ * them. Stored because the complaint it answers is chronic rather than momentary: a reader with a
+ * long backlog of positions is hunting for new claims across visits, not for one afternoon.
+ */
+export const rematchHideMyPositionsAtom = atomWithStorage('rematchHideMyPositions', false);
+
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 
 // Set to `Date.now()` whenever a ranking "Create new" entity is published. The

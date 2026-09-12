@@ -33,8 +33,20 @@ type CollapseOptions<T> = {
    * permanently empty, which is not a filter but a broken tab.
    */
   enabled: boolean;
-  /** Exposed for tests; production has no reason to pass it. */
-  holdMs?: number;
+  /**
+   * How long a row answered under the viewer stays before folding away, or `null` to keep it for
+   * good.
+   *
+   * `null` is the debate-again flow. Answering a claim there is the first half of an action rather
+   * than the end of one — `debateRequestGate` refuses a request from someone holding no position,
+   * so the claim you have just answered is the one you are about to press "Request debate" on.
+   * Folding it away at any delay takes that button with it. What the toggle there hides is the
+   * backlog the viewer arrived with, which is the whole of the complaint it answers.
+   *
+   * A number is the hub, where answering *is* the action and the wait is only long enough for the
+   * press to land before the row leaves. Tests pass their own.
+   */
+  holdMs?: number | null;
 };
 
 /**
@@ -46,6 +58,10 @@ type CollapseOptions<T> = {
  * for {@link ANSWERED_COLLAPSE_HOLD_MS} and then leaves — which is what gives `AnimatePresence`
  * something to animate rather than a list that silently has one fewer row.
  *
+ * That distinction is also what lets one hook serve two surfaces that want opposite things from an
+ * answer. Both hide the backlog the viewer arrived with; they differ only in what happens to a row
+ * answered under them, which is `holdMs` — a moment for the hub, forever for the debate-again flow.
+ *
  * Bookkeeping runs in an effect rather than during render, and that ordering is the point: on the
  * render where a row first appears the effect has not seen it, so it counts as never-seen and an
  * answered one is dropped straight away. Only a row recorded by an earlier commit can hold.
@@ -54,7 +70,9 @@ export function useCollapseAnswered<T>(
   rows: T[],
   { keyOf, answeredStateOf, enabled, holdMs }: CollapseOptions<T>
 ): T[] {
-  const hold = holdMs ?? ANSWERED_COLLAPSE_HOLD_MS;
+  // Not `??`: `null` is a meaningful value here — hold forever — and would otherwise fall through
+  // to the default and fold the row away after a second.
+  const hold = holdMs === undefined ? ANSWERED_COLLAPSE_HOLD_MS : holdMs;
   // Rows this hook has seen unanswered, and rows whose hold has already run out. Refs rather than
   // state: neither changes what is on screen on its own — `holding` below does that — and a render
   // per bookkeeping write would be a render per row.
@@ -88,18 +106,23 @@ export function useCollapseAnswered<T>(
       // The timer lives in a ref rather than in this effect's cleanup. The effect re-runs on every
       // render, and a cleanup that cancelled the pending fold would restart the hold each time —
       // which, with a list that refetches, is a row that never leaves.
-      timers.current.set(
-        key,
-        setTimeout(() => {
-          timers.current.delete(key);
-          foldedOut.current.add(key);
-          setHolding(current => {
-            const next = new Set(current);
-            next.delete(key);
-            return next;
-          });
-        }, hold)
-      );
+      //
+      // No timer at all when the hold is indefinite: the key goes into `holding` below and nothing
+      // ever takes it out, which is exactly "kept for good".
+      if (hold !== null) {
+        timers.current.set(
+          key,
+          setTimeout(() => {
+            timers.current.delete(key);
+            foldedOut.current.add(key);
+            setHolding(current => {
+              const next = new Set(current);
+              next.delete(key);
+              return next;
+            });
+          }, hold)
+        );
+      }
       // Same set back where the key is already in it: a fresh `Set` every render is a fresh
       // identity, and this effect runs on every render.
       setHolding(current => (current.has(key) ? current : new Set(current).add(key)));

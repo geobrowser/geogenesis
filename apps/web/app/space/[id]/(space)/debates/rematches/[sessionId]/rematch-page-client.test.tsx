@@ -3958,3 +3958,101 @@ function publishedEntity(id = CLAIM_MORE, name = 'A newly published claim') {
 function claimSummary(id: string, claim: string) {
   return { id, space_id: SPACE_1, claim_entity_id: id, claim, description: null };
 }
+
+/**
+ * "Hide my positions" (GEO-2863).
+ *
+ * The hub collapses answered claims outright; this page offers it as a switch, because here the
+ * same fact means the opposite. `debateRequestGate` refuses a request from someone holding no
+ * position, so an answered claim is the one this page can act on — hiding them by default would
+ * empty it of everything it exists for, and strand any claim the viewer answered and the opponent
+ * did not, which is on no other tab in the flow.
+ *
+ * What made it worth offering is the complaint behind it: a reader with a long history of positions
+ * scrolls past all of them to reach anything new.
+ */
+describe('Hide my positions', () => {
+  const SWITCH = { name: 'Hide my positions' } as const;
+
+  /** The row the browse list carries for a claim, with the viewer's side on it or without. */
+  function browsedClaim(viewerPosition: boolean | null) {
+    return {
+      ...sharedClaim(),
+      claim: {
+        id: CLAIM_MORE,
+        space_id: SPACE_2,
+        claim_entity_id: CLAIM_MORE,
+        claim: 'A newly published claim',
+        description: null,
+      },
+      // Emptied so the viewer's side comes from `viewer_position` alone, the way geo-chat's own row
+      // carries it — `sharedClaim` fills this in for both participants.
+      participants: [],
+      viewer_position: viewerPosition,
+    };
+  }
+
+  it('is off until the viewer asks for it', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+  });
+
+  it('drops the claims the viewer has already answered', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('switch', SWITCH));
+
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    // Kept, and not by luck: geo-chat holds no row for this one, which is what a claim nobody has
+    // answered looks like. A switch that read that as an answer would hide the whole corpus.
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  /**
+   * The half that makes the switch safe to offer.
+   *
+   * Answering here is the first move of requesting a debate rather than the end of an interaction,
+   * so the row the viewer has just acted on must stay — folding it away would take the "Request
+   * debate" button they were reaching for with it.
+   *
+   * That it stays *for good* rather than for a moment is `useCollapseAnswered`'s own suite, which
+   * owns the clock. This asserts the half that is this page's: the row does not leave on the answer.
+   */
+  it('keeps a position the viewer takes while it is on', async () => {
+    mocks.claims = [sharedClaim(), browsedClaim(null)];
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    fireEvent.click(screen.getByRole('switch', SWITCH));
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+
+    mocks.claims = [sharedClaim(), browsedClaim(true)];
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  // It is that backlog by definition, so the switch could only ever empty it — a broken tab rather
+  // than a filter. Not drawn rather than drawn and ignored, so the state cannot be set from a tab
+  // where it does nothing.
+  it('is not offered on My positions', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showExplore();
+    await chooseSource('My positions');
+
+    expect(screen.queryByRole('switch', SWITCH)).toBeNull();
+  });
+
+  // One switch per tab. The opponent's tab has its own, and everything on it is a claim they
+  // answered — hiding the ones the viewer answered too would take the matches away.
+  it('is not offered on the opponent tab, which has its own switch', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(screen.queryByRole('switch', SWITCH)).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Matches only' })).toBeInTheDocument();
+  });
+});
