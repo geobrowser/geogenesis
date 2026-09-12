@@ -39,6 +39,44 @@ export function RecordingCircleButton({
   );
 }
 
+/**
+ * A mic or camera toggle that sits over a video tile, as the intro screen has them.
+ *
+ * `enabled` is styled as the resting state and `off` as the exceptional one — red-03 behind a
+ * red-01 glyph — because the intro screen will not let you press ready while either is off, so
+ * "off" is a thing to undo rather than a setting.
+ */
+export function DebateTileToggleButton({
+  ariaLabel,
+  enabled,
+  onClick,
+  disabled,
+  children,
+}: {
+  ariaLabel: string;
+  enabled: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      aria-pressed={!enabled}
+      title={ariaLabel}
+      onClick={onClick}
+      disabled={disabled}
+      className={cx(
+        'grid size-10 place-items-center rounded-full shadow-light transition disabled:opacity-50',
+        enabled ? 'bg-text text-white hover:bg-text/85' : 'bg-red-03 text-red-01 hover:bg-red-03/85'
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function LeaveIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">

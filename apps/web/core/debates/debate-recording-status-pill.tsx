@@ -11,36 +11,36 @@ import cx from 'classnames';
  * Both states are shown deliberately: an absent indicator is ambiguous between "not recording"
  * and "failed to render", so the neutral state is the assurance.
  *
- * `fixed`, because both screens are scroll containers and an `absolute` child scrolls out of view
- * with the content.
+ * Sized and coloured to sit inside a video tile — it is rendered in the local tile's
+ * `recordingStatus` slot on both screens, the one corner neither screen spends on something else.
+ * It used to be `fixed` to the top of the viewport, which put it nowhere near the thing it
+ * describes and, because both screens centre their content vertically, left it floating alone
+ * above the layout. On the tile it also reads as a statement about *your* camera, which is exactly
+ * what it is: this is driven by the local `MediaRecorder`, not by the debate's status.
  *
- * Rendered inside each screen rather than once above both: the screens are `aria-modal`, so a
- * sibling can be pruned from the accessibility tree entirely. The cost is that the live region
- * remounts at the swap and the transition goes unannounced; a single persistent dialog wrapper
- * would buy both.
+ * Opaque backgrounds rather than the position label's `bg-white/60`: this indicator of all things
+ * should not depend on what is behind it.
  */
 export function DebateRecordingStatusPill({ recording }: { recording: boolean }) {
   return (
-    <div className="pointer-events-none fixed top-4 left-1/2 z-[1020] -translate-x-1/2">
+    <span
+      role="status"
+      aria-live="polite"
+      className={cx(
+        'inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-tag leading-none whitespace-nowrap',
+        // Dark text on the red, matching the Ready badge's dark-on-green: white on red-01 is
+        // 3.2:1, under the 4.5:1 this indicator of all things should clear.
+        recording ? 'border-red-01 bg-red-01 text-text' : 'border-grey-02 bg-white text-grey-04'
+      )}
+    >
       <span
-        role="status"
-        aria-live="polite"
+        aria-hidden
         className={cx(
-          'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-metadata leading-none whitespace-nowrap',
-          // Dark text on the red, matching the Ready badge's dark-on-green: white on red-01 is
-          // 3.2:1, under the 4.5:1 this indicator of all things should clear.
-          recording ? 'border-red-01 bg-red-01 text-text' : 'border-grey-02 bg-white text-grey-04'
+          'size-1.5 shrink-0 rounded-full',
+          recording ? 'bg-text motion-safe:animate-pulse' : 'border border-grey-03 bg-transparent'
         )}
-      >
-        <span
-          aria-hidden
-          className={cx(
-            'size-2 shrink-0 rounded-full',
-            recording ? 'bg-text motion-safe:animate-pulse' : 'border border-grey-03 bg-transparent'
-          )}
-        />
-        {recording ? 'Recording' : 'Not recording'}
-      </span>
-    </div>
+      />
+      {recording ? 'Recording' : 'Not recording'}
+    </span>
   );
 }

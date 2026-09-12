@@ -670,14 +670,17 @@ describe('DebateRoomPageClient', () => {
 
     expect(screen.getByRole('dialog', { name: 'Debate readiness' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Audio settings' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Video settings' })).toBeInTheDocument();
-    // No mic or camera toggle on the intro. The screen exists so the two of them see and hear each
-    // other before the debate; muting the person you are about to introduce yourself to is not a
-    // state worth supporting, and every way of reaching it costs the recorder its video track.
-    expect(screen.queryByRole('button', { name: 'Mute microphone' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Turn camera off' })).not.toBeInTheDocument();
+    // The intro carries mic and camera toggles, reversing GEO-2819's decision not to. The concern
+    // that produced that decision — "muting the person you are about to introduce yourself to is
+    // not a state worth supporting" — is answered by the gate below rather than by the absence of
+    // the control: you can mute the introduction, you cannot carry it into a recorded debate.
+    // Toggling still goes through `enabled` rather than LiveKit's `mute()`, so the recorder never
+    // loses the track it captured at publish time.
+    expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
     // The issue asks for this line explicitly, and it has to stay true to when capture starts.
     expect(screen.getByText(/this part isn't recorded/i)).toBeInTheDocument();
     expect(screen.getByText('Speak to test your mic')).toBeInTheDocument();
@@ -827,11 +830,11 @@ describe('DebateRoomPageClient', () => {
       })
     );
     expect(screen.getByText('Requesting camera and mic…')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready to debate" })).not.toBeInTheDocument();
 
     pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
 
-    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
   });
 
   it('locks background scrolling while the pre-screen modal is open', () => {
@@ -896,12 +899,12 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText('Allow access to your camera and microphone to continue.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready to debate" })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Audio settings' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Allow access' }));
 
-    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2);
   });
 
@@ -913,7 +916,7 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByText('Connect a camera and microphone, then try again.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready to debate" })).not.toBeInTheDocument();
   });
 
   it('cleans up acquired tracks when device enumeration fails', async () => {
@@ -934,7 +937,7 @@ describe('DebateRoomPageClient', () => {
     ).toBeInTheDocument();
     expect(audioTrack.stop).toHaveBeenCalled();
     expect(videoTrack.stop).toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready to debate" })).not.toBeInTheDocument();
   });
 
   // GEO-2819 moved the room connection into the intro, so `debateRoomOptions` no longer sees a
@@ -995,7 +998,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('radio', { name: 'System default' })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled();
     expect(screen.queryByRole('radio', { name: 'Studio Speakers' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: "I'm ready" })).toBeEnabled();
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
   });
 
   it('falls back to System default when speaker authorization is rejected', async () => {
@@ -1132,11 +1135,11 @@ describe('DebateRoomPageClient', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
 
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: "I'm ready" })).toBeDisabled();
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeDisabled();
 
     pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Studio Mic' })).toBeChecked());
-    expect(screen.getByRole('button', { name: "I'm ready" })).toBeEnabled();
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
   });
 
   it('opens mobile video settings as a bottom sheet using the existing preview stream', async () => {
@@ -1221,7 +1224,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    await screen.findByRole('button', { name: "I'm ready" });
+    await screen.findByRole('button', { name: "I'm ready to debate" });
     const olderEnumeration = deferred<MediaDeviceInfo[]>();
     mocks.enumerateDevices.mockReturnValueOnce(olderEnumeration.promise).mockResolvedValueOnce([
       { kind: 'audioinput', deviceId: 'mic-2', groupId: 'mic-group-2', label: 'Studio Mic' },
@@ -1258,7 +1261,57 @@ describe('DebateRoomPageClient', () => {
 
     expect(within(debateVideoTile('remote')).getByText('Ready')).toBeInTheDocument();
     expect(within(debateVideoTile('local')).queryByText('Ready')).not.toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: "I'm ready too" })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: "I'm ready to debate too" })).toBeEnabled();
+  });
+
+  it('shows the opponent as not ready rather than showing nothing', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeInTheDocument();
+    expect(within(debateVideoTile('remote')).getByText('Not ready')).toBeInTheDocument();
+    expect(within(debateVideoTile('local')).queryByText('Not ready')).not.toBeInTheDocument();
+  });
+
+  // The intro's answer to GEO-2819's objection to having these toggles at all: the state is
+  // reachable, and it is not a state a recorded debate can start from.
+  it('holds readiness back until the microphone and the camera are both on', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
+
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeDisabled();
+    expect(screen.getByText('Enable audio to start')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
+
+    expect(screen.getByText('Enable video and audio to start')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+
+    expect(screen.getByText('Enable video to start')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
+    expect(screen.queryByText('Enable video to start')).not.toBeInTheDocument();
+  });
+
+  // The neutral state is the assurance, so it has to be somewhere the eye already is: on the tile
+  // showing the camera it is talking about.
+  it('puts the not-recording pill in the local tile on the intro screen', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await screen.findByRole('button', { name: "I'm ready to debate" });
+    expect(within(debateVideoTile('local')).getByText('Not recording')).toBeInTheDocument();
+    expect(within(debateVideoTile('remote')).queryByText('Not recording')).not.toBeInTheDocument();
   });
 
   it('disables the ready button while waiting for the opponent', async () => {
@@ -1488,7 +1541,7 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByRole('button', { name: 'Connecting…' })).toBeDisabled();
 
     act(() => pendingConnect.resolve());
-    await waitFor(() => expect(screen.getByRole('button', { name: "I'm ready" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled());
   });
 
   // Disabling the trigger is not enough: an open picker keeps its radios clickable.
@@ -1518,7 +1571,7 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: "I'm ready" }));
+    fireEvent.click(await screen.findByRole('button', { name: "I'm ready to debate" }));
 
     await waitFor(() => {
       expect(mocks.readyMutateAsync).toHaveBeenCalled();
@@ -2555,6 +2608,18 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
     expect(await screen.findByText('Recording')).toBeInTheDocument();
     expect(screen.queryByText('Not recording')).not.toBeInTheDocument();
+  });
+
+  // It is the local `MediaRecorder` this reports on, so it belongs to the local tile and to no
+  // other. It used to be `fixed` to the top of the viewport, far from either.
+  it('puts the recording pill in the local tile rather than over the screen', async () => {
+    installRecordingMocks();
+
+    await renderLiveDebate();
+
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    await waitFor(() => expect(within(debateVideoTile('local')).getByText('Recording')).toBeInTheDocument());
+    expect(within(debateVideoTile('remote')).queryByText('Recording')).not.toBeInTheDocument();
   });
 
   // A recorder can end without `stopLocalRecorder`: a disconnect stops the local tracks, the

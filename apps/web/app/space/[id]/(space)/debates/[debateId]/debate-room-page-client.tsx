@@ -2176,6 +2176,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             remoteVideoReady={remoteVideoReady}
             remotePresence={remotePresence}
             capturing={capturing}
+            audioMuted={audioMuted}
+            videoEnabled={videoEnabled}
+            onToggleAudioMuted={toggleAudioMuted}
+            onToggleVideoEnabled={toggleVideoEnabled}
             previewStream={previewStream}
             previewState={previewState}
             previewBusy={previewBusy}
@@ -2195,9 +2199,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             onVideoInputChange={changeVideoInput}
             onRetryMedia={() => void ensureLocalPreview({ forceRestart: true }).catch(() => undefined)}
             devicesLocked={
-              Boolean(preScreenLocalParticipant?.ready_at) ||
-              roomState === 'connecting' ||
-              roomState === 'reconnecting'
+              Boolean(preScreenLocalParticipant?.ready_at) || roomState === 'connecting' || roomState === 'reconnecting'
             }
             connectionSettling={roomState === 'connecting' || roomState === 'reconnecting'}
             canRetryConnection={roomState === 'idle' && roomError !== null && !connectionConflict}
@@ -2490,6 +2492,7 @@ function DebateRecordingModal({
         localSlot !== null &&
         thankingSlot === localSlot
       }
+      recordingStatus={<DebateRecordingStatusPill recording={capturing} />}
     >
       <video ref={setLocalVideoElement} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
     </DebateVideoTile>
@@ -2541,8 +2544,6 @@ function DebateRecordingModal({
       aria-label="Debate recording"
       className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text outline-none"
     >
-      <DebateRecordingStatusPill recording={capturing} />
-
       {debateDebuggingEnabled && (
         <DebateDebugMenu
           debate={debate}
