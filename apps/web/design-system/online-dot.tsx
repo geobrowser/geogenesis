@@ -6,10 +6,11 @@ type Props = {
   /**
    * The diameter of the face this sits on, in px. The dot is drawn as a fraction of it.
    *
-   * Defaults to 16, the claim pills' face — which is where this geometry came from, and where it
-   * was the only size that existed.
+   * Required, with no default: a dot that is silently the wrong size for its face is the bug this
+   * prop exists to stop, and a default would let the next face size reintroduce it without so much
+   * as a type error. `ringClassName` defaults because a wrong colour is visible; this is not.
    */
-  faceSize?: number;
+  faceSize: number;
   /**
    * The surface the dot sits on, as a Tailwind *border* colour.
    *
@@ -19,7 +20,6 @@ type Props = {
    * caller has to say what it is standing on rather than this guessing white.
    */
   ringClassName?: string;
-  className?: string;
 };
 
 /**
@@ -40,15 +40,17 @@ type Props = {
  *
  * Placement comes with it. The dot's green body sits on the face's own top-left corner and its ring
  * bleeds outside, so the avatar reads as notched rather than badged — which means the element
- * starts one ring-width up and left of that corner. Callers supply a `relative` wrapper the size of
- * the face; they do not do this arithmetic.
+ * starts one ring-width up and left of that corner. Callers owe it a `relative` box the size of the
+ * face and nothing else; they do not do this arithmetic, and there is deliberately no `className`
+ * for them to re-place it with.
  *
  * ## `box-content` is load-bearing and its absence is silent
  *
  * Tailwind's preflight makes everything `border-box`, so a 4px box with a 2px border on each side
  * has a *zero-width* content box: the ring paints and the green has no area left to paint in. The
  * dot then renders as a 4px disc in whatever colour the surface behind it already is — invisible,
- * on every avatar, with no error. The avatar wrapper these sit on carries `box-content` too.
+ * on every avatar, with no error. The claim pills' ringed face wrapper carries `box-content` for
+ * the same reason; a wrapper with no border of its own, like the People tab's, does not need it.
  *
  * ## Deliberately not part of `Avatar`
  *
@@ -56,26 +58,23 @@ type Props = {
  * picture. Only the stacks built from presence pass it, so an avatar cannot pick up a green dot by
  * being rendered somewhere that never knew whether they were online.
  */
-export function OnlineDot({ faceSize = 16, ringClassName = 'border-white', className }: Props) {
+export function OnlineDot({ faceSize, ringClassName = 'border-white' }: Props) {
   const green = faceSize / 4;
   const ring = green / 2;
 
   return (
     <span
       aria-hidden
-      // Inline rather than Tailwind sizes: these are derived from `faceSize`, and a computed class
-      // name is one the compiler never sees, so it would ship without the rule that sizes it.
+      // Inline rather than Tailwind sizes, as `RecordingCountdownRing` does with its own derived
+      // geometry: these come from `faceSize`, and a computed class name is one the compiler never
+      // sees, so it would ship without the rule that sizes it.
       style={{
         width: green,
         height: green,
         borderWidth: ring,
         transform: `translate(${-ring}px, ${-ring}px)`,
       }}
-      className={cx(
-        'box-content absolute top-0 left-0 block rounded-full border-solid bg-green',
-        ringClassName,
-        className
-      )}
+      className={cx('box-content absolute top-0 left-0 block rounded-full border-solid bg-green', ringClassName)}
     />
   );
 }
