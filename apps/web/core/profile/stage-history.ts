@@ -8,6 +8,7 @@ import {
   ACADEMIC_FIELD_TYPE,
   CITY_TYPE,
   DEGREE_PROPERTY,
+  DEGREE_TYPE,
   DESCRIPTION_PROPERTY,
   EDUCATION_PROPERTY,
   EDUCATION_STATUS_OPTION,
@@ -366,7 +367,7 @@ export function stageEducation(
   newStintId: string = ID.createEntityId()
 ): StagedRows {
   const school = newEntityRows(draft.school, spaceId, SCHOOL_TYPES);
-  const degree = newEntityRows(draft.degree, spaceId);
+  const degree = newEntityRows(draft.degree, spaceId, [DEGREE_TYPE]);
 
   let recordId = draft.existingStintId;
   const education: StagedRows = { values: [], relations: [] };

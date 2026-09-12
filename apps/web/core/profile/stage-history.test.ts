@@ -7,6 +7,7 @@ import type { Relation } from '~/core/types';
 import {
   ACADEMIC_FIELDS_PROPERTY,
   DEGREE_PROPERTY,
+  DEGREE_TYPE,
   DESCRIPTION_PROPERTY,
   EDUCATION_PROPERTY,
   EDUCATION_STATUS_COMPLETED,
@@ -249,6 +250,21 @@ describe('stageEducation', () => {
     const { relations } = stageEducation(education({ status: 'studying' }), context);
 
     expect(byType(relations, EDUCATION_STATUS_PROPERTY)).toHaveLength(0);
+  });
+
+  // Same reason a job title is typed: an untyped degree never turns up in the
+  // scoped search that would stop the next person creating a second one.
+  it('names and types a degree the user typed rather than picked', () => {
+    const { values, relations } = stageEducation(education({ degree: created('new-degree', 'MPhil') }), context);
+
+    expect(values).toContainEqual(
+      expect.objectContaining({ entity: { id: 'new-degree', name: null }, value: 'MPhil' })
+    );
+    expect(
+      byType(relations, SystemIds.TYPES_PROPERTY).some(
+        relation => relation.fromEntity.id === 'new-degree' && relation.toEntity.id === DEGREE_TYPE
+      )
+    ).toBe(true);
   });
 
   it('creates an Academic field others can then find', () => {

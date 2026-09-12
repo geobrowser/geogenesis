@@ -54,9 +54,8 @@ export const ACADEMIC_FIELD_TYPE = SystemIds.ACADEMIC_FIELD_TYPE;
  * Types to scope the find-or-create pickers, and to stamp on anything created
  * through them so the next person finds it instead of making a second one.
  *
- * Only those that could be verified. Degree still searches unscoped: several
- * entities sit under that name with no obvious canonical one, and a wrong type
- * there is worse than none.
+ * Taken from what each property declares rather than from the name that reads
+ * best — see `JOB_TYPE` for what guessing cost the last time.
  */
 /**
  * What an Employment edge points at. `Project` rather than `Company`: the graph
@@ -206,6 +205,25 @@ export const TAXONOMY_SPACE_ID = 'd69608290513c2a91102c939b3265bd7';
  * either alone hides most of the answers, and a new school is typed as both so
  * it turns up whichever one the next reader scopes to.
  */
+/**
+ * What `Degree` declares it points at, and what a degree created here is typed as.
+ */
+export const DEGREE_TYPE = 'bfd47a5430aa43e18b8b8b86735919a0';
+
+/**
+ * A second entity also named `Degree`, also a real type, carrying 29 degrees the
+ * graph had before the declared one existed — Ph.D., Master, Bachelor, B.S.
+ *
+ * Searched alongside the declared type rather than instead of it. Scoping to the
+ * declared one alone is the correct-looking choice that hides every degree
+ * anybody has actually used, which is the mistake the Title picker made against
+ * `Job` for a fortnight. New degrees are still typed as the declared one, so the
+ * split narrows rather than widens.
+ */
+export const LEGACY_DEGREE_TYPE = '65256c5462834981b502aceeb74bd08c';
+
+export const DEGREE_TYPES = [DEGREE_TYPE, LEGACY_DEGREE_TYPE];
+
 export const UNIVERSITY_TYPE = '0235f3d2821947a481d39ccd68e2b821';
 export const INSTITUTION_TYPE = '7f5433a40628498f9de6311cb14709a8';
 export const SCHOOL_TYPES = [UNIVERSITY_TYPE, INSTITUTION_TYPE];

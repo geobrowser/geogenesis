@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ACADEMIC_FIELD_TYPE, SCHOOL_TYPES } from '~/core/profile/history-ontology';
+import { ACADEMIC_FIELD_TYPE, DEGREE_TYPES, SCHOOL_TYPES } from '~/core/profile/history-ontology';
 
 import { AddEducationSheet } from './add-education-sheet';
 
@@ -71,16 +71,18 @@ describe('AddEducationSheet', () => {
 
   // School and Degree have several entities apiece under those names with no
   // canonical type, so a wrong filter would hide every real one from the search.
-  // School is scoped to what `Education` declares plus the narrower type most
-  // schools carry. Degree stays unscoped: several entities sit under that name
-  // with no obvious canonical one, and a wrong filter there hides every answer.
-  it('searches both school types, and leaves degree unscoped rather than guessing', () => {
+  // Every picker scoped to what its property declares. School takes the pair,
+  // since `Education` declares the broader of the two and most schools carry the
+  // narrower one.
+  it('scopes each picker to the type its property declares', () => {
     renderSheet();
 
     const scopes = pickers().map(button => button.getAttribute('data-scoped-to'));
 
     expect(scopes).toContain(SCHOOL_TYPES.join(','));
-    expect(scopes.filter(scope => scope === '')).toHaveLength(1);
+    expect(scopes).toContain(DEGREE_TYPES.join(','));
+    expect(scopes).toContain(ACADEMIC_FIELD_TYPE);
+    expect(scopes.filter(scope => scope === '')).toHaveLength(0);
   });
 
   it('offers the three states dates alone cannot express', () => {

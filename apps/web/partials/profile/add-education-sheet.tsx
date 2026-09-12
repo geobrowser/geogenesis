@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { type MonthYear, fromGraphDate, toGraphDate } from '~/core/profile/history-dates';
-import { ACADEMIC_FIELD_TYPE, type EducationStatus, SCHOOL_TYPES } from '~/core/profile/history-ontology';
+import { ACADEMIC_FIELD_TYPE, DEGREE_TYPES, type EducationStatus, SCHOOL_TYPES } from '~/core/profile/history-ontology';
 import type { EducationDraft, EntityChoice } from '~/core/profile/stage-history';
 
 import { inputStyles } from '~/design-system/input';
@@ -29,6 +29,9 @@ type Props = {
  * search on every render. See `SCHOOL_TYPES` for why it is the pair.
  */
 const SCHOOL_TYPE_FILTER = SCHOOL_TYPES.map(id => ({ id, name: null }));
+
+/** Both entities named `Degree`; see `LEGACY_DEGREE_TYPE` for why it is a pair. */
+const DEGREE_TYPE_FILTER = DEGREE_TYPES.map(id => ({ id, name: 'Degree' }));
 
 const STATUS_OPTIONS: { value: EducationStatus; label: string }[] = [
   { value: 'studying', label: 'Still studying' },
@@ -111,6 +114,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
         ) : (
           <SelectEntity
             spaceId={spaceId}
+            relationValueTypes={DEGREE_TYPE_FILTER}
             placeholder="Find or create a degree..."
             onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) =>

@@ -4,6 +4,7 @@ import {
   ACADEMIC_FIELDS_PROPERTY,
   ACADEMIC_FIELD_TYPE,
   DEGREE_PROPERTY,
+  DEGREE_TYPE,
   DESCRIPTION_PROPERTY,
   EDUCATION_PROPERTY,
   EDUCATION_STATUS_OPTION,
@@ -19,6 +20,7 @@ import {
   INSTITUTION_TYPE,
   IS_REQUIRED_PROPERTY,
   JOB_TYPE,
+  LEGACY_DEGREE_TYPE,
   LOCATION_PROPERTY,
   LOCATION_TYPE_OPTIONS,
   LOCATION_TYPE_PROPERTY,
@@ -71,6 +73,10 @@ describe('history ontology ids', () => {
     // the rest — so the id matters more here than usual.
     ['Location', LOCATION_PROPERTY, '95d770021faf4f7cb7deb21a7d48cda0'],
     ['Location type', LOCATION_TYPE_PROPERTY, 'ceeb611101554764bea22818b21d3fbd'],
+    ['Degree type', DEGREE_TYPE, 'bfd47a5430aa43e18b8b8b86735919a0'],
+    // A second real type of the same name, carrying the degrees that predate the
+    // declared one. Searching only the declared one hides all of them.
+    ['Degree type (legacy)', LEGACY_DEGREE_TYPE, '65256c5462834981b502aceeb74bd08c'],
     ['University', UNIVERSITY_TYPE, '0235f3d2821947a481d39ccd68e2b821'],
     ['Institution', INSTITUTION_TYPE, '7f5433a40628498f9de6311cb14709a8'],
   ])('%s resolves to the id the graph has', (_name, actual, expected) => {
