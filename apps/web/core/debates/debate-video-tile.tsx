@@ -19,9 +19,26 @@ export const recordingLabelTextShadow = {
 };
 
 /**
+ * The translucent fill the tile chips share.
+ *
+ * 85% rather than the 60% these started at, and that is a contrast requirement rather than taste.
+ * The chip composites over whatever the camera is pointed at, so its effective background is a
+ * range, and the floor of that range — 60% white over a black frame — is `#999`. Chip text is
+ * 12px, which WCAG counts as body text at 4.5:1, and against `#999` the recording red measures
+ * 3.02:1. No red that still reads as red clears 4.5:1 there; the value that does is around
+ * `#660B00`, which reads as brown. Taking the fill to 85% fixes the background instead: the range
+ * narrows to `#d9d9d9`–`#fff`, where the red measures 6.1:1 at worst and the dark text 11.5:1.
+ *
+ * A constant rather than a default inside `DebateTileChip`, because `cx` concatenates and does not
+ * merge — a caller passing `bg-green` would emit both classes and let stylesheet order decide.
+ */
+export const tileChipSurface = 'bg-white/85';
+
+/**
  * The chip every small label overlaid on a tile wears: the position label, the recording
- * indicator, and the intro screen's readiness badges. They sit on the same row at the same optical
- * size, so the geometry lives here once and callers bring only the fill and the text colour.
+ * indicator, the intro screen's readiness badges, and the playback feed's speaker label. They sit
+ * at the same optical size, so the geometry lives here once and callers bring only the fill and
+ * the text colour.
  */
 export function DebateTileChip({
   className,
@@ -141,7 +158,9 @@ export function DebateVideoTile({
         <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex items-center justify-between gap-2">
           <div className="flex min-w-0 flex-1 justify-start">
             {positionLabel && (
-              <DebateTileChip className="max-w-full truncate bg-white/60 text-text">{positionLabel}</DebateTileChip>
+              <DebateTileChip className={cx('max-w-full truncate text-text', tileChipSurface)}>
+                {positionLabel}
+              </DebateTileChip>
             )}
           </div>
           {tileControls && <div className="pointer-events-auto shrink-0">{tileControls}</div>}

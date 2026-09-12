@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { DebateTileChip } from './debate-video-tile';
+import { DebateTileChip, tileChipSurface } from './debate-video-tile';
 
 /**
  * GEO-2819. Says whether the camera is being written to disk, in the same place on the intro
@@ -22,11 +22,12 @@ import { DebateTileChip } from './debate-video-tile';
  *
  * The dot is hollow when idle and filled when live, so the state does not rest on colour alone.
  *
- * The red is `red-01` taken down to 30% lightness at the same hue, rather than `red-01` itself.
- * The chip is 60% white over whatever the camera is pointed at, so against dark video it settles
- * around mid-grey — where `red-01` measures about 1.1:1 and is effectively invisible. This clears
- * 3:1 even in that worst case and around 8:1 over a bright frame. It is a literal because the
- * palette has no dark red; if one is ever added, this is the value it wants.
+ * The red is `red-01` taken down to 30% lightness at the same hue, rather than `red-01` itself,
+ * which measures about 1.1:1 against the darkest the chip can composite to and is effectively
+ * invisible there. Paired with `tileChipSurface` — see the note on it for why the fill is 85% and
+ * not 60% — this measures 6.1:1 at worst and 8.6:1 over a bright frame, clearing the 4.5:1 that
+ * 12px text is held to. It is a literal because the palette has no dark red; if one is ever added,
+ * this is the value it wants.
  */
 const recordingRed = '#991200';
 export function DebateRecordingStatusPill({ recording }: { recording: boolean }) {
@@ -35,7 +36,7 @@ export function DebateRecordingStatusPill({ recording }: { recording: boolean })
       role="status"
       aria-live="polite"
       style={recording ? { color: recordingRed } : undefined}
-      className={cx('bg-white/60', !recording && 'text-text')}
+      className={cx(tileChipSurface, !recording && 'text-text')}
     >
       <span
         aria-hidden

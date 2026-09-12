@@ -25,7 +25,7 @@ import {
   MicrophoneIcon,
   RecordingCircleButton,
 } from './debate-room-controls';
-import { DebateTileChip, DebateVideoTile } from './debate-video-tile';
+import { DebateTileChip, DebateVideoTile, tileChipSurface } from './debate-video-tile';
 import { DeviceOptionGroup } from './device-option-group';
 import { MicrophoneLevelMeter } from './microphone-level-meter';
 import { useScrollLock } from './use-scroll-lock';
@@ -560,7 +560,7 @@ function PreScreenReadyBadge() {
 }
 
 function PreScreenNotReadyBadge() {
-  return <DebateTileChip className="bg-white/60 text-text">Not ready</DebateTileChip>;
+  return <DebateTileChip className={cx(tileChipSurface, 'text-text')}>Not ready</DebateTileChip>;
 }
 
 type PreScreenSettingsTriggerProps = Omit<React.ComponentPropsWithoutRef<'button'>, 'aria-label'> & {
