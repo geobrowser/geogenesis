@@ -126,6 +126,7 @@ const mocks = vi.hoisted(() => ({
   /** Both participants' graph positions. */
   positions: [] as ParticipantPosition[],
   positionsLoading: false,
+  positionsError: null as unknown,
   positionParticipants: [] as string[][],
   recommendedSections: [] as Array<{ id: string; name: string; claimIds: string[] }>,
   recommendedEntities: [] as Array<Record<string, unknown>>,
@@ -462,7 +463,7 @@ vi.mock('~/core/debates/participant-positions', async importOriginal => {
       return {
         byClaim: actual.groupParticipantPositions(mocks.positions),
         isLoading: mocks.positionsLoading,
-        error: null,
+        error: mocks.positionsError,
       };
     },
   };
@@ -756,6 +757,7 @@ beforeEach(() => {
     position('profile-remote', CLAIM_SHARED, SPACE_1, false),
   ];
   mocks.positionsLoading = false;
+  mocks.positionsError = null;
   mocks.positionParticipants.length = 0;
   mocks.recommendedSections = [];
   mocks.recommendedEntities = [];
@@ -4147,6 +4149,35 @@ describe('the matches-only default', () => {
     await screen.findByText('A claim only Salina answered');
 
     expect(localStorage.getItem('rematchMatchesOnly')).toBe('true');
+  });
+
+  /**
+   * A failed lookup is not an answer about this pair.
+   *
+   * react-query drops `isLoading` on failure, so an outage reads from here exactly like two people
+   * with nothing to go again on. Stepping back on it would swap away the list that carries the
+   * retry, for a list that cannot explain why it is the one on screen — and the same outage would
+   * then walk the viewer to Explore on the rung below.
+   */
+  it('holds the matches list when the lookup failed rather than answered', async () => {
+    nothingToRematch();
+    mocks.positionsError = new Error('positions exploded');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(switchNode()).toHaveAttribute('aria-checked', 'true'));
+    expect(screen.queryByText('A claim only Salina answered')).toBeNull();
+  });
+
+  it('does not walk the viewer to Explore on a failed lookup either', async () => {
+    mocks.savedClaims = [];
+    mocks.claims = [];
+    mocks.entities = [];
+    mocks.positions = [];
+    mocks.positionsError = new Error('positions exploded');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(switchNode()).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'All claims' })).toBeNull();
   });
 
   // The last rung. No rematch to be had and no positions of theirs to make one out of, so there is
