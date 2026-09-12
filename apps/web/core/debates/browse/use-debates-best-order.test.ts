@@ -14,7 +14,7 @@ vi.mock('~/core/io/graphql-client', () => ({
     const page = mocks.pages[mocks.calls.length - 1] ?? { ids: [], endCursor: null, hasNextPage: false };
     return Effect.succeed(
       decoder({
-        entitiesRankedForFeedConnection: {
+        entitiesRankedForFeedByTypeConnection: {
           pageInfo: { endCursor: page.endCursor, hasNextPage: page.hasNextPage },
           nodes: page.ids.map(id => ({ id })),
         },
