@@ -141,7 +141,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Field</span>
+        <span className="text-metadataMedium text-grey-04">Field of study</span>
         {fields.length > 0 && (
           <ul className="flex flex-wrap gap-1.5">
             {fields.map(field => (
