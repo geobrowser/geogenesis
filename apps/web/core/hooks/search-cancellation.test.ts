@@ -1,3 +1,5 @@
+import { CancelledError } from '@tanstack/react-query';
+
 import * as Effect from 'effect/Effect';
 import { describe, expect, it } from 'vitest';
 
@@ -80,6 +82,19 @@ describe('isSearchCancellation', () => {
 
   it("recognises the repo's tagged AbortError thrown directly", () => {
     expect(isSearchCancellation(new AbortError(), live())).toBe(true);
+  });
+
+  // A caller awaiting `fetchQuery` — the chat dispatcher — is rejected with this
+  // when React Query cancels that query. It never reaches the `queryFn`, so it is
+  // wrapped by nothing, and it is invisible to every check above: its `name` is
+  // "Error" and it renders as "Error: CancelledError".
+  it("recognises React Query's CancelledError, which identifies itself by neither name nor text", () => {
+    const cancelled = new CancelledError();
+
+    expect(cancelled.name).toBe('Error');
+    expect(String(cancelled)).toBe('Error: CancelledError');
+    expect(isSearchCancellation(cancelled)).toBe(true);
+    expect(isSearchCancellation(cancelled, live())).toBe(true);
   });
 
   it('leaves a real failure alone, so it is still logged and reported', () => {

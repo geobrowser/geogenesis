@@ -1,3 +1,5 @@
+import { isCancelledError } from '@tanstack/react-query';
+
 import * as Cause from 'effect/Cause';
 import * as Runtime from 'effect/Runtime';
 
@@ -30,9 +32,16 @@ import * as Runtime from 'effect/Runtime';
  * - An abort that escapes as a **defect** is still the DOM's `AbortError` (`name`,
  *   no `_tag`).
  * - Effect can also interrupt the fiber outright, which carries neither.
+ *
+ * React Query has a fourth of its own. A caller awaiting `fetchQuery` is rejected
+ * with `CancelledError` when that query is cancelled, which never reaches the
+ * `queryFn` and so is wrapped by nothing — and it is unrecognisable by shape: its
+ * `name` is `"Error"` and it renders as `"Error: CancelledError"`. Only the
+ * library's own predicate identifies it, as `debate-gateway` also does.
  */
 export function isSearchCancellation(error: unknown, signal?: AbortSignal): boolean {
   if (signal?.aborted) return true;
+  if (isCancelledError(error)) return true;
 
   if (Runtime.isFiberFailure(error)) {
     const cause = error[Runtime.FiberFailureCauseId];
