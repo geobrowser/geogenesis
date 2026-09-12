@@ -45,10 +45,19 @@ export const EDUCATION_STATUS_COMPLETED = '95bc24ff68d148afa6206904da3d5b31';
 export const EDUCATION_STATUS_INCOMPLETE = '99e3e53481334b1aab40fc5a7d232b11';
 
 /** enrolment ──▶ academic field. A relation, so a joint honours degree can repeat it. */
-export const ACADEMIC_FIELDS_PROPERTY = '11692db4ddf54a69bfa044fb6b12f401';
+/**
+ * enrolment ──▶ field of study. A relation, and it repeats for a joint honours.
+ *
+ * Two entities read as "Field of study" and they are not the same thing: this
+ * property (plural, a relation) and {@link LEGACY_FIELD_OF_STUDY_PROPERTY}
+ * (singular, free text). The pair is easy to mix up by name, so both are used by
+ * id and never by lookup.
+ */
+export const FIELDS_OF_STUDY_PROPERTY = '11692db4ddf54a69bfa044fb6b12f401';
 
-/** What `Academic fields` may point at — hand straight to `relationValueTypes`. */
-export const ACADEMIC_FIELD_TYPE = SystemIds.ACADEMIC_FIELD_TYPE;
+/** What `Fields of study` may point at — hand straight to `relationValueTypes`. */
+/** Named for the graph, not the SDK — which still calls this one `ACADEMIC_FIELD_TYPE`. */
+export const FIELD_OF_STUDY_TYPE = SystemIds.ACADEMIC_FIELD_TYPE;
 
 /**
  * Types to scope the find-or-create pickers, and to stamp on anything created
@@ -109,9 +118,11 @@ export const END_DATE_PROPERTY = SystemIds.RANK_END_DATE_PROPERTY;
 export const DESCRIPTION_PROPERTY = SystemIds.DESCRIPTION_PROPERTY;
 
 /**
- * Free-text field of study, used by eleven education records predating
- * `Academic fields`. Read only — those strings are the obvious seed for real
- * Academic field entities, but nothing new should be written here.
+ * Free-text field of study, used by eleven education records predating the
+ * relation. Read only — those strings are the obvious seed for real Field of
+ * study entities, but nothing new should be written here.
+ *
+ * Shares a display name with {@link FIELDS_OF_STUDY_PROPERTY}; see the note there.
  */
 export const LEGACY_FIELD_OF_STUDY_PROPERTY = '8c22d2cd3b0a4a9189f0da6027cf5830';
 

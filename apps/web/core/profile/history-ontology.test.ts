@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  ACADEMIC_FIELDS_PROPERTY,
-  ACADEMIC_FIELD_TYPE,
   DEGREE_INFORMATION_TYPE,
   DEGREE_PROPERTY,
   DEGREE_TYPE,
@@ -20,6 +18,8 @@ import {
   EMPLOYMENT_TYPE_PROPERTY,
   EMPLOYMENT_TYPE_TYPE,
   END_DATE_PROPERTY,
+  FIELDS_OF_STUDY_PROPERTY,
+  FIELD_OF_STUDY_TYPE,
   GRADE_PROPERTY,
   IS_REQUIRED_PROPERTY,
   JOB_TYPE,
@@ -54,8 +54,10 @@ describe('history ontology ids', () => {
     ['Education', EDUCATION_PROPERTY, 'dbb41bb9f76f4e5e866590086857fa22'],
     ['Degree', DEGREE_PROPERTY, '38344c504261406496db13504579e64f'],
     ['Education status', EDUCATION_STATUS_PROPERTY, 'afff0f059654466e865448d56585a41c'],
-    ['Academic fields', ACADEMIC_FIELDS_PROPERTY, '11692db4ddf54a69bfa044fb6b12f401'],
-    ['Academic field type', ACADEMIC_FIELD_TYPE, '9959eb50b0294a158557b39318cbb91b'],
+    // Renamed from `Academic fields` after these were pinned. Same ids — which
+    // is the point of pinning ids rather than looking names up.
+    ['Fields of study', FIELDS_OF_STUDY_PROPERTY, '11692db4ddf54a69bfa044fb6b12f401'],
+    ['Field of study type', FIELD_OF_STUDY_TYPE, '9959eb50b0294a158557b39318cbb91b'],
     ['Start date', START_DATE_PROPERTY, 'eed03a040acd4a9e81e08272ed70a817'],
     ['End date', END_DATE_PROPERTY, 'b08b8f63dc1e41568b0819946f2b011c'],
     ['Description', DESCRIPTION_PROPERTY, '9b1f76ff9711404c861e59dc3fa7d037'],

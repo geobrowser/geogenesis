@@ -4,8 +4,6 @@ import { ID } from '~/core/id';
 import type { Relation, Value } from '~/core/types';
 
 import {
-  ACADEMIC_FIELDS_PROPERTY,
-  ACADEMIC_FIELD_TYPE,
   CITY_TYPE,
   DEGREE_INFORMATION_TYPE,
   DEGREE_PROPERTY,
@@ -24,6 +22,8 @@ import {
   END_DATE_PROPERTY,
   type EducationStatus,
   type EmploymentStatus,
+  FIELDS_OF_STUDY_PROPERTY,
+  FIELD_OF_STUDY_TYPE,
   GRADE_PROPERTY,
   JOB_TYPE,
   LOCATION_PROPERTY,
@@ -372,7 +372,7 @@ export function stagePosition(
 
 /**
  * One education record, as one edit. A level heavier than a position, because
- * `Academic fields` is a relation and can repeat for a joint honours degree.
+ * `Fields of study` is a relation and can repeat for a joint honours degree.
  */
 export function stageEducation(
   draft: EducationDraft,
@@ -412,7 +412,7 @@ export function stageEducation(
 
   const enrolmentType = typeRow(spaceId, enrolmentId, DEGREE_INFORMATION_TYPE, 'Degree information');
 
-  const fieldRows = draft.fields.map(field => newEntityRows(field, spaceId, [ACADEMIC_FIELD_TYPE]));
+  const fieldRows = draft.fields.map(field => newEntityRows(field, spaceId, [FIELD_OF_STUDY_TYPE]));
 
   const skillRows = draft.skills.map(skill => newEntityRows(skill, spaceId, [SKILL_TYPE]));
   const skillEdges = draft.skills.map(skill =>
@@ -439,8 +439,8 @@ export function stageEducation(
   const fieldEdges = draft.fields.map(field =>
     relationRow({
       spaceId,
-      typeId: ACADEMIC_FIELDS_PROPERTY,
-      typeName: 'Academic fields',
+      typeId: FIELDS_OF_STUDY_PROPERTY,
+      typeName: 'Fields of study',
       fromId: enrolmentId,
       to: field,
     })
@@ -538,7 +538,7 @@ export function educationDraftFromEntry(
     degree: { id: entry.subject.id, name: entry.subject.name, isNew: false },
     // The legacy field-of-study text is shown with no id behind it. There is no
     // entity to relate to, so it cannot come back into a draft — it stays where
-    // it is, on the stint, until someone picks a real Academic field.
+    // it is, on the stint, until someone picks a real Field of study.
     fields: entry.fields.filter(field => field.id !== '').map(field => ({ ...field, isNew: false })),
     skills: entry.skills.map(skill => ({ id: skill.id, name: skill.name, isNew: false })),
     grade: entry.grade === null ? '' : String(entry.grade),

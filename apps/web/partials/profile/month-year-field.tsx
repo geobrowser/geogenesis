@@ -6,6 +6,13 @@ import { MONTH_NAMES, type MonthYear, yearOptions } from '~/core/profile/history
 
 type Props = {
   label: string;
+  /**
+   * A qualifier shown beside the label — "or expected" on a degree not finished
+   * yet. Kept out of `label` because that is what names the two selects to a
+   * screen reader, and "End (or expected) year" is a worse thing to hear than
+   * "End year".
+   */
+  note?: string;
   value: MonthYear | null;
   onChange: (value: MonthYear | null) => void;
   disabled?: boolean;
@@ -21,7 +28,7 @@ const selectClassName =
  * first of January, so a day picker would advertise a precision nobody has —
  * and nobody filling in a CV remembers which Tuesday they started.
  */
-export function MonthYearField({ label, value, onChange, disabled }: Props) {
+export function MonthYearField({ label, note, value, onChange, disabled }: Props) {
   const years = React.useMemo(() => yearOptions(), []);
 
   /**
@@ -49,7 +56,10 @@ export function MonthYearField({ label, value, onChange, disabled }: Props) {
 
   return (
     <fieldset className="flex flex-col gap-1.5">
-      <legend className="text-metadataMedium text-grey-04">{label}</legend>
+      <legend className="text-metadataMedium text-grey-04">
+        {label}
+        {note && <span className="text-footnote text-grey-04"> ({note})</span>}
+      </legend>
       <div className="flex items-center gap-2">
         <select
           aria-label={`${label} month`}

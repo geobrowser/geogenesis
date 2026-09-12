@@ -147,7 +147,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
           <SelectEntity
             spaceId={spaceId}
             relationValueTypes={[{ id: EMPLOYER_TYPE, name: 'Project' }]}
-            placeholder="Find or create a company..."
+            placeholder="Example: Microsoft"
             onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) =>
               setPickedCompany({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
@@ -165,7 +165,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
           <SelectEntity
             spaceId={spaceId}
             relationValueTypes={[{ id: JOB_TYPE, name: 'Person role' }]}
-            placeholder="Find or create a job title..."
+            placeholder="Example: Senior Product Manager"
             alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
             onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) =>
@@ -219,6 +219,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
 
       <div className="flex flex-col gap-1.5">
         <span className="text-metadataMedium text-grey-04">Location</span>
+        <span className="text-footnote text-grey-04">Where the role was based, whether or not you went in.</span>
         {location ? (
           <PickedEntity name={location.name} onClear={() => setLocation(null)} />
         ) : (
@@ -227,7 +228,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
           <SelectEntity
             spaceId={spaceId}
             relationValueTypes={LOCATION_TYPE_FILTER}
-            placeholder="Find or create a city..."
+            placeholder="City or region"
             onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) =>
               setLocation({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
@@ -263,13 +264,14 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
           onChange={event => setDescription(event.currentTarget.value)}
           disabled={isSaving}
           rows={3}
-          placeholder="Optional"
+          placeholder="Projects, problems you solved, or results you achieved"
           className={`${inputStyles()} resize-none`}
         />
       </label>
 
       <div className="flex flex-col gap-1.5">
         <span className="text-metadataMedium text-grey-04">Skills</span>
+        <span className="text-footnote text-grey-04">Add skills to show what you do best.</span>
         {skills.length > 0 && (
           <ul className="flex flex-wrap gap-1.5">
             {skills.map(skill => (
@@ -293,7 +295,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
           <SelectEntity
             spaceId={spaceId}
             relationValueTypes={[{ id: SKILL_TYPE, name: 'Skill' }]}
-            placeholder="Find or create a skill..."
+            placeholder="Example: Product management"
             alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
             pinnedResults={pinnedSkills}
             pinnedLabel="Recommended for this role"

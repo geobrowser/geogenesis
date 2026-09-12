@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ACADEMIC_FIELD_TYPE, DEGREE_TYPES, SCHOOL_TYPES } from '~/core/profile/history-ontology';
+import { DEGREE_TYPES, FIELD_OF_STUDY_TYPE, SCHOOL_TYPES } from '~/core/profile/history-ontology';
 
 import { AddEducationSheet } from './add-education-sheet';
 
@@ -62,11 +62,11 @@ describe('AddEducationSheet', () => {
     expect(screen.getByRole('button', { name: 'Save education' })).toBeEnabled();
   });
 
-  it('scopes the field picker to Academic field', () => {
+  it('scopes the field picker to Field of study', () => {
     renderSheet();
 
     const scopes = pickers().map(button => button.getAttribute('data-scoped-to'));
-    expect(scopes).toContain(ACADEMIC_FIELD_TYPE);
+    expect(scopes).toContain(FIELD_OF_STUDY_TYPE);
   });
 
   // Every picker scoped to what its property declares. School takes the pair,
@@ -79,7 +79,7 @@ describe('AddEducationSheet', () => {
 
     expect(scopes).toContain(SCHOOL_TYPES.join(','));
     expect(scopes).toContain(DEGREE_TYPES.join(','));
-    expect(scopes).toContain(ACADEMIC_FIELD_TYPE);
+    expect(scopes).toContain(FIELD_OF_STUDY_TYPE);
     expect(scopes.filter(scope => scope === '')).toHaveLength(0);
   });
 
@@ -137,7 +137,7 @@ describe('AddEducationSheet', () => {
     expect(draft.fields).toHaveLength(2);
   });
 
-  it('marks a field the user typed so it becomes an Academic field others can find', async () => {
+  it('marks a field the user typed so it becomes a Field of study others can find', async () => {
     const props = renderSheet();
 
     await userEvent.click(pickers()[0]);

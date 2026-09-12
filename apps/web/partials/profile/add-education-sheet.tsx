@@ -6,9 +6,9 @@ import cx from 'classnames';
 
 import { type MonthYear, fromGraphDate, toGraphDate } from '~/core/profile/history-dates';
 import {
-  ACADEMIC_FIELD_TYPE,
   DEGREE_TYPES,
   type EducationStatus,
+  FIELD_OF_STUDY_TYPE,
   SCHOOL_TYPES,
   SKILL_TYPE,
   TAXONOMY_SPACE_ID,
@@ -112,7 +112,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
           <SelectEntity
             spaceId={spaceId}
             relationValueTypes={SCHOOL_TYPE_FILTER}
-            placeholder="Find or create a school..."
+            placeholder="Example: Boston University"
             onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) =>
               setPickedSchool({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
@@ -130,7 +130,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
           <SelectEntity
             spaceId={spaceId}
             relationValueTypes={DEGREE_TYPE_FILTER}
-            placeholder="Find or create a degree..."
+            placeholder="Example: Bachelor of Science"
             onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) =>
               setDegree({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
@@ -164,8 +164,8 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
         {isAddingField || fields.length === 0 ? (
           <SelectEntity
             spaceId={spaceId}
-            relationValueTypes={[{ id: ACADEMIC_FIELD_TYPE, name: 'Academic field' }]}
-            placeholder="Find or create a field..."
+            relationValueTypes={[{ id: FIELD_OF_STUDY_TYPE, name: 'Field of study' }]}
+            placeholder="Example: Business"
             onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) => {
               setFields(current =>
@@ -178,7 +178,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
             width="full"
           />
         ) : (
-          // A joint honours degree needs more than one, which is why Academic
+          // A joint honours degree needs more than one, which is why Fields of
           // fields is a relation rather than a value.
           <button
             type="button"
@@ -188,7 +188,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
             + Add another
           </button>
         )}
-        <span className="text-footnote text-grey-04">Creates an Academic field others can use.</span>
+        <span className="text-footnote text-grey-04">Creates a Field of study others can use.</span>
       </div>
 
       <fieldset className="flex flex-col gap-1.5">
@@ -216,7 +216,13 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
 
       <div className="flex flex-wrap items-end gap-4">
         <MonthYearField label="Start" value={start} onChange={setStart} disabled={isSaving} />
-        <MonthYearField label="End" value={end} onChange={setEnd} disabled={isSaving || status === 'studying'} />
+        <MonthYearField
+          label="End"
+          note="or expected"
+          value={end}
+          onChange={setEnd}
+          disabled={isSaving || status === 'studying'}
+        />
       </div>
 
       <label className="flex flex-col gap-1.5">
@@ -230,13 +236,15 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
           value={grade}
           onChange={event => setGrade(event.currentTarget.value)}
           disabled={isSaving}
-          placeholder="Optional — e.g. 3.8"
+          placeholder="Example: 3.8"
           className={inputStyles()}
         />
+        <span className="text-footnote text-grey-04">A number, as the institution gave it.</span>
       </label>
 
       <div className="flex flex-col gap-1.5">
         <span className="text-metadataMedium text-grey-04">Skills</span>
+        <span className="text-footnote text-grey-04">Add skills to show what you studied.</span>
         {skills.length > 0 && (
           <ul className="flex flex-wrap gap-1.5">
             {skills.map(skill => (
@@ -260,7 +268,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
           <SelectEntity
             spaceId={spaceId}
             relationValueTypes={[{ id: SKILL_TYPE, name: 'Skill' }]}
-            placeholder="Find or create a skill..."
+            placeholder="Example: Statistics"
             alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
             onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) => {
@@ -291,7 +299,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
           onChange={event => setDescription(event.currentTarget.value)}
           disabled={isSaving}
           rows={3}
-          placeholder="Optional"
+          placeholder="Activities, societies, or what you focused on"
           className={`${inputStyles()} resize-none`}
         />
       </label>

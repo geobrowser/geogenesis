@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import type { Relation } from '~/core/types';
 
 import {
-  ACADEMIC_FIELDS_PROPERTY,
   DEGREE_INFORMATION_TYPE,
   DEGREE_PROPERTY,
   DEGREE_TYPE,
@@ -21,6 +20,7 @@ import {
   EMPLOYMENT_STATUS_FORMER,
   EMPLOYMENT_STATUS_PROPERTY,
   END_DATE_PROPERTY,
+  FIELDS_OF_STUDY_PROPERTY,
   GRADE_PROPERTY,
   JOB_TYPE,
   LOCATION_PROPERTY,
@@ -257,7 +257,7 @@ describe('stageEducation', () => {
     const degree = oneOf(relations, DEGREE_PROPERTY);
     expect(degree.fromEntity.id).toBe(record.entityId);
 
-    const field = oneOf(relations, ACADEMIC_FIELDS_PROPERTY);
+    const field = oneOf(relations, FIELDS_OF_STUDY_PROPERTY);
     expect(field.fromEntity.id).toBe(degree.entityId);
     expect(field.toEntity.id).toBe('finance');
 
@@ -271,7 +271,7 @@ describe('stageEducation', () => {
       context
     );
 
-    expect(byType(relations, ACADEMIC_FIELDS_PROPERTY).map(r => r.toEntity.id)).toEqual(['finance', 'econ']);
+    expect(byType(relations, FIELDS_OF_STUDY_PROPERTY).map(r => r.toEntity.id)).toEqual(['finance', 'econ']);
   });
 
   // The graph has Completed and Incomplete and nothing for in-progress. Inventing
@@ -338,7 +338,7 @@ describe('stageEducation', () => {
     ).toBe(true);
   });
 
-  it('creates an Academic field others can then find', () => {
+  it('creates a Field of study others can then find', () => {
     const { values, relations } = stageEducation(
       education({ fields: [created('new-field', 'Computer Science')] }),
       context

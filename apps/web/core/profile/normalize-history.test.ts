@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  ACADEMIC_FIELDS_PROPERTY,
   DEGREE_PROPERTY,
   DESCRIPTION_PROPERTY,
   EDUCATION_STATUS_COMPLETED,
@@ -10,6 +9,7 @@ import {
   EMPLOYMENT_STATUS_FORMER,
   EMPLOYMENT_STATUS_PROPERTY,
   END_DATE_PROPERTY,
+  FIELDS_OF_STUDY_PROPERTY,
   LEGACY_FIELD_OF_STUDY_PROPERTY,
   ROLES_PROPERTY,
   START_DATE_PROPERTY,
@@ -185,7 +185,7 @@ describe('normalizeEducation', () => {
                 {
                   id: 'field-finance',
                   entityId: 'field-entity',
-                  type: { id: ACADEMIC_FIELDS_PROPERTY },
+                  type: { id: FIELDS_OF_STUDY_PROPERTY },
                   toEntity: { id: 'finance', name: 'Finance' },
                   entity: null,
                 },
@@ -204,7 +204,7 @@ describe('normalizeEducation', () => {
     });
   });
 
-  // Eleven records keep the discipline as free text from before `Academic fields`
+  // Eleven records keep the discipline as free text from before `Fields of study`
   // existed. Surfaced so they render, but they are not a second way to store one.
   it('surfaces a legacy text field of study when there is no relation', () => {
     const [card] = normalizeEducation([
@@ -217,7 +217,7 @@ describe('normalizeEducation', () => {
     expect(card.entries[0].fields).toEqual([{ id: '', name: 'Computer Science' }]);
   });
 
-  it('prefers real Academic field relations over the legacy text', () => {
+  it('prefers real Field of study relations over the legacy text', () => {
     const [card] = normalizeEducation([
       edge('Northumbria University', {
         values: [textValue(LEGACY_FIELD_OF_STUDY_PROPERTY, 'Computer Science')],
@@ -229,7 +229,7 @@ describe('normalizeEducation', () => {
                 {
                   id: 'field-cs',
                   entityId: 'field-entity',
-                  type: { id: ACADEMIC_FIELDS_PROPERTY },
+                  type: { id: FIELDS_OF_STUDY_PROPERTY },
                   toEntity: { id: 'cs', name: 'Computing' },
                   entity: null,
                 },

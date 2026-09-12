@@ -1,7 +1,6 @@
 import { findMediaUrlValue } from '~/core/utils/media-url';
 
 import {
-  ACADEMIC_FIELDS_PROPERTY,
   DEGREE_PROPERTY,
   DESCRIPTION_PROPERTY,
   EDUCATION_STATUS_PROPERTY,
@@ -10,6 +9,7 @@ import {
   END_DATE_PROPERTY,
   type EducationStatus,
   type EmploymentStatus,
+  FIELDS_OF_STUDY_PROPERTY,
   GRADE_PROPERTY,
   LEGACY_FIELD_OF_STUDY_PROPERTY,
   LOCATION_PROPERTY,
@@ -295,13 +295,13 @@ export function normalizeEducation(edges: HistoryEdgeNode[]): EducationCard[] {
         const enrolmentRelations = relation.entity?.relationsList ?? [];
         const enrolmentValues = relation.entity?.valuesList ?? [];
         const fields = enrolmentRelations
-          .filter(field => field.type.id === ACADEMIC_FIELDS_PROPERTY)
+          .filter(field => field.type.id === FIELDS_OF_STUDY_PROPERTY)
           .map(field => field.toEntity)
           .filter((field): field is NamedRef => field !== null);
 
-        // Eleven records predate `Academic fields` and keep the discipline as
+        // Eleven records predate `Fields of study` and keep the discipline as
         // text on the stint. Shown, never written — they are the seed for real
-        // Academic field entities rather than a second way to store one.
+        // Field of study entities rather than a second way to store one.
         const legacyField = textFor(stintValues, LEGACY_FIELD_OF_STUDY_PROPERTY);
 
         return {
