@@ -110,8 +110,17 @@ describe('useDebateRematchClaimsForIds', () => {
     setCachedIdentityToken(null);
   });
 
-  // geo-chat rejects a request naming more than 100 claims outright, and losing that response
-  // takes every claim's positions with it — not only the ones past the limit.
+  /**
+   * geo-chat rejects a request naming more than **fifty** claims outright — `too_many_claim_ids`,
+   * "at most 50 claim IDs may be requested" — and losing that response takes every claim's positions
+   * with it, not only the ones past the limit. `retry: false` makes it permanent for that key, and
+   * `debate-gateway` deliberately leaves the socket alone, because reconnecting cannot fix a request
+   * that is simply too big.
+   *
+   * The cap here is the server's number written out rather than `REMATCH_CLAIM_ID_BATCH_SIZE`. This
+   * assertion read `<= 100` while the constant said 100, so it agreed with the bug instead of with
+   * geo-chat and passed for as long as the two were wrong together.
+   */
   it('splits an over-long id list across requests and merges the responses', async () => {
     const ids = Array.from({ length: 150 }, (_, index) => `claim-${index}`);
     mocks.listDebateRematchClaims.mockImplementation((_sessionId: string, claimIds: string[]) =>
@@ -131,7 +140,7 @@ describe('useDebateRematchClaimsForIds', () => {
     await waitFor(() => expect(result.current.data.claims).toHaveLength(150));
     const batchSizes = mocks.listDebateRematchClaims.mock.calls.map(([, claimIds]) => claimIds.length);
     expect(batchSizes.length).toBeGreaterThan(1);
-    expect(batchSizes.every(size => size <= 100)).toBe(true);
+    expect(batchSizes.every(size => size <= 50)).toBe(true);
     expect(batchSizes.reduce((sum, size) => sum + size, 0)).toBe(150);
     // Exclusions from every batch count, deduped.
     expect(result.current.data.excluded_claim_ids.sort()).toEqual(
@@ -1281,7 +1290,6 @@ function rematchSession(): DebateRematchSession {
     updated_at: '2026-07-02T00:00:01.000Z',
   };
 }
-
 
 /**
  * The rows behind these keys carry `viewer_response`, `viewer_debate_ready` and the readiness

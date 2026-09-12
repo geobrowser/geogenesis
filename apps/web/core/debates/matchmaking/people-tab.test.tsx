@@ -186,13 +186,13 @@ describe('PeopleTab', () => {
 
   // GEO-2840. Waiting is the only other thing to do while the room is empty, so the empty state
   // offers somewhere to go instead — the Claims tab, which is full whether or not anyone is online.
-  it('offers a way through to claims when nobody is online', async () => {
+  it('offers a way through to Explore when nobody is online', async () => {
     mocks.people = [];
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Explore claims' }));
 
-    expect(mocks.onTabChange).toHaveBeenCalledWith('claims');
+    expect(mocks.onTabChange).toHaveBeenCalledWith('explore');
   });
 
   // A search the viewer can undo gets the undo instead: there is something to do here, so sending

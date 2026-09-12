@@ -25,7 +25,17 @@ const DEBATES_PATHNAME = '/explore';
  * `DebatesHubTab` show up here, instead of letting it silently become the one tab no link can
  * reach — `readonly DebatesHubTab[]` type-checks each entry but never that they are all present.
  */
-const TABS: Record<DebatesHubTab, true> = { claims: true, people: true, matches: true, requests: true };
+const TABS: Record<DebatesHubTab, true> = { lobby: true, people: true, explore: true, requests: true };
+
+/**
+ * The names the tabs used before GEO-2861, kept resolvable.
+ *
+ * These links are written by hand and pasted into emails, so the ones already sent outlive the
+ * rename. `claims` was the browse surface and is now `explore`; `matches` was one of the two ways
+ * to find a debate now and is now Lobby's toggled-on state, so `lobby` is where it lands — the
+ * toggle itself is the viewer's standing preference and is not something a link should flip.
+ */
+const RENAMED_TABS: Record<string, DebatesHubTab> = { claims: 'explore', matches: 'lobby' };
 
 /**
  * The hub's reading of `modalTarget`: a tab name, or null to let the hub pick its own landing tab.
@@ -40,7 +50,10 @@ const TABS: Record<DebatesHubTab, true> = { claims: true, people: true, matches:
 export function debatesPanelTab(target: string | null): DebatesHubTab | null {
   // `Object.hasOwn` rather than `in`, which would walk the prototype and resolve
   // `?modalTarget=toString` to a tab.
-  return target !== null && Object.hasOwn(TABS, target) ? (target as DebatesHubTab) : null;
+  if (target === null) return null;
+  if (Object.hasOwn(TABS, target)) return target as DebatesHubTab;
+
+  return Object.hasOwn(RENAMED_TABS, target) ? (RENAMED_TABS[target] ?? null) : null;
 }
 
 /**

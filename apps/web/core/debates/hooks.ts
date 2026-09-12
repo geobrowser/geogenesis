@@ -25,6 +25,7 @@ import {
   type DebateParticipantSummary,
   type DebateRematchClaimsResponse,
   type DebateRematchParticipant,
+  GEO_CHAT_CLAIM_IDS_PER_REQUEST,
   GeoChatRequestError,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
@@ -285,7 +286,7 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
 }
 
 /** Maximum number of ids accepted by geo-chat's per-space debate-claims endpoint. */
-export const DEBATE_CLAIM_ID_BATCH_SIZE = 50;
+export const DEBATE_CLAIM_ID_BATCH_SIZE = GEO_CHAT_CLAIM_IDS_PER_REQUEST;
 
 /**
  * Smallest chunk a content-defined boundary may close, and how often such a boundary occurs. Chosen
@@ -855,8 +856,12 @@ export function useLeaveDebateRematch(sessionId: string) {
 /**
  * geo-chat rejects a request naming more than this many claims outright, so a caller browsing more
  * claims than this has to ask in batches rather than in one request that 400s.
+ *
+ * {@link GEO_CHAT_CLAIM_IDS_PER_REQUEST}, rather than a number of its own. This said a hundred
+ * against a server that caps at fifty, so every batch that filled past fifty 400'd with
+ * `too_many_claim_ids` — permanently, since `debateQueryNetworkOptions` sets `retry: false`.
  */
-export const REMATCH_CLAIM_ID_BATCH_SIZE = 100;
+export const REMATCH_CLAIM_ID_BATCH_SIZE = GEO_CHAT_CLAIM_IDS_PER_REQUEST;
 
 /**
  * {@link useDebateRematchClaims} for a list of ids of any length, split across as many requests as

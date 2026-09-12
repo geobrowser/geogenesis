@@ -186,7 +186,7 @@ export function DebatesBrowseFeed({
   // finish what they pressed rather than returning them to the feed to press it again.
   const openPrivySignIn = usePrivySignIn(() => {
     setOpenPanel(null);
-    debatesHub.open('claims');
+    debatesHub.open('lobby');
   });
   // Privy, not the smart account: `useSmartAccount` reports null while the account is restoring
   // and after an initialization failure as well as when nobody is signed in, and sending a
@@ -340,7 +340,7 @@ export function DebatesBrowseFeed({
             // The hub is its own portal, so the feed's panel state stays out of it. Closing the
             // in-flow panel first keeps the two from stacking over the same feed.
             setOpenPanel(null);
-            debatesHub.open('claims');
+            debatesHub.open('lobby');
           }}
           onOpenClaims={() => {
             setActiveId(debate.id);

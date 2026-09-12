@@ -1,14 +1,41 @@
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { MatchmakingTopic } from '~/core/debates/api';
+import type { ClaimPickerEntity } from '~/core/debates/claim-picker-page';
+
+/**
+ * The topics each claim entity carries, keyed by claim id.
+ *
+ * The graph is the only source for these. geo-chat fills `topics: []` on every matchmaking and
+ * rematch row it sends and answers about topics in a facet beside them where it answers at all, so
+ * a list built from its rows resolves them from the entity or not at all — reading that empty array
+ * the other way round is what emptied the list in GEO-2714.
+ *
+ * A claim carrying none is left out rather than mapped to an empty array, so `get(id) ?? []` and
+ * {@link carriesEveryTopic} both read "none" the same way whether the claim was looked up or not.
+ */
+export function claimTopicsById(
+  entities: Iterable<Pick<ClaimPickerEntity, 'id' | 'relations'>>
+): Map<string, MatchmakingTopic[]> {
+  const map = new Map<string, MatchmakingTopic[]>();
+
+  for (const entity of entities) {
+    const topics = entity.relations
+      .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
+      .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
+    if (topics.length > 0) map.set(entity.id, topics);
+  }
+
+  return map;
+}
 
 /**
  * Which topics the topic menu should offer, and what to do with a selection the menu no
  * longer holds.
  *
- * Only the rematch picker's graph-backed tabs reach for this now. Its All tab and the hub's
- * Claims tab both read geo-chat's `topic_facets`, which describes the whole filtered corpus
- * rather than the pages a client happens to have walked (GEO-2659) — but the opponent and
- * curated tabs are built from Knowledge Graph entities geo-chat has never seen, so their
- * menus are still derived from the claims on screen.
+ * For the menus built from the claims on screen: the rematch picker's by-id lists, and Lobby's
+ * matches list. Explore and the picker's tagged sources read a server facet instead, which
+ * describes the whole filtered corpus rather than the pages a client happens to have walked
+ * (GEO-2659) — the lists here are fetched whole, so their own rows are the complete answer.
  */
 
 /**

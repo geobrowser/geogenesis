@@ -144,7 +144,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
           emptyAction={
             searchExcludedEveryone
               ? { label: 'Clear search', onClick: () => setSearch('') }
-              : { label: 'Explore claims', onClick: () => onTabChange('claims') }
+              : { label: 'Explore claims', onClick: () => onTabChange('explore') }
           }
           signInAction={
             onRequireSignIn
