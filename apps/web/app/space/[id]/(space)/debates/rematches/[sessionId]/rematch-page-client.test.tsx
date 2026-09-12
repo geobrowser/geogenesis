@@ -50,6 +50,7 @@ const mocks = vi.hoisted(() => ({
   relatedWheres: [] as unknown[],
   relatedFirsts: [] as Array<number | undefined>,
   relatedAfters: [] as Array<string | undefined>,
+  excludedClaimIds: [CLAIM_SOURCE] as string[],
   relatedDefers: [] as Array<boolean | undefined>,
   relatedPrefetches: [] as Array<boolean | undefined>,
   entityHydrations: [] as Array<{ id: string; spaceId?: string }>,
@@ -305,7 +306,7 @@ function rematchClaimsLookup(claimIds: string[]) {
     return { data: { claims: [], excluded_claim_ids: [] }, isLoading: true, error: null };
   }
   return {
-    data: { claims: mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
+    data: { claims: mocks.claims, excluded_claim_ids: mocks.excludedClaimIds },
     isLoading: false,
     error: null,
   };
@@ -797,6 +798,7 @@ beforeEach(() => {
   mocks.relatedWheres.length = 0;
   mocks.relatedFirsts.length = 0;
   mocks.relatedAfters.length = 0;
+  mocks.excludedClaimIds = [CLAIM_SOURCE];
   mocks.relatedDefers.length = 0;
   mocks.relatedPrefetches.length = 0;
   mocks.entityHydrations.length = 0;
@@ -4078,7 +4080,7 @@ describe('the Related tab', () => {
   const RELATED = '019fedb9-7db8-7a05-9b88-9de4cf60bb75';
   const GOV_TOPIC = { id: 'topic-gov', name: 'Governance' };
 
-  function topicEntity(id: string, name: string) {
+  function topicEntity(id: string, name: string, topic = GOV_TOPIC) {
     return {
       id,
       name,
@@ -4086,10 +4088,13 @@ describe('the Related tab', () => {
       spaces: [SPACE_1],
       values: [{ property: { id: NAME_PROPERTY }, spaceId: SPACE_1, value: name }],
       relations: [
-        { type: { id: TOPICS_PROPERTY_ID }, spaceId: SPACE_1.replace(/-/g, ''), toEntity: GOV_TOPIC, isDeleted: false },
+        { type: { id: TOPICS_PROPERTY_ID }, spaceId: SPACE_1.replace(/-/g, ''), toEntity: topic, isDeleted: false },
       ],
     };
   }
+
+  /** The graph's spelling of an id geo-chat writes with hyphens. */
+  const bareHex = (id: string) => id.replace(/-/g, '');
 
   /** The claim the pair just argued, carrying the topic its neighbours are found by. */
   const sourceClaimEntity = () => topicEntity(CLAIM_SOURCE, 'The claim just debated');
@@ -4221,6 +4226,121 @@ describe('the Related tab', () => {
     }
   });
 
+  // The session is the head of the chain, and until it lands there is no `source_debate_id` to
+  // disable discovery *with* — so an idle chain there says nothing, and reading it as "no
+  // neighbours" drew the strip without Related and then moved the pair when the session arrived.
+  it('holds the slot while the session itself is still loading', async () => {
+    debateWithRelated();
+    mocks.session = null;
+    mocks.sessionLoading = true;
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: 'Related' })).toBeInTheDocument();
+  });
+
+  /**
+   * The allowlist fails open — a null set reads as "don't filter" — so while it is in flight the
+   * query runs for a space the response may go on to exclude. Treating that as a settled answer
+   * offered the tab and then took it away, which is the one thing the reservation exists to avoid.
+   */
+  it('holds the slot while the publishable-space allowlist is still resolving', async () => {
+    debateWithRelated();
+    mocks.relatedEntities = [];
+    mocks.publishableSpacesLoading = true;
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: 'Related' })).toBeInTheDocument();
+  });
+
+  /**
+   * A tab can be picked while its slot is only reserved, and the count can then land empty. The
+   * button goes, and a choice that outlived it left the viewer on a tab that was neither visible
+   * nor reachable, showing nothing.
+   */
+  it('discards a chosen Related tab once it stops being offered', async () => {
+    debateWithRelated();
+    mocks.relatedEntitiesLoading = true;
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // Picked while reserved, which is the only window in which this can happen.
+    fireEvent.click(await screen.findByRole('button', { name: 'Related' }));
+
+    // And the count lands empty: only the debated claim came back.
+    mocks.relatedEntitiesLoading = false;
+    mocks.relatedEntities = [sourceClaimEntity()];
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+    expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  /**
+   * `rowFromEntity` treats the space it is handed as a preference and falls back to the claim's own
+   * ranking when a debate could not be published there. For every other source that fallback is a
+   * reasonable second answer; here it is a wrong one — the topic and the Debate tag were satisfied
+   * in the debated claim's space and nothing was asked about any other, so a row drawn elsewhere
+   * rests on relations that may not exist there.
+   */
+  it('drops a neighbour that would be drawn in a space the clause never asked about', async () => {
+    const elsewhere = {
+      ...relatedEntity(),
+      // Named in both — `claimHomeSpaceId` ranks the spaces a claim is *named* in, so a second
+      // space it is merely listed under is not a home it can fall back to — and only the second can
+      // carry a published debate.
+      spaces: [SPACE_1, SPACE_2],
+      values: [
+        { property: { id: NAME_PROPERTY }, spaceId: SPACE_1, value: 'A claim on the same topic' },
+        { property: { id: NAME_PROPERTY }, spaceId: SPACE_2, value: 'A claim on the same topic' },
+      ],
+    };
+    mocks.entities = [sharedEntity(), sourceClaimEntity(), elsewhere];
+    mocks.relatedEntities = [sourceClaimEntity(), elsewhere];
+    // A personal space cannot carry a published debate, so the preference is refused and the row
+    // would otherwise be drawn under SPACE_2.
+    mocks.spaceTypes = { [SPACE_1]: 'PERSONAL' };
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByText('A claim on the same topic')).toBeNull();
+  });
+
+  /**
+   * geo-chat spells a claim id as a hyphenated UUID and the graph as bare hex, and every list on
+   * this page joins the two. The fixtures above use one spelling for both sides — as master's do —
+   * so they cannot see that join fail; these two use the spellings production uses.
+   *
+   * Not a Related-specific hazard. The page keys its session rows, exclusions, rejected ids and
+   * topics on geo-chat's spelling and reads all four back with a graph entity id, so this is the
+   * whole page's join and these two tests stand for it.
+   */
+  it('flags a Related row geo-chat rejected under the other spelling of its id', async () => {
+    mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity(bareHex(RELATED))];
+    mocks.relatedEntities = [sourceClaimEntity(), relatedEntity(bareHex(RELATED))];
+    // geo-chat's own spelling, as the session carries it.
+    mocks.session = session({ recently_rejected_claim_ids: [RELATED] });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByRole('button', { name: 'Related' });
+
+    expect(await screen.findByText('A claim on the same topic')).toBeInTheDocument();
+    expect(screen.getByText('Recently rejected')).toBeInTheDocument();
+  });
+
+  it('drops a Related row geo-chat excluded under the other spelling of its id', async () => {
+    mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity(bareHex(RELATED))];
+    mocks.relatedEntities = [sourceClaimEntity(), relatedEntity(bareHex(RELATED))];
+    mocks.excludedClaimIds = [CLAIM_SOURCE, RELATED];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByText('A claim on the same topic')).toBeNull();
+  });
+
   /**
    * A whole window can come back undrawable — the debated claim is in it, and so is every neighbour
    * whose name has not indexed — and the count of what is left decides whether the tab exists. So
@@ -4245,6 +4365,41 @@ describe('the Related tab', () => {
     expect(await screen.findByText('A claim on the same topic')).toBeInTheDocument();
     // Anchored on the first window's end rather than restarting it, so the walk is a step forward.
     expect(mocks.relatedAfters.filter(Boolean)).toContain('33');
+  });
+
+  /**
+   * The topics are part of the question, not just the claim. They arrive from hydration, so a first
+   * window can be walked against a cached topic set and a later one replaces it — and a cursor from
+   * the old result set anchors nothing in the new one. Kept, it starts the new query midway through
+   * a result set it never saw the front of, silently skipping its first window.
+   */
+  it('walks from the start again when the claim’s topics arrive', async () => {
+    const undrawable = Array.from({ length: 34 }, (_, index) => ({
+      ...topicEntity(`019fedb9-7db8-7a05-9b88-9de4cf60bc${index.toString().padStart(2, '0')}`, 'unindexed'),
+      name: null,
+    }));
+    mocks.entities = [sharedEntity(), sourceClaimEntity()];
+    mocks.relatedEntities = undrawable;
+
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+    expect(mocks.relatedAfters.filter(Boolean)).toContain('33');
+
+    // Hydration lands a different topic set for the same claim, so the query is a new question.
+    const OTHER_TOPIC = { id: 'topic-eth', name: 'Ethics' };
+    mocks.entities = [
+      sharedEntity(),
+      topicEntity(CLAIM_SOURCE, 'The claim just debated', OTHER_TOPIC),
+      relatedEntity(),
+    ];
+    mocks.relatedEntities = [relatedEntity()];
+    mocks.relatedAfters.length = 0;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    // Every window asked for since the topics changed starts at the front.
+    expect(mocks.relatedAfters.filter(Boolean)).toEqual([]);
+    expect(await screen.findByText('A claim on the same topic')).toBeInTheDocument();
   });
 
   // The walk is bounded: each step is a request, and a topic whose claims are mostly unnamed would

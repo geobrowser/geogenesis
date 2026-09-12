@@ -1,6 +1,7 @@
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { MatchmakingTopic } from '~/core/debates/api';
 import type { ClaimPickerEntity } from '~/core/debates/claim-picker-page';
+import { normId } from '~/core/utils/norm-id';
 
 /**
  * The topics each claim entity carries, keyed by claim id.
@@ -10,8 +11,14 @@ import type { ClaimPickerEntity } from '~/core/debates/claim-picker-page';
  * a list built from its rows resolves them from the entity or not at all — reading that empty array
  * the other way round is what emptied the list in GEO-2714.
  *
- * A claim carrying none is left out rather than mapped to an empty array, so `get(id) ?? []` and
+ * A claim carrying none is left out rather than mapped to an empty array, so {@link topicsFor} and
  * {@link carriesEveryTopic} both read "none" the same way whether the claim was looked up or not.
+ *
+ * Keyed canonically, and read back through {@link topicsFor} rather than `get`. The keys are graph
+ * entity ids — bare hex — while every caller looks these up by the `claim_entity_id` on a geo-chat
+ * row, which is a UUID and may carry hyphens. A raw `get` across that boundary silently answers
+ * "no topics", which is not an absence anyone can see: the claim just quietly loses its topic
+ * labels, drops out of the facet, and disappears from the list the moment a topic is picked.
  */
 export function claimTopicsById(
   entities: Iterable<Pick<ClaimPickerEntity, 'id' | 'relations'>>
@@ -22,10 +29,23 @@ export function claimTopicsById(
     const topics = entity.relations
       .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
       .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
-    if (topics.length > 0) map.set(entity.id, topics);
+    if (topics.length > 0) map.set(normId(entity.id), topics);
   }
 
   return map;
+}
+
+/**
+ * The topics recorded for a claim, whichever spelling of its id the caller holds.
+ *
+ * Exists so no caller reaches into the map directly: the normalization has to happen on both sides
+ * of the lookup to be worth anything, and a `get` that skipped it would fail silently.
+ */
+export function topicsFor(
+  topicsByClaimId: ReadonlyMap<string, MatchmakingTopic[]>,
+  claimEntityId: string
+): MatchmakingTopic[] | undefined {
+  return topicsByClaimId.get(normId(claimEntityId));
 }
 
 /**

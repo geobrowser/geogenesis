@@ -12,6 +12,7 @@ import {
   keepSelectableTopics,
   keepSelectedVisible,
   orderFacetOptions,
+  topicsFor,
 } from './topic-facets';
 
 const ai: MatchmakingTopic = { id: 'topic-ai', name: 'AI' };
@@ -42,7 +43,7 @@ describe('claimTopicsById', () => {
   it('keys each claim entity by id, carrying the topics it points at', () => {
     const map = claimTopicsById([entity('claim-1', [{ topicId: 'topic-ai', name: 'AI' }])]);
 
-    expect(map.get('claim-1')).toEqual([ai]);
+    expect(topicsFor(map, 'claim-1')).toEqual([ai]);
   });
 
   // The rule the three call sites were each spelling out: a relation of another type is not a
@@ -56,22 +57,35 @@ describe('claimTopicsById', () => {
       ]),
     ]);
 
-    expect(map.get('claim-1')).toEqual([ai]);
+    expect(topicsFor(map, 'claim-1')).toEqual([ai]);
   });
 
-  // So `get(id) ?? []` and `carriesEveryTopic(get(id), …)` read "none" the same way whether the
-  // claim was looked up and carries nothing or was never looked up at all.
+  // So `topicsFor(map, id) ?? []` and `carriesEveryTopic(topicsFor(map, id), …)` read "none" the
+  // same way whether the claim was looked up and carries nothing or was never looked up at all.
   it('leaves out a claim carrying no topics rather than mapping it to an empty list', () => {
     const map = claimTopicsById([entity('claim-1', []), entity('claim-2', [{ topicId: 'topic-ai', name: 'AI' }])]);
 
-    expect(map.has('claim-1')).toBe(false);
-    expect([...map.keys()]).toEqual(['claim-2']);
+    expect(topicsFor(map, 'claim-1')).toBeUndefined();
+    expect(topicsFor(map, 'claim-2')).toEqual([ai]);
+    expect(map.size).toBe(1);
+  });
+
+  /**
+   * The keys are graph entity ids — bare hex — and every caller looks them up by the
+   * `claim_entity_id` on a geo-chat row, which is a hyphenated UUID for the same claim. A raw `get`
+   * across that boundary answers "no topics", and nothing about that reads as a failure: the claim
+   * simply loses its labels, leaves the facet, and vanishes the moment a topic is picked.
+   */
+  it('answers for a geo-chat spelling of the same claim', () => {
+    const map = claimTopicsById([entity('a1b2c3d4e5f6478899aabbccddeeff00', [{ topicId: 'topic-ai', name: 'AI' }])]);
+
+    expect(topicsFor(map, 'a1b2c3d4-e5f6-4788-99aa-bbccddeeff00')).toEqual([ai]);
   });
 
   it('carries an unnamed topic as null rather than dropping it', () => {
     const map = claimTopicsById([entity('claim-1', [{ topicId: 'topic-unnamed' }])]);
 
-    expect(map.get('claim-1')).toEqual([unnamed]);
+    expect(topicsFor(map, 'claim-1')).toEqual([unnamed]);
   });
 });
 

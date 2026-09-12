@@ -81,7 +81,7 @@ export function useRelatedDebateClaims({
   // as "don't filter" — see that hook. Discovery fails open for the same reason its other callers
   // do: a list that briefly offers a space the reconciliation goes on to remove is better than a
   // list that waits on it.
-  const { publishableSpaceIds } = useDebatePublishableSpaces();
+  const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces();
 
   /**
    * Topics live on the graph entity rather than geo-chat's claim summary, and they are assigned *per
@@ -128,16 +128,22 @@ export function useRelatedDebateClaims({
    * (`claim-related-claims.tsx`), so a tab that gave up where the gallery does not would have been
    * two surfaces disagreeing about the same claim.
    */
-  const [walked, setWalked] = React.useState<{ cursor: string; windows: number } | null>(null);
-
-  // Back to the first window whenever the question changes; a cursor from the previous claim's
-  // result set anchors nothing in this one.
-  React.useEffect(() => {
-    setWalked(null);
-  }, [claimId, spaceId]);
+  /**
+   * A cursor belongs to the question it was issued against, so it is stored with that question and
+   * ignored the moment the question changes — rather than cleared by an effect, which would run a
+   * render *after* the change and spend one request anchored in the old result set.
+   *
+   * The topics are part of the question, not just the claim: they arrive from hydration, so the
+   * first windows can be walked against a cached topic set and a later one replaces it. A cursor
+   * kept across that starts the new query midway through a result set it never saw the front of,
+   * and the rows it skipped are simply never offered.
+   */
+  const question = `${claimId ?? ''}:${spaceId ?? ''}:${topicIds.join(',')}`;
+  const [walked, setWalked] = React.useState<{ question: string; cursor: string; windows: number } | null>(null);
+  const walkedHere = walked?.question === question ? walked : null;
 
   const entitiesQuery = useQueryEntities({
-    after: walked?.cursor,
+    after: walkedHere?.cursor,
     where: relatedClaimsWhere({
       spaceId: spaceId ?? '',
       topicIds,
@@ -191,7 +197,7 @@ export function useRelatedDebateClaims({
     claimIds.length === 0 &&
     entitiesQuery.hasNextPage &&
     entitiesQuery.endCursor !== null &&
-    (walked?.windows ?? 0) < RELATED_MAX_EXTRA_WINDOWS;
+    (walkedHere?.windows ?? 0) < RELATED_MAX_EXTRA_WINDOWS;
 
   React.useEffect(() => {
     if (!walking) return;
@@ -199,8 +205,12 @@ export function useRelatedDebateClaims({
     if (cursor === null) return;
     // Guarded on the cursor rather than set outright: this effect re-runs while the next window is
     // in flight, and re-setting the same anchor would be a render loop rather than a step.
-    setWalked(current => (current?.cursor === cursor ? current : { cursor, windows: (current?.windows ?? 0) + 1 }));
-  }, [walking, entitiesQuery.endCursor]);
+    setWalked(current =>
+      current?.question === question && current.cursor === cursor
+        ? current
+        : { question, cursor, windows: (current?.question === question ? current.windows : 0) + 1 }
+    );
+  }, [walking, entitiesQuery.endCursor, question]);
 
   return {
     claimIds,
@@ -213,7 +223,12 @@ export function useRelatedDebateClaims({
     // caller that read "empty, settled" between two windows would drop the tab and then bring it
     // back. Not covered by a test — `render` flushes the whole walk inside one `act`, so every
     // assertion lands after it, and an assertion that cannot see the gap would pass without it.
-    isLoading: sourceQuery.isLoading || entitiesQuery.isLoading || walking,
+    // The allowlist counts too. It fails open — a null set reads as "don't filter" — so while it is
+    // in flight `queryEnabled` can be true for a space the response goes on to exclude, and a caller
+    // that treated this as settled would offer the tab and then take it away. Only while in flight:
+    // after an error the ids stay null and fail-open is the final answer, so waiting past that would
+    // be waiting forever.
+    isLoading: publishableSpacesLoading || sourceQuery.isLoading || entitiesQuery.isLoading || walking,
     error: sourceQuery.error ?? entitiesQuery.error ?? null,
   };
 }
