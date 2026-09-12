@@ -301,6 +301,13 @@ vi.mock('~/core/debates/hooks', () => ({
 
 function rematchClaimsLookup(claimIds: string[]) {
   mocks.rematchClaimIds.push(claimIds);
+  // Nothing asked for is nothing in flight, as it is on the hook this stands in for: no ids means
+  // no batches, and `useQueries([])` reports `isLoading: false`. A double that reported a load here
+  // let an empty list read as "still settling", which is a state the page cannot actually reach and
+  // a caller waiting on it could not be tested honestly.
+  if (claimIds.length === 0) {
+    return { data: { claims: [], excluded_claim_ids: [] }, isLoading: false, error: null };
+  }
   const isCuratedLookup = mocks.curatedIds.length > 0 && claimIds.every(claimId => mocks.curatedIds.includes(claimId));
   if (mocks.browsedLookupLoading && !isCuratedLookup) {
     return { data: { claims: [], excluded_claim_ids: [] }, isLoading: true, error: null };
@@ -538,6 +545,9 @@ vi.mock('~/core/sync/use-store', () => ({
 vi.mock('~/core/debates/claim-picker-page', () => ({
   useClaimEntitiesByIds: (ids: string[]) => {
     mocks.entityIdLookups.push(ids);
+    // Idle on an empty list, for the same reason as `rematchClaimsLookup` above: the real hook
+    // batches the ids and `useQueries([])` has nothing to load.
+    if (ids.length === 0) return { entities: [], isLoading: false, error: null };
     // Answerless while loading, as react-query is on a cold key. Without that a "loading" lookup
     // still handed back its fixtures, so nothing downstream could tell the two apart — and the
     // states that exist to wait for hydration were untestable.
@@ -4171,6 +4181,22 @@ describe('the Related tab', () => {
    * one place this tab gets ahead of what is known, and getting ahead of it here would mean a tab
    * appearing and vanishing on a session that could never have had one.
    */
+  /**
+   * And not even while the page-wide allowlist is in flight. That request runs whatever the session
+   * is, so counting it as pending here invented a tab on a session that can never have one — the
+   * allowlist only decides something where there is a claim for it to decide about.
+   */
+  it('holds no place for a challenge session while the allowlist is still out', async () => {
+    mocks.session = session({ source_debate_id: null });
+    debateWithRelated();
+    mocks.publishableSpacesLoading = true;
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+  });
+
   it('holds no place for a session with no debate behind it', async () => {
     mocks.session = session({ source_debate_id: null });
     debateWithRelated();
@@ -4339,6 +4365,32 @@ describe('the Related tab', () => {
     await settleTabSwap();
 
     expect(screen.queryByText('A claim on the same topic')).toBeNull();
+    // And the tab goes with it — see the test below.
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+  });
+
+  /**
+   * Two gates sit between what discovery found and what the tab shows: the claims this session
+   * excludes, and the ones whose space cannot carry a published debate. Whether the tab exists has
+   * to be asked after them.
+   *
+   * Asked before, a single neighbour that either gate removes still read as "has neighbours", and
+   * the pair were landed on a tab whose list was empty — the state the tab exists to avoid, arrived
+   * at by the tab itself. The fallback for "nothing left to argue" only works if the count is of
+   * what is left.
+   */
+  it('offers no tab when the only neighbour is one this session rules out', async () => {
+    mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity()];
+    // Discovery finds one, and the session has already ruled it out.
+    mocks.relatedEntities = [sourceClaimEntity(), relatedEntity()];
+    mocks.excludedClaimIds = [CLAIM_SOURCE, RELATED];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+    expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByText('No related claims are left to debate.')).toBeNull();
   });
 
   /**

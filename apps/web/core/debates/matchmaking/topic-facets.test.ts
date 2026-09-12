@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { MatchmakingTopic } from '~/core/debates/api';
+import { normId } from '~/core/utils/norm-id';
 
 import {
   availableTopics,
@@ -19,12 +20,18 @@ const ai: MatchmakingTopic = { id: 'topic-ai', name: 'AI' };
 const health: MatchmakingTopic = { id: 'topic-health', name: 'Health' };
 const unnamed: MatchmakingTopic = { id: 'topic-unnamed', name: null };
 
-const topicsByClaimId = new Map<string, MatchmakingTopic[]>([
-  ['claim-in-crypto', [ai]],
-  ['claim-in-health', [health]],
-  ['claim-in-both', [ai, health]],
-  ['claim-unnamed-topic', [unnamed]],
-]);
+// Keyed as `claimTopicsById` keys it, and carrying the relation's space as it does — `null` here,
+// which is "unknown" and so never narrows.
+const topicsByClaimId = new Map<string, Array<MatchmakingTopic & { spaceId: string | null }>>(
+  (
+    [
+      ['claim-in-crypto', [ai]],
+      ['claim-in-health', [health]],
+      ['claim-in-both', [ai, health]],
+      ['claim-unnamed-topic', [unnamed]],
+    ] as const
+  ).map(([claimId, topics]) => [normId(claimId), topics.map(topic => ({ ...topic, spaceId: null }))])
+);
 
 describe('claimTopicsById', () => {
   const TYPE_PROPERTY = '8f151ba4de204e3c9cb499ddf96f48f1';
@@ -80,6 +87,44 @@ describe('claimTopicsById', () => {
     const map = claimTopicsById([entity('a1b2c3d4e5f6478899aabbccddeeff00', [{ topicId: 'topic-ai', name: 'AI' }])]);
 
     expect(topicsFor(map, 'a1b2c3d4-e5f6-4788-99aa-bbccddeeff00')).toEqual([ai]);
+  });
+
+  /**
+   * Topics are assigned per space and a card is always drawn under one, so a topic the claim carries
+   * in another space is not one it carries here. Shown anyway, it went into the facet beside the
+   * card and picking it filtered the card in or out on something that is not true where the debate
+   * would be published — the query side of this is what `relatedClaimsWhere` scopes.
+   */
+  it('answers only for the space the card is drawn under', () => {
+    const map = claimTopicsById([
+      {
+        id: 'claim-1',
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, spaceId: 'space-here', toEntity: { id: 'topic-ai', name: 'AI' } },
+          {
+            type: { id: TOPICS_PROPERTY_ID },
+            spaceId: 'space-elsewhere',
+            toEntity: { id: 'topic-health', name: 'Health' },
+          },
+        ],
+      },
+    ]);
+
+    expect(topicsFor(map, 'claim-1', 'space-here')).toEqual([ai]);
+    expect(topicsFor(map, 'claim-1', 'space-elsewhere')).toEqual([health]);
+    // No space asked about is no narrowing, which is what the facets do when they have none.
+    expect(topicsFor(map, 'claim-1')).toEqual([ai, health]);
+  });
+
+  /**
+   * Not every projection selects the relation's space — the tagged catalog does not — and an unknown
+   * space cannot be compared to one. Dropping those would empty the facet for a whole source rather
+   * than narrow it, which is a worse answer than a slightly wide one.
+   */
+  it('keeps a topic whose space it was never told', () => {
+    const map = claimTopicsById([entity('claim-1', [{ topicId: 'topic-ai', name: 'AI' }])]);
+
+    expect(topicsFor(map, 'claim-1', 'space-here')).toEqual([ai]);
   });
 
   it('carries an unnamed topic as null rather than dropping it', () => {

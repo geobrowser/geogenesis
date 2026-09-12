@@ -111,12 +111,16 @@ export function useRelatedDebateClaims({
    * quietly return the space's entire claim list. Skipped too when the claim's own space cannot
    * carry a published debate: every row is drawn in that space, so there is nothing to ask for.
    */
-  const queryEnabled =
-    enabled &&
-    claimId !== null &&
-    spaceId !== null &&
-    topicIds.length > 0 &&
-    isSpaceDebatePublishable(spaceId, publishableSpaceIds);
+  /**
+   * Whether there is anything to discover at all — a claim, its space, and something to be related
+   * *by*. Separate from {@link queryEnabled} because the allowlist below is the one input that can
+   * still be in flight when the answer is already no, and reporting that as pending invented a tab
+   * on a session that could never have one: a profile-challenge rematch has no debated claim, but
+   * the allowlist is a page-wide request that is in flight regardless.
+   */
+  const discoverable = enabled && claimId !== null && spaceId !== null && topicIds.length > 0;
+
+  const queryEnabled = discoverable && isSpaceDebatePublishable(spaceId ?? '', publishableSpaceIds);
 
   /**
    * Where discovery has walked to, and how far.
@@ -223,12 +227,15 @@ export function useRelatedDebateClaims({
     // caller that read "empty, settled" between two windows would drop the tab and then bring it
     // back. Not covered by a test — `render` flushes the whole walk inside one `act`, so every
     // assertion lands after it, and an assertion that cannot see the gap would pass without it.
-    // The allowlist counts too. It fails open — a null set reads as "don't filter" — so while it is
-    // in flight `queryEnabled` can be true for a space the response goes on to exclude, and a caller
-    // that treated this as settled would offer the tab and then take it away. Only while in flight:
-    // after an error the ids stay null and fail-open is the final answer, so waiting past that would
-    // be waiting forever.
-    isLoading: publishableSpacesLoading || sourceQuery.isLoading || entitiesQuery.isLoading || walking,
+    // The allowlist counts too, but only where there is something for it to decide. It fails open —
+    // a null set reads as "don't filter" — so while it is in flight `queryEnabled` can be true for a
+    // space the response goes on to exclude, and a caller that treated this as settled would offer
+    // the tab and then take it away. Where nothing is discoverable it decides nothing, and reporting
+    // it would hold a slot open on a session that can never fill it. Only while in flight, either
+    // way: after an error the ids stay null and fail-open is the final answer, so waiting past that
+    // would be waiting forever.
+    isLoading:
+      (discoverable && publishableSpacesLoading) || sourceQuery.isLoading || entitiesQuery.isLoading || walking,
     error: sourceQuery.error ?? entitiesQuery.error ?? null,
   };
 }

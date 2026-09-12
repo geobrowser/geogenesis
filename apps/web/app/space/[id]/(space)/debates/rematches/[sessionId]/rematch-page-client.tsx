@@ -340,18 +340,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const relatedDiscoveryPending = sourceDebateQuery.isLoading || related.isLoading;
 
   /**
-   * Whether it has rows.
-   *
-   * A discovery failure reads as "no related claims" rather than surfacing an error, the same way a
-   * failed curator lookup leaves Recommended out of the Explore menu: this tab is an enhancement on
-   * top of a picker that works without it, so a lookup nobody asked for should not put an error in
-   * front of someone who came here to choose a claim.
-   */
-  const hasRelated = relatedDiscoveryError === null && relatedClaimIds.length > 0;
-
-  /**
-   * Whether it is still being counted. A failure decides it as surely as an answer does, so nothing
-   * still in flight is waited on past that point.
+   * Whether discovery is still working, which is the first half of whether the tab is offered. A
+   * failure decides it as surely as an answer does, so nothing still in flight is waited on past
+   * that point.
    *
    * Nothing to discover reads as decided, without asking the session whether it came out of a
    * debate: a session from a profile challenge disables the source-debate query, and no claim
@@ -367,42 +358,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const relatedPending = sessionQuery.isLoading || (relatedDiscoveryError === null && relatedDiscoveryPending);
 
   /**
-   * Whether the tab is offered — and it is offered while still being counted, not only once it has
-   * rows.
+   * A tab the viewer picked, where it is this session's.
    *
-   * This is the one place the tab deliberately gets ahead of what is known, and it is the lesser of
-   * two flickers. Withholding it until the count landed meant the strip rendered without Related and
-   * the pair started on the opponent's positions, then a moment later the tab appeared and moved
-   * them — on every rematch out of a debate, which is the common case. Holding the slot instead
-   * costs a tab that goes away when a debated claim turns out to have no neighbours left to argue,
-   * which is the rare one. Both are a reflow; only one of them happens most of the time.
-   *
-   * Cheap to hold because the room has usually already answered it — see `useRelatedDebateClaims`.
-   */
-  const relatedOffered = hasRelated || relatedPending;
-
-  /**
-   * Where the pair land, and it is not a fixed answer.
-   *
-   * Related when this session came out of a debate with neighbours to argue next — the continuation
-   * of what just happened is closer to what they came for than any catalogue. The opponent's
-   * positions otherwise, which is where GEO-2861 put it and remains right when there is no debate
-   * behind the session.
-   *
-   * Per pair, not per viewer: a choice made about the last opponent is not a choice about this one.
-   */
-  /**
-   * A choice is honoured except when it names a tab that is no longer there.
-   *
-   * Related can be picked while its slot is only reserved, and then the count can land empty or the
-   * lookup can fail — taking the button away while `chosenTab` still says `related`, which left the
-   * viewer on a tab with no way back to it and nothing in it. A choice cannot outlive its tab, so it
-   * falls back to the same place the landing decision does.
+   * Read here rather than at the landing decision below, because two queries are gated on Explore
+   * being open and the resolved tab is not available yet — it now waits on the Related rows, which
+   * wait on those queries. Asking the choice instead is not a weaker question: Explore is only ever
+   * reached by picking it, so a resolved `tab` of `explore` and a *chosen* one are the same state.
    */
   const chosenForSession = chosenTab?.sessionId === sessionId ? chosenTab.tab : null;
-  const chosenIsAvailable = chosenForSession !== 'related' || relatedOffered;
-  const tab: PickerTab =
-    chosenForSession !== null && chosenIsAvailable ? chosenForSession : relatedOffered ? 'related' : 'opponent';
+
+  /** Whether the viewer is in the browse tab, which is the only way to be in it. */
+  const browsing = chosenForSession === 'explore';
 
   // GEO-2683. Fetched only when Featured is the source on screen — it is one option in a menu, and
   // the other two answer for themselves.
@@ -447,7 +413,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * on screen. The picker lands on the opponent's positions, and a returning pair should not wait
    * behind a lookup for a list nobody has asked for. Same shape as `taggedEnabled` below.
    */
-  const viewerSourced = tab === 'explore' && source === 'mine';
+  const viewerSourced = browsing && source === 'mine';
   const viewerClaimIds = React.useMemo(
     () => (viewerSourced ? claimIdsAnsweredBy(positions.byClaim, localParticipant?.profile_space_id ?? null) : []),
     [localParticipant, positions.byClaim, viewerSourced]
@@ -486,7 +452,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // would open Explore cold. The rows lookup is keyed on the session; the warm-up has to be too.
   const [warmedSessionId, setWarmedSessionId] = React.useState<string | null>(null);
   const browseWarmed = warmedSessionId === sessionId;
-  const taggedEnabled = (tab === 'explore' || !browseWarmed) && (source === 'featured' || source === 'all');
+  const taggedEnabled = (browsing || !browseWarmed) && (source === 'featured' || source === 'all');
   // What goes to the server, so the page and both facet menus describe the same set of spaces.
   //
   // Two of the three gates can be sent; one cannot. The viewer's allowlist and the acceptor's
@@ -908,7 +874,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * there is nothing to defer to and nothing to gate.
    */
   const carriesPickedTopics = React.useCallback(
-    (claimEntityId: string) => carriesEveryTopic(topicsFor(topicsByClaimId, claimEntityId), topicIds),
+    // Scoped to the space the card is drawn under: topics are assigned per space, so a topic the
+    // claim carries somewhere else is not one it carries here.
+    (claimEntityId: string, spaceId: string) =>
+      carriesEveryTopic(topicsFor(topicsByClaimId, claimEntityId, spaceId), topicIds),
     [topicIds, topicsByClaimId]
   );
 
@@ -1063,6 +1032,51 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     ]
   );
   const relatedClaims = useLastSettled(relatedClaimsNow, relatedClaimsSettling, sessionId);
+
+  /**
+   * Whether the tab is offered — and so, below, whether it is where the pair land.
+   *
+   * Read off the finished rows rather than off what discovery found, because between the two sit
+   * two gates that can empty the list: the claims this session excludes, and the ones whose space
+   * cannot carry a published debate. Counting discovery's answer meant a single neighbour that
+   * `excluded_claim_ids` removes still read as "has neighbours", and the pair landed on a tab whose
+   * list was empty — the state this tab is meant to avoid, arrived at by the tab itself.
+   *
+   * Offered while the rows are still settling, too, which is the one place it deliberately gets
+   * ahead of what is known, and is the lesser of two flickers. Withholding it until the count landed
+   * meant the strip rendered without Related and the pair started on the opponent's positions, then
+   * a moment later the tab appeared and moved them — on every rematch out of a debate, which is the
+   * common case. Holding the slot costs a tab that goes away when a debated claim turns out to have
+   * nothing left to argue, which is the rare one. Both are a reflow; only one happens most of the
+   * time. And cheap to hold, because the room has usually answered it already — see
+   * `useRelatedDebateClaims`.
+   *
+   * A discovery failure reads as "no related claims" rather than surfacing an error, the same way a
+   * failed curator lookup leaves Recommended out of the Explore menu: this tab is an enhancement on
+   * top of a picker that works without it, so a lookup nobody asked for should not put an error in
+   * front of someone who came here to choose a claim. `relatedClaimsSettling` carries the same
+   * `relatedPending` that a failure releases, so nothing waits on a lookup that has already failed.
+   */
+  const relatedOffered = relatedClaims.length > 0 || relatedClaimsSettling;
+
+  /**
+   * Where the pair land, and it is not a fixed answer.
+   *
+   * Related when this session came out of a debate with claims left to argue next — the
+   * continuation of what just happened is closer to what they came for than any catalogue. The
+   * opponent's positions otherwise, which is where GEO-2861 put it and remains right when there is
+   * no debate behind the session.
+   *
+   * Per pair, not per viewer: a choice made about the last opponent is not a choice about this one.
+   *
+   * A choice is honoured except when it names a tab that is no longer there. Related can be picked
+   * while its slot is only reserved, and the rows can then land empty — taking the button away while
+   * `chosenTab` still said `related`, which left the viewer on a tab with no way back to it and
+   * nothing in it.
+   */
+  const chosenIsAvailable = chosenForSession !== 'related' || relatedOffered;
+  const tab: PickerTab =
+    chosenForSession !== null && chosenIsAvailable ? chosenForSession : relatedOffered ? 'related' : 'opponent';
 
   // Featured, in the order the tag query ranked it. Built exactly as the curated list is — the
   // entities are the same projection and the rows carry the same session flags — and held the same
@@ -1311,7 +1325,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [spaceIds]
   );
   const passesTopics = React.useCallback(
-    (claim: DebateRematchClaim) => carriesPickedTopics(claim.claim.claim_entity_id),
+    (claim: DebateRematchClaim) => carriesPickedTopics(claim.claim.claim_entity_id, claim.claim.space_id),
     [carriesPickedTopics]
   );
   const passesSearch = React.useCallback(
@@ -1389,7 +1403,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       claims
         .filter(claim => passesMatchesOnly(claim) && passesSpace(claim) && passesSearch(claim) && passesTopics(claim))
         .flatMap(claim =>
-          (topicsFor(topicsByClaimId, claim.claim.claim_entity_id) ?? []).map(topic => ({
+          (topicsFor(topicsByClaimId, claim.claim.claim_entity_id, claim.claim.space_id) ?? []).map(topic => ({
             id: topic.id,
             name: topic.name,
           }))

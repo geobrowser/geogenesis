@@ -4,6 +4,13 @@ import type { ClaimPickerEntity } from '~/core/debates/claim-picker-page';
 import { normId } from '~/core/utils/norm-id';
 
 /**
+ * A topic and the space its relation was written in, which is how the graph records it: the same
+ * claim can carry different topics in different spaces. `null` where the projection did not select
+ * the space — unknown rather than unscoped.
+ */
+type SpacedTopic = MatchmakingTopic & { spaceId: string | null };
+
+/**
  * The topics each claim entity carries, keyed by claim id.
  *
  * The graph is the only source for these. geo-chat fills `topics: []` on every matchmaking and
@@ -22,13 +29,17 @@ import { normId } from '~/core/utils/norm-id';
  */
 export function claimTopicsById(
   entities: Iterable<Pick<ClaimPickerEntity, 'id' | 'relations'>>
-): Map<string, MatchmakingTopic[]> {
-  const map = new Map<string, MatchmakingTopic[]>();
+): Map<string, SpacedTopic[]> {
+  const map = new Map<string, SpacedTopic[]>();
 
   for (const entity of entities) {
     const topics = entity.relations
       .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
-      .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
+      .map(relation => ({
+        id: relation.toEntity.id,
+        name: relation.toEntity.name ?? null,
+        spaceId: relation.spaceId ?? null,
+      }));
     if (topics.length > 0) map.set(normId(entity.id), topics);
   }
 
@@ -36,16 +47,31 @@ export function claimTopicsById(
 }
 
 /**
- * The topics recorded for a claim, whichever spelling of its id the caller holds.
+ * The topics recorded for a claim, whichever spelling of its id the caller holds — and, given a
+ * space, only the ones assigned *in* it.
  *
  * Exists so no caller reaches into the map directly: the normalization has to happen on both sides
  * of the lookup to be worth anything, and a `get` that skipped it would fail silently.
+ *
+ * Topics are assigned per space, and a card is always drawn under one space. Without the filter a
+ * topic assigned only somewhere else was shown on the card and put in the facet beside it, so
+ * picking it filtered the card in or out on something that is not true where the debate would be
+ * published — the same mistake `relatedClaimsWhere` exists to avoid on the query side.
+ *
+ * A topic whose space is unknown is kept rather than dropped. Not every projection selects the
+ * relation's space (the tagged catalog does not), and an unknown space cannot be compared to one —
+ * dropping it would empty the facet for a whole source rather than narrow it.
  */
 export function topicsFor(
-  topicsByClaimId: ReadonlyMap<string, MatchmakingTopic[]>,
-  claimEntityId: string
+  topicsByClaimId: ReadonlyMap<string, SpacedTopic[]>,
+  claimEntityId: string,
+  spaceId?: string | null
 ): MatchmakingTopic[] | undefined {
-  return topicsByClaimId.get(normId(claimEntityId));
+  const topics = topicsByClaimId.get(normId(claimEntityId));
+  if (!topics) return undefined;
+  return topics
+    .filter(topic => spaceId == null || topic.spaceId == null || normId(topic.spaceId) === normId(spaceId))
+    .map(topic => ({ id: topic.id, name: topic.name }));
 }
 
 /**
@@ -67,11 +93,11 @@ export function topicsFor(
  */
 export function availableTopics(
   claimEntityIds: Iterable<string>,
-  topicsByClaimId: ReadonlyMap<string, MatchmakingTopic[]>
+  topicsByClaimId: ReadonlyMap<string, SpacedTopic[]>
 ): MatchmakingTopic[] {
   const seen = new Map<string, MatchmakingTopic>();
   for (const claimEntityId of claimEntityIds) {
-    for (const topic of topicsByClaimId.get(claimEntityId) ?? []) {
+    for (const topic of topicsFor(topicsByClaimId, claimEntityId) ?? []) {
       if (!seen.has(topic.id)) seen.set(topic.id, topic);
     }
   }
