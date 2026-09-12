@@ -4,10 +4,8 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useState } from 'react';
 
-import { Effect, Either } from 'effect';
-
+import { isSearchCancellation } from '~/core/hooks/search-cancellation';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
-import { Subgraph } from '~/core/io';
 import { capSearchQuery } from '~/core/io/search-query';
 
 import { E } from '../sync/orm';
@@ -41,56 +39,45 @@ export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) 
     queryKey: ['spaces-by-name', cappedQuery, matchLimit],
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }) => {
-      const fetchResultsEffect = Effect.either(
-        Effect.tryPromise({
-          try: async () =>
-            await E.findFuzzyPage({
-              store,
-              cache,
-              where: {
-                name: {
-                  fuzzy: cappedQuery,
+      try {
+        const page = await E.findFuzzyPage({
+          store,
+          cache,
+          where: {
+            name: {
+              fuzzy: cappedQuery,
+            },
+            types: filterByTypes?.map(t => {
+              return {
+                id: {
+                  equals: t,
                 },
-                types: filterByTypes?.map(t => {
-                  return {
-                    id: {
-                      equals: t,
-                    },
-                  };
-                }),
-              },
-              first: matchLimit,
-              skip: pageParam,
-              signal,
+              };
             }),
-          catch: error => {
-            console.error('error', error);
-            return new Subgraph.Errors.AbortError();
           },
-        })
-      );
+          first: matchLimit,
+          skip: pageParam,
+          signal,
+        });
 
-      const resultOrError = await Effect.runPromise(fetchResultsEffect);
+        return { rows: page.results, offset: pageParam, rawCount: page.rawCount, total: page.total };
+      } catch (error) {
+        // Re-throw cancellations for the same reason `useSearch` does: returning an
+        // empty page here caches "no matches" under this key, and the key only
+        // changes when the query text does, so the space picker sits empty until
+        // the searcher types another character. This hook shares `findFuzzyPage`
+        // with `useSearch`, so it shares the deduplicated inner fetch that made
+        // somebody else's cancellation arrive here.
+        if (isSearchCancellation(error, signal)) throw error;
 
-      if (Either.isLeft(resultOrError)) {
-        const error = resultOrError.left;
-
-        switch (error._tag) {
-          case 'AbortError':
-            console.log(`abort error`);
-            return { rows: [], offset: pageParam, rawCount: 0, total: 0 };
-          default:
-            console.error('useSearch error:', String(error));
-            throw error;
-        }
+        // Genuine failures still degrade to an empty page rather than throwing at
+        // the picker, which is what this did before — but they are now logged as
+        // themselves. Every rejection used to be relabelled `AbortError` and then
+        // handled as one, so a real failure was silently indistinguishable from a
+        // cancelled keystroke and the branch meant to re-throw it was unreachable.
+        console.error('useSpacesQuery error:', error);
+        return { rows: [], offset: pageParam, rawCount: 0, total: 0 };
       }
-
-      return {
-        rows: resultOrError.right.results,
-        offset: pageParam,
-        rawCount: resultOrError.right.rawCount,
-        total: resultOrError.right.total,
-      };
     },
     getNextPageParam: lastPage => {
       const nextOffset = lastPage.offset + matchLimit;

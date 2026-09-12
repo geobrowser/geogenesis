@@ -22,15 +22,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { Effect, Either } from 'effect';
 import { useSetAtom } from 'jotai';
 
 import { isBlockMediaProperty, resolveMainMediaProperty } from '~/core/blocks/data/resolve-main-media-property';
 import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
 import type { Source } from '~/core/blocks/data/source';
+import { isSearchCancellation } from '~/core/hooks/search-cancellation';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { ID } from '~/core/id';
-import { Subgraph } from '~/core/io';
 import { E } from '~/core/sync/orm';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property, Relation } from '~/core/types';
@@ -195,28 +194,26 @@ export function TableBlockPropertiesMenu({
 
   const { data: geoPropertyHits = [], isFetching: isGeoPropertySearchFetching } = useQuery({
     queryKey: ['table-block-properties-menu', 'geo-property-search', q],
-    queryFn: async () => {
-      const fetchResultsEffect = Effect.either(
-        Effect.tryPromise({
-          try: async () =>
-            await E.findFuzzy({
-              store,
-              cache,
-              where: {
-                name: { fuzzy: debouncedSearch },
-                types: [{ id: { equals: SystemIds.PROPERTY } }],
-              },
-              first: GEO_PROPERTY_SEARCH_LIMIT,
-              skip: 0,
-            }),
-          catch: () => new Subgraph.Errors.AbortError(),
-        })
-      );
-      const resultOrError = await Effect.runPromise(fetchResultsEffect);
-      if (Either.isLeft(resultOrError)) {
+    queryFn: async ({ signal }) => {
+      try {
+        return await E.findFuzzy({
+          store,
+          cache,
+          where: {
+            name: { fuzzy: debouncedSearch },
+            types: [{ id: { equals: SystemIds.PROPERTY } }],
+          },
+          first: GEO_PROPERTY_SEARCH_LIMIT,
+          skip: 0,
+        });
+      } catch (error) {
+        // See `isSearchCancellation`: an empty list returned here is cached under
+        // this key as a successful "no matches", and the key only changes when the
+        // search text does.
+        if (isSearchCancellation(error, signal)) throw error;
+        console.error('table-block-properties-menu geo property search failed:', error);
         return [];
       }
-      return resultOrError.right;
     },
     enabled: open && q.length > 0,
   });
