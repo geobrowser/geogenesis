@@ -49,13 +49,6 @@ interface SearchOptions {
    *   genuinely wants that specific restriction lifted.
    */
   includeNonCanonical?: boolean;
-  /**
-   * Extra spaces to make eligible, for a caller that knows where the thing it is
-   * searching for lives. Appended to the scoped spaces rather than replacing
-   * them, and ignored when the search is already scoped to one space or has
-   * asked for unrestricted results.
-   */
-  alsoSearchSpaceIds?: string[];
 }
 
 const DEFAULT_SEARCH_PAGE_SIZE = 10;
@@ -103,7 +96,6 @@ export function useSearch({
   enabled,
   pageSize = DEFAULT_SEARCH_PAGE_SIZE,
   includeNonCanonical,
-  alsoSearchSpaceIds,
 }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
@@ -114,7 +106,6 @@ export function useSearch({
   const additionalSpaceIds = selectSearchAdditionalSpaceIds({
     filterBySpace,
     includeNonCanonical,
-    alsoSearchSpaceIds,
     globalAdditionalSpaceIds,
   });
 
