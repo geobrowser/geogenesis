@@ -160,7 +160,7 @@ export function initAnalytics() {
 
   const script = document.createElement('script');
   script.src = analyticsScriptSrc;
-  script.integrity = 'sha256-8w3h/NxxQRVAy6gcR5ekJNlCYaayd3d1h/UjkdIRpqc=';
+  script.integrity = 'sha256-JUXjv40zMd8bdICu8F2Tt0ywF8ScLuLoAl7ViGycFuc=';
   script.crossOrigin = 'anonymous';
   script.defer = true;
   script.async = true;

@@ -34,7 +34,7 @@ describe('analytics', () => {
     const script = document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader="true"]');
 
     expect(script?.src).toBe(analyticsScriptSrc);
-    expect(script?.integrity).toBe('sha256-8w3h/NxxQRVAy6gcR5ekJNlCYaayd3d1h/UjkdIRpqc=');
+    expect(script?.integrity).toBe('sha256-JUXjv40zMd8bdICu8F2Tt0ywF8ScLuLoAl7ViGycFuc=');
     expect(script?.crossOrigin).toBe('anonymous');
   });
 
