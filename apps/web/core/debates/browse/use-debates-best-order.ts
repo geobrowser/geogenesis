@@ -38,12 +38,12 @@ export async function fetchDebatesBestOrder(spaceId: string, signal?: AbortSigna
       graphql({
         query: debatesBestOrderDocument,
         decoder: (data: {
-          entitiesRankedForFeedConnection?: {
+          entitiesRankedForFeedByTypeConnection?: {
             pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
             nodes?: ({ id?: string | null } | null)[] | null;
           } | null;
         }) => {
-          const connection = data.entitiesRankedForFeedConnection;
+          const connection = data.entitiesRankedForFeedByTypeConnection;
           return {
             ids: (connection?.nodes ?? []).flatMap(node => (node?.id ? [node.id] : [])),
             endCursor: connection?.pageInfo?.endCursor ?? null,

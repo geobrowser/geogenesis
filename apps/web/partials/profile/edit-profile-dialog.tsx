@@ -236,7 +236,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
           }}
           className="fixed inset-0 z-101 flex items-start justify-center overflow-y-auto focus:outline-hidden"
         >
-          <form
+          <form data-geo-analytics-label="Edit profile"
             onSubmit={onSubmit}
             className="my-10 flex w-full max-w-[560px] flex-col rounded-lg border border-grey-02 bg-white shadow-dropdown"
           >

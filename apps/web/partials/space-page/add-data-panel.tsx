@@ -48,7 +48,7 @@ export function AddDataPanel({ spaceId }: Props) {
         Link a news story and we&rsquo;ll extract and organize it for you
       </h2>
 
-      <form
+      <form data-geo-analytics-label="Extract content from URL"
         onSubmit={handleSubmit}
         className="absolute top-[5rem] left-[1.5rem] flex h-[2.5625rem] w-[34.375rem] max-w-[calc(100%-3rem)] items-center justify-between rounded-full bg-white/80 pr-[0.40625rem] pl-3"
       >
