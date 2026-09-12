@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
+import { DebateTileChip, tileChipSurface } from '~/core/debates/debate-video-tile';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
@@ -273,9 +274,9 @@ function DebaterVideo({
           {name}
         </span>
         {participant && (
-          <span className="inline-flex h-4 shrink-0 items-center rounded-full bg-white/60 px-1.5 text-[0.75rem] leading-none text-text">
+          <DebateTileChip className={cx('shrink-0 text-text', tileChipSurface)}>
             {participant.position_label}
-          </span>
+          </DebateTileChip>
         )}
       </button>
 
