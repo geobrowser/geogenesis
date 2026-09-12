@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  EMPLOYER_TYPE,
   EMPLOYMENT_PROPERTY,
   EMPLOYMENT_STATUS_PROPERTY,
   ROLES_PROPERTY,
@@ -210,6 +211,40 @@ describe('useProfileHistory', () => {
       const employment = relations.find(relation => relation.type.id === EMPLOYMENT_PROPERTY && !relation.isDeleted);
       expect(employment?.toEntity.id).toBe('org-Coinbase');
       expect(result.current.employment.map(card => card.organization.name)).toEqual(['Coinbase']);
+    });
+
+    // The bug this exists for: reopening an unsaved row rebuilt its draft from
+    // what the card displayed, which does not show that the company was created
+    // here. `isNew` came back false, so neither the name nor the type was staged
+    // and the employer published as "Untitled" with no types at all.
+    it('keeps a created company named and typed when the row is reopened', () => {
+      const { result } = setup();
+
+      const created = draft('Digital Paradise', 'Cofounder');
+      created.company.isNew = true;
+
+      act(() => result.current.addPosition(created));
+
+      const entry = result.current.employment[0].entries[0];
+      const reopened = result.current.draftFor(entry) as PositionDraft | undefined;
+
+      expect(reopened?.company.isNew).toBe(true);
+
+      act(() => {
+        const card = result.current.employment[0];
+        result.current.editEntry(card, card.entries[0], 'employment', { ...reopened!, description: 'Edited' });
+      });
+
+      const { values, relations } = result.current.stagePending();
+
+      expect(values).toContainEqual(
+        expect.objectContaining({ entity: { id: 'org-Digital Paradise', name: null }, value: 'Digital Paradise' })
+      );
+      expect(
+        relations.some(
+          relation => relation.fromEntity.id === 'org-Digital Paradise' && relation.toEntity.id === EMPLOYER_TYPE
+        )
+      ).toBe(true);
     });
 
     it('rewrites an unsaved row in place rather than queuing a delete', () => {

@@ -206,7 +206,21 @@ function readCards<TEntry extends HistoryEntry>(
     });
   }
 
-  return [...byOrganization.values()];
+  return [...byOrganization.values()].sort(byMostRecentCard);
+}
+
+/**
+ * Employers newest first, by the most recent thing held at each.
+ *
+ * Entries inside a card are already sorted, so the first one speaks for the card:
+ * a current job puts its employer at the top, which is the order a CV is read in
+ * and the order the graph happens to return records in only by accident.
+ */
+export function byMostRecentCard<TEntry extends HistoryEntry>(a: HistoryCard<TEntry>, b: HistoryCard<TEntry>) {
+  const first = a.entries[0];
+  const second = b.entries[0];
+  if (!first || !second) return first ? -1 : second ? 1 : 0;
+  return byMostRecent(first, second);
 }
 
 export function normalizeEmployment(edges: HistoryEdgeNode[]): EmploymentCard[] {
@@ -274,8 +288,13 @@ export function normalizeEducation(edges: HistoryEdgeNode[]): EducationCard[] {
 /**
  * Most recent first, and anything still open ahead of anything ended. A row with
  * no dates at all sorts last rather than jumping the list on an empty string.
+ *
+ * Exported so the pending rows in the modal sort the same way the saved ones do.
+ * They used to sit in the order they were added, so a promotion entered after the
+ * job before it read as the older of the two until the page was saved and
+ * refetched.
  */
-function byMostRecent(a: HistoryEntry, b: HistoryEntry) {
+export function byMostRecent(a: HistoryEntry, b: HistoryEntry) {
   const aOpen = a.startDate !== null && a.endDate === null;
   const bOpen = b.startDate !== null && b.endDate === null;
   if (aOpen !== bOpen) return aOpen ? -1 : 1;

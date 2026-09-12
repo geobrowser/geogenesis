@@ -1,11 +1,13 @@
-import type {
-  EducationCard,
-  EducationEntry,
-  EmploymentCard,
-  EmploymentEntry,
-  HistoryCard,
-  HistoryEdgeRef,
-  HistoryEntry,
+import {
+  type EducationCard,
+  type EducationEntry,
+  type EmploymentCard,
+  type EmploymentEntry,
+  type HistoryCard,
+  type HistoryEdgeRef,
+  type HistoryEntry,
+  byMostRecent,
+  byMostRecentCard,
 } from './normalize-history';
 import type { EducationDraft, PositionDraft } from './stage-history';
 
@@ -102,7 +104,9 @@ const organizationOf = (draft: PositionDraft | EducationDraft) =>
 function merge<TEntry extends HistoryEntry>(
   saved: HistoryCard<TEntry>[],
   additions: { key: string; draft: PositionDraft | EducationDraft; entry: (edge: HistoryEdgeRef) => TEntry }[],
-  removals: PendingRemoval[]
+  removals: PendingRemoval[],
+  /** Organisation avatars, for a card the saved data has nothing to say about. */
+  avatars: Record<string, string | null> = {}
 ): HistoryCard<TEntry>[] {
   const removed = new Set(removals.map(removal => removal.relationId));
 
@@ -124,25 +128,43 @@ function merge<TEntry extends HistoryEntry>(
       stintId: addition.draft.existingStintId ?? `${PENDING_PREFIX}${organization.id}-stint`,
     };
 
-    // Newest first, matching how the saved rows are sorted.
     if (existing) {
-      existing.entries = [addition.entry(edge), ...existing.entries];
+      existing.entries = [...existing.entries, addition.entry(edge)];
       continue;
     }
 
-    cards.push({ organization, edges: [edge], entries: [addition.entry(edge)] });
+    cards.push({
+      organization,
+      edges: [edge],
+      // Nothing saved mentions this organisation, so its logo has to be looked up
+      // rather than read off an edge. Without it a position looked different
+      // before and after saving, which is the one thing the merged view is for.
+      avatarUrl: avatars[organization.id] ?? null,
+      entries: [addition.entry(edge)],
+    });
   }
+
+  // Sorted the way the saved rows are, rather than left in the order they were
+  // added: a promotion entered after the job before it is still the newer of the
+  // two, and reading as the older one until a save and a refetch was a lie the
+  // merged view told about itself.
+  for (const card of cards) card.entries = [...card.entries].sort(byMostRecent);
 
   // A card whose rows have all gone is dropped: the organisation edge goes with
   // the last row, so leaving it on screen would promise something the save will
   // not deliver.
-  return cards.filter(card => card.entries.length > 0);
+  //
+  // Re-sorted after that, because a pending row can make an employer the most
+  // recent one — a new job at a new company belongs at the top the moment it is
+  // entered, not after a save.
+  return cards.filter(card => card.entries.length > 0).sort(byMostRecentCard);
 }
 
 export function mergePendingEmployment(
   saved: EmploymentCard[],
   additions: PendingAddition<PositionDraft>[],
-  removals: PendingRemoval[]
+  removals: PendingRemoval[],
+  avatars?: Record<string, string | null>
 ): EmploymentCard[] {
   return merge<EmploymentEntry>(
     saved,
@@ -155,14 +177,16 @@ export function mergePendingEmployment(
         skills: addition.draft.skills,
       }),
     })),
-    removals
+    removals,
+    avatars
   );
 }
 
 export function mergePendingEducation(
   saved: EducationCard[],
   additions: PendingAddition<EducationDraft>[],
-  removals: PendingRemoval[]
+  removals: PendingRemoval[],
+  avatars?: Record<string, string | null>
 ): EducationCard[] {
   return merge<EducationEntry>(
     saved,
@@ -174,7 +198,8 @@ export function mergePendingEducation(
         fields: addition.draft.fields,
       }),
     })),
-    removals
+    removals,
+    avatars
   );
 }
 
@@ -212,4 +237,39 @@ export function shareStintsByOrganization<TDraft extends PositionDraft | Educati
     stintByOrganization.set(organizationId, minted);
     return { draft: { ...addition.draft, existingStintId: undefined }, newStintId: minted };
   });
+}
+
+/**
+ * The draft behind an unsaved row, by the relation id the resting state gave it.
+ *
+ * Editing reopens the sheet on a draft, and rebuilding one from the rendered row
+ * loses whatever the row does not display — including whether the company was
+ * created here, which is what decides if its name gets written. So the original
+ * is handed back rather than reconstructed.
+ */
+export function pendingDraftFor(
+  pending: PendingHistory,
+  relationId: string
+): PositionDraft | EducationDraft | undefined {
+  const key = keyOf(relationId);
+  return (
+    pending.positions.find(addition => addition.key === key)?.draft ??
+    pending.education.find(addition => addition.key === key)?.draft
+  );
+}
+
+/**
+ * The organisations named by pending additions, so their avatars can be fetched.
+ *
+ * A pending row at an employer already on the profile inherits that card's logo.
+ * One at an employer nothing saved mentions has nowhere to read it from, which is
+ * why these need looking up separately.
+ */
+export function pendingOrganizationIds(pending: PendingHistory): string[] {
+  return Array.from(
+    new Set([
+      ...pending.positions.map(addition => addition.draft.company.id),
+      ...pending.education.map(addition => addition.draft.school.id),
+    ])
+  ).filter(id => id !== '');
 }

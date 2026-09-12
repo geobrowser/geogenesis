@@ -4,7 +4,13 @@ import * as React from 'react';
 
 import { useSuggestedSkills } from '~/core/hooks/use-suggested-skills';
 import { type MonthYear, fromGraphDate, toGraphDate } from '~/core/profile/history-dates';
-import { EMPLOYER_TYPE, EMPLOYMENT_TYPE_OPTIONS, JOB_TYPE, SKILL_TYPE } from '~/core/profile/history-ontology';
+import {
+  EMPLOYER_TYPE,
+  EMPLOYMENT_TYPE_OPTIONS,
+  JOB_TYPE,
+  SKILL_TYPE,
+  TAXONOMY_SPACE_ID,
+} from '~/core/profile/history-ontology';
 import type { EntityChoice, PositionDraft } from '~/core/profile/stage-history';
 
 import { Checkbox } from '~/design-system/checkbox';
@@ -13,6 +19,13 @@ import { SelectEntity } from '~/design-system/select-entity';
 
 import { HistorySheet, PickedEntity, findOrCreate } from './history-sheet';
 import { MonthYearField } from './month-year-field';
+
+/**
+ * Stable so it does not re-trigger the search on every render. The taxonomy is
+ * in one space and it is not one the viewer belongs to, so both pickers have to
+ * ask for it by name — see `TAXONOMY_SPACE_ID`.
+ */
+const TAXONOMY_SPACE_ID_LIST = [TAXONOMY_SPACE_ID];
 
 type Props = {
   spaceId: string;
@@ -50,12 +63,35 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
   const [isCurrent, setIsCurrent] = React.useState(initial ? initial.status === 'current' : false);
   const [description, setDescription] = React.useState(initial?.description ?? '');
 
-  // Only ESCO occupations carry these; a title somebody typed in themselves has
-  // none, and the row simply does not appear.
-  const { suggestions } = useSuggestedSkills({
+  const pickedSkillIds = React.useMemo(() => skills.map(skill => skill.id), [skills]);
+
+  // Only occupations from the taxonomy carry these; a title somebody typed in
+  // themselves has none, and neither the pills nor the pinned rows appear.
+  const { suggestions, all: allForRole } = useSuggestedSkills({
     roleId: title?.id,
-    picked: React.useMemo(() => skills.map(skill => skill.id), [skills]),
+    picked: pickedSkillIds,
   });
+
+  /**
+   * Every skill the occupation is recorded as needing, offered inside the search
+   * box before anything is typed.
+   *
+   * The five pills below are a shortcut, not the set: a product manager has
+   * dozens, and picking from five meant picking from whichever five ranked
+   * highest. These are the same ranking, all of it, where the user is already
+   * looking when they go to add a skill.
+   */
+  const pinnedSkills = React.useMemo(
+    () =>
+      allForRole.map(skill => ({
+        id: skill.id,
+        name: skill.name,
+        description: null,
+        types: [],
+        spaces: [],
+      })),
+    [allForRole]
+  );
 
   const addSkill = (skill: EntityChoice) =>
     setSkills(current => (current.some(picked => picked.id === skill.id) ? current : [...current, skill]));
@@ -119,6 +155,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
             spaceId={spaceId}
             relationValueTypes={[{ id: JOB_TYPE, name: 'Person role' }]}
             placeholder="Find or create a job title..."
+            alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
             onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) =>
               setTitle({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
@@ -207,6 +244,10 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
             spaceId={spaceId}
             relationValueTypes={[{ id: SKILL_TYPE, name: 'Skill' }]}
             placeholder="Find or create a skill..."
+            alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
+            pinnedResults={pinnedSkills}
+            pinnedLabel="Recommended for this role"
+            restLabel="All skills"
             onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) => {
               addSkill({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) });

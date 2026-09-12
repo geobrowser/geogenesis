@@ -22,6 +22,7 @@ import {
   JOB_TYPE,
   ROLES_PROPERTY,
   ROLE_INFORMATION_TYPE,
+  SCHOOL_TYPES,
   SKILLS_PROPERTY,
   SKILL_TYPE,
   START_DATE_PROPERTY,
@@ -116,7 +117,7 @@ function valueRow(params: {
  * someone writes a name. Without this the relation points at an entity with no
  * name, which renders as a blank row that cannot be searched for afterwards.
  */
-function newEntityRows(choice: EntityChoice, spaceId: string, typeId?: string): StagedRows {
+function newEntityRows(choice: EntityChoice, spaceId: string, typeIds: string[] = []): StagedRows {
   if (!choice.isNew || !choice.name) return { values: [], relations: [] };
 
   const values = [
@@ -133,18 +134,19 @@ function newEntityRows(choice: EntityChoice, spaceId: string, typeId?: string): 
   // Typed where the type is known and verified. An untyped entity still works as
   // a target, but never turns up in the scoped search that would stop the next
   // person creating a second one just like it.
-  const relations = typeId
-    ? [
-        relationRow({
-          spaceId,
-          typeId: SystemIds.TYPES_PROPERTY,
-          typeName: 'Types',
-          fromId: choice.id,
-          fromName: choice.name,
-          to: { id: typeId, name: null },
-        }),
-      ]
-    : [];
+  //
+  // More than one where the thing genuinely is more than one thing — a school is
+  // a University and an Institution, and being findable as either is the point.
+  const relations = typeIds.map(typeId =>
+    relationRow({
+      spaceId,
+      typeId: SystemIds.TYPES_PROPERTY,
+      typeName: 'Types',
+      fromId: choice.id,
+      fromName: choice.name,
+      to: { id: typeId, name: null },
+    })
+  );
 
   return { values, relations };
 }
@@ -228,8 +230,8 @@ export function stagePosition(
    */
   newStintId: string = ID.createEntityId()
 ): StagedRows {
-  const company = newEntityRows(draft.company, spaceId, EMPLOYER_TYPE);
-  const title = newEntityRows(draft.title, spaceId, JOB_TYPE);
+  const company = newEntityRows(draft.company, spaceId, [EMPLOYER_TYPE]);
+  const title = newEntityRows(draft.title, spaceId, [JOB_TYPE]);
 
   let stintId = draft.existingStintId;
   const employment: StagedRows = { values: [], relations: [] };
@@ -292,7 +294,7 @@ export function stagePosition(
       ]
     : [];
 
-  const skillRows = draft.skills.map(skill => newEntityRows(skill, spaceId, SKILL_TYPE));
+  const skillRows = draft.skills.map(skill => newEntityRows(skill, spaceId, [SKILL_TYPE]));
   const skillEdges = draft.skills.map(skill =>
     relationRow({
       spaceId,
@@ -324,7 +326,7 @@ export function stageEducation(
   { personEntityId, spaceId }: Context,
   newStintId: string = ID.createEntityId()
 ): StagedRows {
-  const school = newEntityRows(draft.school, spaceId);
+  const school = newEntityRows(draft.school, spaceId, SCHOOL_TYPES);
   const degree = newEntityRows(draft.degree, spaceId);
 
   let recordId = draft.existingStintId;
@@ -354,7 +356,7 @@ export function stageEducation(
     entityId: enrolmentId,
   });
 
-  const fieldRows = draft.fields.map(field => newEntityRows(field, spaceId, ACADEMIC_FIELD_TYPE));
+  const fieldRows = draft.fields.map(field => newEntityRows(field, spaceId, [ACADEMIC_FIELD_TYPE]));
 
   const fieldEdges = draft.fields.map(field =>
     relationRow({

@@ -20,7 +20,8 @@ vi.mock('~/core/hooks/use-suggested-skills', () => ({
   useSuggestedSkills: ({ roleId, picked }: { roleId: string | undefined; picked: string[] }) => {
     mocks.suggestedFor = roleId;
     mocks.alreadyPicked = picked;
-    return { suggestions: roleId ? mocks.suggestions : [], isLoading: false };
+    const forRole = roleId ? mocks.suggestions : [];
+    return { suggestions: forRole.slice(0, 5), all: forRole, isLoading: false };
   },
 }));
 
@@ -35,10 +36,12 @@ vi.mock('~/design-system/select-entity', () => ({
   SelectEntity: ({
     relationValueTypes,
     onCreateEntity,
+    pinnedResults,
     onDone,
   }: {
     relationValueTypes?: { id: string; name: string | null }[];
     onCreateEntity?: (result: { id: string; name: string | null }) => void | string;
+    pinnedResults?: { id: string; name: string | null }[];
     onDone: (result: { id: string; name: string | null }, fromCreateFn?: boolean) => void;
   }) => (
     <div>
@@ -46,6 +49,7 @@ vi.mock('~/design-system/select-entity', () => ({
         type="button"
         data-scoped-to={relationValueTypes?.map(type => type.id).join(',') ?? ''}
         data-can-create={onCreateEntity ? 'yes' : 'no'}
+        data-pinned={(pinnedResults ?? []).map(result => result.name).join('|')}
         onClick={() => onDone({ id: 'picked-id', name: 'Coinbase' })}
       >
         pick existing
@@ -287,6 +291,23 @@ describe('AddPositionSheet', () => {
       await pickTitle();
 
       expect(screen.queryByText('Common for this role')).not.toBeInTheDocument();
+    });
+
+    // Five pills are a shortcut past searching, not the set. A product manager
+    // has dozens recorded, so choosing from five meant choosing from whichever
+    // five ranked highest — the rest have to be reachable without guessing at a
+    // search term.
+    it('offers every skill for the role inside the picker, not just the five pills', async () => {
+      mocks.suggestions = Array.from({ length: 9 }, (_, index) => suggestion(`Skill ${index}`));
+      renderSheet();
+
+      await pickCompany();
+      await pickTitle();
+
+      expect(screen.getAllByRole('button', { name: /^\+ Skill/ })).toHaveLength(5);
+
+      const pinned = screen.getAllByRole('button', { name: /pick existing/ }).map(picker => picker.dataset.pinned);
+      expect(pinned).toContain(Array.from({ length: 9 }, (_, index) => `Skill ${index}`).join('|'));
     });
   });
 

@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { type MonthYear, fromGraphDate, toGraphDate } from '~/core/profile/history-dates';
-import { ACADEMIC_FIELD_TYPE, type EducationStatus } from '~/core/profile/history-ontology';
+import { ACADEMIC_FIELD_TYPE, type EducationStatus, SCHOOL_TYPES } from '~/core/profile/history-ontology';
 import type { EducationDraft, EntityChoice } from '~/core/profile/stage-history';
 
 import { inputStyles } from '~/design-system/input';
@@ -23,6 +23,12 @@ type Props = {
   onCancel: () => void;
   onSave: (draft: EducationDraft) => void;
 };
+
+/**
+ * University and Institution both, and stable so it does not re-trigger the
+ * search on every render. See `SCHOOL_TYPES` for why it is the pair.
+ */
+const SCHOOL_TYPE_FILTER = SCHOOL_TYPES.map(id => ({ id, name: null }));
 
 const STATUS_OPTIONS: { value: EducationStatus; label: string }[] = [
   { value: 'studying', label: 'Still studying' },
@@ -85,11 +91,9 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
         ) : pickedSchool ? (
           <PickedEntity name={pickedSchool.name} onClear={() => setPickedSchool(null)} />
         ) : (
-          // Unscoped on purpose: several entities are named "University" and
-          // "School" with no obvious canonical type, and a wrong filter would
-          // hide every real school from the search.
           <SelectEntity
             spaceId={spaceId}
+            relationValueTypes={SCHOOL_TYPE_FILTER}
             placeholder="Find or create a school..."
             onCreateEntity={findOrCreate}
             onDone={(result, fromCreateFn) =>

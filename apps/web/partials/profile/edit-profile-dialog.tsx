@@ -9,7 +9,12 @@ import cx from 'classnames';
 import { type ProfileImageEdit, useEditProfile } from '~/core/hooks/use-edit-profile';
 import { useProfileHistory } from '~/core/hooks/use-profile-history';
 import type { EducationEntry, EmploymentEntry, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
-import { educationDraftFromEntry, positionDraftFromEntry } from '~/core/profile/stage-history';
+import {
+  type EducationDraft,
+  type PositionDraft,
+  educationDraftFromEntry,
+  positionDraftFromEntry,
+} from '~/core/profile/stage-history';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
@@ -293,7 +298,10 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   company={sheet.company}
                   initial={
                     sheet.editing &&
-                    positionDraftFromEntry(sheet.editing.card.organization, sheet.editing.entry as EmploymentEntry)
+                    // The original where there is one: a reconstruction cannot know
+                    // the company was created here and still needs its name written.
+                    ((history.draftFor(sheet.editing.entry) as PositionDraft | undefined) ??
+                      positionDraftFromEntry(sheet.editing.card.organization, sheet.editing.entry as EmploymentEntry))
                   }
                   isSaving={false}
                   onCancel={() => setSheet(null)}
@@ -310,7 +318,8 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   school={sheet.school}
                   initial={
                     sheet.editing &&
-                    educationDraftFromEntry(sheet.editing.card.organization, sheet.editing.entry as EducationEntry)
+                    ((history.draftFor(sheet.editing.entry) as EducationDraft | undefined) ??
+                      educationDraftFromEntry(sheet.editing.card.organization, sheet.editing.entry as EducationEntry))
                   }
                   isSaving={false}
                   onCancel={() => setSheet(null)}

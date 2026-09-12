@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { ID } from '~/core/id';
+import { entityAvatarsQueryKey, fetchEntityAvatars } from '~/core/io/subgraph/fetch-entity-avatars';
 import { fetchProfileHistory, profileHistoryQueryKey } from '~/core/io/subgraph/fetch-profile-history';
 import {
   DEGREE_PROPERTY,
@@ -22,6 +23,8 @@ import {
   isPending,
   mergePendingEducation,
   mergePendingEmployment,
+  pendingDraftFor,
+  pendingOrganizationIds,
   replacePendingAddition,
   shareStintsByOrganization,
 } from '~/core/profile/pending-history';
@@ -64,6 +67,22 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     queryKey,
     enabled: enabled && entityId !== '',
     queryFn: () => fetchProfileHistory(entityId),
+    staleTime: 60_000,
+  });
+
+  /**
+   * Logos for employers and schools a pending row names.
+   *
+   * The profile read collects these on its way past an edge; a row being added
+   * has no edge yet. Without this a card showed an initial before saving and a
+   * logo afterwards, which made the merged view look like it was guessing.
+   */
+  const pendingOrgIds = React.useMemo(() => pendingOrganizationIds(pending), [pending]);
+
+  const { data: pendingAvatars } = useQuery({
+    queryKey: entityAvatarsQueryKey(pendingOrgIds),
+    enabled: pendingOrgIds.length > 0,
+    queryFn: () => fetchEntityAvatars(pendingOrgIds),
     staleTime: 60_000,
   });
 
@@ -208,6 +227,18 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     };
   }, [entityId, pending, spaceId]);
 
+  /**
+   * The draft behind an unsaved row, for the sheet to reopen on.
+   *
+   * Rebuilding one from the rendered row loses what the row does not show —
+   * notably that the company was created here and still needs naming, which is
+   * how an employer ended up on a profile as "Untitled".
+   */
+  const draftFor = React.useCallback(
+    (entry: HistoryEntry) => (isPending(entry.relationId) ? pendingDraftFor(pending, entry.relationId) : undefined),
+    [pending]
+  );
+
   /** Called once the save lands, so the merged view falls back to the graph's. */
   const settle = React.useCallback(() => {
     setPending(NOTHING_PENDING);
@@ -217,13 +248,13 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
   const discard = React.useCallback(() => setPending(NOTHING_PENDING), []);
 
   const employment = React.useMemo(
-    () => mergePendingEmployment(data?.employment ?? [], pending.positions, pending.removals),
-    [data?.employment, pending]
+    () => mergePendingEmployment(data?.employment ?? [], pending.positions, pending.removals, pendingAvatars),
+    [data?.employment, pending, pendingAvatars]
   );
 
   const education = React.useMemo(
-    () => mergePendingEducation(data?.education ?? [], pending.education, pending.removals),
-    [data?.education, pending]
+    () => mergePendingEducation(data?.education ?? [], pending.education, pending.removals, pendingAvatars),
+    [data?.education, pending, pendingAvatars]
   );
 
   return {
@@ -235,6 +266,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     addEducation,
     removeEntry,
     editEntry,
+    draftFor,
     stagePending,
     settle,
     discard,

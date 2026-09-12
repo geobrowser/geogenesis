@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ACADEMIC_FIELD_TYPE } from '~/core/profile/history-ontology';
+import { ACADEMIC_FIELD_TYPE, SCHOOL_TYPES } from '~/core/profile/history-ontology';
 
 import { AddEducationSheet } from './add-education-sheet';
 
@@ -71,11 +71,16 @@ describe('AddEducationSheet', () => {
 
   // School and Degree have several entities apiece under those names with no
   // canonical type, so a wrong filter would hide every real one from the search.
-  it('leaves school and degree unscoped rather than guessing a type', () => {
+  // School is scoped to what `Education` declares plus the narrower type most
+  // schools carry. Degree stays unscoped: several entities sit under that name
+  // with no obvious canonical one, and a wrong filter there hides every answer.
+  it('searches both school types, and leaves degree unscoped rather than guessing', () => {
     renderSheet();
 
     const scopes = pickers().map(button => button.getAttribute('data-scoped-to'));
-    expect(scopes.filter(scope => scope === '')).toHaveLength(2);
+
+    expect(scopes).toContain(SCHOOL_TYPES.join(','));
+    expect(scopes.filter(scope => scope === '')).toHaveLength(1);
   });
 
   it('offers the three states dates alone cannot express', () => {

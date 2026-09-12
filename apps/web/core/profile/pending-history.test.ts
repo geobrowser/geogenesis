@@ -45,6 +45,8 @@ const savedCard = (org: string, roles: string[]): EmploymentCard => ({
 });
 
 describe('mergePendingEmployment', () => {
+  // Employers newest first, by the most recent thing held at each — the unsaved
+  // role started in 2024 and the saved one in 2022, so it leads.
   it('shows an unsaved position alongside the saved ones', () => {
     const cards = mergePendingEmployment(
       [savedCard('Coinbase', ['Data Analyst'])],
@@ -52,9 +54,26 @@ describe('mergePendingEmployment', () => {
       []
     );
 
-    expect(cards.map(card => card.organization.name)).toEqual(['Coinbase', 'Geo']);
-    expect(cards[1].entries[0].subject.name).toBe('Product Lead');
-    expect(isPending(cards[1].entries[0].relationId)).toBe(true);
+    expect(cards.map(card => card.organization.name)).toEqual(['Geo', 'Coinbase']);
+    expect(cards[0].entries[0].subject.name).toBe('Product Lead');
+    expect(isPending(cards[0].entries[0].relationId)).toBe(true);
+  });
+
+  // A job left in 2022 does not belong above one still held, however recently the
+  // older employer happened to be entered.
+  it('puts the employer with the most recent role first', () => {
+    const cards = mergePendingEmployment(
+      [savedCard('Geo', ['Engineer'])],
+      [
+        {
+          key: 'k1',
+          draft: draft('Digital Paradise', 'Cofounder', { startDate: '2020-03-01Z', endDate: '2022-06-01Z' }),
+        },
+      ],
+      []
+    );
+
+    expect(cards.map(card => card.organization.name)).toEqual(['Geo', 'Digital Paradise']);
   });
 
   // The promotion case while still unsaved: it belongs under the employer it was
@@ -78,15 +97,41 @@ describe('mergePendingEmployment', () => {
     const cards = mergePendingEmployment(
       [],
       [
-        { key: 'k1', draft: draft('Fathom', 'Engineer') },
+        { key: 'k1', draft: draft('Fathom', 'Engineer', { startDate: '2020-01-01Z', endDate: '2022-01-01Z' }) },
         { key: 'k2', draft: draft('Fathom', 'Staff Engineer') },
       ],
       []
     );
 
     expect(cards).toHaveLength(1);
-    // Newest first, the same order the saved rows use.
     expect(cards[0].entries.map(entry => entry.subject.name)).toEqual(['Staff Engineer', 'Engineer']);
+  });
+
+  // They used to sit in the order they were added, so a promotion entered after
+  // the job before it read as the older of the two until a save and a refetch —
+  // the one thing the merged view exists to avoid.
+  it('sorts unsaved rows by date, not by the order they were added', () => {
+    const cards = mergePendingEmployment(
+      [],
+      [
+        // The current role added second, as anyone filling in a CV backwards does.
+        { key: 'k1', draft: draft('Geo', 'Product manager', { startDate: '2025-02-01Z', endDate: '2026-07-01Z' }) },
+        { key: 'k2', draft: draft('Geo', 'Head of Product', { startDate: '2026-07-01Z' }) },
+      ],
+      []
+    );
+
+    expect(cards[0].entries.map(entry => entry.subject.name)).toEqual(['Head of Product', 'Product manager']);
+  });
+
+  // Before saving, a card showed an initial where the saved one showed a logo,
+  // which made the merged view look like it was guessing.
+  it('carries the organisation avatar onto an unsaved card', () => {
+    const cards = mergePendingEmployment([], [{ key: 'k1', draft: draft('Geo', 'Engineer') }], [], {
+      'org-Geo': 'ipfs://bafyavatar',
+    });
+
+    expect(cards[0].avatarUrl).toBe('ipfs://bafyavatar');
   });
 
   it('hides a row queued for removal', () => {

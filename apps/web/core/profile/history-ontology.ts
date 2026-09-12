@@ -54,9 +54,9 @@ export const ACADEMIC_FIELD_TYPE = SystemIds.ACADEMIC_FIELD_TYPE;
  * Types to scope the find-or-create pickers, and to stamp on anything created
  * through them so the next person finds it instead of making a second one.
  *
- * Only the two that could be verified. School and Degree have several entities
- * apiece under those names with no obvious canonical one, so those two pickers
- * search unscoped rather than guess an id — a wrong type here is worse than none.
+ * Only those that could be verified. Degree still searches unscoped: several
+ * entities sit under that name with no obvious canonical one, and a wrong type
+ * there is worse than none.
  */
 /**
  * What an Employment edge points at. `Project` rather than `Company`: the graph
@@ -146,6 +146,32 @@ export const SKILL_TYPE = ContentIds.SKILL_TYPE;
 export const IS_REQUIRED_PROPERTY = '3d60051c488f4a5ebae67a8264ade8bd';
 export const SKILL_SCOPE_PROPERTY = '7426f8535dc84776bd7abce1d069fa06';
 export const SCOPE_RANK_PROPERTY = '3ae1e15935864c0f9425652125d03772';
+
+/**
+ * The space the taxonomy was imported into.
+ *
+ * Named here because the pickers have to ask for it explicitly. Search widens
+ * eligibility to the canonical graph plus the spaces the viewer belongs to, and
+ * the import is neither: every one of its 4,014 roles and 14,114 skills comes
+ * back from the search endpoint flagged non-canonical, in a space almost nobody
+ * is a member of. So a search for `Software developer` returned four unrelated
+ * canonical roles and none of the occupations — and the skills box offered the
+ * half-dozen skills Geo's own space happens to hold.
+ */
+export const TAXONOMY_SPACE_ID = 'd69608290513c2a91102c939b3265bd7';
+
+/**
+ * What the School picker searches, and what it types a school it creates as.
+ *
+ * `Education` declares `To entity types: Institution`, which is the broader of
+ * the two and has 108 entities behind it; `University` has 10 and is what
+ * someone filling in a school is usually naming. Both, therefore — searching
+ * either alone hides most of the answers, and a new school is typed as both so
+ * it turns up whichever one the next reader scopes to.
+ */
+export const UNIVERSITY_TYPE = '0235f3d2821947a481d39ccd68e2b821';
+export const INSTITUTION_TYPE = '7f5433a40628498f9de6311cb14709a8';
+export const SCHOOL_TYPES = [UNIVERSITY_TYPE, INSTITUTION_TYPE];
 
 /** What the avatar of a company or school is stored under. */
 export const AVATAR_PROPERTY = ContentIds.AVATAR_PROPERTY;

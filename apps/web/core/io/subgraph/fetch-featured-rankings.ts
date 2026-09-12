@@ -155,7 +155,9 @@ async function resolveSubmitterSpaceIdsByBlock(
     byBlock.set(
       blockEntityId,
       dedupePreserveOrder(
-        refs.map(ref => ref.spaceId ?? rankEntitySpaceById.get(ref.rankEntityId)).filter((id): id is string => Boolean(id))
+        refs
+          .map(ref => ref.spaceId ?? rankEntitySpaceById.get(ref.rankEntityId))
+          .filter((id): id is string => Boolean(id))
       )
     );
   }
@@ -187,41 +189,37 @@ async function resolveTopEntriesByBlock(
     bySpace.set(request.spaceId, group);
   }
 
-  await mapWithConcurrency(
-    [...bySpace.entries()],
-    SPACE_QUERY_CONCURRENCY,
-    async ([spaceId, group]) => {
-      const ids = dedupePreserveOrder(group.flatMap(request => request.entityIds));
-      try {
-        const { entities } = await Effect.runPromise(
-          getAllEntities({ filter: { id: { in: ids } }, spaceId, limit: ids.length })
+  await mapWithConcurrency([...bySpace.entries()], SPACE_QUERY_CONCURRENCY, async ([spaceId, group]) => {
+    const ids = dedupePreserveOrder(group.flatMap(request => request.entityIds));
+    try {
+      const { entities } = await Effect.runPromise(
+        getAllEntities({ filter: { id: { in: ids } }, spaceId, limit: ids.length })
+      );
+      const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
+      for (const request of group) {
+        byBlock.set(
+          request.blockEntityId,
+          // Kept per ranking and in its own order: an entity missing from the response still
+          // renders as "Untitled" so the leaderboard keeps its positions.
+          request.entityIds.map(entityId => {
+            const entity = entitiesById.get(entityId);
+            return {
+              entityId,
+              name: entity?.name?.trim() || 'Untitled',
+              image: entity ? (Entities.avatar(entity.relations) ?? Entities.cover(entity.relations) ?? null) : null,
+            };
+          })
         );
-        const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
-        for (const request of group) {
-          byBlock.set(
-            request.blockEntityId,
-            // Kept per ranking and in its own order: an entity missing from the response still
-            // renders as "Untitled" so the leaderboard keeps its positions.
-            request.entityIds.map(entityId => {
-              const entity = entitiesById.get(entityId);
-              return {
-                entityId,
-                name: entity?.name?.trim() || 'Untitled',
-                image: entity ? (Entities.avatar(entity.relations) ?? Entities.cover(entity.relations) ?? null) : null,
-              };
-            })
-          );
-        }
-      } catch (error) {
-        // Scoped to the one space that failed: its rankings keep the empty leaderboard they were
-        // seeded with above and still render, exactly as the per-ranking version did. Reported
-        // for the same reason as above — silent before, and now one failure covers every ranking
-        // in the space rather than one card.
-        reportError(error);
-        console.error(`Unable to resolve featured ranking top entries (space ${spaceId})`, error);
       }
+    } catch (error) {
+      // Scoped to the one space that failed: its rankings keep the empty leaderboard they were
+      // seeded with above and still render, exactly as the per-ranking version did. Reported
+      // for the same reason as above — silent before, and now one failure covers every ranking
+      // in the space rather than one card.
+      reportError(error);
+      console.error(`Unable to resolve featured ranking top entries (space ${spaceId})`, error);
     }
-  );
+  });
 
   return byBlock;
 }
@@ -337,27 +335,23 @@ export async function fetchFeaturedRankings(): Promise<FeaturedRanking[]> {
   }
 
   const blockEntities = new Map<string, Entity>();
-  await mapWithConcurrency(
-    [...candidatesBySpace.entries()],
-    SPACE_QUERY_CONCURRENCY,
-    async ([spaceId, group]) => {
-      try {
-        const resolvedEntities = await Effect.runPromise(
-          getBatchEntities(
-            group.map(candidate => candidate.blockEntityId),
-            spaceId
-          )
-        );
-        for (const entity of resolvedEntities) blockEntities.set(entity.id, entity);
-      } catch (error) {
-        // Scoped to the one space that failed — its rankings drop out below for want of an
-        // entity, the rest are unaffected. Reported because batching widened the blast radius
-        // from the single block the per-block fetch would have dropped.
-        reportError(error);
-        console.error(`Unable to resolve featured ranking blocks (space ${spaceId})`, error);
-      }
+  await mapWithConcurrency([...candidatesBySpace.entries()], SPACE_QUERY_CONCURRENCY, async ([spaceId, group]) => {
+    try {
+      const resolvedEntities = await Effect.runPromise(
+        getBatchEntities(
+          group.map(candidate => candidate.blockEntityId),
+          spaceId
+        )
+      );
+      for (const entity of resolvedEntities) blockEntities.set(entity.id, entity);
+    } catch (error) {
+      // Scoped to the one space that failed — its rankings drop out below for want of an
+      // entity, the rest are unaffected. Reported because batching widened the blast radius
+      // from the single block the per-block fetch would have dropped.
+      reportError(error);
+      console.error(`Unable to resolve featured ranking blocks (space ${spaceId})`, error);
     }
-  );
+  });
 
   // 3. Keep the live ones. Pure reads of what phase 2 returned, so this costs no requests and
   //    still runs before the expensive work, as the per-block version did.

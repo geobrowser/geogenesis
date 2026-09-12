@@ -33,5 +33,13 @@ export function useSuggestedSkills({ roleId, picked }: Params) {
 
   const suggestions = React.useMemo(() => suggestSkills(data ?? [], picked), [data, picked]);
 
-  return { suggestions, isLoading: isLoading && roleId !== undefined };
+  /**
+   * The same ranking with nothing trimmed, for the picker to offer before
+   * anything is typed. Five pills are a shortcut past searching; a product
+   * manager has dozens of skills recorded, and choosing from five meant choosing
+   * from whichever five happened to rank highest.
+   */
+  const all = React.useMemo(() => suggestSkills(data ?? [], picked, Infinity), [data, picked]);
+
+  return { suggestions, all, isLoading: isLoading && roleId !== undefined };
 }
