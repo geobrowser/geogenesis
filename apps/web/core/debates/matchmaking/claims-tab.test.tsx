@@ -2339,6 +2339,22 @@ describe('claims the viewer has already answered', () => {
       expect(end?.className).toBe('ml-auto');
     });
 
+    /**
+     * Nor signed out, where it is a control with nothing behind it.
+     *
+     * geo-chat answers every `viewer_response` null for a viewer it has no account for, so there
+     * are no positions to hide and the collapse is a no-op either way. Drawing the switch over that
+     * offers a setting that cannot change what is on screen.
+     */
+    it('is not offered to a viewer with no positions to hide', async () => {
+      mocks.authenticated = false;
+      render(<ClaimsTab />);
+      await showAllClaims();
+
+      expect(await screen.findByText('One you have answered')).toBeInTheDocument();
+      expect(screen.queryByRole('switch', SWITCH)).toBeNull();
+    });
+
     // It would empty that list rather than filter it, so the state cannot be set from the one place
     // it must not apply.
     it('is not offered on My positions', async () => {

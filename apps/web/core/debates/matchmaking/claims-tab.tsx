@@ -606,7 +606,11 @@ export function ClaimsTab({
   // Lobby is a different question: "what can I debate right now" is not a browse list, and the
   // claims you have answered are exactly the ones a match can be waiting on. And "My positions" is
   // by definition all answered, so collapsing it leaves an empty tab rather than a filtered one.
-  const collapsesAnswered = !isLobby && filter !== 'mine' && hideMyPositions;
+  // Signed out there are no positions to hide — geo-chat answers every `viewer_response` null for
+  // a viewer it has no account for — so the collapse is a no-op and the switch is a control that
+  // cannot do anything. Both go, rather than leaving one drawn over the other's nothing.
+  const hidesMyPositions = authenticated && hideMyPositions;
+  const collapsesAnswered = !isLobby && filter !== 'mine' && hidesMyPositions;
   const answeredStateOf = React.useCallback(
     (entry: MatchmakingClaim): AnsweredState =>
       !taggedAnswersReady ? 'unknown' : entry.viewer_response !== null ? 'answered' : 'unanswered',
@@ -793,7 +797,8 @@ export function ClaimsTab({
           // Lobby passes its own ("Matches only"); Explore draws the one that hides answered claims.
           // Positions draws neither: it *is* the list of answered claims, so hiding them there
           // could only empty it — a broken tab rather than a filter — and the state cannot be set
-          // from the one place it must not apply.
+          // from the one place it must not apply. Nor is it drawn signed out, where the viewer has
+          // no positions for it to hide and it would be a switch with nothing behind it.
           //
           // Inline on every surface that has one now. Explore's row used to also carry the source
           // picker, which left "Hide my positions" nothing to fit into and pushed it onto a line of
@@ -802,7 +807,7 @@ export function ClaimsTab({
           trailing={
             isLobby ? (
               trailing
-            ) : filter === 'mine' ? null : (
+            ) : filter === 'mine' || !authenticated ? null : (
               <FilterSwitch label="Hide my positions" checked={hideMyPositions} onChange={setHideMyPositions} />
             )
           }
