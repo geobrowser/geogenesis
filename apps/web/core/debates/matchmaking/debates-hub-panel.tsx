@@ -358,17 +358,31 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
             picked and fire B's first query with A's space ids, an instant before the effect
             corrects both. One render, but it is the wrong viewer's data. */}
         {!ready || !filtersReconciled ? null : (
-          <HubSwap activeKey={activeTab}>
-            {activeTab === 'requests' ? (
-              <RequestsTab />
-            ) : activeTab === 'lobby' ? (
-              <LobbyTab onTabChange={changeTab} />
-            ) : activeTab === 'explore' ? (
-              <ClaimsTab />
-            ) : (
-              <PeopleTab onTabChange={changeTab} />
-            )}
-          </HubSwap>
+          <>
+            <HubSwap activeKey={activeTab}>
+              {activeTab === 'requests' ? (
+                <RequestsTab />
+              ) : activeTab === 'lobby' ? (
+                <LobbyTab onTabChange={changeTab} />
+              ) : activeTab === 'explore' ? (
+                <ClaimsTab />
+              ) : (
+                <PeopleTab onTabChange={changeTab} />
+              )}
+            </HubSwap>
+            {/* Explore's four serial round trips, started from whichever tab the viewer is on
+                instead of from the moment they ask for Explore — see `ClaimsTab`'s `warm`. The hub
+                opens on the Lobby and Explore is one press away, so the chain has the whole time
+                the viewer spends reading this tab to finish, and usually has.
+
+                Inside the readiness gate above for the reason that gate exists: warming with the
+                previous account's filter bar would fill the cache under the wrong viewer's query
+                keys, which is worse than not warming at all.
+
+                Dropped once Explore is the open tab, so the real one is the only instance holding
+                the selection atoms and geo-chat's space scopes. */}
+            {activeTab === 'explore' ? null : <ClaimsTab warm />}
+          </>
         )}
       </motion.div>
     </div>

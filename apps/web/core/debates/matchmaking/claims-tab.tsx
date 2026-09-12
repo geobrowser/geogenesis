@@ -185,10 +185,29 @@ const VARIANT_ATOMS = {
 export function ClaimsTab({
   variant = 'explore',
   trailing,
+  warm = false,
 }: {
   variant?: ClaimsTabVariant;
   /** Rendered at the end of the filter row. Lobby passes its "Matches only" switch. */
   trailing?: React.ReactNode;
+  /**
+   * Run the queries, draw nothing (GEO-2863).
+   *
+   * Explore is four waits deep before it can draw a page it will not immediately take back: the
+   * space gates, the tagged catalog and its facet menus, the *second* catalog fetch once those
+   * facets have seeded the space filter, and geo-chat's rows for the claims that came back. They
+   * are strictly serial — each one's query key is built from the answer before it — and none of
+   * them start until the tab is on screen, so the whole chain is spent with the viewer watching
+   * skeletons.
+   *
+   * The hub keeps one of these mounted behind whichever tab is open, so the chain runs while the
+   * viewer is reading the Lobby and arriving at Explore lands on a warm cache. Every hook runs and
+   * only the markup is skipped, which is the point: a warmer written as its own hook would have to
+   * restate the atoms, the debounce, the eligible-space derivation and the seed to arrive at the
+   * same query keys, and a warmer that gets a key wrong doesn't warm anything — it silently doubles
+   * the requests instead. Being the same component is what makes that impossible.
+   */
+  warm?: boolean;
 } = {}) {
   const isLobby = variant === 'lobby';
   const atoms = VARIANT_ATOMS[variant];
@@ -729,6 +748,10 @@ export function ClaimsTab({
     isFetchingNextPage: graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage,
     fetchNextPage: graphSourced ? fetchNextTaggedPage : claimsQuery.fetchNextPage,
   });
+
+  // Every hook above has run, so the cache is filled and the atoms are seeded; there is simply
+  // nothing to draw. Placed here rather than early, which would break the rules of hooks.
+  if (warm) return null;
 
   return (
     <div className="flex flex-col">

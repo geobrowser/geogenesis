@@ -1125,6 +1125,29 @@ describe('All claims reads the Debate tag', () => {
     expect(mocks.tagsAskedFor).toContain(DEBATE_TAG);
   });
 
+  /**
+   * The warming mount the hub keeps behind its other tabs (GEO-2863).
+   *
+   * Explore's round trips are serial and none of them used to start until the tab was on screen,
+   * so the viewer paid for the whole chain while watching it. This runs the chain from wherever
+   * they actually are.
+   *
+   * Both hops are asserted, not just the catalog: the rows are the one my first-paint gate waits
+   * on, so a warmer that stopped at the catalog would leave the slowest hop still on the clock.
+   */
+  it('runs the queries without drawing anything when warming', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab warm />);
+
+    await waitFor(() => expect(mocks.tagsAskedFor).toContain(DEBATE_TAG));
+    await waitFor(() => expect(mocks.debateClaimGroups.at(-1) ?? []).not.toHaveLength(0));
+
+    // Not the claim, and not the filter bar either: a second search box and a second set of pills
+    // in the tree would be found by every query the visible tab's tests make.
+    expect(screen.queryByText('Nuclear power is the cheapest clean energy')).toBeNull();
+    expect(screen.queryByPlaceholderText('Search claims')).toBeNull();
+  });
+
   // The catalog says which claims; two lookups behind it say everything about them. Reporting only
   // the catalog's failure leaves the other two rendering an outage as content — a claim with no
   // topics, or with no position and no readiness — which reads as a settled answer.

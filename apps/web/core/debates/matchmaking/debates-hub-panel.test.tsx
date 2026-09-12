@@ -92,7 +92,17 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 // stays real because the People tab renders it.
 vi.mock('./claims-tab', async () => {
   const actual = await vi.importActual<typeof import('./claims-tab')>('./claims-tab');
-  return { ...actual, ClaimsTab: () => <div data-testid="claims-tab" /> };
+  return {
+    ...actual,
+    // Two markers rather than one, because the hub now mounts a second, warming instance behind
+    // whichever tab is open and the panel's job is to mount exactly one of each. A stub that drew
+    // the same node for both would make every tab but Explore report two claim tabs — and would
+    // hide a warmer left running underneath the real one.
+    //
+    // The real warming instance renders null; this draws a marker because that is the only way a
+    // test can see it at all.
+    ClaimsTab: ({ warm = false }: { warm?: boolean }) => <div data-testid={warm ? 'claims-tab-warm' : 'claims-tab'} />,
+  };
 });
 
 // `usePrivySignIn` reaches for Privy's context, which these suites do not stand up. The signed-out
@@ -576,4 +586,41 @@ it.each<[string, { tab: DebatesHubTab } | null]>([
   view.rerender(tree());
 
   expect(store.get(debatesHubAtom)).toEqual({ tab: 'explore' });
+});
+
+/**
+ * GEO-2863. Explore cannot draw a page it will not immediately take back until four serial round
+ * trips have landed, and none of them used to start until the viewer asked for the tab — so the
+ * whole chain was spent watching skeletons. The hub runs it from wherever they actually are.
+ */
+describe('warming Explore', () => {
+  it.each(['lobby', 'people', 'requests'] as const)('runs Explore behind the %s tab', tab => {
+    renderOpen(tab);
+
+    expect(screen.getByTestId('claims-tab-warm')).toBeInTheDocument();
+  });
+
+  // Or the selection atoms and geo-chat's space scopes would have two owners, and the tab the
+  // viewer is looking at would be competing with a copy of itself.
+  it('drops the warming mount once Explore is the tab on screen', () => {
+    renderOpen('explore');
+
+    expect(screen.queryByTestId('claims-tab-warm')).toBeNull();
+    expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
+  });
+
+  /**
+   * The readiness gate covers the warming mount too, and has to.
+   *
+   * Its whole point is that the first query of a new account must not go out carrying the previous
+   * one's space ids. Warming outside it would do exactly that, invisibly, and cache the answer
+   * under keys the real tab then reads — which is worse than not warming, because it is wrong
+   * rather than merely slow.
+   */
+  it('warms nothing until the viewer is known', () => {
+    mocks.ready = false;
+    renderOpen('lobby');
+
+    expect(screen.queryByTestId('claims-tab-warm')).toBeNull();
+  });
 });
