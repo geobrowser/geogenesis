@@ -23,6 +23,27 @@ const mocks = vi.hoisted(() => ({
     bannerUrl: undefined as string | undefined,
     avatarUrl: undefined as string | undefined,
   },
+  hasPendingHistory: false,
+  stagedHistory: { values: [], relations: [] } as { values: unknown[]; relations: unknown[] },
+}));
+
+// The sections keep their own pending state and their own tests; these are about
+// the four header fields and what the sections owe them at Save, so it is stubbed
+// to empty except where a test says otherwise.
+vi.mock('~/core/hooks/use-profile-history', () => ({
+  useProfileHistory: () => ({
+    employment: [],
+    education: [],
+    isLoading: false,
+    hasPendingChanges: mocks.hasPendingHistory,
+    addPosition: vi.fn(),
+    addEducation: vi.fn(),
+    removeEntry: vi.fn(),
+    editEntry: vi.fn(),
+    stagePending: () => mocks.stagedHistory,
+    settle: vi.fn(),
+    discard: vi.fn(),
+  }),
 }));
 
 vi.mock('~/core/hooks/use-edit-profile', () => ({
@@ -31,7 +52,7 @@ vi.mock('~/core/hooks/use-edit-profile', () => ({
     isHydrated: mocks.isHydrated,
     isLoading: mocks.isLoading,
     entityId: mocks.entityId,
-    spaceId: 'space',
+    spaceId: 'space-1',
     current: mocks.current,
     status: mocks.status,
     errorMessage: mocks.errorMessage,
@@ -58,6 +79,8 @@ beforeEach(() => {
   mocks.isLoading = false;
   mocks.status = 'idle';
   mocks.errorMessage = null;
+  mocks.hasPendingHistory = false;
+  mocks.stagedHistory = { values: [], relations: [] };
   mocks.current = {
     name: 'Preston Mantel',
     description: 'Working on debates.',
@@ -119,6 +142,30 @@ describe('EditProfileDialog', () => {
     expect(saveButton()).toBeEnabled();
   });
 
+  // Work and education write nothing of their own, so a position added with the
+  // four fields left alone is the whole of the edit — and Save has to offer it.
+  describe('work and education', () => {
+    it('offers to save an edit that is only a position', async () => {
+      mocks.hasPendingHistory = true;
+      renderDialog();
+
+      expect(saveButton()).toBeEnabled();
+    });
+
+    it('publishes those rows in the same edit as the header fields', async () => {
+      mocks.hasPendingHistory = true;
+      mocks.stagedHistory = { values: [{ id: 'value-1' }], relations: [{ id: 'relation-1' }] };
+      renderDialog();
+
+      await userEvent.click(saveButton());
+
+      expect(mocks.publish).toHaveBeenCalledWith(expect.anything(), {
+        values: [{ id: 'value-1' }],
+        relations: [{ id: 'relation-1' }],
+      });
+    });
+  });
+
   it('publishes the trimmed draft', async () => {
     renderDialog();
 
@@ -126,12 +173,17 @@ describe('EditProfileDialog', () => {
     await userEvent.paste('  Preston  ');
     await userEvent.click(saveButton());
 
-    expect(mocks.publish).toHaveBeenCalledWith({
-      name: 'Preston',
-      description: 'Working on debates.',
-      banner: { kind: 'unchanged' },
-      avatar: { kind: 'unchanged' },
-    });
+    // Second argument is the work and education rows, which go out in the same
+    // edit as the header fields.
+    expect(mocks.publish).toHaveBeenCalledWith(
+      {
+        name: 'Preston',
+        description: 'Working on debates.',
+        banner: { kind: 'unchanged' },
+        avatar: { kind: 'unchanged' },
+      },
+      { values: [], relations: [] }
+    );
   });
 
   // The status bar carries the upload, the publish and the result, and a failure
@@ -359,7 +411,7 @@ describe('EditProfileDialog', () => {
     await userEvent.click(saveButton());
 
     // The name goes out exactly as stored, not silently re-trimmed.
-    expect(mocks.publish).toHaveBeenCalledWith(expect.objectContaining({ name: 'Preston Mantel ' }));
+    expect(mocks.publish).toHaveBeenCalledWith(expect.objectContaining({ name: 'Preston Mantel ' }), expect.anything());
   });
 
   it('holds save until hydration actually produced an entity', () => {

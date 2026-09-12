@@ -7,12 +7,23 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { type ProfileImageEdit, useEditProfile } from '~/core/hooks/use-edit-profile';
+import { useProfileHistory } from '~/core/hooks/use-profile-history';
+import type { EducationEntry, EmploymentEntry, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
+import {
+  type EducationDraft,
+  type PositionDraft,
+  educationDraftFromEntry,
+  positionDraftFromEntry,
+} from '~/core/profile/stage-history';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 import { Warning } from '~/design-system/icons/warning';
 import { Input, inputStyles } from '~/design-system/input';
 
+import { AddEducationSheet } from './add-education-sheet';
+import { AddPositionSheet } from './add-position-sheet';
+import { HistorySection } from './history-section';
 import { ProfileImageField } from './profile-image-field';
 
 const UNCHANGED: ProfileImageEdit = { kind: 'unchanged' };
@@ -44,9 +55,41 @@ type Props = {
  * locks rather than offering to start a second one.
  */
 export function EditProfileDialog({ open, onOpenChange }: Props) {
-  const { canEdit, entityId, isHydrated, isLoading, current, status, errorMessage, publish, reset } = useEditProfile({
-    isOpen: open,
-  });
+  const { canEdit, entityId, isHydrated, isLoading, spaceId, current, status, errorMessage, publish, reset } =
+    useEditProfile({ isOpen: open });
+
+  const history = useProfileHistory({ entityId, spaceId, enabled: open && entityId !== '' });
+
+  /**
+   * Which sheet is open, if any. A sheet replaces the modal's body rather than
+   * stacking over it — the four fields underneath have nothing to do with the
+   * position being added, and two scroll areas fighting is worse than one.
+   *
+   * `editing` is the row the sheet was opened on, where it was opened on one.
+   * Saving then replaces that row rather than adding beside it.
+   */
+  type Organization = { id: string; name: string | null; stintId: string };
+  type Editing = { card: HistoryCard<HistoryEntry>; entry: HistoryEntry };
+
+  const [sheet, setSheet] = React.useState<
+    | { kind: 'position'; company?: Organization; editing?: Editing }
+    | { kind: 'education'; school?: Organization; editing?: Editing }
+    | null
+  >(null);
+
+  const openSheetFor = (kind: 'employment' | 'education', card?: HistoryCard<HistoryEntry>) => {
+    // Any of the card's edges will do as the one to hang a new row off; a card
+    // holds more than one only where the same employer was recorded twice.
+    const org = card?.edges[0]
+      ? { id: card.organization.id, name: card.organization.name, stintId: card.edges[0].stintId }
+      : undefined;
+    setSheet(kind === 'employment' ? { kind: 'position', company: org } : { kind: 'education', school: org });
+  };
+
+  const openSheetOn = (kind: 'employment' | 'education', card: HistoryCard<HistoryEntry>, entry: HistoryEntry) => {
+    const editing = { card, entry };
+    setSheet(kind === 'employment' ? { kind: 'position', editing } : { kind: 'education', editing });
+  };
 
   const [name, setName] = React.useState('');
   const [description, setDescription] = React.useState('');
@@ -111,8 +154,9 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     if (status !== 'published') return;
     resetForm();
     reset();
+    history.settle();
     if (open) onOpenChange(false);
-  }, [status, open, onOpenChange, resetForm, reset]);
+  }, [status, open, onOpenChange, resetForm, reset, history]);
 
   // A failure that lands after the user closed has nowhere else to go. The status
   // bar's generic publish error carries no Retry — `toUserFacingError` only
@@ -166,7 +210,10 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     publishName !== current.name ||
     publishDescription !== current.description ||
     changesImage(banner, current.bannerUrl) ||
-    changesImage(avatar, current.avatarUrl);
+    changesImage(avatar, current.avatarUrl) ||
+    // Work and education write nothing until this Save, so a position added with
+    // the four fields left alone is the whole of the edit.
+    history.hasPendingChanges;
 
   // A failed save has already written its rows to the local store, so the entity
   // now reads back the edit and `hasChanges` goes false. Retry has to stay live
@@ -185,6 +232,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     if (!isPublishing) {
       reset();
       resetForm();
+      history.discard();
     }
     onOpenChange(false);
   };
@@ -209,7 +257,10 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     //
     // No `resetForm()` here: the draft has to survive in case the publish fails
     // and the modal is reopened on it.
-    void publish({ name: publishName, description: publishDescription, banner: banner.edit, avatar: avatar.edit });
+    void publish(
+      { name: publishName, description: publishDescription, banner: banner.edit, avatar: avatar.edit },
+      history.stagePending()
+    );
     onOpenChange(false);
   };
 
@@ -240,110 +291,174 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
             onSubmit={onSubmit}
             className="my-10 flex w-full max-w-[560px] flex-col rounded-lg border border-grey-02 bg-white shadow-dropdown"
           >
-            <header className="flex items-center justify-between px-5 py-4">
-              <Title className="text-smallTitle text-text">Edit profile</Title>
-              <SquareButton type="button" onClick={close} icon={<Close />} aria-label="Close" />
-            </header>
-
-            <Description className="sr-only">
-              Update your banner, photo, name and description. Saving publishes to your personal space.
-            </Description>
-
-            {hasFailed && errorMessage && (
-              <div role="alert" className="mx-5 mb-4 flex items-start gap-2 rounded-lg bg-red-02 p-3">
-                <div className="text-red-01">
-                  <Warning />
-                </div>
-                <p className="text-metadata text-text">{errorMessage}</p>
-              </div>
-            )}
-
-            {rejection && (
-              <div role="alert" className="mx-5 mb-4 rounded-lg bg-red-02 p-3">
-                <p className="text-metadata text-text">{rejection}</p>
-              </div>
-            )}
-
-            <div className="px-5">
-              <ProfileImageField
-                kind="banner"
-                src={imageSrc(banner, current.bannerUrl)}
-                disabled={isPublishing}
-                onPick={onPick('banner')}
-                onRemove={onRemove('banner')}
-                onReject={setRejection}
-              />
-
-              {/* Hangs off the banner's bottom edge, matching how a profile already
-                  reads on a space page. */}
-              <div className="-mt-11 pl-4">
-                <ProfileImageField
-                  kind="avatar"
-                  src={imageSrc(avatar, current.avatarUrl)}
-                  disabled={isPublishing}
-                  onPick={onPick('avatar')}
-                  onRemove={onRemove('avatar')}
-                  onReject={setRejection}
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-4 px-5 pt-5">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-metadataMedium text-grey-04">Name</span>
-                <Input
-                  value={name}
-                  onChange={event => {
-                    pristineRef.current.name = false;
-                    setName(event.currentTarget.value);
+            {sheet ? (
+              sheet.kind === 'position' ? (
+                <AddPositionSheet
+                  spaceId={spaceId}
+                  company={sheet.company}
+                  initial={
+                    sheet.editing &&
+                    // The original where there is one: a reconstruction cannot know
+                    // the company was created here and still needs its name written.
+                    ((history.draftFor(sheet.editing.entry) as PositionDraft | undefined) ??
+                      positionDraftFromEntry(sheet.editing.card.organization, sheet.editing.entry as EmploymentEntry))
+                  }
+                  isSaving={false}
+                  onCancel={() => setSheet(null)}
+                  onSave={draft => {
+                    const editing = sheet.editing;
+                    if (editing) history.editEntry(editing.card, editing.entry, 'employment', draft);
+                    else history.addPosition(draft);
+                    setSheet(null);
                   }}
-                  disabled={isPublishing}
-                  placeholder="Your name"
-                  required
-                  aria-required="true"
-                  aria-invalid={isNameMissing}
-                  aria-describedby={isNameMissing ? 'edit-profile-name-error' : undefined}
                 />
-                {/* Name is the only thing that blocks Save. Without this the button
+              ) : (
+                <AddEducationSheet
+                  spaceId={spaceId}
+                  school={sheet.school}
+                  initial={
+                    sheet.editing &&
+                    ((history.draftFor(sheet.editing.entry) as EducationDraft | undefined) ??
+                      educationDraftFromEntry(sheet.editing.card.organization, sheet.editing.entry as EducationEntry))
+                  }
+                  isSaving={false}
+                  onCancel={() => setSheet(null)}
+                  onSave={draft => {
+                    const editing = sheet.editing;
+                    if (editing) history.editEntry(editing.card, editing.entry, 'education', draft);
+                    else history.addEducation(draft);
+                    setSheet(null);
+                  }}
+                />
+              )
+            ) : (
+              <>
+                <header className="flex items-center justify-between px-5 py-4">
+                  <Title className="text-smallTitle text-text">Edit profile</Title>
+                  <SquareButton type="button" onClick={close} icon={<Close />} aria-label="Close" />
+                </header>
+
+                <Description className="sr-only">
+                  Update your banner, photo, name and description. Saving publishes to your personal space.
+                </Description>
+
+                {hasFailed && errorMessage && (
+                  <div role="alert" className="mx-5 mb-4 flex items-start gap-2 rounded-lg bg-red-02 p-3">
+                    <div className="text-red-01">
+                      <Warning />
+                    </div>
+                    <p className="text-metadata text-text">{errorMessage}</p>
+                  </div>
+                )}
+
+                {rejection && (
+                  <div role="alert" className="mx-5 mb-4 rounded-lg bg-red-02 p-3">
+                    <p className="text-metadata text-text">{rejection}</p>
+                  </div>
+                )}
+
+                <div className="px-5">
+                  <ProfileImageField
+                    kind="banner"
+                    src={imageSrc(banner, current.bannerUrl)}
+                    disabled={isPublishing}
+                    onPick={onPick('banner')}
+                    onRemove={onRemove('banner')}
+                    onReject={setRejection}
+                  />
+
+                  {/* Hangs off the banner's bottom edge, matching how a profile already
+                  reads on a space page. */}
+                  <div className="-mt-11 pl-4">
+                    <ProfileImageField
+                      kind="avatar"
+                      src={imageSrc(avatar, current.avatarUrl)}
+                      disabled={isPublishing}
+                      onPick={onPick('avatar')}
+                      onRemove={onRemove('avatar')}
+                      onReject={setRejection}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-4 px-5 pt-5">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-metadataMedium text-grey-04">Name</span>
+                    <Input
+                      value={name}
+                      onChange={event => {
+                        pristineRef.current.name = false;
+                        setName(event.currentTarget.value);
+                      }}
+                      disabled={isPublishing}
+                      placeholder="Your name"
+                      required
+                      aria-required="true"
+                      aria-invalid={isNameMissing}
+                      aria-describedby={isNameMissing ? 'edit-profile-name-error' : undefined}
+                    />
+                    {/* Name is the only thing that blocks Save. Without this the button
                     just sits disabled, which says nothing to anyone and nothing at
                     all to a screen reader. */}
-                {isNameMissing && (
-                  <span id="edit-profile-name-error" role="alert" className="text-footnote text-red-01">
-                    Name is required.
-                  </span>
-                )}
-              </label>
+                    {isNameMissing && (
+                      <span id="edit-profile-name-error" role="alert" className="text-footnote text-red-01">
+                        Name is required.
+                      </span>
+                    )}
+                  </label>
 
-              <label className="flex flex-col gap-1.5">
-                <span className="text-metadataMedium text-grey-04">Description</span>
-                <textarea
-                  value={description}
-                  onChange={event => {
-                    pristineRef.current.description = false;
-                    setDescription(event.currentTarget.value);
-                  }}
-                  disabled={isPublishing}
-                  rows={3}
-                  placeholder="A sentence about who you are and what you work on."
-                  className={cx(inputStyles(), 'resize-none')}
-                />
-                <span className="text-footnote text-grey-04">Shown under your name across Geo.</span>
-              </label>
-            </div>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-metadataMedium text-grey-04">Description</span>
+                    <textarea
+                      value={description}
+                      onChange={event => {
+                        pristineRef.current.description = false;
+                        setDescription(event.currentTarget.value);
+                      }}
+                      disabled={isPublishing}
+                      rows={3}
+                      placeholder="A sentence about who you are and what you work on."
+                      className={cx(inputStyles(), 'resize-none')}
+                    />
+                    <span className="text-footnote text-grey-04">Shown under your name across Geo.</span>
+                  </label>
 
-            <footer className="mt-5 flex items-center justify-between gap-3 border-t border-grey-02 px-5 py-4">
-              {/* One line, carrying whatever the modal currently owes the reader:
+                  <HistorySection
+                    kind="employment"
+                    cards={history.employment}
+                    disabled={isPublishing}
+                    onAdd={() => openSheetFor('employment')}
+                    onAddTo={card => openSheetFor('employment', card)}
+                    onEditEntry={(card, entry) => openSheetOn('employment', card, entry)}
+                    onRemoveEntry={(card, entry) => history.removeEntry(card, entry, 'employment')}
+                  />
+
+                  <HistorySection
+                    kind="education"
+                    cards={history.education}
+                    disabled={isPublishing}
+                    onAdd={() => openSheetFor('education')}
+                    onAddTo={card => openSheetFor('education', card)}
+                    onEditEntry={(card, entry) => openSheetOn('education', card, entry)}
+                    onRemoveEntry={(card, entry) => history.removeEntry(card, entry, 'education')}
+                  />
+                </div>
+
+                <footer className="mt-5 flex items-center justify-between gap-3 border-t border-grey-02 px-5 py-4">
+                  {/* One line, carrying whatever the modal currently owes the reader:
                   why Save is dead, how long the wait is, or what a failure cost. */}
-              <p className={cx('text-footnote', isUnavailable ? 'text-red-01' : 'text-grey-04')}>{footerNote}</p>
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="secondary" onClick={close}>
-                  {isPublishing ? 'Close' : 'Cancel'}
-                </Button>
-                <Button type="submit" disabled={!canSave}>
-                  {isPublishing ? 'Publishing' : hasFailed ? 'Retry' : 'Save profile'}
-                </Button>
-              </div>
-            </footer>
+                  <p className={cx('text-footnote', isUnavailable ? 'text-red-01' : 'text-grey-04')}>{footerNote}</p>
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="secondary" onClick={close}>
+                      {isPublishing ? 'Close' : 'Cancel'}
+                    </Button>
+                    <Button type="submit" disabled={!canSave}>
+                      {isPublishing ? 'Publishing' : hasFailed ? 'Retry' : 'Save profile'}
+                    </Button>
+                  </div>
+                </footer>
+              </>
+            )}
           </form>
         </Content>
       </Portal>

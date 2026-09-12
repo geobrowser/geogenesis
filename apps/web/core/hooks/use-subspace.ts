@@ -11,6 +11,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
 import { uuidToHex } from '~/core/id/normalize';
+import { SPACE_REGISTRY_ADDRESS } from '~/core/sdk/geo-network';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import {
@@ -18,7 +19,6 @@ import {
   encodeProposalCreatedData,
   padBytes16ToBytes32,
 } from '~/core/utils/contracts/governance';
-import { SPACE_REGISTRY_ADDRESS } from '~/core/sdk/geo-network';
 import {
   DAOSpaceAbi,
   EMPTY_SIGNATURE,

@@ -80,6 +80,28 @@ type SelectEntityProps = {
   initialQuery?: string;
   waitForFilterTypes?: boolean;
   restrictToFilterTypes?: boolean;
+  /**
+   * Extra spaces to make searchable, for a caller that knows where the thing it
+   * is searching for lives — a curated taxonomy in a space the viewer is not a
+   * member of would otherwise be filtered out before it got here.
+   */
+  alsoSearchSpaceIds?: string[];
+  /**
+   * Rows to offer before anything has been typed, above the results.
+   *
+   * For a caller that already knows the likely answers and would rather not make
+   * the user guess at a search term — the skills an occupation is recorded as
+   * needing, say. They are dropped as soon as there is a query, which is the
+   * point at which the search itself is the better answer.
+   *
+   * Rendered without the space summary a search hit carries: a suggestion was not
+   * found in a space, it was offered by a caller that already knows it fits.
+   */
+  pinnedResults?: SearchResult[];
+  /** Heading above the pinned rows, so they read as a suggestion not a result. */
+  pinnedLabel?: string;
+  /** Heading above the ordinary results, where pinned rows precede them. */
+  restLabel?: string;
   /** When set, the result with this ID gets a "Currently selected" indicator */
   selectedEntityId?: string;
   /** Increment (e.g. on "add row") to move focus into this input even when already mounted. */
@@ -108,6 +130,10 @@ export const SelectEntity = ({
   initialQuery,
   waitForFilterTypes,
   restrictToFilterTypes,
+  alsoSearchSpaceIds,
+  pinnedResults,
+  pinnedLabel,
+  restLabel,
   selectedEntityId,
   focusRequestKey,
 }: SelectEntityProps) => {
@@ -155,15 +181,40 @@ export const SelectEntity = ({
   // unrestricted instead of blocking with no way to get results.
   const userClearedTypeFilters = removedTypeIds.size > 0 && allowedTypes.length === 0;
 
-  const { query, onQueryChange, isLoading, isEmpty, results, hasNextPage, fetchNextPage, isFetchingNextPage } =
-    useSearch({
-      filterByTypes,
-      filterBySpace,
-      initialQuery,
-      enabled: isSearchOpen,
-      waitForFilterTypes,
-      restrictToFilterTypes: restrictToFilterTypes && !userClearedTypeFilters,
-    });
+  const {
+    query,
+    onQueryChange,
+    isLoading,
+    isEmpty,
+    results: searchResults,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSearch({
+    filterByTypes,
+    filterBySpace,
+    initialQuery,
+    enabled: isSearchOpen,
+    waitForFilterTypes,
+    restrictToFilterTypes: restrictToFilterTypes && !userClearedTypeFilters,
+    alsoSearchSpaceIds,
+  });
+
+  /**
+   * Pinned rows sit at the top until the user types, and then get out of the way.
+   *
+   * Merged into the one list the results render and the keyboard walks, so
+   * arrowing down and pressing Enter picks a suggestion the same way it picks a
+   * result. Anything pinned is dropped from the results below it rather than
+   * appearing twice.
+   */
+  const pinned = query.trim() === '' ? (pinnedResults ?? []) : [];
+
+  const results = React.useMemo(() => {
+    if (pinned.length === 0) return searchResults;
+    const pinnedIds = new Set(pinned.map(result => result.id));
+    return [...pinned, ...searchResults.filter(result => !pinnedIds.has(result.id))];
+  }, [pinned, searchResults]);
 
   // Auto focus input when component mounts
   useEffect(() => {
@@ -577,7 +628,7 @@ export const SelectEntity = ({
                             <div className="truncate text-resultTitle text-text">Loading...</div>
                           </div>
                         )}
-                        {isEmpty ? (
+                        {isEmpty && pinned.length === 0 ? (
                           <div className="w-full bg-white px-3 py-2">
                             <div className="truncate text-resultTitle text-text">No results.</div>
                           </div>
@@ -585,6 +636,12 @@ export const SelectEntity = ({
                           <div className="divide-y divide-divider bg-white">
                             {results.map((result, index) => (
                               <div key={index} className="w-full">
+                                {pinnedLabel && pinned.length > 0 && index === 0 && (
+                                  <div className="px-3 pt-2 text-[0.6875rem] text-grey-04">{pinnedLabel}</div>
+                                )}
+                                {restLabel && pinned.length > 0 && index === pinned.length && (
+                                  <div className="px-3 pt-2 text-[0.6875rem] text-grey-04">{restLabel}</div>
+                                )}
                                 <div className="p-1">
                                   <button
                                     onClick={() => {
@@ -671,7 +728,12 @@ export const SelectEntity = ({
                                     )}
                                   </button>
                                 </div>
-                                {withSelectSpace && (
+                                {/* Not on a pinned row: the space summary counts where a
+                                    search hit was found, and a suggestion was not
+                                    found anywhere — it is offered because the caller
+                                    already knows it fits. Rendering it read "0 spaces"
+                                    beside a "Select space" that had none to pick. */}
+                                {withSelectSpace && index >= pinned.length && (
                                   <div className="-mt-2 p-1">
                                     <button
                                       onClick={() => setResult(result)}
