@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { DebateTileChip } from './debate-video-tile';
+
 /**
  * GEO-2819. Says whether the camera is being written to disk, in the same place on the intro
  * screen and in the debate room.
@@ -29,14 +31,11 @@ import cx from 'classnames';
 const recordingRed = '#991200';
 export function DebateRecordingStatusPill({ recording }: { recording: boolean }) {
   return (
-    <span
+    <DebateTileChip
       role="status"
       aria-live="polite"
       style={recording ? { color: recordingRed } : undefined}
-      className={cx(
-        'inline-flex h-4 items-center gap-1 rounded-full bg-white/60 px-1.5 text-[0.75rem] leading-none whitespace-nowrap',
-        !recording && 'text-text'
-      )}
+      className={cx('bg-white/60', !recording && 'text-text')}
     >
       <span
         aria-hidden
@@ -46,6 +45,6 @@ export function DebateRecordingStatusPill({ recording }: { recording: boolean })
         )}
       />
       {recording ? 'Recording' : 'Not recording'}
-    </span>
+    </DebateTileChip>
   );
 }

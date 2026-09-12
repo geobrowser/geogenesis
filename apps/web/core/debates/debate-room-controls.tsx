@@ -62,8 +62,11 @@ export function DebateTileToggleButton({
   return (
     <button
       type="button"
+      // No `aria-pressed`: the label is the action, not the state, so it already flips between
+      // "Mute microphone" and "Unmute microphone". Pairing the two announces "Unmute microphone,
+      // pressed" while the mic is muted, which states the opposite of what is true. Same reason
+      // `RecordingCircleButton` omits it.
       aria-label={ariaLabel}
-      aria-pressed={!enabled}
       title={ariaLabel}
       onClick={onClick}
       disabled={disabled}

@@ -19,6 +19,29 @@ export const recordingLabelTextShadow = {
 };
 
 /**
+ * The chip every small label overlaid on a tile wears: the position label, the recording
+ * indicator, and the intro screen's readiness badges. They sit on the same row at the same optical
+ * size, so the geometry lives here once and callers bring only the fill and the text colour.
+ */
+export function DebateTileChip({
+  className,
+  children,
+  ...spanProps
+}: React.ComponentPropsWithoutRef<'span'> & { className?: string }) {
+  return (
+    <span
+      {...spanProps}
+      className={cx(
+        'inline-flex h-4 items-center gap-1 rounded-full px-1.5 text-[0.75rem] leading-none whitespace-nowrap',
+        className
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
  * One participant's tile, shared by the intro screen and the recording modal so the two have the
  * same geometry. Everything past the video is optional: the intro passes a label and an overlay,
  * the debate adds turn countdowns and phase overlays.
@@ -108,19 +131,21 @@ export function DebateVideoTile({
       {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
 
       {/* One row rather than three corners. Everything that wants the bottom of the tile is laid
-          out here instead of absolutely positioned, so the position label truncates under pressure
-          rather than ending up underneath the controls or the status. */}
+          out here instead of absolutely positioned, so nothing can end up underneath anything else.
+          The label is the only flexible cell: the controls and the status hold their natural width
+          and the label truncates to pay for them. Giving the status a share of the free space
+          instead — `flex-1` with a zero basis — sized it to the viewport rather than to its own
+          text, and the wider "Not recording" state then overflowed onto the camera toggle on any
+          tile under ~330px, which is most phones. */}
       {(positionLabel || tileControls || status) && (
         <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex items-center justify-between gap-2">
           <div className="flex min-w-0 flex-1 justify-start">
             {positionLabel && (
-              <span className="inline-flex h-4 max-w-full items-center truncate rounded-full bg-white/60 px-1.5 text-[0.75rem] leading-none text-text">
-                {positionLabel}
-              </span>
+              <DebateTileChip className="max-w-full truncate bg-white/60 text-text">{positionLabel}</DebateTileChip>
             )}
           </div>
           {tileControls && <div className="pointer-events-auto shrink-0">{tileControls}</div>}
-          <div className="flex min-w-0 flex-1 shrink-0 justify-end">{status}</div>
+          <div className="flex shrink-0 justify-end">{status}</div>
         </div>
       )}
 

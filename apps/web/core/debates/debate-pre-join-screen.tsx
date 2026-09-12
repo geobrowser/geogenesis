@@ -25,7 +25,7 @@ import {
   MicrophoneIcon,
   RecordingCircleButton,
 } from './debate-room-controls';
-import { DebateVideoTile } from './debate-video-tile';
+import { DebateTileChip, DebateVideoTile } from './debate-video-tile';
 import { DeviceOptionGroup } from './device-option-group';
 import { MicrophoneLevelMeter } from './microphone-level-meter';
 import { useScrollLock } from './use-scroll-lock';
@@ -222,7 +222,10 @@ export function DebatePreScreen({
               ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
               enabled={!audioMuted}
               onClick={onToggleAudioMuted}
-              disabled={localReady}
+              // `readyBusy` as well as `localReady`: readiness is confirmed by the server, so
+              // between pressing ready and the round trip returning you could still turn the camera
+              // off — and carry exactly the state the gate exists to prevent into the recording.
+              disabled={readyBusy || localReady}
             >
               <MicrophoneIcon muted={audioMuted} />
             </DebateTileToggleButton>
@@ -230,7 +233,10 @@ export function DebatePreScreen({
               ariaLabel={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
               enabled={videoEnabled}
               onClick={onToggleVideoEnabled}
-              disabled={localReady}
+              // `readyBusy` as well as `localReady`: readiness is confirmed by the server, so
+              // between pressing ready and the round trip returning you could still turn the camera
+              // off — and carry exactly the state the gate exists to prevent into the recording.
+              disabled={readyBusy || localReady}
             >
               <CameraIcon disabled={!videoEnabled} />
             </DebateTileToggleButton>
@@ -296,9 +302,9 @@ export function DebatePreScreen({
    *
    * `md` — this stylesheet's breakpoints are desktop-first max-widths, so `md` means *at most*
    * 767px — dissolves the groups with `display: contents`, which drops their boxes and promotes
-   * their children into the one card the mobile design draws. That is what lets the tiles keep the
-   * room's position ordering (below) while your controls still land under both of them rather than
-   * between them: `order-last` can only reach across a group it is no longer inside.
+   * their children into the one card the mobile design draws. That is what lets your controls land
+   * under both tiles rather than between them: `order-last` can only reach across a group it is no
+   * longer inside.
    */
   const cardGroup = 'flex flex-1 flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3 md:contents';
   const controlsOrder = 'md:order-last';
@@ -543,22 +549,18 @@ export function DebatePreScreen({
  */
 function PreScreenReadyBadge() {
   return (
-    <span className="inline-flex h-4 items-center gap-1 rounded-full bg-green px-1.5 text-[0.75rem] leading-none text-text">
+    <DebateTileChip className="bg-green text-text">
       {/* The icon ships at 16px, which is the whole chip. */}
       <span aria-hidden className="grid size-2.5 shrink-0 place-items-center [&>svg]:size-full">
         <Check />
       </span>
       Ready
-    </span>
+    </DebateTileChip>
   );
 }
 
 function PreScreenNotReadyBadge() {
-  return (
-    <span className="inline-flex h-4 items-center rounded-full bg-white/60 px-1.5 text-[0.75rem] leading-none text-text">
-      Not ready
-    </span>
-  );
+  return <DebateTileChip className="bg-white/60 text-text">Not ready</DebateTileChip>;
 }
 
 type PreScreenSettingsTriggerProps = Omit<React.ComponentPropsWithoutRef<'button'>, 'aria-label'> & {
