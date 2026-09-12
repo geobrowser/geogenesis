@@ -35,7 +35,7 @@ import {
   stageEducation,
   stagePosition,
 } from '~/core/profile/stage-history';
-import type { Relation } from '~/core/types';
+import type { Relation, Value } from '~/core/types';
 
 type Params = { entityId: string; spaceId: string; enabled?: boolean };
 
@@ -119,7 +119,12 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     );
 
     const removals: PendingRemoval[] = [
-      { relationId: entry.relationId, entityId: entry.tenureId, typeId: properties.entry },
+      {
+        relationId: entry.relationId,
+        entityId: entry.tenureId,
+        typeId: properties.entry,
+        subtree: entry.subtree,
+      },
     ];
 
     if (savedSiblings.length === 0 && !isPending(entry.edge.relationId)) {
@@ -127,6 +132,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
         relationId: entry.edge.relationId,
         entityId: entry.edge.stintId,
         typeId: properties.card,
+        subtree: entry.edge.subtree,
       });
     }
 
@@ -167,9 +173,18 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
       const staysPut = organizationId === card.organization.id;
 
       // Only the row when the employer is unchanged — the edge it hangs off is
-      // still wanted, and the replacement attaches straight back to it.
+      // still wanted, and the replacement attaches straight back to it. What hung
+      // off the row goes either way: the replacement writes its own dates and
+      // skills, and the old ones are not merged into them.
       const removals = staysPut
-        ? [{ relationId: entry.relationId, entityId: entry.tenureId, typeId: PROPERTIES[kind].entry }]
+        ? [
+            {
+              relationId: entry.relationId,
+              entityId: entry.tenureId,
+              typeId: PROPERTIES[kind].entry,
+              subtree: entry.subtree,
+            },
+          ]
         : removalsFor(card, entry, kind);
 
       const next = { ...draft, existingStintId: staysPut ? entry.edge.stintId : undefined };
@@ -193,9 +208,10 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
   /**
    * Everything pending, as rows for the modal's Save to publish with its own.
    *
-   * Deletions are expressed as tombstoned relations. The reader returns cards
-   * rather than store rows, so these carry the minimum a delete needs — the
-   * publish layer reads only the id off a tombstone.
+   * Deletions are tombstones — rows carrying `isDeleted` — and a removal produces
+   * one for the relation plus one for everything on the entity it carries. The
+   * publish layer reads only the id off a tombstone, so these carry the minimum a
+   * delete needs rather than the row as it stands in the graph.
    */
   const stagePending = React.useCallback((): StagedRows => {
     const context = { personEntityId: entityId, spaceId };
@@ -210,20 +226,48 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
       ),
     ];
 
-    const tombstones: Relation[] = pending.removals.map(removal => ({
-      id: removal.relationId,
-      entityId: removal.entityId,
+    const tombstone = (id: string, typeId: string, ownerId: string): Relation => ({
+      id,
+      entityId: ownerId,
       spaceId,
       renderableType: 'RELATION',
       isDeleted: true,
-      type: { id: removal.typeId, name: null },
+      type: { id: typeId, name: null },
       fromEntity: { id: entityId, name: null },
-      toEntity: { id: removal.entityId, name: null, value: removal.entityId },
-    }));
+      toEntity: { id: ownerId, name: null, value: ownerId },
+    });
+
+    const removedRelations: Relation[] = [];
+    const removedValues: Value[] = [];
+
+    for (const removal of pending.removals) {
+      removedRelations.push(tombstone(removal.relationId, removal.typeId, removal.entityId));
+
+      // The relation's own entity goes with it. Its type is not known per row
+      // here and the publish layer does not read one off a tombstone, so the
+      // removal's own type stands in.
+      for (const relationId of removal.subtree.relationIds) {
+        removedRelations.push(tombstone(relationId, removal.typeId, removal.entityId));
+      }
+
+      for (const value of removal.subtree.values) {
+        removedValues.push({
+          id: value.id,
+          entity: { id: removal.entityId, name: null },
+          // The publish layer builds an `unset` from the property id and checks
+          // only that the data type is not RELATION, which a value never is. The
+          // real type is not worth another round trip to state here.
+          property: { id: value.propertyId, name: null, dataType: 'TEXT', renderableType: 'TEXT' },
+          spaceId,
+          value: '',
+          isDeleted: true,
+        });
+      }
+    }
 
     return {
-      values: additions.flatMap(rows => rows.values),
-      relations: [...additions.flatMap(rows => rows.relations), ...tombstones],
+      values: [...additions.flatMap(rows => rows.values), ...removedValues],
+      relations: [...additions.flatMap(rows => rows.relations), ...removedRelations],
     };
   }, [entityId, pending, spaceId]);
 

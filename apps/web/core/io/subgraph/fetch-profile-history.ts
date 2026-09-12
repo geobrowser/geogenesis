@@ -33,16 +33,20 @@ export interface ProfileHistory {
  * than filtered by property id: the same nested block has to serve the current
  * shape and the legacy one, which puts dates on the stint instead. Both levels
  * hold a handful of rows, so there is nothing to save by narrowing them.
+ *
+ * Row ids come back alongside the content because removing a row has to delete
+ * what hangs off it, and a relation id cannot be reconstructed the way a value id
+ * can.
  */
 const nested = `
-  valuesList { property { id } date text decimal }
+  valuesList { id property { id } date text decimal }
   relationsList {
     id
     entityId
     type { id }
     toEntity { id name }
     entity {
-      valuesList { property { id } date text decimal }
+      valuesList { id property { id } date text decimal }
       relationsList { id entityId type { id } toEntity { id name } entity { valuesList { property { id } date text } } }
     }
   }

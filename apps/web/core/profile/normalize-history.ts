@@ -23,6 +23,7 @@ import {
 
 /** Shapes as they come back from the graph; see `fetch-profile-history.ts`. */
 export type HistoryValueNode = {
+  id?: string;
   property: { id: string };
   date: string | null;
   text: string | null;
@@ -48,8 +49,32 @@ export type HistoryEdgeNode = {
 
 export type NamedRef = { id: string; name: string | null };
 
+/**
+ * Everything hanging off a relation's own entity.
+ *
+ * Deleting the relation does not touch any of it — the store marks one row
+ * deleted and nothing else — so removing a position has to name each of these or
+ * leave the dates, the description and the skills behind as an entity nothing can
+ * reach.
+ */
+export type Subtree = {
+  relationIds: string[];
+  /**
+   * Both halves, because deleting a value publishes an `unset` keyed on the
+   * property — the row id alone names the row but not what to clear.
+   */
+  values: { id: string; propertyId: string }[];
+};
+
+const readSubtree = (entity: { valuesList: HistoryValueNode[]; relationsList: HistoryRelationNode[] } | null) => ({
+  relationIds: (entity?.relationsList ?? []).map(relation => relation.id),
+  values: (entity?.valuesList ?? [])
+    .filter((value): value is HistoryValueNode & { id: string } => Boolean(value.id))
+    .map(value => ({ id: value.id, propertyId: value.property.id })),
+});
+
 /** One Employment/Education relation and the entity it carries. */
-export type HistoryEdgeRef = { relationId: string; stintId: string };
+export type HistoryEdgeRef = { relationId: string; stintId: string; subtree: Subtree };
 
 /** One dated row under an organisation — a role held, or a degree read. */
 export type HistoryEntry = {
@@ -62,6 +87,8 @@ export type HistoryEntry = {
    * than per card because one employer can have several edges — see the card.
    */
   edge: HistoryEdgeRef;
+  /** What goes with this row when it is removed. */
+  subtree: Subtree;
   subject: NamedRef;
   startDate: string | null;
   endDate: string | null;
@@ -168,6 +195,7 @@ function readEntry(
   return {
     relationId: relation.id,
     tenureId: relation.entityId,
+    subtree: readSubtree(relation.entity),
     subject: relation.toEntity ?? { id: relation.entityId, name: null },
     startDate: isLegacy ? dateFor(stintValues, START_DATE_PROPERTY) : ownStart,
     endDate: isLegacy ? dateFor(stintValues, END_DATE_PROPERTY) : ownEnd,
@@ -211,7 +239,11 @@ function readCards<TEntry extends HistoryEntry>(
   const byOrganization = new Map<string, HistoryCard<TEntry>>();
 
   for (const edge of edges) {
-    const edgeRef: HistoryEdgeRef = { relationId: edge.id, stintId: edge.entityId };
+    const edgeRef: HistoryEdgeRef = {
+      relationId: edge.id,
+      stintId: edge.entityId,
+      subtree: readSubtree(edge.entity),
+    };
     const organization = edge.toEntity ?? { id: edge.entityId, name: null };
     const entries = readEntries(edgeRef, edge.entity?.valuesList ?? [], edge.entity?.relationsList ?? []);
 

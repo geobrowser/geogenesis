@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { EmploymentCard } from '~/core/profile/normalize-history';
+import { NOTHING_TO_CLEAN } from '~/core/profile/pending-history';
 
 import { HistorySection } from './history-section';
 
@@ -15,7 +16,8 @@ type Entry = EmploymentCard['entries'][number];
 const entry = (name: string, startDate: string | null, endDate: string | null, org = 'Geo'): Entry => ({
   relationId: `rel-${name}`,
   tenureId: `tenure-${name}`,
-  edge: { relationId: `edge-${org}`, stintId: `stint-${org}` },
+  edge: { relationId: `edge-${org}`, stintId: `stint-${org}`, subtree: NOTHING_TO_CLEAN },
+  subtree: NOTHING_TO_CLEAN,
   subject: { id: `subject-${name}`, name },
   startDate,
   endDate,
@@ -30,7 +32,7 @@ const entry = (name: string, startDate: string | null, endDate: string | null, o
 
 const card = (org: string, entries: ReturnType<typeof entry>[]): EmploymentCard => ({
   organization: { id: `org-${org}`, name: org },
-  edges: [{ relationId: `edge-${org}`, stintId: `stint-${org}` }],
+  edges: [{ relationId: `edge-${org}`, stintId: `stint-${org}`, subtree: NOTHING_TO_CLEAN }],
   entries,
 });
 

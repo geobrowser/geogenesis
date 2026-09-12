@@ -4,6 +4,7 @@ import { EMPLOYMENT_PROPERTY, ROLES_PROPERTY } from './history-ontology';
 import type { EmploymentCard } from './normalize-history';
 import {
   NOTHING_PENDING,
+  NOTHING_TO_CLEAN,
   PENDING_PREFIX,
   dropPendingAddition,
   hasPendingChanges,
@@ -30,11 +31,12 @@ const draft = (company: string, title: string, overrides: Partial<PositionDraft>
 
 const savedCard = (org: string, roles: string[]): EmploymentCard => ({
   organization: { id: `org-${org}`, name: org },
-  edges: [{ relationId: `edge-${org}`, stintId: `stint-${org}` }],
+  edges: [{ relationId: `edge-${org}`, stintId: `stint-${org}`, subtree: NOTHING_TO_CLEAN }],
   entries: roles.map(role => ({
     relationId: `rel-${role}`,
     tenureId: `tenure-${role}`,
-    edge: { relationId: `edge-${org}`, stintId: `stint-${org}` },
+    edge: { relationId: `edge-${org}`, stintId: `stint-${org}`, subtree: NOTHING_TO_CLEAN },
+    subtree: NOTHING_TO_CLEAN,
     subject: { id: `title-${role}`, name: role },
     startDate: '2022-06-01Z',
     endDate: null,
@@ -142,7 +144,7 @@ describe('mergePendingEmployment', () => {
     const cards = mergePendingEmployment(
       [savedCard('Geo', ['Engineer', 'Product Lead'])],
       [],
-      [{ relationId: 'rel-Engineer', entityId: 'tenure-Engineer', typeId: ROLES_PROPERTY }]
+      [{ relationId: 'rel-Engineer', entityId: 'tenure-Engineer', typeId: ROLES_PROPERTY, subtree: NOTHING_TO_CLEAN }]
     );
 
     expect(cards[0].entries.map(entry => entry.subject.name)).toEqual(['Product Lead']);
@@ -155,8 +157,8 @@ describe('mergePendingEmployment', () => {
       [savedCard('Geo', ['Engineer'])],
       [],
       [
-        { relationId: 'rel-Engineer', entityId: 'tenure-Engineer', typeId: ROLES_PROPERTY },
-        { relationId: 'edge-Geo', entityId: 'stint-Geo', typeId: EMPLOYMENT_PROPERTY },
+        { relationId: 'rel-Engineer', entityId: 'tenure-Engineer', typeId: ROLES_PROPERTY, subtree: NOTHING_TO_CLEAN },
+        { relationId: 'edge-Geo', entityId: 'stint-Geo', typeId: EMPLOYMENT_PROPERTY, subtree: NOTHING_TO_CLEAN },
       ]
     );
 
@@ -267,7 +269,7 @@ describe('hasPendingChanges', () => {
     expect(
       hasPendingChanges({
         ...NOTHING_PENDING,
-        removals: [{ relationId: 'r', entityId: 'e', typeId: ROLES_PROPERTY }],
+        removals: [{ relationId: 'r', entityId: 'e', typeId: ROLES_PROPERTY, subtree: NOTHING_TO_CLEAN }],
       })
     ).toBe(true);
   });

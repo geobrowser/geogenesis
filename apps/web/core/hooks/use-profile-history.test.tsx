@@ -10,6 +10,7 @@ import {
   START_DATE_PROPERTY,
 } from '~/core/profile/history-ontology';
 import type { EmploymentCard } from '~/core/profile/normalize-history';
+import { NOTHING_TO_CLEAN } from '~/core/profile/pending-history';
 import type { PositionDraft } from '~/core/profile/stage-history';
 
 import { useProfileHistory } from './use-profile-history';
@@ -40,11 +41,12 @@ afterEach(() => {
 /** One employer, with as many saved roles under one Employment edge as named. */
 const savedCard = (org: string, roles: string[], stint = `stint-${org}`): EmploymentCard => ({
   organization: { id: `org-${org}`, name: org },
-  edges: [{ relationId: `edge-${org}`, stintId: stint }],
+  edges: [{ relationId: `edge-${org}`, stintId: stint, subtree: NOTHING_TO_CLEAN }],
   entries: roles.map(role => ({
     relationId: `rel-${role}`,
     tenureId: `tenure-${role}`,
-    edge: { relationId: `edge-${org}`, stintId: stint },
+    edge: { relationId: `edge-${org}`, stintId: stint, subtree: NOTHING_TO_CLEAN },
+    subtree: NOTHING_TO_CLEAN,
     subject: { id: `title-${role}`, name: role },
     startDate: '2022-06-01Z',
     endDate: null,
@@ -121,7 +123,7 @@ describe('useProfileHistory', () => {
     it('counts siblings on the row’s own edge, not across the whole card', () => {
       const card = savedCard('Geo', ['Engineer']);
       const second = savedCard('Geo', ['Product Lead'], 'stint-Geo-2');
-      second.entries[0].edge = { relationId: 'edge-Geo-2', stintId: 'stint-Geo-2' };
+      second.entries[0].edge = { relationId: 'edge-Geo-2', stintId: 'stint-Geo-2', subtree: NOTHING_TO_CLEAN };
       mocks.employment = [
         { ...card, edges: [...card.edges, ...second.edges], entries: [...card.entries, ...second.entries] },
       ];
@@ -138,6 +140,83 @@ describe('useProfileHistory', () => {
           .map(relation => relation.id)
           .sort()
       ).toEqual(['edge-Geo', 'rel-Engineer']);
+    });
+
+    // The leak this exists for: deleting a relation marks that one row deleted
+    // and touches nothing else, so the tenure survived with its dates,
+    // description, employment type and skills on it — an entity nothing could
+    // reach and nobody could see. Four of them were found in the graph.
+    it('takes everything on the row with the row', () => {
+      const card = savedCard('Geo', ['Engineer']);
+      card.entries[0].subtree = {
+        relationIds: ['rel-status', 'rel-employment-type', 'rel-skill-1', 'rel-types'],
+        values: [
+          { id: 'value-start', propertyId: START_DATE_PROPERTY },
+          { id: 'value-end', propertyId: 'end-date-property' },
+          { id: 'value-description', propertyId: 'description-property' },
+        ],
+      };
+      mocks.employment = [card];
+
+      const { result } = setup();
+
+      act(() => {
+        const merged = result.current.employment[0];
+        result.current.removeEntry(merged, merged.entries[0], 'employment');
+      });
+
+      const { relations, values } = result.current.stagePending();
+
+      expect(relations.every(relation => relation.isDeleted)).toBe(true);
+      expect(relations.map(relation => relation.id).sort()).toEqual(
+        ['edge-Geo', 'rel-Engineer', 'rel-employment-type', 'rel-skill-1', 'rel-status', 'rel-types'].sort()
+      );
+      expect(values.every(value => value.isDeleted)).toBe(true);
+      expect(values.map(value => value.id).sort()).toEqual(['value-description', 'value-end', 'value-start'].sort());
+
+      // The unset op is keyed on the property, so a tombstone that lost it would
+      // publish a delete that clears nothing.
+      expect(values.find(value => value.id === 'value-start')?.property.id).toBe(START_DATE_PROPERTY);
+    });
+
+    // The stint carries its own type, and the legacy records carry dates on it.
+    it('cleans the employment record too when the edge goes with the last role', () => {
+      const card = savedCard('Geo', ['Engineer']);
+      card.edges[0].subtree = {
+        relationIds: ['stint-types'],
+        values: [{ id: 'stint-legacy-start', propertyId: START_DATE_PROPERTY }],
+      };
+      card.entries[0].edge = card.edges[0];
+      mocks.employment = [card];
+
+      const { result } = setup();
+
+      act(() => {
+        const merged = result.current.employment[0];
+        result.current.removeEntry(merged, merged.entries[0], 'employment');
+      });
+
+      const { relations, values } = result.current.stagePending();
+
+      expect(relations.map(relation => relation.id)).toContain('stint-types');
+      expect(values.map(value => value.id)).toContain('stint-legacy-start');
+    });
+
+    // A sibling still hangs off the edge, so the edge and everything on it stays
+    // — only the row being removed is cleaned.
+    it('leaves the employment record alone while a sibling still needs it', () => {
+      const card = savedCard('Geo', ['Engineer', 'Product Lead']);
+      card.edges[0].subtree = { relationIds: ['stint-types'], values: [] };
+      mocks.employment = [card];
+
+      const { result } = setup();
+
+      act(() => {
+        const merged = result.current.employment[0];
+        result.current.removeEntry(merged, merged.entries[0], 'employment');
+      });
+
+      expect(result.current.stagePending().relations.map(relation => relation.id)).not.toContain('stint-types');
     });
 
     it('forgets an unsaved row rather than queuing a delete for it', () => {
@@ -249,6 +328,34 @@ describe('useProfileHistory', () => {
           relation => relation.fromEntity.id === 'org-Digital Paradise' && relation.toEntity.id === EMPLOYER_TYPE
         )
       ).toBe(true);
+    });
+
+    // The replacement writes its own dates and skills; the old ones are not
+    // merged into them, so leaving them behind would have the row claiming both.
+    it('clears what hung off a row it replaces', () => {
+      const card = savedCard('Geo', ['Engineer']);
+      card.entries[0].subtree = {
+        relationIds: ['rel-old-skill'],
+        values: [{ id: 'value-old-description', propertyId: 'description-property' }],
+      };
+      mocks.employment = [card];
+
+      const { result } = setup();
+
+      act(() => {
+        const merged = result.current.employment[0];
+        result.current.editEntry(merged, merged.entries[0], 'employment', draft('Geo', 'Staff Engineer'));
+      });
+
+      const { relations, values } = result.current.stagePending();
+
+      expect(
+        relations
+          .filter(r => r.isDeleted)
+          .map(r => r.id)
+          .sort()
+      ).toEqual(['rel-Engineer', 'rel-old-skill']);
+      expect(values.filter(v => v.isDeleted).map(v => v.id)).toEqual(['value-old-description']);
     });
 
     it('rewrites an unsaved row in place rather than queuing a delete', () => {

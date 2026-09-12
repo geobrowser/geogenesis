@@ -617,7 +617,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // it. Written into the store here so staging collects them like its own, and
       // so a failure rolls them back with the rest.
       const extra = extraRows ?? { values: [], relations: [] };
-      extra.values.forEach(value => storage.values.set(value));
+      extra.values.forEach(value => (value.isDeleted ? storage.values.delete(value) : storage.values.set(value)));
       extra.relations.forEach(relation =>
         relation.isDeleted ? storage.relations.delete(relation) : storage.relations.set(relation)
       );

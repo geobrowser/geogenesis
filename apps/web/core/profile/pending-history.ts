@@ -6,6 +6,7 @@ import {
   type HistoryCard,
   type HistoryEdgeRef,
   type HistoryEntry,
+  type Subtree,
   byMostRecent,
   byMostRecentCard,
 } from './normalize-history';
@@ -20,7 +21,19 @@ export const PENDING_PREFIX = 'pending:';
 
 export const isPending = (id: string) => id.startsWith(PENDING_PREFIX);
 
-export type PendingRemoval = { relationId: string; entityId: string; typeId: string };
+export type PendingRemoval = {
+  relationId: string;
+  entityId: string;
+  typeId: string;
+  /**
+   * Everything on the relation's own entity, which goes with it.
+   *
+   * Deleting a relation marks that one row deleted and touches nothing else, so
+   * without this a removed position leaves its dates, description, employment
+   * type and skills behind on an entity nothing can reach any more.
+   */
+  subtree: Subtree;
+};
 
 /** A draft plus the key its synthetic rows are built from. */
 export type PendingAddition<TDraft> = { key: string; draft: TDraft };
@@ -68,6 +81,9 @@ export function replacePendingAddition<TDraft extends PositionDraft | EducationD
   return { ...pending, positions: swap(pending.positions), education: swap(pending.education) };
 }
 
+/** An unsaved row has written nothing, so it has nothing hanging off it. */
+export const NOTHING_TO_CLEAN: Subtree = { relationIds: [], values: [] };
+
 function entryFromDraft(
   key: string,
   draft: PositionDraft | EducationDraft,
@@ -77,6 +93,7 @@ function entryFromDraft(
   return {
     relationId: `${PENDING_PREFIX}${key}`,
     tenureId: `${PENDING_PREFIX}${key}-tenure`,
+    subtree: NOTHING_TO_CLEAN,
     edge,
     subject,
     startDate: draft.startDate,
@@ -126,6 +143,7 @@ function merge<TEntry extends HistoryEntry>(
     const edge: HistoryEdgeRef = existing?.edges[0] ?? {
       relationId: `${PENDING_PREFIX}${organization.id}-edge`,
       stintId: addition.draft.existingStintId ?? `${PENDING_PREFIX}${organization.id}-stint`,
+      subtree: NOTHING_TO_CLEAN,
     };
 
     if (existing) {
