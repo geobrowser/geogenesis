@@ -129,26 +129,23 @@ export function BountyFilterBar({ filters, onChange, bounties, spaces, skills }:
       className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:gap-x-1.5 lg:[&_button]:px-2"
       data-testid="bounty-filter-bar"
     >
-      {/* Search anchors the left edge, matching the board's left gutter; everything that narrows or
-          reorders the board is pushed to the right by `ml-auto`. Search keeps the pill geometry of
-          the controls it faces.
+      {/* Wide: search anchors the board's left gutter and `ml-auto` pushes everything that narrows
+          or reorders the board to the right edge. An auto margin rather than `justify-between`,
+          which would strand the right group at flex-start on any line it wrapped onto.
 
-          That right-hand arrangement only reads as alignment while the bar fits on one line, which
-          it stops doing around 1024px. Under `lg` it is dismantled rather than wrapped: search takes
-          its own full-width row, and the two groups below it go `display: contents` so all seven
-          pills become items of this one flex container. Nesting them is what stranded a pill — the
-          groups are separate flex items, so a leftover filter could never share a row with the sort
-          pills no matter how much room was going spare beside it. Flattened, they simply pack, and
-          the divider disappears with the box that drew it.
+          Narrow: that arrangement only reads as alignment while the bar fits on one line, so under
+          `lg` it comes apart instead of wrapping. Search takes a full-width row, and the wrapper
+          and both groups go `display: contents` — nesting is what stranded a pill, since separate
+          flex items cannot share a row however much room is going spare beside them. Flattened,
+          the pills pack, and the divider goes with the box that drew it.
 
-          Packing alone still left the last pill over: measured in Calibre on a 431px phone, the
-          second row ran to 237 of 355px and the remaining pill needed 119 — one pixel more than
-          the 118 left. So the pills also lose 2px of side padding and the row 2px of gap here,
-          which buys ~15px and settles the whole bar into two rows. The narrower padding is scoped
-          to descendants of this bar, leaving `FILTER_PILL_CLASS` alone for the surfaces that share
-          it; menu contents are portaled out, so only the triggers and Clear filters are touched.
+          The pills also lose 2px of side padding and the row 2px of gap here, which is what settles
+          all seven into two rows on a phone rather than three: measured in Calibre at 355px, the
+          second row needed one more pixel than it had. That padding is scoped to descendants of
+          this bar, leaving `FILTER_PILL_CLASS` as it is for the surfaces that share it; menu
+          contents are portaled out, so it reaches the triggers and Clear filters only.
 
-          Note this file's breakpoints are max-width (styles.css): `lg` is ≤1023px. */}
+          Breakpoints here are max-width (styles.css): `lg` is ≤1023px. */}
       <label
         className={`${FILTER_PILL_CLASS} w-[220px] cursor-text gap-1.5 focus-within:border-grey-03 hover:bg-white lg:w-full`}
       >
