@@ -49,6 +49,7 @@ const mocks = vi.hoisted(() => ({
   relatedEntitiesError: null as Error | null,
   relatedWheres: [] as unknown[],
   relatedFirsts: [] as Array<number | undefined>,
+  relatedAfters: [] as Array<string | undefined>,
   relatedDefers: [] as Array<boolean | undefined>,
   relatedPrefetches: [] as Array<boolean | undefined>,
   entityHydrations: [] as Array<{ id: string; spaceId?: string }>,
@@ -489,12 +490,14 @@ vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: ({
     where,
     first,
+    after,
     enabled,
     deferUntilFetched,
     prefetchNextPage,
   }: {
     where: unknown;
     first?: number;
+    after?: string;
     enabled?: boolean;
     deferUntilFetched?: boolean;
     prefetchNextPage?: boolean;
@@ -509,13 +512,23 @@ vi.mock('~/core/sync/use-store', () => ({
     // `first` is a real cap, as it is on the query this stands in for. Ignoring it let a fixture
     // hand back more rows than were asked for, which is how a caller that asks for too few still
     // looks like it returned enough.
-    const page = first === undefined ? mocks.relatedEntities : mocks.relatedEntities.slice(0, first);
+    //
+    // And it pages, as the query does: `relatedEntities` is the whole result set, `after` is an
+    // offset into it, and `hasNextPage` says whether anything is left. Without this the double
+    // always claimed to be exhausted, so a caller walking past an undrawable window had nowhere to
+    // walk to and the walk itself was untestable.
+    const from = after === undefined ? 0 : Number(after);
+    const page =
+      first === undefined ? mocks.relatedEntities.slice(from) : mocks.relatedEntities.slice(from, from + first);
+    const reached = from + page.length;
+    const hasNextPage = enabled !== false && reached < mocks.relatedEntities.length;
+    mocks.relatedAfters.push(after);
     return {
       entities: enabled === false || loading ? [] : page,
       isLoading: loading,
       isPlaceholderData: false,
-      endCursor: null,
-      hasNextPage: false,
+      endCursor: hasNextPage ? String(reached) : null,
+      hasNextPage,
       error: enabled === false ? null : mocks.relatedEntitiesError,
     };
   },
@@ -783,6 +796,7 @@ beforeEach(() => {
   mocks.relatedEntitiesError = null;
   mocks.relatedWheres.length = 0;
   mocks.relatedFirsts.length = 0;
+  mocks.relatedAfters.length = 0;
   mocks.relatedDefers.length = 0;
   mocks.relatedPrefetches.length = 0;
   mocks.entityHydrations.length = 0;
@@ -4205,6 +4219,53 @@ describe('the Related tab', () => {
     for (const relation of where.relations) {
       expect(relation.space).toEqual({ equals: SPACE_1.replace(/-/g, '') });
     }
+  });
+
+  /**
+   * A whole window can come back undrawable — the debated claim is in it, and so is every neighbour
+   * whose name has not indexed — and the count of what is left decides whether the tab exists. So
+   * discovery walks to the next window rather than reading an undrawable one as "no neighbours".
+   *
+   * Raised twice in review, and the second time with the right argument: the claim page's gallery
+   * skips forward on exactly this data, so a tab that gave up where the gallery does not would have
+   * been two surfaces disagreeing about the same claim.
+   */
+  it('walks past a window it cannot draw any of', async () => {
+    // A full window of the debated claim and unnamed neighbours, with a drawable one behind it.
+    const unnamed = Array.from({ length: 32 }, (_, index) => ({
+      ...topicEntity(`019fedb9-7db8-7a05-9b88-9de4cf60bb${index.toString().padStart(2, '0')}`, 'unindexed'),
+      name: null,
+    }));
+    mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity()];
+    mocks.relatedEntities = [sourceClaimEntity(), ...unnamed, relatedEntity()];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: 'Related' })).toBeInTheDocument();
+    expect(await screen.findByText('A claim on the same topic')).toBeInTheDocument();
+    // Anchored on the first window's end rather than restarting it, so the walk is a step forward.
+    expect(mocks.relatedAfters.filter(Boolean)).toContain('33');
+  });
+
+  // The walk is bounded: each step is a request, and a topic whose claims are mostly unnamed would
+  // otherwise spend an unbounded number of them on a tab nobody asked for.
+  it('gives up after four further windows', async () => {
+    const undrawable = Array.from({ length: 33 * 6 }, (_, index) => ({
+      ...topicEntity(`019fedb9-7db8-7a05-9b88-9de4cf6${index.toString().padStart(5, '0')}`, 'unindexed'),
+      name: null,
+    }));
+    // The debated claim is hydrated for its topics; without it discovery never starts, and a walk
+    // that never began would pass this test for the wrong reason.
+    mocks.entities = [sharedEntity(), sourceClaimEntity()];
+    mocks.relatedEntities = undrawable;
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+    // Four steps past the first window, and no fifth.
+    expect(mocks.relatedAfters.filter(Boolean)).toContain('132');
+    expect(mocks.relatedAfters.filter(Boolean)).not.toContain('165');
   });
 
   /**

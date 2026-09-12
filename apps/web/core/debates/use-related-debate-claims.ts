@@ -19,6 +19,16 @@ export const RELATED_CLAIMS_LIMIT = 25;
  */
 const RELATED_DROPPED_ROW_SLACK = 8;
 
+/**
+ * How many further windows discovery will walk when a whole one turns out to be undrawable.
+ *
+ * A cap rather than "until the server runs out": each step is a request, and a topic whose claims
+ * are mostly unnamed would spend an unbounded number of them to populate a tab nobody asked for.
+ * Four windows is 132 rows deep, past which "no neighbours left to argue" is the honest answer even
+ * if one is hiding further down.
+ */
+const RELATED_MAX_EXTRA_WINDOWS = 4;
+
 /** Stable empty list, so a skipped discovery is not a new array each render. */
 const NO_RELATED_IDS: string[] = [];
 
@@ -108,7 +118,26 @@ export function useRelatedDebateClaims({
     topicIds.length > 0 &&
     isSpaceDebatePublishable(spaceId, publishableSpaceIds);
 
+  /**
+   * Where discovery has walked to, and how far.
+   *
+   * A window can come back entirely undrawable — the debated claim is in its own related list, and
+   * neighbours whose names have not indexed cannot be drawn — and the count decides whether the tab
+   * exists. Treating that window as the whole answer hid the tab from a claim that does have
+   * neighbours, a page further down. The claim page's gallery skips forward on exactly this data
+   * (`claim-related-claims.tsx`), so a tab that gave up where the gallery does not would have been
+   * two surfaces disagreeing about the same claim.
+   */
+  const [walked, setWalked] = React.useState<{ cursor: string; windows: number } | null>(null);
+
+  // Back to the first window whenever the question changes; a cursor from the previous claim's
+  // result set anchors nothing in this one.
+  React.useEffect(() => {
+    setWalked(null);
+  }, [claimId, spaceId]);
+
   const entitiesQuery = useQueryEntities({
+    after: walked?.cursor,
     where: relatedClaimsWhere({
       spaceId: spaceId ?? '',
       topicIds,
@@ -149,13 +178,42 @@ export function useRelatedDebateClaims({
     [queryEnabled, entitiesQuery.entities, claimId]
   );
 
+  /**
+   * Whether this window answered nothing and there is another to try.
+   *
+   * Only while the window is empty: one drawable neighbour is enough for the tab to exist, and
+   * walking on to fill the list would spend requests to lengthen a list most pairs take the first
+   * row of.
+   */
+  const walking =
+    queryEnabled &&
+    !entitiesQuery.isLoading &&
+    claimIds.length === 0 &&
+    entitiesQuery.hasNextPage &&
+    entitiesQuery.endCursor !== null &&
+    (walked?.windows ?? 0) < RELATED_MAX_EXTRA_WINDOWS;
+
+  React.useEffect(() => {
+    if (!walking) return;
+    const cursor = entitiesQuery.endCursor;
+    if (cursor === null) return;
+    // Guarded on the cursor rather than set outright: this effect re-runs while the next window is
+    // in flight, and re-setting the same anchor would be a render loop rather than a step.
+    setWalked(current => (current?.cursor === cursor ? current : { cursor, windows: (current?.windows ?? 0) + 1 }));
+  }, [walking, entitiesQuery.endCursor]);
+
   return {
     claimIds,
     spaceId,
     enabled: queryEnabled,
     // Both lookups, reported together, so a caller cannot gate on a different subset than it reads —
     // the mistake that let one gate pass while the other was still waiting.
-    isLoading: sourceQuery.isLoading || entitiesQuery.isLoading,
+    //
+    // A walk to the next window counts as loading: the count is not final until it stops, and a
+    // caller that read "empty, settled" between two windows would drop the tab and then bring it
+    // back. Not covered by a test — `render` flushes the whole walk inside one `act`, so every
+    // assertion lands after it, and an assertion that cannot see the gap would pass without it.
+    isLoading: sourceQuery.isLoading || entitiesQuery.isLoading || walking,
     error: sourceQuery.error ?? entitiesQuery.error ?? null,
   };
 }
