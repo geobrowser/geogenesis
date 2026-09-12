@@ -37,6 +37,7 @@ import {
 } from '../tagged-claims';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
+import { type AnsweredState, useCollapseAnswered } from './collapse-answered';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests } from './hooks';
 import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
@@ -131,6 +132,14 @@ function filterOptionsFor(authenticated: boolean) {
  * with `claimPickerEntitiesQueryKey` and `debateQueryKeys.claims`.
  */
 const CLAIM_ENTITIES_QUERY_PREFIX = ['claim-picker', 'entities'] as const;
+
+/**
+ * How a row is named, everywhere that has to recognise it again across a refetch.
+ *
+ * Space *and* claim, because a claim tagged in two spaces is two cards with two sets of sides, and
+ * the viewer can answer one without the other.
+ */
+const claimRowKey = (entry: MatchmakingClaim) => `${entry.claim.space_id}:${entry.claim.claim_entity_id}`;
 const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
 
 /**
@@ -557,12 +566,41 @@ export function ClaimsTab({
   // they ask for a different list.
   const claims = useStableListOrder(
     graphSourced ? taggedEntries : serverClaims,
-    entry => `${entry.claim.space_id}:${entry.claim.claim_entity_id}`,
+    claimRowKey,
     `${debouncedSearch}|${spaceIds.join(',')}|${topicIds.join(',')}|${filter}`
   );
 
-  // Nothing left to filter here: both lists are narrowed by their server now.
-  const visibleClaims = claims;
+  /**
+   * Explore hides the claims the viewer has already answered (GEO-2863).
+   *
+   * The list is ordered by the server's ranking score and does not move when you answer something,
+   * so every claim you have taken a side on stays exactly where it was, between you and the next one
+   * you haven't — for as long as you keep using the product. There is no new control for this: "My
+   * positions" is already how you go and look at them, and a fourth thing in the filter bar would
+   * overlap with a menu option that already exists.
+   *
+   * `viewer_response` is the whole predicate. geo-chat records a position the moment the write
+   * starts, so it answers promptly — it is the *graph* that waits on the indexer, which is why the
+   * card reconciles against that separately.
+   *
+   * Not while `taggedAnswersReady` is false, which is the same signal that decides whether a card
+   * may be pressed at all: until the per-space rows land, `viewer_response` reads `null` for "holds
+   * no position" and for "nobody has asked yet" alike, and folding on the second takes a row away
+   * from under someone before anyone knew whether they had answered it.
+   */
+  const answeredStateOf = React.useCallback(
+    (entry: MatchmakingClaim): AnsweredState =>
+      !taggedAnswersReady ? 'unknown' : entry.viewer_response !== null ? 'answered' : 'unanswered',
+    [taggedAnswersReady]
+  );
+  const visibleClaims = useCollapseAnswered(claims, {
+    keyOf: claimRowKey,
+    answeredStateOf,
+    // Lobby is a different question: "what can I debate right now" is not a browse list, and the
+    // claims you have answered are exactly the ones a match can be waiting on. And "My positions" is
+    // by definition all answered, so collapsing it leaves an empty tab rather than a filtered one.
+    enabled: !isLobby && filter !== 'mine',
+  });
 
   // The topic menu, from the server's count over the tag. It describes every claim the current
   // filters allow rather than the pages loaded so far — which is what a client-side version could
@@ -633,6 +671,9 @@ export function ClaimsTab({
   //
   // What "Clear filters" should undo is wider, and does include the position filter — resetting to
   // All claims is exactly what a viewer stuck on an empty My positions wants.
+  // The list has rows and the viewer has answered all of them — which is the one empty state here
+  // that is not about curation or about a filter, and reads wrongly as either.
+  const collapsedEverything = visibleClaims.length === 0 && claims.length > 0;
   const hasNarrowingFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
   // Explore's alone. Lobby's source is fixed rather than chosen — it is `debate_now` and nothing
   // else — so an empty Lobby was offering to clear a filter the viewer had not set and could not
@@ -734,12 +775,18 @@ export function ClaimsTab({
           // filters mean different things by it: Featured says a curator has tagged nothing, All
           // says nothing carries the Debate tag. Both are statements about curation, not about the
           // viewer's filters, so they only show when no filter is narrowing anything.
+          //
+          // Answered-everything comes first, because it is the only one of the three that is true
+          // of a list with rows in it. Saying "nothing carries the Debate tag" to someone who has
+          // answered all of it is the collapse taking credit for an empty corpus (GEO-2863).
           emptyMessage={
-            hasNarrowingFilters
-              ? filter === 'featured'
-                ? 'No featured claims match these filters.'
-                : 'No claims match these filters.'
-              : NOTHING_HERE[filter]
+            collapsedEverything
+              ? 'You’ve answered every claim here. Pick another space or topic, or see them under My positions.'
+              : hasNarrowingFilters
+                ? filter === 'featured'
+                  ? 'No featured claims match these filters.'
+                  : 'No claims match these filters.'
+                : NOTHING_HERE[filter]
           }
           // "Debate now" is the only filter here scored on who is online, so it is the only one an
           // empty list means "nobody is around" for — Featured and All claims are statements about

@@ -2712,3 +2712,98 @@ describe('ClaimsTab -- Featured', () => {
     expect(mocks.debateClaimGroups.at(-1)).not.toEqual([]);
   });
 });
+
+/**
+ * GEO-2863. Explore is ordered by the server's ranking score and does not move when you answer
+ * something, so without this every claim you have taken a side on stays exactly where it was,
+ * between you and the next one you haven't.
+ *
+ * The hold before a row answered *in place* folds away is the hook's own business and is pinned
+ * exhaustively in `collapse-answered.test`. What these cases are about is the tab wiring the right
+ * signals into it: the right predicate, the right exemption, and the right treatment of a row whose
+ * side has not landed.
+ */
+describe('claims the viewer has already answered', () => {
+  const DEBATE = '55c95b2626f8482cb9739ea99dfde438';
+  const FEATURED_TAG = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
+
+  function answeredRow(entityId: string, spaceId = SPACE_ID) {
+    return {
+      id: `row-${entityId}`,
+      claim_entity_id: entityId,
+      space_id: spaceId,
+      response_kind: 'stance' as const,
+      viewer_response: { position: true, position_label: 'Agree' },
+      viewer_debate_ready: true,
+      readiness_disabled_reason: null,
+      online_choices: [],
+      active_debate: null,
+    };
+  }
+
+  beforeEach(() => {
+    mocks.taggedClaims[DEBATE] = [
+      featuredClaim(FEATURED_A, 'One you have answered'),
+      featuredClaim(FEATURED_B, 'One you have not'),
+    ];
+    mocks.debateClaimRows = [answeredRow(FEATURED_A)];
+  });
+
+  it('leaves them out of All claims', async () => {
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByText('One you have not')).toBeInTheDocument();
+    expect(screen.queryByText('One you have answered')).toBeNull();
+  });
+
+  it('leaves them out of Featured too', async () => {
+    mocks.taggedClaims[FEATURED_TAG] = mocks.taggedClaims[DEBATE]!;
+    renderFeatured();
+
+    expect(await screen.findByText('One you have not')).toBeInTheDocument();
+    expect(screen.queryByText('One you have answered')).toBeNull();
+  });
+
+  // The list that is *about* them. Collapsing it leaves an empty tab rather than a filtered one.
+  it('leaves My positions alone', async () => {
+    mocks.claims = [claim(FEATURED_A, 'One you have answered', true), claim(FEATURED_B, 'One you have not', false)];
+    renderMine();
+    await showIndexedClaims();
+
+    expect(await screen.findByText('One you have answered')).toBeInTheDocument();
+    expect(screen.getByText('One you have not')).toBeInTheDocument();
+  });
+
+  /**
+   * The row carrying the viewer's side is a separate query, and `viewer_response` is `null` both for
+   * "holds no position" and for "nobody has asked yet" — so the collapse waits on
+   * `taggedAnswersReady`, the same signal that decides whether a card may be pressed at all.
+   *
+   * The failure case is the one worth a test. A loading lookup hands back no rows at all, so nothing
+   * reads as answered and nothing would fold whatever the gate said; an *errored* one can hand back
+   * the batches that did land while saying nothing about the ones that did not, and react-query
+   * drops `isLoading` on error — so without the gate a partial outage quietly folds rows away and
+   * keeps them folded.
+   */
+  it('folds nothing while that lookup is unreliable', async () => {
+    mocks.taggedRowsError = true;
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByText('One you have answered')).toBeInTheDocument();
+    expect(screen.getByText('One you have not')).toBeInTheDocument();
+  });
+
+  // The one empty state here that is true of a list *with rows in it*. Saying "nothing carries the
+  // Debate tag" to someone who has answered all of it is the collapse taking credit for an empty
+  // corpus.
+  it('says the viewer answered everything rather than that there is nothing here', async () => {
+    mocks.taggedClaims[DEBATE] = [featuredClaim(FEATURED_A, 'One you have answered')];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByText(/You’ve answered every claim here/)).toBeInTheDocument();
+    expect(screen.queryByText('No claims have been tagged for debate yet.')).toBeNull();
+  });
+});

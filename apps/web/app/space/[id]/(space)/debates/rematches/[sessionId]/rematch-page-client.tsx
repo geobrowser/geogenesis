@@ -1231,6 +1231,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     topicsByClaimId,
   ]);
 
+  /**
+   * Deliberately *not* collapsing the claims the viewer has already answered, unlike the hub's
+   * Explore (GEO-2863).
+   *
+   * The hub hides them because browsing is about finding something new: a claim you have taken a
+   * side on is one you are done with, and it sits in the way of the next one forever. Here the same
+   * fact means the opposite. `request-gate` refuses a request from someone holding no position —
+   * "with no position at all there is nothing to agree about" — so on this page a claim you have
+   * answered is precisely the one you can act on now, and one you have not is a claim you must
+   * answer before you can ask anybody to debate it.
+   *
+   * It would also strand a claim: one the viewer answered and the opponent did not is not on the
+   * opponent's tab either, so collapsing it here would leave it unreachable in the whole flow.
+   */
   const visibleClaims = React.useMemo(
     () =>
       graphFiltered
