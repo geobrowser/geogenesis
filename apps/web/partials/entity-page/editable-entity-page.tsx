@@ -797,7 +797,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
       : 'image/png,image/jpeg';
 
   return (
-    <div className="flex w-full max-w-full min-w-0 flex-wrap items-center gap-1 pr-1">
+    <motion.div className="flex w-full max-w-full min-w-0 flex-wrap items-start gap-1 pr-1">
       {/* Hidden file input for upload */}
       <input ref={fileInputRef} type="file" accept={fileAccept} onChange={handleFileInputChange} className="hidden" />
 
@@ -854,129 +854,128 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               if (newPosition) draft.position = newPosition;
             });
           }}
-        />
-      )}
+          afterChips={
+            <div className="shrink-0 self-start">
+              <SelectEntityAsPopover
+                trigger={
+                  isType ? (
+                    <AddTypeButton icon={<Create className="h-3 w-3" color="grey-04" />} label="type" />
+                  ) : (
+                    <SquareButton icon={<Create />} />
+                  )
+                }
+                placeholder={isType ? 'Find or create type...' : undefined}
+                relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
+                onCreateEntity={result => {
+                  // Check if we're creating a Property entity
+                  const isCreatingProperty = valueType?.id === SystemIds.PROPERTY;
 
-      {property.renderableType !== SystemIds.IMAGE && property.renderableTypeStrict !== 'VIDEO' && (
-        <div>
-          <SelectEntityAsPopover
-            trigger={
-              isType ? (
-                <AddTypeButton icon={<Create className="h-3 w-3" color="grey-04" />} label="type" />
-              ) : (
-                <SquareButton icon={<Create />} />
-              )
-            }
-            placeholder={isType ? 'Find or create type...' : undefined}
-            relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
-            onCreateEntity={result => {
-              // Check if we're creating a Property entity
-              const isCreatingProperty = valueType?.id === SystemIds.PROPERTY;
+                  if (isCreatingProperty) {
+                    // Use the proper property creation flow which sets dataType correctly
+                    const renderableType = result.renderableType || 'TEXT';
+                    const { baseDataType, renderableTypeId } = mapPropertyType(renderableType);
+                    storage.properties.create({
+                      entityId: result.id,
+                      spaceId,
+                      name: result.name ?? '',
+                      dataType: baseDataType,
+                      renderableTypeId,
+                      verified: result.verified,
+                      toSpaceId: result.space,
+                    });
+                  } else {
+                    // Standard entity creation
+                    storage.values.set({
+                      id: ID.createValueId({
+                        entityId: result.id,
+                        propertyId: SystemIds.NAME_PROPERTY,
+                        spaceId,
+                      }),
+                      entity: {
+                        id: result.id,
+                        name: result.name,
+                      },
+                      property: {
+                        id: SystemIds.NAME_PROPERTY,
+                        name: 'Name',
+                        dataType: 'TEXT',
+                      },
+                      spaceId,
+                      value: result.name ?? '',
+                    });
 
-              if (isCreatingProperty) {
-                // Use the proper property creation flow which sets dataType correctly
-                const renderableType = result.renderableType || 'TEXT';
-                const { baseDataType, renderableTypeId } = mapPropertyType(renderableType);
-                storage.properties.create({
-                  entityId: result.id,
-                  spaceId,
-                  name: result.name ?? '',
-                  dataType: baseDataType,
-                  renderableTypeId,
-                  verified: result.verified,
-                  toSpaceId: result.space,
-                });
-              } else {
-                // Standard entity creation
-                storage.values.set({
-                  id: ID.createValueId({
-                    entityId: result.id,
-                    propertyId: SystemIds.NAME_PROPERTY,
-                    spaceId,
-                  }),
-                  entity: {
-                    id: result.id,
-                    name: result.name,
-                  },
-                  property: {
-                    id: SystemIds.NAME_PROPERTY,
-                    name: 'Name',
-                    dataType: 'TEXT',
-                  },
-                  spaceId,
-                  value: result.name ?? '',
-                });
+                    if (valueType) {
+                      storage.relations.set({
+                        id: IdUtils.generate(),
+                        entityId: IdUtils.generate(),
+                        spaceId,
+                        renderableType: 'RELATION',
+                        toSpaceId: valueType.spaceId,
+                        type: {
+                          id: SystemIds.TYPES_PROPERTY,
+                          name: 'Types',
+                        },
+                        fromEntity: {
+                          id: result.id,
+                          name: result.name,
+                        },
+                        toEntity: {
+                          id: valueType.id,
+                          name: valueType.name,
+                          value: valueType.id,
+                        },
+                      });
+                    }
+                  }
+                }}
+                onDone={async result => {
+                  const newRelationId = ID.createEntityId();
+                  // @TODO(migration): lightweight relation pointing to entity id
+                  const newEntityId = ID.createEntityId();
 
-                if (valueType) {
-                  storage.relations.set({
-                    id: IdUtils.generate(),
-                    entityId: IdUtils.generate(),
-                    spaceId,
+                  const newRelation: Relation = {
+                    id: newRelationId,
+                    spaceId: spaceId,
+                    position: Position.generate(),
                     renderableType: 'RELATION',
-                    toSpaceId: valueType.spaceId,
+                    verified: false,
+                    entityId: newEntityId,
                     type: {
-                      id: SystemIds.TYPES_PROPERTY,
-                      name: 'Types',
+                      id: typeOfId,
+                      name: typeOfName,
                     },
                     fromEntity: {
-                      id: result.id,
-                      name: result.name,
+                      id: id,
+                      name: name,
                     },
                     toEntity: {
-                      id: valueType.id,
-                      name: valueType.name,
-                      value: valueType.id,
+                      id: result.id,
+                      name: result.name,
+                      value: result.id,
                     },
-                  });
-                }
-              }
-            }}
-            onDone={async result => {
-              const newRelationId = ID.createEntityId();
-              // @TODO(migration): lightweight relation pointing to entity id
-              const newEntityId = ID.createEntityId();
+                  };
 
-              const newRelation: Relation = {
-                id: newRelationId,
-                spaceId: spaceId,
-                position: Position.generate(),
-                renderableType: 'RELATION',
-                verified: false,
-                entityId: newEntityId,
-                type: {
-                  id: typeOfId,
-                  name: typeOfName,
-                },
-                fromEntity: {
-                  id: id,
-                  name: name,
-                },
-                toEntity: {
-                  id: result.id,
-                  name: result.name,
-                  value: result.id,
-                },
-              };
+                  if (result.space) {
+                    newRelation.toSpaceId = result.space;
+                  }
 
-              if (result.space) {
-                newRelation.toSpaceId = result.space;
-              }
+                  if (result.verified) {
+                    newRelation.verified = true;
+                  }
 
-              if (result.verified) {
-                newRelation.verified = true;
-              }
+                  storage.relations.set(newRelation);
 
-              storage.relations.set(newRelation);
+                  for (const relationType of property.relationEntityTypes ?? []) {
+                    createRelationEntityTypeRelation(storage, spaceId, newEntityId, relationType);
+                  }
 
-              for (const relationType of property.relationEntityTypes ?? []) {
-                createRelationEntityTypeRelation(storage, spaceId, newEntityId, relationType);
-              }
-
-              await applyTemplate({ ...templateOptions, propertyId: typeOfId, typeId: result.id });
-            }}
-            spaceId={spaceId}
-          />
-        </div>
+                  await applyTemplate({ ...templateOptions, propertyId: typeOfId, typeId: result.id });
+                }}
+                spaceId={spaceId}
+              />
+            </div>
+          }
+        />
       )}
 
       {/* Show geo location map for the first Address or Venue relation */}
@@ -988,7 +987,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
           propertyType={propertyId}
         />
       )}
-    </div>
+    </motion.div>
   );
 }
 
