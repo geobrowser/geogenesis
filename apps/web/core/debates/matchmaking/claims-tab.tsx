@@ -53,8 +53,6 @@ import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { useStableListOrder } from './use-stable-list-order';
 import {
-  type DebatesHubExploreFilter,
-  debatesHubExploreFilterAtom,
   debatesHubExploreSearchAtom,
   debatesHubExploreSpaceIdsAtom,
   debatesHubExploreSpaceSeedSpentAtom,
@@ -64,65 +62,43 @@ import {
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
+  debatesHubPositionsSearchAtom,
+  debatesHubPositionsSpaceIdsAtom,
+  debatesHubPositionsSpaceSeedSpentAtom,
+  debatesHubPositionsTopicIdsAtom,
 } from '~/atoms';
 
 /**
- * `featured` and `all` are the tab's own, not geo-chat's: the index has no notion of either tag, so
- * picking one swaps the list's *source* for the knowledge graph rather than changing a query param.
- * GEO-2683 did that for `featured`; GEO-2771 did it for `all`.
+ * Which list a surface is showing. One per surface now, rather than a source the viewer picks.
+ *
+ * `all` is the tab's own rather than geo-chat's: the index has no notion of the Debate tag, so this
+ * swaps the list's *source* for the knowledge graph rather than changing a query param (GEO-2771).
  *
  * `mine` and `debate_now` stay geo-chat's. Both are viewer-relative and scored on who is available
  * and who this viewer is already pair-blocked with, which is not in the graph at any price.
+ *
+ * Featured is gone with the picker it lived in (GEO-2863). It was a curated cut of the same tag
+ * behind a menu most viewers never opened, and the menu was costing Explore's filter row the space
+ * its switch needed.
  */
-type ClaimsTabFilter = DebatesHubExploreFilter | 'debate_now';
-
-// All claims leads: it is where the tab opens, and an option the menu opens on should be the one
-// at the top of it. Featured is the narrower, curated cut, and sits one below. "My positions" is
-// last: it is the same catalogue cut to the viewer, so it belongs with the others rather than on a
-// tab of its own, but it is the one a viewer arrives looking for least often.
-const FILTER_OPTIONS: HubFilterOption<DebatesHubExploreFilter>[] = [
-  { value: 'all', label: 'All claims' },
-  { value: 'featured', label: 'Featured' },
-  { value: 'mine', label: 'My positions' },
-];
+type ClaimsTabFilter = 'all' | 'mine' | 'debate_now';
 
 /**
- * The one viewer-relative filter leaves the menu signed out.
- *
- * "My positions" is the viewer's own list, so it could only ever come back empty. Featured and All
- * claims describe the corpus rather than the viewer, and both still answer.
- *
- * "Debate now" used to be here too, and left the menu entirely with GEO-2861 — it is Lobby now, and
- * `SIGNED_OUT_TABS` keeps that whole tab off the signed-out hub for the same reason it was hidden
- * here: geo-chat scores it on who is available to debate *you*, so with no viewer it is not a
- * stricter "all claims" but a question with no subject.
- */
-const SIGNED_OUT_HIDDEN_FILTERS: ClaimsTabFilter[] = ['mine'];
-
-/**
- * The two filters the graph answers, and the tag each one asks for.
+ * The one filter the graph answers, and the tag it asks for.
  *
  * Absent from this map means geo-chat's index answers instead — which is the whole of the branching
  * in this file, so it is stated once here rather than tested per call site.
  */
 const TAG_FOR_FILTER: Partial<Record<ClaimsTabFilter, string>> = {
-  featured: FEATURED_TAG_ID,
   all: DEBATE_TAG_ID,
 };
 
 /** What an empty list means, which differs by where the list came from. */
 const NOTHING_HERE: Record<ClaimsTabFilter, string> = {
-  featured: 'No claims have been featured yet.',
   all: 'No claims have been tagged for debate yet.',
-  mine: 'You haven’t taken a position on any claims yet.',
+  mine: 'You haven\u2019t taken a position on any claims yet.',
   debate_now: 'Nobody is ready to debate you on a claim right now.',
 };
-
-function filterOptionsFor(authenticated: boolean) {
-  return authenticated
-    ? FILTER_OPTIONS
-    : FILTER_OPTIONS.filter(option => !SIGNED_OUT_HIDDEN_FILTERS.includes(option.value));
-}
 
 /** Stable identity so the geo-chat lookups don't restart on every render of a geo-chat list. */
 
@@ -165,7 +141,7 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
  * act from narrowing what you are browsing — so the atoms come from here rather than being read
  * directly, and adding a surface means adding a row rather than threading another flag through.
  */
-export type ClaimsTabVariant = 'explore' | 'lobby';
+export type ClaimsTabVariant = 'explore' | 'lobby' | 'positions';
 
 const VARIANT_ATOMS = {
   explore: {
@@ -173,6 +149,12 @@ const VARIANT_ATOMS = {
     topicIds: debatesHubExploreTopicIdsAtom,
     search: debatesHubExploreSearchAtom,
     seedSpent: debatesHubExploreSpaceSeedSpentAtom,
+  },
+  positions: {
+    spaceIds: debatesHubPositionsSpaceIdsAtom,
+    topicIds: debatesHubPositionsTopicIdsAtom,
+    search: debatesHubPositionsSearchAtom,
+    seedSpent: debatesHubPositionsSpaceSeedSpentAtom,
   },
   lobby: {
     spaceIds: debatesHubLobbySpaceIdsAtom,
@@ -236,7 +218,6 @@ export function ClaimsTab({
   const requestsQuery = useDebateRequests(authenticated);
   const { data: activity } = useDebateActivity(authenticated);
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
-  const filterOptions = React.useMemo(() => filterOptionsFor(authenticated), [authenticated]);
 
   const [search, setSearch] = useAtom(atoms.search);
   const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
@@ -246,7 +227,7 @@ export function ClaimsTab({
   //
   // Session-scoped like the space and topic selections below, and for the same reason: it is the
   // same filter bar, dismissed the same way (GEO-2850).
-  const [selectedFilter, setFilter] = useAtom(debatesHubExploreFilterAtom);
+
   // Explore's own switch (GEO-2863). Stored rather than session-scoped, and on by default: it is
   // the collapse this tab already did, with something on screen to say it is doing it.
   const [hideMyPositions, setHideMyPositions] = useAtom(debatesHubHideMyPositionsAtom);
@@ -257,9 +238,11 @@ export function ClaimsTab({
   //
   // Lobby is the `debate_now` list and nothing else, so it never reads the picker's value. That tab
   // is hidden signed out (`SIGNED_OUT_TABS`), which is what stands in for the coercion here.
-  const exploreFilter: DebatesHubExploreFilter =
-    !authenticated && SIGNED_OUT_HIDDEN_FILTERS.includes(selectedFilter) ? 'all' : selectedFilter;
-  const filter: ClaimsTabFilter = isLobby ? 'debate_now' : exploreFilter;
+  // One list per surface, decided by which surface this is rather than by a menu. Explore is the
+  // tagged corpus, Positions is the viewer's own, Lobby is `debate_now` — and each of the two
+  // viewer-relative ones is a tab that `SIGNED_OUT_TABS` keeps off the signed-out hub, which is
+  // what used to be a coercion here.
+  const filter: ClaimsTabFilter = variant === 'lobby' ? 'debate_now' : variant === 'positions' ? 'mine' : 'all';
   // Held outside this component so they survive it. The hub closes on any outside pointer-down,
   // so dismissing a dropdown by clicking away unmounts this tab — and with `useState` that took
   // the viewer's selection with it (GEO-2850).
@@ -761,12 +744,11 @@ export function ClaimsTab({
     reportedEmpty.current = true;
     onSettledEmpty();
   }, [onSettledEmpty, settledEmpty]);
-  // Explore's alone. Lobby's source is fixed rather than chosen — it is `debate_now` and nothing
-  // else — so an empty Lobby was offering to clear a filter the viewer had not set and could not
-  // see. Worse, clearing it ran `setFilter`, which writes *Explore's* source atom: Lobby does not
-  // read that value, so the button quietly put someone else's tab back to All claims.
-  const hasClearableSource = !isLobby && !graphSourced && filter !== 'all';
-  const hasFilters = hasNarrowingFilters || hasClearableSource;
+  // Every surface's list is now fixed rather than chosen, so the only thing "Clear filters" can
+  // undo is what the viewer narrowed. It used to also put Explore's source picker back to All
+  // claims; with the picker gone there is no source to clear, and an empty tab offering to clear
+  // one would be offering to undo something the viewer never set.
+  const hasFilters = hasNarrowingFilters;
 
   // Both lists page now, so the sentinel follows whichever one is on screen (GEO-2798). The tagged
   // lists used to arrive whole, which is why this was the index's alone.
@@ -808,25 +790,20 @@ export function ClaimsTab({
           facetSpaces={facetSpaces}
           facetTopics={facetTopics}
           countsPending={countsPending}
-          // Lobby passes its own ("Matches only"); Explore draws this one. Never on My positions,
-          // which is the list it would empty — a broken tab rather than a filter — so the state
-          // cannot be set from the one place it must not apply.
-          trailingInline={isLobby}
+          // Lobby passes its own ("Matches only"); Explore draws the one that hides answered claims.
+          // Positions draws neither: it *is* the list of answered claims, so hiding them there
+          // could only empty it — a broken tab rather than a filter — and the state cannot be set
+          // from the one place it must not apply.
+          //
+          // Inline on every surface that has one now. Explore's row used to also carry the source
+          // picker, which left "Hide my positions" nothing to fit into and pushed it onto a line of
+          // its own; with the picker gone it sits at the end of the menus like Lobby's does.
+          trailingInline
           trailing={
             isLobby ? (
               trailing
             ) : filter === 'mine' ? null : (
               <FilterSwitch label="Hide my positions" checked={hideMyPositions} onChange={setHideMyPositions} />
-            )
-          }
-          leading={
-            isLobby ? null : (
-              <HubFilterMenu
-                label={filterOptions.find(option => option.value === exploreFilter)?.label ?? 'All claims'}
-                options={filterOptions}
-                value={exploreFilter}
-                onChange={setFilter}
-              />
             )
           }
         />
@@ -889,9 +866,7 @@ export function ClaimsTab({
             collapsedEverything
               ? 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
               : hasNarrowingFilters
-                ? filter === 'featured'
-                  ? 'No featured claims match these filters.'
-                  : 'No claims match these filters.'
+                ? 'No claims match these filters.'
                 : NOTHING_HERE[filter]
           }
           // "Debate now" is the only filter here scored on who is online, so it is the only one an
@@ -912,7 +887,6 @@ export function ClaimsTab({
                     label: 'Clear filters',
                     onClick: () => {
                       setSearch('');
-                      if (hasClearableSource) setFilter('all');
                       // The menu's own clear row, so this counts as choosing the unfiltered list and
                       // the default cannot put its spaces back.
                       onSpacesClear();

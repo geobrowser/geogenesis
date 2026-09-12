@@ -1,7 +1,6 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
-import type { MatchmakingClaimsFilter } from '~/core/debates/api';
 
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
 
@@ -33,7 +32,7 @@ export const spaceSidebarHasContentAtom = atom<boolean | null>(null);
  */
 export const entityCommentsPanelAtom = atom<{ entityId: string; spaceId: string } | null>(null);
 
-export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'people';
+export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'positions' | 'people';
 
 /** `null` while the debates matchmaking hub is closed. */
 export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
@@ -56,27 +55,6 @@ export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
  * Split per surface because the two menus describe different lists: Explore's facets are the whole
  * tagged corpus, Lobby's are only what the viewer can debate right now.
  */
-
-/**
- * Which list Explore is showing, and what its source picker offers.
- *
- * `featured` is the tab's own rather than geo-chat's, which is why this is not just
- * {@link MatchmakingClaimsFilter} — typed off it so the two cannot drift. Only `debate_now` left the
- * menu, for Lobby: that list is scored on who is available to debate *you*, which is a question
- * about arranging a debate rather than about the corpus. `mine` stayed — it is the viewer's own cut
- * of the same catalogue, and reads as one more answer to "which claims?" rather than as a surface
- * of its own (GEO-2861).
- *
- * Persisted with the rest of the filter bar (GEO-2850): it is the same dropdown, dismissed the same
- * way, and losing it on a click-away was the same surprise.
- *
- * The signed-out coercion stays where it is, in the tab. It is a rule about what may be *shown*,
- * not about what the viewer picked, so it leaves this value alone — which is what lets a viewer who
- * signs in keep the list they had chosen. Changing account is the one thing that clears it; see
- * {@link debatesHubFiltersOwnerAtom}.
- */
-export type DebatesHubExploreFilter = Exclude<MatchmakingClaimsFilter, 'debate_now'> | 'featured';
-export const debatesHubExploreFilterAtom = atom<DebatesHubExploreFilter>('all');
 
 export const debatesHubExploreSpaceIdsAtom = atom<string[]>([]);
 export const debatesHubExploreTopicIdsAtom = atom<string[]>([]);
@@ -113,6 +91,22 @@ export const debatesHubLobbyTopicIdsAtom = atom<string[]>([]);
 export const debatesHubLobbySearchAtom = atom('');
 
 /**
+ * Positions' own filter bar (GEO-2863).
+ *
+ * "My positions" used to be one of three sources behind a dropdown on Explore. It is a tab of its
+ * own now: the dropdown was where a viewer had to go to find the claims they had answered, which
+ * is the wrong shape for a list people want to reach directly — and with it gone, Explore's row has
+ * space for the switch that hides those same claims from it.
+ *
+ * Its own selection rather than Explore's, for the reason Lobby has its own: they are two tabs
+ * asking different questions, and carrying one's spaces and topics into the other re-filters a list
+ * the viewer never narrowed.
+ */
+export const debatesHubPositionsSpaceIdsAtom = atom<string[]>([]);
+export const debatesHubPositionsTopicIdsAtom = atom<string[]>([]);
+export const debatesHubPositionsSearchAtom = atom('');
+
+/**
  * Whether each browse surface's membership default has been applied or forfeited this session.
  *
  * `useMemberSpaceDefault` spends its seed once per *mount*, which was the right lifetime while the
@@ -122,6 +116,7 @@ export const debatesHubLobbySearchAtom = atom('');
  */
 export const debatesHubExploreSpaceSeedSpentAtom = atom(false);
 export const debatesHubLobbySpaceSeedSpentAtom = atom(false);
+export const debatesHubPositionsSpaceSeedSpentAtom = atom(false);
 
 /**
  * Which account the filter state above belongs to, so it is never handed to a different viewer.
@@ -147,7 +142,6 @@ export const debatesHubFiltersOwnerAtom = atom<string | null>(null);
  * atom is added to the reset by adding it here rather than by remembering every call site.
  */
 export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
-  set(debatesHubExploreFilterAtom, 'all');
   set(debatesHubExploreSpaceIdsAtom, []);
   set(debatesHubExploreTopicIdsAtom, []);
   set(debatesHubExploreSearchAtom, '');
@@ -156,6 +150,10 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubLobbyTopicIdsAtom, []);
   set(debatesHubLobbySearchAtom, '');
   set(debatesHubLobbySpaceSeedSpentAtom, false);
+  set(debatesHubPositionsSpaceIdsAtom, []);
+  set(debatesHubPositionsTopicIdsAtom, []);
+  set(debatesHubPositionsSearchAtom, '');
+  set(debatesHubPositionsSpaceSeedSpentAtom, false);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than
   // working state, which is the whole reason it is stored rather than session-scoped. Handing a new
   // account the previous one's *filters* is a leak; handing them a browsing preference held on this

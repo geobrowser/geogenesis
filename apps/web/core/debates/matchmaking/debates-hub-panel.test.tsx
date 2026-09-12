@@ -13,7 +13,6 @@ import { DebatesHubPanel } from './debates-hub-panel';
 import {
   type DebatesHubTab,
   debatesHubAtom,
-  debatesHubExploreFilterAtom,
   debatesHubExploreSearchAtom,
   debatesHubExploreSpaceIdsAtom,
   debatesHubExploreSpaceSeedSpentAtom,
@@ -22,6 +21,10 @@ import {
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
+  debatesHubPositionsSearchAtom,
+  debatesHubPositionsSpaceIdsAtom,
+  debatesHubPositionsSpaceSeedSpentAtom,
+  debatesHubPositionsTopicIdsAtom,
 } from '~/atoms';
 import * as atomsModule from '~/atoms';
 
@@ -157,13 +160,21 @@ afterEach(cleanup);
  * against the module's exports, because the hand-kept version fell behind once already.
  */
 const FILTER_ATOMS = [
-  { name: 'debatesHubExploreFilterAtom', atom: debatesHubExploreFilterAtom, dirty: 'featured', cleared: 'all' },
   { name: 'debatesHubExploreSpaceIdsAtom', atom: debatesHubExploreSpaceIdsAtom, dirty: ['space-a'], cleared: [] },
   { name: 'debatesHubExploreTopicIdsAtom', atom: debatesHubExploreTopicIdsAtom, dirty: ['topic-a'], cleared: [] },
   { name: 'debatesHubExploreSearchAtom', atom: debatesHubExploreSearchAtom, dirty: 'nuclear', cleared: '' },
   {
     name: 'debatesHubExploreSpaceSeedSpentAtom',
     atom: debatesHubExploreSpaceSeedSpentAtom,
+    dirty: true,
+    cleared: false,
+  },
+  { name: 'debatesHubPositionsSpaceIdsAtom', atom: debatesHubPositionsSpaceIdsAtom, dirty: ['space-a'], cleared: [] },
+  { name: 'debatesHubPositionsTopicIdsAtom', atom: debatesHubPositionsTopicIdsAtom, dirty: ['topic-a'], cleared: [] },
+  { name: 'debatesHubPositionsSearchAtom', atom: debatesHubPositionsSearchAtom, dirty: 'nuclear', cleared: '' },
+  {
+    name: 'debatesHubPositionsSpaceSeedSpentAtom',
+    atom: debatesHubPositionsSpaceSeedSpentAtom,
     dirty: true,
     cleared: false,
   },
@@ -182,10 +193,10 @@ describe('DebatesHubPanel', () => {
   // of `resetDebatesHubFiltersAtom` has to fail here rather than quietly hand B one of A's filters.
   // GEO-2861. Four tabs, and "My positions" is not one of them: it is a source inside Explore's
   // menu, one more answer to "which claims?" rather than a surface of its own.
-  it('offers Lobby, People, Explore and Requests, in that order', () => {
+  it('offers Lobby, People, Explore, Positions and Requests, in that order', () => {
     renderOpen('explore');
 
-    const order = ['Lobby', 'People', 'Explore', 'Requests'];
+    const order = ['Lobby', 'People', 'Explore', 'Positions', 'Requests'];
     const row = screen.getByRole('button', { name: /^Lobby/ }).closest('.overflow-x-auto');
     const labels = [...(row?.querySelectorAll('button') ?? [])].map(button => button.textContent?.trim());
 
@@ -218,8 +229,8 @@ describe('DebatesHubPanel', () => {
    * stored preference about how you like to arrive at a debate, not working state, and handing a
    * new account the previous one's *preference* is what every other stored setting here does.
    */
-  it('covers every Explore and Lobby filter atom', () => {
-    const exported = Object.keys(atomsModule).filter(name => /^debatesHub(Explore|Lobby).*Atom$/.test(name));
+  it('covers every filter atom on every surface', () => {
+    const exported = Object.keys(atomsModule).filter(name => /^debatesHub(Explore|Lobby|Positions).*Atom$/.test(name));
 
     expect(new Set(exported)).toEqual(new Set(FILTER_ATOMS.map(entry => entry.name)));
   });
@@ -231,13 +242,13 @@ describe('DebatesHubPanel', () => {
     mocks.accountKey = null;
     const store = renderOpen('explore');
     store.set(debatesHubExploreSpaceIdsAtom, ['space-a']);
-    store.set(debatesHubExploreFilterAtom, 'all');
+    store.set(debatesHubExploreSearchAtom, 'nuclear');
 
     mocks.accountKey = 'user-a';
     store.rerender();
 
     expect(store.get(debatesHubExploreSpaceIdsAtom)).toEqual(['space-a']);
-    expect(store.get(debatesHubExploreFilterAtom)).toBe('all');
+    expect(store.get(debatesHubExploreSearchAtom)).toBe('nuclear');
   });
 
   // Signed out there are no memberships for the seed to apply to, so it is never spent by seeding
@@ -361,7 +372,7 @@ describe('DebatesHubPanel', () => {
     expect(row).not.toBeNull();
 
     // Order, not just presence: the labels alone stayed green through a reorder.
-    const order = ['Lobby', 'People', 'Explore', 'Requests'];
+    const order = ['Lobby', 'People', 'Explore', 'Positions', 'Requests'];
     const rendered = order.map(label => screen.getByRole('button', { name: new RegExp(`^${label}`) }));
     for (const [index, tab] of rendered.slice(0, -1).entries()) {
       const next = rendered[index + 1];
@@ -415,6 +426,16 @@ describe('DebatesHubPanel', () => {
 
     expect(screen.queryByRole('button', { name: /Matches/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Requests/ })).not.toBeInTheDocument();
+    // Positions joins them (GEO-2863). It was a source inside Explore's picker and left that menu
+    // signed out for exactly this reason, so promoting it to a tab promotes the rule with it.
+    expect(screen.queryByRole('button', { name: /Positions/ })).not.toBeInTheDocument();
+  });
+
+  it('draws Positions as its own tab once there is a viewer to have any', () => {
+    renderOpen('positions');
+
+    expect(screen.getByRole('button', { name: /^Positions/ })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
   });
 
   // `authenticated` is false while Privy restores, so a row drawn before then is the signed-out
