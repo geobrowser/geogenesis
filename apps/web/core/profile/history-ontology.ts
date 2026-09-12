@@ -197,15 +197,6 @@ export const SCOPE_RANK_PROPERTY = '3ae1e15935864c0f9425652125d03772';
 export const TAXONOMY_SPACE_ID = 'd69608290513c2a91102c939b3265bd7';
 
 /**
- * What the School picker searches, and what it types a school it creates as.
- *
- * `Education` declares `To entity types: Institution`, which is the broader of
- * the two and has 108 entities behind it; `University` has 10 and is what
- * someone filling in a school is usually naming. Both, therefore — searching
- * either alone hides most of the answers, and a new school is typed as both so
- * it turns up whichever one the next reader scopes to.
- */
-/**
  * What `Degree` declares it points at, and what a degree created here is typed as.
  */
 export const DEGREE_TYPE = 'bfd47a5430aa43e18b8b8b86735919a0';
@@ -224,9 +215,20 @@ export const LEGACY_DEGREE_TYPE = '65256c5462834981b502aceeb74bd08c';
 
 export const DEGREE_TYPES = [DEGREE_TYPE, LEGACY_DEGREE_TYPE];
 
+/**
+ * What the School picker searches, and what it types a school it creates as.
+ *
+ * `Education` still declares `Institution`, and the schools on profiles today are
+ * typed Project or Institution rather than this — the ontology is being moved onto
+ * this id deliberately and those records migrated behind it.
+ *
+ * Written against the id, not the name: the entity may be renamed to
+ * `Institution`, which would not make it a different type. Until the migration
+ * lands the picker finds the twelve schools already carrying it, plus whatever is
+ * created here.
+ */
 export const UNIVERSITY_TYPE = '0235f3d2821947a481d39ccd68e2b821';
-export const INSTITUTION_TYPE = '7f5433a40628498f9de6311cb14709a8';
-export const SCHOOL_TYPES = [UNIVERSITY_TYPE, INSTITUTION_TYPE];
+export const SCHOOL_TYPES = [UNIVERSITY_TYPE];
 
 /** What the avatar of a company or school is stored under. */
 export const AVATAR_PROPERTY = ContentIds.AVATAR_PROPERTY;

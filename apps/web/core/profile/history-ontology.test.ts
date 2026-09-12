@@ -17,7 +17,6 @@ import {
   EMPLOYMENT_TYPE_PROPERTY,
   EMPLOYMENT_TYPE_TYPE,
   END_DATE_PROPERTY,
-  INSTITUTION_TYPE,
   IS_REQUIRED_PROPERTY,
   JOB_TYPE,
   LEGACY_DEGREE_TYPE,
@@ -77,8 +76,9 @@ describe('history ontology ids', () => {
     // A second real type of the same name, carrying the degrees that predate the
     // declared one. Searching only the declared one hides all of them.
     ['Degree type (legacy)', LEGACY_DEGREE_TYPE, '65256c5462834981b502aceeb74bd08c'],
+    // The school type the ontology is moving onto. Pinned by id because the
+    // entity may be renamed to `Institution` without becoming a different type.
     ['University', UNIVERSITY_TYPE, '0235f3d2821947a481d39ccd68e2b821'],
-    ['Institution', INSTITUTION_TYPE, '7f5433a40628498f9de6311cb14709a8'],
   ])('%s resolves to the id the graph has', (_name, actual, expected) => {
     expect(actual).toBe(expected);
   });
