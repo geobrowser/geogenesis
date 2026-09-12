@@ -42,9 +42,30 @@ function nodeFieldNames(doc: DocumentNode): string[] {
 
 describe('debatesBestOrderDocument', () => {
   // The whole point is that this is the same ranking the explore page sorts by, not a lookalike.
-  it('reads the same ranked connection the explore Best sort does', () => {
-    expect(rootField(debatesBestOrderDocument).name.value).toBe(rootField(exploreBestConnectionDocument).name.value);
-    expect(rootField(debatesBestOrderDocument).name.value).toBe('entitiesRankedForFeedConnection');
+  // It reads the by-type sibling rather than the connection explore uses: same function body and
+  // same `ranking_score DESC, entity_id DESC`, but the type predicate is planned as a semi-join
+  // instead of a filter on a ranked walk (GEO-2793). This document must filter by type, and that
+  // walk does not terminate for a type as rare as Debate; explore sends no `typeIds` at all, so
+  // the walk is the right plan there. Both names are asserted so a drift in either is caught.
+  it('reads the by-type ranked connection', () => {
+    expect(rootField(debatesBestOrderDocument).name.value).toBe('entitiesRankedForFeedByTypeConnection');
+  });
+
+  // Explore stays on the original connection. Note its *document* still declares and passes
+  // `typeIds` — it is `fetchBestEntitiesPage` that leaves the variable undefined at the call site
+  // (#2345), so the walk gets no type argument in practice. That is a runtime decision and cannot
+  // be asserted here; what this pins is that the two documents no longer read the same field.
+  it('reads a different connection from explore Best', () => {
+    expect(rootField(exploreBestConnectionDocument).name.value).toBe('entitiesRankedForFeedConnection');
+    expect(rootField(debatesBestOrderDocument).name.value).not.toBe(
+      rootField(exploreBestConnectionDocument).name.value
+    );
+  });
+
+  // The by-type connection matches nothing when `type_ids` is null, so omitting the argument here
+  // would silently empty the feed rather than fall back to an unfiltered ranking.
+  it('always sends typeIds, which the by-type connection requires to match anything', () => {
+    expect(argNames(rootField(debatesBestOrderDocument))).toContain('typeIds');
   });
 
   it('asks for ids alone — the feed already has the debates', () => {
