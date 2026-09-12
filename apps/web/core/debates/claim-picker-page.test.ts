@@ -59,7 +59,11 @@ describe('fetchClaimPickerEntities', () => {
             { spaceId: 'space-b', propertyId: SystemIds.NAME_PROPERTY, text: null, boolean: null },
             null,
           ],
-          relationsList: [{ toEntity: { id: 'topic-1', name: 'Fashion' } }, { toEntity: null }, null],
+          relationsList: [
+            { spaceId: 'space-a', toEntity: { id: 'topic-1', name: 'Fashion' } },
+            { spaceId: 'space-b', toEntity: null },
+            null,
+          ],
         },
         null,
       ],
@@ -79,7 +83,12 @@ describe('fetchClaimPickerEntities', () => {
           { property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID }, spaceId: 'space-a', value: '1' },
           { property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID }, spaceId: 'space-b', value: '0' },
         ],
-        relations: [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-1', name: 'Fashion' } }],
+        // The space the topic was assigned in is carried through, not dropped. Topics are per-space,
+        // so a caller scoped to one space cannot otherwise tell an assignment made there from one
+        // made somewhere else — which is what let another space's topic into the picker's facet.
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, spaceId: 'space-a', toEntity: { id: 'topic-1', name: 'Fashion' } },
+        ],
       },
     ]);
   });

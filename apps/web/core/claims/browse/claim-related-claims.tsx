@@ -4,7 +4,7 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { relatedClaimsWhere } from '~/core/claims/related-claims';
 import type { DebateClaim } from '~/core/debates/api';
 import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { useDebateClaims } from '~/core/debates/hooks';
@@ -74,11 +74,9 @@ export function ClaimRelatedClaims({
     endCursor,
     hasNextPage,
   } = useQueryEntities({
-    where: {
-      types: [{ id: { equals: CLAIM_TYPE_ID } }],
-      spaces: [{ equals: spaceId }],
-      relations: [{ typeOf: { id: { equals: TOPICS_PROPERTY_ID } }, toEntity: { id: { in: topicIds } } }],
-    },
+    // Shared with the debate-again picker's Related claims source, so the two surfaces cannot
+    // drift into disagreeing about what "related" means (GEO-2758).
+    where: relatedClaimsWhere({ spaceId, topicIds }),
     first: RELATED_PAGE_SIZE,
     after: pages.cursor,
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
