@@ -8,6 +8,8 @@ import {
   EMPLOYER_TYPE,
   EMPLOYMENT_TYPE_OPTIONS,
   JOB_TYPE,
+  LOCATION_TYPES,
+  LOCATION_TYPE_OPTIONS,
   SKILL_TYPE,
   TAXONOMY_SPACE_ID,
 } from '~/core/profile/history-ontology';
@@ -26,6 +28,9 @@ import { MonthYearField } from './month-year-field';
  * ask for it by name — see `TAXONOMY_SPACE_ID`.
  */
 const TAXONOMY_SPACE_ID_LIST = [TAXONOMY_SPACE_ID];
+
+/** Cities, regions and countries — see `LOCATION_TYPES` for why not addresses. */
+const LOCATION_TYPE_FILTER = LOCATION_TYPES.map(id => ({ id, name: null }));
 
 type Props = {
   spaceId: string;
@@ -59,6 +64,10 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
     initial?.employmentType ?? null
   );
   const [skills, setSkills] = React.useState<EntityChoice[]>(initial?.skills ?? []);
+  const [location, setLocation] = React.useState<EntityChoice | null>(initial?.location ?? null);
+  const [locationType, setLocationType] = React.useState<{ id: string; name: string } | null>(
+    initial?.locationType ?? null
+  );
   const [isAddingSkill, setIsAddingSkill] = React.useState(false);
   const [isCurrent, setIsCurrent] = React.useState(initial ? initial.status === 'current' : false);
   const [description, setDescription] = React.useState(initial?.description ?? '');
@@ -106,6 +115,8 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
       title,
       employmentType,
       skills,
+      location,
+      locationType,
       startDate: start ? toGraphDate(start) : null,
       // A role still held has no end date, whatever the picker was left showing.
       endDate: isCurrent || !end ? null : toGraphDate(end),
@@ -205,6 +216,45 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
         <MonthYearField label="Start" value={start} onChange={setStart} disabled={isSaving} />
         <MonthYearField label="End" value={end} onChange={setEnd} disabled={isSaving || isCurrent} />
       </div>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-metadataMedium text-grey-04">Location</span>
+        {location ? (
+          <PickedEntity name={location.name} onClear={() => setLocation(null)} />
+        ) : (
+          // A place in the graph rather than a string, so the San Francisco on
+          // this profile is the one everybody else means.
+          <SelectEntity
+            spaceId={spaceId}
+            relationValueTypes={LOCATION_TYPE_FILTER}
+            placeholder="Find or create a city..."
+            onCreateEntity={findOrCreate}
+            onDone={(result, fromCreateFn) =>
+              setLocation({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
+            }
+            width="full"
+          />
+        )}
+      </div>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="text-metadataMedium text-grey-04">Location type</span>
+        <select
+          value={locationType?.id ?? ''}
+          disabled={isSaving}
+          onChange={event =>
+            setLocationType(LOCATION_TYPE_OPTIONS.find(option => option.id === event.currentTarget.value) ?? null)
+          }
+          className={inputStyles()}
+        >
+          <option value="">Please select</option>
+          {LOCATION_TYPE_OPTIONS.map(option => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <label className="flex flex-col gap-1.5">
         <span className="text-metadataMedium text-grey-04">Highlights</span>

@@ -6,6 +6,7 @@ import type { Relation, Value } from '~/core/types';
 import {
   ACADEMIC_FIELDS_PROPERTY,
   ACADEMIC_FIELD_TYPE,
+  CITY_TYPE,
   DEGREE_PROPERTY,
   DESCRIPTION_PROPERTY,
   EDUCATION_PROPERTY,
@@ -20,6 +21,8 @@ import {
   type EducationStatus,
   type EmploymentStatus,
   JOB_TYPE,
+  LOCATION_PROPERTY,
+  LOCATION_TYPE_PROPERTY,
   ROLES_PROPERTY,
   ROLE_INFORMATION_TYPE,
   SCHOOL_TYPES,
@@ -38,6 +41,10 @@ export type PositionDraft = {
   employmentType: { id: string; name: string } | null;
   /** Repeats, so it is a relation rather than a value. */
   skills: EntityChoice[];
+  /** Where it was held. A place in the graph, not a string. */
+  location: EntityChoice | null;
+  /** Onsite, Hybrid or Remote. Optional, as on LinkedIn. */
+  locationType: { id: string; name: string } | null;
   startDate: string | null;
   endDate: string | null;
   status: EmploymentStatus;
@@ -294,6 +301,38 @@ export function stagePosition(
       ]
     : [];
 
+  // Beside the dates, for the same reason: a job moves city and goes remote
+  // without becoming a different job.
+  //
+  // A city typed rather than picked is named and typed like any other new entity.
+  // City rather than Place: someone filling in where they worked is naming a
+  // city, and an untyped one would not turn up for the next person who types it.
+  const locationEntity = newEntityRows(draft.location ?? { id: '', name: null, isNew: false }, spaceId, [CITY_TYPE]);
+
+  const location = draft.location
+    ? [
+        relationRow({
+          spaceId,
+          typeId: LOCATION_PROPERTY,
+          typeName: 'Location',
+          fromId: tenureId,
+          to: draft.location,
+        }),
+      ]
+    : [];
+
+  const locationType = draft.locationType
+    ? [
+        relationRow({
+          spaceId,
+          typeId: LOCATION_TYPE_PROPERTY,
+          typeName: 'Location type',
+          fromId: tenureId,
+          to: draft.locationType,
+        }),
+      ]
+    : [];
+
   const skillRows = draft.skills.map(skill => newEntityRows(skill, spaceId, [SKILL_TYPE]));
   const skillEdges = draft.skills.map(skill =>
     relationRow({
@@ -305,8 +344,8 @@ export function stagePosition(
     })
   );
 
-  return merge(company, title, ...skillRows, employment, {
-    relations: [roles, tenureType, status, ...employmentType, ...skillEdges],
+  return merge(company, title, locationEntity, ...skillRows, employment, {
+    relations: [roles, tenureType, status, ...employmentType, ...location, ...locationType, ...skillEdges],
     values: datesAndDescription({
       spaceId,
       tenureId,
@@ -409,6 +448,8 @@ export function positionDraftFromEntry(
     subject: { id: string; name: string | null };
     employmentType: { id: string; name: string | null } | null;
     skills: { id: string; name: string | null }[];
+    location: { id: string; name: string | null } | null;
+    locationType: { id: string; name: string | null } | null;
     startDate: string | null;
     endDate: string | null;
     status: EmploymentStatus | null;
@@ -426,6 +467,8 @@ export function positionDraftFromEntry(
       ? { id: entry.employmentType.id, name: entry.employmentType.name ?? '' }
       : null,
     skills: entry.skills.map(skill => ({ id: skill.id, name: skill.name, isNew: false })),
+    location: entry.location ? { id: entry.location.id, name: entry.location.name, isNew: false } : null,
+    locationType: entry.locationType ? { id: entry.locationType.id, name: entry.locationType.name ?? '' } : null,
     startDate: entry.startDate,
     endDate: entry.endDate,
     // An older row may carry no status at all. An open end date is what said

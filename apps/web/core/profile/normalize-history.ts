@@ -11,6 +11,8 @@ import {
   type EducationStatus,
   type EmploymentStatus,
   LEGACY_FIELD_OF_STUDY_PROPERTY,
+  LOCATION_PROPERTY,
+  LOCATION_TYPE_PROPERTY,
   ROLES_PROPERTY,
   SKILLS_PROPERTY,
   START_DATE_PROPERTY,
@@ -70,6 +72,8 @@ export type EmploymentEntry = HistoryEntry & {
   status: EmploymentStatus | null;
   employmentType: NamedRef | null;
   skills: NamedRef[];
+  location: NamedRef | null;
+  locationType: NamedRef | null;
 };
 export type EducationEntry = HistoryEntry & { status: EducationStatus | null; fields: NamedRef[] };
 
@@ -241,6 +245,8 @@ export function normalizeEmployment(edges: HistoryEdgeNode[]): EmploymentCard[] 
           edge: edgeRef,
           status: employmentStatusFromOptionId(statusOptionId),
           employmentType: relationTo(tenureRelations, EMPLOYMENT_TYPE_PROPERTY),
+          location: relationTo(tenureRelations, LOCATION_PROPERTY),
+          locationType: relationTo(tenureRelations, LOCATION_TYPE_PROPERTY),
           skills: tenureRelations
             .filter(skill => skill.type.id === SKILLS_PROPERTY)
             .map(skill => skill.toEntity)

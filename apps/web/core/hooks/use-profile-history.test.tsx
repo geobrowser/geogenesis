@@ -53,6 +53,8 @@ const savedCard = (org: string, roles: string[], stint = `stint-${org}`): Employ
     status: 'current' as const,
     employmentType: null,
     skills: [],
+    location: null,
+    locationType: null,
   })),
 });
 
@@ -61,6 +63,8 @@ const draft = (company: string, title: string, overrides: Partial<PositionDraft>
   title: { id: `title-${title}`, name: title, isNew: false },
   employmentType: null,
   skills: [],
+  location: null,
+  locationType: null,
   startDate: '2024-01-01Z',
   endDate: null,
   status: 'current',

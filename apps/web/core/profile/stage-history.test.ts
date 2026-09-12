@@ -18,6 +18,8 @@ import {
   EMPLOYMENT_STATUS_PROPERTY,
   END_DATE_PROPERTY,
   JOB_TYPE,
+  LOCATION_PROPERTY,
+  LOCATION_TYPE_PROPERTY,
   ROLES_PROPERTY,
   ROLE_INFORMATION_TYPE,
   START_DATE_PROPERTY,
@@ -34,6 +36,8 @@ const position = (overrides: Partial<PositionDraft> = {}): PositionDraft => ({
   title: picked('analyst', 'Data Analyst'),
   employmentType: null,
   skills: [],
+  location: null,
+  locationType: null,
   startDate: '2019-03-01Z',
   endDate: '2021-01-01Z',
   status: 'former',
@@ -160,6 +164,49 @@ describe('stagePosition', () => {
     );
 
     expect(tenureType?.fromEntity.id).toBe(roles?.entityId);
+  });
+
+  // Beside the dates, for the same reason: a job moves city and goes remote
+  // without becoming a different job, and the role it is a promotion from may
+  // have been neither.
+  it('puts location and location type on the tenure', () => {
+    const { relations } = stagePosition(
+      position({
+        location: picked('city-sf', 'San Francisco'),
+        locationType: { id: 'loc-remote', name: 'Remote' },
+      }),
+      context
+    );
+
+    const roles = oneOf(relations, ROLES_PROPERTY);
+
+    expect(oneOf(relations, LOCATION_PROPERTY)).toMatchObject({
+      fromEntity: { id: roles.entityId },
+      toEntity: { id: 'city-sf' },
+    });
+    expect(oneOf(relations, LOCATION_TYPE_PROPERTY)).toMatchObject({
+      fromEntity: { id: roles.entityId },
+      toEntity: { id: 'loc-remote' },
+    });
+  });
+
+  // Optional on LinkedIn and optional here. A dangling relation to nothing is
+  // worse than an unanswered question.
+  it('writes neither when they are left unanswered', () => {
+    const { relations } = stagePosition(position(), context);
+
+    expect(byType(relations, LOCATION_PROPERTY)).toHaveLength(0);
+    expect(byType(relations, LOCATION_TYPE_PROPERTY)).toHaveLength(0);
+  });
+
+  // A city the graph has not heard of still has to be a place rather than a
+  // string, or the next person typing it makes a second one.
+  it('names and types a city the user typed rather than picked', () => {
+    const { values } = stagePosition(position({ location: created('new-city', 'Cincinnati') }), context);
+
+    expect(values).toContainEqual(
+      expect.objectContaining({ entity: { id: 'new-city', name: null }, value: 'Cincinnati' })
+    );
   });
 
   it('gives every row the space being published to', () => {

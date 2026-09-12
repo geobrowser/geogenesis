@@ -123,6 +123,43 @@ export const EMPLOYMENT_TYPE_OPTIONS = [
   { id: '1a0235d7f32e4cff83f9545f01bd96ba', name: 'Seasonal' },
 ] as const;
 
+/**
+ * Where the role was held, and how.
+ *
+ * Seven properties are named `Location` and three `Location type`; these are the
+ * ones the graph actually uses — 676 relations and 16 against nothing at all for
+ * the rest. Both hang off the tenure beside the dates, because a job moves city
+ * and goes remote without becoming a different job.
+ *
+ * `Location` points at a place rather than holding text, so "San Francisco" is
+ * the same San Francisco everyone else means.
+ */
+export const LOCATION_PROPERTY = '95d770021faf4f7cb7deb21a7d48cda0';
+export const LOCATION_TYPE_PROPERTY = 'ceeb611101554764bea22818b21d3fbd';
+
+/** What `Location` declares it points at. Address is deliberately left out — a
+ * job is held in a city, not at a street number. */
+export const PLACE_TYPE = '783bc688e65f4e54b67fa5643d78345e';
+export const CITY_TYPE = '01b05333941a4b00bc78fac5a15b467d';
+export const REGION_TYPE = 'c188844a722442abb4762991c9c913f1';
+export const COUNTRY_TYPE = '42a0a7618c82459fad0834bfeb437cde';
+export const LOCATION_TYPES = [CITY_TYPE, REGION_TYPE, COUNTRY_TYPE, PLACE_TYPE];
+
+/**
+ * Remote, Onsite and Hybrid — one set, though only the first two have ever been
+ * used. All three sit in the same space with descriptions that read as a set
+ * ("Position combines remote and onsite work"), and none of them is typed, which
+ * is why they cannot be found by type the way employment types can.
+ *
+ * Verified against the graph on 2026-09-11. Note the spelling: `Onsite`, not
+ * `On-site`.
+ */
+export const LOCATION_TYPE_OPTIONS = [
+  { id: '19db5058ae4849e79fd698f46b6beae4', name: 'Onsite' },
+  { id: '18022953fd99439e8feb55e50241dac0', name: 'Hybrid' },
+  { id: '8f5e23aa70394ea4b7946fa0a9878da7', name: 'Remote' },
+] as const;
+
 /** tenure ──▶ skill. A relation, and it repeats. */
 export const SKILLS_PROPERTY = ContentIds.SKILLS_PROPERTY;
 export const SKILL_TYPE = ContentIds.SKILL_TYPE;

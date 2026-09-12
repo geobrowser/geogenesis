@@ -175,6 +175,8 @@ export function mergePendingEmployment(
         status: addition.draft.status,
         employmentType: addition.draft.employmentType,
         skills: addition.draft.skills,
+        location: addition.draft.location,
+        locationType: addition.draft.locationType,
       }),
     })),
     removals,

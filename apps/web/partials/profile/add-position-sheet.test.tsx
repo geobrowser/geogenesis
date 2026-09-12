@@ -196,6 +196,8 @@ describe('AddPositionSheet', () => {
       title: { id: 'title-engineer', name: 'Engineer', isNew: false },
       employmentType: null,
       skills: [{ id: 'skill-1', name: 'Product development', isNew: false }],
+      location: { id: 'city-sf', name: 'San Francisco', isNew: false },
+      locationType: { id: 'loc-remote', name: 'Remote' },
       startDate: '2022-06-01Z',
       endDate: null,
       status: 'current' as const,
@@ -236,6 +238,45 @@ describe('AddPositionSheet', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Save position' }));
 
       expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining(initial));
+    });
+  });
+
+  describe('location', () => {
+    it('saves the city and the arrangement onto the position', async () => {
+      const props = renderSheet();
+
+      await pickCompany();
+      await pickTitle();
+      // The location picker is the next unanswered one.
+      await userEvent.click(screen.getAllByRole('button', { name: /pick existing/ })[0]);
+      await userEvent.selectOptions(screen.getByLabelText('Location type'), 'Remote');
+      await userEvent.click(screen.getByRole('button', { name: 'Save position' }));
+
+      expect(props.onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          location: { id: 'picked-id', name: 'Coinbase', isNew: false },
+          locationType: { id: '8f5e23aa70394ea4b7946fa0a9878da7', name: 'Remote' },
+        })
+      );
+    });
+
+    // Optional on LinkedIn and optional here.
+    it('leaves both unanswered rather than guessing', async () => {
+      const props = renderSheet();
+
+      await pickCompany();
+      await pickTitle();
+      await userEvent.click(screen.getByRole('button', { name: 'Save position' }));
+
+      expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ location: null, locationType: null }));
+    });
+
+    it('offers the three arrangements the graph records', () => {
+      renderSheet();
+
+      for (const option of ['Onsite', 'Hybrid', 'Remote']) {
+        expect(screen.getByRole('option', { name: option })).toBeInTheDocument();
+      }
     });
   });
 

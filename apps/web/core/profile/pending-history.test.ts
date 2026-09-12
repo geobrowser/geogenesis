@@ -19,6 +19,8 @@ const draft = (company: string, title: string, overrides: Partial<PositionDraft>
   title: { id: `title-${title}`, name: title, isNew: false },
   employmentType: null,
   skills: [],
+  location: null,
+  locationType: null,
   startDate: '2024-01-01Z',
   endDate: null,
   status: 'current',
@@ -41,6 +43,8 @@ const savedCard = (org: string, roles: string[]): EmploymentCard => ({
     status: null,
     employmentType: null,
     skills: [],
+    location: null,
+    locationType: null,
   })),
 });
 

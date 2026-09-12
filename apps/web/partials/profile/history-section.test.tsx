@@ -10,7 +10,9 @@ import { HistorySection } from './history-section';
 
 afterEach(cleanup);
 
-const entry = (name: string, startDate: string | null, endDate: string | null, org = 'Geo') => ({
+type Entry = EmploymentCard['entries'][number];
+
+const entry = (name: string, startDate: string | null, endDate: string | null, org = 'Geo'): Entry => ({
   relationId: `rel-${name}`,
   tenureId: `tenure-${name}`,
   edge: { relationId: `edge-${org}`, stintId: `stint-${org}` },
@@ -22,6 +24,8 @@ const entry = (name: string, startDate: string | null, endDate: string | null, o
   status: null,
   employmentType: null,
   skills: [],
+  location: null,
+  locationType: null,
 });
 
 const card = (org: string, entries: ReturnType<typeof entry>[]): EmploymentCard => ({
@@ -123,6 +127,27 @@ describe('HistorySection', () => {
 
     expect(screen.getByText('Engineer')).toBeInTheDocument();
     expect(screen.queryByText('–')).not.toBeInTheDocument();
+  });
+
+  // One line the way a CV states it, and either half stands on its own: a remote
+  // role need not name a city, and a city says something without an arrangement
+  // beside it.
+  it('reads the location and the working arrangement as one line', () => {
+    const row = entry('Engineer', '2022-06-01Z', null);
+    renderSection([
+      card('Geo', [
+        { ...row, location: { id: 'city-sf', name: 'San Francisco' }, locationType: { id: 'r', name: 'Remote' } },
+      ]),
+    ]);
+
+    expect(screen.getByText('San Francisco · Remote')).toBeInTheDocument();
+  });
+
+  it('shows whichever half it has', () => {
+    const row = entry('Engineer', '2022-06-01Z', null);
+    renderSection([card('Geo', [{ ...row, locationType: { id: 'r', name: 'Remote' } }])]);
+
+    expect(screen.getByText('Remote')).toBeInTheDocument();
   });
 
   it('locks every control while a save is in flight', () => {

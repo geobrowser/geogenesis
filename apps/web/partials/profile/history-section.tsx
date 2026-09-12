@@ -172,6 +172,14 @@ function EntryRow({
   const fields = 'fields' in entry ? (entry as { fields: { name: string | null }[] }).fields : [];
   const employmentType =
     'employmentType' in entry ? (entry as { employmentType: { name: string | null } | null }).employmentType : null;
+  const location = 'location' in entry ? (entry as { location: { name: string | null } | null }).location : null;
+  const locationType =
+    'locationType' in entry ? (entry as { locationType: { name: string | null } | null }).locationType : null;
+
+  // One line, the way a CV states it: "San Francisco · Remote". Either half
+  // stands on its own — a remote role need not name a city, and a city says
+  // something without a working arrangement beside it.
+  const place = [location?.name, locationType?.name].filter(Boolean).join(' · ');
   const skills = 'skills' in entry ? (entry as { skills: { name: string | null }[] }).skills : [];
 
   const heading = fields.length > 0 ? `${subject}, ${fields.map(field => field.name).join(', ')}` : subject;
@@ -199,6 +207,8 @@ function EntryRow({
             {duration && ` · ${duration}`}
           </p>
         )}
+
+        {place && <p className="text-footnote text-grey-04">{place}</p>}
 
         {entry.description && <p className="mt-1 text-footnote text-text">{entry.description}</p>}
 

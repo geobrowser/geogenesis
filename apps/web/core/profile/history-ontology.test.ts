@@ -16,8 +16,12 @@ import {
   EMPLOYMENT_TYPE_PROPERTY,
   EMPLOYMENT_TYPE_TYPE,
   END_DATE_PROPERTY,
+  INSTITUTION_TYPE,
   IS_REQUIRED_PROPERTY,
   JOB_TYPE,
+  LOCATION_PROPERTY,
+  LOCATION_TYPE_OPTIONS,
+  LOCATION_TYPE_PROPERTY,
   ROLES_PROPERTY,
   ROLE_INFORMATION_TYPE,
   SCOPE_RANK_PROPERTY,
@@ -25,6 +29,7 @@ import {
   SKILL_SCOPE_PROPERTY,
   SKILL_TYPE,
   START_DATE_PROPERTY,
+  UNIVERSITY_TYPE,
   educationStatusFromOptionId,
   employmentStatusFromOptionId,
 } from './history-ontology';
@@ -61,6 +66,13 @@ describe('history ontology ids', () => {
     ['Is required?', IS_REQUIRED_PROPERTY, '3d60051c488f4a5ebae67a8264ade8bd'],
     ['Skill scope', SKILL_SCOPE_PROPERTY, '7426f8535dc84776bd7abce1d069fa06'],
     ['Scope rank', SCOPE_RANK_PROPERTY, '3ae1e15935864c0f9425652125d03772'],
+    // Seven properties are named `Location` and three `Location type`. These are
+    // the ones the graph uses — 676 relations and 16, against nothing at all for
+    // the rest — so the id matters more here than usual.
+    ['Location', LOCATION_PROPERTY, '95d770021faf4f7cb7deb21a7d48cda0'],
+    ['Location type', LOCATION_TYPE_PROPERTY, 'ceeb611101554764bea22818b21d3fbd'],
+    ['University', UNIVERSITY_TYPE, '0235f3d2821947a481d39ccd68e2b821'],
+    ['Institution', INSTITUTION_TYPE, '7f5433a40628498f9de6311cb14709a8'],
   ])('%s resolves to the id the graph has', (_name, actual, expected) => {
     expect(actual).toBe(expected);
   });
@@ -130,5 +142,24 @@ describe('employment type options', () => {
   it('gives every option a distinct id', () => {
     const ids = EMPLOYMENT_TYPE_OPTIONS.map(option => option.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('location type options', () => {
+  // Onsite and Hybrid and Remote are one set: same space, and descriptions that
+  // only make sense together ("Position combines remote and onsite work"). Only
+  // the first and last have ever been used, so Hybrid is the one most likely to
+  // be wrong if any of them is.
+  it.each([
+    ['Onsite', '19db5058ae4849e79fd698f46b6beae4'],
+    ['Hybrid', '18022953fd99439e8feb55e50241dac0'],
+    ['Remote', '8f5e23aa70394ea4b7946fa0a9878da7'],
+  ])('%s resolves to the id the graph has', (name, id) => {
+    expect(LOCATION_TYPE_OPTIONS.find(option => option.name === name)?.id).toBe(id);
+  });
+
+  // The graph spells it `Onsite`. Writing `On-site` would point at nothing.
+  it('spells them the way the graph does', () => {
+    expect(LOCATION_TYPE_OPTIONS.map(option => option.name)).toEqual(['Onsite', 'Hybrid', 'Remote']);
   });
 });
