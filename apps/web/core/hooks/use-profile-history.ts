@@ -243,14 +243,18 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     for (const removal of pending.removals) {
       removedRelations.push(tombstone(removal.relationId, removal.typeId, removal.entityId));
 
-      // The relation's own entity goes with it. Its type is not known per row
-      // here and the publish layer does not read one off a tombstone, so the
-      // removal's own type stands in.
-      for (const relationId of removal.subtree.relationIds) {
-        removedRelations.push(tombstone(relationId, removal.typeId, removal.entityId));
+      // The relation's own entity goes with it, minus anything living in another
+      // space — this edit reaches one space, and a delete aimed at a row that is
+      // not in it does nothing but claim otherwise.
+      const ours = (rowSpaceId: string | null) => rowSpaceId === null || rowSpaceId === spaceId;
+
+      // The type is not known per row here, and the publish layer does not read
+      // one off a tombstone, so the removal's own stands in.
+      for (const relation of removal.subtree.relations.filter(row => ours(row.spaceId))) {
+        removedRelations.push(tombstone(relation.id, removal.typeId, removal.entityId));
       }
 
-      for (const value of removal.subtree.values) {
+      for (const value of removal.subtree.values.filter(row => ours(row.spaceId))) {
         removedValues.push({
           id: value.id,
           entity: { id: removal.entityId, name: null },

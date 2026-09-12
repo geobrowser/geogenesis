@@ -24,6 +24,7 @@ import {
 /** Shapes as they come back from the graph; see `fetch-profile-history.ts`. */
 export type HistoryValueNode = {
   id?: string;
+  spaceId?: string;
   property: { id: string };
   date: string | null;
   text: string | null;
@@ -32,6 +33,7 @@ export type HistoryValueNode = {
 export type HistoryRelationNode = {
   id: string;
   entityId: string;
+  spaceId?: string;
   type: { id: string };
   toEntity: { id: string; name: string | null } | null;
   entity: { valuesList: HistoryValueNode[]; relationsList: HistoryRelationNode[] } | null;
@@ -57,20 +59,31 @@ export type NamedRef = { id: string; name: string | null };
  * leave the dates, the description and the skills behind as an entity nothing can
  * reach.
  */
+/**
+ * Everything on a relation's own entity, with the space each row lives in.
+ *
+ * The space matters because a proposal only reaches one of them: a row somebody
+ * else wrote in another space is not ours to delete, and a tombstone for it would
+ * be a delete op aimed at a space the row is not in. The SDK's own `deleteEntity`
+ * scopes the same way, for the same reason.
+ *
+ * Values carry their property as well as their row id, because deleting one
+ * publishes an `unset` keyed on the property — the id names the row without
+ * saying what to clear.
+ */
 export type Subtree = {
-  relationIds: string[];
-  /**
-   * Both halves, because deleting a value publishes an `unset` keyed on the
-   * property — the row id alone names the row but not what to clear.
-   */
-  values: { id: string; propertyId: string }[];
+  relations: { id: string; spaceId: string | null }[];
+  values: { id: string; propertyId: string; spaceId: string | null }[];
 };
 
 const readSubtree = (entity: { valuesList: HistoryValueNode[]; relationsList: HistoryRelationNode[] } | null) => ({
-  relationIds: (entity?.relationsList ?? []).map(relation => relation.id),
+  relations: (entity?.relationsList ?? []).map(relation => ({
+    id: relation.id,
+    spaceId: relation.spaceId ?? null,
+  })),
   values: (entity?.valuesList ?? [])
     .filter((value): value is HistoryValueNode & { id: string } => Boolean(value.id))
-    .map(value => ({ id: value.id, propertyId: value.property.id })),
+    .map(value => ({ id: value.id, propertyId: value.property.id, spaceId: value.spaceId ?? null })),
 });
 
 /** One Employment/Education relation and the entity it carries. */

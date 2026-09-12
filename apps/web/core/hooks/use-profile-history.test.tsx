@@ -76,6 +76,9 @@ const draft = (company: string, title: string, overrides: Partial<PositionDraft>
 
 const setup = () => renderHook(() => useProfileHistory({ entityId: ENTITY_ID, spaceId: SPACE_ID }));
 
+/** A subtree row in the space this modal publishes to, which is the common case. */
+const inSpace = (id: string) => ({ id, spaceId: SPACE_ID });
+
 const tombstones = (relations: { isDeleted?: boolean; id: string; type: { id: string } }[]) =>
   relations.filter(relation => relation.isDeleted);
 
@@ -149,11 +152,11 @@ describe('useProfileHistory', () => {
     it('takes everything on the row with the row', () => {
       const card = savedCard('Geo', ['Engineer']);
       card.entries[0].subtree = {
-        relationIds: ['rel-status', 'rel-employment-type', 'rel-skill-1', 'rel-types'],
+        relations: ['rel-status', 'rel-employment-type', 'rel-skill-1', 'rel-types'].map(inSpace),
         values: [
-          { id: 'value-start', propertyId: START_DATE_PROPERTY },
-          { id: 'value-end', propertyId: 'end-date-property' },
-          { id: 'value-description', propertyId: 'description-property' },
+          { id: 'value-start', propertyId: START_DATE_PROPERTY, spaceId: SPACE_ID },
+          { id: 'value-end', propertyId: 'end-date-property', spaceId: SPACE_ID },
+          { id: 'value-description', propertyId: 'description-property', spaceId: SPACE_ID },
         ],
       };
       mocks.employment = [card];
@@ -179,12 +182,41 @@ describe('useProfileHistory', () => {
       expect(values.find(value => value.id === 'value-start')?.property.id).toBe(START_DATE_PROPERTY);
     });
 
+    // This edit reaches one space. A row somebody else wrote against the same
+    // tenure in another space is not ours to delete, and a tombstone for it would
+    // be a delete aimed at a space the row is not in. The SDK's own deleteEntity
+    // scopes the same way.
+    it('leaves rows in another space alone', () => {
+      const card = savedCard('Geo', ['Engineer']);
+      card.entries[0].subtree = {
+        relations: [inSpace('rel-ours'), { id: 'rel-theirs', spaceId: 'some-other-space' }],
+        values: [
+          { id: 'value-ours', propertyId: START_DATE_PROPERTY, spaceId: SPACE_ID },
+          { id: 'value-theirs', propertyId: START_DATE_PROPERTY, spaceId: 'some-other-space' },
+        ],
+      };
+      mocks.employment = [card];
+
+      const { result } = setup();
+
+      act(() => {
+        const merged = result.current.employment[0];
+        result.current.removeEntry(merged, merged.entries[0], 'employment');
+      });
+
+      const { relations, values } = result.current.stagePending();
+
+      expect(relations.map(relation => relation.id)).toContain('rel-ours');
+      expect(relations.map(relation => relation.id)).not.toContain('rel-theirs');
+      expect(values.map(value => value.id)).toEqual(['value-ours']);
+    });
+
     // The stint carries its own type, and the legacy records carry dates on it.
     it('cleans the employment record too when the edge goes with the last role', () => {
       const card = savedCard('Geo', ['Engineer']);
       card.edges[0].subtree = {
-        relationIds: ['stint-types'],
-        values: [{ id: 'stint-legacy-start', propertyId: START_DATE_PROPERTY }],
+        relations: [inSpace('stint-types')],
+        values: [{ id: 'stint-legacy-start', propertyId: START_DATE_PROPERTY, spaceId: SPACE_ID }],
       };
       card.entries[0].edge = card.edges[0];
       mocks.employment = [card];
@@ -206,7 +238,7 @@ describe('useProfileHistory', () => {
     // — only the row being removed is cleaned.
     it('leaves the employment record alone while a sibling still needs it', () => {
       const card = savedCard('Geo', ['Engineer', 'Product Lead']);
-      card.edges[0].subtree = { relationIds: ['stint-types'], values: [] };
+      card.edges[0].subtree = { relations: [inSpace('stint-types')], values: [] };
       mocks.employment = [card];
 
       const { result } = setup();
@@ -335,8 +367,8 @@ describe('useProfileHistory', () => {
     it('clears what hung off a row it replaces', () => {
       const card = savedCard('Geo', ['Engineer']);
       card.entries[0].subtree = {
-        relationIds: ['rel-old-skill'],
-        values: [{ id: 'value-old-description', propertyId: 'description-property' }],
+        relations: [inSpace('rel-old-skill')],
+        values: [{ id: 'value-old-description', propertyId: 'description-property', spaceId: SPACE_ID }],
       };
       mocks.employment = [card];
 

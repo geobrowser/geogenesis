@@ -82,7 +82,7 @@ export function replacePendingAddition<TDraft extends PositionDraft | EducationD
 }
 
 /** An unsaved row has written nothing, so it has nothing hanging off it. */
-export const NOTHING_TO_CLEAN: Subtree = { relationIds: [], values: [] };
+export const NOTHING_TO_CLEAN: Subtree = { relations: [], values: [] };
 
 function entryFromDraft(
   key: string,

@@ -34,20 +34,28 @@ export interface ProfileHistory {
  * shape and the legacy one, which puts dates on the stint instead. Both levels
  * hold a handful of rows, so there is nothing to save by narrowing them.
  *
- * Row ids come back alongside the content because removing a row has to delete
- * what hangs off it, and a relation id cannot be reconstructed the way a value id
- * can.
+ * Row ids and their spaces come back alongside the content because removing a
+ * row has to delete what hangs off it: a relation id cannot be reconstructed the
+ * way a value id can, and a row in another space is not ours to delete.
  */
 const nested = `
-  valuesList { id property { id } date text decimal }
+  valuesList { id spaceId property { id } date text decimal }
   relationsList {
     id
     entityId
+    spaceId
     type { id }
     toEntity { id name }
     entity {
-      valuesList { id property { id } date text decimal }
-      relationsList { id entityId type { id } toEntity { id name } entity { valuesList { property { id } date text } } }
+      valuesList { id spaceId property { id } date text decimal }
+      relationsList {
+        id
+        entityId
+        spaceId
+        type { id }
+        toEntity { id name }
+        entity { valuesList { property { id } date text } }
+      }
     }
   }
 `;
