@@ -4420,6 +4420,59 @@ describe('the Related tab', () => {
   });
 
   /**
+   * The member-space default is spent on whatever menu it sees, and it is a default about browsing.
+   * Its gate said "not the opponent's tab", which was the same sentence as "only on Explore" while
+   * there were two tabs to choose between — and stopped being one the moment this tab landed the
+   * pair somewhere else. Spent here, it would be spent against a menu of one space, the debated
+   * claim's, which Explore would then inherit as a deliberate-looking choice nobody made.
+   */
+  it('does not spend the member-space default on the Related tab', async () => {
+    debateWithRelated();
+    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByRole('button', { name: 'Related' });
+    await settleTabSwap();
+
+    // Unspent: the trigger still offers every space rather than naming one.
+    expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
+
+    // And spent as soon as the tab it is about is open.
+    await showAllClaims();
+    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+  });
+
+  /**
+   * The space filter is a selection made against whatever spelling the menu offered, and a row
+   * carries whatever spelling its source used. Compared raw, switching to Related hid a row under a
+   * filter naming that very space — the filter and the row agreeing about the space and disagreeing
+   * about how to write it.
+   */
+  it('keeps a Related row under a filter naming its space in the other spelling', async () => {
+    const hexSpace = SPACE_1.replace(/-/g, '');
+    const hexSpaced = {
+      ...relatedEntity(),
+      spaces: [hexSpace],
+      values: [{ property: { id: NAME_PROPERTY }, spaceId: hexSpace, value: 'A claim on the same topic' }],
+    };
+    mocks.entities = [sharedEntity(), sourceClaimEntity(), hexSpaced];
+    mocks.relatedEntities = [sourceClaimEntity(), hexSpaced];
+
+    // The selection is made over on Explore, against a menu built from rows geo-chat named with
+    // hyphens, and it outlives the tab (GEO-2850) — which is how the two spellings meet.
+    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByRole('button', { name: 'Related' });
+    await showAllClaims();
+    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Related' }));
+
+    expect(await screen.findByText('A claim on the same topic')).toBeInTheDocument();
+  });
+
+  /**
    * A space reached through two sources is still one space. Rows carry whichever spelling their
    * source used — a Related row built from the graph carries bare hex, geo-chat's rows for the
    * opponent's claims carry the same space with hyphens — so a raw set counted it twice and opened

@@ -65,10 +65,14 @@ export function claimTopicsById(
  * scoping for that claim.
  */
 function preferKnownSpaces(topics: SpacedTopic[]): SpacedTopic[] {
-  const known = topics.some(topic => topic.spaceId !== null);
+  // Per topic, not per claim. Asked of the whole claim, one space-aware relation discarded every
+  // unknown-space relation beside it — so a claim whose AI topic came back with a space and whose
+  // Health topic did not lost Health entirely, which is not a narrowing, it is a deletion. The rule
+  // is only ever about two copies of the *same* topic.
+  const known = new Set(topics.filter(topic => topic.spaceId !== null).map(topic => normId(topic.id)));
   const byIdentity = new Map<string, SpacedTopic>();
   for (const topic of topics) {
-    if (known && topic.spaceId === null) continue;
+    if (topic.spaceId === null && known.has(normId(topic.id))) continue;
     byIdentity.set(`${normId(topic.id)}:${topic.spaceId === null ? '' : normId(topic.spaceId)}`, topic);
   }
   return [...byIdentity.values()];
@@ -226,7 +230,13 @@ export function orderFacetOptions<T extends { id: string; count: number }>(optio
  * picked in is at least the viewer's own.
  */
 export function toggleId(selected: string[], id: string): string[] {
-  return selected.includes(id) ? selected.filter(entry => entry !== id) : [...selected, id];
+  // Compared canonically: a space id reaches the menu in whichever spelling its rows carried, so
+  // unticking could otherwise add a second spelling of a space that was already picked instead of
+  // removing it.
+  const key = normId(id);
+  return selected.some(entry => normId(entry) === key)
+    ? selected.filter(entry => normId(entry) !== key)
+    : [...selected, id];
 }
 
 /**
@@ -257,15 +267,28 @@ export function mergeFacetCounts(
   return [...merged.values()];
 }
 
-/** Counts how many of `values` fall into each bucket, as facet options. */
+/**
+ * Counts how many of `values` fall into each bucket, as facet options.
+ *
+ * Bucketed canonically while keeping the first real spelling seen, the same way the picker's
+ * gateway scopes are. These entries are built from row ids, and a row carries whichever spelling
+ * its source used — so the same space reached through a geo-chat row and a graph-built one counted
+ * as two, and the menu offered one space twice with its rows split between them.
+ */
 export function countBy(
   entries: { id: string; name: string | null }[]
 ): { id: string; name: string | null; count: number }[] {
   const counts = new Map<string, { id: string; name: string | null; count: number }>();
   for (const entry of entries) {
-    const existing = counts.get(entry.id);
-    if (existing) existing.count += 1;
-    else counts.set(entry.id, { id: entry.id, name: entry.name, count: 1 });
+    const key = normId(entry.id);
+    const existing = counts.get(key);
+    if (existing) {
+      existing.count += 1;
+      // A later entry can be the one that carries the name.
+      if (existing.name === null && entry.name !== null) existing.name = entry.name;
+    } else {
+      counts.set(key, { id: entry.id, name: entry.name, count: 1 });
+    }
   }
   return [...counts.values()];
 }
@@ -289,8 +312,11 @@ export function keepSelectedVisible<T extends { id: string; name: string | null;
   options: T[],
   selected: string[]
 ): (T | { id: string; name: string | null; count: number })[] {
-  const present = new Set(options.map(option => option.id));
-  const missing = selected.filter(id => !present.has(id)).map(id => ({ id, name: null, count: 0 }));
+  // Canonically, because an option's id comes from a row and a selection comes from whatever the
+  // menu offered when it was picked — two spellings of one space would put it back at zero *beside*
+  // its real entry, which is the duplicate this exists to prevent.
+  const present = new Set(options.map(option => normId(option.id)));
+  const missing = selected.filter(id => !present.has(normId(id))).map(id => ({ id, name: null, count: 0 }));
   return missing.length === 0 ? options : [...options, ...missing];
 }
 

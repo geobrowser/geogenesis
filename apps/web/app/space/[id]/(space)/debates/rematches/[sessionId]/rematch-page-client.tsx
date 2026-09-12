@@ -1376,7 +1376,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [isRematchable, matchesOnlyHere]
   );
   const passesSpace = React.useCallback(
-    (claim: DebateRematchClaim) => spaceIds.length === 0 || spaceIds.includes(claim.claim.space_id),
+    // Canonically, as everything that joins a row's space to another source's now is. A row carries
+    // whichever spelling its source used — a Related row built from the graph carries bare hex where
+    // the selection made on the opponent's tab carries geo-chat's — so a raw `includes` hid a row
+    // under a filter naming that very space.
+    (claim: DebateRematchClaim) =>
+      spaceIds.length === 0 || spaceIds.some(spaceId => idEquals(spaceId, claim.claim.space_id)),
     [spaceIds]
   );
   const passesTopics = React.useCallback(
@@ -1534,16 +1539,21 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // than the menu's: sign-up sends one membership proposal per picked space and they land
     // seconds apart, so the first non-empty answer is a fraction of what they chose (GEO-2834).
     //
-    // And never on the opponent's tab, which is the landing tab since GEO-2861. That list is the
-    // claims *they* hold a side on, and seeding it with the spaces the viewer belongs to would hide
-    // the opponent's positions everywhere else — the one thing the tab is for. The default is about
-    // browsing, so it waits for Explore, where the seed is spent against a menu it is about.
+    // And only on Explore. That list is the one the default is about; the opponent's positions are
+    // the claims *they* hold a side on, and seeding those with the spaces the viewer belongs to
+    // would hide the opponent's positions everywhere else — the one thing the tab is for.
+    //
+    // Written as "not browsing" rather than "not the opponent's tab", which was the same sentence
+    // while there were two tabs to choose between and stopped being one when GEO-2758 added a
+    // third: the seed is spent against whatever menu it sees, and on Related that is a menu of one
+    // space — the debated claim's — which Explore would then inherit as a deliberate-looking choice
+    // the viewer never made.
     //
     // Not gated on the *source*, though. Explore always opens on a browsing one, so the seed is
     // already spent by the time My positions can be picked, and it inherits the filter bar from
     // whatever was showing — the same as switching between All claims and Featured does.
     pending:
-      tab === 'opponent' ||
+      !browsing ||
       tabIsLoading ||
       publishabilityPending ||
       publishableSpacesLoading ||

@@ -8,6 +8,7 @@ import {
   availableTopics,
   carriesEveryTopic,
   claimTopicsById,
+  countBy,
   formatFacetCount,
   keepSelectableTopic,
   keepSelectableTopics,
@@ -147,6 +148,29 @@ describe('claimTopicsById', () => {
   });
 
   /**
+   * The preference is between two copies of the *same* topic. Asked of the whole claim, one
+   * space-aware relation discarded every unknown-space relation beside it — so a topic that only
+   * one projection knew about disappeared rather than being kept unscoped, which is a deletion
+   * dressed up as a narrowing.
+   */
+  it('keeps an unknown-space topic that no projection knew a space for', () => {
+    const map = claimTopicsById([
+      {
+        id: 'claim-1',
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, spaceId: 'space-here', toEntity: { id: 'topic-ai', name: 'AI' } },
+          // No space, and no other projection supplies one for this topic.
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-health', name: 'Health' } },
+        ],
+      },
+    ]);
+
+    expect(topicsFor(map, 'claim-1', 'space-here')).toEqual([ai, health]);
+    // And elsewhere it keeps only the one nothing was claimed about.
+    expect(topicsFor(map, 'claim-1', 'space-elsewhere')).toEqual([health]);
+  });
+
+  /**
    * Not every projection selects the relation's space — the tagged catalog does not — and an unknown
    * space cannot be compared to one. Dropping those would empty the facet for a whole source rather
    * than narrow it, which is a worse answer than a slightly wide one.
@@ -161,6 +185,26 @@ describe('claimTopicsById', () => {
     const map = claimTopicsById([entity('claim-1', [{ topicId: 'topic-unnamed' }])]);
 
     expect(topicsFor(map, 'claim-1')).toEqual([unnamed]);
+  });
+});
+
+describe('countBy', () => {
+  /**
+   * These entries are built from row ids, and a row carries whichever spelling its source used —
+   * so one space reached through a geo-chat row and a graph-built one was counted as two, and the
+   * menu offered the same space twice with its rows split between the entries.
+   */
+  it('buckets two spellings of the same id together', () => {
+    const counted = countBy([
+      { id: '019fedae-72b6-7ab2-927a-df044d57c566', name: 'Crypto' },
+      { id: '019fedae72b67ab2927adf044d57c566', name: null },
+    ]);
+
+    expect(counted).toHaveLength(1);
+    expect(counted[0]!.count).toBe(2);
+    // The first real spelling is kept, and a name arriving with the second entry is not lost.
+    expect(counted[0]!.id).toBe('019fedae-72b6-7ab2-927a-df044d57c566');
+    expect(counted[0]!.name).toBe('Crypto');
   });
 });
 
