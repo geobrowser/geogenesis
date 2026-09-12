@@ -1,6 +1,19 @@
+import * as Effect from 'effect/Effect';
 import { describe, expect, it } from 'vitest';
 
+import { AbortError } from '~/core/io/subgraph/errors';
+
 import { isSearchCancellation } from './search-cancellation';
+
+/** The rejection `Effect.runPromise` hands back, rather than a hand-made look-alike. */
+const rejectionOf = async (effect: Effect.Effect<never, unknown>): Promise<unknown> => {
+  try {
+    await Effect.runPromise(effect);
+    throw new Error('expected the effect to fail');
+  } catch (error) {
+    return error;
+  }
+};
 
 const live = () => new AbortController().signal;
 
@@ -31,12 +44,42 @@ describe('isSearchCancellation', () => {
 
   // The one that actually bit. A deduplicated inner fetch, started by a query
   // that was then cancelled, rejects into whichever query is now awaiting it —
-  // so our signal is live and the name is Effect's, not the DOM's.
-  it("recognises Effect's wrapped abort, which carries neither our signal nor the name", () => {
-    const error = new Error('signal is aborted without reason');
-    error.name = 'FiberFailure';
+  // so our signal is live and the wrapper is Effect's, not the DOM's.
+  //
+  // These three go through `Effect.runPromise` rather than asserting against a
+  // hand-built stand-in, because the wrapper is exactly what the code has to see
+  // through: its own name is "(FiberFailure) Error", it has no `cause`, and the
+  // original is reachable only through Effect's API. A stand-in that merely looks
+  // the part would pass while the real rejection did not — which is how the
+  // tagged case below went unnoticed.
+  it("sees through Effect's wrapper to the repo's tagged AbortError, as restFetch produces", async () => {
+    const rejection = await rejectionOf(Effect.fail(new AbortError()));
 
-    expect(isSearchCancellation(error, live())).toBe(true);
+    expect(isSearchCancellation(rejection, live())).toBe(true);
+  });
+
+  it("sees through Effect's wrapper to a DOM AbortError arriving as a defect", async () => {
+    const dom = new Error('signal is aborted without reason');
+    dom.name = 'AbortError';
+    const rejection = await rejectionOf(Effect.die(dom));
+
+    expect(isSearchCancellation(rejection, live())).toBe(true);
+  });
+
+  it('treats an interrupted fiber as a cancellation', async () => {
+    const rejection = await rejectionOf(Effect.interrupt as Effect.Effect<never, never>);
+
+    expect(isSearchCancellation(rejection, live())).toBe(true);
+  });
+
+  it('still lets a genuine failure through the wrapper', async () => {
+    const rejection = await rejectionOf(Effect.fail(new Error('500 Internal Server Error')));
+
+    expect(isSearchCancellation(rejection, live())).toBe(false);
+  });
+
+  it("recognises the repo's tagged AbortError thrown directly", () => {
+    expect(isSearchCancellation(new AbortError(), live())).toBe(true);
   });
 
   it('leaves a real failure alone, so it is still logged and reported', () => {
