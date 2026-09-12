@@ -123,7 +123,7 @@ export function EntityVoteButtons({
     isResponseIndexingDelayed,
     isConnected,
     personalSpaceId,
-  } = useEntityResponse({ entityId, spaceId, responseKind });
+  } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
 
   const setName = useSetAtom(nameAtom);

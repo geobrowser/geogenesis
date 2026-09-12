@@ -107,7 +107,7 @@ declare global {
 }
 
 const appName = 'genesis';
-const analyticsScriptSrc = '/geo-analytics-f30de1fcdc71.js';
+const analyticsScriptSrc = '/geo-analytics-2545e3bf8d33.js';
 const collectorUrl = 'https://c.geobrowser.io';
 
 let scriptRequested = false;

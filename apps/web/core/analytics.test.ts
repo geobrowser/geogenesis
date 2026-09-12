@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const analyticsScriptSrc = 'http://localhost:3000/geo-analytics-f30de1fcdc71.js';
+const analyticsScriptSrc = 'http://localhost:3000/geo-analytics-2545e3bf8d33.js';
 
 describe('analytics', () => {
   beforeEach(() => {
