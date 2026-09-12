@@ -93,6 +93,9 @@ type SelectEntityProps = {
    * the user guess at a search term — the skills an occupation is recorded as
    * needing, say. They are dropped as soon as there is a query, which is the
    * point at which the search itself is the better answer.
+   *
+   * Rendered without the space summary a search hit carries: a suggestion was not
+   * found in a space, it was offered by a caller that already knows it fits.
    */
   pinnedResults?: SearchResult[];
   /** Heading above the pinned rows, so they read as a suggestion not a result. */
@@ -725,7 +728,12 @@ export const SelectEntity = ({
                                     )}
                                   </button>
                                 </div>
-                                {withSelectSpace && (
+                                {/* Not on a pinned row: the space summary counts where a
+                                    search hit was found, and a suggestion was not
+                                    found anywhere — it is offered because the caller
+                                    already knows it fits. Rendering it read "0 spaces"
+                                    beside a "Select space" that had none to pick. */}
+                                {withSelectSpace && index >= pinned.length && (
                                   <div className="-mt-2 p-1">
                                     <button
                                       onClick={() => setResult(result)}
