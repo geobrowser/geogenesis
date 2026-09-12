@@ -34,7 +34,6 @@ import { Avatar } from '~/design-system/avatar';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
-import { Gem } from '~/design-system/icons/gem';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -196,9 +195,11 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
       ) : null}
       {bountiesEnabled ? (
         <Link href={NavUtils.toBounties()} prefetch className={isBounties ? navLinkActive : navLinkIdle}>
-          <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
-            <Gem color={isBounties ? 'purple' : 'grey-04'} />
-          </span>
+          <BrowseNavIconSwap
+            idleSrc={BROWSE_NAV_ICON.bounties}
+            activeSrc={BROWSE_NAV_ICON.bountiesFilled}
+            isActive={isBounties}
+          />
           <span>Bounties</span>
         </Link>
       ) : null}
