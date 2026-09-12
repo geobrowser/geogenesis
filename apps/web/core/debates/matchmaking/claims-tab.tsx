@@ -811,6 +811,7 @@ export function ClaimsTab({
           // Lobby passes its own ("Matches only"); Explore draws this one. Never on My positions,
           // which is the list it would empty — a broken tab rather than a filter — so the state
           // cannot be set from the one place it must not apply.
+          trailingInline={isLobby}
           trailing={
             isLobby ? (
               trailing
@@ -1029,6 +1030,14 @@ type SpaceTopicFiltersProps = {
    * at the edge than as a fourth pill in the run.
    */
   trailing?: React.ReactNode;
+  /**
+   * Keep {@link trailing} on the menus' own line, at the far end, however narrow the row gets.
+   *
+   * For a control short enough to fit there at any width this row is drawn at — "Matches only".
+   * The default wraps it to a full-width line of its own once the row is narrow, which is right for
+   * a long label and wasteful for a short one.
+   */
+  trailingInline?: boolean;
 };
 
 /**
@@ -1049,6 +1058,7 @@ export function SpaceTopicFilters({
   countsPending,
   leading,
   trailing,
+  trailingInline = false,
 }: SpaceTopicFiltersProps) {
   const facetSpaceIds = React.useMemo(() => facetSpaces.map(space => space.id), [facetSpaces]);
 
@@ -1122,14 +1132,19 @@ export function SpaceTopicFilters({
       {/* `ml-auto` so it sits at the end whatever is in front of it, and keeps sitting there when a
           menu drops out of the row — the topic menu is conditional.
 
-          Only where the row is wide enough to have an end worth sitting at. Narrow, the switch
-          wraps onto a line of its own and `ml-auto` then pinned it to the right margin with nothing
-          beside it, which reads as a stray control rather than as the last item of the filter row.
-          Full width and left-aligned there instead, under the menus it belongs with.
+          Only where the row is wide enough to have an end worth sitting at — and only for a control
+          long enough to need the room. Narrow, a long one wraps onto a line of its own, and
+          `ml-auto` then pinned it to the right margin with nothing beside it, which reads as a stray
+          control rather than as the last item of the filter row. Full width and left-aligned there
+          instead, under the menus it belongs with.
 
           A container query rather than a viewport one, because the two narrow cases are not both
-          small screens: the debates side panel is ~400px wide on the largest desktop there is. */}
-      {trailing ? <div className="w-full @lg:ml-auto @lg:w-auto">{trailing}</div> : null}
+          small screens: the debates side panel is ~400px wide on the largest desktop there is.
+
+          `trailingInline` opts out, for a control that fits beside the menus at any width this row
+          is drawn at — Lobby's "Matches only". Left to wrap it would take a whole line to say two
+          words, which is worse than the crowding the wrapping avoids. */}
+      {trailing ? <div className={trailingInline ? 'ml-auto' : 'w-full @lg:ml-auto @lg:w-auto'}>{trailing}</div> : null}
     </div>
   );
 }

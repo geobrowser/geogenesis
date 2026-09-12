@@ -242,6 +242,7 @@ export function MatchesList({
         />
 
         <SpaceTopicFilters
+          trailingInline
           spaceIds={spaceIds}
           onSpaceToggle={onSpaceToggle}
           onSpacesClear={onSpacesClear}

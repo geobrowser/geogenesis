@@ -2915,6 +2915,31 @@ describe('claims the viewer has already answered', () => {
       expect(await screen.findByText('One you have answered')).toBeInTheDocument();
     });
 
+    /**
+     * Where it sits, which differs from Lobby's switch on purpose.
+     *
+     * "Hide my positions" is long enough that in a ~400px panel it wraps off the menus' line, and
+     * pinned right on a line of its own it read as a stray control rather than as the end of the
+     * filter row. So it goes full width and left-aligned there. Lobby's "Matches only" is two words
+     * and fits beside the menus at any width this row is drawn at, so it keeps the far end of their
+     * line — wrapping it would spend a whole line saying two words.
+     */
+    it('wraps to its own line, left-aligned, where the row is narrow', async () => {
+      render(<ClaimsTab />);
+      await showAllClaims();
+
+      const end = screen.getByRole('switch', SWITCH).parentElement;
+      expect(end?.className).toContain('w-full');
+      expect(end?.className).toContain('@lg:ml-auto');
+    });
+
+    it('leaves Lobby’s own switch inline at the end of the menus', async () => {
+      render(<ClaimsTab variant="lobby" trailing={<button type="button">Matches only</button>} />);
+
+      const end = (await screen.findByRole('button', { name: 'Matches only' })).parentElement;
+      expect(end?.className).toBe('ml-auto');
+    });
+
     // It would empty that list rather than filter it, so the state cannot be set from the one place
     // it must not apply.
     it('is not offered on My positions', async () => {
