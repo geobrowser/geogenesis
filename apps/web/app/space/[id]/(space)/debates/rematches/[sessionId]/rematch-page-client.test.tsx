@@ -1515,8 +1515,10 @@ describe('DebateRematchPageClient', () => {
       await chooseSource('My positions');
 
       expect(await screen.findByText('Only mine')).toBeInTheDocument();
-      // A claim nobody has answered belongs to the corpus, not to this list.
-      expect(screen.queryByText('A newly published claim')).toBeNull();
+      // A claim nobody has answered belongs to the corpus, not to this list. Waited for rather than
+      // asserted outright: the previous source's cards fade out on a switch, so one can still be on
+      // screen for a couple of frames after the new list has drawn.
+      await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
     });
 
     /**

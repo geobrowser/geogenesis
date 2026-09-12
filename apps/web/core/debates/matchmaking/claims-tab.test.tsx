@@ -1575,11 +1575,15 @@ describe('All claims reads the Debate tag', () => {
         relations: [],
       },
     ];
-    // The half that has not: no row yet, so nothing knows which side the viewer is already on.
-    mocks.taggedRowsLoading = true;
-
-    render(<ClaimsTab />);
+    const view = render(<ClaimsTab />);
     await showAllClaims();
+    await screen.findByText('Tagged in one space');
+
+    // The half that has not: a later page's rows are in flight, so nothing knows which side the
+    // viewer holds on what is already drawn. Reached by a refetch rather than on load, because the
+    // tab holds its first paint until the answers land — see `answersSettled` (GEO-2863).
+    mocks.taggedRowsLoading = true;
+    view.rerender(<ClaimsTab />);
 
     const agree = await screen.findByRole('button', { name: /^Agree/ });
     expect(agree).toBeDisabled();
@@ -2576,9 +2580,14 @@ describe('ClaimsTab -- Featured', () => {
   // unselected, a side they already hold would be republished by the press meant to clear it.
   it('will not let anyone answer a featured claim before their own side has arrived', async () => {
     mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
-    mocks.taggedRowsLoading = true;
 
-    renderFeatured();
+    const view = renderFeatured();
+    await screen.findByText('Nuclear power is the cheapest clean energy');
+
+    // On a refetch rather than on load: the tab holds its first paint until the answers land, so the
+    // window where a drawn card has no side of its own is a later page's, not the first one's.
+    mocks.taggedRowsLoading = true;
+    view.rerender(<ClaimsTab />);
 
     const agree = screen.getByRole('button', { name: /^Agree/ });
     expect(agree).toBeDisabled();
@@ -2788,6 +2797,42 @@ describe('claims the viewer has already answered', () => {
    */
   it('folds nothing while that lookup is unreliable', async () => {
     mocks.taggedRowsError = true;
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByText('One you have answered')).toBeInTheDocument();
+    expect(screen.getByText('One you have not')).toBeInTheDocument();
+  });
+
+  /**
+   * Reported: the tab draws a screenful, and then a dozen claims vanish at once as the rows land.
+   *
+   * The catalog arrives a hop before the per-space rows, so every claim is drawn while its side is
+   * unknown — kept, because folding on "nobody has asked yet" is the thing the collapse must never
+   * do — and then the answers arrive and take a screenful back. Without the hold, too, and rightly:
+   * the hold is for a claim answered while the viewer was looking at it, and these were answered
+   * weeks ago. So it reads as the list throwing rows away for no reason.
+   */
+  it('draws nothing until it knows which claims to leave out', async () => {
+    mocks.taggedRowsLoading = true;
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    // Not the unanswered one either. The tab cannot tell them apart yet, and a list drawn now is a
+    // list that loses rows a moment later.
+    expect(screen.queryByText('One you have answered')).toBeNull();
+    expect(screen.queryByText('One you have not')).toBeNull();
+  });
+
+  /**
+   * And it is a wait, not a hang.
+   *
+   * With no account key there is nothing asked for and nothing to settle, so a gate on
+   * `taggedAnswersReady` would hold a skeleton for the whole visit. Nothing can be hidden in that
+   * state either — the collapse folds nothing it does not know about — so the list is already right.
+   */
+  it('draws the list rather than waiting forever when there is no account to ask about', async () => {
+    mocks.accountKey = null;
     render(<ClaimsTab />);
     await showAllClaims();
 

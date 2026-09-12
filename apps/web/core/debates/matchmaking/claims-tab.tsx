@@ -564,11 +564,10 @@ export function ClaimsTab({
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
   // they ask for a different list.
-  const claims = useStableListOrder(
-    graphSourced ? taggedEntries : serverClaims,
-    claimRowKey,
-    `${debouncedSearch}|${spaceIds.join(',')}|${topicIds.join(',')}|${filter}`
-  );
+  // What the viewer asked for, as one value. A change to any of it is a different list: a different
+  // order to hold, and a different set of answers to wait for.
+  const listKey = `${debouncedSearch}|${spaceIds.join(',')}|${topicIds.join(',')}|${filter}`;
+  const claims = useStableListOrder(graphSourced ? taggedEntries : serverClaims, claimRowKey, listKey);
 
   /**
    * Explore hides the claims the viewer has already answered (GEO-2863).
@@ -588,18 +587,59 @@ export function ClaimsTab({
    * no position" and for "nobody has asked yet" alike, and folding on the second takes a row away
    * from under someone before anyone knew whether they had answered it.
    */
+  // Lobby is a different question: "what can I debate right now" is not a browse list, and the
+  // claims you have answered are exactly the ones a match can be waiting on. And "My positions" is
+  // by definition all answered, so collapsing it leaves an empty tab rather than a filtered one.
+  const collapsesAnswered = !isLobby && filter !== 'mine';
   const answeredStateOf = React.useCallback(
     (entry: MatchmakingClaim): AnsweredState =>
       !taggedAnswersReady ? 'unknown' : entry.viewer_response !== null ? 'answered' : 'unanswered',
     [taggedAnswersReady]
   );
+  /**
+   * Whether the answers behind *this* list have landed once, which is what the tab waits for before
+   * drawing anything at all.
+   *
+   * Without it the first paint is wrong and then corrects itself in the worst possible way. The
+   * catalog lands a hop before the per-space rows, so every claim renders while its side is still
+   * unknown — kept, because folding on "nobody has asked yet" is the thing the collapse must never
+   * do — and then the rows arrive and a dozen of them vanish at once. They vanish without the hold,
+   * too, and rightly: the hold is for a claim the viewer answered while looking at it, and these
+   * were answered weeks ago. So it reads as the list throwing away a screenful for no reason.
+   *
+   * Latched per list rather than read live, because `taggedRows.isLoading` goes true again on every
+   * page: re-gating on it would send the whole tab back to a skeleton each time the viewer reached
+   * the bottom. A new list — a different source, space, topic or search — is a new wait.
+   *
+   * The wait is on the lookup being *in flight*, not on `taggedAnswersReady`. That flag is also
+   * false for a viewer whose account key has not arrived — and in that state nothing is asked for,
+   * so nothing would ever settle and the tab would hold a skeleton for the whole visit. It is false
+   * on a failed lookup too, for the same reason. Neither can hide a claim, because the collapse
+   * folds nothing it does not know about, so the honest thing in both is to draw the list.
+   *
+   * `taggedLoading` has to be in it as well, or the latch closes before it has anything to wait for:
+   * until the catalog lands there are no ids to look up, so the rows query is idle rather than
+   * pending, and a latch reading only the rows would settle on the empty list and then let the real
+   * one through unfiltered.
+   *
+   * Latched during render rather than in an effect, and that is not a shortcut. An effect settles a
+   * commit later, so there would be one render where the answers are in and the tab is still drawing
+   * a skeleton — and on the render after it, the whole list appearing at once. Written here it flips
+   * on the same render the answers arrive, so the first list the viewer sees is the right one. The
+   * write is a monotonic latch over values already in hand, so a repeated render reaches the same
+   * answer.
+   */
+  const answersInFlight = graphSourced && authenticated && Boolean(accountKey) && taggedRows.isLoading;
+  const answersSettledForRef = React.useRef<string | null>(null);
+  if (answersSettledForRef.current !== listKey && !taggedLoading && !answersInFlight) {
+    answersSettledForRef.current = listKey;
+  }
+  const answersSettled = answersSettledForRef.current === listKey;
+
   const visibleClaims = useCollapseAnswered(claims, {
     keyOf: claimRowKey,
     answeredStateOf,
-    // Lobby is a different question: "what can I debate right now" is not a browse list, and the
-    // claims you have answered are exactly the ones a match can be waiting on. And "My positions" is
-    // by definition all answered, so collapsing it leaves an empty tab rather than a filtered one.
-    enabled: !isLobby && filter !== 'mine',
+    enabled: collapsesAnswered,
   });
 
   // The topic menu, from the server's count over the tag. It describes every claim the current
@@ -734,7 +774,13 @@ export function ClaimsTab({
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
-          isLoading={spacesPending || (graphSourced ? taggedLoading : claimsQuery.isLoading)}
+          // Plus the answers, where the list hides some of them. Drawing before they land shows a
+          // screenful the tab is about to take back — see `answersSettled`.
+          isLoading={
+            spacesPending ||
+            (graphSourced ? taggedLoading : claimsQuery.isLoading) ||
+            (collapsesAnswered && !answersSettled)
+          }
           // The catalog only. It is the list — without it there is nothing to show, and an error is
           // the honest answer.
           //
