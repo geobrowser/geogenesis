@@ -8,6 +8,7 @@ import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from '~/core/debates/api';
 import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
@@ -40,6 +41,18 @@ const {
 }));
 
 const mocks = vi.hoisted(() => ({
+  sourceDebate: { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } } as unknown,
+  sourceDebateLoading: false,
+  /** GEO-2758. The Related tab's discovery: the topic query and the source claim's hydration. */
+  relatedEntities: [] as any[],
+  relatedEntitiesLoading: false,
+  relatedEntitiesError: null as Error | null,
+  relatedWheres: [] as unknown[],
+  relatedFirsts: [] as Array<number | undefined>,
+  relatedDefers: [] as Array<boolean | undefined>,
+  relatedPrefetches: [] as Array<boolean | undefined>,
+  entityHydrations: [] as Array<{ id: string; spaceId?: string }>,
+  singleHydrationErrorFor: null as string | null,
   session: null as DebateRematchSession | null,
   /** The session lookup itself is in flight — everything below it is keyed on what it returns. */
   sessionLoading: false,
@@ -240,7 +253,10 @@ vi.mock('~/core/debates/hooks', () => ({
   // Two lookups run: one for the curated ids, one for the browsed ones. `curatedIds` lets a test
   // stall the browsed lookup on its own, which is the whole point of their being separate.
   useDebateRematchClaimsForIds: (_sessionId: string, claimIds: string[]) => rematchClaimsLookup(claimIds),
-  useDebate: () => ({ data: { claim: { claim_entity_id: CLAIM_SOURCE } } }),
+  // The source debate, and the head of the Related tab's discovery chain. Carries the claim's space
+  // as the real payload does: topics are assigned per space, so the space is what the claim is
+  // hydrated with.
+  useDebate: () => ({ data: mocks.sourceDebate, isLoading: mocks.sourceDebateLoading, error: null }),
   useDebateClaimsBySpaces: (groups: Array<{ spaceId: string; claimIds: string[] }>) => {
     mocks.perSpaceReadinessGroups.push(groups);
     return {
@@ -437,6 +453,66 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
 const HYDRATION_ERROR = new Error('hydration exploded');
 
 // The opponent's claims are hydrated from the graph by id, through the picker's narrow projection.
+vi.mock('~/core/sync/use-store', () => ({
+  // Topics are assigned per space, so the source claim is hydrated with the debate's space. This
+  // records what it was asked for; the scoping itself happens in `store.getEntity`, outside the
+  // component.
+  useQueryEntity: ({ id, spaceId, enabled }: { id: string; spaceId?: string; enabled?: boolean }) => {
+    if (enabled !== false && id) mocks.entityHydrations.push({ id, spaceId });
+    // Matched canonically, as the store is: a strict compare here would be stricter than the thing
+    // this stands in for and would fail a caller that correctly normalized before asking.
+    const wanted = id.replace(/-/g, '').toLowerCase();
+    const entity =
+      enabled === false
+        ? null
+        : (mocks.entities.find(candidate => (candidate.id as string).replace(/-/g, '').toLowerCase() === wanted) ??
+          null);
+    // `error` as well, as the hook reports since this review: a failed hydration still answers from
+    // the store, so a caller gating on failure cannot infer one from a missing entity.
+    const singleFailed =
+      mocks.singleHydrationErrorFor !== null &&
+      mocks.singleHydrationErrorFor.replace(/-/g, '').toLowerCase() === wanted;
+    return {
+      entity,
+      isLoading: enabled !== false && Boolean(id) && mocks.entityHydrationLoading,
+      error: enabled !== false && singleFailed ? HYDRATION_ERROR : null,
+    };
+  },
+  useQueryEntities: ({
+    where,
+    first,
+    enabled,
+    deferUntilFetched,
+    prefetchNextPage,
+  }: {
+    where: unknown;
+    first?: number;
+    enabled?: boolean;
+    deferUntilFetched?: boolean;
+    prefetchNextPage?: boolean;
+  }) => {
+    mocks.relatedWheres.push(where);
+    mocks.relatedFirsts.push(first);
+    mocks.relatedDefers.push(deferUntilFetched);
+    mocks.relatedPrefetches.push(prefetchNextPage);
+    // A first load has no rows yet -- returning them *and* `isLoading` is a state react-query
+    // never produces, and a test written against it passes whatever the picker does with the flag.
+    const loading = enabled !== false && mocks.relatedEntitiesLoading;
+    // `first` is a real cap, as it is on the query this stands in for. Ignoring it let a fixture
+    // hand back more rows than were asked for, which is how a caller that asks for too few still
+    // looks like it returned enough.
+    const page = first === undefined ? mocks.relatedEntities : mocks.relatedEntities.slice(0, first);
+    return {
+      entities: enabled === false || loading ? [] : page,
+      isLoading: loading,
+      isPlaceholderData: false,
+      endCursor: null,
+      hasNextPage: false,
+      error: enabled === false ? null : mocks.relatedEntitiesError,
+    };
+  },
+}));
+
 vi.mock('~/core/debates/claim-picker-page', () => ({
   useClaimEntitiesByIds: (ids: string[]) => {
     mocks.entityIdLookups.push(ids);
@@ -692,6 +768,17 @@ function mutation(mutate = mocks.mutate) {
 }
 
 beforeEach(() => {
+  mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
+  mocks.sourceDebateLoading = false;
+  mocks.relatedEntities = [];
+  mocks.relatedEntitiesLoading = false;
+  mocks.relatedEntitiesError = null;
+  mocks.relatedWheres.length = 0;
+  mocks.relatedFirsts.length = 0;
+  mocks.relatedDefers.length = 0;
+  mocks.relatedPrefetches.length = 0;
+  mocks.entityHydrations.length = 0;
+  mocks.singleHydrationErrorFor = null;
   localStorage.clear();
 
   clearDebateReturnDestination();
@@ -3956,3 +4043,132 @@ function publishedEntity(id = CLAIM_MORE, name = 'A newly published claim') {
 function claimSummary(id: string, claim: string) {
   return { id, space_id: SPACE_1, claim_entity_id: id, claim, description: null };
 }
+
+/**
+ * GEO-2758. The Related tab: claims sharing a topic with the one this pair just argued, and where
+ * they land when there is one.
+ *
+ * A tab rather than an Explore source (GEO-2861 review): Explore's sources are four answers to
+ * "which claims?", and this is not a way of browsing — it is the continuation of the debate that
+ * just happened.
+ */
+describe('the Related tab', () => {
+  const RELATED = '019fedb9-7db8-7a05-9b88-9de4cf60bb75';
+  const GOV_TOPIC = { id: 'topic-gov', name: 'Governance' };
+
+  function topicEntity(id: string, name: string) {
+    return {
+      id,
+      name,
+      description: null,
+      spaces: [SPACE_1],
+      values: [{ property: { id: NAME_PROPERTY }, spaceId: SPACE_1, value: name }],
+      relations: [
+        { type: { id: TOPICS_PROPERTY_ID }, spaceId: SPACE_1.replace(/-/g, ''), toEntity: GOV_TOPIC, isDeleted: false },
+      ],
+    };
+  }
+
+  /** The claim the pair just argued, carrying the topic its neighbours are found by. */
+  const sourceClaimEntity = () => topicEntity(CLAIM_SOURCE, 'The claim just debated');
+  /** A neighbour in the same space on the same topic. */
+  const relatedEntity = (id = RELATED, name = 'A claim on the same topic') => topicEntity(id, name);
+
+  /**
+   * The graph returns the debated claim in its own related list — it holds the topics the clause
+   * matches on — so a fixture without it describes a result the query cannot produce.
+   */
+  function debateWithRelated() {
+    mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity()];
+    mocks.relatedEntities = [sourceClaimEntity(), relatedEntity()];
+  }
+
+  it('lands the pair on Related when the claim they argued has neighbours', async () => {
+    debateWithRelated();
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: 'Related' })).toBeInTheDocument();
+    expect(await screen.findByText('A claim on the same topic')).toBeInTheDocument();
+  });
+
+  // The GEO-2861 landing place, and still right when there is no debate to continue from.
+  it('lands on the opponent’s positions when there are no neighbours', async () => {
+    mocks.entities = [sharedEntity(), sourceClaimEntity()];
+    // Only the debated claim comes back, which is what "no neighbours" looks like.
+    mocks.relatedEntities = [sourceClaimEntity()];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+    expect(screen.getByRole('button', { name: /positions/ })).toBeInTheDocument();
+  });
+
+  // A tab that leads to an empty list is worse than no tab: the strip is not where someone should
+  // learn a lookup came back empty.
+  it('does not offer the tab at all without neighbours', async () => {
+    mocks.entities = [sharedEntity()];
+    mocks.relatedEntities = [];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+  });
+
+  /**
+   * Three round trips stand between arriving and knowing whether Related exists — the source debate,
+   * that claim's topics, and the topic query. Until they land, "no neighbours" and "not yet" are the
+   * same observation, so the strip must not name a landing place it will move away from.
+   */
+  it('withholds the tab while discovery is still out', async () => {
+    debateWithRelated();
+    mocks.relatedEntitiesLoading = true;
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /positions/ })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+  });
+
+  /**
+   * The clause is shared with the claim page's Related gallery so the two surfaces cannot disagree
+   * about what "related" means — and narrowed here to the Debate tag, because this tab asks what the
+   * pair should argue next rather than where else a reader can go.
+   *
+   * Both relations carry the space: topics and tags are assigned per space, and `spaces` on the
+   * entity only says the claim is *named* there.
+   */
+  it('asks the shared clause, tag-narrowed and scoped to the debated claim’s space', async () => {
+    debateWithRelated();
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByRole('button', { name: 'Related' });
+
+    const where = mocks.relatedWheres.at(-1) as {
+      spaces: Array<{ equals: string }>;
+      relations: Array<{ typeOf: { id: { equals: string } }; space?: { equals: string } }>;
+    };
+    expect(where.spaces).toEqual([{ equals: SPACE_1.replace(/-/g, '') }]);
+    expect(where.relations.map(relation => relation.typeOf.id.equals)).toEqual([TOPICS_PROPERTY_ID, TAG_PROPERTY_ID]);
+    for (const relation of where.relations) {
+      expect(relation.space).toEqual({ equals: SPACE_1.replace(/-/g, '') });
+    }
+  });
+
+  /**
+   * The debated claim is always in its own related list, and an unnamed neighbour cannot be drawn.
+   * Both are dropped before the count that decides the tab exists — counting either makes a claim
+   * with no neighbours look like a claim with one.
+   */
+  it('counts neither the debated claim nor an unnamed neighbour', async () => {
+    mocks.entities = [sharedEntity(), sourceClaimEntity()];
+    mocks.relatedEntities = [sourceClaimEntity(), { ...relatedEntity(), name: null }];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+  });
+});
