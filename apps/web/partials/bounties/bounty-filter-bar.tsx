@@ -125,7 +125,10 @@ export function BountyFilterBar({ filters, onChange, bounties, spaces, skills }:
     !isDefaultStatuses(filters.statuses);
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:gap-x-2" data-testid="bounty-filter-bar">
+    <div
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:gap-x-1.5 lg:[&_button]:px-2"
+      data-testid="bounty-filter-bar"
+    >
       {/* Search anchors the left edge, matching the board's left gutter; everything that narrows or
           reorders the board is pushed to the right by `ml-auto`. Search keeps the pill geometry of
           the controls it faces.
@@ -137,6 +140,13 @@ export function BountyFilterBar({ filters, onChange, bounties, spaces, skills }:
           groups are separate flex items, so a leftover filter could never share a row with the sort
           pills no matter how much room was going spare beside it. Flattened, they simply pack, and
           the divider disappears with the box that drew it.
+
+          Packing alone still left the last pill over: measured in Calibre on a 431px phone, the
+          second row ran to 237 of 355px and the remaining pill needed 119 — one pixel more than
+          the 118 left. So the pills also lose 2px of side padding and the row 2px of gap here,
+          which buys ~15px and settles the whole bar into two rows. The narrower padding is scoped
+          to descendants of this bar, leaving `FILTER_PILL_CLASS` alone for the surfaces that share
+          it; menu contents are portaled out, so only the triggers and Clear filters are touched.
 
           Note this file's breakpoints are max-width (styles.css): `lg` is ≤1023px. */}
       <label
