@@ -29,6 +29,7 @@ import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
+import { OnlineDot } from '~/design-system/online-dot';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
@@ -211,6 +212,7 @@ export function MatchmakingClaimCard({
           onRequireSignIn={onRequireSignIn}
           hideEndSlot={hideEndSlot}
           endSlot={endSlot}
+          hasFooter={Boolean(footer)}
         />
       ) : (
         <UnresolvableControls
@@ -513,11 +515,20 @@ function RespondableControls({
   onRequireSignIn,
   hideEndSlot,
   endSlot,
+  hasFooter,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: Debate | boolean | null;
+  /**
+   * Whether the host renders anything after these controls.
+   *
+   * Only the footer band cares: it bleeds past the card's padding to sit on the base, which is only
+   * true when nothing follows it. The rematch picker's error alert does, and would land under a
+   * band that had already claimed the bottom edge.
+   */
+  hasFooter?: boolean;
   answersReady?: boolean;
   responseBlockedReason?: string | null;
   /** False while the card is still far enough below the fold that its reads are not worth making. */
@@ -618,7 +629,8 @@ function RespondableControls({
         onOpenClaim={onOpenClaim}
         isControversial={summary.isControversial}
         endSlot={
-          endSlot ?? (hideEndSlot ? null : (
+          endSlot ??
+          (hideEndSlot ? null : (
             <ClaimEndSlot
               claimId={claim.claim_entity_id}
               spaceId={claim.space_id}
@@ -652,12 +664,23 @@ function RespondableControls({
           answered yet" — a disabled hook reports a total of zero, and that is the absence of an
           answer rather than an answer of none. */}
       {!readResponses || summary.isLoading ? null : (
+        // The card's own footer band (Figma 76081-15715): grey, full-bleed to the card's edge, with
+        // the share, the split and the faces on one line. It was a rule and two stacked rows, which
+        // read as more card rather than as the card's base — and the split bar, at full width above
+        // its own reading, was the loudest thing on a card whose subject is the claim.
         <ClaimSummary
           entityId={claim.claim_entity_id}
           spaceId={claim.space_id}
           responseKind={readiness.response_kind}
           summary={summary}
-          className="mt-3 border-t border-divider pt-3"
+          layout="inline"
+          className={cx(
+            '-mx-3 mt-3 border-t border-divider bg-grey-01 px-3 py-2',
+            // Only reaches the card's base when nothing follows it. A host that passes a footer —
+            // the rematch picker's error alert — renders after this, and a band bled past the
+            // padding would sit under it.
+            !hasFooter && '-mb-3 rounded-b-[inherit]'
+          )}
         />
       )}
     </>
@@ -829,7 +852,8 @@ function UnresolvableControls({
              hardest to reach any other way: every card there is a match by definition, and the
              footer button that used to offer it is gone. Masking an action the server would accept
              is not the safe direction to be wrong in. */
-          endSlot ?? (hideEndSlot ? null : (
+          endSlot ??
+          (hideEndSlot ? null : (
             <ClaimEndSlot
               claimId={claim.claim_entity_id}
               spaceId={claim.space_id}
@@ -964,22 +988,38 @@ function PositionButton({
 }) {
   // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
   // which sheds faces rather than letting the label truncate.
+  // Grey when held, a dashed outline when not (the Figma card). The side you picked used to be
+  // green or red, which made the pill argue the position as well as record it — and put white-ish
+  // text on two saturated fills that nothing else in the product uses this way. Which side is
+  // yours is said by the fill and the filled thumb; which side is *which* is said by the summary
+  // bar below, where the colours still mean something.
+  //
+  // `border` on both states, transparent when held, so picking a side cannot change the pill's
+  // width and shuffle the row.
+  //
+  // `divider` (#F0F0F0) and not `grey-01` (#F6F6F6): the card's footer band is the lighter of the
+  // two and these sit directly above it, so using one grey for both flattens the pill into the
+  // band. Figma names this colour "Secondary/Line dividers", which is the same name this token
+  // already has — the two systems agree, and the pill borrows it rather than inventing a shade.
   const className = cx(
-    '@container flex min-h-7 items-center justify-between gap-2 rounded-full px-3 text-button text-text',
-    selected ? (position ? 'bg-green' : 'bg-red-01') : 'bg-grey-01'
+    '@container flex min-h-7 items-center justify-center rounded-full border px-3 text-button text-text',
+    selected ? 'border-transparent bg-divider' : 'border-dashed border-grey-03 bg-white'
   );
+  // Icon, label and faces are one centred group at a single 6px gap, per the Figma card. They used
+  // to be two groups pushed to opposite ends by `justify-between`, which left the faces adrift at
+  // the far edge of a wide pill instead of reading as part of the label they belong to.
   const content = (
-    <>
-      <span className="flex min-w-0 items-center gap-1.5">
-        {/* Filled once it's the side you hold, so the pill reads as taken even in a screenshot. */}
-        <span className="shrink-0">{position ? <ThumbUp filled={selected} /> : <ThumbDown filled={selected} />}</span>
-        <span className="truncate">
-          {label}
-          {selected ? <span className="sr-only"> — your response</span> : null}
-        </span>
+    <span className="flex min-w-0 items-center gap-1.5">
+      {/* Filled once it's the side you hold, so the pill reads as taken even in a screenshot. */}
+      <span className="shrink-0">{position ? <ThumbUp filled={selected} /> : <ThumbDown filled={selected} />}</span>
+      <span className="truncate">
+        {label}
+        {selected ? <span className="sr-only"> — your response</span> : null}
       </span>
-      {summary && presentCount(summary) > 0 ? <PositionAvatars summary={summary} /> : null}
-    </>
+      {summary && presentCount(summary) > 0 ? (
+        <PositionAvatars summary={summary} ringClassName={selected ? 'border-divider' : 'border-white'} />
+      ) : null}
+    </span>
   );
 
   if (!onRespond) return <div className={className}>{content}</div>;
@@ -991,7 +1031,7 @@ function PositionButton({
       disabled={disabled}
       title={title}
       onClick={() => onRespond(position)}
-      className={cx(className, 'transition-colors disabled:opacity-60', !selected && !disabled && 'hover:bg-grey-01')}
+      className={cx(className, 'transition-colors disabled:opacity-60', !selected && !disabled && 'hover:border-text')}
     >
       {content}
     </button>
@@ -1027,19 +1067,27 @@ export function presentCount(summary: Pick<DebateClaimPositionSummary, 'present_
 /**
  * Largest remainder the badge will print.
  *
- * The badge is `min-w-5` with `px-1`, so it sits at exactly 32px until its text outgrows that
- * floor — measured, that happens between "+99" (32px) and "+100" (34.9px). The shedding rules below
- * are written against a 32px badge, so an uncapped count would widen a `shrink-0` stack and start
+ * The badge is `min-w-4` with no padding — a circle the size of a face, 16px of content in a 2px
+ * ring — and 8px type keeps "+99" (about 14px) inside that floor. The shedding rules below are
+ * written against that fixed width, so an uncapped count would widen a `shrink-0` stack and start
  * taking width back off the label, which is the whole thing they exist to prevent. Capping here
- * rather than widening the rule keeps the badge a fixed size for every claim instead of sizing all
- * of them for a crowd that almost never turns up.
+ * rather than widening the rule keeps the badge one size for every claim instead of sizing all of
+ * them for a crowd that almost never turns up. `overflow-hidden` is the backstop if this cap is
+ * ever raised.
  *
  * Understating is safe: the stack is `aria-hidden`, decorative beside a count the row states
  * exactly, and a badge that reads "and at least this many more" is the convention anyway.
  */
 const MAX_OVERFLOW_SHOWN = 99;
 
-function PositionAvatars({ summary }: { summary: DebateClaimPositionSummary }) {
+function PositionAvatars({
+  summary,
+  ringClassName = 'border-white',
+}: {
+  summary: DebateClaimPositionSummary;
+  /** The pill's own background, so the dot's ring reads as a hole punched in it rather than a rim. */
+  ringClassName?: string;
+}) {
   const participants = summary.participants.slice(0, 2);
   const overflow = Math.max(0, presentCount(summary) - participants.length);
 
@@ -1053,30 +1101,77 @@ function PositionAvatars({ summary }: { summary: DebateClaimPositionSummary }) {
   // These thresholds are against the pill's *content* box, which is what a container query measures
   // — 24px of `px-3` is already excluded, so they read 24px smaller than the pill widths they
   // correspond to. Inside that box sit the label group (a 12px icon, a 6px gap and 58px of
-  // "Disagree" = 76px) and the 8px gap before the stack. A face is 24px, a second adds 16px after
-  // the 8px overlap, and the badge adds another 24px: 108px holds one face, 124px holds two, 148px
-  // holds the lot. 108px is `claim-pills-wide` seen from inside a pill, which is where that
-  // threshold came from. The badge is 24px only because `MAX_OVERFLOW_SHOWN` keeps its text inside
-  // the `min-w-5` floor — without that cap it grows and the arithmetic here stops holding.
+  // "Disagree" = 76px) and the 6px gap before the stack. A face is a 16px picture in a 2px ring
+  // outside it — 20px of box — pitched 13px apart, so the first costs 20px and each one after it
+  // 13px, the badge likewise: 102px holds one face, 115px holds two, 128px holds the lot. These are
+  // deliberately a few pixels loose rather than exact, because erring toward shedding a face early
+  // is the safe direction — the failure they exist to prevent is the label truncating to "Dis...".
+  // The badge only fits that budget because `MAX_OVERFLOW_SHOWN` keeps its text inside the
+  // `min-w-4` floor; without that cap it grows and this stops holding.
+  //
+  // These were 108/124/148 against 24px faces and an 8px gap. Both changed together: the faces
+  // shrank to match the explore card's, and merging the pill's two groups into one centred run
+  // took the gap to 6px. Anything that moves a face size, a ring, an overlap or that gap moves
+  // these three numbers with it.
   //
   // The badge goes first and a face last, because the faces stay truthful as they are dropped: the
   // count is computed against the participants rendered, so hiding a face would leave a "+N" that
   // no longer adds up, while hiding the badge only stops advertising a remainder.
   return (
-    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-2">
+    // `-7px`, not Figma's `-3px`. Figma's stroke is drawn outside the node and does not lay out, so
+    // its faces are 16px apart less 3px = a 13px pitch. A CSS border *does* lay out, so a face here
+    // is 20px wide and needs -7px to land that same 13px pitch. Copying the -3px across was the bug:
+    // same number, box 4px wider, four pixels of overlap lost per face.
+    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-[7px]">
       {participants.map((participant, index) => (
         <span
           key={participant.user_id}
           className={cx(
-            'relative box-content block size-5 overflow-hidden rounded-full border-2 border-white',
-            index === 0 ? '@max-[108px]:hidden' : '@max-[124px]:hidden'
+            // The picture stays 16px and the ring sits outside it, which is what Figma draws: the
+            // ring's job is to cut the face behind, so it has to be *over* that face rather than
+            // inside its own. 11px of a 16px face shows before the next one's ring bites into it.
+            'relative box-content block size-4 rounded-full border-2',
+            // Figma leaves the ring off the leading face, which overlaps nothing. Transparent
+            // rather than absent, so every face keeps identical geometry: a ring that is not drawn
+            // must not also change the size of the thing it is not drawn on.
+            index === 0 ? 'border-transparent' : ringClassName,
+            index === 0 ? '@max-[102px]:hidden' : '@max-[115px]:hidden'
           )}
         >
-          <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
+          {/* Matches the picture, which `box-content` keeps at a full 16px whether or not the face
+              carries a ring — so every face is the same size and sits on one baseline. The clip is
+              here rather than on the wrapper so the dot can hang over the rim without being cut. */}
+          <span className="block size-4 overflow-hidden rounded-full">
+            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={16} />
+          </span>
+          {/* Everyone in this stack is present by construction — the sides are built from
+              `online_choices` — so the dot needs no condition. It rings in the pill's own colour
+              rather than white, which is the surface actually behind it here. */}
+          {/* Top-left, per the Figma card: the dot's 4px body sits on the face's own top-left
+              corner and its 2px ring bleeds outside, so the avatar reads as notched rather than
+              badged. `-translate-*-0.5` is that 2px, which is what puts the *green* on the corner
+              instead of the ring. */}
+          {/* Figma's ellipse is `r=3` under an opaque `stroke-width=2`, so the green reads 4px
+              across inside a 2px ring — 8px overall, which is `OnlineDot`'s default. Its 4px box
+              sits on the picture's top-left corner and the svg overhangs it by half, so the element
+              starts 2px up and left of that corner. */}
+          <OnlineDot
+            ringClassName={ringClassName}
+            className="absolute top-0 left-0 -translate-x-0.5 -translate-y-0.5"
+          />
         </span>
       ))}
       {overflow > 0 && (
-        <span className="relative box-content flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[11px] leading-5 text-grey-04 tabular-nums @max-[148px]:hidden">
+        <span
+          className={cx(
+            // A circle the size of a face, which is what Figma draws and what the stack read as
+            // before: `px-1` made it a wide pill sitting beside two small circles. `min-w-4` with
+            // no padding keeps it round — "+99", the most `MAX_OVERFLOW_SHOWN` allows, is about
+            // 14px of 8px type and still fits inside the 16px floor.
+            'relative box-content flex h-4 min-w-4 items-center justify-center overflow-hidden rounded-full border-2 bg-grey-02 text-[8px] leading-4 text-grey-04 tabular-nums @max-[128px]:hidden',
+            ringClassName
+          )}
+        >
           +{Math.min(overflow, MAX_OVERFLOW_SHOWN)}
         </span>
       )}

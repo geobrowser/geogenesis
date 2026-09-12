@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
-import { ClaimSides, ClaimSplitBar, ControversialTag } from '~/core/claims/browse/claim-summary';
+import { ClaimSides, ClaimSplitBar, ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
@@ -140,7 +140,20 @@ export function ClaimExploreFeedCard({
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
 
   return (
-    <article ref={setContainer} className="@container flex flex-col gap-4 border-b border-divider py-4 last:border-b-0">
+    // The `<article>` is the root and stays the root. Two things depend on that and neither is
+    // visible from here: `table-block-explore-items-dnd` sizes these through `[&>article]`, a
+    // direct-child rule that a wrapper silently breaks, and `last:` is only meaningful on an
+    // element that is actually a sibling of the other cards — inside a wrapper every card is an
+    // only child, so `:last-child` matches all of them.
+    //
+    // That rules out giving the phone a boxed card here: box, spacing and border are all rules that
+    // would have to sit on this element, and a container query never matches the element declaring
+    // the container. The phone still gets the panel's *contents* — pills above, the grey summary
+    // band below — through descendants, which is where the width question can actually be asked.
+    <article
+      ref={setContainer}
+      className={cx('@container flex flex-col gap-4', 'border-b border-divider py-4 last:border-b-0')}
+    >
       {/*
         Two zones, divided by a rule that runs the whole height: everything you can *do* to the claim
         on the left, everything describing its *state* on the right, with the meta row inside the
@@ -214,11 +227,11 @@ export function ClaimExploreFeedCard({
 
         <div
           className={cx(
-            'col-start-1 row-start-3 mt-4 max-w-[360px] claim-card-narrow:mt-0',
-            // Row 4 only when the verdict is in row 3. Without it the pills would sit a row below an
-            // empty one, and an implicit row of zero height still costs the `gap-y-4` on either side
-            // of it — so the space between the claim and the pills would silently double.
-            hasVerdict && 'claim-card-narrow:row-start-4'
+            'col-start-1 row-start-3 mt-4 max-w-[360px] claim-card-narrow:mt-0'
+            // Nothing to add on a phone: the pills hold row 3 either way, and the verdict below
+            // them takes row 4. That is the debates panel's order — what you can *do* to the claim
+            // before what everyone else did with it — and on a wide card the verdict is a column
+            // beside this, so the question does not arise.
           )}
         >
           <PositionRow
@@ -242,7 +255,7 @@ export function ClaimExploreFeedCard({
             The narrow variant drops the rule rather than rotating it — see the note on the
             component. */}
         {hasVerdict ? (
-          <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 claim-card-narrow:col-start-1 claim-card-narrow:row-span-1 claim-card-narrow:row-start-3 claim-card-narrow:border-l-0 claim-card-narrow:pl-0">
+          <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 claim-card-narrow:col-start-1 claim-card-narrow:row-span-1 claim-card-narrow:row-start-4 claim-card-narrow:border-l-0 claim-card-narrow:pl-0">
             <ClaimVerdictColumn
               entityId={item.entityId}
               spaceId={item.spaceId}
@@ -260,9 +273,21 @@ export function ClaimExploreFeedCard({
  * The share, the split and who answered — or an invitation where nobody has.
  *
  * The tier is `claimSummaryTier`'s, so this column and the claim page cannot describe the same
- * claim differently. Drawn here rather than reusing the card's `ClaimSummary` because the feed
- * gives it a column to stand in rather than a strip: the number can be set large, which is the
- * whole reason to spend 186px on it.
+ * claim differently.
+ *
+ * Two arrangements of one set of facts, chosen by the card's own width:
+ *
+ *   * **Wide** keeps this column's own layout — drawn here rather than reusing `ClaimSummary`
+ *     because the feed gives it a column to stand in rather than a strip, so the number can be set
+ *     large, which is the whole reason to spend 186px on it.
+ *   * **Narrow** hands over to `ClaimSummary`, the module the debates panel and the claim page use.
+ *     A phone has no column to spend, and the expanded version there was the widest reading of the
+ *     number on the smallest surface showing it.
+ *
+ * Both are mounted and one is hidden, which costs nothing it would not otherwise: `ClaimSides` and
+ * `ClaimSummary`'s responder cluster read the *same* `entityRespondersQueryKey`, so react-query
+ * serves both from one cache entry and one request. That is worth knowing before either side is
+ * repointed at a query of its own.
  */
 function ClaimVerdictColumn({
   entityId,
@@ -285,41 +310,48 @@ function ClaimVerdictColumn({
   // read through. Stacked rather than pushed to opposite ends, which is what the page does with the
   // width to do it; at 220px they would wrap into each other.
   return (
-    <div>
-      {/* The claim page's own top row, narrowed for the rail: the share and its verb on one
-          baseline, and — where there is width for it — how many responses that share is *of*. In
-          the 220px rail the count would wrap onto a line of its own, so it stays to the phone,
-          where this module is the claim page's module at the claim page's size. */}
-      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-        <span className="flex items-baseline gap-1.5">
-          <span className="text-[2rem] leading-none font-semibold tracking-[-0.8px] text-text tabular-nums claim-card-narrow:text-[2.5rem] claim-card-narrow:tracking-[-1px]">
+    <>
+      {/* Wide: this column's own arrangement. The narrow-width rules that used to enlarge it here
+          are gone — a phone gets `ClaimSummary` below instead of a bigger version of this. */}
+      <div className="claim-card-narrow:hidden">
+        {/* The claim page's own top row, narrowed for the rail: the share and its verb on one
+          baseline. No response count — this is the 220px rail, where it wrapped onto a line of its
+          own. It used to be kept for the phone; the phone reads `ClaimSummary` now. */}
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[2rem] leading-none font-semibold tracking-[-0.8px] text-text tabular-nums">
             {percent}%
           </span>
           <Text as="span" variant="metadata" color="grey-04">
             {copy.positiveAction.toLowerCase()}
           </Text>
-        </span>
-        <Text as="span" variant="metadata" color="grey-04" className="hidden tabular-nums claim-card-narrow:block">
-          {summary.total} {summary.total === 1 ? 'response' : 'responses'}
-        </Text>
-      </div>
-      <ClaimSplitBar
-        percent={percent}
-        responseKind={responseKind}
-        className="mt-3 h-1.5 claim-card-narrow:mt-4 claim-card-narrow:h-2"
-      />
-      {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
+        </div>
+        <ClaimSplitBar percent={percent} responseKind={responseKind} className="mt-3 h-1.5" />
+        {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
           what kind of claim this is rather than adding a second voice to the split. */}
-      {/* Stacked in the desktop rail, which is 220px and cannot hold both. Side by side on a phone,
-          where the column is the full width of the card — agree left, disagree pushed right, the
-          same arrangement the claim page uses when it has the room. */}
-      <ClaimSides
-        entityId={entityId}
-        spaceId={spaceId}
-        responseKind={responseKind}
-        summary={summary}
-        className="mt-3 flex flex-col gap-1.5 claim-card-narrow:flex-row claim-card-narrow:items-center claim-card-narrow:justify-between claim-card-narrow:gap-4"
-      />
-    </div>
+        {/* Stacked, because this is the 220px rail and it cannot hold both across. The phone's
+          side-by-side arrangement went with the phone, which no longer draws this block. */}
+        <ClaimSides
+          entityId={entityId}
+          spaceId={spaceId}
+          responseKind={responseKind}
+          summary={summary}
+          className="mt-3 flex flex-col gap-1.5"
+        />
+      </div>
+
+      {/* Narrow: the debates panel's footer band — share, split and faces on one line, on grey.
+          Full width of the row rather than bled past it: the feed row carries no horizontal
+          padding, so a negative margin here would hang 16px outside the card. */}
+      <div className="hidden claim-card-narrow:block">
+        <ClaimSummary
+          entityId={entityId}
+          spaceId={spaceId}
+          responseKind={responseKind}
+          summary={summary}
+          layout="inline"
+          className="border-t border-divider bg-grey-01 px-3 py-2"
+        />
+      </div>
+    </>
   );
 }

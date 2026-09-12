@@ -80,6 +80,16 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
 
 // The pills publish through the entity-response stack; this suite is about the card around them.
 // `disabled` is surfaced because the card is what decides it.
+vi.mock('~/core/claims/browse/claim-summary', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/claims/browse/claim-summary')>()),
+  // Only `ClaimSummary` is stubbed — `ClaimSides`, `ClaimSplitBar` and `ControversialTag` are the
+  // wide card's own and are asserted on below. The narrow card hands the phone this shared module,
+  // whose own suite covers what it draws; stubbing it here keeps this file about *layout* rather
+  // than dragging in a query client, and stops the share matching twice while both arrangements
+  // are mounted.
+  ClaimSummary: () => <div data-testid="inline-summary" />,
+}));
+
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   PositionRow: ({
     disabled,
@@ -302,19 +312,42 @@ describe('ClaimExploreFeedCard', () => {
     expect(document.querySelector('.border-l')).toBeNull();
   });
 
-  it('places the pills a row up when there is no verdict above them', () => {
-    // An implicit row of zero height still costs the `gap-y-4` either side of it, so leaving the
-    // pills in row 4 would silently double the space under the claim.
-    render(<ClaimExploreFeedCard item={item} />);
+  it('keeps the card as the root element, so its host and its siblings can reach it', () => {
+    // Two things depend on the root being an `<article>` that is a real sibling of the other cards,
+    // and a wrapper quietly broke both: `table-block-explore-items-dnd` sizes these through
+    // `[&>article]`, a direct-child rule; and `last:border-b-0` divides the feed, which needs
+    // `:last-child` to mean "last card" rather than "only child of my own wrapper".
+    const { container } = render(
+      <>
+        <ClaimExploreFeedCard item={item} />
+        <ClaimExploreFeedCard item={{ ...item, entityId: 'claim-2' }} />
+      </>
+    );
     scrollIntoRange();
-    expect(screen.getByTestId('pills').parentElement).not.toHaveClass('claim-card-narrow:row-start-4');
 
-    cleanup();
+    const cards = container.querySelectorAll(':scope > article');
+    expect(cards).toHaveLength(2);
+    // The first is not `:last-child`, so its divider survives; only the final card drops it.
+    expect(cards[0].matches(':last-child')).toBe(false);
+    expect(cards[1].matches(':last-child')).toBe(true);
+  });
+
+  it('puts the pills above the verdict on a phone, as the debates panel does', () => {
+    // What you can *do* to the claim comes before what everyone else did with it. The pills hold
+    // row 3 whether or not a verdict follows, so an unanswered claim gains no empty row — an
+    // implicit row of zero height still costs the `gap-y-4` either side of it.
     mocks.positive = 9;
     mocks.negative = 3;
     render(<ClaimExploreFeedCard item={item} />);
     scrollIntoRange();
-    expect(screen.getByTestId('pills').parentElement).toHaveClass('claim-card-narrow:row-start-4');
+
+    expect(screen.getByTestId('pills').parentElement).toHaveClass('row-start-3');
+    expect(screen.getByTestId('pills').parentElement).not.toHaveClass('claim-card-narrow:row-start-4');
+    // Grandparent, not parent: the summary sits inside the narrow-only wrapper, which sits inside
+    // the verdict column that carries the row.
+    expect(screen.getByTestId('inline-summary').parentElement?.parentElement).toHaveClass(
+      'claim-card-narrow:row-start-4'
+    );
   });
 
   it('separates the two zones with a rule at card width and with the stack in a narrow card', () => {

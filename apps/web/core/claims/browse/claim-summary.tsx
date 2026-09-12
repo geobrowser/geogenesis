@@ -46,12 +46,22 @@ export function ClaimSummary({
   responseKind,
   summary,
   className,
+  layout = 'stacked',
 }: {
   entityId: string;
   spaceId: string;
   responseKind: ResponseKind;
   summary: ClaimResponseSummary;
   className?: string;
+  /**
+   * `'stacked'` puts the bar above its reading, which is what the five surfaces with width do.
+   *
+   * `'inline'` is the compact card's (Figma 76081-15715): share, bar and faces on one line, on the
+   * card's own grey footer. A variant rather than a second component because everything above the
+   * markup — the tier gate, the `hasCounts` guard, the vocabulary — is the part worth having once,
+   * and it is the part that would quietly diverge if this were copied.
+   */
+  layout?: 'stacked' | 'inline';
 }) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const tier = claimSummaryTier(summary.total);
@@ -85,18 +95,41 @@ export function ClaimSummary({
 
   const percent = summary.percent ?? 0;
 
+  const share = (
+    <span className="flex shrink-0 items-center gap-1.5">
+      <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
+        {percent}%
+      </Text>
+      <Text as="span" variant="metadata" color="grey-04">
+        {copy.positiveAction.toLowerCase()}
+      </Text>
+    </span>
+  );
+
+  if (layout === 'inline') {
+    return (
+      // The responder faces sit on this band, not on white, so the rings they draw have to be the
+      // band's colour. Set here rather than passed down: the stack is five components away, through
+      // ranking code that has no opinion about what it is standing on.
+      <div
+        className={cx('flex items-center gap-3', className)}
+        style={{ '--avatar-group-ring': 'var(--color-grey-01)' } as React.CSSProperties}
+      >
+        {share}
+        {/* The bar takes the middle and gives way first: `min-w-0` so a narrow card shortens the
+            rail rather than wrapping the reading off the end of it. Thinner than the stacked one —
+            at full width it is a chart, inline it is a rule between two readings. */}
+        <ClaimSplitBar percent={percent} responseKind={responseKind} className="h-0.5 min-w-0 flex-1" />
+        {responders}
+      </div>
+    );
+  }
+
   return (
     <div className={className}>
       <ClaimSplitBar percent={percent} responseKind={responseKind} className="h-1.5" />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <span className="flex items-center gap-1.5">
-          <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
-            {percent}%
-          </Text>
-          <Text as="span" variant="metadata" color="grey-04">
-            {copy.positiveAction.toLowerCase()}
-          </Text>
-        </span>
+        {share}
         {responders}
       </div>
     </div>
