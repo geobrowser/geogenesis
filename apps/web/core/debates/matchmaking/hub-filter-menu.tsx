@@ -33,6 +33,12 @@ type Props<T extends string> = {
   showImages?: boolean;
   /** As {@link HubFilterOption.pending}, for the name in the trigger pill. */
   labelPending?: boolean;
+  /**
+   * What the skeleton in the trigger announces while `labelPending` holds. Defaults to the space
+   * menu's wording, which is what this component was built for; the Claims source menu waits on
+   * something else entirely and would otherwise tell a screen reader it was loading a space name.
+   */
+  labelPendingAnnouncement?: string;
 };
 
 /**
@@ -50,6 +56,7 @@ export function HubFilterMenu<T extends string>({
   onChange,
   showImages,
   labelPending,
+  labelPendingAnnouncement = 'Loading space name',
 }: Props<T>) {
   const [open, setOpen] = React.useState(false);
 
@@ -64,7 +71,7 @@ export function HubFilterMenu<T extends string>({
         <SmallButton icon={<ChevronDownSmall />} className="max-w-[160px]">
           {labelPending ? (
             // Sized to the pill's line box so the trigger doesn't resize when the name lands.
-            <Skeleton className="h-[1em] w-16" aria-label="Loading space name" />
+            <Skeleton className="h-[1em] w-16" aria-label={labelPendingAnnouncement} />
           ) : (
             <span className="truncate">{label}</span>
           )}

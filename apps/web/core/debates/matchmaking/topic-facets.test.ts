@@ -2,28 +2,37 @@ import { describe, expect, it } from 'vitest';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { MatchmakingTopic } from '~/core/debates/api';
+import { normId } from '~/core/utils/norm-id';
 
 import {
   availableTopics,
   carriesEveryTopic,
   claimTopicsById,
+  countBy,
   formatFacetCount,
   keepSelectableTopic,
   keepSelectableTopics,
   keepSelectedVisible,
   orderFacetOptions,
+  topicsFor,
 } from './topic-facets';
 
 const ai: MatchmakingTopic = { id: 'topic-ai', name: 'AI' };
 const health: MatchmakingTopic = { id: 'topic-health', name: 'Health' };
 const unnamed: MatchmakingTopic = { id: 'topic-unnamed', name: null };
 
-const topicsByClaimId = new Map<string, MatchmakingTopic[]>([
-  ['claim-in-crypto', [ai]],
-  ['claim-in-health', [health]],
-  ['claim-in-both', [ai, health]],
-  ['claim-unnamed-topic', [unnamed]],
-]);
+// Keyed as `claimTopicsById` keys it, and carrying the relation's space as it does — `null` here,
+// which is "unknown" and so never narrows.
+const topicsByClaimId = new Map<string, Array<MatchmakingTopic & { spaceId: string | null }>>(
+  (
+    [
+      ['claim-in-crypto', [ai]],
+      ['claim-in-health', [health]],
+      ['claim-in-both', [ai, health]],
+      ['claim-unnamed-topic', [unnamed]],
+    ] as const
+  ).map(([claimId, topics]) => [normId(claimId), topics.map(topic => ({ ...topic, spaceId: null }))])
+);
 
 describe('claimTopicsById', () => {
   const TYPE_PROPERTY = '8f151ba4de204e3c9cb499ddf96f48f1';
@@ -42,7 +51,7 @@ describe('claimTopicsById', () => {
   it('keys each claim entity by id, carrying the topics it points at', () => {
     const map = claimTopicsById([entity('claim-1', [{ topicId: 'topic-ai', name: 'AI' }])]);
 
-    expect(map.get('claim-1')).toEqual([ai]);
+    expect(topicsFor(map, 'claim-1')).toEqual([ai]);
   });
 
   // The rule the three call sites were each spelling out: a relation of another type is not a
@@ -56,22 +65,146 @@ describe('claimTopicsById', () => {
       ]),
     ]);
 
-    expect(map.get('claim-1')).toEqual([ai]);
+    expect(topicsFor(map, 'claim-1')).toEqual([ai]);
   });
 
-  // So `get(id) ?? []` and `carriesEveryTopic(get(id), …)` read "none" the same way whether the
-  // claim was looked up and carries nothing or was never looked up at all.
+  // So `topicsFor(map, id) ?? []` and `carriesEveryTopic(topicsFor(map, id), …)` read "none" the
+  // same way whether the claim was looked up and carries nothing or was never looked up at all.
   it('leaves out a claim carrying no topics rather than mapping it to an empty list', () => {
     const map = claimTopicsById([entity('claim-1', []), entity('claim-2', [{ topicId: 'topic-ai', name: 'AI' }])]);
 
-    expect(map.has('claim-1')).toBe(false);
-    expect([...map.keys()]).toEqual(['claim-2']);
+    expect(topicsFor(map, 'claim-1')).toBeUndefined();
+    expect(topicsFor(map, 'claim-2')).toEqual([ai]);
+    expect(map.size).toBe(1);
+  });
+
+  /**
+   * The keys are graph entity ids — bare hex — and every caller looks them up by the
+   * `claim_entity_id` on a geo-chat row, which is a hyphenated UUID for the same claim. A raw `get`
+   * across that boundary answers "no topics", and nothing about that reads as a failure: the claim
+   * simply loses its labels, leaves the facet, and vanishes the moment a topic is picked.
+   */
+  it('answers for a geo-chat spelling of the same claim', () => {
+    const map = claimTopicsById([entity('a1b2c3d4e5f6478899aabbccddeeff00', [{ topicId: 'topic-ai', name: 'AI' }])]);
+
+    expect(topicsFor(map, 'a1b2c3d4-e5f6-4788-99aa-bbccddeeff00')).toEqual([ai]);
+  });
+
+  /**
+   * Topics are assigned per space and a card is always drawn under one, so a topic the claim carries
+   * in another space is not one it carries here. Shown anyway, it went into the facet beside the
+   * card and picking it filtered the card in or out on something that is not true where the debate
+   * would be published — the query side of this is what `relatedClaimsWhere` scopes.
+   */
+  it('answers only for the space the card is drawn under', () => {
+    const map = claimTopicsById([
+      {
+        id: 'claim-1',
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, spaceId: 'space-here', toEntity: { id: 'topic-ai', name: 'AI' } },
+          {
+            type: { id: TOPICS_PROPERTY_ID },
+            spaceId: 'space-elsewhere',
+            toEntity: { id: 'topic-health', name: 'Health' },
+          },
+        ],
+      },
+    ]);
+
+    expect(topicsFor(map, 'claim-1', 'space-here')).toEqual([ai]);
+    expect(topicsFor(map, 'claim-1', 'space-elsewhere')).toEqual([health]);
+    // No space asked about is no narrowing, which is what the facets do when they have none.
+    expect(topicsFor(map, 'claim-1')).toEqual([ai, health]);
+  });
+
+  /**
+   * Callers hand this several projections of the same pool and a claim can be in more than one. The
+   * rematch picker appends its tagged catalog last, and that projection does not select relation
+   * spaces — so a Debate-tagged claim also reached by id had its spaces replaced by a projection
+   * that never asked for them, and the space filter went back to keeping everything.
+   */
+  it('keeps the spaces a second projection of the same claim never asked for', () => {
+    const map = claimTopicsById([
+      // The by-id projection, which knows where each topic was assigned.
+      {
+        id: 'claim-1',
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, spaceId: 'space-here', toEntity: { id: 'topic-ai', name: 'AI' } },
+          {
+            type: { id: TOPICS_PROPERTY_ID },
+            spaceId: 'space-elsewhere',
+            toEntity: { id: 'topic-health', name: 'Health' },
+          },
+        ],
+      },
+      // The tagged catalog, carrying the same claim with no spaces at all.
+      entity('claim-1', [
+        { topicId: 'topic-ai', name: 'AI' },
+        { topicId: 'topic-health', name: 'Health' },
+      ]),
+    ]);
+
+    expect(topicsFor(map, 'claim-1', 'space-here')).toEqual([ai]);
+  });
+
+  /**
+   * The preference is between two copies of the *same* topic. Asked of the whole claim, one
+   * space-aware relation discarded every unknown-space relation beside it — so a topic that only
+   * one projection knew about disappeared rather than being kept unscoped, which is a deletion
+   * dressed up as a narrowing.
+   */
+  it('keeps an unknown-space topic that no projection knew a space for', () => {
+    const map = claimTopicsById([
+      {
+        id: 'claim-1',
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, spaceId: 'space-here', toEntity: { id: 'topic-ai', name: 'AI' } },
+          // No space, and no other projection supplies one for this topic.
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-health', name: 'Health' } },
+        ],
+      },
+    ]);
+
+    expect(topicsFor(map, 'claim-1', 'space-here')).toEqual([ai, health]);
+    // And elsewhere it keeps only the one nothing was claimed about.
+    expect(topicsFor(map, 'claim-1', 'space-elsewhere')).toEqual([health]);
+  });
+
+  /**
+   * Not every projection selects the relation's space — the tagged catalog does not — and an unknown
+   * space cannot be compared to one. Dropping those would empty the facet for a whole source rather
+   * than narrow it, which is a worse answer than a slightly wide one.
+   */
+  it('keeps a topic whose space it was never told', () => {
+    const map = claimTopicsById([entity('claim-1', [{ topicId: 'topic-ai', name: 'AI' }])]);
+
+    expect(topicsFor(map, 'claim-1', 'space-here')).toEqual([ai]);
   });
 
   it('carries an unnamed topic as null rather than dropping it', () => {
     const map = claimTopicsById([entity('claim-1', [{ topicId: 'topic-unnamed' }])]);
 
-    expect(map.get('claim-1')).toEqual([unnamed]);
+    expect(topicsFor(map, 'claim-1')).toEqual([unnamed]);
+  });
+});
+
+describe('countBy', () => {
+  /**
+   * These entries are built from row ids, and a row carries whichever spelling its source used —
+   * so one space reached through a geo-chat row and a graph-built one was counted as two, and the
+   * menu offered the same space twice with its rows split between the entries.
+   */
+  it('buckets two spellings of the same id together', () => {
+    const counted = countBy([
+      { id: '019fedae-72b6-7ab2-927a-df044d57c566', name: 'Crypto' },
+      { id: '019fedae72b67ab2927adf044d57c566', name: null },
+    ]);
+
+    expect(counted).toHaveLength(1);
+    expect(counted[0]!.count).toBe(2);
+    // The first real spelling is kept, and a name arriving with the second entry is not lost.
+    expect(counted[0]!.id).toBe('019fedae-72b6-7ab2-927a-df044d57c566');
+    expect(counted[0]!.name).toBe('Crypto');
   });
 });
 

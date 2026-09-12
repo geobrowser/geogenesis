@@ -1,6 +1,14 @@
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { MatchmakingTopic } from '~/core/debates/api';
 import type { ClaimPickerEntity } from '~/core/debates/claim-picker-page';
+import { normId } from '~/core/utils/norm-id';
+
+/**
+ * A topic and the space its relation was written in, which is how the graph records it: the same
+ * claim can carry different topics in different spaces. `null` where the projection did not select
+ * the space — unknown rather than unscoped.
+ */
+type SpacedTopic = MatchmakingTopic & { spaceId: string | null };
 
 /**
  * The topics each claim entity carries, keyed by claim id.
@@ -10,22 +18,92 @@ import type { ClaimPickerEntity } from '~/core/debates/claim-picker-page';
  * a list built from its rows resolves them from the entity or not at all — reading that empty array
  * the other way round is what emptied the list in GEO-2714.
  *
- * A claim carrying none is left out rather than mapped to an empty array, so `get(id) ?? []` and
+ * A claim carrying none is left out rather than mapped to an empty array, so {@link topicsFor} and
  * {@link carriesEveryTopic} both read "none" the same way whether the claim was looked up or not.
+ *
+ * Keyed canonically, and read back through {@link topicsFor} rather than `get`. The keys are graph
+ * entity ids — bare hex — while every caller looks these up by the `claim_entity_id` on a geo-chat
+ * row, which is a UUID and may carry hyphens. A raw `get` across that boundary silently answers
+ * "no topics", which is not an absence anyone can see: the claim just quietly loses its topic
+ * labels, drops out of the facet, and disappears from the list the moment a topic is picked.
  */
 export function claimTopicsById(
   entities: Iterable<Pick<ClaimPickerEntity, 'id' | 'relations'>>
-): Map<string, MatchmakingTopic[]> {
-  const map = new Map<string, MatchmakingTopic[]>();
+): Map<string, SpacedTopic[]> {
+  const map = new Map<string, SpacedTopic[]>();
 
   for (const entity of entities) {
     const topics = entity.relations
       .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
-      .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
-    if (topics.length > 0) map.set(entity.id, topics);
+      .map(relation => ({
+        id: relation.toEntity.id,
+        name: relation.toEntity.name ?? null,
+        spaceId: relation.spaceId ?? null,
+      }));
+    if (topics.length === 0) continue;
+
+    // Merged rather than overwritten. Callers hand this several projections of the same pool, and a
+    // claim in two of them arrived twice — where the last one won, whatever it knew. In the rematch
+    // picker the tagged catalog comes last and does not select relation spaces, so a Debate-tagged
+    // claim also reached by id lost its spaces to a projection that never asked for them, and the
+    // per-space filter below went back to keeping everything.
+    const merged = [...(map.get(normId(entity.id)) ?? []), ...topics];
+    map.set(normId(entity.id), preferKnownSpaces(merged));
   }
 
   return map;
+}
+
+/**
+ * One entry per topic-and-space, and — where any projection knew the spaces — only the ones that
+ * did.
+ *
+ * An unknown space is kept when it is all there is, because it cannot be compared to anything and
+ * dropping it would empty a source's facet. But once *some* projection has reported real spaces for
+ * a claim, an unknown-space copy of the same topic is not extra information, it is the same topic
+ * seen by a query that did not ask — and keeping it would slip past the space filter and undo the
+ * scoping for that claim.
+ */
+function preferKnownSpaces(topics: SpacedTopic[]): SpacedTopic[] {
+  // Per topic, not per claim. Asked of the whole claim, one space-aware relation discarded every
+  // unknown-space relation beside it — so a claim whose AI topic came back with a space and whose
+  // Health topic did not lost Health entirely, which is not a narrowing, it is a deletion. The rule
+  // is only ever about two copies of the *same* topic.
+  const known = new Set(topics.filter(topic => topic.spaceId !== null).map(topic => normId(topic.id)));
+  const byIdentity = new Map<string, SpacedTopic>();
+  for (const topic of topics) {
+    if (topic.spaceId === null && known.has(normId(topic.id))) continue;
+    byIdentity.set(`${normId(topic.id)}:${topic.spaceId === null ? '' : normId(topic.spaceId)}`, topic);
+  }
+  return [...byIdentity.values()];
+}
+
+/**
+ * The topics recorded for a claim, whichever spelling of its id the caller holds — and, given a
+ * space, only the ones assigned *in* it.
+ *
+ * Exists so no caller reaches into the map directly: the normalization has to happen on both sides
+ * of the lookup to be worth anything, and a `get` that skipped it would fail silently.
+ *
+ * Topics are assigned per space, and a card is always drawn under one space. Without the filter a
+ * topic assigned only somewhere else was shown on the card and put in the facet beside it, so
+ * picking it filtered the card in or out on something that is not true where the debate would be
+ * published — the same mistake `relatedClaimsWhere` exists to avoid on the query side.
+ *
+ * A topic whose space is unknown is kept rather than dropped. Not every projection selects the
+ * relation's space (the tagged catalog does not), and an unknown space cannot be compared to one —
+ * dropping it would empty the facet for a whole source rather than narrow it.
+ */
+export function topicsFor(
+  topicsByClaimId: ReadonlyMap<string, SpacedTopic[]>,
+  claimEntityId: string,
+  spaceId?: string | null
+): MatchmakingTopic[] | undefined {
+  const topics = topicsByClaimId.get(normId(claimEntityId));
+  if (!topics) return undefined;
+  return topics
+    .filter(topic => spaceId == null || topic.spaceId == null || normId(topic.spaceId) === normId(spaceId))
+    .map(topic => ({ id: topic.id, name: topic.name }));
 }
 
 /**
@@ -47,11 +125,11 @@ export function claimTopicsById(
  */
 export function availableTopics(
   claimEntityIds: Iterable<string>,
-  topicsByClaimId: ReadonlyMap<string, MatchmakingTopic[]>
+  topicsByClaimId: ReadonlyMap<string, SpacedTopic[]>
 ): MatchmakingTopic[] {
   const seen = new Map<string, MatchmakingTopic>();
   for (const claimEntityId of claimEntityIds) {
-    for (const topic of topicsByClaimId.get(claimEntityId) ?? []) {
+    for (const topic of topicsFor(topicsByClaimId, claimEntityId) ?? []) {
       if (!seen.has(topic.id)) seen.set(topic.id, topic);
     }
   }
@@ -152,7 +230,13 @@ export function orderFacetOptions<T extends { id: string; count: number }>(optio
  * picked in is at least the viewer's own.
  */
 export function toggleId(selected: string[], id: string): string[] {
-  return selected.includes(id) ? selected.filter(entry => entry !== id) : [...selected, id];
+  // Compared canonically: a space id reaches the menu in whichever spelling its rows carried, so
+  // unticking could otherwise add a second spelling of a space that was already picked instead of
+  // removing it.
+  const key = normId(id);
+  return selected.some(entry => normId(entry) === key)
+    ? selected.filter(entry => normId(entry) !== key)
+    : [...selected, id];
 }
 
 /**
@@ -183,15 +267,28 @@ export function mergeFacetCounts(
   return [...merged.values()];
 }
 
-/** Counts how many of `values` fall into each bucket, as facet options. */
+/**
+ * Counts how many of `values` fall into each bucket, as facet options.
+ *
+ * Bucketed canonically while keeping the first real spelling seen, the same way the picker's
+ * gateway scopes are. These entries are built from row ids, and a row carries whichever spelling
+ * its source used — so the same space reached through a geo-chat row and a graph-built one counted
+ * as two, and the menu offered one space twice with its rows split between them.
+ */
 export function countBy(
   entries: { id: string; name: string | null }[]
 ): { id: string; name: string | null; count: number }[] {
   const counts = new Map<string, { id: string; name: string | null; count: number }>();
   for (const entry of entries) {
-    const existing = counts.get(entry.id);
-    if (existing) existing.count += 1;
-    else counts.set(entry.id, { id: entry.id, name: entry.name, count: 1 });
+    const key = normId(entry.id);
+    const existing = counts.get(key);
+    if (existing) {
+      existing.count += 1;
+      // A later entry can be the one that carries the name.
+      if (existing.name === null && entry.name !== null) existing.name = entry.name;
+    } else {
+      counts.set(key, { id: entry.id, name: entry.name, count: 1 });
+    }
   }
   return [...counts.values()];
 }
@@ -215,8 +312,11 @@ export function keepSelectedVisible<T extends { id: string; name: string | null;
   options: T[],
   selected: string[]
 ): (T | { id: string; name: string | null; count: number })[] {
-  const present = new Set(options.map(option => option.id));
-  const missing = selected.filter(id => !present.has(id)).map(id => ({ id, name: null, count: 0 }));
+  // Canonically, because an option's id comes from a row and a selection comes from whatever the
+  // menu offered when it was picked — two spellings of one space would put it back at zero *beside*
+  // its real entry, which is the duplicate this exists to prevent.
+  const present = new Set(options.map(option => normId(option.id)));
+  const missing = selected.filter(id => !present.has(normId(id))).map(id => ({ id, name: null, count: 0 }));
   return missing.length === 0 ? options : [...options, ...missing];
 }
 

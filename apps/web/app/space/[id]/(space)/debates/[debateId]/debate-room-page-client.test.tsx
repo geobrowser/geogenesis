@@ -14,6 +14,7 @@ import { DebateRoomPageClient, isDebateInThankYouPeriod, upcomingTurnLabel } fro
 
 const mocks = vi.hoisted(() => ({
   prefetchAllowlist: vi.fn(),
+  warmRelatedClaims: vi.fn(),
   back: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
@@ -270,10 +271,21 @@ vi.mock('~/core/debates/use-prefetch-claim-space-allowlist', () => ({
   usePrefetchClaimSpaceAllowlist: (enabled: boolean) => mocks.prefetchAllowlist(enabled),
 }));
 
+// The same arrangement, for the same reason: the room warms this one too and reads nothing back, so
+// the only question here is whether it asks — with the claim being argued, and only once the debate
+// is actually under way. Its real implementation wants a sync engine this suite does not stand up.
+vi.mock('~/core/debates/use-related-debate-claims', () => ({
+  useRelatedDebateClaims: (options: unknown) => {
+    mocks.warmRelatedClaims(options);
+    return { claimIds: [], spaceId: null, enabled: false, isLoading: false, error: null };
+  },
+}));
+
 beforeEach(() => {
   mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: false };
   mocks.setPublishOptOutRequest.mockReset();
   mocks.prefetchAllowlist.mockReset();
+  mocks.warmRelatedClaims.mockReset();
   clearDebateReturnDestination();
   setHistoryLength(1);
   mocks.back.mockReset();
@@ -498,6 +510,37 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(mocks.prefetchAllowlist).toHaveBeenCalledWith(true);
+  });
+
+  // GEO-2758. The picker that opens when this debate ends offers the claims related to the one
+  // being argued, and finding them is three serial requests. Asked from here, they are answered
+  // long before anyone is waiting on them.
+  it("warms the claims related to the one being argued, once the debate is under way", () => {
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.warmRelatedClaims).toHaveBeenCalledWith(
+      expect.objectContaining({ claim: expect.objectContaining({ claim_entity_id: 'claim-entity-1' }), enabled: true })
+    );
+  });
+
+  // A preflight that times out, or a room nobody joins, is a debate that never happens — and a
+  // warm cache for one is a request spent on nothing.
+  it('does not warm them before the debate has started', () => {
+    const now = Date.parse('2026-07-02T00:00:05.000Z');
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'preflight',
+      current_turn_index: 0,
+      current_speaker_slot: null,
+      preflight_ends_at: new Date(now + 5_000).toISOString(),
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.warmRelatedClaims).toHaveBeenCalled();
+    expect(mocks.warmRelatedClaims).not.toHaveBeenCalledWith(expect.objectContaining({ enabled: true }));
   });
 
   it('returns through browser history without rendering an already-completed room', async () => {
