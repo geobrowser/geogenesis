@@ -57,6 +57,7 @@ import {
 } from '~/core/debates/matchmaking/topic-facets';
 import { useDebouncedSearch } from '~/core/debates/matchmaking/use-debounced-search';
 import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-selection';
+import { useNarrowedDefault } from '~/core/debates/matchmaking/use-narrowed-default';
 import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
@@ -1114,7 +1115,47 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // Only on the opponent's tab: Explore is the wider catalogue by definition, and a claim there
   // that neither of you has answered is the normal case rather than one to hide.
-  const matchesOnlyHere = matchesOnly && tab === 'opponent';
+  /**
+   * "Matches only" is on by default, and steps back rather than opening onto nothing.
+   *
+   * A rematch needs both of you holding opposite sides of the same claim, which a returning pair
+   * often does not have yet — so the setting most people want is also the one most likely to have
+   * nothing behind it. `useNarrowedDefault` keeps the preference and decides only whether it
+   * applies on arrival; the switch reports what actually happened, and a viewer who presses it
+   * outranks the guess.
+   *
+   * Settled and without an error, both. Mid-load every list is empty, and react-query drops
+   * `isLoading` on failure — so an outage reads from here exactly like a pair with nothing to go
+   * again on, and stepping back on it would swap away the list that carries the retry.
+   */
+  // The opponent tab's own three sources rather than `tabError`, which is declared below and is a
+  // composite over every tab's. Same set, asked here because this runs before it.
+  const opponentTabError = sessionQuery.error ?? positions.error ?? opponentEntitiesQuery.error;
+  const opponentTabSettled = tab === 'opponent' && !positions.isLoading && !opponentClaimsSettling && !opponentTabError;
+  const noRematchAtAll = opponentTabSettled && !claims.some(isRematchable);
+  const {
+    narrowed: matchesNarrowed,
+    steppedBack: steppedBackFromMatches,
+    rearm: rearmMatchesDefault,
+  } = useNarrowedDefault(matchesOnly, noRematchAtAll);
+
+  const matchesOnlyHere = matchesNarrowed && tab === 'opponent';
+
+  /**
+   * The last rung: no rematch to be had, and no positions of theirs to make one out of either.
+   *
+   * There is nothing on this tab in that state, and Explore is the half of the flow that always has
+   * something — it is the corpus rather than this pair. Only on the automatic path, because a
+   * viewer who turned the switch off themselves and found an empty tab asked a question and got an
+   * answer; moving them would be answering a different one.
+   */
+  const nothingOnTheirTab = opponentTabSettled && claims.length === 0;
+  const leftForExplore = React.useRef(false);
+  React.useEffect(() => {
+    if (!steppedBackFromMatches || !nothingOnTheirTab || leftForExplore.current) return;
+    leftForExplore.current = true;
+    setTab('explore');
+  }, [nothingOnTheirTab, setTab, steppedBackFromMatches]);
 
   /**
    * The four dimensions the client-side lists narrow by, each testable on its own.
@@ -1607,7 +1648,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               // in the way. Neither is drawn on "My positions", which is that backlog itself.
               trailing={
                 tab === 'opponent' ? (
-                  <MatchesOnlySwitch checked={matchesOnly} onChange={setMatchesOnly} />
+                  <MatchesOnlySwitch
+                    // The effective value, not the stored one — see `useNarrowedDefault`.
+                    checked={matchesNarrowed}
+                    onChange={next => {
+                      rearmMatchesDefault();
+                      setMatchesOnly(next);
+                    }}
+                  />
                 ) : source === 'mine' ? null : (
                   <FilterSwitch label="Hide my positions" checked={hideMyPositions} onChange={setHideMyPositions} />
                 )

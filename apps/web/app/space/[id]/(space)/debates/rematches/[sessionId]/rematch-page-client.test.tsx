@@ -693,6 +693,13 @@ function mutation(mutate = mocks.mutate) {
 
 beforeEach(() => {
   localStorage.clear();
+  // Both standing preferences off, so every list below is the whole of what its fixture put in it.
+  //
+  // They ship *on* (GEO-2863), and the cases that are about the defaults set them back. Every other
+  // case here is about something else — search, topics, sections, allowed spaces — and one that has
+  // to reason about which of its own rows a default removed is a case about two things.
+  localStorage.setItem('rematchMatchesOnly', 'false');
+  localStorage.setItem('rematchHideMyPositions', 'false');
 
   clearDebateReturnDestination();
   mocks.replace.mockReset();
@@ -4001,19 +4008,32 @@ describe('Hide my positions', () => {
     };
   }
 
-  it('is off until the viewer asks for it', async () => {
+  // The outer fixture turns both standing preferences off so the rest of the suite sees whole
+  // lists; these cases are the ones about the shipped default, so they put it back.
+  beforeEach(() => {
+    localStorage.setItem('rematchHideMyPositions', 'true');
+  });
+
+  it('is on by default', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('brings the answered claims back when it is turned off', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('switch', SWITCH));
+
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
   });
 
   it('drops the claims the viewer has already answered', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
-
-    fireEvent.click(screen.getByRole('switch', SWITCH));
 
     await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
     // Kept, and not by luck: geo-chat holds no row for this one, which is what a claim nobody has
@@ -4035,7 +4055,6 @@ describe('Hide my positions', () => {
     mocks.claims = [sharedClaim(), browsedClaim(null)];
     const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
-    fireEvent.click(screen.getByRole('switch', SWITCH));
     await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
 
     mocks.claims = [sharedClaim(), browsedClaim(true)];
@@ -4063,5 +4082,82 @@ describe('Hide my positions', () => {
 
     expect(screen.queryByRole('switch', SWITCH)).toBeNull();
     expect(screen.getByRole('switch', { name: 'Matches only' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * "Matches only" ships on, and steps back rather than opening onto nothing.
+ *
+ * A rematch needs both of you holding opposite sides of the same claim, which a returning pair
+ * often does not have yet — so the setting most people want is also the one most likely to have
+ * nothing behind it. The preference stands; only whether it applies on arrival is decided here.
+ */
+describe('the matches-only default', () => {
+  const OPPONENT_ONLY = '019fedb7-5b96-7e83-9f66-7bc2ad4f9953';
+  const switchNode = () => screen.getByRole('switch', { name: 'Matches only' });
+
+  beforeEach(() => {
+    localStorage.setItem('rematchMatchesOnly', 'true');
+  });
+
+  /** One position of theirs and none of the viewer's: nothing to go again on, something to show. */
+  function nothingToRematch() {
+    mocks.savedClaims = [];
+    mocks.claims = [];
+    mocks.entities = [{ ...sharedEntity(), id: OPPONENT_ONLY, name: 'A claim only Salina answered' }];
+    mocks.positions = [position('profile-remote', OPPONENT_ONLY, SPACE_1, true)];
+  }
+
+  it('opens on the matches, which is what the page is for', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+    expect(switchNode()).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('steps back to their positions when there is no rematch to be had', async () => {
+    nothingToRematch();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('A claim only Salina answered')).toBeInTheDocument();
+  });
+
+  // Or the switch describes something other than the list beneath it, and pressing it appears to do
+  // nothing — it would be setting the preference to the value it already held.
+  it('says so on the switch, and lets the viewer ask for the empty list anyway', async () => {
+    nothingToRematch();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('A claim only Salina answered');
+
+    expect(switchNode()).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(switchNode());
+
+    await waitFor(() => expect(screen.queryByText('A claim only Salina answered')).toBeNull());
+    expect(switchNode()).toHaveAttribute('aria-checked', 'true');
+  });
+
+  /**
+   * One quiet evening is not a change of mind. Writing the step back would make it one, and over
+   * enough evenings would walk every viewer off the setting they chose.
+   */
+  it('leaves the stored preference alone when it steps back', async () => {
+    nothingToRematch();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('A claim only Salina answered');
+
+    expect(localStorage.getItem('rematchMatchesOnly')).toBe('true');
+  });
+
+  // The last rung. No rematch to be had and no positions of theirs to make one out of, so there is
+  // no version of this tab with anything on it — and Explore is the corpus rather than this pair.
+  it('moves on to Explore when they have no positions either', async () => {
+    mocks.savedClaims = [];
+    mocks.claims = [];
+    mocks.entities = [];
+    mocks.positions = [];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: 'All claims' })).toBeInTheDocument();
   });
 });

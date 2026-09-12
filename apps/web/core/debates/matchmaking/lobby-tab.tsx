@@ -5,8 +5,10 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 
 import { ClaimsTab } from './claims-tab';
+import { useMatchmakingMatches } from './hooks';
 import { MatchesList } from './matches-list';
 import { MatchesOnlySwitch } from './matches-only-switch';
+import { useNarrowedDefault } from './use-narrowed-default';
 import { type DebatesHubTab, debatesHubMatchesOnlyAtom } from '~/atoms';
 
 /**
@@ -31,14 +33,49 @@ import { type DebatesHubTab, debatesHubMatchesOnlyAtom } from '~/atoms';
 export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
   const [matchesOnly, setMatchesOnly] = useAtom(debatesHubMatchesOnlyAtom);
 
-  const toggle = <MatchesOnlySwitch checked={matchesOnly} onChange={setMatchesOnly} />;
+  // Asked here rather than left to `MatchesList`, because the answer decides which of the two lists
+  // is drawn at all — and the query is the same one that component makes, so with matches to show
+  // this costs nothing beyond what the tab was already fetching.
+  const matchesQuery = useMatchmakingMatches(true);
+  // Settled, and settled *with an answer*: react-query drops `isLoading` on failure, and an outage
+  // reads from here exactly like a viewer with nobody to debate. Stepping back on that would take
+  // the matches list away over a request that could simply be retried — and `MatchesList` has the
+  // retry, where the wider list this would fall to has nothing to say about it.
+  const noMatchesAtAll =
+    !matchesQuery.isLoading && !matchesQuery.error && (matchesQuery.data?.matches.length ?? 0) === 0;
+
+  const { narrowed, steppedBack, rearm } = useNarrowedDefault(matchesOnly, noMatchesAtAll);
+
+  const toggle = (
+    <MatchesOnlySwitch
+      // The effective state, not the stored one. A switch reading "on" over the unfiltered list is
+      // telling the viewer something that is not true of what they are looking at, and pressing it
+      // would then appear to do nothing.
+      checked={narrowed}
+      onChange={next => {
+        rearm();
+        setMatchesOnly(next);
+      }}
+    />
+  );
 
   // Two components rather than one with a branch inside it. They query different endpoints, derive
   // their space menus differently, and describe an empty list in different words — the only thing
   // they share is the toggle and the selection it sits beside, which is exactly what is passed.
-  return matchesOnly ? (
+  return narrowed ? (
     <MatchesList onTabChange={onTabChange} trailing={toggle} />
   ) : (
-    <ClaimsTab variant="lobby" trailing={toggle} />
+    <ClaimsTab
+      variant="lobby"
+      trailing={toggle}
+      // The last rung of the same ladder. Having stepped back from matches to the wider list and
+      // found that empty too, there is nothing on this tab for the viewer to do, and Explore is the
+      // one place that always has something — it describes the corpus rather than the viewer.
+      //
+      // Only on the automatic path. A viewer who turned the switch off themselves and found an
+      // empty Lobby asked a question and got an answer; moving them off the tab would be answering
+      // a different one. `steppedBack` is exactly "nobody chose this list".
+      onSettledEmpty={steppedBack ? () => onTabChange('explore') : undefined}
+    />
   );
 }

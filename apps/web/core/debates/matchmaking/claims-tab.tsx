@@ -188,10 +188,19 @@ export function ClaimsTab({
   variant = 'explore',
   trailing,
   warm = false,
+  onSettledEmpty,
 }: {
   variant?: ClaimsTabVariant;
   /** Rendered at the end of the filter row. Lobby passes its "Matches only" switch. */
   trailing?: React.ReactNode;
+  /**
+   * Called once when this list settles with nothing in it *and nothing narrowing it* — no search,
+   * no spaces, no topics. The corpus is empty for this viewer, not their filters.
+   *
+   * For the caller that wants to send them somewhere with something in it; see Lobby. Deliberately
+   * not fired for a filtered empty list, which is a question the viewer asked and got an answer to.
+   */
+  onSettledEmpty?: () => void;
   /**
    * Run the queries, draw nothing (GEO-2863).
    *
@@ -739,6 +748,19 @@ export function ClaimsTab({
   // that is not about curation or about a filter, and reads wrongly as either.
   const collapsedEverything = visibleClaims.length === 0 && claims.length > 0;
   const hasNarrowingFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
+
+  // Reported once, and only from a settled, unnarrowed, working list. Every one of those matters:
+  // mid-load every list is empty, an error is not an answer about the corpus, and a filtered empty
+  // list is the viewer's own question rather than a dead end to be moved out of.
+  const listIsLoading = spacesPending || (graphSourced ? taggedLoading : claimsQuery.isLoading);
+  const listError = graphSourced ? taggedError : claimsQuery.error;
+  const settledEmpty = !listIsLoading && !listError && !hasNarrowingFilters && claims.length === 0;
+  const reportedEmpty = React.useRef(false);
+  React.useEffect(() => {
+    if (!settledEmpty || reportedEmpty.current || !onSettledEmpty) return;
+    reportedEmpty.current = true;
+    onSettledEmpty();
+  }, [onSettledEmpty, settledEmpty]);
   // Explore's alone. Lobby's source is fixed rather than chosen — it is `debate_now` and nothing
   // else — so an empty Lobby was offering to clear a filter the viewer had not set and could not
   // see. Worse, clearing it ran `setFilter`, which writes *Explore's* source atom: Lobby does not

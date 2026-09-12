@@ -170,10 +170,16 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
  * standing answer to how you like to arrive at a debate, and a viewer who only ever wants a
  * confirmed match should not have to say so again every session.
  *
- * Off by default. The wider list is the one that can always answer; opening onto a stricter list
- * that is usually empty would read as the hub being broken rather than as a filter being on.
+ * On by default. A confirmed match is what the hub is for, so it is what the hub opens on.
+ *
+ * That was the other way round until now, for a good reason: the wider list is the one that can
+ * always answer, and opening onto a stricter list that is usually empty reads as the hub being
+ * broken rather than as a filter being on. What changed is that the emptiness is now handled where
+ * it arises instead of being avoided by never asking — see `useNarrowedDefault`, which steps back
+ * to the wider list on arrival when there is no match to show, and on to Explore when that is empty
+ * too. The preference stands; only whether it applies on arrival is decided for the viewer.
  */
-export const debatesHubMatchesOnlyAtom = atomWithStorage('debatesHubMatchesOnly', false);
+export const debatesHubMatchesOnlyAtom = atomWithStorage('debatesHubMatchesOnly', true);
 
 /**
  * The same standing preference for the debate-again flow (GEO-2861), under its own key.
@@ -181,8 +187,10 @@ export const debatesHubMatchesOnlyAtom = atomWithStorage('debatesHubMatchesOnly'
  * Two keys rather than one: the hub asks "who can I debate right now, out of everyone", the rematch
  * picker asks "which of this opponent's claims can we go again on". Wanting the strict answer to one
  * is not a statement about the other, and sharing a key would make it one.
+ *
+ * On by default, and stepped back the same way when this pair has nothing to go again on.
  */
-export const rematchMatchesOnlyAtom = atomWithStorage('rematchMatchesOnly', false);
+export const rematchMatchesOnlyAtom = atomWithStorage('rematchMatchesOnly', true);
 
 /**
  * "Hide my positions" on the debate-again flow's Explore tab (GEO-2863).
@@ -201,13 +209,27 @@ export const rematchMatchesOnlyAtom = atomWithStorage('rematchMatchesOnly', fals
  * what says so: the same behaviour with nothing on screen to explain it read as the list throwing
  * rows away, which is the report that produced it.
  *
- * Its counterpart on the debate-again flow defaults the other way, and the difference is not an
- * inconsistency — see {@link rematchHideMyPositionsAtom}. Two atoms rather than one for the same
- * reason: they are one setting only if the two surfaces mean the same thing by it.
+ * Two atoms rather than one shared setting, because the two surfaces do not mean the same thing by
+ * it — see {@link rematchHideMyPositionsAtom}. They agree on the default and disagree about what
+ * happens to a claim answered under the viewer, which is the part that matters.
  */
 export const debatesHubHideMyPositionsAtom = atomWithStorage('debatesHubHideMyPositions', true);
 
-export const rematchHideMyPositionsAtom = atomWithStorage('rematchHideMyPositions', false);
+/**
+ * "Hide my positions" on the debate-again flow's Explore tab (GEO-2863).
+ *
+ * Stored rather than session-scoped, and on by default. Stored because the complaint it answers is
+ * chronic rather than momentary: a reader with a long backlog of positions is hunting for new
+ * claims across visits, not for one afternoon.
+ *
+ * On because it gives the page's two tabs one job each. The claims it hides are the ones this page
+ * can act on — `debateRequestGate` refuses a request from someone holding no position — but those
+ * are also what the *opponent's* tab is made of, and with "Matches only" on beside it that tab is
+ * exactly "what we can go again on right now". Explore is then the other half of the flow: finding
+ * a claim to take a side on. Nothing becomes unreachable, because a claim only the viewer has
+ * answered cannot be requested from either tab — the gate needs both sides.
+ */
+export const rematchHideMyPositionsAtom = atomWithStorage('rematchHideMyPositions', true);
 
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 
