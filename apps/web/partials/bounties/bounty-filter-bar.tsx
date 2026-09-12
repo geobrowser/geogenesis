@@ -125,19 +125,22 @@ export function BountyFilterBar({ filters, onChange, bounties, spaces, skills }:
     !isDefaultStatuses(filters.statuses);
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2" data-testid="bounty-filter-bar">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:gap-x-2" data-testid="bounty-filter-bar">
       {/* Search anchors the left edge, matching the board's left gutter; everything that narrows or
           reorders the board is pushed to the right by `ml-auto`. Search keeps the pill geometry of
           the controls it faces.
 
-          Right-alignment only earns its keep while the whole bar fits on one line, which it stops
-          doing around 1024px. Below `lg` the pills wrap, and right-aligned wrapped rows are ragged
-          — a lone "Any skill" stranded at the right edge, and the sort/group divider starting a row
-          with nothing to its left. So under `lg` the bar reverts to one left-aligned flow and the
-          divider goes away with the side-by-side arrangement it was dividing. Note this file's
-          breakpoints are max-width (styles.css): `lg` is ≤1023px, `sm` is ≤639px. */}
+          That right-hand arrangement only reads as alignment while the bar fits on one line, which
+          it stops doing around 1024px. Under `lg` it is dismantled rather than wrapped: search takes
+          its own full-width row, and the two groups below it go `display: contents` so all seven
+          pills become items of this one flex container. Nesting them is what stranded a pill — the
+          groups are separate flex items, so a leftover filter could never share a row with the sort
+          pills no matter how much room was going spare beside it. Flattened, they simply pack, and
+          the divider disappears with the box that drew it.
+
+          Note this file's breakpoints are max-width (styles.css): `lg` is ≤1023px. */}
       <label
-        className={`${FILTER_PILL_CLASS} w-[220px] cursor-text gap-1.5 focus-within:border-grey-03 hover:bg-white sm:w-full`}
+        className={`${FILTER_PILL_CLASS} w-[220px] cursor-text gap-1.5 focus-within:border-grey-03 hover:bg-white lg:w-full`}
       >
         <Search />
         <input
@@ -149,8 +152,8 @@ export function BountyFilterBar({ filters, onChange, bounties, spaces, skills }:
         />
       </label>
 
-      <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2 lg:ml-0 lg:justify-start">
-        <div className="flex flex-wrap items-center justify-end gap-2 lg:justify-start" data-testid="bounty-filters">
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2 lg:contents">
+        <div className="flex flex-wrap items-center justify-end gap-2 lg:contents" data-testid="bounty-filters">
           {spaces && spaces.length > 1 ? (
             <FilterMenu
               label={spaceLabel}
@@ -228,7 +231,7 @@ export function BountyFilterBar({ filters, onChange, bounties, spaces, skills }:
 
         {/* Sorting and grouping are view options, not filters — same row, own group behind the divider. */}
         <div
-          className="flex flex-wrap items-center gap-2 border-l border-grey-02 pl-3 lg:border-l-0 lg:pl-0"
+          className="flex flex-wrap items-center gap-2 border-l border-grey-02 pl-3 lg:contents"
           data-testid="bounty-view-options"
           aria-label="Sort and group"
         >
