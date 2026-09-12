@@ -43,10 +43,7 @@ export function DebateVideoTile({
   showMutedIndicator = false,
   countdown,
   closingMessage = false,
-  badge,
-  badgeAlign = 'left',
-  tileControls,
-  recordingStatus,
+  status,
   children,
 }: {
   participantPosition: boolean | null;
@@ -70,25 +67,13 @@ export function DebateVideoTile({
   showMutedIndicator?: boolean;
   countdown?: React.ReactNode;
   closingMessage?: boolean;
-  /** Top chip. The intro screen puts the opponent's readiness here. */
-  badge?: React.ReactNode;
   /**
-   * Which top corner the badge takes. `left` by default because the debate room spends the right
-   * one on the turn countdown and the muted indicator; the intro screen, which has neither, puts
-   * the opponent's readiness on the right as the design has it.
+   * Bottom-right: where this tile says how its own speaker stands. Yours carries the recording
+   * indicator, theirs their readiness on the intro screen — one place to look per person, rather
+   * than a different corner per fact. Deliberately the same slot on both screens and both tiles,
+   * so nothing the debate does later can displace it.
    */
-  badgeAlign?: 'left' | 'right';
-  /**
-   * The middle of the tile's bottom row. The intro screen puts your mic and camera here. It sits
-   * between the other two slots rather than at the tile's centre, so a long position label or the
-   * wider "Not recording" state shifts it a little either way.
-   */
-  tileControls?: React.ReactNode;
-  /**
-   * Bottom-right. Reserved for the recording indicator on both screens, so the one thing that has
-   * to be findable in the same place throughout is never displaced by a phase overlay.
-   */
-  recordingStatus?: React.ReactNode;
+  status?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const showInactiveIndicator =
@@ -118,15 +103,10 @@ export function DebateVideoTile({
         {showInactiveIndicator && <MutedMicrophoneIndicator />}
       </div>
       {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
-      {/* Top-left by default: the muted indicator and the turn countdown both own the right
-          corner, and "muted and ready" is a very ordinary combination. */}
-      {badge && <div className={cx('absolute top-3 z-30', badgeAlign === 'right' ? 'right-3' : 'left-3')}>{badge}</div>}
 
-      {/* One row rather than three corners. The position label, the intro's mic and camera, and the
-          recording indicator all want the bottom of the tile, and a tile is only ~270px wide in the
-          intro's two-column layout — absolutely positioning each to its own corner had the
-          indicator sitting on top of the camera button there. */}
-      {(positionLabel || tileControls || recordingStatus) && (
+      {/* One row rather than two corners: the position label and the status both want the bottom of
+          the tile, and laying them out means a long label can never end up underneath the status. */}
+      {(positionLabel || status) && (
         <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex items-center justify-between gap-2">
           <div className="flex min-w-0 flex-1 justify-start">
             {positionLabel && (
@@ -135,8 +115,7 @@ export function DebateVideoTile({
               </span>
             )}
           </div>
-          {tileControls && <div className="pointer-events-auto shrink-0">{tileControls}</div>}
-          <div className="flex flex-1 shrink-0 justify-end">{recordingStatus}</div>
+          <div className="flex shrink-0 justify-end">{status}</div>
         </div>
       )}
 

@@ -2492,7 +2492,7 @@ function DebateRecordingModal({
         localSlot !== null &&
         thankingSlot === localSlot
       }
-      recordingStatus={<DebateRecordingStatusPill recording={capturing} />}
+      status={<DebateRecordingStatusPill recording={capturing} />}
     >
       <video ref={setLocalVideoElement} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
     </DebateVideoTile>
@@ -2561,12 +2561,15 @@ function DebateRecordingModal({
         />
       )}
 
-      <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-2 py-8 sm:px-5">
-        <h1 className="mb-5 max-w-[390px] text-center text-[1.375rem] leading-[1.1] font-semibold text-text">
+      {/* `main` is wide enough for the claim, which is set and sized exactly as the intro screen
+          sets it so the headline does not change under you at the swap. Everything below it stays
+          in the single 430px column the room has always used. */}
+      <main className="mx-auto flex min-h-dvh w-full max-w-[940px] flex-col items-center justify-center px-2 py-8 sm:px-5 md:max-w-[430px]">
+        <h1 className="mb-5 w-full max-w-[900px] text-center text-mainPage text-text md:max-w-[390px] md:text-[1.5rem] md:leading-[1.8125rem] md:font-semibold md:tracking-[-0.75px]">
           {debate.claim.claim}
         </h1>
 
-        <div className="relative grid w-full gap-2">
+        <div className="relative grid w-full max-w-[430px] gap-2">
           {orderedVideoTiles}
 
           {countdown.effectiveStatus === 'thanking' && countdown.remainingSeconds > 0 && (
@@ -2590,13 +2593,13 @@ function DebateRecordingModal({
         </div>
 
         {roomState === 'reconnecting' && (
-          <div className="mt-3 w-full rounded-lg border border-grey-02 bg-white px-4 py-3">
+          <div className="mt-3 w-full max-w-[430px] rounded-lg border border-grey-02 bg-white px-4 py-3">
             <Text>Reconnecting to the debate room…</Text>
           </div>
         )}
 
         {roomError && (
-          <div className="mt-3 flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white px-4 py-3">
+          <div className="mt-3 flex w-full max-w-[430px] flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white px-4 py-3">
             <Text color="red-01">{roomError}</Text>
             {['thanking', 'complete'].includes(debate.status) && (
               <Button type="button" variant="tertiary" onClick={onRetryFinalization} disabled={roomState === 'saving'}>
@@ -2611,7 +2614,7 @@ function DebateRecordingModal({
           </div>
         )}
 
-        <div className="mt-5 flex w-full justify-end">
+        <div className="mt-5 flex w-full max-w-[430px] justify-end">
           <RecordingCircleButton
             ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
             title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}

@@ -36,10 +36,11 @@ export type DebatePreScreenRemotePresence = 'absent' | 'present' | 'left';
  * The pre-debate screen: a live two-way call from the moment both sides grant the camera, ending
  * when both press ready. Nothing here is recorded.
  *
- * Shares the room's tile and its ordering rule, so neither speaker changes places when the debate
- * starts. The geometry is no longer shared on desktop: this screen puts the two speakers in the
- * design's side-by-side cards where the room keeps one column, so a wide viewport does reflow at
- * the swap. Mobile — where the debate is actually held — still stacks both the same way.
+ * Shares the room's tile but not its layout. This screen puts the two speakers in the design's
+ * side-by-side cards, you always on the left, where the room keeps one column ordered by which
+ * side of the claim each speaker holds — so crossing into the debate does reflow, and on mobile
+ * can swap which of you is on top. That is the cost of "you are always on the left here", and it
+ * is deliberate: before the debate the screen is about your own setup, during it about the claim.
  */
 export function DebatePreScreen({
   claim,
@@ -214,31 +215,9 @@ export function DebatePreScreen({
       overlayCompact={!mediaReady || switchingDevice}
       inactiveIndicatorId="local"
       tileLabel="You"
-      badge={localReady ? <PreScreenReadyBadge /> : null}
-      badgeAlign="right"
-      tileControls={
-        mediaReady ? (
-          <div className="flex items-center gap-2">
-            <DebateTileToggleButton
-              ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
-              enabled={!audioMuted}
-              onClick={onToggleAudioMuted}
-              disabled={localReady}
-            >
-              <MicrophoneIcon muted={audioMuted} />
-            </DebateTileToggleButton>
-            <DebateTileToggleButton
-              ariaLabel={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
-              enabled={videoEnabled}
-              onClick={onToggleVideoEnabled}
-              disabled={localReady}
-            >
-              <CameraIcon disabled={!videoEnabled} />
-            </DebateTileToggleButton>
-          </div>
-        ) : null
-      }
-      recordingStatus={<DebateRecordingStatusPill recording={capturing} />}
+      // Your readiness is not stated here the way theirs is: the ready button becomes "Waiting for
+      // …", and the bottom-right of your own tile is spent on the recording indicator.
+      status={<DebateRecordingStatusPill recording={capturing} />}
     >
       <video ref={setLocalVideoElement} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
       {/* A disabled camera track keeps sending — as black frames, so the recorder never loses it —
@@ -280,8 +259,7 @@ export function DebatePreScreen({
       tileLabel={remoteName}
       // Their readiness is stated either way. "No badge" was ambiguous between not ready and a
       // badge that had not rendered, which is the same reason the recording pill has two states.
-      badge={remoteReady ? <PreScreenReadyBadge /> : <PreScreenNotReadyBadge />}
-      badgeAlign="right"
+      status={remoteReady ? <PreScreenReadyBadge /> : <PreScreenNotReadyBadge />}
     >
       <div
         ref={setRemoteMediaElement}
@@ -304,13 +282,13 @@ export function DebatePreScreen({
   const controlsOrder = 'md:order-last';
 
   const remoteGroup = (
-    <div key="remote" className={cardGroup}>
+    <div key="remote" className={cx(cardGroup, 'order-2')}>
       {remoteTile}
     </div>
   );
 
   const localGroup = (
-    <div key="local" className={cardGroup}>
+    <div key="local" className={cx(cardGroup, 'order-1')}>
       {localTile}
 
       {!mediaReady && previewState !== 'requesting' && (
@@ -328,6 +306,29 @@ export function DebatePreScreen({
 
       {mediaReady && (
         <>
+          {/* Their own row under your tile rather than overlaid on it. On the tile they shared the
+              bottom band with the position label and the recording indicator, which at a two-column
+              tile width was three things deep in a strip ~40px tall. Here they also sit with the
+              mic and camera pickers, which is what they are about. */}
+          <div className={cx('flex w-full items-center justify-center gap-2', controlsOrder)}>
+            <DebateTileToggleButton
+              ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
+              enabled={!audioMuted}
+              onClick={onToggleAudioMuted}
+              disabled={localReady}
+            >
+              <MicrophoneIcon muted={audioMuted} />
+            </DebateTileToggleButton>
+            <DebateTileToggleButton
+              ariaLabel={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
+              enabled={videoEnabled}
+              onClick={onToggleVideoEnabled}
+              disabled={localReady}
+            >
+              <CameraIcon disabled={!videoEnabled} />
+            </DebateTileToggleButton>
+          </div>
+
           <div className={cx('flex w-full flex-col gap-[6px]', controlsOrder)}>
             {isMobile ? (
               <>
@@ -424,8 +425,14 @@ export function DebatePreScreen({
     </div>
   );
 
-  // The room's ordering rule, so neither tile moves when the debate starts.
-  const orderedGroups = localParticipant?.position === false ? [remoteGroup, localGroup] : [localGroup, remoteGroup];
+  /**
+   * You are always on the left on desktop, whichever side of the claim you are arguing — hence the
+   * `order` above rather than the room's position ordering, which put whoever holds the first slot
+   * first. The document order is the mobile one the design draws: your opponent on top, you
+   * directly above your own controls. `order` is ignored there, because at that width the groups
+   * are `display: contents` and it is their children that are the flex items.
+   */
+  const orderedGroups = [remoteGroup, localGroup];
 
   return (
     <div
@@ -436,27 +443,27 @@ export function DebatePreScreen({
       aria-label="Debate readiness"
       className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text outline-none"
     >
-      {/* The claim is given more room than the speakers, as the design has it — a wide headline
-          over a narrower pair of cards — so the column caps are set per band rather than on `main`. */}
-      <main className="mx-auto flex min-h-dvh w-full max-w-[820px] flex-col items-center justify-center px-2 py-8 sm:px-5 md:max-w-[430px]">
-        <div className="mb-5 flex w-full max-w-[740px] flex-col items-center gap-3 md:mb-4 md:max-w-none md:gap-2">
-          {/* Was a paragraph under the claim. It keeps the assurance GEO-2819 asked for — the
-              recording pill on your own tile now says the same thing in the same breath — and
-              moves into the eyebrow slot the design gives it above the claim. */}
+      {/* The claim is given the full width and the speakers a little less, as the design has it —
+          a wide headline over the cards — so the caps are per band rather than on `main`. The
+          cards are sized so each tile lands back at the ~415px the single-column layout gave it. */}
+      <main className="mx-auto flex min-h-dvh w-full max-w-[940px] flex-col items-center justify-center px-2 py-8 sm:px-5 md:max-w-[430px]">
+        <div className="mb-5 flex w-full max-w-[900px] flex-col items-center gap-3 md:mb-4 md:max-w-none md:gap-2">
+          {/* Replaces the paragraph that sat under the claim. The assurance it also carried — that
+              this part is not recorded — is now the "Not recording" pill on your own tile. */}
           <p className="text-center text-mediumTitle text-grey-04 md:text-metadataMedium">
-            Introduce yourselves before debating — this part isn&apos;t recorded
+            Introduce yourselves before debating
           </p>
           <h1 className="text-center text-mainPage text-text md:max-w-[390px] md:text-[1.5rem] md:leading-[1.8125rem] md:font-semibold md:tracking-[-0.75px]">
             {claim}
           </h1>
         </div>
 
-        <div className="flex w-full max-w-[600px] items-start gap-5 md:max-w-none md:flex-col md:items-stretch md:gap-3 md:rounded-lg md:border md:border-grey-02 md:bg-white md:p-3">
+        <div className="flex w-full max-w-[900px] items-start gap-5 md:max-w-none md:flex-col md:items-stretch md:gap-3 md:rounded-lg md:border md:border-grey-02 md:bg-white md:p-3">
           {orderedGroups}
         </div>
 
         {error && (
-          <div className="mt-3 flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white px-4 py-3">
+          <div className="mt-3 flex w-full max-w-[900px] flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white px-4 py-3">
             <Text as="p" variant="metadata" color="red-01">
               {error}
             </Text>
@@ -527,11 +534,21 @@ export function DebatePreScreen({
   );
 }
 
-/** Readiness as a fact on a tile, deliberately not a prompt or countdown near the ready button. */
+/**
+ * Readiness as a fact on a tile, deliberately not a prompt or countdown near the ready button.
+ *
+ * Sized like the position label and the recording pill rather than as its own badge: all three are
+ * chips on a tile, and the opponent's readiness sits in the same bottom-right slot your recording
+ * state does. Green survives as the fill because "ready" is the one state worth spotting from
+ * across the layout.
+ */
 function PreScreenReadyBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-green px-3 py-1.5 text-metadata leading-none text-text">
-      <Check />
+    <span className="inline-flex h-4 items-center gap-1 rounded-full bg-green px-1.5 text-[0.75rem] leading-none text-text">
+      {/* The icon ships at 16px, which is the whole chip. */}
+      <span aria-hidden className="grid size-2.5 shrink-0 place-items-center [&>svg]:size-full">
+        <Check />
+      </span>
       Ready
     </span>
   );
@@ -539,7 +556,7 @@ function PreScreenReadyBadge() {
 
 function PreScreenNotReadyBadge() {
   return (
-    <span className="inline-flex items-center rounded-full bg-grey-01 px-3 py-1.5 text-metadata leading-none text-grey-04">
+    <span className="inline-flex h-4 items-center rounded-full bg-white/60 px-1.5 text-[0.75rem] leading-none text-text">
       Not ready
     </span>
   );

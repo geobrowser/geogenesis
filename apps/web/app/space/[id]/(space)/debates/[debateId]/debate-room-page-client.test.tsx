@@ -682,7 +682,10 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
     // The issue asks for this line explicitly, and it has to stay true to when capture starts.
-    expect(screen.getByText(/this part isn't recorded/i)).toBeInTheDocument();
+    // GEO-2819 asked for "this part isn't recorded" in so many words. The sentence is gone from the
+    // copy, but the fact it was there to state is now on the tile the sentence was talking about,
+    // in both of its states — which is the assertion below and the one worth keeping.
+    expect(screen.getByText('Introduce yourselves before debating')).toBeInTheDocument();
     expect(screen.getByText('Speak to test your mic')).toBeInTheDocument();
     expect(screen.getByRole('meter')).toBeInTheDocument();
     expect(screen.queryByText('Ready')).not.toBeInTheDocument();
@@ -1302,6 +1305,20 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText('Enable video to start')).not.toBeInTheDocument();
   });
 
+  // The room orders its tiles by which side of the claim each speaker holds. The intro does not:
+  // it is about your own setup, so you are on the left of it whichever side you are arguing.
+  it('puts you on the left of the intro screen whichever position you hold', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await screen.findByRole('button', { name: "I'm ready to debate" });
+    // The card wrapping your tile takes the first column; the document order is the mobile one,
+    // where your opponent is on top and you sit directly above your own controls.
+    expect(debateVideoTile('local').parentElement).toHaveClass('order-1');
+    expect(debateVideoTile('remote').parentElement).toHaveClass('order-2');
+  });
+
   // The neutral state is the assurance, so it has to be somewhere the eye already is: on the tile
   // showing the camera it is talking about.
   it('puts the not-recording pill in the local tile on the intro screen', async () => {
@@ -1320,8 +1337,11 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByRole('button', { name: 'Waiting for Bri…' })).toBeDisabled();
-    expect(within(debateVideoTile('local')).getByText('Ready')).toBeInTheDocument();
-    expect(within(debateVideoTile('remote')).queryByText('Ready')).not.toBeInTheDocument();
+    // Your own readiness is the button, not a badge: the bottom-right of your tile is the recording
+    // indicator, and two different places to read "ready" was the state this screen used to be in.
+    expect(within(debateVideoTile('local')).getByText('Not recording')).toBeInTheDocument();
+    expect(within(debateVideoTile('local')).queryByText('Ready')).not.toBeInTheDocument();
+    expect(within(debateVideoTile('remote')).getByText('Not ready')).toBeInTheDocument();
   });
 
   // The intro screen and the debate room own different media elements, and the status flip swaps
@@ -2494,8 +2514,11 @@ describe('DebateRoomPageClient', () => {
 
     const heading = screen.getByRole('heading', { name: 'The protocol should ship debates' });
     expect(heading).toBeInTheDocument();
-    expect(heading.closest('main')).toHaveClass('max-w-[430px]');
-    expect(heading).toHaveClass('mb-5', 'max-w-[390px]', 'text-[1.375rem]', 'leading-[1.1]');
+    // The claim is set exactly as the intro screen sets it — wide band, `text-mainPage` on desktop
+    // — so the headline does not resize under you at the swap. Only the video column is still held
+    // to the room's 430px, which is what `main` used to hold everything to.
+    expect(heading).toHaveClass('mb-5', 'max-w-[900px]', 'text-mainPage', 'md:max-w-[390px]', 'md:text-[1.5rem]');
+    expect(debateVideoTile('local').parentElement).toHaveClass('max-w-[430px]');
     expect(screen.queryByRole('button', { name: 'Mute microphone' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Turn camera off' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Disable audio' })).not.toBeInTheDocument();
