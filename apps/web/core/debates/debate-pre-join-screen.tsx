@@ -215,6 +215,28 @@ export function DebatePreScreen({
       overlayCompact={!mediaReady || switchingDevice}
       inactiveIndicatorId="local"
       tileLabel="You"
+      tileControls={
+        mediaReady ? (
+          <div className="flex items-center gap-2">
+            <DebateTileToggleButton
+              ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
+              enabled={!audioMuted}
+              onClick={onToggleAudioMuted}
+              disabled={localReady}
+            >
+              <MicrophoneIcon muted={audioMuted} />
+            </DebateTileToggleButton>
+            <DebateTileToggleButton
+              ariaLabel={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
+              enabled={videoEnabled}
+              onClick={onToggleVideoEnabled}
+              disabled={localReady}
+            >
+              <CameraIcon disabled={!videoEnabled} />
+            </DebateTileToggleButton>
+          </div>
+        ) : null
+      }
       // Your readiness is not stated here the way theirs is: the ready button becomes "Waiting for
       // …", and the bottom-right of your own tile is spent on the recording indicator.
       status={<DebateRecordingStatusPill recording={capturing} />}
@@ -306,29 +328,6 @@ export function DebatePreScreen({
 
       {mediaReady && (
         <>
-          {/* Their own row under your tile rather than overlaid on it. On the tile they shared the
-              bottom band with the position label and the recording indicator, which at a two-column
-              tile width was three things deep in a strip ~40px tall. Here they also sit with the
-              mic and camera pickers, which is what they are about. */}
-          <div className={cx('flex w-full items-center justify-center gap-2', controlsOrder)}>
-            <DebateTileToggleButton
-              ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
-              enabled={!audioMuted}
-              onClick={onToggleAudioMuted}
-              disabled={localReady}
-            >
-              <MicrophoneIcon muted={audioMuted} />
-            </DebateTileToggleButton>
-            <DebateTileToggleButton
-              ariaLabel={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
-              enabled={videoEnabled}
-              onClick={onToggleVideoEnabled}
-              disabled={localReady}
-            >
-              <CameraIcon disabled={!videoEnabled} />
-            </DebateTileToggleButton>
-          </div>
-
           <div className={cx('flex w-full flex-col gap-[6px]', controlsOrder)}>
             {isMobile ? (
               <>

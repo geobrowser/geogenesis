@@ -43,6 +43,7 @@ export function DebateVideoTile({
   showMutedIndicator = false,
   countdown,
   closingMessage = false,
+  tileControls,
   status,
   children,
 }: {
@@ -67,6 +68,8 @@ export function DebateVideoTile({
   showMutedIndicator?: boolean;
   countdown?: React.ReactNode;
   closingMessage?: boolean;
+  /** The middle of the bottom row. The intro screen puts your mic and camera here. */
+  tileControls?: React.ReactNode;
   /**
    * Bottom-right: where this tile says how its own speaker stands. Yours carries the recording
    * indicator, theirs their readiness on the intro screen — one place to look per person, rather
@@ -104,9 +107,10 @@ export function DebateVideoTile({
       </div>
       {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
 
-      {/* One row rather than two corners: the position label and the status both want the bottom of
-          the tile, and laying them out means a long label can never end up underneath the status. */}
-      {(positionLabel || status) && (
+      {/* One row rather than three corners. Everything that wants the bottom of the tile is laid
+          out here instead of absolutely positioned, so the position label truncates under pressure
+          rather than ending up underneath the controls or the status. */}
+      {(positionLabel || tileControls || status) && (
         <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex items-center justify-between gap-2">
           <div className="flex min-w-0 flex-1 justify-start">
             {positionLabel && (
@@ -115,7 +119,8 @@ export function DebateVideoTile({
               </span>
             )}
           </div>
-          <div className="flex shrink-0 justify-end">{status}</div>
+          {tileControls && <div className="pointer-events-auto shrink-0">{tileControls}</div>}
+          <div className="flex min-w-0 flex-1 shrink-0 justify-end">{status}</div>
         </div>
       )}
 
