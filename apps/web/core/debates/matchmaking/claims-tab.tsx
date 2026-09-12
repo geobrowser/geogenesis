@@ -39,6 +39,7 @@ import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { type AnsweredState, useCollapseAnswered } from './collapse-answered';
 import { DebateHoursNote } from './debate-hours-note';
+import { FilterSwitch } from './filter-switch';
 import { useDebateRequests } from './hooks';
 import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
@@ -58,6 +59,7 @@ import {
   debatesHubExploreSpaceIdsAtom,
   debatesHubExploreSpaceSeedSpentAtom,
   debatesHubExploreTopicIdsAtom,
+  debatesHubHideMyPositionsAtom,
   debatesHubLobbySearchAtom,
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
@@ -236,6 +238,9 @@ export function ClaimsTab({
   // Session-scoped like the space and topic selections below, and for the same reason: it is the
   // same filter bar, dismissed the same way (GEO-2850).
   const [selectedFilter, setFilter] = useAtom(debatesHubExploreFilterAtom);
+  // Explore's own switch (GEO-2863). Stored rather than session-scoped, and on by default: it is
+  // the collapse this tab already did, with something on screen to say it is doing it.
+  const [hideMyPositions, setHideMyPositions] = useAtom(debatesHubHideMyPositionsAtom);
   // Signing out with "My positions" selected would otherwise leave the tab querying it anonymously
   // and showing a trigger value that is no longer in the menu. Derived rather than reset through an
   // effect so the query, the menu label, the ordering key and the empty state all read the same
@@ -609,7 +614,7 @@ export function ClaimsTab({
   // Lobby is a different question: "what can I debate right now" is not a browse list, and the
   // claims you have answered are exactly the ones a match can be waiting on. And "My positions" is
   // by definition all answered, so collapsing it leaves an empty tab rather than a filtered one.
-  const collapsesAnswered = !isLobby && filter !== 'mine';
+  const collapsesAnswered = !isLobby && filter !== 'mine' && hideMyPositions;
   const answeredStateOf = React.useCallback(
     (entry: MatchmakingClaim): AnsweredState =>
       !taggedAnswersReady ? 'unknown' : entry.viewer_response !== null ? 'answered' : 'unanswered',
@@ -781,7 +786,16 @@ export function ClaimsTab({
           facetSpaces={facetSpaces}
           facetTopics={facetTopics}
           countsPending={countsPending}
-          trailing={trailing}
+          // Lobby passes its own ("Matches only"); Explore draws this one. Never on My positions,
+          // which is the list it would empty — a broken tab rather than a filter — so the state
+          // cannot be set from the one place it must not apply.
+          trailing={
+            isLobby ? (
+              trailing
+            ) : filter === 'mine' ? null : (
+              <FilterSwitch label="Hide my positions" checked={hideMyPositions} onChange={setHideMyPositions} />
+            )
+          }
           leading={
             isLobby ? null : (
               <HubFilterMenu
@@ -850,7 +864,7 @@ export function ClaimsTab({
           // answered all of it is the collapse taking credit for an empty corpus (GEO-2863).
           emptyMessage={
             collapsedEverything
-              ? 'You’ve answered every claim here. Pick another space or topic, or see them under My positions.'
+              ? 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
               : hasNarrowingFilters
                 ? filter === 'featured'
                   ? 'No featured claims match these filters.'
@@ -865,20 +879,24 @@ export function ClaimsTab({
           // `live` unconditionally: `SIGNED_OUT_HIDDEN_FILTERS` takes "Debate now" out of the menu
           // signed out, so reaching this note at all means holding the gateway scope.
           emptyNote={filter === 'debate_now' && !hasNarrowingFilters ? <DebateHoursNote live /> : undefined}
+          // Answered-everything first, and it is the only one of these whose way out is the switch
+          // rather than the filters: the rows are all there, and one press brings them back.
           emptyAction={
-            hasFilters
-              ? {
-                  label: 'Clear filters',
-                  onClick: () => {
-                    setSearch('');
-                    if (hasClearableSource) setFilter('all');
-                    // The menu's own clear row, so this counts as choosing the unfiltered list and
-                    // the default cannot put its spaces back.
-                    onSpacesClear();
-                    setTopicIds([]);
-                  },
-                }
-              : undefined
+            collapsedEverything
+              ? { label: 'Show my positions', onClick: () => setHideMyPositions(false) }
+              : hasFilters
+                ? {
+                    label: 'Clear filters',
+                    onClick: () => {
+                      setSearch('');
+                      if (hasClearableSource) setFilter('all');
+                      // The menu's own clear row, so this counts as choosing the unfiltered list and
+                      // the default cannot put its spaces back.
+                      onSpacesClear();
+                      setTopicIds([]);
+                    },
+                  }
+                : undefined
           }
         >
           {/* One list, in the server's order. Splitting out the claims you'd already answered
@@ -1051,7 +1069,7 @@ export function SpaceTopicFilters({
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="@container flex flex-wrap items-center gap-2">
       {leading}
       <HubMultiFilterMenu
         label={spaceMenuLabel}
@@ -1080,8 +1098,16 @@ export function SpaceTopicFilters({
         />
       ) : null}
       {/* `ml-auto` so it sits at the end whatever is in front of it, and keeps sitting there when a
-          menu drops out of the row — the topic menu is conditional. */}
-      {trailing ? <div className="ml-auto">{trailing}</div> : null}
+          menu drops out of the row — the topic menu is conditional.
+
+          Only where the row is wide enough to have an end worth sitting at. Narrow, the switch
+          wraps onto a line of its own and `ml-auto` then pinned it to the right margin with nothing
+          beside it, which reads as a stray control rather than as the last item of the filter row.
+          Full width and left-aligned there instead, under the menus it belongs with.
+
+          A container query rather than a viewport one, because the two narrow cases are not both
+          small screens: the debates side panel is ~400px wide on the largest desktop there is. */}
+      {trailing ? <div className="w-full @lg:ml-auto @lg:w-auto">{trailing}</div> : null}
     </div>
   );
 }

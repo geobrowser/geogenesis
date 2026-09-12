@@ -2874,4 +2874,53 @@ describe('claims the viewer has already answered', () => {
     expect(await screen.findByText(/You’ve answered every claim here/)).toBeInTheDocument();
     expect(screen.queryByText('No claims have been tagged for debate yet.')).toBeNull();
   });
+
+  /**
+   * The switch that says this is happening.
+   *
+   * The collapse was right and unexplained, and unexplained is how it read as the list discarding
+   * rows — which is the report that produced the hold and the fold animation, and this. On by
+   * default, because the behaviour is not changing; what changes is that there is now something on
+   * screen naming it, and a way back.
+   */
+  describe('the switch that controls it', () => {
+    const SWITCH = { name: 'Hide my positions' } as const;
+
+    it('is on by default, so the tab behaves as it did', async () => {
+      render(<ClaimsTab />);
+      await showAllClaims();
+
+      expect(await screen.findByText('One you have not')).toBeInTheDocument();
+      expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'true');
+    });
+
+    it('brings the answered claims back when it is turned off', async () => {
+      render(<ClaimsTab />);
+      await showAllClaims();
+      await screen.findByText('One you have not');
+
+      fireEvent.click(screen.getByRole('switch', SWITCH));
+
+      expect(await screen.findByText('One you have answered')).toBeInTheDocument();
+    });
+
+    // The one empty state whose way out is the switch rather than the filters: every row is there,
+    // and one press brings them all back.
+    it('offers itself as the way out of an emptied list', async () => {
+      mocks.taggedClaims[DEBATE] = [featuredClaim(FEATURED_A, 'One you have answered')];
+      render(<ClaimsTab />);
+      await showAllClaims();
+      fireEvent.click(await screen.findByRole('button', { name: 'Show my positions' }));
+
+      expect(await screen.findByText('One you have answered')).toBeInTheDocument();
+    });
+
+    // It would empty that list rather than filter it, so the state cannot be set from the one place
+    // it must not apply.
+    it('is not offered on My positions', async () => {
+      renderMine();
+
+      await waitFor(() => expect(screen.queryByRole('switch', SWITCH)).toBeNull());
+    });
+  });
 });

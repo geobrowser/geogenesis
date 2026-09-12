@@ -193,6 +193,20 @@ export const rematchMatchesOnlyAtom = atomWithStorage('rematchMatchesOnly', fals
  * them. Stored because the complaint it answers is chronic rather than momentary: a reader with a
  * long backlog of positions is hunting for new claims across visits, not for one afternoon.
  */
+/**
+ * "Hide my positions" on the debates hub's Explore tab (GEO-2863).
+ *
+ * On by default, which is the collapse the tab shipped with — browsing is about finding something
+ * new, and a claim you have taken a side on sits in the way of the next one forever. The switch is
+ * what says so: the same behaviour with nothing on screen to explain it read as the list throwing
+ * rows away, which is the report that produced it.
+ *
+ * Its counterpart on the debate-again flow defaults the other way, and the difference is not an
+ * inconsistency — see {@link rematchHideMyPositionsAtom}. Two atoms rather than one for the same
+ * reason: they are one setting only if the two surfaces mean the same thing by it.
+ */
+export const debatesHubHideMyPositionsAtom = atomWithStorage('debatesHubHideMyPositions', true);
+
 export const rematchHideMyPositionsAtom = atomWithStorage('rematchHideMyPositions', false);
 
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
