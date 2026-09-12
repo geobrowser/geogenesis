@@ -35,14 +35,14 @@ export interface ProfileHistory {
  * hold a handful of rows, so there is nothing to save by narrowing them.
  */
 const nested = `
-  valuesList { property { id } date text }
+  valuesList { property { id } date text decimal }
   relationsList {
     id
     entityId
     type { id }
     toEntity { id name }
     entity {
-      valuesList { property { id } date text }
+      valuesList { property { id } date text decimal }
       relationsList { id entityId type { id } toEntity { id name } entity { valuesList { property { id } date text } } }
     }
   }

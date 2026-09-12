@@ -3,20 +3,24 @@ import { describe, expect, it } from 'vitest';
 import {
   ACADEMIC_FIELDS_PROPERTY,
   ACADEMIC_FIELD_TYPE,
+  DEGREE_INFORMATION_TYPE,
   DEGREE_PROPERTY,
   DEGREE_TYPE,
   DESCRIPTION_PROPERTY,
   EDUCATION_PROPERTY,
+  EDUCATION_RECORD_TYPE,
   EDUCATION_STATUS_OPTION,
   EDUCATION_STATUS_PROPERTY,
   EMPLOYER_TYPE,
   EMPLOYMENT_PROPERTY,
+  EMPLOYMENT_RECORD_TYPE,
   EMPLOYMENT_STATUS_OPTION,
   EMPLOYMENT_STATUS_PROPERTY,
   EMPLOYMENT_TYPE_OPTIONS,
   EMPLOYMENT_TYPE_PROPERTY,
   EMPLOYMENT_TYPE_TYPE,
   END_DATE_PROPERTY,
+  GRADE_PROPERTY,
   IS_REQUIRED_PROPERTY,
   JOB_TYPE,
   LEGACY_DEGREE_TYPE,
@@ -73,6 +77,13 @@ describe('history ontology ids', () => {
     ['Location', LOCATION_PROPERTY, '95d770021faf4f7cb7deb21a7d48cda0'],
     ['Location type', LOCATION_TYPE_PROPERTY, 'ceeb611101554764bea22818b21d3fbd'],
     ['Degree type', DEGREE_TYPE, 'bfd47a5430aa43e18b8b8b86735919a0'],
+    // The four relation-entity types, one per level, each declared by the
+    // property that carries it.
+    ['Employment record', EMPLOYMENT_RECORD_TYPE, '8ff1f25ffa814dc292171ecee721ee17'],
+    ['Role information', ROLE_INFORMATION_TYPE, '343952488d4a4bc088aae611b931ac0e'],
+    ['Education record', EDUCATION_RECORD_TYPE, '333d23cc8a0244e6a3d00c8414429164'],
+    ['Degree information', DEGREE_INFORMATION_TYPE, '45ecd803515d43fd8b2e529bdac330a9'],
+    ['Grade', GRADE_PROPERTY, 'efa26e09c19b4ef9b3bd9698ad5d3abf'],
     // A second real type of the same name, carrying the degrees that predate the
     // declared one. Searching only the declared one hides all of them.
     ['Degree type (legacy)', LEGACY_DEGREE_TYPE, '65256c5462834981b502aceeb74bd08c'],

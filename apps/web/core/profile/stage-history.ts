@@ -7,20 +7,24 @@ import {
   ACADEMIC_FIELDS_PROPERTY,
   ACADEMIC_FIELD_TYPE,
   CITY_TYPE,
+  DEGREE_INFORMATION_TYPE,
   DEGREE_PROPERTY,
   DEGREE_TYPE,
   DESCRIPTION_PROPERTY,
   EDUCATION_PROPERTY,
+  EDUCATION_RECORD_TYPE,
   EDUCATION_STATUS_OPTION,
   EDUCATION_STATUS_PROPERTY,
   EMPLOYER_TYPE,
   EMPLOYMENT_PROPERTY,
+  EMPLOYMENT_RECORD_TYPE,
   EMPLOYMENT_STATUS_OPTION,
   EMPLOYMENT_STATUS_PROPERTY,
   EMPLOYMENT_TYPE_PROPERTY,
   END_DATE_PROPERTY,
   type EducationStatus,
   type EmploymentStatus,
+  GRADE_PROPERTY,
   JOB_TYPE,
   LOCATION_PROPERTY,
   LOCATION_TYPE_PROPERTY,
@@ -62,6 +66,10 @@ export type EducationDraft = {
   school: EntityChoice;
   degree: EntityChoice;
   fields: EntityChoice[];
+  /** Repeats, like a position's. */
+  skills: EntityChoice[];
+  /** A mark, as the institution gave it. Empty where none was recorded. */
+  grade: string;
   startDate: string | null;
   endDate: string | null;
   status: EducationStatus;
@@ -101,7 +109,7 @@ function valueRow(params: {
   entityId: string;
   propertyId: string;
   propertyName: string;
-  dataType: 'TEXT' | 'DATE';
+  dataType: 'TEXT' | 'DATE' | 'DECIMAL';
   value: string;
 }): Value {
   return {
@@ -111,7 +119,7 @@ function valueRow(params: {
       id: params.propertyId,
       name: params.propertyName,
       dataType: params.dataType,
-      renderableType: params.dataType === 'DATE' ? 'DATE' : 'TEXT',
+      renderableType: params.dataType,
     },
     spaceId: params.spaceId,
     value: params.value,
@@ -157,6 +165,17 @@ function newEntityRows(choice: EntityChoice, spaceId: string, typeIds: string[] 
   );
 
   return { values, relations };
+}
+
+/** `Types` on a relation's own entity, from what its property declares. */
+function typeRow(spaceId: string, entityId: string, typeId: string, typeName: string): Relation {
+  return relationRow({
+    spaceId,
+    typeId: SystemIds.TYPES_PROPERTY,
+    typeName: 'Types',
+    fromId: entityId,
+    to: { id: typeId, name: typeName },
+  });
 }
 
 function datesAndDescription(params: {
@@ -254,7 +273,8 @@ export function stagePosition(
         fromId: personEntityId,
         to: draft.company,
         entityId: stintId,
-      })
+      }),
+      typeRow(spaceId, stintId, EMPLOYMENT_RECORD_TYPE, 'Employment record')
     );
   }
 
@@ -268,17 +288,10 @@ export function stagePosition(
     entityId: tenureId,
   });
 
-  // The tenure says what it is. `Roles` declares `Role information` as its
-  // relation entity type, and an untyped tenure is reachable only by walking in
-  // from the person holding it — which is exactly how the dates on it stayed
-  // invisible to everything else.
-  const tenureType = relationRow({
-    spaceId,
-    typeId: SystemIds.TYPES_PROPERTY,
-    typeName: 'Types',
-    fromId: tenureId,
-    to: { id: ROLE_INFORMATION_TYPE, name: 'Role information' },
-  });
+  // Each level says what it is, from what its property declares. An untyped
+  // relation entity is reachable only by walking in from the person holding it,
+  // which is how the dates on a tenure stayed invisible to everything else.
+  const tenureType = typeRow(spaceId, tenureId, ROLE_INFORMATION_TYPE, 'Role information');
 
   const status = relationRow({
     spaceId,
@@ -375,6 +388,7 @@ export function stageEducation(
   if (!recordId) {
     recordId = newStintId;
     education.relations.push(
+      typeRow(spaceId, recordId, EDUCATION_RECORD_TYPE, 'Education record'),
       relationRow({
         spaceId,
         typeId: EDUCATION_PROPERTY,
@@ -396,7 +410,31 @@ export function stageEducation(
     entityId: enrolmentId,
   });
 
+  const enrolmentType = typeRow(spaceId, enrolmentId, DEGREE_INFORMATION_TYPE, 'Degree information');
+
   const fieldRows = draft.fields.map(field => newEntityRows(field, spaceId, [ACADEMIC_FIELD_TYPE]));
+
+  const skillRows = draft.skills.map(skill => newEntityRows(skill, spaceId, [SKILL_TYPE]));
+  const skillEdges = draft.skills.map(skill =>
+    relationRow({ spaceId, typeId: SKILLS_PROPERTY, typeName: 'Skills', fromId: enrolmentId, to: skill })
+  );
+
+  // Decimal, so a 3.8 sorts and filters as a number. A mark that is not a number
+  // — a classification, a pass — has nowhere to go here and is left unwritten
+  // rather than stored as text under a numeric property.
+  const grade = Number.parseFloat(draft.grade.trim());
+  const gradeRows: Value[] = Number.isFinite(grade)
+    ? [
+        valueRow({
+          spaceId,
+          entityId: enrolmentId,
+          propertyId: GRADE_PROPERTY,
+          propertyName: 'Grade',
+          dataType: 'DECIMAL',
+          value: String(grade),
+        }),
+      ]
+    : [];
 
   const fieldEdges = draft.fields.map(field =>
     relationRow({
@@ -424,15 +462,18 @@ export function stageEducation(
       ]
     : [];
 
-  return merge(school, degree, ...fieldRows, education, {
-    relations: [degreeEdge, ...fieldEdges, ...statusEdge],
-    values: datesAndDescription({
-      spaceId,
-      tenureId: enrolmentId,
-      startDate: draft.startDate,
-      endDate: draft.endDate,
-      description: draft.description,
-    }),
+  return merge(school, degree, ...fieldRows, ...skillRows, education, {
+    relations: [degreeEdge, enrolmentType, ...fieldEdges, ...skillEdges, ...statusEdge],
+    values: [
+      ...datesAndDescription({
+        spaceId,
+        tenureId: enrolmentId,
+        startDate: draft.startDate,
+        endDate: draft.endDate,
+        description: draft.description,
+      }),
+      ...gradeRows,
+    ],
   });
 }
 
@@ -484,6 +525,8 @@ export function educationDraftFromEntry(
   entry: {
     subject: { id: string; name: string | null };
     fields: { id: string; name: string | null }[];
+    skills: { id: string; name: string | null }[];
+    grade: number | null;
     startDate: string | null;
     endDate: string | null;
     status: EducationStatus | null;
@@ -497,6 +540,8 @@ export function educationDraftFromEntry(
     // entity to relate to, so it cannot come back into a draft — it stays where
     // it is, on the stint, until someone picks a real Academic field.
     fields: entry.fields.filter(field => field.id !== '').map(field => ({ ...field, isNew: false })),
+    skills: entry.skills.map(skill => ({ id: skill.id, name: skill.name, isNew: false })),
+    grade: entry.grade === null ? '' : String(entry.grade),
     startDate: entry.startDate,
     endDate: entry.endDate,
     status: entry.status ?? (entry.endDate === null ? 'studying' : 'completed'),

@@ -10,6 +10,7 @@ import {
   END_DATE_PROPERTY,
   type EducationStatus,
   type EmploymentStatus,
+  GRADE_PROPERTY,
   LEGACY_FIELD_OF_STUDY_PROPERTY,
   LOCATION_PROPERTY,
   LOCATION_TYPE_PROPERTY,
@@ -21,7 +22,12 @@ import {
 } from './history-ontology';
 
 /** Shapes as they come back from the graph; see `fetch-profile-history.ts`. */
-export type HistoryValueNode = { property: { id: string }; date: string | null; text: string | null };
+export type HistoryValueNode = {
+  property: { id: string };
+  date: string | null;
+  text: string | null;
+  decimal?: string | null;
+};
 export type HistoryRelationNode = {
   id: string;
   entityId: string;
@@ -75,7 +81,13 @@ export type EmploymentEntry = HistoryEntry & {
   location: NamedRef | null;
   locationType: NamedRef | null;
 };
-export type EducationEntry = HistoryEntry & { status: EducationStatus | null; fields: NamedRef[] };
+export type EducationEntry = HistoryEntry & {
+  status: EducationStatus | null;
+  fields: NamedRef[];
+  skills: NamedRef[];
+  /** A mark, where the institution's was recorded. */
+  grade: number | null;
+};
 
 /** An organisation and everything held there. One card in the resting state. */
 export type HistoryCard<TEntry> = {
@@ -109,6 +121,17 @@ function dateFor(values: HistoryValueNode[], propertyId: string) {
 function textFor(values: HistoryValueNode[], propertyId: string) {
   const text = valueFor(values, propertyId)?.text;
   return text && text.trim() !== '' ? text : null;
+}
+
+/**
+ * A decimal off the graph. It arrives as a string — the endpoint serialises
+ * BigFloat the way it serialises BigInt — so parsing is not optional.
+ */
+function decimalFor(values: HistoryValueNode[], propertyId: string) {
+  const raw = valueFor(values, propertyId)?.decimal;
+  if (raw === null || raw === undefined || raw === '') return null;
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function relationTo(relations: HistoryRelationNode[], propertyId: string) {
@@ -270,6 +293,7 @@ export function normalizeEducation(edges: HistoryEdgeNode[]): EducationCard[] {
         );
 
         const enrolmentRelations = relation.entity?.relationsList ?? [];
+        const enrolmentValues = relation.entity?.valuesList ?? [];
         const fields = enrolmentRelations
           .filter(field => field.type.id === ACADEMIC_FIELDS_PROPERTY)
           .map(field => field.toEntity)
@@ -285,6 +309,11 @@ export function normalizeEducation(edges: HistoryEdgeNode[]): EducationCard[] {
           edge: edgeRef,
           status: educationStatusFromOptionId(statusOptionId),
           fields: fields.length > 0 || legacyField === null ? fields : [{ id: '', name: legacyField }],
+          skills: enrolmentRelations
+            .filter(skill => skill.type.id === SKILLS_PROPERTY)
+            .map(skill => skill.toEntity)
+            .filter((skill): skill is NamedRef => skill !== null),
+          grade: decimalFor(enrolmentValues, GRADE_PROPERTY),
         };
       })
       .sort(byMostRecent)

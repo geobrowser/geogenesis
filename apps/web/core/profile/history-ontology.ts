@@ -75,11 +75,28 @@ export const EMPLOYER_TYPE = SystemIds.PROJECT_TYPE;
 export const JOB_TYPE = 'e4e366e9d5554b6892bf7358e824afd2';
 
 /**
- * What `Roles` declares its *relation* entity is — the tenure. Typing it is what
- * lets anything else find a tenure by its type; an untyped one is reachable only
- * by walking in from the person who holds it.
+ * The four levels' relation-entity types, each declared by the property that
+ * carries it: person ─Employment▶ company, whose entity is the *employment
+ * record*, which ─Roles▶ a title, whose entity is the *role information*. The
+ * education branch mirrors it exactly.
+ *
+ * Typing them is what lets anything else find one by its type. Untyped, a tenure
+ * is reachable only by walking in from the person holding it, which is how the
+ * dates on it stayed invisible to everything but this modal.
+ *
+ * Verified against the graph on 2026-09-12.
  */
+export const EMPLOYMENT_RECORD_TYPE = '8ff1f25ffa814dc292171ecee721ee17';
 export const ROLE_INFORMATION_TYPE = '343952488d4a4bc088aae611b931ac0e';
+export const EDUCATION_RECORD_TYPE = '333d23cc8a0244e6a3d00c8414429164';
+export const DEGREE_INFORMATION_TYPE = '45ecd803515d43fd8b2e529bdac330a9';
+
+/**
+ * A mark on the enrolment — a GPA, a classification, whatever the institution
+ * gave. Decimal, so it is a number rather than the string somebody would
+ * otherwise type into a description.
+ */
+export const GRADE_PROPERTY = 'efa26e09c19b4ef9b3bd9698ad5d3abf';
 
 /**
  * Dates. The SDK names these `RANK_*` after the first thing that used them, but

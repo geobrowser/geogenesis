@@ -181,6 +181,7 @@ function EntryRow({
   // something without a working arrangement beside it.
   const place = [location?.name, locationType?.name].filter(Boolean).join(' · ');
   const skills = 'skills' in entry ? (entry as { skills: { name: string | null }[] }).skills : [];
+  const grade = 'grade' in entry ? (entry as { grade: number | null }).grade : null;
 
   const heading = fields.length > 0 ? `${subject}, ${fields.map(field => field.name).join(', ')}` : subject;
 
@@ -209,6 +210,7 @@ function EntryRow({
         )}
 
         {place && <p className="text-footnote text-grey-04">{place}</p>}
+        {grade !== null && <p className="text-footnote text-grey-04">Grade {grade}</p>}
 
         {entry.description && <p className="mt-1 text-footnote text-text">{entry.description}</p>}
 

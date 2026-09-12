@@ -69,8 +69,6 @@ describe('AddEducationSheet', () => {
     expect(scopes).toContain(ACADEMIC_FIELD_TYPE);
   });
 
-  // School and Degree have several entities apiece under those names with no
-  // canonical type, so a wrong filter would hide every real one from the search.
   // Every picker scoped to what its property declares. School takes the pair,
   // since `Education` declares the broader of the two and most schools carry the
   // narrower one.
@@ -144,7 +142,9 @@ describe('AddEducationSheet', () => {
 
     await userEvent.click(pickers()[0]);
     await userEvent.click(pickers()[0]);
-    await userEvent.click(screen.getAllByRole('button', { name: /create new/ }).at(-1)!);
+    // School and Degree are answered, so their pickers are gone; Field is the
+    // first of the two left, with Skills behind it.
+    await userEvent.click(screen.getAllByRole('button', { name: /create new/ })[0]);
     await userEvent.click(screen.getByRole('button', { name: 'Save education' }));
 
     const draft = props.onSave.mock.calls.at(-1)?.[0];

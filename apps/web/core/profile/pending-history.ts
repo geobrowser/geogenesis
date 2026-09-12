@@ -198,6 +198,10 @@ export function mergePendingEducation(
         ...entryFromDraft(addition.key, addition.draft, addition.draft.degree, edge),
         status: addition.draft.status,
         fields: addition.draft.fields,
+        skills: addition.draft.skills,
+        grade: Number.isFinite(Number.parseFloat(addition.draft.grade))
+          ? Number.parseFloat(addition.draft.grade)
+          : null,
       }),
     })),
     removals,

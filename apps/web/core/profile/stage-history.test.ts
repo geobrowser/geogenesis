@@ -6,23 +6,28 @@ import type { Relation } from '~/core/types';
 
 import {
   ACADEMIC_FIELDS_PROPERTY,
+  DEGREE_INFORMATION_TYPE,
   DEGREE_PROPERTY,
   DEGREE_TYPE,
   DESCRIPTION_PROPERTY,
   EDUCATION_PROPERTY,
+  EDUCATION_RECORD_TYPE,
   EDUCATION_STATUS_COMPLETED,
   EDUCATION_STATUS_PROPERTY,
   EMPLOYER_TYPE,
   EMPLOYMENT_PROPERTY,
+  EMPLOYMENT_RECORD_TYPE,
   EMPLOYMENT_STATUS_CURRENT,
   EMPLOYMENT_STATUS_FORMER,
   EMPLOYMENT_STATUS_PROPERTY,
   END_DATE_PROPERTY,
+  GRADE_PROPERTY,
   JOB_TYPE,
   LOCATION_PROPERTY,
   LOCATION_TYPE_PROPERTY,
   ROLES_PROPERTY,
   ROLE_INFORMATION_TYPE,
+  SKILLS_PROPERTY,
   START_DATE_PROPERTY,
 } from './history-ontology';
 import { type EducationDraft, type PositionDraft, stageEducation, stagePosition } from './stage-history';
@@ -50,6 +55,8 @@ const education = (overrides: Partial<EducationDraft> = {}): EducationDraft => (
   school: picked('northumbria', 'Northumbria University'),
   degree: picked('phd', 'Ph.D.'),
   fields: [picked('finance', 'Finance')],
+  skills: [],
+  grade: '',
   startDate: '2022-09-01Z',
   endDate: null,
   status: 'studying',
@@ -148,10 +155,12 @@ describe('stagePosition', () => {
 
     expect(values.filter(value => value.property.id === SystemIds.NAME_PROPERTY)).toHaveLength(0);
 
-    // The tenure's own type is the exception, and it is not about either picked
-    // entity: it is minted here, so nothing else is going to type it.
+    // The two relation entities are the exception, and neither is about a picked
+    // entity: both are minted here, so nothing else is going to type them.
     const types = byType(relations, SystemIds.TYPES_PROPERTY);
-    expect(types.map(relation => relation.toEntity.id)).toEqual([ROLE_INFORMATION_TYPE]);
+    expect(types.map(relation => relation.toEntity.id).sort()).toEqual(
+      [EMPLOYMENT_RECORD_TYPE, ROLE_INFORMATION_TYPE].sort()
+    );
   });
 
   // `Roles` declares `Role information` as its relation entity type. An untyped
@@ -210,6 +219,27 @@ describe('stagePosition', () => {
     );
   });
 
+  // Each level says what it is. Untyped, a relation entity is reachable only by
+  // walking in from the person holding it.
+  it('types the employment record as well as the tenure', () => {
+    const { relations } = stagePosition(position(), context);
+
+    const employment = oneOf(relations, EMPLOYMENT_PROPERTY);
+    const roles = oneOf(relations, ROLES_PROPERTY);
+    const types = byType(relations, SystemIds.TYPES_PROPERTY);
+
+    expect(types.find(t => t.toEntity.id === EMPLOYMENT_RECORD_TYPE)?.fromEntity.id).toBe(employment.entityId);
+    expect(types.find(t => t.toEntity.id === ROLE_INFORMATION_TYPE)?.fromEntity.id).toBe(roles.entityId);
+  });
+
+  // A promotion reuses the stint, which is already typed, so typing it again
+  // would write a second identical Types relation onto it.
+  it('does not retype an employment record it did not create', () => {
+    const { relations } = stagePosition(position({ existingStintId: 'stint-1' }), context);
+
+    expect(byType(relations, SystemIds.TYPES_PROPERTY).map(t => t.toEntity.id)).toEqual([ROLE_INFORMATION_TYPE]);
+  });
+
   it('gives every row the space being published to', () => {
     const { values, relations } = stagePosition(position({ company: created('new-co', 'Fathom') }), context);
 
@@ -254,6 +284,47 @@ describe('stageEducation', () => {
 
   // Same reason a job title is typed: an untyped degree never turns up in the
   // scoped search that would stop the next person creating a second one.
+  it('types the education record and the enrolment', () => {
+    const { relations } = stageEducation(education(), context);
+
+    const record = oneOf(relations, EDUCATION_PROPERTY);
+    const degree = oneOf(relations, DEGREE_PROPERTY);
+    const types = byType(relations, SystemIds.TYPES_PROPERTY);
+
+    expect(types.find(t => t.toEntity.id === EDUCATION_RECORD_TYPE)?.fromEntity.id).toBe(record.entityId);
+    expect(types.find(t => t.toEntity.id === DEGREE_INFORMATION_TYPE)?.fromEntity.id).toBe(degree.entityId);
+  });
+
+  // Decimal, so it sorts and filters as a number rather than as the string
+  // somebody would otherwise type into the description.
+  it('writes a grade on the enrolment as a decimal', () => {
+    const { values, relations } = stageEducation(education({ grade: '3.8' }), context);
+    const degree = oneOf(relations, DEGREE_PROPERTY);
+
+    const grade = values.find(value => value.property.id === GRADE_PROPERTY);
+    expect(grade).toMatchObject({ entity: { id: degree.entityId }, value: '3.8' });
+    expect(grade?.property.dataType).toBe('DECIMAL');
+  });
+
+  // A classification or a pass has nowhere to go under a numeric property, and
+  // storing it as text there would break every reader that expects a number.
+  it('leaves a grade that is not a number unwritten', () => {
+    for (const grade of ['', '  ', 'First class honours', 'Pass']) {
+      const { values } = stageEducation(education({ grade }), context);
+      expect(values.find(value => value.property.id === GRADE_PROPERTY)).toBeUndefined();
+    }
+  });
+
+  it('hangs skills off the enrolment, beside the dates', () => {
+    const { relations } = stageEducation(education({ skills: [picked('stats', 'Statistics')] }), context);
+
+    const degree = oneOf(relations, DEGREE_PROPERTY);
+    expect(oneOf(relations, SKILLS_PROPERTY)).toMatchObject({
+      fromEntity: { id: degree.entityId },
+      toEntity: { id: 'stats' },
+    });
+  });
+
   it('names and types a degree the user typed rather than picked', () => {
     const { values, relations } = stageEducation(education({ degree: created('new-degree', 'MPhil') }), context);
 

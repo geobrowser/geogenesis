@@ -5,7 +5,14 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { type MonthYear, fromGraphDate, toGraphDate } from '~/core/profile/history-dates';
-import { ACADEMIC_FIELD_TYPE, DEGREE_TYPES, type EducationStatus, SCHOOL_TYPES } from '~/core/profile/history-ontology';
+import {
+  ACADEMIC_FIELD_TYPE,
+  DEGREE_TYPES,
+  type EducationStatus,
+  SCHOOL_TYPES,
+  SKILL_TYPE,
+  TAXONOMY_SPACE_ID,
+} from '~/core/profile/history-ontology';
 import type { EducationDraft, EntityChoice } from '~/core/profile/stage-history';
 
 import { inputStyles } from '~/design-system/input';
@@ -32,6 +39,9 @@ const SCHOOL_TYPE_FILTER = SCHOOL_TYPES.map(id => ({ id, name: null }));
 
 /** Both entities named `Degree`; see `LEGACY_DEGREE_TYPE` for why it is a pair. */
 const DEGREE_TYPE_FILTER = DEGREE_TYPES.map(id => ({ id, name: 'Degree' }));
+
+/** The taxonomy lives in one space nobody is a member of; see `TAXONOMY_SPACE_ID`. */
+const TAXONOMY_SPACE_ID_LIST = [TAXONOMY_SPACE_ID];
 
 const STATUS_OPTIONS: { value: EducationStatus; label: string }[] = [
   { value: 'studying', label: 'Still studying' },
@@ -60,6 +70,9 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
   const [start, setStart] = React.useState<MonthYear | null>(fromGraphDate(initial?.startDate));
   const [end, setEnd] = React.useState<MonthYear | null>(fromGraphDate(initial?.endDate));
   const [description, setDescription] = React.useState(initial?.description ?? '');
+  const [skills, setSkills] = React.useState<EntityChoice[]>(initial?.skills ?? []);
+  const [isAddingSkill, setIsAddingSkill] = React.useState(false);
+  const [grade, setGrade] = React.useState(initial?.grade ?? '');
 
   const canSave = pickedSchool !== null && degree !== null && !isSaving;
 
@@ -70,6 +83,8 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
       school: pickedSchool,
       degree,
       fields,
+      skills,
+      grade,
       startDate: start ? toGraphDate(start) : null,
       endDate: status === 'studying' || !end ? null : toGraphDate(end),
       status,
@@ -202,6 +217,71 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
       <div className="flex flex-wrap items-end gap-4">
         <MonthYearField label="Start" value={start} onChange={setStart} disabled={isSaving} />
         <MonthYearField label="End" value={end} onChange={setEnd} disabled={isSaving || status === 'studying'} />
+      </div>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="text-metadataMedium text-grey-04">Grade</span>
+        {/* A number, because the property is a decimal. A classification or a
+            pass has nowhere to go here and belongs in the description. */}
+        <input
+          type="number"
+          inputMode="decimal"
+          step="any"
+          value={grade}
+          onChange={event => setGrade(event.currentTarget.value)}
+          disabled={isSaving}
+          placeholder="Optional — e.g. 3.8"
+          className={inputStyles()}
+        />
+      </label>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-metadataMedium text-grey-04">Skills</span>
+        {skills.length > 0 && (
+          <ul className="flex flex-wrap gap-1.5">
+            {skills.map(skill => (
+              <li key={skill.id} className="flex items-center gap-1.5 rounded bg-divider px-2 py-1">
+                <span className="text-footnote text-text">{skill.name ?? 'Untitled'}</span>
+                {skill.isNew && <span className="text-footnote text-ctaPrimary">NEW</span>}
+                <button
+                  type="button"
+                  onClick={() => setSkills(current => current.filter(item => item.id !== skill.id))}
+                  aria-label={`Remove skill ${skill.name ?? 'skill'}`}
+                  className="text-footnote text-grey-04 hover:underline"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {isAddingSkill || skills.length === 0 ? (
+          <SelectEntity
+            spaceId={spaceId}
+            relationValueTypes={[{ id: SKILL_TYPE, name: 'Skill' }]}
+            placeholder="Find or create a skill..."
+            alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
+            onCreateEntity={findOrCreate}
+            onDone={(result, fromCreateFn) => {
+              setSkills(current =>
+                current.some(skill => skill.id === result.id)
+                  ? current
+                  : [...current, { id: result.id, name: result.name, isNew: Boolean(fromCreateFn) }]
+              );
+              setIsAddingSkill(false);
+            }}
+            width="full"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsAddingSkill(true)}
+            className="self-start text-footnote text-ctaPrimary hover:underline"
+          >
+            + Add skill
+          </button>
+        )}
       </div>
 
       <label className="flex flex-col gap-1.5">
