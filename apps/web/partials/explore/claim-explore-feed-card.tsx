@@ -140,29 +140,21 @@ export function ClaimExploreFeedCard({
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
 
   return (
-    // `@container` sits out here rather than on the card, because a container query never matches
-    // the element that declares the container — only its descendants. With both on the `<article>`
-    // every `claim-card-narrow:` rule *on the article itself* was silently inert, which is how the
-    // boxed phone card shipped doing nothing at all while its descendants narrowed correctly.
-    <div className="@container">
-      <article
-        ref={setContainer}
-        className={cx(
-          'flex flex-col gap-4',
-          // Wide: a feed row, separated from the next by a rule.
-          'border-b border-divider py-4 last:border-b-0',
-          // Narrow: the debates panel's card. The rule between rows becomes a box, so the bottom
-          // border comes back on the last card too — `last:border-b-0` above is a wide-card rule
-          // and would otherwise leave the final card open along its base. Clipped so the grey
-          // footer band takes the rounded corners with it.
-          'claim-card-narrow:rounded-2xl claim-card-narrow:mb-3 claim-card-narrow:overflow-hidden claim-card-narrow:border claim-card-narrow:border-grey-02 claim-card-narrow:p-4 claim-card-narrow:last:mb-0 claim-card-narrow:last:border-b',
-          // Only a card with a footer band gives up its bottom padding, and only then does the band
-          // reach the base. An unanswered claim has no band, so it keeps its padding rather than
-          // ending flush against its own border.
-          hasVerdict && 'claim-card-narrow:pb-0'
-        )}
-      >
-        {/*
+    // The `<article>` is the root and stays the root. Two things depend on that and neither is
+    // visible from here: `table-block-explore-items-dnd` sizes these through `[&>article]`, a
+    // direct-child rule that a wrapper silently breaks, and `last:` is only meaningful on an
+    // element that is actually a sibling of the other cards — inside a wrapper every card is an
+    // only child, so `:last-child` matches all of them.
+    //
+    // That rules out giving the phone a boxed card here: box, spacing and border are all rules that
+    // would have to sit on this element, and a container query never matches the element declaring
+    // the container. The phone still gets the panel's *contents* — pills above, the grey summary
+    // band below — through descendants, which is where the width question can actually be asked.
+    <article
+      ref={setContainer}
+      className={cx('@container flex flex-col gap-4', 'border-b border-divider py-4 last:border-b-0')}
+    >
+      {/*
         Two zones, divided by a rule that runs the whole height: everything you can *do* to the claim
         on the left, everything describing its *state* on the right, with the meta row inside the
         split rather than spanning above it.
@@ -185,96 +177,95 @@ export function ClaimExploreFeedCard({
         derived from; the arithmetic lives there so the two cannot drift apart. Stacking gives the
         pills the card's full width, which is the arrangement a phone already got.
       */}
-        {/* `gap-x-6` to match the right column's `pl-6`, so the rule sits centred in a 24px gutter:
+      {/* `gap-x-6` to match the right column's `pl-6`, so the rule sits centred in a 24px gutter:
             the offer at the end of the meta row and the share below it are the same distance from
             it, rather than the offer floating 36px out while the number sits 24px in. */}
-        <div
-          className={cx(
-            'grid claim-card-narrow:grid-cols-1 claim-card-narrow:gap-y-4',
-            // No verdict, no column, no rule. A claim nobody has answered has nothing to report, and
-            // an empty 220px cell behind a vertical line reads as something having failed to load —
-            // where the claim simply taking the full width reads as a claim nobody has answered.
-            hasVerdict ? 'grid-cols-[minmax(0,1fr)_220px] gap-x-6' : 'grid-cols-1'
-          )}
-        >
-          {/* The same row every other explore card draws, through the same component. It was a copy
+      <div
+        className={cx(
+          'grid claim-card-narrow:grid-cols-1 claim-card-narrow:gap-y-4',
+          // No verdict, no column, no rule. A claim nobody has answered has nothing to report, and
+          // an empty 220px cell behind a vertical line reads as something having failed to load —
+          // where the claim simply taking the full width reads as a claim nobody has answered.
+          hasVerdict ? 'grid-cols-[minmax(0,1fr)_220px] gap-x-6' : 'grid-cols-1'
+        )}
+      >
+        {/* The same row every other explore card draws, through the same component. It was a copy
             once, and the copy drifted in four ways the eye could see before anyone found them in a
             diff — see the note on `ExploreMetaRow`. What a claim adds is Controversial beside its
             type, and the offer pinned to the end. */}
-          <ExploreMetaRow
-            item={item}
-            hideSpaceLink={hideSpaceLink}
-            hideJoinButton={hideJoinButton}
-            extraSegments={summary.isControversial ? [<ControversialTag key="controversial" />] : undefined}
-            endSlot={
-              <ClaimEndSlot
-                claimId={item.entityId}
-                spaceId={item.spaceId}
-                activeDebate={row?.active_debate}
-                enabled={nearViewport}
-                // `undefined` while the reads are out, so "not known yet" cannot read as "holds none".
-                viewerPosition={isResponseKindResolved && isViewerResponseResolved ? control.viewerPosition : undefined}
-                className="ml-auto"
-              />
-            }
-            className="col-start-1 row-start-1 mb-3 claim-card-narrow:mb-0"
-          />
+        <ExploreMetaRow
+          item={item}
+          hideSpaceLink={hideSpaceLink}
+          hideJoinButton={hideJoinButton}
+          extraSegments={summary.isControversial ? [<ControversialTag key="controversial" />] : undefined}
+          endSlot={
+            <ClaimEndSlot
+              claimId={item.entityId}
+              spaceId={item.spaceId}
+              activeDebate={row?.active_debate}
+              enabled={nearViewport}
+              // `undefined` while the reads are out, so "not known yet" cannot read as "holds none".
+              viewerPosition={isResponseKindResolved && isViewerResponseResolved ? control.viewerPosition : undefined}
+              className="ml-auto"
+            />
+          }
+          className="col-start-1 row-start-1 mb-3 claim-card-narrow:mb-0"
+        />
 
-          {/* No thumbnail: claims carry no image, so the generic card's 60px well is either an empty
+        {/* No thumbnail: claims carry no image, so the generic card's 60px well is either an empty
             gutter or a placeholder that says nothing. The sentence gets the column instead — it
             runs to a median of 108 characters and needs it. */}
-          <ExploreCardEntityLink
-            item={item}
-            opensSidePanel={titleOpensSidePanel}
-            className="group/title col-start-1 row-start-2 min-w-0"
-          >
-            <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-pretty text-text group-hover/title:underline">
-              {item.title}
-            </h2>
-          </ExploreCardEntityLink>
+        <ExploreCardEntityLink
+          item={item}
+          opensSidePanel={titleOpensSidePanel}
+          className="group/title col-start-1 row-start-2 min-w-0"
+        >
+          <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-pretty text-text group-hover/title:underline">
+            {item.title}
+          </h2>
+        </ExploreCardEntityLink>
 
-          <div
-            className={cx(
-              'col-start-1 row-start-3 mt-4 max-w-[360px] claim-card-narrow:mt-0'
-              // Nothing to add on a phone: the pills hold row 3 either way, and the verdict below
-              // them takes row 4. That is the debates panel's order — what you can *do* to the claim
-              // before what everyone else did with it — and on a wide card the verdict is a column
-              // beside this, so the question does not arise.
-            )}
-          >
-            <PositionRow
-              positions={control.optimisticPositions}
-              responseKind={responseKind}
-              viewerPosition={control.viewerPosition}
-              onRespond={control.respond}
-              disabled={!control.canRespond}
-              titleFor={control.actionTitle}
-            />
-            {control.responseError ? (
-              <div role="alert" className="mt-2">
-                <Text as="p" variant="footnote" color="red-01">
-                  {control.responseError}
-                </Text>
-              </div>
-            ) : null}
-          </div>
-
-          {/* Spans all three rows in the wide arrangement, which is what makes the rule full-height.
-            The narrow variant drops the rule rather than rotating it — see the note on the
-            component. */}
-          {hasVerdict ? (
-            <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 claim-card-narrow:col-start-1 claim-card-narrow:row-span-1 claim-card-narrow:row-start-4 claim-card-narrow:border-l-0 claim-card-narrow:pl-0">
-              <ClaimVerdictColumn
-                entityId={item.entityId}
-                spaceId={item.spaceId}
-                responseKind={responseKind}
-                summary={summary}
-              />
+        <div
+          className={cx(
+            'col-start-1 row-start-3 mt-4 max-w-[360px] claim-card-narrow:mt-0'
+            // Nothing to add on a phone: the pills hold row 3 either way, and the verdict below
+            // them takes row 4. That is the debates panel's order — what you can *do* to the claim
+            // before what everyone else did with it — and on a wide card the verdict is a column
+            // beside this, so the question does not arise.
+          )}
+        >
+          <PositionRow
+            positions={control.optimisticPositions}
+            responseKind={responseKind}
+            viewerPosition={control.viewerPosition}
+            onRespond={control.respond}
+            disabled={!control.canRespond}
+            titleFor={control.actionTitle}
+          />
+          {control.responseError ? (
+            <div role="alert" className="mt-2">
+              <Text as="p" variant="footnote" color="red-01">
+                {control.responseError}
+              </Text>
             </div>
           ) : null}
         </div>
-      </article>
-    </div>
+
+        {/* Spans all three rows in the wide arrangement, which is what makes the rule full-height.
+            The narrow variant drops the rule rather than rotating it — see the note on the
+            component. */}
+        {hasVerdict ? (
+          <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 claim-card-narrow:col-start-1 claim-card-narrow:row-span-1 claim-card-narrow:row-start-4 claim-card-narrow:border-l-0 claim-card-narrow:pl-0">
+            <ClaimVerdictColumn
+              entityId={item.entityId}
+              spaceId={item.spaceId}
+              responseKind={responseKind}
+              summary={summary}
+            />
+          </div>
+        ) : null}
+      </div>
+    </article>
   );
 }
 
@@ -348,10 +339,9 @@ function ClaimVerdictColumn({
         />
       </div>
 
-      {/* Narrow: the debates panel's footer band — share, split and faces on one line, on grey,
-          bled to the card's edges by `-mx-4` against its `p-4`. The card carries `pb-0` so this
-          reaches the base, and `overflow-hidden` so the band is clipped to the rounded corners
-          rather than squaring them off. */}
+      {/* Narrow: the debates panel's footer band — share, split and faces on one line, on grey.
+          Full width of the row rather than bled past it: the feed row carries no horizontal
+          padding, so a negative margin here would hang 16px outside the card. */}
       <div className="hidden claim-card-narrow:block">
         <ClaimSummary
           entityId={entityId}
@@ -359,7 +349,7 @@ function ClaimVerdictColumn({
           responseKind={responseKind}
           summary={summary}
           layout="inline"
-          className="-mx-4 border-t border-divider bg-grey-01 px-4 py-2"
+          className="border-t border-divider bg-grey-01 px-3 py-2"
         />
       </div>
     </>

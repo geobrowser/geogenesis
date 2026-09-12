@@ -312,6 +312,26 @@ describe('ClaimExploreFeedCard', () => {
     expect(document.querySelector('.border-l')).toBeNull();
   });
 
+  it('keeps the card as the root element, so its host and its siblings can reach it', () => {
+    // Two things depend on the root being an `<article>` that is a real sibling of the other cards,
+    // and a wrapper quietly broke both: `table-block-explore-items-dnd` sizes these through
+    // `[&>article]`, a direct-child rule; and `last:border-b-0` divides the feed, which needs
+    // `:last-child` to mean "last card" rather than "only child of my own wrapper".
+    const { container } = render(
+      <>
+        <ClaimExploreFeedCard item={item} />
+        <ClaimExploreFeedCard item={{ ...item, entityId: 'claim-2' }} />
+      </>
+    );
+    scrollIntoRange();
+
+    const cards = container.querySelectorAll(':scope > article');
+    expect(cards).toHaveLength(2);
+    // The first is not `:last-child`, so its divider survives; only the final card drops it.
+    expect(cards[0].matches(':last-child')).toBe(false);
+    expect(cards[1].matches(':last-child')).toBe(true);
+  });
+
   it('puts the pills above the verdict on a phone, as the debates panel does', () => {
     // What you can *do* to the claim comes before what everyone else did with it. The pills hold
     // row 3 whether or not a verdict follows, so an unanswered claim gains no empty row — an
