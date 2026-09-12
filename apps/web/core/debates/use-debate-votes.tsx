@@ -8,6 +8,7 @@ import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
+import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import {
@@ -310,6 +311,15 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       ]);
 
       setVoteInFlight(debateEntityId, true);
+      const operation = observeOperation('vote', 'debate', debateEntityId);
+      const outcomeProperties: Record<string, unknown> = {
+        vote_kind: 'winner',
+        vote_direction: 'winner',
+        mutation_kind: previousVote ? 'switch' : 'cast',
+        vote_id: voteEntityId,
+        winner_id: participant.profile_space_id,
+        previous_winner_id: previousVote?.winnerSpaceEntityId ?? null,
+      };
 
       const publish = Effect.gen(function* () {
         const ops = yield* Publish.prepareLocalDataForPublishing(values, relations, personalSpaceId);
@@ -330,13 +340,12 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           retrySchedule(Duration.minutes(1))
         );
 
-        return yield* Effect.retry(
-          Effect.tryPromise({
-            try: () => smartAccount.sendUserOperation({ calls: [{ to: result.to, value: 0n, data: result.calldata }] }),
-            catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
-          }),
-          retrySchedule(Duration.seconds(10))
-        );
+        // The wallet retries known pre-submission failures. Repeating this whole
+        // call after an uncertain response could submit the vote twice.
+        return yield* Effect.tryPromise({
+          try: () => smartAccount.sendUserOperation({ calls: [{ to: result.to, value: 0n, data: result.calldata }] }),
+          catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
+        });
       });
 
       try {
@@ -353,6 +362,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           });
 
           const error = result.left;
+          operation.failed(classifyOperationFailure(error));
           if (error instanceof Error && error.message.includes('User rejected')) return;
 
           console.error('[useDebateVotes] Publish failed:', error);
@@ -361,6 +371,8 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           return;
         }
 
+        outcomeProperties.user_operation_hash = result.right;
+        operation.outcome('vote_cast', 'submitted', outcomeProperties);
         setToast(<span>Vote published!</span>);
       } finally {
         setVoteInFlight(debateEntityId, false);
@@ -409,6 +421,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
         // never asking: left alone, the card would have refetched on its next mount and had a
         // chance at the truth.
         if (voteIsReadable) {
+          operation.outcome('vote_cast', 'indexed', outcomeProperties);
           void queryClient.invalidateQueries({ queryKey: ['curator-onboarding-status'] });
         }
       })();

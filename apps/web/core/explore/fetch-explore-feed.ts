@@ -19,7 +19,13 @@ import {
 } from './explore-card-item';
 import { EXPLORE_ENTITY_NAME_PROPERTY_ID, EXPLORE_PAGE_SIZE } from './explore-constants';
 import { claimsRequireDebateTagFilter } from './explore-debate-tag-filter';
-import { EXPLORE_DIVERSITY_WINDOW_SIZE, applyDiversityCap, exploreItemTypeKey } from './explore-diversity';
+import {
+  EXPLORE_DIVERSITY_WINDOW_SIZE,
+  applyDiversityCap,
+  applyPerSpaceQuota,
+  exploreItemSpaceKey,
+  exploreItemTypeKey,
+} from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
@@ -446,7 +452,12 @@ export async function fetchExploreFeed(args: {
     // "Best" is the only sort that reorders (GEO-2690). "New" is reverse-chronological and
     // an activity log that shuffles is simply wrong; "Top" is an explicit "rank by score"
     // request, and the crowding-out was measured on Best, which is also the default tab.
-    return args.sort === 'best' ? applyDiversityCap(rows, exploreItemTypeKey) : rows;
+    // Two different crowding problems, two passes (GEO-2690 for type, GEO-2841 for space).
+    // The space quota runs last so its guarantee is the one that holds outright; see
+    // `applyPerSpaceQuota` for why that trade is the right way round.
+    return args.sort === 'best'
+      ? applyPerSpaceQuota(applyDiversityCap(rows, exploreItemTypeKey), exploreItemSpaceKey)
+      : rows;
   };
 
   // A window that survives none of the above is not the end of the feed, and returning it as an

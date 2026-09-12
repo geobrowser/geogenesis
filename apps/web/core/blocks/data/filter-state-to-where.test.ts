@@ -117,6 +117,80 @@ describe('filterStateToWhere', () => {
   });
 });
 
+describe('relation filters are scoped to the block space (GEO-2865)', () => {
+  const SPACE = 'cccccccccccccccccccccccccccccccc';
+  const OTHER = 'dddddddddddddddddddddddddddddddd';
+
+  it('scopes a single relation filter to the space it was given', () => {
+    const where = filterStateToWhere([relationFilter(PROPERTY_A, 'v1')], {}, SPACE);
+
+    expect(where).toEqual({
+      relations: [
+        { typeOf: { id: { equals: PROPERTY_A } }, toEntity: { id: { equals: 'v1' } }, space: { equals: SPACE } },
+      ],
+    });
+  });
+
+  it('scopes backlink filters in the same way', () => {
+    const backlink: Filter = { ...relationFilter(PROPERTY_A, 'v1'), isBacklink: true };
+
+    const where = filterStateToWhere([backlink], {}, SPACE);
+
+    expect(where).toEqual({
+      backlinks: [
+        { typeOf: { id: { equals: PROPERTY_A } }, fromEntity: { id: { equals: 'v1' } }, space: { equals: SPACE } },
+      ],
+    });
+  });
+
+  it('scopes every branch of an OR group, not just the first', () => {
+    const where = filterStateToWhere(
+      [relationFilter(PROPERTY_A, 'v1'), relationFilter(PROPERTY_A, 'v2')],
+      { [PROPERTY_A]: 'OR' },
+      SPACE
+    );
+
+    const branches = (where.OR ?? []) as Array<{ relations?: Array<{ space?: { equals: string } }> }>;
+    expect(branches).toHaveLength(2);
+    for (const branch of branches) {
+      expect(branch.relations?.[0].space).toEqual({ equals: SPACE });
+    }
+  });
+
+  it('leaves the query unscoped when no space is supplied, preserving previous behaviour', () => {
+    // Two callers have no block space in scope; omitting it must not invent one.
+    const where = filterStateToWhere([relationFilter(PROPERTY_A, 'v1')]);
+
+    expect(where).toEqual({
+      relations: [{ typeOf: { id: { equals: PROPERTY_A } }, toEntity: { id: { equals: 'v1' } } }],
+    });
+  });
+
+  it('does not touch the Types branch, which scopes by the chosen type instead', () => {
+    const typesFilter: Filter = {
+      columnId: SystemIds.TYPES_PROPERTY,
+      columnName: 'Types',
+      valueType: 'RELATION',
+      value: 'type-1',
+      valueName: 'Type 1',
+      typesRelationSpaceId: OTHER,
+    };
+
+    const where = filterStateToWhere([typesFilter], {}, SPACE);
+
+    // OTHER, not SPACE: the type's own space still wins here by design.
+    expect(where).toEqual({
+      relations: [
+        {
+          typeOf: { id: { equals: SystemIds.TYPES_PROPERTY } },
+          toEntity: { id: { equals: 'type-1' } },
+          space: { equals: OTHER },
+        },
+      ],
+    });
+  });
+});
+
 describe('isBacklinkFilter', () => {
   const base: Filter = { columnId: 'p', columnName: 'Topics', valueType: 'RELATION', value: 'v', valueName: null };
 

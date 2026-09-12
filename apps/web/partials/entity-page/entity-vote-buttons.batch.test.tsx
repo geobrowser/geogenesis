@@ -172,7 +172,7 @@ describe('EntityVoteButtons claims-page batching', () => {
     expect(view.getByText('7')).toBeInTheDocument();
     expect(view.getByRole('button', { name: 'Remove upvote' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(view.getByRole('button', { name: 'Downvote' }));
-    expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative', expect.any(Object));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative');
   });
 
   it('passes the optimistic viewer response to responder avatars immediately', () => {
@@ -192,7 +192,7 @@ describe('EntityVoteButtons claims-page batching', () => {
     const view = renderButtons(true, true);
 
     fireEvent.click(view.getByTitle('Remove agreement'));
-    expect(mocks.submitResponse).toHaveBeenLastCalledWith('clear', expect.any(Object));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith('clear');
 
     mocks.optimisticResponse = 'negative';
     view.rerender(
@@ -201,7 +201,7 @@ describe('EntityVoteButtons claims-page batching', () => {
       </ClaimResponseBatchBoundary>
     );
     fireEvent.click(view.getByTitle('Agree'));
-    expect(mocks.submitResponse).toHaveBeenLastCalledWith('positive', expect.any(Object));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith('positive');
 
     mocks.optimisticResponse = 'positive';
     view.rerender(
@@ -210,7 +210,7 @@ describe('EntityVoteButtons claims-page batching', () => {
       </ClaimResponseBatchBoundary>
     );
     fireEvent.click(view.getByTitle('Disagree'));
-    expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative', expect.any(Object));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative');
   });
 
   it('renders 50 batched claims with one summary request and no individual response requests', async () => {

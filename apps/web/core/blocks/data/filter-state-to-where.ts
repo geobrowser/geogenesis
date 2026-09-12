@@ -5,9 +5,28 @@ import type { WhereCondition } from '~/core/sync/experimental_query-layer';
 
 import type { Filter, FilterMode, ModesByColumn } from './filters';
 
-export function filterStateToWhere(filterState: Filter[], modesByColumn: ModesByColumn = {}): WhereCondition {
+/**
+ * `relationSpaceId` scopes relation and backlink filters to the space the block lives in
+ * (GEO-2865). Without it, `Tags -> Main topic` matched an entity holding that relation in *any*
+ * space, so a World Affairs table listed topics tagged Main topic only in US Politics. Measured on
+ * production: 31 relations point at "Main topic" across three spaces, and every table filtered on
+ * it showed all 31 regardless of which space it was in.
+ *
+ * Optional on purpose. Two callers — the ranking row accumulator and the filter-value dropdown —
+ * have no block space in scope, and passing nothing keeps exactly the previous behaviour there
+ * rather than inventing a scope for them. Omitting it is the old, unscoped query.
+ *
+ * The Types branch is deliberately untouched: it already scopes, via `typesRelationSpaceId`, by
+ * where the *chosen type* is defined rather than by the block. That is a different question with a
+ * different answer, and changing it would move behaviour nobody reported.
+ */
+export function filterStateToWhere(
+  filterState: Filter[],
+  modesByColumn: ModesByColumn = {},
+  relationSpaceId?: string | null
+): WhereCondition {
   if (filterState.length === 0) return {};
-  if (filterState.length === 1) return buildSingleFilterWhere(filterState[0]);
+  if (filterState.length === 1) return buildSingleFilterWhere(filterState[0], relationSpaceId);
 
   // Group filters by property AND direction (see filterGroupKey). Each group
   // chooses its own mode; distinct groups are always combined with AND by
@@ -27,15 +46,15 @@ export function filterStateToWhere(filterState: Filter[], modesByColumn: ModesBy
     // several ever coexist in memory, each stays required.
     const mode: FilterMode = isBacklinkFilter(filters[0]) ? 'AND' : (modesByColumn[columnId] ?? 'AND');
     if (filters.length === 1) {
-      groupConditions.push(buildSingleFilterWhere(filters[0]));
+      groupConditions.push(buildSingleFilterWhere(filters[0], relationSpaceId));
     } else if (ID.equals(columnId, SystemIds.SPACE_FILTER)) {
       // Multiple spaces are always OR, whatever the mode says: an entity lives
       // in one space, so "in A and in B" is an empty set nobody asks for.
       groupConditions.push(buildSpaceFiltersWhere(filters));
     } else if (mode === 'OR') {
-      groupConditions.push(buildOrWhere(filters));
+      groupConditions.push(buildOrWhere(filters, relationSpaceId));
     } else {
-      groupConditions.push(buildAndWhere(filters));
+      groupConditions.push(buildAndWhere(filters, relationSpaceId));
     }
   }
 
@@ -123,7 +142,7 @@ export function filterGroupKey(filter: Filter): string {
   return isBacklinkFilter(filter) ? `backlink:${filter.columnId}` : filter.columnId;
 }
 
-function buildSingleFilterWhere(filter: Filter): WhereCondition {
+function buildSingleFilterWhere(filter: Filter, relationSpaceId?: string | null): WhereCondition {
   if (filter.valueType === 'TEXT') {
     if (ID.equals(filter.columnId, SystemIds.NAME_PROPERTY)) {
       return { name: { contains: filter.value } };
@@ -151,13 +170,28 @@ function buildSingleFilterWhere(filter: Filter): WhereCondition {
       }
       return { types: [{ id: { equals: filter.value } }] };
     }
+    // Both branches carry the block's space when it is known (GEO-2865). A relation lives in a
+    // space, so an unscoped predicate matches the relation wherever it was written — which is the
+    // reported bug, and applies equally in the reverse direction.
     if (isBacklinkFilter(filter)) {
       return {
-        backlinks: [{ typeOf: { id: { equals: filter.columnId } }, fromEntity: { id: { equals: filter.value } } }],
+        backlinks: [
+          {
+            typeOf: { id: { equals: filter.columnId } },
+            fromEntity: { id: { equals: filter.value } },
+            ...(relationSpaceId ? { space: { equals: relationSpaceId } } : {}),
+          },
+        ],
       };
     }
     return {
-      relations: [{ typeOf: { id: { equals: filter.columnId } }, toEntity: { id: { equals: filter.value } } }],
+      relations: [
+        {
+          typeOf: { id: { equals: filter.columnId } },
+          toEntity: { id: { equals: filter.value } },
+          ...(relationSpaceId ? { space: { equals: relationSpaceId } } : {}),
+        },
+      ],
     };
   }
 
@@ -169,6 +203,8 @@ function buildSpaceFiltersWhere(filters: Filter[]): WhereCondition {
   const ids = [...new Set(filters.map(filter => filter.value).filter(Boolean))];
   if (ids.length === 0) return {};
   if (ids.length === 1) {
+    // No space to thread: this path only ever handles SPACE_FILTER, which never reaches the
+    // relation branches.
     return buildSingleFilterWhere({ ...filters[0], value: ids[0] });
   }
   return {
@@ -176,12 +212,12 @@ function buildSpaceFiltersWhere(filters: Filter[]): WhereCondition {
   };
 }
 
-function buildOrWhere(filters: Filter[]): WhereCondition {
-  return { OR: filters.map(filter => buildSingleFilterWhere(filter)) };
+function buildOrWhere(filters: Filter[], relationSpaceId?: string | null): WhereCondition {
+  return { OR: filters.map(filter => buildSingleFilterWhere(filter, relationSpaceId)) };
 }
 
-function buildAndWhere(filters: Filter[]): WhereCondition {
+function buildAndWhere(filters: Filter[], relationSpaceId?: string | null): WhereCondition {
   // Each chip remains an independent clause so one entity must satisfy all
   // selected values for this property.
-  return { AND: filters.map(filter => buildSingleFilterWhere(filter)) };
+  return { AND: filters.map(filter => buildSingleFilterWhere(filter, relationSpaceId)) };
 }

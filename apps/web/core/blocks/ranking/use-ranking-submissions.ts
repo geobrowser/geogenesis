@@ -7,6 +7,7 @@ import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
+import { type OperationContext, classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { readCachedPersonalSpace, readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
@@ -131,8 +132,18 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   );
 
   // Purely clock-based: the ballot is live until the block's submission window
-  // has elapsed since it was created. The block's Aggregated rankings relations
-  // are no help here — they retain every past ballot indefinitely.
+  // has elapsed since it was created.
+  //
+  // The block's `Aggregated rankings` relations cannot answer this. They hold one
+  // relation per *contributing author*, not every past ballot — the indexer
+  // rewrites them from the ballots that fed the current projection each sweep. A
+  // block with 56 submissions from 5 people carries 5. (An earlier comment here
+  // claimed they "retain every past ballot indefinitely"; they do not. GEO-2871.)
+  //
+  // Note this clock is the client's alone. Since gaia#921 (GEO-2869) the indexer
+  // does not expire ballots at all — an old one is weighted down, never dropped —
+  // so "rolled off" now means only "time to rank again", never "your ranking
+  // stopped counting".
   const isSubmissionLive = React.useMemo(() => {
     if (!isRolling || !myRankEntity) return true;
     if (submissionFrequencyHours == null || submittedAtMs === 0) return true;
@@ -141,19 +152,48 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
   const hasRolledOff = isRolling && Boolean(myRankEntity) && !isSubmissionLive;
 
-  // A rolled-off ballot is treated as absent everywhere: the block's views and
-  // the compose flow open fresh, as if the author hadn't ranked yet. (An earlier
-  // iteration retained the expired ballot because the indexer kept only the
-  // newest rank per author, so a rebuilt-from-scratch short ballot permanently
-  // superseded the fuller one — see #2122. The indexer now retains every ballot
-  // in the aggregate, so a fresh submission adds to it instead of replacing.)
-  // `hasRolledOff` still drives the "Rank" call to action, and publishing still
-  // mints a fresh rank entity below (keyed off myRankEntity, not mySubmission).
+  // A rolled-off ballot reads as absent to the block's views and to the call to action, so the
+  // author is prompted to rank again. `hasRolledOff` still drives that prompt, and publishing
+  // still mints a fresh rank entity below (keyed off myRankEntity, not mySubmission).
+  //
+  // It is *not* absent to the compose screen any more — see `myLastSubmission` below. That
+  // split is the GEO-2871 fix, and this comment is where the reason lives.
+  //
+  // **The justification that used to sit here was false.** It said the #2122 failure —
+  // rebuilding a short ballot from scratch permanently superseding a fuller one — was fixed
+  // because "the indexer now retains every ballot in the aggregate, so a fresh submission adds
+  // to it instead of replacing". It does not. `ranking-indexer/src/dedup.rs` keeps only the
+  // most-recently-updated submission per (block, personal space), by design: one vote per
+  // person. Verified on live data — 9 in-window ballots from 5 people produced exactly 5
+  // aggregated rankings.
+  //
+  // So #2122 was still live: blank the sheet, rank 3 things, and the 20 you ranked before were
+  // gone from your contribution. The reason it could not be fixed by simply un-blanking here is
+  // that the blanking is what *produces* the prompt — `showEditRankingButton` clears **because**
+  // `mySubmission` goes null (see `ranking-block-body.tsx`). Hence the second value rather than
+  // a change to this one: the prompt keeps its cause, and the ballot survives.
   const mySubmission = hasRolledOff ? null : apiMySubmission;
   const hasMySubmission = (mySubmission?.orderedEntityIds.length ?? 0) > 0;
 
+  // The same ballot, *not* blanked on roll-off — what the author last ranked, which the
+  // indexer is still counting (see the note above about `dedup_latest`).
+  //
+  // The compose screen seeds from this rather than `mySubmission`, so re-ranking starts from
+  // "here is what you said, change what you want" instead of an empty sheet. That is the
+  // GEO-2871 fix and it is deliberately narrow: `mySubmission` keeps blanking, so the "Add my
+  // ranking" call to action still appears and the prompt to re-rank survives. Fixing the loss
+  // by un-blanking `mySubmission` outright would have taken the prompt with it.
+  //
+  // It also leaves `hasUnpublishedChanges` reading true against an empty published key, which
+  // is correct on roll-off: publishing has to mint a fresh rank entity to get a fresh
+  // `submitted_at`, and `shouldMintNewRankEntity` already does.
+  const myLastSubmission = apiMySubmission;
+
   const saveMySubmission = React.useCallback(
-    async (slots: RankingSubmissionSlot[]): Promise<RankingSubmissionPublishResult | null> => {
+    async (
+      slots: RankingSubmissionSlot[],
+      opportunity?: OperationContext
+    ): Promise<RankingSubmissionPublishResult | null> => {
       const account = readCachedSmartAccount(queryClient, smartAccount);
       if (!account) {
         setToast(React.createElement('span', null, 'Please connect your wallet to publish your ranking'));
@@ -185,6 +225,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       }
 
       setIsSaving(true);
+      const operation = observeOperation('ranking', 'ranking', blockId, opportunity);
       try {
         const rankName = blockName.trim() || 'My ranking';
 
@@ -212,6 +253,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           ops = result.ops;
           rankId = result.id;
         } catch (error) {
+          operation.failed('invalid_input');
           console.error('[useRankingSubmissions] Building rank ops failed:', error);
           const { message, retry } = toUserFacingError(error, 'Failed to publish ranking: ');
           reportError(message, retry);
@@ -237,16 +279,15 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
             retrySchedule('publishEdit', Duration.minutes(1))
           );
 
-          const txHash = yield* Effect.retry(
-            Effect.tryPromise({
-              try: () =>
-                account.sendUserOperation({
-                  calls: [{ to: result.to, value: 0n, data: result.calldata }],
-                }),
-              catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
-            }),
-            retrySchedule('sendUserOperation', Duration.seconds(10))
-          );
+          // Safe submission retries belong to the wallet. An uncertain response
+          // must not cause another ranking write here.
+          const txHash = yield* Effect.tryPromise({
+            try: () =>
+              account.sendUserOperation({
+                calls: [{ to: result.to, value: 0n, data: result.calldata }],
+              }),
+            catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
+          });
 
           return txHash;
         });
@@ -260,6 +301,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
         if (Either.isLeft(result)) {
           const err = result.left;
+          operation.failed(classifyOperationFailure(err));
           if (err instanceof Error && err.message.includes('User rejected')) {
             return null;
           }
@@ -269,6 +311,14 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           return null;
         }
 
+        const outcomeProperties = {
+          ranking_id: blockId,
+          rank_id: rankId,
+          mutation_kind: reuseExistingRank ? 'revision' : myRankEntity ? 'new_period' : 'first_submission',
+          user_operation_hash: result.right,
+          item_count: votes.length,
+        };
+        operation.outcome('ranking_submitted', 'submitted', outcomeProperties);
         clearLocalMyRankingDraft(spaceId, blockId);
         setToast(React.createElement('span', null, 'Ranking published!'));
 
@@ -307,6 +357,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
             try {
               const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
               if (rankEntity && matchesExpectedOrder(getMyRankingOrderedEntityIds(rankEntity, personalSpaceId))) {
+                operation.outcome('ranking_submitted', 'indexed', outcomeProperties);
                 break;
               }
             } catch (e) {
@@ -357,6 +408,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   return {
     submissions: [] as RankingSubmissionRecord[],
     mySubmission,
+    myLastSubmission,
     hasMySubmission,
     saveMySubmission,
     isLoading: isLoadingMyRanking,

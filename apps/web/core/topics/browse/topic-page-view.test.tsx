@@ -111,6 +111,26 @@ describe('TopicPageView description', () => {
   });
 });
 
+/**
+ * GEO-2460 gave entity and space titles their own responsive token. On master this view and the
+ * entity header both used `mainPage`, so they matched; moving only the entity header would have
+ * shipped the same route drawing the same slot at two sizes depending on whether the entity
+ * happened to be typed as a Topic. This keeps them on one token instead.
+ *
+ * Asserted as the token rather than as sizes: the 44/36/26 steps live in `styles.css` and jsdom
+ * applies no stylesheet, so a size assertion here would only restate the class anyway.
+ */
+describe('TopicPageView title', () => {
+  it('shares the entity title token rather than the section-heading one', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    const title = screen.getByRole('heading', { level: 1 });
+    expect(title).toHaveTextContent('Artificial intelligence');
+    expect(title).toHaveClass('text-entityTitle');
+    expect(title).not.toHaveClass('text-mainPage');
+  });
+});
+
 // GEO-2781 lifted this section out of this file so the claim view could draw its Topics with it.
 // Extracting a component is where a caller quietly loses an argument, so the subtopics side is
 // pinned too rather than only the new one.
