@@ -4370,6 +4370,43 @@ describe('the Related tab', () => {
   });
 
   /**
+   * A failed discovery is not reliably an empty one. `useQueryEntities` falls back to whatever the
+   * local store already matches when its fetch fails, so the count can be non-zero on a failure —
+   * and the pair would be dropped onto a tab built from whatever the store happened to hold, which
+   * is not the fallback this tab documents.
+   */
+  it('offers no tab when discovery failed, even holding rows it could draw', async () => {
+    debateWithRelated();
+    // Rows, as the local store would answer them, and a failure alongside.
+    mocks.relatedEntitiesError = new Error('discovery failed');
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+    expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  /**
+   * An unresolved space type reads as publishable, deliberately, so a slow lookup does not empty a
+   * list. Every other tab accepts that, because a viewer reaches those by choosing them. This is
+   * the tab they are dropped onto, so a row drawn actionable before its type resolves is a debate
+   * that can be requested and could never be published — and Related is the source most likely to
+   * be the only one naming that space.
+   */
+  it('holds the slot rather than drawing rows whose spaces are still unresolved', async () => {
+    debateWithRelated();
+    mocks.spacesHeldOver = true;
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    // The slot is kept — this is a wait, not an absence — and nothing actionable is drawn in it.
+    expect(screen.getByRole('button', { name: 'Related' })).toBeInTheDocument();
+    expect(screen.queryByText('A claim on the same topic')).toBeNull();
+  });
+
+  /**
    * Two gates sit between what discovery found and what the tab shows: the claims this session
    * excludes, and the ones whose space cannot carry a published debate. Whether the tab exists has
    * to be asked after them.

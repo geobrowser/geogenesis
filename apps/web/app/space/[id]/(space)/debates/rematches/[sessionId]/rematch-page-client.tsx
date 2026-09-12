@@ -996,9 +996,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * session flags, the same two gates. Only the ids differ.
    *
    * Held while its lookups settle so a refetch does not blank a list that is still right.
+   *
+   * `publishabilityPending` is here and on none of the other lists, which is a deliberate asymmetry
+   * rather than an oversight. An unresolved space type reads as publishable — fail-open, so a slow
+   * lookup does not empty a list — and every other tab accepts that, because a viewer reaches those
+   * by choosing them and a row that proves unpublishable simply goes. This is the tab the pair are
+   * *dropped* onto: they are looking at it before they chose anything, so the window where a row is
+   * drawn actionable and turns out to be in a personal space is a window where a debate can be
+   * requested that could never be published. Related is also the tab most likely to open that
+   * window, since it can be the only source naming the debated claim's space.
+   *
+   * It costs a held slot rather than a blank one — the reservation below already covers settling —
+   * so the price is rows arriving with the space types instead of before them.
    */
   const relatedClaimsSettling =
-    sessionQuery.isLoading || relatedPending || relatedEntitiesByIdQuery.isLoading || relatedClaimsQuery.isLoading;
+    sessionQuery.isLoading ||
+    relatedPending ||
+    publishabilityPending ||
+    relatedEntitiesByIdQuery.isLoading ||
+    relatedClaimsQuery.isLoading;
   const relatedClaimsNow = React.useMemo(
     () =>
       relatedClaimsSettling
@@ -1054,10 +1070,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * A discovery failure reads as "no related claims" rather than surfacing an error, the same way a
    * failed curator lookup leaves Recommended out of the Explore menu: this tab is an enhancement on
    * top of a picker that works without it, so a lookup nobody asked for should not put an error in
-   * front of someone who came here to choose a claim. `relatedClaimsSettling` carries the same
-   * `relatedPending` that a failure releases, so nothing waits on a lookup that has already failed.
+   * front of someone who came here to choose a claim.
+   *
+   * Tested here rather than left to the row count, because a failure does not reliably produce an
+   * empty one: `useQueryEntities` falls back to matching rows already in the local store when its
+   * fetch fails, so a failed discovery can still hand back claims — and the pair would be landed on
+   * a tab built from whatever the store happened to hold. Only *discovery* failures. An error from
+   * the row lookups below is a tab that exists and could not draw, which `tabError` reports where
+   * the rows would be.
    */
-  const relatedOffered = relatedClaims.length > 0 || relatedClaimsSettling;
+  const relatedOffered = relatedDiscoveryError === null && (relatedClaims.length > 0 || relatedClaimsSettling);
 
   /**
    * Where the pair land, and it is not a fixed answer.

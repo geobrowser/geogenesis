@@ -117,6 +117,36 @@ describe('claimTopicsById', () => {
   });
 
   /**
+   * Callers hand this several projections of the same pool and a claim can be in more than one. The
+   * rematch picker appends its tagged catalog last, and that projection does not select relation
+   * spaces — so a Debate-tagged claim also reached by id had its spaces replaced by a projection
+   * that never asked for them, and the space filter went back to keeping everything.
+   */
+  it('keeps the spaces a second projection of the same claim never asked for', () => {
+    const map = claimTopicsById([
+      // The by-id projection, which knows where each topic was assigned.
+      {
+        id: 'claim-1',
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, spaceId: 'space-here', toEntity: { id: 'topic-ai', name: 'AI' } },
+          {
+            type: { id: TOPICS_PROPERTY_ID },
+            spaceId: 'space-elsewhere',
+            toEntity: { id: 'topic-health', name: 'Health' },
+          },
+        ],
+      },
+      // The tagged catalog, carrying the same claim with no spaces at all.
+      entity('claim-1', [
+        { topicId: 'topic-ai', name: 'AI' },
+        { topicId: 'topic-health', name: 'Health' },
+      ]),
+    ]);
+
+    expect(topicsFor(map, 'claim-1', 'space-here')).toEqual([ai]);
+  });
+
+  /**
    * Not every projection selects the relation's space — the tagged catalog does not — and an unknown
    * space cannot be compared to one. Dropping those would empty the facet for a whole source rather
    * than narrow it, which is a worse answer than a slightly wide one.

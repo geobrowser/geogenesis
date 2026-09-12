@@ -40,10 +40,38 @@ export function claimTopicsById(
         name: relation.toEntity.name ?? null,
         spaceId: relation.spaceId ?? null,
       }));
-    if (topics.length > 0) map.set(normId(entity.id), topics);
+    if (topics.length === 0) continue;
+
+    // Merged rather than overwritten. Callers hand this several projections of the same pool, and a
+    // claim in two of them arrived twice — where the last one won, whatever it knew. In the rematch
+    // picker the tagged catalog comes last and does not select relation spaces, so a Debate-tagged
+    // claim also reached by id lost its spaces to a projection that never asked for them, and the
+    // per-space filter below went back to keeping everything.
+    const merged = [...(map.get(normId(entity.id)) ?? []), ...topics];
+    map.set(normId(entity.id), preferKnownSpaces(merged));
   }
 
   return map;
+}
+
+/**
+ * One entry per topic-and-space, and — where any projection knew the spaces — only the ones that
+ * did.
+ *
+ * An unknown space is kept when it is all there is, because it cannot be compared to anything and
+ * dropping it would empty a source's facet. But once *some* projection has reported real spaces for
+ * a claim, an unknown-space copy of the same topic is not extra information, it is the same topic
+ * seen by a query that did not ask — and keeping it would slip past the space filter and undo the
+ * scoping for that claim.
+ */
+function preferKnownSpaces(topics: SpacedTopic[]): SpacedTopic[] {
+  const known = topics.some(topic => topic.spaceId !== null);
+  const byIdentity = new Map<string, SpacedTopic>();
+  for (const topic of topics) {
+    if (known && topic.spaceId === null) continue;
+    byIdentity.set(`${normId(topic.id)}:${topic.spaceId === null ? '' : normId(topic.spaceId)}`, topic);
+  }
+  return [...byIdentity.values()];
 }
 
 /**
