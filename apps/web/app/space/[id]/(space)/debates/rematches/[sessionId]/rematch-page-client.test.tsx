@@ -551,11 +551,19 @@ vi.mock('~/core/debates/claim-picker-page', () => ({
     // Answerless while loading, as react-query is on a cold key. Without that a "loading" lookup
     // still handed back its fixtures, so nothing downstream could tell the two apart — and the
     // states that exist to wait for hydration were untestable.
+    // Answerless on a failure too, as react-query is on a cold key: `data` is undefined, so there
+    // are no entities *and* an error. Handing back fixtures alongside the error let a caller that
+    // ignored the failure still draw every row, so the states that exist to handle one could not
+    // fail a test.
+    const failed = Boolean(mocks.entityHydrationErrorFor && ids.includes(mocks.entityHydrationErrorFor));
     return {
-      entities: mocks.entityHydrationLoading ? [] : mocks.entities.filter(entity => ids.includes(entity.id as string)),
+      entities:
+        mocks.entityHydrationLoading || failed
+          ? []
+          : mocks.entities.filter(entity => ids.includes(entity.id as string)),
       isLoading: mocks.entityHydrationLoading,
       // Stable identity: a fresh Error each render would be a new value for every memo below it.
-      error: mocks.entityHydrationErrorFor && ids.includes(mocks.entityHydrationErrorFor) ? HYDRATION_ERROR : null,
+      error: failed ? HYDRATION_ERROR : null,
     };
   },
 }));
@@ -1963,6 +1971,31 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByRole('heading', { name: 'Geopolitics & chips' })).toBeInTheDocument();
     // Not just the card: its sides come from the graph, so nothing here waits on the browsed list.
     expect(await screen.findByRole('button', { name: 'Request debate' })).toBeInTheDocument();
+  });
+
+  /**
+   * The curator names its claims in the graph's spelling; a row geo-chat supplied carries geo-chat's.
+   * Joined raw, the section lost precisely the claims geo-chat had a row for — which is to say the
+   * curated claims with any session history at all, the ones most worth showing.
+   *
+   * Latent until the session lookup itself was canonicalized: before that geo-chat's rows were never
+   * found, so every row carried the entity's spelling and the two sides happened to agree. Making
+   * one join work is what exposed the next one.
+   */
+  it('keeps a curated claim in its section when geo-chat spelled its id differently', async () => {
+    // The graph's side of it — the curator's list and the entity — in bare hex, as the graph
+    // answers. geo-chat's row for the same claim keeps its hyphens (`mocks.claims`, by default).
+    const graphId = CLAIM_SHARED.replace(/-/g, '');
+    mocks.curatedIds = [graphId];
+    mocks.savedClaims = [];
+    mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [graphId] }];
+    mocks.recommendedEntities = [{ ...sharedEntity(), id: graphId }];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showRecommended();
+
+    expect(screen.getByRole('heading', { name: 'Geopolitics & chips' })).toBeInTheDocument();
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
   });
 
   // The session's own claims arrive in one round trip; they shouldn't sit behind the scan either.
@@ -4367,6 +4400,85 @@ describe('the Related tab', () => {
     expect(screen.queryByText('A claim on the same topic')).toBeNull();
     // And the tab goes with it — see the test below.
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+  });
+
+  /**
+   * The hook accepts a claim summary with no space, and a space is required rather than merely used:
+   * hydrating unscoped asks for topics from every space at once, and discovery can never run without
+   * a space anyway. Reported as loading, that pointless hydration reserved a tab that was always
+   * going to vanish when it finished.
+   */
+  it('holds no slot for a source claim that arrived without a space', async () => {
+    debateWithRelated();
+    mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: undefined } };
+    mocks.entityHydrationLoading = true;
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+  });
+
+  /**
+   * A space reached through two sources is still one space. Rows carry whichever spelling their
+   * source used — a Related row built from the graph carries bare hex, geo-chat's rows for the
+   * opponent's claims carry the same space with hyphens — so a raw set counted it twice and opened
+   * two gateway scopes on it, which is every event on that space delivered twice.
+   */
+  it('opens one scope on a space two sources spell differently', async () => {
+    const hexSpace = SPACE_1.replace(/-/g, '');
+    // The neighbour lives in the debated claim's space, spelled as the graph spells it.
+    const hexSpaced = {
+      ...relatedEntity(),
+      spaces: [hexSpace],
+      values: [{ property: { id: NAME_PROPERTY }, spaceId: hexSpace, value: 'A claim on the same topic' }],
+    };
+    mocks.entities = [sharedEntity(), sourceClaimEntity(), hexSpaced];
+    mocks.relatedEntities = [sourceClaimEntity(), hexSpaced];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByRole('button', { name: 'Related' });
+
+    const scoped = mocks.gatewaySpaceScopes.filter(scope => scope.enabled).at(-1)?.spaceIds ?? [];
+    const canonical = scoped.map(spaceId => spaceId.replace(/-/g, ''));
+    expect(canonical).toEqual([...new Set(canonical)]);
+    // And the space is genuinely there, so this is a deduplication rather than a disappearance.
+    expect(canonical).toContain(hexSpace);
+  });
+
+  /**
+   * `publishabilityPending` is not this tab's own lookup — it covers every catalog source — so on a
+   * session with no related claims at all another tab's space lookup was holding this one's slot
+   * open. A phantom tab reached from the other end: not discovery saying "wait", but an unrelated
+   * request that happened not to have finished.
+   */
+  it('holds no slot on another tab’s space lookup when discovery found nothing', async () => {
+    mocks.entities = [sharedEntity(), sourceClaimEntity()];
+    mocks.relatedEntities = [sourceClaimEntity()];
+    mocks.spacesHeldOver = true;
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+  });
+
+  /**
+   * A tab that exists and could not draw is an error where the rows would be, not a missing tab.
+   * Reading availability off the row count collapsed the two: a cold failure leaves no rows and
+   * nothing settling, which looked exactly like "no neighbours", so the failure was never reported
+   * to anyone. What separates them is that discovery found ids.
+   */
+  it('keeps the tab and reports the failure when the rows could not be built', async () => {
+    debateWithRelated();
+    // The row projection fails for the neighbour discovery found.
+    mocks.entityHydrationErrorFor = RELATED;
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.getByRole('button', { name: 'Related' })).toBeInTheDocument();
+    expect(screen.queryByText('No related claims are left to debate.')).toBeNull();
   });
 
   /**

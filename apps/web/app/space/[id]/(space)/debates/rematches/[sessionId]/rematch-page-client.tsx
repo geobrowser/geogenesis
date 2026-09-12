@@ -333,6 +333,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const relatedEntitiesByIdQuery = useClaimEntitiesByIds(relatedClaimIds);
   const relatedClaimsQuery = useDebateRematchClaimsForIds(sessionId, relatedClaimIds);
 
+  /**
+   * Turning discovery's ids into rows, as opposed to finding them. Named once so the tab's error
+   * state and the decision to keep the tab at all cannot disagree about which failures are which.
+   */
+  const relatedRowsError = relatedEntitiesByIdQuery.error ?? relatedClaimsQuery.error ?? null;
+
   // The whole chain, enumerated once, so the gates below cannot each wait on a different subset of
   // it — the mistake that let one gate pass while another was still waiting. The source debate is
   // this page's own hop; the rest belongs to the hook.
@@ -831,6 +837,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         preferred && recordedRow && !idEquals(recordedRow.claim.space_id, preferred) ? undefined : recordedRow;
       const responseKind = sessionRow?.response_kind ?? claimResponseKind(entity, homeSpaceId);
       return {
+        /**
+         * Left in whichever spelling its source used, deliberately.
+         *
+         * A row geo-chat supplied carries its hyphenated UUIDs; one built from the entity carries
+         * the graph's bare hex. Canonicalizing here would give the page one spelling — and would
+         * also change what goes back *out*: this object is the payload for the debate request, the
+         * side panel and the readiness lookup, and geo-chat would stop receiving the ids it handed
+         * over. So the normalization lives at each join instead, on both sides, where it cannot
+         * change anything but the matching.
+         */
         claim: sessionRow?.claim ?? {
           id: entity.id,
           space_id: homeSpaceId,
@@ -937,7 +953,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // empty list mid-flight and lose the order at the moment it is needed.
   const opponentClaims = useStableListOrder(
     opponentClaimsHeld,
-    row => `${row.claim.space_id}:${row.claim.claim_entity_id}`,
+    // Canonical, because a row's ids carry whichever spelling its source used and this key is what
+    // decides whether two sources describing the same claim are the same row.
+    row => `${normId(row.claim.space_id)}:${normId(row.claim.claim_entity_id)}`,
     sessionId
   );
 
@@ -963,7 +981,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // carry the rest of the list with it.
   const viewerClaims = useStableListOrder(
     viewerClaimsHeld,
-    row => `${row.claim.space_id}:${row.claim.claim_entity_id}`,
+    // Canonical, because a row's ids carry whichever spelling its source used and this key is what
+    // decides whether two sources describing the same claim are the same row.
+    row => `${normId(row.claim.space_id)}:${normId(row.claim.claim_entity_id)}`,
     sessionId
   );
 
@@ -997,6 +1017,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    *
    * Held while its lookups settle so a refetch does not blank a list that is still right.
    *
+   * Only once discovery has found something to draw. The row waits below are about *these* rows, and
+   * `publishabilityPending` is not even this tab's own lookup — it covers every catalog source — so
+   * ungated it let another tab's space lookup hold this one's slot open on a session that had no
+   * related claims at all, which is a phantom tab arrived at from the other end. `relatedPending`
+   * stays unconditional: it is discovery itself, and its whole job is the window before there are
+   * ids to count.
+   *
    * `publishabilityPending` is here and on none of the other lists, which is a deliberate asymmetry
    * rather than an oversight. An unresolved space type reads as publishable — fail-open, so a slow
    * lookup does not empty a list — and every other tab accepts that, because a viewer reaches those
@@ -1009,12 +1036,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * It costs a held slot rather than a blank one — the reservation below already covers settling —
    * so the price is rows arriving with the space types instead of before them.
    */
-  const relatedClaimsSettling =
-    sessionQuery.isLoading ||
-    relatedPending ||
-    publishabilityPending ||
-    relatedEntitiesByIdQuery.isLoading ||
-    relatedClaimsQuery.isLoading;
+  const relatedRowsPending =
+    relatedClaimIds.length > 0 &&
+    (publishabilityPending || relatedEntitiesByIdQuery.isLoading || relatedClaimsQuery.isLoading);
+  const relatedClaimsSettling = sessionQuery.isLoading || relatedPending || relatedRowsPending;
   const relatedClaimsNow = React.useMemo(
     () =>
       relatedClaimsSettling
@@ -1079,7 +1104,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * the row lookups below is a tab that exists and could not draw, which `tabError` reports where
    * the rows would be.
    */
-  const relatedOffered = relatedDiscoveryError === null && (relatedClaims.length > 0 || relatedClaimsSettling);
+  /**
+   * A row lookup that failed is a tab that exists and could not draw, which is what `tabError`
+   * reports where the rows would be. Without this the tab went instead: the rows are empty and
+   * nothing is settling, so a cold failure looked exactly like "no neighbours" and the error was
+   * never shown to anyone. Discovery having found ids is what separates the two.
+   */
+  const relatedRowsFailed = relatedClaimIds.length > 0 && relatedRowsError !== null;
+  const relatedOffered =
+    relatedDiscoveryError === null && (relatedClaims.length > 0 || relatedClaimsSettling || relatedRowsFailed);
 
   /**
    * Where the pair land, and it is not a fixed answer.
@@ -1527,7 +1560,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         ? // Discovery's failure is deliberately *not* here: it takes the tab out of the strip rather
           // than showing an error, so a viewer on Related is on it because rows were found. What can
           // still fail is turning those ids into rows.
-          (relatedEntitiesByIdQuery.error ?? relatedClaimsQuery.error)
+          relatedRowsError
         : source === 'mine'
           ? // The same two lookups the opponent's tab is built from, asked about the viewer.
             (positions.error ?? viewerEntitiesQuery.error)
@@ -1575,13 +1608,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const showsSections = tab === 'explore' && source === 'recommended';
   const visibleSections = React.useMemo(() => {
     if (!showsSections) return [];
-    const visibleById = new Map(visibleClaims.map(claim => [claim.claim.claim_entity_id, claim]));
+    // Canonical on both sides. The keys are row ids and the lookups are the curator's, which come
+    // from the graph — so a raw join dropped any claim whose row geo-chat supplied, which is to say
+    // exactly the curated claims with session history.
+    const visibleById = new Map(visibleClaims.map(claim => [normId(claim.claim.claim_entity_id), claim]));
 
     return recommendedSections
       .map(section => ({
         ...section,
         claims: section.claimIds
-          .map(claimId => visibleById.get(claimId))
+          .map(claimId => visibleById.get(normId(claimId)))
           .filter((claim): claim is DebateRematchClaim => claim !== undefined),
       }))
       .filter(section => section.claims.length > 0);
@@ -1598,14 +1634,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //   about — the opponent taking their *first* position — so there would be no claim to derive the
   //   scope from at the moment it matters.
   const scopedSpaceIds = React.useMemo(() => {
-    const ids = new Set<string>();
+    // Deduplicated canonically, but subscribed to in a real spelling. A row carries whichever
+    // spelling its source used, so the same space reached through two sources — the graph's bare
+    // hex from a Related row, geo-chat's UUID from a participant — counted as two and was
+    // subscribed to twice, which is two scopes and two deliveries of every event on it.
+    //
+    // geo-chat's spelling wins where both are seen, since geo-chat is what the scope is opened
+    // against: the participants are added last and overwrite.
+    const byCanonical = new Map<string, string>();
     // Related included since GEO-2758. It is a visible source like the others, so without its
     // spaces here a claim reachable only through Related holds no `claims_changed` subscription and
     // the opponent's moves on the tab in front of the viewer wait for the next poll.
     for (const claim of [...opponentClaims, ...viewerClaims, ...curatedClaims, ...taggedClaims, ...relatedClaims])
-      ids.add(claim.claim.space_id);
-    for (const participant of participants) ids.add(participant.profile_space_id);
-    return [...ids].sort((a, b) => a.localeCompare(b));
+      byCanonical.set(normId(claim.claim.space_id), claim.claim.space_id);
+    for (const participant of participants)
+      byCanonical.set(normId(participant.profile_space_id), participant.profile_space_id);
+    return [...byCanonical.values()].sort((a, b) => a.localeCompare(b));
   }, [curatedClaims, taggedClaims, opponentClaims, viewerClaims, relatedClaims, participants]);
   useDebateGatewaySpaceScopes(scopedSpaceIds, geoChatAuthenticated && scopedSpaceIds.length > 0);
 
@@ -1645,7 +1689,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   /** The last request failure, and whether the claim it was sent for is still on screen. */
   const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
   const requestErrorClaimId = requestError ? createRequest.variables?.claim_id : undefined;
-  const hasClaimId = (claim: DebateRematchClaim) => claim.claim.claim_entity_id === requestErrorClaimId;
+  // Compared canonically: the error carries whichever spelling the failed request used, and the row
+  // carries this page's.
+  const hasClaimId = (claim: DebateRematchClaim) =>
+    requestErrorClaimId != null && idEquals(claim.claim.claim_entity_id, requestErrorClaimId);
   const requestErrorHasCard =
     requestErrorClaimId !== undefined &&
     (showsSections ? visibleSections.some(section => section.claims.some(hasClaimId)) : visibleClaims.some(hasClaimId));
@@ -1657,7 +1704,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       session={session}
       currentUserId={currentUserId}
       chatPosition={chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id)}
-      readiness={readinessByClaimId.get(claim.claim.claim_entity_id) ?? null}
+      readiness={readinessByClaimId.get(normId(claim.claim.claim_entity_id)) ?? null}
       onRequest={() =>
         createRequest.mutate({
           source_space_id: claim.claim.space_id,
@@ -1974,15 +2021,18 @@ function useClaimReadinessByClaimId({
 
   const byClaimId = React.useMemo(() => {
     const map = new Map<string, ClaimReadinessState>();
+    // Two sources in one map — geo-chat's per-space response and the rows themselves — so both are
+    // keyed canonically, and {@link readinessFor} reads it the same way. Raw, the second loop's
+    // entries could never overwrite the first's for the same claim.
     for (const claim of perSpace.claims) {
-      map.set(claim.claim_entity_id, {
+      map.set(normId(claim.claim_entity_id), {
         viewer_debate_ready: claim.viewer_debate_ready,
         readiness_disabled_reason: claim.readiness_disabled_reason,
       });
     }
     for (const claim of claims) {
       if (claim.viewer_debate_ready === undefined) continue;
-      map.set(claim.claim.claim_entity_id, {
+      map.set(normId(claim.claim.claim_entity_id), {
         viewer_debate_ready: claim.viewer_debate_ready,
         readiness_disabled_reason: claim.readiness_disabled_reason ?? null,
       });
@@ -2119,7 +2169,9 @@ function RematchClaimCard({
   const request = session?.request;
 
   const requesting =
-    session?.status === 'request_pending' && request?.claim.claim_entity_id === claim.claim.claim_entity_id;
+    session?.status === 'request_pending' &&
+    request != null &&
+    idEquals(request.claim.claim_entity_id, claim.claim.claim_entity_id);
 
   const positions = React.useMemo(
     () => rematchPositionSummaries(claim, session, responseKind),

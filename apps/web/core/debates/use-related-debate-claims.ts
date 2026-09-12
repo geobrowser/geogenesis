@@ -24,8 +24,8 @@ const RELATED_DROPPED_ROW_SLACK = 8;
  *
  * A cap rather than "until the server runs out": each step is a request, and a topic whose claims
  * are mostly unnamed would spend an unbounded number of them to populate a tab nobody asked for.
- * Four windows is 132 rows deep, past which "no neighbours left to argue" is the honest answer even
- * if one is hiding further down.
+ * Four *further* windows on top of the first is five requests and 165 rows, past which "no
+ * neighbours left to argue" is the honest answer even if one is hiding further down.
  */
 const RELATED_MAX_EXTRA_WINDOWS = 4;
 
@@ -81,7 +81,7 @@ export function useRelatedDebateClaims({
   // as "don't filter" — see that hook. Discovery fails open for the same reason its other callers
   // do: a list that briefly offers a space the reconciliation goes on to remove is better than a
   // list that waits on it.
-  const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces();
+  const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces({ enabled });
 
   /**
    * Topics live on the graph entity rather than geo-chat's claim summary, and they are assigned *per
@@ -95,7 +95,12 @@ export function useRelatedDebateClaims({
   const sourceQuery = useQueryEntity({
     id: claimId ?? '',
     spaceId: spaceId ?? undefined,
-    enabled: enabled && claimId !== null,
+    // The space is required, not merely used: this hook allows a claim summary that carries no
+    // space, and hydrating one unscoped asks a question whose answer can never be used — the topics
+    // would come from every space at once, and `discoverable` below can never be true without a
+    // space anyway. Reported as loading, it reserved a Related tab that was always going to vanish
+    // when the pointless hydration finished. If the space arrives later, this enables then.
+    enabled: enabled && claimId !== null && spaceId !== null,
   });
 
   const topicIds = React.useMemo(() => {
