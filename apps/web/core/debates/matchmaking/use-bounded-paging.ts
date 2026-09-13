@@ -40,7 +40,15 @@ export function useBoundedPaging({
   fetchNextPage,
   resetKey,
 }: {
-  /** Rows fetched so far, filtered or not — what a new page adds to. */
+  /**
+   * Rows the *server* has returned so far, before any client-side gate touches them.
+   *
+   * This is what says a page landed, so it has to be the raw count. Handed a filtered one, a page
+   * that the space and publishability gates empty entirely looks like no page at all — the budget
+   * is never spent, and the sentinel walks the corpus exactly as it did before this hook existed.
+   * A page arriving with nothing to show is the *definition* of barren, not a reason to stop
+   * counting.
+   */
   loaded: number;
   /** Rows actually on screen — what a new page is supposed to add to. */
   visible: number;

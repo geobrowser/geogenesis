@@ -766,7 +766,10 @@ export function ClaimsTab({
   // the sentinel permanently in view and the list pages the whole thing on their behalf. Bounded
   // rather than stopped: it advances while that is getting somewhere, and asks when it is not.
   const { autoPages, stoppedShort, keepLooking } = useBoundedPaging({
-    loaded: claims.length,
+    // The server's own count, before the space and publishability gates run over it. A page they
+    // empty entirely is the barren case this bound is for, and counting the gated rows would make
+    // it look like no page had landed at all.
+    loaded: graphSourced ? taggedClaims.length : pages.reduce((total, page) => total + page.claims.length, 0),
     visible: visibleClaims.length,
     hasNextPage,
     fetchNextPage,

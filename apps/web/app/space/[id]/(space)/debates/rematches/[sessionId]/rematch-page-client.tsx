@@ -1204,11 +1204,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // tag in the key, switching source shows the previous source's rows until the new tag lands — and
   // lands instantly once both are cached, which is why it looked like the first few clicks did
   // nothing at all. The filters join it for the same reason: a search is a different list.
-  const taggedClaims = useLastSettled(
-    taggedRowsNow,
-    taggedClaimsSettling,
-    `${sessionId}:${claimsTagId}:${debouncedSearch}:${spaceIds.join(',')}:${debouncedTopicIds.join(',')}`
-  );
+  /**
+   * Everything the tagged queries are keyed by, as one value — so anything that holds or budgets
+   * "this list" is talking about the same list they are.
+   *
+   * Written once because it is read twice and the two must not drift: the hold below, which exists
+   * to bridge a refetch of *the same* list, and the paging budget, which must start over when the
+   * list changes. The debounced topics rather than the live ones, because that is what the query
+   * uses; spaces are not debounced on the way in, so those are live.
+   */
+  const taggedListKey = `${sessionId}:${claimsTagId}:${debouncedSearch}:${spaceIds.join(',')}:${debouncedTopicIds.join(',')}`;
+
+  const taggedClaims = useLastSettled(taggedRowsNow, taggedClaimsSettling, taggedListKey);
 
   // The opponent is whichever participant isn't the local user; with no local user there is none.
   const opponentPositionOf = React.useCallback(
@@ -1614,11 +1621,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // as it lands, so the sentinel never leaves the viewport and the list fetches the whole tag on
   // the viewer's behalf. Only the tagged sources page; the rest arrive whole.
   const { autoPages, stoppedShort, keepLooking } = useBoundedPaging({
-    loaded: narrowedClaims.length,
+    // The tag's own page, before the exclusions and the publishability gate run over it — see the
+    // hook. `narrowedClaims` is downstream of both, so a page they empty would not have counted.
+    loaded: taggedCatalog.length,
     visible: visibleClaims.length,
     hasNextPage: taggedHasNextPage,
     fetchNextPage: fetchNextTaggedPage,
-    resetKey: `${sessionId}:${claimsTagId}:${source}`,
+    // Every dimension the tagged query is keyed by, plus the source that chooses between the two
+    // catalogues. A budget spent searching one list must not be held against the next: narrowing to
+    // a space, or typing, asks a different question and deserves its own.
+    resetKey: `${taggedListKey}:${source}`,
   });
 
   const stillPaging = graphFiltered && visibleClaims.length === 0 && autoPages;
