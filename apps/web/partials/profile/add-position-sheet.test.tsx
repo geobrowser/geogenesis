@@ -25,6 +25,34 @@ vi.mock('~/core/hooks/use-suggested-skills', () => ({
   },
 }));
 
+// The design-system Select is a Radix trigger with no native options to drive.
+// Mocked to the native equivalent, keeping the aria-label so the fields are still
+// queried the way a user finds them — the same approach the bounty form tests take.
+vi.mock('~/design-system/select', () => ({
+  Select: ({
+    value,
+    onChange,
+    options,
+    placeholder,
+    'aria-label': ariaLabel,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+    options: { value: string; label: string }[];
+    placeholder?: string;
+    'aria-label'?: string;
+  }) => (
+    <select aria-label={ariaLabel} value={value} onChange={event => onChange(event.target.value)}>
+      <option value="">{placeholder}</option>
+      {options.map(option => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
+
 /**
  * `SelectEntity` is a search box over the graph. Stubbed down to the three things
  * this sheet depends on: which types it was scoped to, whether the result came

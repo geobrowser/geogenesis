@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
+import { TextButton } from '~/design-system/text-button';
 
 type Props = {
   title: string;
@@ -80,9 +81,11 @@ export function PickedEntity({ name, note, onClear }: { name: string | null; not
       <div className="flex items-center justify-between gap-2 rounded border border-grey-02 px-[10px] py-[9px]">
         <span className="truncate text-input text-text">{name ?? 'Untitled'}</span>
         {onClear && (
-          <button type="button" onClick={onClear} className="shrink-0 text-footnote text-grey-04 hover:underline">
-            Change
-          </button>
+          <div className="shrink-0">
+            <TextButton type="button" onClick={onClear}>
+              Change
+            </TextButton>
+          </div>
         )}
       </div>
       {note && <span className="text-footnote text-grey-04">{note}</span>}

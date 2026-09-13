@@ -15,9 +15,13 @@ import {
 } from '~/core/profile/history-ontology';
 import type { EntityChoice, PositionDraft } from '~/core/profile/stage-history';
 
+import { SmallButton } from '~/design-system/button';
 import { Checkbox } from '~/design-system/checkbox';
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { inputStyles } from '~/design-system/input';
+import { Select } from '~/design-system/select';
 import { SelectEntity } from '~/design-system/select-entity';
+import { TextButton } from '~/design-system/text-button';
 
 import { HistorySheet, PickedEntity, findOrCreate } from './history-sheet';
 import { MonthYearField } from './month-year-field';
@@ -175,24 +179,17 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
         )}
       </div>
 
-      <label className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5">
         <span className="text-metadataMedium text-grey-04">Employment type</span>
-        <select
+        <Select
           value={employmentType?.id ?? ''}
+          onChange={value => setEmploymentType(EMPLOYMENT_TYPE_OPTIONS.find(option => option.id === value) ?? null)}
+          options={EMPLOYMENT_TYPE_OPTIONS.map(option => ({ value: option.id, label: option.name }))}
+          placeholder="Please select"
           disabled={isSaving}
-          onChange={event =>
-            setEmploymentType(EMPLOYMENT_TYPE_OPTIONS.find(option => option.id === event.currentTarget.value) ?? null)
-          }
-          className={inputStyles()}
-        >
-          <option value="">Please select</option>
-          {EMPLOYMENT_TYPE_OPTIONS.map(option => (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
-          ))}
-        </select>
-      </label>
+          aria-label="Employment type"
+        />
+      </div>
 
       {/* Above the dates, because it decides what the End picker is for: ticking
           it puts the role in the present and leaves End with nothing to say. */}
@@ -236,24 +233,17 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
         )}
       </div>
 
-      <label className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5">
         <span className="text-metadataMedium text-grey-04">Location type</span>
-        <select
+        <Select
           value={locationType?.id ?? ''}
+          onChange={value => setLocationType(LOCATION_TYPE_OPTIONS.find(option => option.id === value) ?? null)}
+          options={LOCATION_TYPE_OPTIONS.map(option => ({ value: option.id, label: option.name }))}
+          placeholder="Please select"
           disabled={isSaving}
-          onChange={event =>
-            setLocationType(LOCATION_TYPE_OPTIONS.find(option => option.id === event.currentTarget.value) ?? null)
-          }
-          className={inputStyles()}
-        >
-          <option value="">Please select</option>
-          {LOCATION_TYPE_OPTIONS.map(option => (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
-          ))}
-        </select>
-      </label>
+          aria-label="Location type"
+        />
+      </div>
 
       <label className="flex flex-col gap-1.5">
         <span className="text-metadataMedium text-grey-04">Highlights</span>
@@ -272,17 +262,16 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
         {skills.length > 0 && (
           <ul className="flex flex-wrap gap-1.5">
             {skills.map(skill => (
-              <li key={skill.id} className="flex items-center gap-1.5 rounded bg-divider px-2 py-1">
-                <span className="text-footnote text-text">{skill.name ?? 'Untitled'}</span>
-                {skill.isNew && <span className="text-footnote text-ctaPrimary">NEW</span>}
-                <button
-                  type="button"
+              <li key={skill.id}>
+                <SmallButton
                   onClick={() => setSkills(current => current.filter(item => item.id !== skill.id))}
+                  disabled={isSaving}
                   aria-label={`Remove skill ${skill.name ?? 'skill'}`}
-                  className="text-footnote text-grey-04 hover:underline"
                 >
-                  ×
-                </button>
+                  <span>{skill.name ?? 'Untitled'}</span>
+                  {skill.isNew && <span className="text-ctaPrimary">NEW</span>}
+                  <CloseSmall />
+                </SmallButton>
               </li>
             ))}
           </ul>
@@ -306,13 +295,11 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
             width="full"
           />
         ) : (
-          <button
-            type="button"
-            onClick={() => setIsAddingSkill(true)}
-            className="self-start text-footnote text-ctaPrimary hover:underline"
-          >
-            + Add skill
-          </button>
+          <div className="self-start">
+            <TextButton type="button" color="ctaPrimary" onClick={() => setIsAddingSkill(true)} disabled={isSaving}>
+              + Add skill
+            </TextButton>
+          </div>
         )}
 
         {/* What the occupation itself says the job needs, essential first and

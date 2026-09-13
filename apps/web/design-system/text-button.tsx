@@ -25,8 +25,12 @@ interface Props extends React.ComponentPropsWithoutRef<'button'> {
 }
 
 export function TextButton({ children, color = 'grey-04', disabled = false, ...props }: Props) {
+  // `disabled` reaches the element, not only the styling. It was destructured for
+  // the variant and never passed on, so a button that looked disabled still fired
+  // its onClick — `table-pagination` works around it by nulling the handler, and
+  // the query-setup popover's Done committed while greyed out.
   return (
-    <button {...props} className={buttonStyles({ disabled, color })}>
+    <button {...props} disabled={disabled} className={buttonStyles({ disabled, color })}>
       {children}
     </button>
   );

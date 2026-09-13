@@ -10,6 +10,7 @@ import type { EducationCard, EmploymentCard, HistoryCard, HistoryEntry } from '~
 import { SmallButton, SquareButton } from '~/design-system/button';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { Trash } from '~/design-system/icons/trash';
+import { TextButton } from '~/design-system/text-button';
 
 type Kind = 'employment' | 'education';
 
@@ -102,14 +103,11 @@ export function HistorySection({ kind, cards, disabled, onAdd, onAddTo, onEditEn
                     ))}
                   </ul>
 
-                  <button
-                    type="button"
-                    onClick={() => onAddTo(card)}
-                    disabled={disabled}
-                    className="mt-2 text-footnote text-ctaPrimary hover:underline disabled:text-grey-03 disabled:no-underline"
-                  >
-                    + {copy.addHere}
-                  </button>
+                  <div className="mt-2">
+                    <TextButton type="button" color="ctaPrimary" onClick={() => onAddTo(card)} disabled={disabled}>
+                      + {copy.addHere}
+                    </TextButton>
+                  </div>
                 </div>
               </div>
             </li>

@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import { type MonthYear, fromGraphDate, toGraphDate } from '~/core/profile/history-dates';
 import {
   DEGREE_TYPES,
@@ -15,8 +13,11 @@ import {
 } from '~/core/profile/history-ontology';
 import type { EducationDraft, EntityChoice } from '~/core/profile/stage-history';
 
-import { inputStyles } from '~/design-system/input';
+import { SmallButton } from '~/design-system/button';
+import { CloseSmall } from '~/design-system/icons/close-small';
+import { Input, inputStyles } from '~/design-system/input';
 import { SelectEntity } from '~/design-system/select-entity';
+import { TextButton } from '~/design-system/text-button';
 
 import { HistorySheet, PickedEntity, findOrCreate } from './history-sheet';
 import { MonthYearField } from './month-year-field';
@@ -144,17 +145,16 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
         {fields.length > 0 && (
           <ul className="flex flex-wrap gap-1.5">
             {fields.map(field => (
-              <li key={field.id} className="flex items-center gap-1.5 rounded bg-divider px-2 py-1">
-                <span className="text-footnote text-text">{field.name ?? 'Untitled'}</span>
-                {field.isNew && <span className="text-footnote text-ctaPrimary">NEW</span>}
-                <button
-                  type="button"
+              <li key={field.id}>
+                <SmallButton
                   onClick={() => setFields(current => current.filter(item => item.id !== field.id))}
-                  aria-label={`Remove ${field.name ?? 'field'}`}
-                  className="text-footnote text-grey-04 hover:underline"
+                  disabled={isSaving}
+                  aria-label={`Remove field ${field.name ?? 'field'}`}
                 >
-                  ×
-                </button>
+                  <span>{field.name ?? 'Untitled'}</span>
+                  {field.isNew && <span className="text-ctaPrimary">NEW</span>}
+                  <CloseSmall />
+                </SmallButton>
               </li>
             ))}
           </ul>
@@ -180,13 +180,11 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
         ) : (
           // A joint honours degree needs more than one, which is why Fields of
           // fields is a relation rather than a value.
-          <button
-            type="button"
-            onClick={() => setIsAddingField(true)}
-            className="self-start text-footnote text-ctaPrimary hover:underline"
-          >
-            + Add another
-          </button>
+          <div className="self-start">
+            <TextButton type="button" color="ctaPrimary" onClick={() => setIsAddingField(true)} disabled={isSaving}>
+              + Add another
+            </TextButton>
+          </div>
         )}
       </div>
 
@@ -194,21 +192,15 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
         <legend className="text-metadataMedium text-grey-04">Status</legend>
         <div className="flex flex-wrap gap-1.5">
           {STATUS_OPTIONS.map(option => (
-            <button
+            <SmallButton
               key={option.value}
-              type="button"
+              variant={status === option.value ? 'primary' : 'secondary'}
               aria-pressed={status === option.value}
               onClick={() => setStatus(option.value)}
               disabled={isSaving}
-              className={cx(
-                'rounded border px-2.5 py-1.5 text-footnote transition-colors',
-                status === option.value
-                  ? 'border-text bg-text text-white'
-                  : 'border-grey-02 text-text hover:border-text'
-              )}
             >
               {option.label}
-            </button>
+            </SmallButton>
           ))}
         </div>
       </fieldset>
@@ -228,7 +220,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
         <span className="text-metadataMedium text-grey-04">Grade</span>
         {/* A number, because the property is a decimal. A classification or a
             pass has nowhere to go here and belongs in the description. */}
-        <input
+        <Input
           type="number"
           inputMode="decimal"
           step="any"
@@ -236,7 +228,6 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
           onChange={event => setGrade(event.currentTarget.value)}
           disabled={isSaving}
           placeholder="Example: 3.8"
-          className={inputStyles()}
         />
       </label>
 
@@ -257,17 +248,16 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
         {skills.length > 0 && (
           <ul className="flex flex-wrap gap-1.5">
             {skills.map(skill => (
-              <li key={skill.id} className="flex items-center gap-1.5 rounded bg-divider px-2 py-1">
-                <span className="text-footnote text-text">{skill.name ?? 'Untitled'}</span>
-                {skill.isNew && <span className="text-footnote text-ctaPrimary">NEW</span>}
-                <button
-                  type="button"
+              <li key={skill.id}>
+                <SmallButton
                   onClick={() => setSkills(current => current.filter(item => item.id !== skill.id))}
+                  disabled={isSaving}
                   aria-label={`Remove skill ${skill.name ?? 'skill'}`}
-                  className="text-footnote text-grey-04 hover:underline"
                 >
-                  ×
-                </button>
+                  <span>{skill.name ?? 'Untitled'}</span>
+                  {skill.isNew && <span className="text-ctaPrimary">NEW</span>}
+                  <CloseSmall />
+                </SmallButton>
               </li>
             ))}
           </ul>
@@ -292,13 +282,11 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
             width="full"
           />
         ) : (
-          <button
-            type="button"
-            onClick={() => setIsAddingSkill(true)}
-            className="self-start text-footnote text-ctaPrimary hover:underline"
-          >
-            + Add skill
-          </button>
+          <div className="self-start">
+            <TextButton type="button" color="ctaPrimary" onClick={() => setIsAddingSkill(true)} disabled={isSaving}>
+              + Add skill
+            </TextButton>
+          </div>
         )}
       </div>
     </HistorySheet>

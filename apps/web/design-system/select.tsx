@@ -21,6 +21,13 @@ type Props = {
   position?: 'item-aligned' | 'popper';
   disabled?: boolean;
   contentClassName?: string;
+  /**
+   * The trigger is a button rather than a native select, so wrapping it in a
+   * `<label>` names nothing. A caller with a visible label points at it with
+   * `aria-labelledby`; one without gives an `aria-label`.
+   */
+  'aria-label'?: string;
+  'aria-labelledby'?: string;
 };
 
 export const Select = ({
@@ -33,6 +40,8 @@ export const Select = ({
   position = 'popper',
   disabled = false,
   contentClassName = '',
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
 }: Props) => {
   const [open, setOpen] = useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
@@ -61,6 +70,8 @@ export const Select = ({
       <SelectPrimitive.Trigger
         ref={triggerRef}
         disabled={disabled}
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledBy}
         className={cx(
           variant === 'secondary' ? 'bg-white text-text' : 'bg-text text-white',
           !disabled
