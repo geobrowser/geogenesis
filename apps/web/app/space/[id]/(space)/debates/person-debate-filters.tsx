@@ -2,63 +2,77 @@
 
 import * as React from 'react';
 
-import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
+import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import type { PersonClaimTopic } from '~/core/debates/use-person-claims';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-
-/** The unfiltered choice, distinct from any real space or topic id. */
-export const ALL_FILTER = 'all';
+import { equals as idEquals } from '~/core/id/normalize';
 
 type Props = {
   spaceIds: string[];
   topics: PersonClaimTopic[];
-  selectedSpace: string;
-  selectedTopic: string;
-  onSelectSpace: (value: string) => void;
-  onSelectTopic: (value: string) => void;
+  selectedSpaceIds: string[];
+  selectedTopicIds: string[];
+  spaceCounts: Map<string, number>;
+  topicCounts: Map<string, number>;
+  onToggleSpace: (value: string) => void;
+  onToggleTopic: (value: string) => void;
+  onClearSpaces: () => void;
+  onClearTopics: () => void;
 };
 
-/**
- * The Space and Topic dropdowns that narrow the two collections.
- */
+/** Space and Topic multi-select filters for the personal Debates collections. */
 export function PersonDebateFilters({
   spaceIds,
   topics,
-  selectedSpace,
-  selectedTopic,
-  onSelectSpace,
-  onSelectTopic,
+  selectedSpaceIds,
+  selectedTopicIds,
+  spaceCounts,
+  topicCounts,
+  onToggleSpace,
+  onToggleTopic,
+  onClearSpaces,
+  onClearTopics,
 }: Props) {
   const { labelsById, isLoading } = useSpaceLabels(spaceIds);
 
   const spaceOptions = React.useMemo<HubFilterOption<string>[]>(
-    () => [
-      { value: ALL_FILTER, label: 'All spaces', showImage: false },
-      ...spaceIds.map(id => {
+    () =>
+      spaceIds.map(id => {
         const label = spaceLabel(labelsById, id);
         return {
           value: id,
           label: label?.name ?? 'Space',
           image: label?.image ?? null,
           pending: !label && isLoading,
+          count: spaceCounts.get(id) ?? 0,
         };
       }),
-    ],
-    [spaceIds, labelsById, isLoading]
+    [spaceIds, labelsById, isLoading, spaceCounts]
   );
 
   const topicOptions = React.useMemo<HubFilterOption<string>[]>(
-    () => [
-      { value: ALL_FILTER, label: 'All topics' },
-      ...topics.map(topic => ({ value: topic.id, label: topic.name ?? 'Topic' })),
-    ],
-    [topics]
+    () =>
+      topics.map(topic => ({ value: topic.id, label: topic.name ?? 'Topic', count: topicCounts.get(topic.id) ?? 0 })),
+    [topics, topicCounts]
   );
 
-  const spaceTriggerLabel =
-    selectedSpace === ALL_FILTER ? 'All spaces' : (spaceLabel(labelsById, selectedSpace)?.name ?? 'Space');
-  const topicTriggerLabel =
-    selectedTopic === ALL_FILTER ? 'All topics' : (topics.find(topic => topic.id === selectedTopic)?.name ?? 'Topic');
+  const selectedSpaceName =
+    selectedSpaceIds.length === 1 ? (spaceLabel(labelsById, selectedSpaceIds[0])?.name ?? null) : null;
+
+  const spaceTriggerLabel = pickerLabel(
+    selectedSpaceIds.length,
+    'Any space',
+    () => selectedSpaceName ?? 'Space',
+    count => `${count} spaces`
+  );
+  const spaceLabelPending = selectedSpaceIds.length === 1 && selectedSpaceName == null && isLoading;
+
+  const topicTriggerLabel = pickerLabel(
+    selectedTopicIds.length,
+    'Any topic',
+    () => topics.find(topic => idEquals(topic.id, selectedTopicIds[0]))?.name ?? 'Topic',
+    count => `${count} topics`
+  );
 
   const showSpaceMenu = spaceIds.length > 1;
   const showTopicMenu = topics.length > 0;
@@ -67,21 +81,25 @@ export function PersonDebateFilters({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {showSpaceMenu && (
-        <HubFilterMenu
+        <HubMultiFilterMenu
           label={spaceTriggerLabel}
-          labelPending={selectedSpace !== ALL_FILTER && !spaceLabel(labelsById, selectedSpace) && isLoading}
+          labelPending={spaceLabelPending}
           options={spaceOptions}
-          value={selectedSpace}
-          onChange={onSelectSpace}
+          values={selectedSpaceIds}
+          onToggle={onToggleSpace}
+          onClear={onClearSpaces}
+          clearLabel="Any space"
           showImages
         />
       )}
       {showTopicMenu && (
-        <HubFilterMenu
+        <HubMultiFilterMenu
           label={topicTriggerLabel}
           options={topicOptions}
-          value={selectedTopic}
-          onChange={onSelectTopic}
+          values={selectedTopicIds}
+          onToggle={onToggleTopic}
+          onClear={onClearTopics}
+          clearLabel="Any topic"
         />
       )}
     </div>

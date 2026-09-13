@@ -7,6 +7,7 @@ import { CursorPager } from '~/core/claims/browse/use-cursor-pages';
 import type { DebateClaim } from '~/core/debates/api';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { keepSelectableTopics } from '~/core/debates/matchmaking/topic-facets';
 import { type PersonClaimEntry, personTopics, usePersonClaims } from '~/core/debates/use-person-claims';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
@@ -16,7 +17,7 @@ import type { Entity } from '~/core/types';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { ALL_FILTER, PersonDebateFilters } from './person-debate-filters';
+import { PersonDebateFilters } from './person-debate-filters';
 
 const CLAIMS_PAGE_SIZE = 8;
 
@@ -31,31 +32,72 @@ type PersonClaimRecord = {
 export function PersonClaimsCollection({ personId }: { personId: string }) {
   const { entries, claimByHex, topicsByClaimHex, isLoading } = usePersonClaims(personId);
 
-  const [selectedSpace, setSelectedSpace] = React.useState(ALL_FILTER);
-  const [selectedTopic, setSelectedTopic] = React.useState(ALL_FILTER);
+  // Multi-select, matching the debates hub side panel: spaces OR, topics AND.
+  const [selectedSpaceIds, setSelectedSpaceIds] = React.useState<string[]>([]);
+  const [selectedTopicIds, setSelectedTopicIds] = React.useState<string[]>([]);
   const [pageIndex, setPageIndex] = React.useState(0);
 
   // The spaces the person's claims live in — the filter is claim-scoped, so its options are too.
   const spaceIds = React.useMemo(() => [...new Set(entries.flatMap(entry => entry.spaceIds))], [entries]);
   const topics = React.useMemo(() => personTopics(topicsByClaimHex), [topicsByClaimHex]);
 
+  const filtersSettled = !isLoading;
+  React.useEffect(() => {
+    if (!filtersSettled) return;
+    setSelectedSpaceIds(current => {
+      if (current.length === 0) return current;
+      const kept = current.filter(id => spaceIds.some(spaceId => idEquals(spaceId, id)));
+      return kept.length === current.length ? current : kept;
+    });
+  }, [filtersSettled, spaceIds]);
+  React.useEffect(() => {
+    setSelectedTopicIds(current => keepSelectableTopics(current, topics, filtersSettled));
+  }, [filtersSettled, topics]);
+
   const filtered = React.useMemo<PersonClaimRecord[]>(
     () =>
       entries.flatMap(entry => {
-        if (selectedTopic !== ALL_FILTER) {
+        // Topics: AND — the claim has to carry every selected topic.
+        if (selectedTopicIds.length > 0) {
           const claimTopics = topicsByClaimHex.get(entry.claimHex) ?? [];
-          if (!claimTopics.some(topic => idEquals(topic.id, selectedTopic))) return [];
+          if (!selectedTopicIds.every(topicId => claimTopics.some(topic => idEquals(topic.id, topicId)))) return [];
         }
 
+        // Spaces: OR — show the claim under the first selected space it holds a position in.
         const position =
-          selectedSpace === ALL_FILTER
+          selectedSpaceIds.length === 0
             ? entry.positions[0]
-            : entry.positions.find(candidate => idEquals(candidate.spaceId, selectedSpace));
+            : entry.positions.find(candidate => selectedSpaceIds.some(id => idEquals(candidate.spaceId, id)));
 
         return position ? [{ entry, spaceId: position.spaceId }] : [];
       }),
-    [entries, topicsByClaimHex, selectedSpace, selectedTopic]
+    [entries, topicsByClaimHex, selectedSpaceIds, selectedTopicIds]
   );
+
+  const spaceCounts = React.useMemo(() => {
+    const map = new Map<string, number>();
+    for (const spaceId of spaceIds) map.set(spaceId, 0);
+    for (const entry of entries) {
+      if (selectedTopicIds.length > 0) {
+        const claimTopics = topicsByClaimHex.get(entry.claimHex) ?? [];
+        if (!selectedTopicIds.every(topicId => claimTopics.some(topic => idEquals(topic.id, topicId)))) continue;
+      }
+      for (const spaceId of new Set(entry.spaceIds)) {
+        if (map.has(spaceId)) map.set(spaceId, (map.get(spaceId) ?? 0) + 1);
+      }
+    }
+    return map;
+  }, [entries, spaceIds, topicsByClaimHex, selectedTopicIds]);
+
+  const topicCounts = React.useMemo(() => {
+    const map = new Map<string, number>();
+    for (const { entry } of filtered) {
+      for (const topic of topicsByClaimHex.get(entry.claimHex) ?? []) {
+        map.set(topic.id, (map.get(topic.id) ?? 0) + 1);
+      }
+    }
+    return map;
+  }, [filtered, topicsByClaimHex]);
 
   const lastPageIndex = Math.max(0, Math.ceil(filtered.length / CLAIMS_PAGE_SIZE) - 1);
   const currentPageIndex = Math.min(pageIndex, lastPageIndex);
@@ -65,12 +107,24 @@ export function PersonClaimsCollection({ personId }: { personId: string }) {
   );
   const hasNextPage = currentPageIndex < lastPageIndex;
 
-  const selectSpace = React.useCallback((spaceId: string) => {
-    setSelectedSpace(spaceId);
+  const toggleSpace = React.useCallback((spaceId: string) => {
+    setSelectedSpaceIds(prev =>
+      prev.some(id => idEquals(id, spaceId)) ? prev.filter(id => !idEquals(id, spaceId)) : [...prev, spaceId]
+    );
     setPageIndex(0);
   }, []);
-  const selectTopic = React.useCallback((topicId: string) => {
-    setSelectedTopic(topicId);
+  const toggleTopic = React.useCallback((topicId: string) => {
+    setSelectedTopicIds(prev =>
+      prev.some(id => idEquals(id, topicId)) ? prev.filter(id => !idEquals(id, topicId)) : [...prev, topicId]
+    );
+    setPageIndex(0);
+  }, []);
+  const clearSpaces = React.useCallback(() => {
+    setSelectedSpaceIds([]);
+    setPageIndex(0);
+  }, []);
+  const clearTopics = React.useCallback(() => {
+    setSelectedTopicIds([]);
     setPageIndex(0);
   }, []);
 
@@ -107,10 +161,14 @@ export function PersonClaimsCollection({ personId }: { personId: string }) {
         <PersonDebateFilters
           spaceIds={spaceIds}
           topics={topics}
-          selectedSpace={selectedSpace}
-          selectedTopic={selectedTopic}
-          onSelectSpace={selectSpace}
-          onSelectTopic={selectTopic}
+          selectedSpaceIds={selectedSpaceIds}
+          selectedTopicIds={selectedTopicIds}
+          spaceCounts={spaceCounts}
+          topicCounts={topicCounts}
+          onToggleSpace={toggleSpace}
+          onToggleTopic={toggleTopic}
+          onClearSpaces={clearSpaces}
+          onClearTopics={clearTopics}
         />
       </div>
 
