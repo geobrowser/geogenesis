@@ -19,7 +19,6 @@ import { SmallButton } from '~/design-system/button';
 import { Checkbox } from '~/design-system/checkbox';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { inputStyles } from '~/design-system/input';
-import { Select } from '~/design-system/select';
 import { SelectEntity } from '~/design-system/select-entity';
 import { TextButton } from '~/design-system/text-button';
 
@@ -179,17 +178,31 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
         )}
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      {/* Native rather than the design-system `Select`, which cannot be opened from
+          inside this modal: it traps focus in a menu portalled outside the
+          dialog, the dialog's own focus trap takes focus straight back, and the
+          menu closes as fast as it opens. The entity pickers above manage because
+          `SelectEntityAsPopover` is a Popover with `modal={false}`, which does not
+          compete for focus. Worth fixing in `Select` — until then a control that
+          opens beats one that matches. */}
+      <label className="flex flex-col gap-1.5">
         <span className="text-metadataMedium text-grey-04">Employment type</span>
-        <Select
+        <select
           value={employmentType?.id ?? ''}
-          onChange={value => setEmploymentType(EMPLOYMENT_TYPE_OPTIONS.find(option => option.id === value) ?? null)}
-          options={EMPLOYMENT_TYPE_OPTIONS.map(option => ({ value: option.id, label: option.name }))}
-          placeholder="Please select"
           disabled={isSaving}
-          aria-label="Employment type"
-        />
-      </div>
+          onChange={event =>
+            setEmploymentType(EMPLOYMENT_TYPE_OPTIONS.find(option => option.id === event.currentTarget.value) ?? null)
+          }
+          className={inputStyles()}
+        >
+          <option value="">Please select</option>
+          {EMPLOYMENT_TYPE_OPTIONS.map(option => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
+      </label>
 
       {/* Above the dates, because it decides what the End picker is for: ticking
           it puts the role in the present and leaves End with nothing to say. */}
@@ -233,17 +246,24 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
         )}
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <label className="flex flex-col gap-1.5">
         <span className="text-metadataMedium text-grey-04">Location type</span>
-        <Select
+        <select
           value={locationType?.id ?? ''}
-          onChange={value => setLocationType(LOCATION_TYPE_OPTIONS.find(option => option.id === value) ?? null)}
-          options={LOCATION_TYPE_OPTIONS.map(option => ({ value: option.id, label: option.name }))}
-          placeholder="Please select"
           disabled={isSaving}
-          aria-label="Location type"
-        />
-      </div>
+          onChange={event =>
+            setLocationType(LOCATION_TYPE_OPTIONS.find(option => option.id === event.currentTarget.value) ?? null)
+          }
+          className={inputStyles()}
+        >
+          <option value="">Please select</option>
+          {LOCATION_TYPE_OPTIONS.map(option => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <label className="flex flex-col gap-1.5">
         <span className="text-metadataMedium text-grey-04">Highlights</span>
