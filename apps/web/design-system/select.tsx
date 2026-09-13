@@ -94,7 +94,12 @@ export const Select = ({
         <SelectPrimitive.Content
           ref={setContentElement}
           className={cx(
-            'z-20 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded border border-grey-02 bg-white shadow-lg',
+            // The menu portals to the body, which a modal dialog switches off:
+            // Radix sets `pointer-events: none` there and re-enables it only
+            // inside its own content, and the dialog sits far above z-20. So the
+            // menu opened and was both unclickable and behind the dialog. Same
+            // two properties `SelectEntityAsPopover` sets, for the same reason.
+            'pointer-events-auto z-[var(--elevated-popover-z,1001)] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded border border-grey-02 bg-white shadow-lg',
             contentClassName
           )}
           position={position}
