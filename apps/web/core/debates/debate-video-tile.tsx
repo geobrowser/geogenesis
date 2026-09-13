@@ -147,24 +147,42 @@ export function DebateVideoTile({
       </div>
       {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
 
-      {/* One row rather than three corners. Everything that wants the bottom of the tile is laid
-          out here instead of absolutely positioned, so nothing can end up underneath anything else.
-          The label is the only flexible cell: the controls and the status hold their natural width
-          and the label truncates to pay for them. Giving the status a share of the free space
-          instead — `flex-1` with a zero basis — sized it to the viewport rather than to its own
-          text, and the wider "Not recording" state then overflowed onto the camera toggle on any
-          tile under ~330px, which is most phones. */}
+      {/* One row rather than three corners, so nothing can end up underneath anything else.
+          `1fr auto 1fr` rather than a flex row: the controls belong on the tile's centre line, and
+          grid gets them there by construction, because the two `1fr` columns are equal whatever
+          their contents weigh. A flex row with `justify-between` centres the middle child only
+          when its siblings happen to be the same width, and here they are not — the status chip
+          runs to twice the position label, which pushed the mic and camera visibly to the right.
+
+          The side columns hold their contents' natural width and the label truncates into
+          whatever is left. Giving the status a share of the free space instead — `flex-1` with a
+          zero basis — sized it to the viewport rather than to its own text, and the wider
+          "Not recording" state then overflowed onto the camera toggle below ~330px.
+
+          All three cells are always rendered: with two children the status would take the middle
+          column and sit on the centre line itself.
+
+          The status column is `minmax(auto,1fr)` rather than `1fr` so that centring degrades
+          instead of breaking. Equal columns are what centre the controls, but they also starve the
+          wider side: on a 254px tile — a 320px viewport — an equal share is 67px while
+          "Not recording" needs 86, and being `whitespace-nowrap` it took the difference out of the
+          middle column and sat on the camera toggle. An `auto` minimum lets that column claim its
+          own width first, so the label gives up the space instead and truncates. Everywhere there
+          is room for equal columns, which is every width from ~360px up, the two resolve equal and
+          the controls land exactly on the centre line. */}
       {(positionLabel || tileControls || status) && (
-        <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-1 justify-start">
+        <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 grid grid-cols-[minmax(0,1fr)_auto_minmax(auto,1fr)] items-center gap-2">
+          <div className="flex min-w-0 justify-start">
             {positionLabel && (
               <DebateTileChip className={cx('max-w-full truncate text-text', tileChipSurface)}>
                 {positionLabel}
               </DebateTileChip>
             )}
           </div>
-          {tileControls && <div className="pointer-events-auto shrink-0">{tileControls}</div>}
-          <div className="flex shrink-0 justify-end">{status}</div>
+          <div className="pointer-events-auto">{tileControls}</div>
+          {/* No `min-w-0` here, unlike the label: it is what lets the column's `auto` minimum see
+              the chip's real width. */}
+          <div className="flex justify-end">{status}</div>
         </div>
       )}
 
