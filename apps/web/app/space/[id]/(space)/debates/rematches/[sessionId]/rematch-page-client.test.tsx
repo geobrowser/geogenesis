@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from '~/core/debates/api';
 import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
+import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 
 import { DebateRematchPageClient } from './rematch-page-client';
@@ -3992,6 +3993,20 @@ function claimSummary(id: string, claim: string) {
 describe('Hide my positions', () => {
   const SWITCH = { name: 'Hide my positions' } as const;
 
+  /**
+   * Waits out a collapsing card before asserting that a row is still on screen.
+   *
+   * A row leaving stays in the DOM while it fades, so `findByText` resolves on the ghost of one on
+   * its way out — and a case asserting "this must not leave" passes on the very thing it exists to
+   * catch. Only the "still here" assertions need it; "gone" ones are `waitFor`'d instead, which
+   * waits for the removal rather than racing it.
+   */
+  async function settleExit() {
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, HUB_CARD_EXIT_TRANSITION.duration * 1000 + 150));
+    });
+  }
+
   /** The row the browse list carries for a claim, with the viewer's side on it or without. */
   function browsedClaim(viewerPosition: boolean | null) {
     return {
@@ -4044,6 +4059,28 @@ describe('Hide my positions', () => {
   });
 
   /**
+   * The case the hold is actually for, and the one a row-present fixture misses.
+   *
+   * Most of a tag catalogue has no geo-chat row at all — a row appears when somebody answers. So
+   * the claim a viewer browses to, takes a side on, and is then a press away from requesting a
+   * debate on goes *straight* from "no row" to answered. Read as unknown, that transition was never
+   * recorded as on-screen-unanswered, and the row was dropped the instant it was answered.
+   */
+  it('keeps a claim that had no row at all until the viewer answered it', async () => {
+    mocks.claims = [sharedClaim()];
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+
+    mocks.claims = [sharedClaim(), browsedClaim(true)];
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await settleExit();
+
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  /**
    * The half that makes the switch safe to offer.
    *
    * Answering here is the first move of requesting a debate rather than the end of an interaction,
@@ -4061,8 +4098,9 @@ describe('Hide my positions', () => {
 
     mocks.claims = [sharedClaim(), browsedClaim(true)];
     rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleExit();
 
-    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
   });
 
   // It is that backlog by definition, so the switch could only ever empty it — a broken tab rather

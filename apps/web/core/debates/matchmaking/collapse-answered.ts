@@ -96,6 +96,16 @@ export function useCollapseAnswered<T>(
       if (state === 'unanswered') {
         // Answering, clearing, and answering again is two separate folds, so the record of having
         // folded is cleared with the answer that produced it.
+        //
+        // The *pending* fold goes with it, and that is the part that bites. A viewer who clears an
+        // answer inside the hold left a timer running against a row that is no longer answered; it
+        // fired into the empty, recorded the key as folded, and the next answer was then dropped on
+        // the spot with no hold at all — the one thing the hold exists to prevent.
+        const pending = timers.current.get(key);
+        if (pending !== undefined) {
+          clearTimeout(pending);
+          timers.current.delete(key);
+        }
         seenUnanswered.current.add(key);
         foldedOut.current.delete(key);
         continue;

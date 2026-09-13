@@ -969,7 +969,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const taggedClaims = useLastSettled(
     taggedRowsNow,
     taggedClaimsSettling,
-    `${sessionId}:${claimsTagId}:${debouncedSearch}:${spaceIds.join(',')}:${topicIds.join(',')}`
+    `${sessionId}:${claimsTagId}:${debouncedSearch}:${spaceIds.join(',')}:${debouncedTopicIds.join(',')}`
   );
 
   // The opponent is whichever participant isn't the local user; with no local user there is none.
@@ -1284,13 +1284,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * the two surfaces. The hub hides an answered claim because browsing is about finding something
    * new and a claim you have taken a side on is one you are done with. Here `debateRequestGate`
    * refuses a request from someone holding no position — "with no position at all there is nothing
-   * to agree about" — so an answered claim is precisely the one you can act on, and hiding it by
-   * default would empty the page of everything it exists to do. It would also strand claims: one
-   * the viewer answered and the opponent did not is on no other tab in the flow.
+   * to agree about" — so an answered claim is one you can act on rather than one you are finished
+   * with, and it cannot simply be collapsed the way the hub's is.
    *
-   * What made it worth offering anyway is that a reader with a long history of positions has to
-   * scroll past all of them to reach a claim they have not seen, which is the opposite failure and
-   * the one people actually reported. So it is theirs to switch on, off by default, and remembered.
+   * It is on by default all the same, because the two tabs then do one job each: what the pair can
+   * go again on right now is the opponent's tab with "Matches only" beside it, and this is the
+   * other half of the flow — finding a claim to take a side on. Nothing becomes unreachable, since
+   * a claim only the viewer has answered cannot be requested from either tab; the gate needs both
+   * sides. And the claim answered *here*, which is the one a press away from a request, is kept by
+   * the indefinite hold below rather than folded away under the viewer.
+   *
+   * What it hides is the backlog they arrived with — a reader with a long history of positions
+   * scrolling past all of them to reach a claim they have not seen, which is what was reported.
    *
    * Never on "My positions", which is that backlog by definition and would be left permanently
    * empty — a broken tab rather than a filter. The switch is not drawn there either, so the state
@@ -1298,16 +1303,34 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const hidesAnswered = tab === 'explore' && source !== 'mine' && hideMyPositions;
 
+  /**
+   * Whether the lookup carrying this viewer's side has answered for the list on screen.
+   *
+   * Needed because "geo-chat has no row for this claim" and "geo-chat has not been asked yet" both
+   * arrive as a missing row, and over a tag catalogue the first is the *ordinary* case — most
+   * claims have no row until somebody answers them. Reading them both as unknown meant a claim the
+   * viewer answered right here went straight from unknown to answered, was never once recorded as
+   * on-screen-unanswered, and so was dropped on the spot — with the indefinite hold that exists to
+   * keep it doing nothing at all, on the exact path this page is for.
+   *
+   * Per source, because a different query answers for each: the tag's rows for Explore's two
+   * catalogues, the curated lookup for Recommended.
+   */
+  const rowsSettled =
+    source === 'recommended'
+      ? !curatedClaimsQuery.isLoading && !curatedClaimsQuery.error
+      : !taggedClaimsSettling && !taggedClaimsQuery.error;
+
   const answeredStateOf = React.useCallback(
     (claim: DebateRematchClaim): AnsweredState => {
       const position = chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id);
-      // `undefined` is "geo-chat holds no row for this claim in this space", which over a tag
-      // catalogue is the ordinary shape of a claim nobody has answered rather than a lookup still
-      // running — and either way it is not the viewer's position, so it is never a reason to hide.
-      if (position === undefined) return 'unknown';
-      return position === null ? 'unanswered' : 'answered';
+      if (position !== undefined) return position === null ? 'unanswered' : 'answered';
+      // No row, and the lookup has answered: geo-chat holds no position for this viewer here, which
+      // is a real answer. Still out, and it is not one — hiding on a lookup that has not run takes
+      // a row away from under someone before anyone knew whether they had answered it.
+      return rowsSettled ? 'unanswered' : 'unknown';
     },
-    [chatPositionFor]
+    [chatPositionFor, rowsSettled]
   );
 
   // Kept for good rather than folded after a moment — see `holdMs`. A claim answered here is one
@@ -1321,6 +1344,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   });
 
   const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
+
+  // Only the tagged sources page; the rest arrive whole, so an empty one of those really is empty.
+  const stillPaging = graphFiltered && visibleClaims.length === 0 && taggedHasNextPage;
 
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage: taggedHasNextPage,
@@ -1695,7 +1721,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           // Only what the visible tab actually draws from, and only while it has nothing to show.
           // Holding every tab on the slowest query meant the session's own claims — which arrive in
           // one round trip — sat behind a graph-wide scan they don't come from.
-          isLoading={tabIsLoading && (showsSections ? visibleSections.length === 0 : visibleClaims.length === 0)}
+          // `stillPaging` for the same reason the hub has one: the collapse runs over the page in
+          // hand, so a viewer who has answered everything on it sees the list emptied while the
+          // corpus goes on past them — and the empty state below would announce that as "no other
+          // eligible claims", of rows nobody has fetched. While the sentinel still has somewhere to
+          // go, this is still looking.
+          isLoading={
+            (tabIsLoading || stillPaging) && (showsSections ? visibleSections.length === 0 : visibleClaims.length === 0)
+          }
           error={tabError}
           isEmpty={showsSections ? visibleSections.length === 0 : visibleClaims.length === 0}
           emptyMessage={

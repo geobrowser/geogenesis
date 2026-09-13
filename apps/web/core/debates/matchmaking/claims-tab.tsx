@@ -128,11 +128,14 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
 /**
  * Which surface is drawing this list (GEO-2861).
  *
- * Lobby and Explore are the same machinery over two different questions: Lobby is fixed to
- * `debate_now` and has no source picker, Explore keeps the picker and never asks for `debate_now`.
+ * Three surfaces over the same machinery, each fixed to one list: Lobby is `debate_now`, Explore is
+ * the Debate tag, Positions is the viewer's own. None of them picks — the source menu that used to
+ * choose between the last two went with GEO-2863.
+ *
  * They hold their filter selections apart — narrowing what you can debate right now is a different
- * act from narrowing what you are browsing — so the atoms come from here rather than being read
- * directly, and adding a surface means adding a row rather than threading another flag through.
+ * act from narrowing what you are browsing, and from narrowing what you have already answered — so
+ * the atoms come from here rather than being read directly, and adding a surface means adding a row
+ * rather than threading another flag through.
  */
 export type ClaimsTabVariant = 'explore' | 'lobby' | 'positions';
 
@@ -561,7 +564,16 @@ export function ClaimsTab({
   // they ask for a different list.
   // What the viewer asked for, as one value. A change to any of it is a different list: a different
   // order to hold, and a different set of answers to wait for.
-  const listKey = `${debouncedSearch}|${spaceIds.join(',')}|${topicIds.join(',')}|${filter}`;
+  //
+  // The *debounced* topics, because this has to name the list the queries are actually fetching.
+  // Read from the live selection it moved on the tick the viewer clicked, while the catalog was
+  // still out on the previous one — so the answers latch below closed on the new key against the
+  // old query's rows, and the claims the viewer had answered painted and then vanished, which is
+  // the first-paint bug this PR fixed arriving by a second route.
+  //
+  // Spaces are not debounced on the way into the tagged query (`taggedFilters`), so the live
+  // selection is the right one for them. The two differ on purpose; this key follows each.
+  const listKey = `${debouncedSearch}|${spaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}`;
   const claims = useStableListOrder(graphSourced ? taggedEntries : serverClaims, claimRowKey, listKey);
 
   /**
@@ -569,9 +581,11 @@ export function ClaimsTab({
    *
    * The list is ordered by the server's ranking score and does not move when you answer something,
    * so every claim you have taken a side on stays exactly where it was, between you and the next one
-   * you haven't — for as long as you keep using the product. There is no new control for this: "My
-   * positions" is already how you go and look at them, and a fourth thing in the filter bar would
-   * overlap with a menu option that already exists.
+   * you haven't — for as long as you keep using the product.
+   *
+   * On by default, with the "Hide my positions" switch at the end of the filter row to say so and
+   * to turn it off. It ran silently at first, and silently is how correct behaviour read as the
+   * list discarding rows. Going and *looking* at them is the Positions tab.
    *
    * `viewer_response` is the whole predicate. geo-chat records a position the moment the write
    * starts, so it answers promptly — it is the *graph* that waits on the indexer, which is why the
@@ -735,11 +749,25 @@ export function ClaimsTab({
 
   // Both lists page now, so the sentinel follows whichever one is on screen (GEO-2798). The tagged
   // lists used to arrive whole, which is why this was the index's alone.
+  const hasNextPage = graphSourced ? taggedHasNextPage : claimsQuery.hasNextPage;
   const sentinelRef = useInfiniteScrollSentinel({
-    hasNextPage: graphSourced ? taggedHasNextPage : claimsQuery.hasNextPage,
+    hasNextPage,
     isFetchingNextPage: graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage,
     fetchNextPage: graphSourced ? fetchNextTaggedPage : claimsQuery.fetchNextPage,
   });
+
+  /**
+   * An empty screen with pages still to come is not an empty list.
+   *
+   * The collapse runs over the page in hand, so a viewer who has answered the first fifty claims
+   * sees every row removed while the corpus goes on past them — and the empty states below would
+   * then tell them they had answered *every claim here*, or that no claims match their filters, of
+   * rows nobody has fetched. Both are statements about the whole corpus made from its first page.
+   *
+   * So while the sentinel still has somewhere to go, this is still looking. The sentinel is on
+   * screen precisely because the list is short, so it keeps advancing and this resolves itself.
+   */
+  const stillPaging = visibleClaims.length === 0 && hasNextPage;
 
   // Every hook above has run, so the cache is filled and the atoms are seeded; there is simply
   // nothing to draw. Placed here rather than early, which would break the rules of hooks.
@@ -800,7 +828,8 @@ export function ClaimsTab({
           isLoading={
             spacesPending ||
             (graphSourced ? taggedLoading : claimsQuery.isLoading) ||
-            (collapsesAnswered && !answersSettled)
+            (collapsesAnswered && !answersSettled) ||
+            stillPaging
           }
           // The catalog only. It is the list — without it there is nothing to show, and an error is
           // the honest answer.
@@ -980,7 +1009,7 @@ type SpaceTopicFiltersProps = {
    * them with skeletons rather than blanking them on the spot — see the prop there.
    */
   countsPending?: boolean;
-  /** Rendered before the space filter — Explore puts its source picker here. */
+  /** Rendered before the space filter — the debate-again flow puts its source picker here. */
   leading?: React.ReactNode;
   /**
    * Rendered at the far end of the row, past the menus. Lobby puts its "Matches only" switch here:

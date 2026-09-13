@@ -119,6 +119,31 @@ describe('useCollapseAnswered', () => {
   // A list that is *about* the viewer's positions collapses to nothing, which is not a filter but a
   // broken tab.
   /**
+   * Clearing inside the hold has to take the pending fold with it.
+   *
+   * Changing your mind twice in a second is a real thing to do, and the second answer was inheriting
+   * the first one's timer: the guard against starting two folds for one row reads "a timer is
+   * already pending", which was still true of a fold the clear should have cancelled. So the row
+   * folded on the *first* answer's clock — here, 200ms after the press instead of a full second,
+   * and arbitrarily close to zero the later in the hold the viewer changes their mind.
+   */
+  it('gives a fresh hold to an answer that follows a clear made mid-fold', () => {
+    const { result, rerender } = render([row('a', 'unanswered')]);
+    rerender({ rows: [row('a', 'answered')] });
+
+    act(() => void vi.advanceTimersByTime(HOLD - 200));
+    rerender({ rows: [row('a', 'unanswered')] });
+    rerender({ rows: [row('a', 'answered')] });
+
+    // The first answer's fold would land here. This answer is 200ms old.
+    act(() => void vi.advanceTimersByTime(200));
+    expect(ids(result.current)).toEqual(['a']);
+
+    act(() => void vi.advanceTimersByTime(HOLD - 200));
+    expect(result.current).toEqual([]);
+  });
+
+  /**
    * The debate-again flow's half of the same switch.
    *
    * There, answering is the first half of an action rather than the end of one — the claim you just

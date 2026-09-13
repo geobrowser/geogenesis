@@ -888,14 +888,28 @@ describe('ClaimsTab', () => {
     renderMine();
     await showIndexedClaims();
 
-    // Nothing is narrowing the list — the viewer simply holds no positions — so it says that rather
-    // than blaming filters they never set.
-    expect(screen.getByText('You haven’t taken a position on any claims yet.')).toBeInTheDocument();
+    // And says nothing about the corpus while it does. "You haven't taken a position on any claims
+    // yet" is a statement about every page, and this is the first one — the allowlist emptied it,
+    // and the rows that would disprove it have not been fetched. The sentinel lives outside the
+    // query state for exactly this reason, so the list keeps advancing while it says so.
+    expect(screen.queryByText('You haven’t taken a position on any claims yet.')).toBeNull();
     expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
 
     act(() => mocks.trigger());
 
     expect(mocks.fetchNextPage).toHaveBeenCalled();
+  });
+
+  // The other half: once there is no page left, an empty list really is empty and says so.
+  it('blames nothing but the corpus once the last page is in', async () => {
+    mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID)];
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.hasNextPage = false;
+    renderMine();
+    await showIndexedClaims();
+
+    expect(await screen.findByText('You haven’t taken a position on any claims yet.')).toBeInTheDocument();
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
   });
 
   // The reported bug: the space menu opened as a column of "Space" placeholders while it re-fetched
@@ -2257,6 +2271,25 @@ describe('claims the viewer has already answered', () => {
 
     expect(await screen.findByText(/You’ve answered every claim here/)).toBeInTheDocument();
     expect(screen.queryByText('No claims have been tagged for debate yet.')).toBeNull();
+  });
+
+  /**
+   * Not while there is more corpus to come.
+   *
+   * The collapse runs over the page in hand, so a viewer who has answered the first fifty claims
+   * has every row removed while the tag goes on past them. Saying "you have answered every claim
+   * here" then is a statement about rows nobody has fetched — and the sentinel is, at that moment,
+   * fetching them.
+   */
+  it('does not claim the viewer answered everything while pages are still coming', async () => {
+    mocks.taggedClaims[DEBATE] = [featuredClaim(FEATURED_A, 'One you have answered')];
+    mocks.taggedHasNextPage = true;
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    await waitFor(() => expect(screen.queryByText('One you have answered')).toBeNull());
+    expect(screen.queryByText(/You’ve answered every claim here/)).toBeNull();
+    expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
   });
 
   /**
