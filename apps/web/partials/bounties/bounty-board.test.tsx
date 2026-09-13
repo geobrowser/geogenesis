@@ -245,6 +245,13 @@ describe('BountyBoard', () => {
     expect(within(viewOptions).getByRole('button', { name: /Recently updated/ })).toBeInTheDocument();
     expect(within(viewOptions).getByRole('button', { name: /No grouping/ })).toBeInTheDocument();
     expect(within(screen.getByTestId('bounty-filters')).queryByRole('button', { name: /Recently updated/ })).toBeNull();
+
+    // Search is a sibling of both groups, not a member of either: the bar anchors it to the left
+    // edge while the groups are pushed right, which it cannot do from inside one of them.
+    const bar = screen.getByTestId('bounty-filter-bar');
+    const search = screen.getByLabelText('Search bounties');
+    expect(within(screen.getByTestId('bounty-filters')).queryByLabelText('Search bounties')).toBeNull();
+    expect(search.closest('label')?.parentElement).toBe(bar);
   });
 
   it('Featured is a checkbox: toggling on writes the scope param, the All row clears it', () => {

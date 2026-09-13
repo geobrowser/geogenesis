@@ -213,7 +213,10 @@ function PersonRow({
         <div className="h-8 w-8 overflow-hidden rounded-full">
           <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
         </div>
-        <OnlineDot className="absolute top-0 left-0 -translate-x-0.5 -translate-y-0.5" />
+        {/* The face here is 32px, twice the claim pills', so the dot is twice theirs: 8px of green
+            in a 4px ring. It carried the pills' 8px dot before, which on a face this size read as
+            a speck rather than a badge. */}
+        <OnlineDot faceSize={32} />
       </div>
       <div className="flex min-w-0 flex-col gap-0.5">
         {/* The name goes to their personal space, which is the profile page GEO-2611 settled on.

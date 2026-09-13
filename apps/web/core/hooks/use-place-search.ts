@@ -5,10 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Duration } from 'effect';
-import * as Effect from 'effect/Effect';
-import * as Either from 'effect/Either';
 
-import { Subgraph } from '~/core/io';
 import { EntityId } from '~/core/io/substream-schema';
 import { validateEntityId } from '~/core/utils/utils';
 
@@ -18,6 +15,7 @@ import { E } from '../sync/orm';
 import { useSyncEngine } from '../sync/use-sync-engine';
 import { PLACE_TYPE } from '../system-ids';
 import { SearchResult } from '../types';
+import { isSearchCancellation } from './search-cancellation';
 import { useDebouncedValue } from './use-debounced-value';
 
 export type Feature = {
@@ -53,86 +51,43 @@ export const usePlaceSearch = () => {
       if (isValidEntityId) {
         const id = EntityId(maybeEntityId);
 
-        const fetchResultEffect = Effect.either(
-          Effect.tryPromise({
-            try: async () =>
-              await mergeSearchResult({
-                id,
-                store,
-              }),
+        try {
+          const merged = await mergeSearchResult({ id, store });
+          return merged ? [merged] : [];
+        } catch (error) {
+          // See `isSearchCancellation`: an empty array returned here is cached under
+          // this key as a successful "no matches".
+          if (isSearchCancellation(error)) throw error;
+          console.error('usePlaceSearch entity lookup failed:', error);
+          return [];
+        }
+      }
 
-            catch: error => {
-              console.error('error', error);
-              return new Subgraph.Errors.AbortError();
+      try {
+        return await E.findFuzzy({
+          store,
+          cache,
+          where: {
+            name: {
+              fuzzy: debouncedQuery,
             },
-          })
-        );
-
-        const resultOrError = await Effect.runPromise(fetchResultEffect);
-
-        if (Either.isLeft(resultOrError)) {
-          const error = resultOrError.left;
-
-          switch (error._tag) {
-            case 'AbortError':
-              console.log(`abort error`);
-              return [];
-            default:
-              console.error('useSearch error:', String(error));
-              throw error;
-          }
-        }
-        console.log('resultOrError.right', resultOrError.right);
-        return resultOrError.right ? [resultOrError.right] : [];
-      }
-
-      const fetchResultsEffect = Effect.either(
-        Effect.tryPromise({
-          try: async () =>
-            await E.findFuzzy({
-              store,
-              cache,
-              where: {
-                name: {
-                  fuzzy: debouncedQuery,
+            // Hardcoded
+            types: mockFilterByTypes?.map(t => {
+              return {
+                id: {
+                  equals: t,
                 },
-                // Hardcoded
-                types: mockFilterByTypes?.map(t => {
-                  return {
-                    id: {
-                      equals: t,
-                    },
-                  };
-                }),
-              },
-              first: 10,
-              skip: 0,
+              };
             }),
-          catch: error => {
-            console.error('error', error);
-            return new Subgraph.Errors.AbortError();
           },
-        })
-      );
-
-      const resultOrError = await Effect.runPromise(fetchResultsEffect);
-
-      if (Either.isLeft(resultOrError)) {
-        const error = resultOrError.left;
-
-        switch (error._tag) {
-          case 'AbortError':
-            console.log(`abort error`);
-            return [];
-          default:
-            console.error('useSearch error:', String(error));
-            throw error;
-        }
+          first: 10,
+          skip: 0,
+        });
+      } catch (error) {
+        if (isSearchCancellation(error)) throw error;
+        console.error('usePlaceSearch error:', error);
+        return [];
       }
-
-      console.log('resultOrError.right', resultOrError.right);
-
-      return resultOrError.right;
     },
     /**
      * We don't want to return stale search results. Instead we just
