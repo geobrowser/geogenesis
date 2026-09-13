@@ -132,7 +132,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
 
   return (
     <HistorySheet
-      title={initial ? 'Edit position' : 'Add position'}
+      title={initial ? 'Edit role' : 'Add role'}
       isSaving={isSaving}
       canSave={canSave}
       onCancel={onCancel}

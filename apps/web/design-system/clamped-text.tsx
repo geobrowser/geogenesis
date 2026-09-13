@@ -31,8 +31,13 @@ type ClampedTextProps = {
   textClassName?: string;
 };
 
+// No type of its own: the toggle takes the variant of the text it belongs to, so
+// More sits on the last line at the same size and on the same baseline. It used
+// to hardcode `text-body` and `leading-none`, which was right only for a caller
+// passing `body` and left every other one with an oversized toggle sitting off
+// the line.
 const TOGGLE_CLASS =
-  'm-0 inline cursor-pointer border-0 bg-transparent p-0 text-body leading-none text-grey-04 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
+  'm-0 inline cursor-pointer border-0 bg-transparent p-0 text-grey-04 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
 
 const TOGGLE_GUTTER_CLASS = 'pr-11';
 
@@ -144,7 +149,12 @@ export function ClampedText({
         {showToggle && expanded && (
           <>
             {' '}
-            <button type="button" onClick={() => setExpanded(false)} aria-expanded={true} className={TOGGLE_CLASS}>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              aria-expanded={true}
+              className={cx(typeClassName, TOGGLE_CLASS)}
+            >
               Less
             </button>
           </>
@@ -159,7 +169,12 @@ export function ClampedText({
               : { height: '1lh', lineHeight: '1lh' }
           }
         >
-          <button type="button" onClick={() => setExpanded(true)} aria-expanded={false} className={TOGGLE_CLASS}>
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            aria-expanded={false}
+            className={cx(typeClassName, TOGGLE_CLASS)}
+          >
             More
           </button>
         </span>

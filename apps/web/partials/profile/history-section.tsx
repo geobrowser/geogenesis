@@ -27,11 +27,11 @@ type Props = {
 
 const COPY: Record<Kind, { title: string; add: string; addHere: string; empty: string; noun: string }> = {
   employment: {
-    title: 'Work',
-    add: 'Add position',
+    title: 'Experience',
+    add: 'Add experience',
     addHere: 'Add another role here',
-    empty: 'Nothing here yet. Add a position and it appears on your profile.',
-    noun: 'position',
+    empty: 'Nothing here yet. Add a role and it appears on your profile.',
+    noun: 'role',
   },
   education: {
     title: 'Education',
@@ -201,7 +201,7 @@ function EntryRow({
           aria-label={`Edit ${noun} ${subject}`}
           className="w-full text-left"
         >
-          <p className="truncate text-metadataMedium text-text">{heading}</p>
+          <p className="truncate text-inputMedium text-text">{heading}</p>
           {employmentType?.name && <p className="text-metadata text-grey-04">{employmentType.name}</p>}
 
           {/* About a third of records carry no dates. A lone dash there reads as a
@@ -227,10 +227,20 @@ function EntryRow({
           </div>
         )}
 
+        {/* Clamped for the same reason as the description, at two lines rather than
+            three: a long list of skills says "there are many" well before it is
+            read to the end. The label folds into the clamped text because the
+            component takes a string, and a two-tone prefix is not worth a second
+            implementation of the measuring this one already does. */}
         {skills.length > 0 && (
-          <p className="mt-1 text-metadata text-grey-04">
-            <span className="text-text">Skills:</span> {skills.map(skill => skill.name).join(', ')}
-          </p>
+          <div className="mt-1">
+            <ClampedText
+              text={`Skills: ${skills.map(skill => skill.name).join(', ')}`}
+              maxLines={2}
+              variant="metadata"
+              textClassName="text-grey-04"
+            />
+          </div>
         )}
       </div>
 

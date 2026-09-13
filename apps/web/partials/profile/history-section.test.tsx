@@ -54,9 +54,9 @@ describe('HistorySection', () => {
   it('names the section and offers a way in when there is nothing yet', () => {
     renderSection();
 
-    expect(screen.getByRole('heading', { name: 'Work' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Experience' })).toBeInTheDocument();
     expect(screen.getByText(/Nothing here yet/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '+ Add position' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Add experience' })).toBeInTheDocument();
   });
 
   // The promotion case, and the only place the nesting shows: two roles under one
@@ -87,7 +87,7 @@ describe('HistorySection', () => {
   it('adds an unattached position from the section header', async () => {
     const props = renderSection([card('Geo', [entry('Engineer', '2022-06-01Z', null)])]);
 
-    await userEvent.click(screen.getByRole('button', { name: '+ Add position' }));
+    await userEvent.click(screen.getByRole('button', { name: '+ Add experience' }));
 
     expect(props.onAdd).toHaveBeenCalled();
     expect(props.onAddTo).not.toHaveBeenCalled();
@@ -97,7 +97,7 @@ describe('HistorySection', () => {
     const cards = [card('Geo', [entry('Product Lead', '2024-01-01Z', null), entry('Engineer', '2022-06-01Z', null)])];
     const props = renderSection(cards);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Remove position Engineer' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove role Engineer' }));
 
     expect(props.onRemoveEntry).toHaveBeenCalledWith(cards[0], cards[0].entries[1]);
   });
@@ -107,7 +107,7 @@ describe('HistorySection', () => {
     const cards = [card('Geo', [entry('Product Lead', '2024-01-01Z', null), entry('Engineer', '2022-06-01Z', null)])];
     const props = renderSection(cards);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Edit position Engineer' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Edit role Engineer' }));
 
     expect(props.onEditEntry).toHaveBeenCalledWith(cards[0], cards[0].entries[1]);
     expect(props.onRemoveEntry).not.toHaveBeenCalled();
@@ -118,7 +118,7 @@ describe('HistorySection', () => {
   it('offers removal on the row and nowhere else', () => {
     renderSection([card('Geo', [entry('Engineer', '2022-06-01Z', null)])]);
 
-    expect(screen.getByRole('button', { name: 'Remove position Engineer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove role Engineer' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Remove employer/ })).not.toBeInTheDocument();
   });
 
@@ -168,7 +168,7 @@ describe('HistorySection', () => {
     const row = entry('Engineer', '2022-06-01Z', null);
     renderSection([card('Geo', [{ ...row, description: 'What I did there.' }])]);
 
-    const edit = screen.getByRole('button', { name: 'Edit position Engineer' });
+    const edit = screen.getByRole('button', { name: 'Edit role Engineer' });
     expect(edit).not.toHaveTextContent('What I did there.');
     expect(screen.getByText('What I did there.')).toBeInTheDocument();
   });
@@ -176,10 +176,10 @@ describe('HistorySection', () => {
   it('locks every control while a save is in flight', () => {
     renderSection([card('Geo', [entry('Engineer', '2022-06-01Z', null)])], { disabled: true });
 
-    expect(screen.getByRole('button', { name: '+ Add position' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '+ Add experience' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '+ Add another role here' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Edit position Engineer' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Remove position Engineer' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Edit role Engineer' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Remove role Engineer' })).toBeDisabled();
   });
 
   it('uses the education wording for the education section', () => {

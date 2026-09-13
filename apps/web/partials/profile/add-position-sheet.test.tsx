@@ -238,7 +238,7 @@ describe('AddPositionSheet', () => {
     it('opens with the row already in it', () => {
       renderSheet({ initial });
 
-      expect(screen.getByRole('heading', { name: 'Edit position' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Edit role' })).toBeInTheDocument();
       expect(screen.getByText('Geo')).toBeInTheDocument();
       expect(screen.getByText('Engineer')).toBeInTheDocument();
       expect(screen.getByText('Product development')).toBeInTheDocument();
