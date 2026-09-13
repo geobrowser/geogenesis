@@ -231,6 +231,53 @@ describe('useCollapseAnswered', () => {
     });
   });
 
+  /**
+   * A paged list looks its rows up a page at a time, and the flag saying so is usually one flag for
+   * the whole list. So every fetch of a later page turned every row already on screen back into
+   * `unknown` — and a viewer's whole collapsed backlog reappeared until it settled, over and over as
+   * they scrolled.
+   */
+  describe('while a later page is being looked up', () => {
+    it('keeps a collapsed row collapsed', () => {
+      const { result, rerender } = render([row('a', 'answered'), row('b', 'unanswered')]);
+      expect(ids(result.current)).toEqual(['b']);
+
+      // The next page's lookup starts, and the flag behind every row goes back to unknown.
+      rerender({ rows: [row('a', 'unknown'), row('b', 'unknown'), row('c', 'unknown')] });
+
+      expect(ids(result.current)).not.toContain('a');
+    });
+
+    it('holds back a row nobody has classified yet, rather than drawing one it may take away', () => {
+      const { result, rerender } = renderHook(
+        ({ rows, classifying }: { rows: Row[]; classifying: boolean }) =>
+          useCollapseAnswered(rows, {
+            keyOf: candidate => candidate.id,
+            answeredStateOf: candidate => candidate.state,
+            enabled: true,
+            holdMs: HOLD,
+            classifying,
+          }),
+        { initialProps: { rows: [row('a', 'unanswered')], classifying: false } }
+      );
+
+      rerender({ rows: [row('a', 'unanswered'), row('c', 'unknown')], classifying: true });
+      expect(ids(result.current)).toEqual(['a']);
+
+      // And draws it once its own answer lands.
+      rerender({ rows: [row('a', 'unanswered'), row('c', 'unanswered')], classifying: false });
+      expect(ids(result.current)).toEqual(['a', 'c']);
+    });
+
+    // The rule only covers rows it is *about* to classify. A lookup that settled without an answer
+    // leaves them genuinely unknown, and a list that is too wide beats a list that never fills.
+    it('draws an unclassifiable row once the lookup has finished', () => {
+      const { result } = render([row('a', 'unknown')]);
+
+      expect(ids(result.current)).toEqual(['a']);
+    });
+  });
+
   it('does nothing at all when it is off', () => {
     const { result } = render([row('a', 'answered'), row('b', 'unanswered')], false);
 

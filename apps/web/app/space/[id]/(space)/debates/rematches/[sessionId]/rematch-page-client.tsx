@@ -56,9 +56,10 @@ import {
   toggleId,
   topicsFor,
 } from '~/core/debates/matchmaking/topic-facets';
+import { useBoundedPaging } from '~/core/debates/matchmaking/use-bounded-paging';
 import { useDebouncedSearch } from '~/core/debates/matchmaking/use-debounced-search';
 import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-selection';
-import { useNarrowedDefault } from '~/core/debates/matchmaking/use-narrowed-default';
+import { type NarrowedListState, useNarrowedDefault } from '~/core/debates/matchmaking/use-narrowed-default';
 import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
@@ -1363,14 +1364,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // composite over every tab's. Same set, asked here because this runs before it.
   const opponentTabError = sessionQuery.error ?? positions.error ?? opponentEntitiesQuery.error;
   const opponentTabSettled = tab === 'opponent' && !positions.isLoading && !opponentClaimsSettling && !opponentTabError;
-  const noRematchAtAll = opponentTabSettled && !claims.some(isRematchable);
+  const rematchState: NarrowedListState = !opponentTabSettled
+    ? 'pending'
+    : claims.some(isRematchable)
+      ? 'filled'
+      : 'empty';
   const {
-    narrowed: matchesNarrowed,
+    showNarrowed: matchesNarrowed,
     steppedBack: steppedBackFromMatches,
     rearm: rearmMatchesDefault,
     // Keyed on the session, because this component is reused when the route moves between
     // rematches — see `useLastSettled` and the warm-up above, which key on it for the same reason.
-  } = useNarrowedDefault(matchesOnly, noRematchAtAll, sessionId);
+  } = useNarrowedDefault(matchesOnly, rematchState, sessionId);
 
   const matchesOnlyHere = matchesNarrowed && tab === 'opponent';
 
@@ -1598,15 +1603,28 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // next, and with `holdMs: null` an inherited record keeps it on screen for good — exactly the
     // backlog this hides.
     resetKey: sessionId,
+    // Same rule as the hub's: a row nobody has classified yet is not ready to be drawn while the
+    // lookup that would classify it is still out.
+    classifying: !rowsSettled,
   });
 
   const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
 
-  // Only the tagged sources page; the rest arrive whole, so an empty one of those really is empty.
-  const stillPaging = graphFiltered && visibleClaims.length === 0 && taggedHasNextPage;
+  // The same runaway the hub has, and the same bound on it: "Hide my positions" empties each page
+  // as it lands, so the sentinel never leaves the viewport and the list fetches the whole tag on
+  // the viewer's behalf. Only the tagged sources page; the rest arrive whole.
+  const { autoPages, stoppedShort, keepLooking } = useBoundedPaging({
+    loaded: narrowedClaims.length,
+    visible: visibleClaims.length,
+    hasNextPage: taggedHasNextPage,
+    fetchNextPage: fetchNextTaggedPage,
+    resetKey: `${sessionId}:${claimsTagId}:${source}`,
+  });
+
+  const stillPaging = graphFiltered && visibleClaims.length === 0 && autoPages;
 
   const sentinelRef = useInfiniteScrollSentinel({
-    hasNextPage: taggedHasNextPage,
+    hasNextPage: autoPages,
     isFetchingNextPage: taggedFetchingNextPage,
     fetchNextPage: fetchNextTaggedPage,
   });
@@ -2026,51 +2044,59 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           error={tabError}
           isEmpty={showsSections ? visibleSections.length === 0 : visibleClaims.length === 0}
           emptyMessage={
-            hasFilters
-              ? 'No claims match these filters.'
-              : matchesOnlyHere
-                ? `You and ${remoteName} haven’t taken opposite sides on anything yet.`
-                : tab === 'opponent'
-                  ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
-                  : tab === 'related'
-                    ? // Reachable even though the tab only appears when neighbours were found: every
-                      // one of them can still be ruled out by this session — already debated, or in a
-                      // space that cannot carry a published debate.
-                      'No related claims are left to debate.'
-                    : source === 'recommended'
-                      ? `Nothing recommended for you and ${remoteName} yet.`
-                      : source === 'mine'
-                        ? 'You haven’t taken a position on any claims yet.'
-                        : source === 'featured'
-                          ? 'No featured claims are available to debate yet.'
-                          : 'No other eligible claims are available yet.'
+            stillPaging
+              ? 'Looking for claims you haven’t answered yet…'
+              : stoppedShort
+                ? 'Nothing you haven’t already answered in the first few hundred claims.'
+                : hasFilters
+                  ? 'No claims match these filters.'
+                  : matchesOnlyHere
+                    ? `You and ${remoteName} haven’t taken opposite sides on anything yet.`
+                    : tab === 'opponent'
+                      ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
+                      : tab === 'related'
+                        ? // Reachable even though the tab only appears when neighbours were found: every
+                          // one of them can still be ruled out by this session — already debated, or in a
+                          // space that cannot carry a published debate.
+                          'No related claims are left to debate.'
+                        : source === 'recommended'
+                          ? `Nothing recommended for you and ${remoteName} yet.`
+                          : source === 'mine'
+                            ? 'You haven’t taken a position on any claims yet.'
+                            : source === 'featured'
+                              ? 'No featured claims are available to debate yet.'
+                              : 'No other eligible claims are available yet.'
           }
           // Four dead ends, and each has a different way out. Ordered by how much the viewer has
           // to give up: clearing their filters, then dropping the toggle, then leaving the tab or
           // the source they picked.
           emptyAction={
-            hasFilters
-              ? {
-                  label: 'Clear filters',
-                  onClick: () => {
-                    setSearch('');
-                    // The menu's own clear row, so this counts as choosing the unfiltered list and
-                    // the default cannot put its spaces back.
-                    onSpacesClear();
-                    setTopicIds([]);
-                  },
-                }
-              : matchesOnlyHere
-                ? { label: 'Show all their positions', onClick: () => setMatchesOnly(false) }
-                : tab === 'opponent'
-                  ? // GEO-2861. An opponent who has answered nothing is a dead end this tab cannot
-                    // resolve, and the catalogue next door is the whole of the way out of it.
-                    { label: 'Explore claims', onClick: () => setTab('explore') }
-                  : source === 'mine'
-                    ? // The same dead end one level down: a viewer who has answered nothing cannot
-                      // fill this list from here, and the whole corpus is one pick away.
-                      { label: 'Show all claims', onClick: () => setChosenSource('all') }
-                    : undefined
+            stillPaging
+              ? undefined
+              : stoppedShort
+                ? { label: 'Keep looking', onClick: keepLooking }
+                : hasFilters
+                  ? {
+                      label: 'Clear filters',
+                      onClick: () => {
+                        setSearch('');
+                        // The menu's own clear row, so this counts as choosing the unfiltered list and
+                        // the default cannot put its spaces back.
+                        onSpacesClear();
+                        setTopicIds([]);
+                      },
+                    }
+                  : matchesOnlyHere
+                    ? { label: 'Show all their positions', onClick: () => setMatchesOnly(false) }
+                    : tab === 'opponent'
+                      ? // GEO-2861. An opponent who has answered nothing is a dead end this tab cannot
+                        // resolve, and the catalogue next door is the whole of the way out of it.
+                        { label: 'Explore claims', onClick: () => setTab('explore') }
+                      : source === 'mine'
+                        ? // The same dead end one level down: a viewer who has answered nothing cannot
+                          // fill this list from here, and the whole corpus is one pick away.
+                          { label: 'Show all claims', onClick: () => setChosenSource('all') }
+                        : undefined
           }
         >
           {showsSections ? (
@@ -2095,7 +2121,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             while it is disabled, so `taggedHasNextPage` still answers true under a source that is
             not paging anything, and the sentinel would sit in view asking a list nobody is looking
             at for its next page. */}
-        {taggedHasNextPage && graphFiltered ? (
+        {autoPages && graphFiltered ? (
           <div ref={sentinelRef} data-testid="rematch-claims-scroll-sentinel" className="h-px" />
         ) : null}
       </main>

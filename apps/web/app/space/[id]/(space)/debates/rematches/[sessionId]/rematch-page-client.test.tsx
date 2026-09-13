@@ -4186,6 +4186,10 @@ describe('Hide my positions', () => {
   });
 
   it('is on by default', async () => {
+    // Not merely restored from storage. The enclosing setup writes this key so the rest of the
+    // cases run against the shipped behaviour; a case about the *default* has to take it away
+    // again, or it passes on a value it wrote itself and would keep passing if the atom flipped.
+    localStorage.removeItem('rematchHideMyPositions');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
@@ -4303,6 +4307,8 @@ describe('the matches-only default', () => {
   }
 
   it('opens on the matches, which is what the page is for', async () => {
+    // The atom's own default, not the one this describe writes — see the note above.
+    localStorage.removeItem('rematchMatchesOnly');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();

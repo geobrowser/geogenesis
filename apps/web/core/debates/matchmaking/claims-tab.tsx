@@ -47,6 +47,7 @@ import { HideMyPositionsSwitch } from './matches-only-switch';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
+import { useBoundedPaging } from './use-bounded-paging';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
@@ -653,6 +654,9 @@ export function ClaimsTab({
     keyOf: claimRowKey,
     answeredStateOf,
     enabled: collapsesAnswered,
+    // A page arriving brings rows whose answers are one round trip behind them. Drawn now, the
+    // answered ones are taken back a moment later — the first-paint problem again, one page down.
+    classifying: answersInFlight,
   });
 
   // The topic menu, from the server's count over the tag. It describes every claim the current
@@ -757,24 +761,36 @@ export function ClaimsTab({
   // one would be offering to undo something the viewer never set.
   const hasFilters = hasNarrowingFilters;
 
-  const sentinelRef = useInfiniteScrollSentinel({
+  const fetchNextPage = graphSourced ? fetchNextTaggedPage : claimsQuery.fetchNextPage;
+  // The collapse runs over the page in hand, so a viewer who has answered most of a corpus leaves
+  // the sentinel permanently in view and the list pages the whole thing on their behalf. Bounded
+  // rather than stopped: it advances while that is getting somewhere, and asks when it is not.
+  const { autoPages, stoppedShort, keepLooking } = useBoundedPaging({
+    loaded: claims.length,
+    visible: visibleClaims.length,
     hasNextPage,
+    fetchNextPage,
+    resetKey: listKey,
+  });
+
+  const sentinelRef = useInfiniteScrollSentinel({
+    hasNextPage: autoPages,
     isFetchingNextPage: graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage,
-    fetchNextPage: graphSourced ? fetchNextTaggedPage : claimsQuery.fetchNextPage,
+    fetchNextPage,
   });
 
   /**
    * An empty screen with pages still to come is not an empty list.
    *
-   * The collapse runs over the page in hand, so a viewer who has answered the first fifty claims
-   * sees every row removed while the corpus goes on past them — and the empty states below would
-   * then tell them they had answered *every claim here*, or that no claims match their filters, of
-   * rows nobody has fetched. Both are statements about the whole corpus made from its first page.
+   * The empty states below all speak for the corpus — "you have answered every claim here", "no
+   * claims match these filters" — and from the first page of it, none of them is a thing anyone
+   * knows. So while the list is still advancing this says what is actually happening instead.
    *
-   * So while the sentinel still has somewhere to go, this is still looking. The sentinel is on
-   * screen precisely because the list is short, so it keeps advancing and this resolves itself.
+   * A message rather than a skeleton, deliberately: the rows already found stay on screen while the
+   * search goes on behind them, and a viewer watching it is told what it is doing rather than shown
+   * a loading state that never resolves.
    */
-  const stillPaging = visibleClaims.length === 0 && hasNextPage;
+  const stillPaging = visibleClaims.length === 0 && autoPages;
 
   // Every hook above has run, so the cache is filled and the atoms are seeded; there is simply
   // nothing to draw. Placed here rather than early, which would break the rules of hooks.
@@ -835,8 +851,7 @@ export function ClaimsTab({
           isLoading={
             spacesPending ||
             (graphSourced ? taggedLoading : claimsQuery.isLoading) ||
-            (collapsesAnswered && !answersSettled) ||
-            stillPaging
+            (collapsesAnswered && !answersSettled)
           }
           // The catalog only. It is the list — without it there is nothing to show, and an error is
           // the honest answer.
@@ -883,11 +898,15 @@ export function ClaimsTab({
           // of a list with rows in it. Saying "nothing carries the Debate tag" to someone who has
           // answered all of it is the collapse taking credit for an empty corpus (GEO-2863).
           emptyMessage={
-            collapsedEverything
-              ? 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
-              : hasNarrowingFilters
-                ? 'No claims match these filters.'
-                : NOTHING_HERE[filter]
+            stillPaging
+              ? 'Looking for claims you haven’t answered yet…'
+              : stoppedShort
+                ? 'Nothing you haven’t already answered in the first few hundred claims.'
+                : collapsedEverything
+                  ? 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
+                  : hasNarrowingFilters
+                    ? 'No claims match these filters.'
+                    : NOTHING_HERE[filter]
           }
           // "Debate now" is the only filter here scored on who is online, so it is the only one an
           // empty list means "nobody is around" for — Featured and All claims are statements about
@@ -900,20 +919,24 @@ export function ClaimsTab({
           // Answered-everything first, and it is the only one of these whose way out is the switch
           // rather than the filters: the rows are all there, and one press brings them back.
           emptyAction={
-            collapsedEverything
-              ? { label: 'Show my positions', onClick: () => setHideMyPositions(false) }
-              : hasFilters
-                ? {
-                    label: 'Clear filters',
-                    onClick: () => {
-                      setSearch('');
-                      // The menu's own clear row, so this counts as choosing the unfiltered list and
-                      // the default cannot put its spaces back.
-                      onSpacesClear();
-                      setTopicIds([]);
-                    },
-                  }
-                : undefined
+            stillPaging
+              ? undefined
+              : stoppedShort
+                ? { label: 'Keep looking', onClick: keepLooking }
+                : collapsedEverything
+                  ? { label: 'Show my positions', onClick: () => setHideMyPositions(false) }
+                  : hasFilters
+                    ? {
+                        label: 'Clear filters',
+                        onClick: () => {
+                          setSearch('');
+                          // The menu's own clear row, so this counts as choosing the unfiltered
+                          // list and the default cannot put its spaces back.
+                          onSpacesClear();
+                          setTopicIds([]);
+                        },
+                      }
+                    : undefined
           }
         >
           {/* One list, in the server's order. Splitting out the claims you'd already answered
@@ -946,9 +969,7 @@ export function ClaimsTab({
           Not while the allowlist is pending, though: the tab is showing a four-row skeleton then,
           so the sentinel sits in view under it and pages the corpus on the strength of a loading
           state being visible — reading "the viewer reached the end" off a list that isn't there. */}
-        {(graphSourced ? taggedHasNextPage : claimsQuery.hasNextPage) ? (
-          <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
-        ) : null}
+        {autoPages ? <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" /> : null}
       </div>
     </div>
   );

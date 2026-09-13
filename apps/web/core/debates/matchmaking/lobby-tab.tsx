@@ -8,7 +8,7 @@ import { ClaimsTab } from './claims-tab';
 import { useMatchmakingMatches } from './hooks';
 import { MatchesList } from './matches-list';
 import { MatchesOnlySwitch } from './matches-only-switch';
-import { useNarrowedDefault } from './use-narrowed-default';
+import { type NarrowedListState, useNarrowedDefault } from './use-narrowed-default';
 import { type DebatesHubTab, debatesHubMatchesOnlyAtom } from '~/atoms';
 
 /**
@@ -37,14 +37,18 @@ export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =>
   // is drawn at all — and the query is the same one that component makes, so with matches to show
   // this costs nothing beyond what the tab was already fetching.
   const matchesQuery = useMatchmakingMatches(true);
-  // Settled, and settled *with an answer*: react-query drops `isLoading` on failure, and an outage
-  // reads from here exactly like a viewer with nobody to debate. Stepping back on that would take
-  // the matches list away over a request that could simply be retried — and `MatchesList` has the
-  // retry, where the wider list this would fall to has nothing to say about it.
-  const noMatchesAtAll =
-    !matchesQuery.isLoading && !matchesQuery.error && (matchesQuery.data?.matches.length ?? 0) === 0;
+  // A failed lookup is `pending`, not `empty`: react-query drops `isLoading` on failure, and an
+  // outage reads from here exactly like a viewer with nobody to debate. Stepping back on that would
+  // take the matches list away over a request that could simply be retried — and `MatchesList` has
+  // the retry, where the wider list this would fall to has nothing to say about it.
+  const matchesState: NarrowedListState =
+    matchesQuery.isLoading || matchesQuery.error
+      ? 'pending'
+      : (matchesQuery.data?.matches.length ?? 0) === 0
+        ? 'empty'
+        : 'filled';
 
-  const { narrowed, steppedBack, rearm } = useNarrowedDefault(matchesOnly, noMatchesAtAll);
+  const { showNarrowed, steppedBack, rearm } = useNarrowedDefault(matchesOnly, matchesState);
 
   // Held still so `ClaimsTab`'s report effect is not re-armed on every render of this one.
   const showExplore = React.useCallback(() => onTabChange('explore'), [onTabChange]);
@@ -54,7 +58,7 @@ export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =>
       // The effective state, not the stored one. A switch reading "on" over the unfiltered list is
       // telling the viewer something that is not true of what they are looking at, and pressing it
       // would then appear to do nothing.
-      checked={narrowed}
+      checked={showNarrowed}
       onChange={next => {
         rearm();
         setMatchesOnly(next);
@@ -65,7 +69,7 @@ export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =>
   // Two components rather than one with a branch inside it. They query different endpoints, derive
   // their space menus differently, and describe an empty list in different words — the only thing
   // they share is the toggle and the selection it sits beside, which is exactly what is passed.
-  return narrowed ? (
+  return showNarrowed ? (
     <MatchesList onTabChange={onTabChange} trailing={toggle} />
   ) : (
     <ClaimsTab

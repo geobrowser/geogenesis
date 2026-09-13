@@ -60,6 +60,18 @@ type CollapseOptions<T> = {
    * Surfaces that die with their list — the hub's tabs — need none, and omitting it never resets.
    */
   resetKey?: string;
+  /**
+   * Whether the answers behind {@link answeredStateOf} are still arriving.
+   *
+   * Only ever about rows this hook has *never* classified. Those are held back while it is true,
+   * because drawing one now is drawing a row that may be gone a moment later — which is the
+   * paging-shaped version of the first-paint problem, and reads the same way: a screenful appears
+   * and part of it is taken back.
+   *
+   * Rows it has classified before are unaffected. A refetch does not un-answer a claim, and the
+   * remembered answer is what keeps a collapsed row collapsed while a later page is looked up.
+   */
+  classifying?: boolean;
 };
 
 /**
@@ -81,7 +93,7 @@ type CollapseOptions<T> = {
  */
 export function useCollapseAnswered<T>(
   rows: T[],
-  { keyOf, answeredStateOf, enabled, holdMs, resetKey }: CollapseOptions<T>
+  { keyOf, answeredStateOf, enabled, holdMs, resetKey, classifying = false }: CollapseOptions<T>
 ): T[] {
   // Not `??`: `null` is a meaningful value here — hold forever — and would otherwise fall through
   // to the default and fold the row away after a second.
@@ -91,6 +103,16 @@ export function useCollapseAnswered<T>(
   // per bookkeeping write would be a render per row.
   const seenUnanswered = React.useRef(new Set<string>());
   const foldedOut = React.useRef(new Set<string>());
+  /**
+   * The last answer each row gave, so a row that has been classified once stays classified.
+   *
+   * The lookups behind `answeredStateOf` are usually one flag for the whole list — "the row query
+   * is loading" — and a paged list starts that query again for every page it fetches. Without this,
+   * every row on screen fell back to `unknown` the moment a later page was looked up, and a
+   * collapsed claim reappeared for as long as that took: the list growing by fifty put the
+   * viewer's whole answered backlog back in front of them, repeatedly.
+   */
+  const lastKnown = React.useRef(new Map<string, Exclude<AnsweredState, 'unknown'>>());
   const timers = React.useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const [holding, setHolding] = React.useState<ReadonlySet<string>>(() => new Set());
 
@@ -102,6 +124,7 @@ export function useCollapseAnswered<T>(
     lastResetKey.current = resetKey;
     seenUnanswered.current.clear();
     foldedOut.current.clear();
+    lastKnown.current.clear();
     for (const timer of timers.current.values()) clearTimeout(timer);
     timers.current.clear();
     setHolding(current => (current.size === 0 ? current : new Set()));
@@ -119,6 +142,7 @@ export function useCollapseAnswered<T>(
       const state = answeredStateOf(row);
 
       if (state === 'unknown') continue;
+      lastKnown.current.set(key, state);
       if (state === 'unanswered') {
         // Answering, clearing, and answering again is two separate folds, so the record of having
         // folded is cleared with the answer that produced it.
@@ -179,9 +203,16 @@ export function useCollapseAnswered<T>(
     if (!enabled) return rows;
 
     return rows.filter(row => {
-      if (answeredStateOf(row) !== 'answered') return true;
-
       const key = keyOf(row);
+      // A row that has answered before keeps that answer through a lookup that has not. Only a row
+      // nobody has classified yet is genuinely unknown, and while the answers are still arriving it
+      // is not ready to be drawn at all — see `classifying`.
+      const remembered = lastKnown.current.get(key);
+      const state = answeredStateOf(row);
+      const known = state === 'unknown' ? remembered : state;
+
+      if (known === undefined) return !classifying;
+      if (known !== 'answered') return true;
       // `holding` is set by the effect, which runs *after* the commit that first sees the answer —
       // so on that one commit a row the viewer just answered was neither unanswered nor held, and
       // dropped out of the list only to come back a tick later. On a one-row list that is the empty
@@ -193,5 +224,5 @@ export function useCollapseAnswered<T>(
       // carry the answer this needs.
       return holding.has(key) || (seenUnanswered.current.has(key) && !foldedOut.current.has(key));
     });
-  }, [answeredStateOf, enabled, holding, keyOf, rows]);
+  }, [answeredStateOf, classifying, enabled, holding, keyOf, rows]);
 }

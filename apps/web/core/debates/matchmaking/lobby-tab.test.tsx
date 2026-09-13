@@ -56,13 +56,14 @@ vi.mock('./matches-list', () => ({
 const STORAGE_KEY = 'debatesHubMatchesOnly';
 
 function renderLobby(store = createStore(), onTabChange = vi.fn()) {
-  render(
+  const tree = () => (
     <Provider store={store}>
       <LobbyTab onTabChange={onTabChange} />
     </Provider>
   );
+  const view = render(tree());
 
-  return Object.assign(store, { onTabChange });
+  return Object.assign(store, { onTabChange, rerender: () => view.rerender(tree()) });
 }
 
 const toggle = () => screen.getByRole('switch', { name: 'Matches only' });
@@ -174,6 +175,24 @@ describe('LobbyTab', () => {
 
       expect(screen.getByTestId('matches-list')).toBeInTheDocument();
     });
+  });
+
+  /**
+   * The decision is about arrival, and only about arrival.
+   *
+   * The matches list is live — the gateway invalidates it as people come and go — so a viewer who
+   * arrived on three matches and watched the last one go offline would have had the list swapped
+   * out from under them mid-read. That is the same swap the hook refuses in the other direction.
+   */
+  it('holds the list it arrived on when the last match goes away', () => {
+    const store = renderLobby();
+    expect(screen.getByTestId('matches-list')).toBeInTheDocument();
+
+    mocks.matches = [];
+    store.rerender();
+
+    expect(screen.getByTestId('matches-list')).toBeInTheDocument();
+    expect(toggle()).toHaveAttribute('aria-checked', 'true');
   });
 
   // A viewer who turned the switch off and found an empty Lobby asked a question and got an answer.
