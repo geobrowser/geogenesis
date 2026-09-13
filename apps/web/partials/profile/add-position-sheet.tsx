@@ -131,7 +131,6 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
       title={initial ? 'Edit position' : 'Add position'}
       isSaving={isSaving}
       canSave={canSave}
-      saveLabel="Save position"
       onCancel={onCancel}
       onSave={save}
     >

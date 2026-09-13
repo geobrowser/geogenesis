@@ -98,7 +98,6 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
       title={initial ? 'Edit education' : 'Add education'}
       isSaving={isSaving}
       canSave={canSave}
-      saveLabel="Save education"
       onCancel={onCancel}
       onSave={save}
     >

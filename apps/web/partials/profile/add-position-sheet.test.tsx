@@ -90,13 +90,13 @@ describe('AddPositionSheet', () => {
   it('cannot save until both the company and the title are answered', async () => {
     renderSheet();
 
-    expect(screen.getByRole('button', { name: 'Save position' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
 
     await pickCompany();
-    expect(screen.getByRole('button', { name: 'Save position' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
 
     await pickTitle();
-    expect(screen.getByRole('button', { name: 'Save position' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
   });
 
   it('scopes each picker to the type it should search', () => {
@@ -116,7 +116,7 @@ describe('AddPositionSheet', () => {
     await userEvent.selectOptions(screen.getByLabelText('Start year'), '2019');
     await userEvent.selectOptions(screen.getByLabelText('End month'), '1');
     await userEvent.selectOptions(screen.getByLabelText('End year'), '2021');
-    await userEvent.click(screen.getByRole('button', { name: 'Save position' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(props.onSave).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -139,7 +139,7 @@ describe('AddPositionSheet', () => {
     await userEvent.selectOptions(screen.getByLabelText('End month'), '1');
     await userEvent.selectOptions(screen.getByLabelText('End year'), '2021');
     await userEvent.click(screen.getByRole('checkbox'));
-    await userEvent.click(screen.getByRole('button', { name: 'Save position' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     // The end date the picker was left showing is discarded rather than published
     // alongside a claim that the role is current.
@@ -151,7 +151,7 @@ describe('AddPositionSheet', () => {
 
     await userEvent.click(screen.getAllByRole('button', { name: /create new/ })[0]);
     await pickTitle();
-    await userEvent.click(screen.getByRole('button', { name: 'Save position' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(props.onSave).toHaveBeenCalledWith(
       expect.objectContaining({ company: { id: 'new-id', name: 'Fathom', isNew: true } })
@@ -166,7 +166,7 @@ describe('AddPositionSheet', () => {
     expect(screen.getByText(/Already on your profile/)).toBeInTheDocument();
 
     await pickTitle();
-    await userEvent.click(screen.getByRole('button', { name: 'Save position' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ existingStintId: 'stint-1' }));
   });
@@ -228,7 +228,7 @@ describe('AddPositionSheet', () => {
       // The company's, which is the first of the two — the title has one too.
       await userEvent.click(screen.getAllByRole('button', { name: 'Change' })[0]);
       await userEvent.click(screen.getAllByRole('button', { name: /pick existing/ })[0]);
-      await userEvent.click(screen.getByRole('button', { name: 'Save position' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
       expect(props.onSave).toHaveBeenCalledWith(
         expect.objectContaining({ company: { id: 'picked-id', name: 'Coinbase', isNew: false } })
@@ -238,7 +238,7 @@ describe('AddPositionSheet', () => {
     it('hands back everything it was given when nothing is touched', async () => {
       const props = renderSheet({ initial });
 
-      await userEvent.click(screen.getByRole('button', { name: 'Save position' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
       expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining(initial));
     });
@@ -253,7 +253,7 @@ describe('AddPositionSheet', () => {
       // The location picker is the next unanswered one.
       await userEvent.click(screen.getAllByRole('button', { name: /pick existing/ })[0]);
       await userEvent.selectOptions(screen.getByLabelText('Location type'), 'Remote');
-      await userEvent.click(screen.getByRole('button', { name: 'Save position' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
       expect(props.onSave).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -269,7 +269,7 @@ describe('AddPositionSheet', () => {
 
       await pickCompany();
       await pickTitle();
-      await userEvent.click(screen.getByRole('button', { name: 'Save position' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
       expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ location: null, locationType: null }));
     });
@@ -306,7 +306,7 @@ describe('AddPositionSheet', () => {
       await pickCompany();
       await pickTitle();
       await userEvent.click(screen.getByRole('button', { name: '+ Debug software' }));
-      await userEvent.click(screen.getByRole('button', { name: 'Save position' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
       expect(props.onSave).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -375,11 +375,11 @@ describe('AddPositionSheet', () => {
     expect(focused).toHaveLength(1);
   });
 
-  it('says what the wait is and locks the controls while saving', () => {
-    renderSheet({ isSaving: true });
+  // Nothing here publishes — the draft goes back to the modal, which does.
+  it('says what Done actually does', () => {
+    renderSheet();
 
-    expect(screen.getByText(/about 10 seconds/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Saving' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    expect(screen.getByText('Added to your profile when you save it.')).toBeInTheDocument();
+    expect(screen.queryByText(/publishes to your space/i)).not.toBeInTheDocument();
   });
 });

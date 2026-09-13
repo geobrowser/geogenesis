@@ -7,7 +7,6 @@ import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 
 type Props = {
   title: string;
-  saveLabel: string;
   isSaving: boolean;
   canSave: boolean;
   onCancel: () => void;
@@ -17,13 +16,18 @@ type Props = {
 
 /**
  * The chrome shared by the two sheets: a back title, the fields, and a footer
- * that says where the save lands before it is clicked.
+ * that says what Done actually does.
+ *
+ * Nothing here publishes. It used to, and the footer still said so long after
+ * the sheets were changed to hand their draft back to the modal — so the note
+ * now describes the thing that happens, and the button says Done rather than
+ * naming a save that is not one.
  *
  * Rendered in place of the modal's own body rather than over it — one thing on
  * screen at a time, and the fields underneath have nothing to do with the
  * position being added.
  */
-export function HistorySheet({ title, saveLabel, isSaving, canSave, onCancel, onSave, children }: Props) {
+export function HistorySheet({ title, isSaving, canSave, onCancel, onSave, children }: Props) {
   return (
     <div className="flex flex-col">
       <header className="flex items-center gap-2 px-5 py-4">
@@ -34,17 +38,13 @@ export function HistorySheet({ title, saveLabel, isSaving, canSave, onCancel, on
       <div className="flex flex-col gap-4 px-5">{children}</div>
 
       <footer className="mt-5 flex items-center justify-between gap-3 border-t border-grey-02 px-5 py-4">
-        <p className="text-footnote text-grey-04">
-          {isSaving
-            ? 'Publishing to your space. This usually takes about 10 seconds.'
-            : 'Saving publishes to your space.'}
-        </p>
+        <p className="text-footnote text-grey-04">Added to your profile when you save it.</p>
         <div className="flex items-center gap-2">
           <Button type="button" variant="secondary" onClick={onCancel} disabled={isSaving}>
             Cancel
           </Button>
           <Button type="button" onClick={onSave} disabled={!canSave}>
-            {isSaving ? 'Saving' : saveLabel}
+            Done
           </Button>
         </div>
       </footer>

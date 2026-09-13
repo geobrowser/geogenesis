@@ -57,12 +57,12 @@ describe('AddEducationSheet', () => {
   it('needs a school and a degree before it can save', async () => {
     renderSheet();
 
-    expect(screen.getByRole('button', { name: 'Save education' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
 
     await userEvent.click(pickers()[0]); // school
     await userEvent.click(pickers()[0]); // degree
 
-    expect(screen.getByRole('button', { name: 'Save education' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
   });
 
   it('scopes the field picker to Field of study', () => {
@@ -101,7 +101,7 @@ describe('AddEducationSheet', () => {
 
     await userEvent.click(pickers()[0]);
     await userEvent.click(pickers()[0]);
-    await userEvent.click(screen.getByRole('button', { name: 'Save education' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ status: 'studying', endDate: null }));
   });
@@ -116,7 +116,7 @@ describe('AddEducationSheet', () => {
     await userEvent.selectOptions(screen.getByLabelText('Start year'), '2020');
     await userEvent.selectOptions(screen.getByLabelText('End month'), '6');
     await userEvent.selectOptions(screen.getByLabelText('End year'), '2022');
-    await userEvent.click(screen.getByRole('button', { name: 'Save education' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(props.onSave).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'completed', startDate: '2020-09-01Z', endDate: '2022-06-01Z' })
@@ -134,7 +134,7 @@ describe('AddEducationSheet', () => {
     await userEvent.click(screen.getByRole('button', { name: '+ Add another' }));
     await userEvent.click(pickers()[0]); // second field
 
-    await userEvent.click(screen.getByRole('button', { name: 'Save education' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     const draft = props.onSave.mock.calls.at(-1)?.[0];
     expect(draft.fields).toHaveLength(2);
@@ -148,7 +148,7 @@ describe('AddEducationSheet', () => {
     // School and Degree are answered, so their pickers are gone; Field is the
     // first of the two left, with Skills behind it.
     await userEvent.click(screen.getAllByRole('button', { name: /create new/ })[0]);
-    await userEvent.click(screen.getByRole('button', { name: 'Save education' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     const draft = props.onSave.mock.calls.at(-1)?.[0];
     expect(draft.fields).toEqual([{ id: 'new-field', name: 'Computer Science', isNew: true }]);
@@ -186,7 +186,7 @@ describe('AddEducationSheet', () => {
     expect(screen.getByText(/Already on your profile/)).toBeInTheDocument();
 
     await userEvent.click(pickers()[0]); // degree
-    await userEvent.click(screen.getByRole('button', { name: 'Save education' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ existingStintId: 'record-1' }));
   });
