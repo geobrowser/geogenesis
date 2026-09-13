@@ -39,6 +39,10 @@ const CLAIM_PICKER_ENTITIES_SOURCE = /* GraphQL */ `
           boolean
         }
         relationsList(first: 100, filter: { typeId: { is: $topicsPropertyId } }) {
+          # Topics are assigned per space, so which space the assignment was made in is part of the
+          # answer rather than metadata about it. Without it a caller scoped to one space cannot tell
+          # a topic assigned there from one assigned somewhere else entirely.
+          spaceId
           toEntity {
             id
             name
@@ -62,7 +66,11 @@ type ClaimPickerEntitiesQuery = {
         text: string | null;
         boolean: boolean | null;
       } | null> | null;
-      relationsList: Array<{ toEntity: { id: string; name: string | null } | null } | null> | null;
+      // Nullable, as `tagged-claims.ts` also models it: a relation can carry no space.
+      relationsList: Array<{
+        spaceId: string | null;
+        toEntity: { id: string; name: string | null } | null;
+      } | null> | null;
     } | null> | null;
   } | null;
 };
@@ -86,7 +94,19 @@ export type ClaimPickerEntity = {
   description: string | null;
   spaces: string[];
   values: Array<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: string }>;
-  relations: Array<{ isDeleted?: boolean; type: { id: string }; toEntity: { id: string; name: string | null } }>;
+  relations: Array<{
+    isDeleted?: boolean;
+    type: { id: string };
+    /**
+     * The space the relation was written in.
+     *
+     * Optional so a full `Entity` still satisfies this, and nullable because the API models it that
+     * way — a relation can carry no space at all. Both mean the same thing to a caller: the space is
+     * not known, so it cannot be compared against one.
+     */
+    spaceId?: string | null;
+    toEntity: { id: string; name: string | null };
+  }>;
 };
 
 /** The graph caps `first` on `entitiesConnection`; ids are asked for in lists this long. */
@@ -111,7 +131,13 @@ function decodeClaimPickerEntities(data: ClaimPickerEntitiesQuery): ClaimPickerE
       }),
       relations: (node.relationsList ?? []).flatMap(relation =>
         relation?.toEntity
-          ? [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: relation.toEntity.id, name: relation.toEntity.name } }]
+          ? [
+              {
+                type: { id: TOPICS_PROPERTY_ID },
+                spaceId: relation.spaceId,
+                toEntity: { id: relation.toEntity.id, name: relation.toEntity.name },
+              },
+            ]
           : []
       ),
     });

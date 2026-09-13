@@ -24,6 +24,7 @@ import {
   keepSelectedVisible,
   orderFacetOptions,
   toggleId,
+  topicsFor,
 } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
@@ -155,7 +156,8 @@ export function MatchesList({
   );
   const passesTopics = React.useCallback(
     (match: MatchmakingMatch) =>
-      !topicsResolved || carriesEveryTopic(topicsByClaimId.get(match.claim.claim_entity_id), topicIds),
+      !topicsResolved ||
+      carriesEveryTopic(topicsFor(topicsByClaimId, match.claim.claim_entity_id, match.claim.space_id), topicIds),
     [topicIds, topicsByClaimId, topicsResolved]
   );
   const passesSearch = React.useCallback(
@@ -205,7 +207,7 @@ export function MatchesList({
           countBy(
             matches
               .filter(match => passesSpace(match) && passesSearch(match) && passesTopics(match))
-              .flatMap(match => topicsByClaimId.get(match.claim.claim_entity_id) ?? [])
+              .flatMap(match => topicsFor(topicsByClaimId, match.claim.claim_entity_id, match.claim.space_id) ?? [])
           ),
           topicIds
         ),
