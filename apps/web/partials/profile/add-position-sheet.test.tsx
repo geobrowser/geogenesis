@@ -37,11 +37,13 @@ vi.mock('~/design-system/select-entity', () => ({
     relationValueTypes,
     onCreateEntity,
     pinnedResults,
+    autoFocus,
     onDone,
   }: {
     relationValueTypes?: { id: string; name: string | null }[];
     onCreateEntity?: (result: { id: string; name: string | null }) => void | string;
     pinnedResults?: { id: string; name: string | null }[];
+    autoFocus?: boolean;
     onDone: (result: { id: string; name: string | null }, fromCreateFn?: boolean) => void;
   }) => (
     <div>
@@ -50,6 +52,7 @@ vi.mock('~/design-system/select-entity', () => ({
         data-scoped-to={relationValueTypes?.map(type => type.id).join(',') ?? ''}
         data-can-create={onCreateEntity ? 'yes' : 'no'}
         data-pinned={(pinnedResults ?? []).map(result => result.name).join('|')}
+        data-autofocus={autoFocus ? 'yes' : 'no'}
         onClick={() => onDone({ id: 'picked-id', name: 'Coinbase' })}
       >
         pick existing
@@ -350,6 +353,26 @@ describe('AddPositionSheet', () => {
       const pinned = screen.getAllByRole('button', { name: /pick existing/ }).map(picker => picker.dataset.pinned);
       expect(pinned).toContain(Array.from({ length: 9 }, (_, index) => `Skill ${index}`).join('|'));
     });
+  });
+
+  // A picker opened by clicking "+ Add skill" should be ready to type in; the
+  // ones showing because nothing is filled in yet must not steal focus.
+  it('focuses the skills picker opened on demand, and no other', async () => {
+    renderSheet();
+
+    expect(screen.getAllByRole('button', { name: /pick existing/ }).every(p => p.dataset.autofocus === 'no')).toBe(
+      true
+    );
+
+    await pickCompany();
+    await pickTitle();
+    await userEvent.click(screen.getAllByRole('button', { name: /pick existing/ }).at(-1)!); // skills
+    await userEvent.click(screen.getByRole('button', { name: '+ Add skill' }));
+
+    const focused = screen
+      .getAllByRole('button', { name: /pick existing/ })
+      .filter(picker => picker.dataset.autofocus === 'yes');
+    expect(focused).toHaveLength(1);
   });
 
   it('says what the wait is and locks the controls while saving', () => {

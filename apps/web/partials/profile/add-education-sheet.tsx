@@ -167,6 +167,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
             relationValueTypes={[{ id: FIELD_OF_STUDY_TYPE, name: 'Field of study' }]}
             placeholder="Example: Business"
             onCreateEntity={findOrCreate}
+            autoFocus={isAddingField}
             onDone={(result, fromCreateFn) => {
               setFields(current =>
                 current.some(field => field.id === result.id)
@@ -188,7 +189,6 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
             + Add another
           </button>
         )}
-        <span className="text-footnote text-grey-04">Creates a Field of study others can use.</span>
       </div>
 
       <fieldset className="flex flex-col gap-1.5">
@@ -239,12 +239,22 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
           placeholder="Example: 3.8"
           className={inputStyles()}
         />
-        <span className="text-footnote text-grey-04">A number, as the institution gave it.</span>
+      </label>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="text-metadataMedium text-grey-04">Description</span>
+        <textarea
+          value={description}
+          onChange={event => setDescription(event.currentTarget.value)}
+          disabled={isSaving}
+          rows={3}
+          placeholder="Activities, societies, or what you focused on"
+          className={`${inputStyles()} resize-none`}
+        />
       </label>
 
       <div className="flex flex-col gap-1.5">
         <span className="text-metadataMedium text-grey-04">Skills</span>
-        <span className="text-footnote text-grey-04">Add skills to show what you studied.</span>
         {skills.length > 0 && (
           <ul className="flex flex-wrap gap-1.5">
             {skills.map(skill => (
@@ -271,6 +281,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
             placeholder="Example: Statistics"
             alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
             onCreateEntity={findOrCreate}
+            autoFocus={isAddingSkill}
             onDone={(result, fromCreateFn) => {
               setSkills(current =>
                 current.some(skill => skill.id === result.id)
@@ -291,18 +302,6 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
           </button>
         )}
       </div>
-
-      <label className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Description</span>
-        <textarea
-          value={description}
-          onChange={event => setDescription(event.currentTarget.value)}
-          disabled={isSaving}
-          rows={3}
-          placeholder="Activities, societies, or what you focused on"
-          className={`${inputStyles()} resize-none`}
-        />
-      </label>
     </HistorySheet>
   );
 }

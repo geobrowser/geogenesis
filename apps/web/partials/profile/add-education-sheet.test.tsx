@@ -13,15 +13,18 @@ let pickCount = 0;
 vi.mock('~/design-system/select-entity', () => ({
   SelectEntity: ({
     relationValueTypes,
+    autoFocus,
     onDone,
   }: {
     relationValueTypes?: { id: string; name: string | null }[];
+    autoFocus?: boolean;
     onDone: (result: { id: string; name: string | null }, fromCreateFn?: boolean) => void;
   }) => (
     <div>
       <button
         type="button"
         data-scoped-to={relationValueTypes?.map(type => type.id).join(',') ?? ''}
+        data-autofocus={autoFocus ? 'yes' : 'no'}
         onClick={() => {
           pickCount += 1;
           onDone({ id: `picked-${pickCount}`, name: `Picked ${pickCount}` });
@@ -149,6 +152,32 @@ describe('AddEducationSheet', () => {
 
     const draft = props.onSave.mock.calls.at(-1)?.[0];
     expect(draft.fields).toEqual([{ id: 'new-field', name: 'Computer Science', isNew: true }]);
+  });
+
+  // A picker opened by clicking "+ Add another" should be ready to type in. The
+  // ones showing because the list is empty must not be, or opening the sheet
+  // yanks focus down the form.
+  it('focuses a picker opened on demand, and no other', async () => {
+    renderSheet();
+
+    expect(pickers().map(picker => picker.dataset.autofocus)).toEqual(['no', 'no', 'no', 'no']);
+
+    await userEvent.click(pickers()[0]); // school
+    await userEvent.click(pickers()[0]); // degree
+    await userEvent.click(pickers()[0]); // first field
+    await userEvent.click(screen.getByRole('button', { name: '+ Add another' }));
+
+    const focused = pickers().filter(picker => picker.dataset.autofocus === 'yes');
+    expect(focused).toHaveLength(1);
+  });
+
+  it('focuses the skills picker opened on demand', async () => {
+    renderSheet();
+
+    await userEvent.click(pickers().at(-1)!); // the skills picker, shown while empty
+    await userEvent.click(screen.getByRole('button', { name: '+ Add skill' }));
+
+    expect(pickers().filter(picker => picker.dataset.autofocus === 'yes')).toHaveLength(1);
   });
 
   it('locks the school and reuses its record when adding a second degree there', async () => {

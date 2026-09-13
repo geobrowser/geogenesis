@@ -219,7 +219,6 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
 
       <div className="flex flex-col gap-1.5">
         <span className="text-metadataMedium text-grey-04">Location</span>
-        <span className="text-footnote text-grey-04">Where the role was based, whether or not you went in.</span>
         {location ? (
           <PickedEntity name={location.name} onClear={() => setLocation(null)} />
         ) : (
@@ -271,7 +270,6 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
 
       <div className="flex flex-col gap-1.5">
         <span className="text-metadataMedium text-grey-04">Skills</span>
-        <span className="text-footnote text-grey-04">Add skills to show what you do best.</span>
         {skills.length > 0 && (
           <ul className="flex flex-wrap gap-1.5">
             {skills.map(skill => (
@@ -296,6 +294,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
             spaceId={spaceId}
             relationValueTypes={[{ id: SKILL_TYPE, name: 'Skill' }]}
             placeholder="Example: Product management"
+            autoFocus={isAddingSkill}
             alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
             pinnedResults={pinnedSkills}
             pinnedLabel="Recommended for this role"
