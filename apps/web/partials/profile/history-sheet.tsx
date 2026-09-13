@@ -39,7 +39,7 @@ export function HistorySheet({ title, isSaving, canSave, onCancel, onSave, child
       <div className="flex flex-col gap-4 px-5">{children}</div>
 
       <footer className="mt-5 flex items-center justify-between gap-3 border-t border-grey-02 px-5 py-4">
-        <p className="text-footnote text-grey-04">Added to your profile when you save it.</p>
+        <p className="text-metadata text-grey-04">Added to your profile when you save it.</p>
         <div className="flex items-center gap-2">
           <Button type="button" variant="secondary" onClick={onCancel} disabled={isSaving}>
             Cancel
@@ -88,7 +88,7 @@ export function PickedEntity({ name, note, onClear }: { name: string | null; not
           </div>
         )}
       </div>
-      {note && <span className="text-footnote text-grey-04">{note}</span>}
+      {note && <span className="text-metadata text-grey-04">{note}</span>}
     </div>
   );
 }

@@ -205,7 +205,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
           aria-checked={isCurrent}
           aria-label="I’m in this role now"
         />
-        <span className="text-footnote text-text">I’m in this role now</span>
+        <span className="text-metadata text-text">I’m in this role now</span>
       </div>
 
       <div className="flex flex-wrap items-end gap-4">
@@ -307,7 +307,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
             shortcut past typing, not a claim about what this person did. */}
         {suggestions.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-footnote text-grey-04">Common for this role</span>
+            <span className="text-metadata text-grey-04">Common for this role</span>
             <ul className="flex flex-wrap gap-1.5">
               {suggestions.map(suggestion => (
                 <li key={suggestion.id}>
@@ -315,7 +315,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
                     type="button"
                     onClick={() => addSkill({ id: suggestion.id, name: suggestion.name, isNew: false })}
                     disabled={isSaving}
-                    className="rounded border border-grey-02 px-2 py-1 text-footnote text-text transition-colors hover:border-text disabled:text-grey-03"
+                    className="rounded border border-grey-02 px-2 py-1 text-metadata text-text transition-colors hover:border-text disabled:text-grey-03"
                   >
                     + {suggestion.name ?? 'Untitled'}
                   </button>

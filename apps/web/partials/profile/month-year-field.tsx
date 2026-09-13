@@ -58,7 +58,7 @@ export function MonthYearField({ label, note, value, onChange, disabled }: Props
     <fieldset className="flex flex-col gap-1.5">
       <legend className="text-metadataMedium text-grey-04">
         {label}
-        {note && <span className="text-footnote text-grey-04"> ({note})</span>}
+        {note && <span className="text-metadata text-grey-04"> ({note})</span>}
       </legend>
       <div className="flex items-center gap-2">
         <select

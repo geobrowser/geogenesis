@@ -69,25 +69,25 @@ export function HistorySection({ kind, cards, disabled, onAdd, onAddTo, onEditEn
       </header>
 
       {cards.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-grey-02 px-3 py-4 text-center text-footnote text-grey-04">
+        <p className="rounded-lg border border-dashed border-grey-02 px-3 py-4 text-center text-metadata text-grey-04">
           {copy.empty}
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
           {cards.map(card => (
-            <li key={card.organization.id} className="rounded-lg border border-grey-02 p-3">
+            <li key={card.organization.id} className="rounded-lg border border-grey-02 p-4">
               <div className="flex items-start gap-2.5">
                 <OrganizationAvatar name={card.organization.name} url={card.avatarUrl} />
 
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-metadataMedium text-text">{card.organization.name ?? 'Untitled'}</p>
+                  <p className="truncate text-smallTitle text-text">{card.organization.name ?? 'Untitled'}</p>
                   {/* Total time at the employer — the number a run of roles is
                       actually read for. Only where there is a run. */}
                   {card.entries.length > 1 && <CardDuration entries={card.entries} />}
 
                   <ul
                     className={cx(
-                      'mt-2 flex flex-col gap-2.5',
+                      'mt-2.5 flex flex-col gap-4',
                       card.entries.length > 1 && 'border-l border-grey-02 pl-3'
                     )}
                   >
@@ -147,7 +147,7 @@ function CardDuration({ entries }: { entries: HistoryEntry[] }) {
   const ends = entries.map(entry => entry.endDate).filter((date): date is string => date !== null);
 
   const duration = formatDuration([...starts].sort()[0], isOpen ? null : ([...ends].sort().at(-1) ?? null));
-  return duration ? <p className="text-footnote text-grey-04">{duration}</p> : null;
+  return duration ? <p className="text-metadata text-grey-04">{duration}</p> : null;
 }
 
 function EntryRow({
@@ -195,25 +195,25 @@ function EntryRow({
         aria-label={`Edit ${noun} ${subject}`}
         className="min-w-0 flex-1 text-left"
       >
-        <p className="truncate text-footnote text-text">{heading}</p>
-        {employmentType?.name && <p className="text-footnote text-grey-04">{employmentType.name}</p>}
+        <p className="truncate text-metadataMedium text-text">{heading}</p>
+        {employmentType?.name && <p className="text-metadata text-grey-04">{employmentType.name}</p>}
 
         {/* About a third of records carry no dates. A lone dash there reads as a
             rendering fault rather than as missing data, so the line is dropped. */}
         {dates && (
-          <p className="text-footnote text-grey-04">
+          <p className="text-metadata text-grey-04">
             {dates}
             {duration && ` · ${duration}`}
           </p>
         )}
 
-        {place && <p className="text-footnote text-grey-04">{place}</p>}
-        {grade !== null && <p className="text-footnote text-grey-04">Grade {grade}</p>}
+        {place && <p className="text-metadata text-grey-04">{place}</p>}
+        {grade !== null && <p className="text-metadata text-grey-04">Grade {grade}</p>}
 
-        {entry.description && <p className="mt-1 text-footnote text-text">{entry.description}</p>}
+        {entry.description && <p className="mt-1 text-metadata text-text">{entry.description}</p>}
 
         {skills.length > 0 && (
-          <p className="mt-1 text-footnote text-grey-04">
+          <p className="mt-1 text-metadata text-grey-04">
             <span className="text-text">Skills:</span> {skills.map(skill => skill.name).join(', ')}
           </p>
         )}
