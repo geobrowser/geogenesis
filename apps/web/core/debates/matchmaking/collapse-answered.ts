@@ -47,6 +47,19 @@ type CollapseOptions<T> = {
    * press to land before the row leaves. Tests pass their own.
    */
   holdMs?: number | null;
+  /**
+   * Throws the bookkeeping away when it changes — the list this hook is describing is now a
+   * different one, about different people.
+   *
+   * The debate-again flow passes its session id, because that page is *reused* when the route moves
+   * between rematches rather than remounted. Without this, a claim seen unanswered opposite one
+   * opponent counted as seen for the next, and so was held on screen instead of hidden as the
+   * backlog it is for them. Everything here is keyed per row, and a row means something different
+   * once the pair changes.
+   *
+   * Surfaces that die with their list — the hub's tabs — need none, and omitting it never resets.
+   */
+  resetKey?: string;
 };
 
 /**
@@ -68,7 +81,7 @@ type CollapseOptions<T> = {
  */
 export function useCollapseAnswered<T>(
   rows: T[],
-  { keyOf, answeredStateOf, enabled, holdMs }: CollapseOptions<T>
+  { keyOf, answeredStateOf, enabled, holdMs, resetKey }: CollapseOptions<T>
 ): T[] {
   // Not `??`: `null` is a meaningful value here — hold forever — and would otherwise fall through
   // to the default and fold the row away after a second.
@@ -80,6 +93,19 @@ export function useCollapseAnswered<T>(
   const foldedOut = React.useRef(new Set<string>());
   const timers = React.useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const [holding, setHolding] = React.useState<ReadonlySet<string>>(() => new Set());
+
+  // During render, so the very first render of the new list is already clean. An effect would let
+  // one commit classify the new rows against the old list's history, which is the whole of what
+  // this prevents.
+  const lastResetKey = React.useRef(resetKey);
+  if (lastResetKey.current !== resetKey) {
+    lastResetKey.current = resetKey;
+    seenUnanswered.current.clear();
+    foldedOut.current.clear();
+    for (const timer of timers.current.values()) clearTimeout(timer);
+    timers.current.clear();
+    setHolding(current => (current.size === 0 ? current : new Set()));
+  }
 
   // Every render rather than on a dependency list, and that is the cheaper of the two: the callbacks
   // come from the caller, so a list would either churn on inline ones or go stale on memoized ones.
@@ -152,6 +178,20 @@ export function useCollapseAnswered<T>(
   return React.useMemo(() => {
     if (!enabled) return rows;
 
-    return rows.filter(row => answeredStateOf(row) !== 'answered' || holding.has(keyOf(row)));
+    return rows.filter(row => {
+      if (answeredStateOf(row) !== 'answered') return true;
+
+      const key = keyOf(row);
+      // `holding` is set by the effect, which runs *after* the commit that first sees the answer —
+      // so on that one commit a row the viewer just answered was neither unanswered nor held, and
+      // dropped out of the list only to come back a tick later. On a one-row list that is the empty
+      // state flashing up; on the rematch page it is the "Request debate" button they were reaching
+      // for blinking out from under them.
+      //
+      // The refs say the same thing a commit earlier: seen unanswered before, and not yet folded.
+      // They are written in the effect too, but by the time a row *becomes* answered they already
+      // carry the answer this needs.
+      return holding.has(key) || (seenUnanswered.current.has(key) && !foldedOut.current.has(key));
+    });
   }, [answeredStateOf, enabled, holding, keyOf, rows]);
 }

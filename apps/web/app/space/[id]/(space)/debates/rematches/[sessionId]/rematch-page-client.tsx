@@ -1129,7 +1129,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     narrowed: matchesNarrowed,
     steppedBack: steppedBackFromMatches,
     rearm: rearmMatchesDefault,
-  } = useNarrowedDefault(matchesOnly, noRematchAtAll);
+    // Keyed on the session, because this component is reused when the route moves between
+    // rematches — see `useLastSettled` and the warm-up above, which key on it for the same reason.
+  } = useNarrowedDefault(matchesOnly, noRematchAtAll, sessionId);
 
   const matchesOnlyHere = matchesNarrowed && tab === 'opponent';
 
@@ -1142,12 +1144,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * answer; moving them would be answering a different one.
    */
   const nothingOnTheirTab = opponentTabSettled && claims.length === 0;
-  const leftForExplore = React.useRef(false);
+  // The session it was spent on rather than a bare flag, for the same reason the warm-up above
+  // keeps one: the route reuses this component between rematches, and a boolean would report the
+  // *previous* pair's move as already made — leaving an empty new session sitting on a tab with
+  // nothing on it.
+  const leftForExplore = React.useRef<string | null>(null);
   React.useEffect(() => {
-    if (!steppedBackFromMatches || !nothingOnTheirTab || leftForExplore.current) return;
-    leftForExplore.current = true;
+    if (!steppedBackFromMatches || !nothingOnTheirTab || leftForExplore.current === sessionId) return;
+    leftForExplore.current = sessionId;
     setTab('explore');
-  }, [nothingOnTheirTab, setTab, steppedBackFromMatches]);
+  }, [nothingOnTheirTab, sessionId, setTab, steppedBackFromMatches]);
 
   /**
    * The four dimensions the client-side lists narrow by, each testable on its own.
@@ -1341,6 +1347,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     answeredStateOf,
     enabled: hidesAnswered,
     holdMs: null,
+    // Same reuse, same reason. A claim seen unanswered opposite one opponent is not seen for the
+    // next, and with `holdMs: null` an inherited record keeps it on screen for good — exactly the
+    // backlog this hides.
+    resetKey: sessionId,
   });
 
   const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);

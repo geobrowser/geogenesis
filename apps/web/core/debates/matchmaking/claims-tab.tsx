@@ -729,12 +729,22 @@ export function ClaimsTab({
   const collapsedEverything = visibleClaims.length === 0 && claims.length > 0;
   const hasNarrowingFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
 
-  // Reported once, and only from a settled, unnarrowed, working list. Every one of those matters:
-  // mid-load every list is empty, an error is not an answer about the corpus, and a filtered empty
-  // list is the viewer's own question rather than a dead end to be moved out of.
+  // Both lists page now, so the sentinel follows whichever one is on screen (GEO-2798). The tagged
+  // lists used to arrive whole, which is why this was the index's alone.
+  const hasNextPage = graphSourced ? taggedHasNextPage : claimsQuery.hasNextPage;
+
+  // Reported once, and only from a settled, unnarrowed, working, *finished* list. Every one of
+  // those matters: mid-load every list is empty, an error is not an answer about the corpus, a
+  // filtered empty list is the viewer's own question rather than a dead end to be moved out of —
+  // and with a page still to come this is the first page's answer, not the corpus's.
+  //
+  // The last one is the one that bites hardest, because the caller acts on it. The space and
+  // publishability gates run over the loaded page, so a page can arrive with everything on it
+  // removed while the corpus goes on — and Lobby would then walk the viewer off to Explore before
+  // the sentinel had fetched the rows that would have kept them here.
   const listIsLoading = spacesPending || (graphSourced ? taggedLoading : claimsQuery.isLoading);
   const listError = graphSourced ? taggedError : claimsQuery.error;
-  const settledEmpty = !listIsLoading && !listError && !hasNarrowingFilters && claims.length === 0;
+  const settledEmpty = !listIsLoading && !listError && !hasNarrowingFilters && !hasNextPage && claims.length === 0;
   const reportedEmpty = React.useRef(false);
   React.useEffect(() => {
     if (!settledEmpty || reportedEmpty.current || !onSettledEmpty) return;
@@ -747,9 +757,6 @@ export function ClaimsTab({
   // one would be offering to undo something the viewer never set.
   const hasFilters = hasNarrowingFilters;
 
-  // Both lists page now, so the sentinel follows whichever one is on screen (GEO-2798). The tagged
-  // lists used to arrive whole, which is why this was the index's alone.
-  const hasNextPage = graphSourced ? taggedHasNextPage : claimsQuery.hasNextPage;
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage,
     isFetchingNextPage: graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage,

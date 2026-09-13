@@ -900,6 +900,35 @@ describe('ClaimsTab', () => {
     expect(mocks.fetchNextPage).toHaveBeenCalled();
   });
 
+  /**
+   * And does not send the viewer anywhere on the strength of it.
+   *
+   * Lobby acts on `onSettledEmpty` by moving them to Explore, so reporting the first page's
+   * emptiness as the corpus's would walk them off the tab before the sentinel had fetched the rows
+   * that would have kept them on it.
+   */
+  it('does not report an empty corpus while a page is still to come', async () => {
+    mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID)];
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.hasNextPage = true;
+    const onSettledEmpty = vi.fn();
+    render(<ClaimsTab variant="positions" onSettledEmpty={onSettledEmpty} />);
+    await showIndexedClaims();
+
+    expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
+    expect(onSettledEmpty).not.toHaveBeenCalled();
+  });
+
+  it('reports it once the last page is in', async () => {
+    mocks.claims = [];
+    mocks.hasNextPage = false;
+    const onSettledEmpty = vi.fn();
+    render(<ClaimsTab variant="positions" onSettledEmpty={onSettledEmpty} />);
+    await showIndexedClaims();
+
+    await waitFor(() => expect(onSettledEmpty).toHaveBeenCalled());
+  });
+
   // The other half: once there is no page left, an empty list really is empty and says so.
   it('blames nothing but the corpus once the last page is in', async () => {
     mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID)];

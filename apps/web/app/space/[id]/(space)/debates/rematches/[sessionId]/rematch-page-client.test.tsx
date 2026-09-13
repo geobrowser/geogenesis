@@ -4218,6 +4218,31 @@ describe('the matches-only default', () => {
     expect(screen.queryByRole('button', { name: 'All claims' })).toBeNull();
   });
 
+  /**
+   * None of this may travel to the next rematch.
+   *
+   * The route reuses this component when it moves between sessions, so every latch here is keyed on
+   * the session id — the step back, the viewer's own answer to the switch, and the move to Explore.
+   * Unkeyed, a pair with no match taught the page that the *next* pair had none either.
+   */
+  it('decides again for the next rematch rather than carrying the last one’s answer', async () => {
+    nothingToRematch();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('A claim only Salina answered');
+    expect(switchNode()).toHaveAttribute('aria-checked', 'false');
+
+    // The next pair does have a match — the default fixture's opposed positions.
+    mocks.entities = [sharedEntity()];
+    mocks.positions = [
+      position('profile-local', CLAIM_SHARED, SPACE_1, true),
+      position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+    ];
+    rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+    expect(switchNode()).toHaveAttribute('aria-checked', 'true');
+  });
+
   // The last rung. No rematch to be had and no positions of theirs to make one out of, so there is
   // no version of this tab with anything on it — and Explore is the corpus rather than this pair.
   it('moves on to Explore when they have no positions either', async () => {

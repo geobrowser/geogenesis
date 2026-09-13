@@ -34,7 +34,18 @@ import * as React from 'react';
  */
 export function useNarrowedDefault(
   preferred: boolean,
-  emptyNarrowed: boolean
+  emptyNarrowed: boolean,
+  /**
+   * Throws the decision away when it changes — this is a different list, about different people.
+   *
+   * The debate-again flow passes its session id, because that page is *reused* when the route moves
+   * between rematches rather than remounted. Without it, a step back taken because one pair had no
+   * match carried into the next pair, who may have several; and a viewer who pressed the switch for
+   * one opponent had answered a question nobody asked about the next.
+   *
+   * Surfaces that die with their list — the hub's tabs — need none, and omitting it never resets.
+   */
+  resetKey?: string
 ): {
   /** Whether the narrowed list is the one to draw. */
   narrowed: boolean;
@@ -49,6 +60,15 @@ export function useNarrowedDefault(
   // stepped straight back out of it on the very next render, and the press would look like it had
   // missed.
   const [chosen, setChosen] = React.useState(false);
+
+  // During render, so the first render of the new list already decides for itself rather than
+  // inheriting an answer given about the previous one.
+  const lastResetKey = React.useRef(resetKey);
+  if (lastResetKey.current !== resetKey) {
+    lastResetKey.current = resetKey;
+    if (steppedBack) setSteppedBack(false);
+    if (chosen) setChosen(false);
+  }
 
   // During render, not in an effect. An effect would let the empty narrowed list paint for a commit
   // before the wider one replaced it, which is a flash of the exact emptiness this exists to avoid.

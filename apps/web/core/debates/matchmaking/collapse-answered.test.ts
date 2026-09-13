@@ -12,16 +12,17 @@ function row(id: string, state: AnsweredState): Row {
   return { id, state };
 }
 
-function render(initial: Row[], enabled = true, holdMs: number | null = HOLD) {
+function render(initial: Row[], enabled = true, holdMs: number | null = HOLD, resetKey?: string) {
   return renderHook(
-    ({ rows }: { rows: Row[] }) =>
+    ({ rows, key }: { rows: Row[]; key?: string | undefined }) =>
       useCollapseAnswered(rows, {
         keyOf: candidate => candidate.id,
         answeredStateOf: candidate => candidate.state,
         enabled,
         holdMs,
+        resetKey: key,
       }),
-    { initialProps: { rows: initial } }
+    { initialProps: { rows: initial, key: resetKey } as { rows: Row[]; key?: string } }
   );
 }
 
@@ -176,6 +177,57 @@ describe('useCollapseAnswered', () => {
       rerender({ rows: [row('a', 'unanswered')] });
 
       expect(ids(result.current)).toEqual(['a']);
+    });
+  });
+
+  /**
+   * The row must not blink out and back on the commit it is answered.
+   *
+   * `holding` is written by the effect, which is passive and so runs *after* the browser has
+   * painted the commit that first saw the answer. For that frame the row was neither unanswered nor
+   * held, and left the list — on a one-row list that is the empty state flashing up, and on the
+   * debate-again flow it is the "Request debate" button blinking out from under the press that
+   * earned it, with `AnimatePresence` starting an exit for a row that is about to come back.
+   *
+   * Every render is recorded rather than only the last, because the last one is already correct:
+   * the effect has run by then, which is exactly why this was invisible.
+   */
+  it('keeps a row on the very commit it is answered, before the effect records the hold', () => {
+    const drawn: string[][] = [];
+    const { rerender } = renderHook(
+      ({ rows }: { rows: Row[] }) => {
+        const visible = useCollapseAnswered(rows, {
+          keyOf: candidate => candidate.id,
+          answeredStateOf: candidate => candidate.state,
+          enabled: true,
+          holdMs: HOLD,
+        });
+        drawn.push(ids(visible));
+        return visible;
+      },
+      { initialProps: { rows: [row('a', 'unanswered')] } }
+    );
+
+    drawn.length = 0;
+    rerender({ rows: [row('a', 'answered')] });
+
+    expect(drawn).not.toContainEqual([]);
+  });
+
+  /**
+   * Bookkeeping is about one list. The debate-again flow reuses its page when the route moves
+   * between rematches, so without a reset a claim seen unanswered opposite one opponent counted as
+   * seen for the next — and was held on screen instead of hidden as the backlog it is for them.
+   */
+  describe('when the list it is describing is replaced', () => {
+    it('forgets what it saw in the previous one', () => {
+      const { result, rerender } = render([row('a', 'unanswered')], true, HOLD, 'session-1');
+      rerender({ rows: [row('a', 'answered')], key: 'session-1' });
+      expect(ids(result.current)).toEqual(['a']);
+
+      rerender({ rows: [row('a', 'answered')], key: 'session-2' });
+
+      expect(result.current).toEqual([]);
     });
   });
 
