@@ -518,12 +518,6 @@ function claim(
   };
 }
 
-/** Picks an option out of the position dropdown, which opens on its current label. */
-function chooseFilter(current: string, next: string) {
-  fireEvent.click(screen.getByRole('button', { name: current }));
-  fireEvent.click(screen.getByRole('button', { name: next }));
-}
-
 /**
  * Waits for the list geo-chat's index answers to settle, having been rendered onto it.
  *
@@ -538,16 +532,6 @@ function chooseFilter(current: string, next: string) {
  */
 async function showIndexedClaims() {
   await waitFor(() => expect(screen.queryByText('No claims have been featured yet.')).toBeNull());
-}
-
-/**
- * Picks Featured out of the menu, for the cases that are about the picking rather than about the
- * list underneath. `getAllByRole`, because the open menu's option carries the same name as the
- * trigger it came from.
- */
-async function showFeatured() {
-  chooseFilter('All claims', 'Featured');
-  await waitFor(() => expect(screen.getAllByRole('button', { name: /Featured/ }).length).toBeGreaterThan(0));
 }
 
 /**
@@ -1041,7 +1025,6 @@ it('asks the server for debate_now when it is Lobby drawing the list', async () 
  */
 describe('All claims reads the Debate tag', () => {
   const DEBATE_TAG = '55c95b2626f8482cb9739ea99dfde438';
-  const FEATURED_TAG = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
 
   // GEO-2798 review. The sentinel now follows whichever list is on screen, and every case above it
   // drives the indexed one — so the tagged path, which is the list this PR added, had no test that
@@ -2149,7 +2132,6 @@ describe('topic menu', () => {
 
 const FEATURED_A = '019fedb4-3f74-7c61-8d44-5fa0810e7742';
 const FEATURED_B = '019fedb5-4085-7d72-9e55-60b1921f8853';
-const CLAIM_IS_FACTUAL_PROPERTY_ID = 'da4a6c1f9d4446f9832ff3b49a4400ef';
 const TOPICS_PROPERTY_ID = '806d52bc27e94c9193c057978b093351';
 
 function featuredClaim(entityId: string, name: string, spaceId = SPACE_ID) {
@@ -2168,7 +2150,6 @@ function featuredClaim(entityId: string, name: string, spaceId = SPACE_ID) {
  */
 describe('claims the viewer has already answered', () => {
   const DEBATE = '55c95b2626f8482cb9739ea99dfde438';
-  const FEATURED_TAG = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
 
   function answeredRow(entityId: string, spaceId = SPACE_ID) {
     return {

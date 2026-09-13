@@ -39,13 +39,13 @@ import {
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
+import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
-import { FilterSwitch } from '~/core/debates/matchmaking/filter-switch';
 import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
 import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
-import { MatchesOnlySwitch } from '~/core/debates/matchmaking/matches-only-switch';
+import { HideMyPositionsSwitch, MatchesOnlySwitch } from '~/core/debates/matchmaking/matches-only-switch';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import {
   carriesEveryTopic,
@@ -840,11 +840,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Applied after `useLastSettled` rather than before it: the hold remembers the rows it has been
   // shown, and `opponentClaimsNow` empties on every refetch. Stabilising that would hand it an
   // empty list mid-flight and lose the order at the moment it is needed.
-  const opponentClaims = useStableListOrder(
-    opponentClaimsHeld,
-    row => `${row.claim.space_id}:${row.claim.claim_entity_id}`,
-    sessionId
-  );
+  const opponentClaims = useStableListOrder(opponentClaimsHeld, claimRowKey, sessionId);
 
   // My positions: the same list asked about the viewer. Not narrowed by the space allowlist either,
   // and for the same reason — a debater's own claims live in their personal space, which nobody
@@ -866,11 +862,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Held against the viewer's own acting on it, exactly as the opponent's list is: taking a side
   // flips `shared_preference`, and re-sorting would send the row they just acted on to the top and
   // carry the rest of the list with it.
-  const viewerClaims = useStableListOrder(
-    viewerClaimsHeld,
-    row => `${row.claim.space_id}:${row.claim.claim_entity_id}`,
-    sessionId
-  );
+  const viewerClaims = useStableListOrder(viewerClaimsHeld, claimRowKey, sessionId);
 
   // The curated tab, in the curator's order. Held the same way, and likewise not narrowed by the
   // space allowlist.
@@ -1322,7 +1314,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // the viewer is a press away from requesting a debate on, so the switch hides the backlog they
   // arrived with and never the position they just took.
   const visibleClaims = useCollapseAnswered(narrowedClaims, {
-    keyOf: claim => `${claim.claim.space_id}:${claim.claim.claim_entity_id}`,
+    keyOf: claimRowKey,
     answeredStateOf,
     enabled: hidesAnswered,
     holdMs: null,
@@ -1657,7 +1649,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                     }}
                   />
                 ) : source === 'mine' ? null : (
-                  <FilterSwitch label="Hide my positions" checked={hideMyPositions} onChange={setHideMyPositions} />
+                  <HideMyPositionsSwitch checked={hideMyPositions} onChange={setHideMyPositions} />
                 )
               }
               leading={

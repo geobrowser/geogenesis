@@ -7,7 +7,6 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 
 import { claimResponseKind } from '~/core/claims/response-kind';
-import { FEATURED_TAG_ID } from '~/core/constants';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -37,13 +36,14 @@ import {
 } from '../tagged-claims';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
+import { claimRowKey } from './claim-row-key';
 import { type AnsweredState, useCollapseAnswered } from './collapse-answered';
 import { DebateHoursNote } from './debate-hours-note';
-import { FilterSwitch } from './filter-switch';
 import { useDebateRequests } from './hooks';
-import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
+import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
+import { HideMyPositionsSwitch } from './matches-only-switch';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
@@ -96,7 +96,7 @@ const TAG_FOR_FILTER: Partial<Record<ClaimsTabFilter, string>> = {
 /** What an empty list means, which differs by where the list came from. */
 const NOTHING_HERE: Record<ClaimsTabFilter, string> = {
   all: 'No claims have been tagged for debate yet.',
-  mine: 'You haven\u2019t taken a position on any claims yet.',
+  mine: 'You haven’t taken a position on any claims yet.',
   debate_now: 'Nobody is ready to debate you on a claim right now.',
 };
 
@@ -111,13 +111,6 @@ const NOTHING_HERE: Record<ClaimsTabFilter, string> = {
  */
 const CLAIM_ENTITIES_QUERY_PREFIX = ['claim-picker', 'entities'] as const;
 
-/**
- * How a row is named, everywhere that has to recognise it again across a refetch.
- *
- * Space *and* claim, because a claim tagged in two spaces is two cards with two sets of sides, and
- * the viewer can answer one without the other.
- */
-const claimRowKey = (entry: MatchmakingClaim) => `${entry.claim.space_id}:${entry.claim.claim_entity_id}`;
 const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
 
 /**
@@ -221,23 +214,9 @@ export function ClaimsTab({
 
   const [search, setSearch] = useAtom(atoms.search);
   const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
-  // All claims is where the tab opens: the whole tagged corpus is the wider net, and the curated
-  // cut of it is one pick below rather than the thing you land on (GEO-2861). Read by Explore
-  // alone — Lobby has no source picker, and coerces to `debate_now` below.
-  //
-  // Session-scoped like the space and topic selections below, and for the same reason: it is the
-  // same filter bar, dismissed the same way (GEO-2850).
-
   // Explore's own switch (GEO-2863). Stored rather than session-scoped, and on by default: it is
   // the collapse this tab already did, with something on screen to say it is doing it.
   const [hideMyPositions, setHideMyPositions] = useAtom(debatesHubHideMyPositionsAtom);
-  // Signing out with "My positions" selected would otherwise leave the tab querying it anonymously
-  // and showing a trigger value that is no longer in the menu. Derived rather than reset through an
-  // effect so the query, the menu label, the ordering key and the empty state all read the same
-  // value on the very first render after the session goes away.
-  //
-  // Lobby is the `debate_now` list and nothing else, so it never reads the picker's value. That tab
-  // is hidden signed out (`SIGNED_OUT_TABS`), which is what stands in for the coercion here.
   // One list per surface, decided by which surface this is rather than by a menu. Explore is the
   // tagged corpus, Positions is the viewer's own, Lobby is `debate_now` — and each of the two
   // viewer-relative ones is a tab that `SIGNED_OUT_TABS` keeps off the signed-out hub, which is
@@ -808,7 +787,7 @@ export function ClaimsTab({
             isLobby ? (
               trailing
             ) : filter === 'mine' || !authenticated ? null : (
-              <FilterSwitch label="Hide my positions" checked={hideMyPositions} onChange={setHideMyPositions} />
+              <HideMyPositionsSwitch checked={hideMyPositions} onChange={setHideMyPositions} />
             )
           }
         />
@@ -907,7 +886,7 @@ export function ClaimsTab({
           <HubCardList>
             {visibleClaims.map(entry => (
               <MatchmakingClaimCard
-                key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
+                key={claimRowKey(entry)}
                 claim={entry.claim}
                 positions={entry.positions}
                 readiness={entry}

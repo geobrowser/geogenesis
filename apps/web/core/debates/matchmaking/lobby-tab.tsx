@@ -46,6 +46,9 @@ export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =>
 
   const { narrowed, steppedBack, rearm } = useNarrowedDefault(matchesOnly, noMatchesAtAll);
 
+  // Held still so `ClaimsTab`'s report effect is not re-armed on every render of this one.
+  const showExplore = React.useCallback(() => onTabChange('explore'), [onTabChange]);
+
   const toggle = (
     <MatchesOnlySwitch
       // The effective state, not the stored one. A switch reading "on" over the unfiltered list is
@@ -75,7 +78,7 @@ export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =>
       // Only on the automatic path. A viewer who turned the switch off themselves and found an
       // empty Lobby asked a question and got an answer; moving them off the tab would be answering
       // a different one. `steppedBack` is exactly "nobody chose this list".
-      onSettledEmpty={steppedBack ? () => onTabChange('explore') : undefined}
+      onSettledEmpty={steppedBack ? showExplore : undefined}
     />
   );
 }
