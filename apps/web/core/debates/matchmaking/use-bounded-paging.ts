@@ -28,6 +28,10 @@ export const AUTO_PAGES_WITHOUT_ROWS = 5;
  *
  * The cap counts *barren* pages rather than pages, so a list that is finding rows scrolls as far as
  * the viewer likes; only a search that is turning up nothing is bounded.
+ *
+ * All of which is a mitigation, not a fix. GEO-2894 is the fix: let the graph filter out entities
+ * the viewer has already acted on, so a page arrives full of rows that can be shown and there is
+ * nothing here to bound. This hook comes out with it.
  */
 export function useBoundedPaging({
   loaded,
