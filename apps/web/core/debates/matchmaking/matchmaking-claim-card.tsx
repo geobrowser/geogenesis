@@ -1147,18 +1147,11 @@ function PositionAvatars({
           {/* Everyone in this stack is present by construction — the sides are built from
               `online_choices` — so the dot needs no condition. It rings in the pill's own colour
               rather than white, which is the surface actually behind it here. */}
-          {/* Top-left, per the Figma card: the dot's 4px body sits on the face's own top-left
-              corner and its 2px ring bleeds outside, so the avatar reads as notched rather than
-              badged. `-translate-*-0.5` is that 2px, which is what puts the *green* on the corner
-              instead of the ring. */}
-          {/* Figma's ellipse is `r=3` under an opaque `stroke-width=2`, so the green reads 4px
-              across inside a 2px ring — 8px overall, which is `OnlineDot`'s default. Its 4px box
-              sits on the picture's top-left corner and the svg overhangs it by half, so the element
-              starts 2px up and left of that corner. */}
-          <OnlineDot
-            ringClassName={ringClassName}
-            className="absolute top-0 left-0 -translate-x-0.5 -translate-y-0.5"
-          />
+          {/* Sized and placed from the 16px face: 4px of green in a 2px ring, sitting on the
+              picture's top-left corner with the ring bleeding outside it. Those numbers are
+              `OnlineDot`'s to derive now — the People tab needed the same proportions on a 32px
+              face and two hand-written copies had already drifted. */}
+          <OnlineDot faceSize={16} ringClassName={ringClassName} />
         </span>
       ))}
       {overflow > 0 && (

@@ -15,6 +15,7 @@ import { E } from '../sync/orm';
 import { useSyncEngine } from '../sync/use-sync-engine';
 import type { SearchResult } from '../types';
 import { selectSearchAdditionalSpaceIds } from './search-additional-space-ids';
+import { isSearchCancellation } from './search-cancellation';
 import { useDebouncedValue } from './use-debounced-value';
 import { useGlobalSearchSpaceIds } from './use-global-search-space-ids';
 
@@ -193,10 +194,13 @@ export function useSearch({
         // Re-throw cancellations so React Query treats them as a cancel, not a
         // successful empty result. Returning `emptySearchPage` here would let RQ
         // cache the empty page under the canceled queryKey — leaving popovers
-        // stuck on "No matches" when the key changes mid-fetch (e.g.
-        // `additionalSpaceIds` settles after mount, or React StrictMode
-        // double-mounts in dev).
-        if (signal.aborted || (error as { name?: string })?.name === 'AbortError') {
+        // stuck on "No matches" until the query text changes, which is what made
+        // typing a trailing space look like it fixed the search.
+        //
+        // See `isSearchCancellation` for why the obvious two checks were not
+        // enough: an abort from a deduplicated inner fetch leaves this signal
+        // untouched and arrives wrapped by Effect.
+        if (isSearchCancellation(error, signal)) {
           throw error;
         }
         console.error(error);
