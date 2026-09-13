@@ -8,6 +8,7 @@ import { formatDateRange, formatDuration } from '~/core/profile/history-dates';
 import type { EducationCard, EmploymentCard, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
+import { ClampedText } from '~/design-system/clamped-text';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { Trash } from '~/design-system/icons/trash';
 import { TextButton } from '~/design-system/text-button';
@@ -185,39 +186,53 @@ function EntryRow({
 
   return (
     <li className="flex items-start justify-between gap-2">
-      {/* The row itself opens it. Everything shown here was typed into the sheet,
-          so the sheet is where it is changed — a separate pencil would only be a
-          smaller target for the same thing. */}
-      <button
-        type="button"
-        onClick={onEdit}
-        disabled={disabled}
-        aria-label={`Edit ${noun} ${subject}`}
-        className="min-w-0 flex-1 text-left"
-      >
-        <p className="truncate text-metadataMedium text-text">{heading}</p>
-        {employmentType?.name && <p className="text-metadata text-grey-04">{employmentType.name}</p>}
+      <div className="min-w-0 flex-1">
+        {/* What identifies the row opens it. Everything shown was typed into the
+            sheet, so the sheet is where it is changed — a separate pencil would
+            only be a smaller target for the same thing.
 
-        {/* About a third of records carry no dates. A lone dash there reads as a
-            rendering fault rather than as missing data, so the line is dropped. */}
-        {dates && (
-          <p className="text-metadata text-grey-04">
-            {dates}
-            {duration && ` · ${duration}`}
-          </p>
+            The description is outside this button rather than in it: it carries
+            its own More toggle, and a button inside a button is neither valid nor
+            clickable without also opening the sheet. */}
+        <button
+          type="button"
+          onClick={onEdit}
+          disabled={disabled}
+          aria-label={`Edit ${noun} ${subject}`}
+          className="w-full text-left"
+        >
+          <p className="truncate text-metadataMedium text-text">{heading}</p>
+          {employmentType?.name && <p className="text-metadata text-grey-04">{employmentType.name}</p>}
+
+          {/* About a third of records carry no dates. A lone dash there reads as a
+              rendering fault rather than as missing data, so the line is dropped. */}
+          {dates && (
+            <p className="text-metadata text-grey-04">
+              {dates}
+              {duration && ` · ${duration}`}
+            </p>
+          )}
+
+          {place && <p className="text-metadata text-grey-04">{place}</p>}
+          {grade !== null && <p className="text-metadata text-grey-04">Grade {grade}</p>}
+        </button>
+
+        {/* Clamped, because this list is scanned to find a row rather than read.
+            Three lines is enough to recognise which position it is, and More is
+            there for when it is not — a profile with four jobs was otherwise a
+            wall of text between the reader and the Save button. */}
+        {entry.description && (
+          <div className="mt-1">
+            <ClampedText text={entry.description} maxLines={3} variant="metadata" textClassName="text-text" />
+          </div>
         )}
-
-        {place && <p className="text-metadata text-grey-04">{place}</p>}
-        {grade !== null && <p className="text-metadata text-grey-04">Grade {grade}</p>}
-
-        {entry.description && <p className="mt-1 text-metadata text-text">{entry.description}</p>}
 
         {skills.length > 0 && (
           <p className="mt-1 text-metadata text-grey-04">
             <span className="text-text">Skills:</span> {skills.map(skill => skill.name).join(', ')}
           </p>
         )}
-      </button>
+      </div>
 
       <SquareButton onClick={onRemove} disabled={disabled} icon={<Trash />} aria-label={`Remove ${noun} ${subject}`} />
     </li>

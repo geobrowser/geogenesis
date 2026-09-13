@@ -152,6 +152,27 @@ describe('HistorySection', () => {
     expect(screen.getByText('Remote')).toBeInTheDocument();
   });
 
+  // The list is scanned to find a row, not read. Four jobs with full descriptions
+  // put a wall of text between the reader and the Save button.
+  it('clamps a long description rather than printing all of it', () => {
+    const row = entry('Engineer', '2022-06-01Z', null);
+    const description = 'A sentence about the work. '.repeat(20).trim();
+    renderSection([card('Geo', [{ ...row, description }])]);
+
+    expect(screen.getByText(description)).toHaveClass('line-clamp-3');
+  });
+
+  // The toggle is a button, so it cannot sit inside the button that opens the
+  // sheet — nested buttons are invalid, and clicking More would also edit.
+  it('keeps the description out of the edit target', () => {
+    const row = entry('Engineer', '2022-06-01Z', null);
+    renderSection([card('Geo', [{ ...row, description: 'What I did there.' }])]);
+
+    const edit = screen.getByRole('button', { name: 'Edit position Engineer' });
+    expect(edit).not.toHaveTextContent('What I did there.');
+    expect(screen.getByText('What I did there.')).toBeInTheDocument();
+  });
+
   it('locks every control while a save is in flight', () => {
     renderSection([card('Geo', [entry('Engineer', '2022-06-01Z', null)])], { disabled: true });
 
