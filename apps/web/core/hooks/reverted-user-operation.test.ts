@@ -1,5 +1,4 @@
 import { RevertedUserOperationError, isRevertedUserOperationError } from '@geogenesis/auth/account';
-
 import { describe, expect, it } from 'vitest';
 
 import { TransactionWriteFailedError } from '~/core/errors';

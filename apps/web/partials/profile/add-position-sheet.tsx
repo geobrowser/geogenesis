@@ -17,12 +17,8 @@ import type { EntityChoice, PositionDraft } from '~/core/profile/stage-history';
 
 import { SmallButton } from '~/design-system/button';
 import { Checkbox } from '~/design-system/checkbox';
-import { CloseSmall } from '~/design-system/icons/close-small';
-import { inputStyles } from '~/design-system/input';
-import { SelectEntity } from '~/design-system/select-entity';
-import { TextButton } from '~/design-system/text-button';
 
-import { HistorySheet, PickedEntity, findOrCreate } from './history-sheet';
+import { EntityField, HistorySheet, MultiEntityField, OptionField, TextAreaField } from './history-sheet';
 import { MonthYearField } from './month-year-field';
 
 /**
@@ -34,6 +30,12 @@ const TAXONOMY_SPACE_ID_LIST = [TAXONOMY_SPACE_ID];
 
 /** Cities, regions and countries — see `LOCATION_TYPES` for why not addresses. */
 const LOCATION_TYPE_FILTER = LOCATION_TYPES.map(id => ({ id, name: null }));
+
+const EMPLOYER_FILTER = [{ id: EMPLOYER_TYPE, name: 'Project' }];
+
+const JOB_FILTER = [{ id: JOB_TYPE, name: 'Person role' }];
+
+const SKILL_FILTER = [{ id: SKILL_TYPE, name: 'Skill' }];
 
 type Props = {
   spaceId: string;
@@ -71,7 +73,6 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
   const [locationType, setLocationType] = React.useState<{ id: string; name: string } | null>(
     initial?.locationType ?? null
   );
-  const [isAddingSkill, setIsAddingSkill] = React.useState(false);
   const [isCurrent, setIsCurrent] = React.useState(initial ? initial.status === 'current' : false);
   const [description, setDescription] = React.useState(initial?.description ?? '');
 
@@ -137,46 +138,30 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
       onCancel={onCancel}
       onSave={save}
     >
-      <div className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Company</span>
-        {locked ? (
-          // The promotion case. Locked rather than hidden so it still reads as an
-          // answered question, and so the role visibly attaches to that employer.
-          <PickedEntity name={locked.name} note="Already on your profile — this role attaches to it." />
-        ) : pickedCompany ? (
-          <PickedEntity name={pickedCompany.name} onClear={() => setPickedCompany(null)} />
-        ) : (
-          <SelectEntity
-            spaceId={spaceId}
-            relationValueTypes={[{ id: EMPLOYER_TYPE, name: 'Project' }]}
-            placeholder="Example: Microsoft"
-            onCreateEntity={findOrCreate}
-            onDone={(result, fromCreateFn) =>
-              setPickedCompany({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
-            }
-            width="full"
-          />
-        )}
-      </div>
+      {/* Locked rather than hidden in the promotion case, so it still reads as an
+          answered question and the role visibly attaches to that employer. */}
+      <EntityField
+        label="Company"
+        value={pickedCompany}
+        locked={locked ? { name: locked.name, note: 'Already on your profile — this role attaches to it.' } : undefined}
+        onChange={setPickedCompany}
+        onClear={() => setPickedCompany(null)}
+        spaceId={spaceId}
+        relationValueTypes={EMPLOYER_FILTER}
+        placeholder="Example: Microsoft"
+        alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
+      />
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Title</span>
-        {title ? (
-          <PickedEntity name={title.name} onClear={() => setTitle(null)} />
-        ) : (
-          <SelectEntity
-            spaceId={spaceId}
-            relationValueTypes={[{ id: JOB_TYPE, name: 'Person role' }]}
-            placeholder="Example: Senior Product Manager"
-            alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
-            onCreateEntity={findOrCreate}
-            onDone={(result, fromCreateFn) =>
-              setTitle({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
-            }
-            width="full"
-          />
-        )}
-      </div>
+      <EntityField
+        label="Title"
+        value={title}
+        onChange={setTitle}
+        onClear={() => setTitle(null)}
+        spaceId={spaceId}
+        relationValueTypes={JOB_FILTER}
+        placeholder="Example: Senior Product Manager"
+        alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
+      />
 
       {/* Native rather than the design-system `Select`, which cannot be opened from
           inside this modal: it traps focus in a menu portalled outside the
@@ -185,24 +170,13 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
           `SelectEntityAsPopover` is a Popover with `modal={false}`, which does not
           compete for focus. Worth fixing in `Select` — until then a control that
           opens beats one that matches. */}
-      <label className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Employment type</span>
-        <select
-          value={employmentType?.id ?? ''}
-          disabled={isSaving}
-          onChange={event =>
-            setEmploymentType(EMPLOYMENT_TYPE_OPTIONS.find(option => option.id === event.currentTarget.value) ?? null)
-          }
-          className={inputStyles()}
-        >
-          <option value="">Please select</option>
-          {EMPLOYMENT_TYPE_OPTIONS.map(option => (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <OptionField
+        label="Employment type"
+        value={employmentType}
+        options={EMPLOYMENT_TYPE_OPTIONS}
+        onChange={setEmploymentType}
+        disabled={isSaving}
+      />
 
       {/* Above the dates, because it decides what the End picker is for: ticking
           it puts the role in the present and leaves End with nothing to say. */}
@@ -226,125 +200,71 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
         <MonthYearField label="End" value={end} onChange={setEnd} disabled={isSaving || isCurrent} />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Location</span>
-        {location ? (
-          <PickedEntity name={location.name} onClear={() => setLocation(null)} />
-        ) : (
-          // A place in the graph rather than a string, so the San Francisco on
-          // this profile is the one everybody else means.
-          <SelectEntity
-            spaceId={spaceId}
-            relationValueTypes={LOCATION_TYPE_FILTER}
-            placeholder="City or region"
-            onCreateEntity={findOrCreate}
-            onDone={(result, fromCreateFn) =>
-              setLocation({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
-            }
-            width="full"
-          />
-        )}
-      </div>
+      {/* A place in the graph rather than a string, so the San Francisco on this
+          profile is the one everybody else means. */}
+      <EntityField
+        label="Location"
+        value={location}
+        onChange={setLocation}
+        onClear={() => setLocation(null)}
+        spaceId={spaceId}
+        relationValueTypes={LOCATION_TYPE_FILTER}
+        placeholder="City or region"
+      />
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Location type</span>
-        <select
-          value={locationType?.id ?? ''}
-          disabled={isSaving}
-          onChange={event =>
-            setLocationType(LOCATION_TYPE_OPTIONS.find(option => option.id === event.currentTarget.value) ?? null)
-          }
-          className={inputStyles()}
-        >
-          <option value="">Please select</option>
-          {LOCATION_TYPE_OPTIONS.map(option => (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <OptionField
+        label="Location type"
+        value={locationType}
+        options={LOCATION_TYPE_OPTIONS}
+        onChange={setLocationType}
+        disabled={isSaving}
+      />
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Highlights</span>
-        <textarea
-          value={description}
-          onChange={event => setDescription(event.currentTarget.value)}
-          disabled={isSaving}
-          rows={3}
-          placeholder="Projects, problems you solved, or results you achieved"
-          className={`${inputStyles()} resize-none`}
-        />
-      </label>
+      <TextAreaField
+        label="Highlights"
+        value={description}
+        onChange={setDescription}
+        placeholder="Projects, problems you solved, or results you achieved"
+        disabled={isSaving}
+      />
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Skills</span>
-        {skills.length > 0 && (
-          <ul className="flex flex-wrap gap-1.5">
-            {skills.map(skill => (
-              <li key={skill.id}>
-                <SmallButton
-                  onClick={() => setSkills(current => current.filter(item => item.id !== skill.id))}
-                  disabled={isSaving}
-                  aria-label={`Remove skill ${skill.name ?? 'skill'}`}
-                >
-                  <span>{skill.name ?? 'Untitled'}</span>
-                  {skill.isNew && <span className="text-ctaPrimary">NEW</span>}
-                  <CloseSmall />
-                </SmallButton>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {isAddingSkill || skills.length === 0 ? (
-          <SelectEntity
-            spaceId={spaceId}
-            relationValueTypes={[{ id: SKILL_TYPE, name: 'Skill' }]}
-            placeholder="Example: Product management"
-            autoFocus={isAddingSkill}
-            alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
-            pinnedResults={pinnedSkills}
-            pinnedLabel="Recommended for this role"
-            restLabel="All skills"
-            onCreateEntity={findOrCreate}
-            onDone={(result, fromCreateFn) => {
-              addSkill({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) });
-              setIsAddingSkill(false);
-            }}
-            width="full"
-          />
-        ) : (
-          <div className="self-start">
-            <TextButton type="button" color="ctaPrimary" onClick={() => setIsAddingSkill(true)} disabled={isSaving}>
-              + Add skill
-            </TextButton>
-          </div>
-        )}
-
-        {/* What the occupation itself says the job needs, essential first and
-            most distinctive within that. Offered rather than applied: they are a
-            shortcut past typing, not a claim about what this person did. */}
-        {suggestions.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-metadata text-grey-04">Common for this role</span>
-            <ul className="flex flex-wrap gap-1.5">
-              {suggestions.map(suggestion => (
-                <li key={suggestion.id}>
-                  <button
-                    type="button"
-                    onClick={() => addSkill({ id: suggestion.id, name: suggestion.name, isNew: false })}
-                    disabled={isSaving}
-                    className="rounded border border-grey-02 px-2 py-1 text-metadata text-text transition-colors hover:border-text disabled:text-grey-03"
-                  >
-                    + {suggestion.name ?? 'Untitled'}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
+      <MultiEntityField
+        label="Skills"
+        noun="skill"
+        addLabel="+ Add skill"
+        items={skills}
+        onChange={setSkills}
+        spaceId={spaceId}
+        relationValueTypes={SKILL_FILTER}
+        placeholder="Example: Product management"
+        disabled={isSaving}
+        alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
+        pinnedResults={pinnedSkills}
+        pinnedLabel="Recommended for this role"
+        restLabel="All skills"
+        extra={
+          /* What the occupation itself says the job needs, essential first and
+             most distinctive within that. Offered rather than applied: they are a
+             shortcut past typing, not a claim about what this person did. */
+          suggestions.length > 0 ? (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-metadata text-grey-04">Common for this role</span>
+              <ul className="flex flex-wrap gap-1.5">
+                {suggestions.map(suggestion => (
+                  <li key={suggestion.id}>
+                    <SmallButton
+                      onClick={() => addSkill({ id: suggestion.id, name: suggestion.name, isNew: false })}
+                      disabled={isSaving}
+                    >
+                      + {suggestion.name ?? 'Untitled'}
+                    </SmallButton>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null
+        }
+      />
     </HistorySheet>
   );
 }

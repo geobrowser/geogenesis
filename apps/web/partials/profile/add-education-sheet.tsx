@@ -14,12 +14,9 @@ import {
 import type { EducationDraft, EntityChoice } from '~/core/profile/stage-history';
 
 import { SmallButton } from '~/design-system/button';
-import { CloseSmall } from '~/design-system/icons/close-small';
-import { Input, inputStyles } from '~/design-system/input';
-import { SelectEntity } from '~/design-system/select-entity';
-import { TextButton } from '~/design-system/text-button';
+import { Input } from '~/design-system/input';
 
-import { HistorySheet, PickedEntity, findOrCreate } from './history-sheet';
+import { EntityField, HistorySheet, MultiEntityField, TextAreaField } from './history-sheet';
 import { MonthYearField } from './month-year-field';
 
 type Props = {
@@ -40,6 +37,10 @@ const SCHOOL_TYPE_FILTER = SCHOOL_TYPES.map(id => ({ id, name: null }));
 
 /** Both entities named `Degree`; see `LEGACY_DEGREE_TYPE` for why it is a pair. */
 const DEGREE_TYPE_FILTER = DEGREE_TYPES.map(id => ({ id, name: 'Degree' }));
+
+const FIELD_OF_STUDY_FILTER = [{ id: FIELD_OF_STUDY_TYPE, name: 'Field of study' }];
+
+const SKILL_FILTER = [{ id: SKILL_TYPE, name: 'Skill' }];
 
 /** The taxonomy lives in one space nobody is a member of; see `TAXONOMY_SPACE_ID`. */
 const TAXONOMY_SPACE_ID_LIST = [TAXONOMY_SPACE_ID];
@@ -66,13 +67,11 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
   );
   const [degree, setDegree] = React.useState<EntityChoice | null>(initial?.degree ?? null);
   const [fields, setFields] = React.useState<EntityChoice[]>(initial?.fields ?? []);
-  const [isAddingField, setIsAddingField] = React.useState(false);
   const [status, setStatus] = React.useState<EducationStatus>(initial?.status ?? 'studying');
   const [start, setStart] = React.useState<MonthYear | null>(fromGraphDate(initial?.startDate));
   const [end, setEnd] = React.useState<MonthYear | null>(fromGraphDate(initial?.endDate));
   const [description, setDescription] = React.useState(initial?.description ?? '');
   const [skills, setSkills] = React.useState<EntityChoice[]>(initial?.skills ?? []);
-  const [isAddingSkill, setIsAddingSkill] = React.useState(false);
   const [grade, setGrade] = React.useState(initial?.grade ?? '');
 
   const canSave = pickedSchool !== null && degree !== null && !isSaving;
@@ -102,91 +101,42 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
       onCancel={onCancel}
       onSave={save}
     >
-      <div className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">School</span>
-        {locked ? (
-          <PickedEntity name={locked.name} note="Already on your profile — this degree attaches to it." />
-        ) : pickedSchool ? (
-          <PickedEntity name={pickedSchool.name} onClear={() => setPickedSchool(null)} />
-        ) : (
-          <SelectEntity
-            spaceId={spaceId}
-            relationValueTypes={SCHOOL_TYPE_FILTER}
-            placeholder="Example: Boston University"
-            onCreateEntity={findOrCreate}
-            onDone={(result, fromCreateFn) =>
-              setPickedSchool({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
-            }
-            width="full"
-          />
-        )}
-      </div>
+      <EntityField
+        label="School"
+        value={pickedSchool}
+        locked={
+          locked ? { name: locked.name, note: 'Already on your profile — this degree attaches to it.' } : undefined
+        }
+        onChange={setPickedSchool}
+        onClear={() => setPickedSchool(null)}
+        spaceId={spaceId}
+        relationValueTypes={SCHOOL_TYPE_FILTER}
+        placeholder="Example: Boston University"
+      />
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Degree</span>
-        {degree ? (
-          <PickedEntity name={degree.name} onClear={() => setDegree(null)} />
-        ) : (
-          <SelectEntity
-            spaceId={spaceId}
-            relationValueTypes={DEGREE_TYPE_FILTER}
-            placeholder="Example: Bachelor of Science"
-            onCreateEntity={findOrCreate}
-            onDone={(result, fromCreateFn) =>
-              setDegree({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
-            }
-            width="full"
-          />
-        )}
-      </div>
+      <EntityField
+        label="Degree"
+        value={degree}
+        onChange={setDegree}
+        onClear={() => setDegree(null)}
+        spaceId={spaceId}
+        relationValueTypes={DEGREE_TYPE_FILTER}
+        placeholder="Example: Bachelor of Science"
+      />
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Field of study</span>
-        {fields.length > 0 && (
-          <ul className="flex flex-wrap gap-1.5">
-            {fields.map(field => (
-              <li key={field.id}>
-                <SmallButton
-                  onClick={() => setFields(current => current.filter(item => item.id !== field.id))}
-                  disabled={isSaving}
-                  aria-label={`Remove field ${field.name ?? 'field'}`}
-                >
-                  <span>{field.name ?? 'Untitled'}</span>
-                  {field.isNew && <span className="text-ctaPrimary">NEW</span>}
-                  <CloseSmall />
-                </SmallButton>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {isAddingField || fields.length === 0 ? (
-          <SelectEntity
-            spaceId={spaceId}
-            relationValueTypes={[{ id: FIELD_OF_STUDY_TYPE, name: 'Field of study' }]}
-            placeholder="Example: Business"
-            onCreateEntity={findOrCreate}
-            autoFocus={isAddingField}
-            onDone={(result, fromCreateFn) => {
-              setFields(current =>
-                current.some(field => field.id === result.id)
-                  ? current
-                  : [...current, { id: result.id, name: result.name, isNew: Boolean(fromCreateFn) }]
-              );
-              setIsAddingField(false);
-            }}
-            width="full"
-          />
-        ) : (
-          // A joint honours degree needs more than one, which is why Fields of
-          // fields is a relation rather than a value.
-          <div className="self-start">
-            <TextButton type="button" color="ctaPrimary" onClick={() => setIsAddingField(true)} disabled={isSaving}>
-              + Add another
-            </TextButton>
-          </div>
-        )}
-      </div>
+      {/* A joint honours degree needs more than one, which is why Fields of study
+          is a relation rather than a value. */}
+      <MultiEntityField
+        label="Field of study"
+        noun="field"
+        addLabel="+ Add another"
+        items={fields}
+        onChange={setFields}
+        spaceId={spaceId}
+        relationValueTypes={FIELD_OF_STUDY_FILTER}
+        placeholder="Example: Business"
+        disabled={isSaving}
+      />
 
       <fieldset className="flex flex-col gap-1.5">
         <legend className="text-metadataMedium text-grey-04">Status</legend>
@@ -231,64 +181,26 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
         />
       </label>
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Description</span>
-        <textarea
-          value={description}
-          onChange={event => setDescription(event.currentTarget.value)}
-          disabled={isSaving}
-          rows={3}
-          placeholder="Activities, societies, or what you focused on"
-          className={`${inputStyles()} resize-none`}
-        />
-      </label>
+      <TextAreaField
+        label="Description"
+        value={description}
+        onChange={setDescription}
+        placeholder="Activities, societies, or what you focused on"
+        disabled={isSaving}
+      />
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Skills</span>
-        {skills.length > 0 && (
-          <ul className="flex flex-wrap gap-1.5">
-            {skills.map(skill => (
-              <li key={skill.id}>
-                <SmallButton
-                  onClick={() => setSkills(current => current.filter(item => item.id !== skill.id))}
-                  disabled={isSaving}
-                  aria-label={`Remove skill ${skill.name ?? 'skill'}`}
-                >
-                  <span>{skill.name ?? 'Untitled'}</span>
-                  {skill.isNew && <span className="text-ctaPrimary">NEW</span>}
-                  <CloseSmall />
-                </SmallButton>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {isAddingSkill || skills.length === 0 ? (
-          <SelectEntity
-            spaceId={spaceId}
-            relationValueTypes={[{ id: SKILL_TYPE, name: 'Skill' }]}
-            placeholder="Example: Statistics"
-            alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
-            onCreateEntity={findOrCreate}
-            autoFocus={isAddingSkill}
-            onDone={(result, fromCreateFn) => {
-              setSkills(current =>
-                current.some(skill => skill.id === result.id)
-                  ? current
-                  : [...current, { id: result.id, name: result.name, isNew: Boolean(fromCreateFn) }]
-              );
-              setIsAddingSkill(false);
-            }}
-            width="full"
-          />
-        ) : (
-          <div className="self-start">
-            <TextButton type="button" color="ctaPrimary" onClick={() => setIsAddingSkill(true)} disabled={isSaving}>
-              + Add skill
-            </TextButton>
-          </div>
-        )}
-      </div>
+      <MultiEntityField
+        label="Skills"
+        noun="skill"
+        addLabel="+ Add skill"
+        items={skills}
+        onChange={setSkills}
+        spaceId={spaceId}
+        relationValueTypes={SKILL_FILTER}
+        placeholder="Example: Statistics"
+        disabled={isSaving}
+        alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
+      />
     </HistorySheet>
   );
 }

@@ -2,8 +2,14 @@
 
 import * as React from 'react';
 
-import { Button, SquareButton } from '~/design-system/button';
+import type { EntityChoice } from '~/core/profile/stage-history';
+import type { SearchResult } from '~/core/types';
+
+import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
+import { CloseSmall } from '~/design-system/icons/close-small';
+import { inputStyles } from '~/design-system/input';
+import { SelectEntity } from '~/design-system/select-entity';
 import { TextButton } from '~/design-system/text-button';
 
 type Props = {
@@ -90,5 +96,243 @@ export function PickedEntity({ name, note, onClear }: { name: string | null; not
       </div>
       {note && <span className="text-metadata text-grey-04">{note}</span>}
     </div>
+  );
+}
+
+/**
+ * A label above a control. The pickers below are buttons rather than form
+ * controls, so this is a `div` and the label is a `span` — wrapping a button in
+ * a `<label>` names nothing.
+ */
+export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-metadataMedium text-grey-04">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/** The same, for a native control that a `<label>` can actually name. */
+export function LabelledField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-metadataMedium text-grey-04">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+/**
+ * One entity, picked or created.
+ *
+ * `locked` is the promotion case: the company is already answered and stays
+ * visible so the row reads as attaching to it, rather than disappearing and
+ * leaving the reader to wonder where it went.
+ */
+export function EntityField({
+  label,
+  value,
+  locked,
+  onChange,
+  onClear,
+  spaceId,
+  relationValueTypes,
+  placeholder,
+  alsoSearchSpaceIds,
+  autoFocus,
+  ...picker
+}: {
+  label: string;
+  value: EntityChoice | null;
+  locked?: { name: string | null; note: string };
+  onChange: (choice: EntityChoice) => void;
+  onClear: () => void;
+  spaceId: string;
+  relationValueTypes?: { id: string; name: string | null }[];
+  placeholder: string;
+  alsoSearchSpaceIds?: string[];
+  autoFocus?: boolean;
+  pinnedResults?: SearchResult[];
+  pinnedLabel?: string;
+  restLabel?: string;
+}) {
+  return (
+    <Field label={label}>
+      {locked ? (
+        <PickedEntity name={locked.name} note={locked.note} />
+      ) : value ? (
+        <PickedEntity name={value.name} onClear={onClear} />
+      ) : (
+        <SelectEntity
+          spaceId={spaceId}
+          relationValueTypes={relationValueTypes}
+          placeholder={placeholder}
+          alsoSearchSpaceIds={alsoSearchSpaceIds}
+          autoFocus={autoFocus}
+          onCreateEntity={findOrCreate}
+          onDone={(result, fromCreateFn) =>
+            onChange({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
+          }
+          width="full"
+          {...picker}
+        />
+      )}
+    </Field>
+  );
+}
+
+/** A fixed set of options, as a native select — see the note at each caller. */
+export function OptionField<T extends { id: string; name: string }>({
+  label,
+  value,
+  options,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: { id: string } | null;
+  options: readonly T[];
+  onChange: (option: T | null) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <LabelledField label={label}>
+      <select
+        value={value?.id ?? ''}
+        disabled={disabled}
+        onChange={event => onChange(options.find(option => option.id === event.currentTarget.value) ?? null)}
+        className={inputStyles()}
+      >
+        <option value="">Please select</option>
+        {options.map(option => (
+          <option key={option.id} value={option.id}>
+            {option.name}
+          </option>
+        ))}
+      </select>
+    </LabelledField>
+  );
+}
+
+/** There is no design-system textarea; `inputStyles` exists so one can borrow the chrome. */
+export function TextAreaField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  disabled?: boolean;
+}) {
+  return (
+    <LabelledField label={label}>
+      <textarea
+        value={value}
+        onChange={event => onChange(event.currentTarget.value)}
+        disabled={disabled}
+        rows={3}
+        placeholder={placeholder}
+        className={`${inputStyles()} resize-none`}
+      />
+    </LabelledField>
+  );
+}
+
+/**
+ * A repeating entity picker: chips for what is chosen, a search that adds one,
+ * and a link back to that search once the list is not empty.
+ *
+ * Skills and Fields of study are the same control with different words — both
+ * repeat, both create what they cannot find. `extra` is where the position sheet
+ * hangs its recommendations.
+ */
+export function MultiEntityField({
+  label,
+  noun,
+  addLabel,
+  items,
+  onChange,
+  spaceId,
+  relationValueTypes,
+  placeholder,
+  disabled,
+  alsoSearchSpaceIds,
+  pinnedResults,
+  pinnedLabel,
+  restLabel,
+  extra,
+}: {
+  label: string;
+  /** Used in the remove button's name, so it says what is being removed. */
+  noun: string;
+  addLabel: string;
+  items: EntityChoice[];
+  onChange: (next: EntityChoice[]) => void;
+  spaceId: string;
+  relationValueTypes: { id: string; name: string | null }[];
+  placeholder: string;
+  disabled?: boolean;
+  alsoSearchSpaceIds?: string[];
+  pinnedResults?: SearchResult[];
+  pinnedLabel?: string;
+  restLabel?: string;
+  extra?: React.ReactNode;
+}) {
+  const [isAdding, setIsAdding] = React.useState(false);
+
+  const add = (item: EntityChoice) => {
+    if (!items.some(picked => picked.id === item.id)) onChange([...items, item]);
+    setIsAdding(false);
+  };
+
+  return (
+    <Field label={label}>
+      {items.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5">
+          {items.map(item => (
+            <li key={item.id}>
+              <SmallButton
+                onClick={() => onChange(items.filter(other => other.id !== item.id))}
+                disabled={disabled}
+                aria-label={`Remove ${noun} ${item.name ?? noun}`}
+              >
+                <span>{item.name ?? 'Untitled'}</span>
+                {item.isNew && <span className="text-ctaPrimary">NEW</span>}
+                <CloseSmall />
+              </SmallButton>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {isAdding || items.length === 0 ? (
+        <SelectEntity
+          spaceId={spaceId}
+          relationValueTypes={relationValueTypes}
+          placeholder={placeholder}
+          alsoSearchSpaceIds={alsoSearchSpaceIds}
+          autoFocus={isAdding}
+          pinnedResults={pinnedResults}
+          pinnedLabel={pinnedLabel}
+          restLabel={restLabel}
+          onCreateEntity={findOrCreate}
+          onDone={(result, fromCreateFn) => add({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })}
+          width="full"
+        />
+      ) : (
+        <div className="self-start">
+          <TextButton type="button" color="ctaPrimary" onClick={() => setIsAdding(true)} disabled={disabled}>
+            {addLabel}
+          </TextButton>
+        </div>
+      )}
+
+      {extra}
+    </Field>
   );
 }
