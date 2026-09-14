@@ -27,11 +27,34 @@ export const MONTH_NAMES = [
 /** Oldest year offered. Comfortably before any plausible CV entry. */
 const EARLIEST_YEAR = 1950;
 
-export function yearOptions(now = new Date()): number[] {
-  const latest = now.getUTCFullYear();
+/**
+ * Years to offer, newest first.
+ *
+ * `aheadBy` extends the top of the list into the future. Education needs it: its
+ * End date is labelled "or expected", and a student graduating next year could
+ * not enter the year they were being asked for. Employment has no equivalent —
+ * nobody schedules the end of a job — so it keeps the present as its ceiling.
+ */
+export function yearOptions(now = new Date(), aheadBy = 0): number[] {
+  const latest = now.getUTCFullYear() + aheadBy;
   const years: number[] = [];
   for (let year = latest; year >= EARLIEST_YEAR; year--) years.push(year);
   return years;
+}
+
+/** How far ahead an expected graduation may reasonably sit. */
+export const EXPECTED_YEARS_AHEAD = 8;
+
+/**
+ * Whether a picked pair runs forwards. Both halves optional, because an unfinished
+ * pair is not wrong yet — only a complete one can be backwards.
+ *
+ * The renderer already refuses to show a negative duration, but that only hides
+ * the problem: without this the bad range still reaches the graph.
+ */
+export function isOrderedRange(start: MonthYear | null, end: MonthYear | null): boolean {
+  if (!start || !end) return true;
+  return end.year > start.year || (end.year === start.year && end.month >= start.month);
 }
 
 export function toGraphDate({ month, year }: MonthYear): string {
@@ -63,13 +86,19 @@ export function fromGraphDate(value: string | null | undefined): MonthYear | nul
  * An entry with no start at all renders as nothing rather than a lone dash —
  * about a third of the records in the graph carry no dates, and a dash on its
  * own reads as a rendering fault rather than as missing data.
+ *
+ * `isOpen` is what an absent end date means for this row. Employment says so
+ * through its status; education has three states, only one of which is ongoing.
  */
-export function formatDateRange(start: string | null, end: string | null): string | null {
+export function formatDateRange(start: string | null, end: string | null, isOpen = true): string | null {
   const from = fromGraphDate(start);
   const to = fromGraphDate(end);
 
   if (!from) return to ? `Until ${formatMonthYear(to)}` : null;
-  if (!to) return `${formatMonthYear(from)} – Present`;
+  // A missing end date does not mean "still going". A completed degree may
+  // simply not record when it finished, and calling that Present is the exact
+  // ambiguity the three-way education status was added to settle.
+  if (!to) return isOpen ? `${formatMonthYear(from)} – Present` : formatMonthYear(from);
 
   return `${formatMonthYear(from)} – ${formatMonthYear(to)}`;
 }

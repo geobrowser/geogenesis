@@ -41,11 +41,12 @@ afterEach(() => {
 /** One employer, with as many saved roles under one Employment edge as named. */
 const savedCard = (org: string, roles: string[], stint = `stint-${org}`): EmploymentCard => ({
   organization: { id: `org-${org}`, name: org },
-  edges: [{ relationId: `edge-${org}`, stintId: stint, subtree: NOTHING_TO_CLEAN }],
+  edges: [{ relationId: `edge-${org}`, stintId: stint, spaceId: null, subtree: NOTHING_TO_CLEAN }],
   entries: roles.map(role => ({
     relationId: `rel-${role}`,
+    spaceId: null,
     tenureId: `tenure-${role}`,
-    edge: { relationId: `edge-${org}`, stintId: stint, subtree: NOTHING_TO_CLEAN },
+    edge: { relationId: `edge-${org}`, stintId: stint, spaceId: null, subtree: NOTHING_TO_CLEAN },
     subtree: NOTHING_TO_CLEAN,
     subject: { id: `title-${role}`, name: role },
     startDate: '2022-06-01Z',
@@ -126,7 +127,12 @@ describe('useProfileHistory', () => {
     it('counts siblings on the row’s own edge, not across the whole card', () => {
       const card = savedCard('Geo', ['Engineer']);
       const second = savedCard('Geo', ['Product Lead'], 'stint-Geo-2');
-      second.entries[0].edge = { relationId: 'edge-Geo-2', stintId: 'stint-Geo-2', subtree: NOTHING_TO_CLEAN };
+      second.entries[0].edge = {
+        relationId: 'edge-Geo-2',
+        stintId: 'stint-Geo-2',
+        spaceId: null,
+        subtree: NOTHING_TO_CLEAN,
+      };
       mocks.employment = [
         { ...card, edges: [...card.edges, ...second.edges], entries: [...card.entries, ...second.entries] },
       ];
@@ -249,6 +255,26 @@ describe('useProfileHistory', () => {
       });
 
       expect(result.current.stagePending().relations.map(relation => relation.id)).not.toContain('stint-types');
+    });
+
+    // A proposal reaches one space. A row somebody else wrote in another is not
+    // ours to delete, and a tombstone for it would report success and change
+    // nothing.
+    it('skips a relation that lives in another space', () => {
+      const card = savedCard('Geo', ['Engineer']);
+      card.entries[0].spaceId = 'some-other-space';
+      card.edges[0].spaceId = 'some-other-space';
+      card.entries[0].edge = card.edges[0];
+      mocks.employment = [card];
+
+      const { result } = setup();
+
+      act(() => {
+        const merged = result.current.employment[0];
+        result.current.removeEntry(merged, merged.entries[0], 'employment');
+      });
+
+      expect(result.current.stagePending().relations).toEqual([]);
     });
 
     it('forgets an unsaved row rather than queuing a delete for it', () => {

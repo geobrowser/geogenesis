@@ -15,8 +15,9 @@ type Entry = EmploymentCard['entries'][number];
 
 const entry = (name: string, startDate: string | null, endDate: string | null, org = 'Geo'): Entry => ({
   relationId: `rel-${name}`,
+  spaceId: null,
   tenureId: `tenure-${name}`,
-  edge: { relationId: `edge-${org}`, stintId: `stint-${org}`, subtree: NOTHING_TO_CLEAN },
+  edge: { relationId: `edge-${org}`, stintId: `stint-${org}`, spaceId: null, subtree: NOTHING_TO_CLEAN },
   subtree: NOTHING_TO_CLEAN,
   subject: { id: `subject-${name}`, name },
   startDate,
@@ -32,7 +33,7 @@ const entry = (name: string, startDate: string | null, endDate: string | null, o
 
 const card = (org: string, entries: ReturnType<typeof entry>[]): EmploymentCard => ({
   organization: { id: `org-${org}`, name: org },
-  edges: [{ relationId: `edge-${org}`, stintId: `stint-${org}`, subtree: NOTHING_TO_CLEAN }],
+  edges: [{ relationId: `edge-${org}`, stintId: `stint-${org}`, spaceId: null, subtree: NOTHING_TO_CLEAN }],
   entries,
 });
 
@@ -171,6 +172,23 @@ describe('HistorySection', () => {
     const edit = screen.getByRole('button', { name: 'Edit role Engineer' });
     expect(edit).not.toHaveTextContent('What I did there.');
     expect(screen.getByText('What I did there.')).toBeInTheDocument();
+  });
+
+  // A completed degree may simply not record when it finished. Reading that as
+  // "Present" is the ambiguity the three-way education status exists to settle.
+  it('does not call a finished row Present just because it has no end date', () => {
+    const row = entry('Engineer', '2022-06-01Z', null);
+    renderSection([card('Geo', [{ ...row, status: 'former' }])]);
+
+    expect(screen.getByText('Jun 2022')).toBeInTheDocument();
+    expect(screen.queryByText(/Present/)).not.toBeInTheDocument();
+  });
+
+  it('still says Present for a row that is actually still running', () => {
+    const row = entry('Engineer', '2022-06-01Z', null);
+    renderSection([card('Geo', [{ ...row, status: 'current' }])]);
+
+    expect(screen.getByText(/Jun 2022 – Present/)).toBeInTheDocument();
   });
 
   it('locks every control while a save is in flight', () => {

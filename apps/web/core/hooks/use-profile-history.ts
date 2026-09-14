@@ -63,7 +63,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
 
   const queryKey = profileHistoryQueryKey(entityId);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey,
     enabled: enabled && entityId !== '',
     queryFn: () => fetchProfileHistory(entityId),
@@ -86,19 +86,42 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     staleTime: 60_000,
   });
 
-  const addPosition = React.useCallback((draft: PositionDraft) => {
-    setPending(current => ({
-      ...current,
-      positions: [...current.positions, { key: ID.createEntityId(), draft }],
-    }));
-  }, []);
+  /**
+   * The saved edge for an organisation already on the profile.
+   *
+   * "Add another role here" supplies one, because it was clicked on a card. The
+   * section's own button does not, so picking an employer that is already listed
+   * would open a second Employment edge to it — the thing one-edge-per-employer
+   * exists to prevent.
+   */
+  const savedStintFor = React.useCallback(
+    (cards: HistoryCard<HistoryEntry>[], organizationId: string) =>
+      cards.find(card => card.organization.id === organizationId)?.edges.find(edge => !isPending(edge.relationId))
+        ?.stintId,
+    []
+  );
 
-  const addEducation = React.useCallback((draft: EducationDraft) => {
-    setPending(current => ({
-      ...current,
-      education: [...current.education, { key: ID.createEntityId(), draft }],
-    }));
-  }, []);
+  const addPosition = React.useCallback(
+    (draft: PositionDraft) => {
+      const existingStintId = draft.existingStintId ?? savedStintFor(data?.employment ?? [], draft.company.id);
+      setPending(current => ({
+        ...current,
+        positions: [...current.positions, { key: ID.createEntityId(), draft: { ...draft, existingStintId } }],
+      }));
+    },
+    [data?.employment, savedStintFor]
+  );
+
+  const addEducation = React.useCallback(
+    (draft: EducationDraft) => {
+      const existingStintId = draft.existingStintId ?? savedStintFor(data?.education ?? [], draft.school.id);
+      setPending(current => ({
+        ...current,
+        education: [...current.education, { key: ID.createEntityId(), draft: { ...draft, existingStintId } }],
+      }));
+    },
+    [data?.education, savedStintFor]
+  );
 
   /**
    * What removing one row costs: the row itself, and the organisation edge it
@@ -123,6 +146,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
         relationId: entry.relationId,
         entityId: entry.tenureId,
         typeId: properties.entry,
+        spaceId: entry.spaceId,
         subtree: entry.subtree,
       },
     ];
@@ -132,6 +156,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
         relationId: entry.edge.relationId,
         entityId: entry.edge.stintId,
         typeId: properties.card,
+        spaceId: entry.edge.spaceId,
         subtree: entry.edge.subtree,
       });
     }
@@ -182,6 +207,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
               relationId: entry.relationId,
               entityId: entry.tenureId,
               typeId: PROPERTIES[kind].entry,
+              spaceId: entry.spaceId,
               subtree: entry.subtree,
             },
           ]
@@ -240,13 +266,15 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     const removedRelations: Relation[] = [];
     const removedValues: Value[] = [];
 
-    for (const removal of pending.removals) {
-      removedRelations.push(tombstone(removal.relationId, removal.typeId, removal.entityId));
+    const ours = (rowSpaceId: string | null) => rowSpaceId === null || rowSpaceId === spaceId;
 
-      // The relation's own entity goes with it, minus anything living in another
-      // space — this edit reaches one space, and a delete aimed at a row that is
-      // not in it does nothing but claim otherwise.
-      const ours = (rowSpaceId: string | null) => rowSpaceId === null || rowSpaceId === spaceId;
+    for (const removal of pending.removals) {
+      // A relation in another space is not ours to delete, and a tombstone for it
+      // would be a delete op aimed at a space the row is not in — the edit would
+      // report success and change nothing.
+      if (!ours(removal.spaceId)) continue;
+
+      removedRelations.push(tombstone(removal.relationId, removal.typeId, removal.entityId));
 
       // The type is not known per row here, and the publish layer does not read
       // one off a tombstone, so the removal's own stands in.
@@ -309,6 +337,11 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     employment: employment as EmploymentCard[],
     education: education as EducationCard[],
     isLoading,
+    /**
+     * The read failed, so what is on screen is not what is on the profile.
+     * Adding against it would duplicate whatever the failure hid.
+     */
+    isUnavailable: isError,
     hasPendingChanges: hasPendingChanges(pending),
     addPosition,
     addEducation,

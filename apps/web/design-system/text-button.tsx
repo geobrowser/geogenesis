@@ -30,7 +30,7 @@ export function TextButton({ children, color = 'grey-04', disabled = false, ...p
   // its onClick — `table-pagination` works around it by nulling the handler, and
   // the query-setup popover's Done committed while greyed out.
   return (
-    <button {...props} disabled={disabled} className={buttonStyles({ disabled, color })}>
+    <button type="button" {...props} disabled={disabled} className={buttonStyles({ disabled, color })}>
       {children}
     </button>
   );

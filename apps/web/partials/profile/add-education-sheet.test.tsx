@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -84,6 +84,31 @@ describe('AddEducationSheet', () => {
     expect(scopes).toContain(DEGREE_TYPES.join(','));
     expect(scopes).toContain(FIELD_OF_STUDY_TYPE);
     expect(scopes.filter(scope => scope === '')).toHaveLength(0);
+  });
+
+  it('will not save a range that ends before it starts', async () => {
+    renderSheet();
+
+    await userEvent.click(pickers()[0]);
+    await userEvent.click(pickers()[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Completed' }));
+    await userEvent.selectOptions(screen.getByLabelText('Start month'), '6');
+    await userEvent.selectOptions(screen.getByLabelText('Start year'), '2021');
+    await userEvent.selectOptions(screen.getByLabelText('End month'), '3');
+    await userEvent.selectOptions(screen.getByLabelText('End year'), '2019');
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('The end date is before the start date.');
+  });
+
+  // "or expected" is only true if the years reach past the present.
+  it('offers years ahead of now for an expected graduation', () => {
+    renderSheet();
+
+    const nextYear = String(new Date().getUTCFullYear() + 1);
+    const end = screen.getByLabelText('End year');
+
+    expect(within(end).getByRole('option', { name: nextYear })).toBeInTheDocument();
   });
 
   it('offers the three states dates alone cannot express', () => {

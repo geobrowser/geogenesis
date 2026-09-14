@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEGREE_INFORMATION_TYPE,
   DEGREE_PROPERTY,
   DESCRIPTION_PROPERTY,
   EDUCATION_STATUS_COMPLETED,
@@ -57,6 +58,14 @@ const role = (
   type: { id: propertyId },
   toEntity: { id: `subject-${name}`, name },
   entity: { valuesList: tenure.values ?? [], relationsList: tenure.relations ?? [] },
+});
+
+const typedAs = (typeId: string): HistoryRelationNode => ({
+  id: `types-${typeId}`,
+  entityId: `types-entity-${typeId}`,
+  type: { id: '8f151ba4de204e3c9cb499ddf96f48f1' },
+  toEntity: { id: typeId, name: null },
+  entity: null,
 });
 
 const edge = (
@@ -215,6 +224,23 @@ describe('normalizeEducation', () => {
     ]);
 
     expect(card.entries[0].fields).toEqual([{ id: '', name: 'Computer Science' }]);
+  });
+
+  // A degree marked "Still studying" writes no status by design, and its dates
+  // and description are optional — so a modern row can be as empty as a legacy
+  // one. Under a legacy school it used to inherit that school's dates and status.
+  it('does not mistake an empty modern degree for a legacy one', () => {
+    const cards = normalizeEducation([
+      edge('Northumbria', {
+        values: [dateValue(START_DATE_PROPERTY, '2001-01-01Z'), textValue(DESCRIPTION_PROPERTY, 'Somebody else’s.')],
+        relations: [role('Ph.D.', { relations: [typedAs(DEGREE_INFORMATION_TYPE)] }, DEGREE_PROPERTY)],
+      }),
+    ]);
+
+    const entry = cards[0].entries[0];
+    expect(entry.isLegacy).toBe(false);
+    expect(entry.startDate).toBeNull();
+    expect(entry.description).toBeNull();
   });
 
   it('prefers real Field of study relations over the legacy text', () => {

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatDateRange, formatDuration, fromGraphDate, toGraphDate, yearOptions } from './history-dates';
+import {
+  formatDateRange,
+  formatDuration,
+  fromGraphDate,
+  isOrderedRange,
+  toGraphDate,
+  yearOptions,
+} from './history-dates';
 
 describe('toGraphDate', () => {
   it('writes the shape the graph already uses', () => {
@@ -91,5 +98,36 @@ describe('formatDuration', () => {
 
   it('says nothing when the dates run backwards', () => {
     expect(formatDuration('2024-01-01Z', '2022-01-01Z', now)).toBeNull();
+  });
+});
+
+describe('isOrderedRange', () => {
+  it('accepts a range that runs forwards, including within one month', () => {
+    expect(isOrderedRange({ month: 3, year: 2019 }, { month: 1, year: 2021 })).toBe(true);
+    expect(isOrderedRange({ month: 3, year: 2019 }, { month: 3, year: 2019 })).toBe(true);
+  });
+
+  it('rejects one that runs backwards, including within one year', () => {
+    expect(isOrderedRange({ month: 1, year: 2021 }, { month: 3, year: 2019 })).toBe(false);
+    expect(isOrderedRange({ month: 6, year: 2019 }, { month: 3, year: 2019 })).toBe(false);
+  });
+
+  // Half a pair is not wrong yet; only a complete one can be backwards.
+  it('accepts an unfinished pair', () => {
+    expect(isOrderedRange(null, { month: 3, year: 2019 })).toBe(true);
+    expect(isOrderedRange({ month: 3, year: 2019 }, null)).toBe(true);
+    expect(isOrderedRange(null, null)).toBe(true);
+  });
+});
+
+describe('yearOptions ahead of the present', () => {
+  // Education's End is labelled "or expected", which was a promise the list of
+  // years did not keep.
+  it('reaches into the future when asked', () => {
+    expect(yearOptions(new Date('2026-09-13T00:00:00Z'), 8)[0]).toBe(2034);
+  });
+
+  it('stops at the present by default', () => {
+    expect(yearOptions(new Date('2026-09-13T00:00:00Z'))[0]).toBe(2026);
   });
 });

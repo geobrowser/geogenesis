@@ -2,7 +2,13 @@
 
 import * as React from 'react';
 
-import { type MonthYear, fromGraphDate, toGraphDate } from '~/core/profile/history-dates';
+import {
+  EXPECTED_YEARS_AHEAD,
+  type MonthYear,
+  fromGraphDate,
+  isOrderedRange,
+  toGraphDate,
+} from '~/core/profile/history-dates';
 import {
   DEGREE_TYPES,
   type EducationStatus,
@@ -74,7 +80,10 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
   const [skills, setSkills] = React.useState<EntityChoice[]>(initial?.skills ?? []);
   const [grade, setGrade] = React.useState(initial?.grade ?? '');
 
-  const canSave = pickedSchool !== null && degree !== null && !isSaving;
+  // Still studying writes no end date, so the pair only has to run forwards when
+  // one is actually going to be written.
+  const isOrdered = status === 'studying' || isOrderedRange(start, end);
+  const canSave = pickedSchool !== null && degree !== null && isOrdered && !isSaving;
 
   const save = () => {
     if (!pickedSchool || !degree) return;
@@ -89,7 +98,8 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
       endDate: status === 'studying' || !end ? null : toGraphDate(end),
       status,
       description,
-      existingStintId: school?.stintId,
+      // See the position sheet: a reopened row keeps the record it hung off.
+      existingStintId: school?.stintId ?? initial?.existingStintId,
     });
   };
 
@@ -155,15 +165,25 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
         </div>
       </fieldset>
 
-      <div className="flex flex-wrap items-end gap-4">
-        <MonthYearField label="Start" value={start} onChange={setStart} disabled={isSaving} />
-        <MonthYearField
-          label="End"
-          note="or expected"
-          value={end}
-          onChange={setEnd}
-          disabled={isSaving || status === 'studying'}
-        />
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-end gap-4">
+          <MonthYearField label="Start" value={start} onChange={setStart} disabled={isSaving} />
+          {/* "or expected" is only true if the years on offer reach into the
+              future, which they did not. */}
+          <MonthYearField
+            label="End"
+            note="or expected"
+            value={end}
+            onChange={setEnd}
+            disabled={isSaving || status === 'studying'}
+            aheadBy={EXPECTED_YEARS_AHEAD}
+          />
+        </div>
+        {!isOrdered && (
+          <span role="alert" className="text-metadata text-red-01">
+            The end date is before the start date.
+          </span>
+        )}
       </div>
 
       <label className="flex flex-col gap-1.5">

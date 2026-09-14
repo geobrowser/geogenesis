@@ -76,12 +76,14 @@ const profileHistoryQuery = (entityId: string) => `
       employment: relationsList(filter: { typeId: { is: ${JSON.stringify(EMPLOYMENT_PROPERTY)} } }) {
         id
         entityId
+        spaceId
         toEntity { id name ${orgAvatar} }
         entity { ${nested} }
       }
       education: relationsList(filter: { typeId: { is: ${JSON.stringify(EDUCATION_PROPERTY)} } }) {
         id
         entityId
+        spaceId
         toEntity { id name ${orgAvatar} }
         entity { ${nested} }
       }
@@ -105,10 +107,15 @@ export async function fetchProfileHistory(entityId: string): Promise<ProfileHist
 
   if (Either.isLeft(result)) {
     console.error(`[profile-history] failed to fetch history for ${entityId}:`, result.left);
-    // Empty rather than thrown: the sections render as "nothing here yet", which
-    // is wrong but harmless, where a throw would take the whole modal down with
-    // it and block the four fields that have nothing to do with this.
-    return { employment: [], education: [] };
+    // Thrown rather than answered with nothing. An empty answer reads as "no
+    // records", and the sections stayed editable on the strength of it — so a
+    // company already on the profile could be added again, opening a second
+    // Employment edge to the employer whose existing one the failure had hidden.
+    //
+    // React Query holds the error; the modal shows the sections as unavailable
+    // and leaves the four header fields alone, which is what a throw used to be
+    // avoided for.
+    throw new Error(`Failed to fetch profile history for ${entityId}`, { cause: result.left });
   }
 
   const entity = result.right.entity;

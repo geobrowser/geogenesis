@@ -25,6 +25,8 @@ export type PendingRemoval = {
   relationId: string;
   entityId: string;
   typeId: string;
+  /** Where the relation lives. A proposal reaches one space; this may not be it. */
+  spaceId: string | null;
   /**
    * Everything on the relation's own entity, which goes with it.
    *
@@ -92,6 +94,7 @@ function entryFromDraft(
 ): HistoryEntry {
   return {
     relationId: `${PENDING_PREFIX}${key}`,
+    spaceId: null,
     tenureId: `${PENDING_PREFIX}${key}-tenure`,
     subtree: NOTHING_TO_CLEAN,
     edge,
@@ -143,6 +146,7 @@ function merge<TEntry extends HistoryEntry>(
     const edge: HistoryEdgeRef = existing?.edges[0] ?? {
       relationId: `${PENDING_PREFIX}${organization.id}-edge`,
       stintId: addition.draft.existingStintId ?? `${PENDING_PREFIX}${organization.id}-stint`,
+      spaceId: null,
       subtree: NOTHING_TO_CLEAN,
     };
 

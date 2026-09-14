@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import { useSuggestedSkills } from '~/core/hooks/use-suggested-skills';
-import { type MonthYear, fromGraphDate, toGraphDate } from '~/core/profile/history-dates';
+import { type MonthYear, fromGraphDate, isOrderedRange, toGraphDate } from '~/core/profile/history-dates';
 import {
   EMPLOYER_TYPE,
   EMPLOYMENT_TYPE_OPTIONS,
@@ -109,7 +109,10 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
   const addSkill = (skill: EntityChoice) =>
     setSkills(current => (current.some(picked => picked.id === skill.id) ? current : [...current, skill]));
 
-  const canSave = pickedCompany !== null && title !== null && !isSaving;
+  // A role still held has no end date whatever the picker shows, so the pair only
+  // has to run forwards when it is actually going to be written.
+  const isOrdered = isCurrent || isOrderedRange(start, end);
+  const canSave = pickedCompany !== null && title !== null && isOrdered && !isSaving;
 
   const save = () => {
     if (!pickedCompany || !title) return;
@@ -126,7 +129,10 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
       endDate: isCurrent || !end ? null : toGraphDate(end),
       status: isCurrent ? 'current' : 'former',
       description,
-      existingStintId: company?.stintId,
+      // The locked employer when adding beside one, otherwise whatever the row
+      // already hung off — a reopened row keeps its edge rather than opening a
+      // second one at the same company.
+      existingStintId: company?.stintId ?? initial?.existingStintId,
     });
   };
 
@@ -195,9 +201,18 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
         <span className="text-metadata text-text">I’m in this role now</span>
       </div>
 
-      <div className="flex flex-wrap items-end gap-4">
-        <MonthYearField label="Start" value={start} onChange={setStart} disabled={isSaving} />
-        <MonthYearField label="End" value={end} onChange={setEnd} disabled={isSaving || isCurrent} />
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-end gap-4">
+          <MonthYearField label="Start" value={start} onChange={setStart} disabled={isSaving} />
+          <MonthYearField label="End" value={end} onChange={setEnd} disabled={isSaving || isCurrent} />
+        </div>
+        {/* Done is dead while this is true, and a dead button that says nothing
+            is the worst version of a validation rule. */}
+        {!isOrdered && (
+          <span role="alert" className="text-metadata text-red-01">
+            The end date is before the start date.
+          </span>
+        )}
       </div>
 
       {/* A place in the graph rather than a string, so the San Francisco on this

@@ -376,6 +376,38 @@ describe('AddPositionSheet', () => {
   });
 
   // Nothing here publishes — the draft goes back to the modal, which does.
+  // The renderer refuses to show a negative duration, which only hid the problem:
+  // the backwards range still reached the graph.
+  it('will not save a range that ends before it starts', async () => {
+    renderSheet();
+
+    await pickCompany();
+    await pickTitle();
+    await userEvent.selectOptions(screen.getByLabelText('Start month'), '6');
+    await userEvent.selectOptions(screen.getByLabelText('Start year'), '2021');
+    await userEvent.selectOptions(screen.getByLabelText('End month'), '3');
+    await userEvent.selectOptions(screen.getByLabelText('End year'), '2019');
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('The end date is before the start date.');
+  });
+
+  // A role still held writes no end date, so whatever the picker was left showing
+  // cannot be backwards.
+  it('ignores a stale end date once the role is marked current', async () => {
+    renderSheet();
+
+    await pickCompany();
+    await pickTitle();
+    await userEvent.selectOptions(screen.getByLabelText('Start month'), '6');
+    await userEvent.selectOptions(screen.getByLabelText('Start year'), '2021');
+    await userEvent.selectOptions(screen.getByLabelText('End month'), '3');
+    await userEvent.selectOptions(screen.getByLabelText('End year'), '2019');
+    await userEvent.click(screen.getByRole('checkbox'));
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
+  });
+
   it('says what Done actually does', () => {
     renderSheet();
 

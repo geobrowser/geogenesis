@@ -19,6 +19,8 @@ type Props = {
   kind: Kind;
   cards: (EmploymentCard | EducationCard)[];
   disabled?: boolean;
+  /** The read failed; what is on screen is not what is on the profile. */
+  isUnavailable?: boolean;
   onAdd: () => void;
   onAddTo: (card: HistoryCard<HistoryEntry>) => void;
   onEditEntry: (card: HistoryCard<HistoryEntry>, entry: HistoryEntry) => void;
@@ -57,19 +59,35 @@ const COPY: Record<Kind, { title: string; add: string; addHere: string; empty: s
  * where the two buttons did exactly the same work — so the last role standing
  * takes its employer with it, and that is the only way an employer leaves.
  */
-export function HistorySection({ kind, cards, disabled, onAdd, onAddTo, onEditEntry, onRemoveEntry }: Props) {
+export function HistorySection({
+  kind,
+  cards,
+  disabled,
+  isUnavailable,
+  onAdd,
+  onAddTo,
+  onEditEntry,
+  onRemoveEntry,
+}: Props) {
   const copy = COPY[kind];
 
   return (
     <section className="flex flex-col gap-2">
       <header className="flex items-center justify-between">
         <h3 className="text-metadataMedium text-grey-04">{copy.title}</h3>
-        <SmallButton onClick={onAdd} disabled={disabled}>
+        <SmallButton onClick={onAdd} disabled={disabled || isUnavailable}>
           + {copy.add}
         </SmallButton>
       </header>
 
-      {cards.length === 0 ? (
+      {/* Adding is closed while this is showing. An empty list would otherwise
+          invite adding an employer that is already there, and the second edge
+          would only surface once the read started working again. */}
+      {isUnavailable ? (
+        <p className="rounded-lg border border-dashed border-grey-02 px-3 py-4 text-center text-metadata text-grey-04">
+          We couldn’t load this. Try reloading the page.
+        </p>
+      ) : cards.length === 0 ? (
         <p className="rounded-lg border border-dashed border-grey-02 px-3 py-4 text-center text-metadata text-grey-04">
           {copy.empty}
         </p>
@@ -143,8 +161,14 @@ function CardDuration({ entries }: { entries: HistoryEntry[] }) {
   const starts = entries.map(entry => entry.startDate).filter((date): date is string => date !== null);
   if (starts.length === 0) return null;
 
-  // Open at the employer if any role there is still held.
-  const isOpen = entries.some(entry => entry.startDate !== null && entry.endDate === null);
+  // Open at the employer if any row there is still running — by its status where
+  // it has one, since a missing end date on a finished row means only that nobody
+  // wrote it down.
+  const isOpen = entries.some(entry => {
+    const status = 'status' in entry ? (entry as { status: string | null }).status : null;
+    const stillRunning = status === null || status === 'current' || status === 'studying';
+    return entry.startDate !== null && entry.endDate === null && stillRunning;
+  });
   const ends = entries.map(entry => entry.endDate).filter((date): date is string => date !== null);
 
   const duration = formatDuration([...starts].sort()[0], isOpen ? null : ([...ends].sort().at(-1) ?? null));
@@ -164,8 +188,14 @@ function EntryRow({
   onEdit: () => void;
   onRemove: () => void;
 }) {
-  const dates = formatDateRange(entry.startDate, entry.endDate);
-  const duration = formatDuration(entry.startDate, entry.endDate);
+  // What an absent end date means here. A role says so through its status, and
+  // a degree through its three-way one — where only "studying" is still running,
+  // and a status that was never recorded falls back to the old reading.
+  const status = 'status' in entry ? (entry as { status: string | null }).status : null;
+  const isOpen = status === null || status === 'current' || status === 'studying';
+
+  const dates = formatDateRange(entry.startDate, entry.endDate, isOpen);
+  const duration = isOpen || entry.endDate !== null ? formatDuration(entry.startDate, entry.endDate) : null;
   const subject = entry.subject.name ?? 'Untitled';
 
   const fields = 'fields' in entry ? (entry as { fields: { name: string | null }[] }).fields : [];

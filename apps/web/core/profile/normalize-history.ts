@@ -1,6 +1,9 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { findMediaUrlValue } from '~/core/utils/media-url';
 
 import {
+  DEGREE_INFORMATION_TYPE,
   DEGREE_PROPERTY,
   DESCRIPTION_PROPERTY,
   EDUCATION_STATUS_PROPERTY,
@@ -15,6 +18,7 @@ import {
   LOCATION_PROPERTY,
   LOCATION_TYPE_PROPERTY,
   ROLES_PROPERTY,
+  ROLE_INFORMATION_TYPE,
   SKILLS_PROPERTY,
   START_DATE_PROPERTY,
   educationStatusFromOptionId,
@@ -41,6 +45,7 @@ export type HistoryRelationNode = {
 export type HistoryEdgeNode = {
   id: string;
   entityId: string;
+  spaceId?: string;
   toEntity: {
     id: string;
     name: string | null;
@@ -87,12 +92,20 @@ const readSubtree = (entity: { valuesList: HistoryValueNode[]; relationsList: Hi
 });
 
 /** One Employment/Education relation and the entity it carries. */
-export type HistoryEdgeRef = { relationId: string; stintId: string; subtree: Subtree };
+export type HistoryEdgeRef = {
+  relationId: string;
+  stintId: string;
+  /** Where the relation itself lives, which is not always where its entity's rows do. */
+  spaceId: string | null;
+  subtree: Subtree;
+};
 
 /** One dated row under an organisation — a role held, or a degree read. */
 export type HistoryEntry = {
   /** The Roles/Degree relation, which is what removing this row deletes. */
   relationId: string;
+  /** The space that relation lives in; a removal cannot reach outside its own. */
+  spaceId: string | null;
   /** That relation's own entity, which carries the dates and status. */
   tenureId: string;
   /**
@@ -190,7 +203,9 @@ function readEntry(
   relation: HistoryRelationNode,
   stintValues: HistoryValueNode[],
   stintRelations: HistoryRelationNode[],
-  statusProperty: string
+  statusProperty: string,
+  /** The type this relation's entity carries when it was written by this modal. */
+  modernType: string
 ) {
   const tenureValues = relation.entity?.valuesList ?? [];
   const tenureRelations = relation.entity?.relationsList ?? [];
@@ -200,13 +215,23 @@ function readEntry(
   const ownStatus = relationTo(tenureRelations, statusProperty);
   const ownDescription = textFor(tenureValues, DESCRIPTION_PROPERTY);
 
-  // A tenure that carries nothing at all is the legacy case. Judged on the whole
-  // row rather than field by field, so a row with a real start and a deliberately
-  // empty end is not mistaken for one.
-  const isLegacy = ownStart === null && ownEnd === null && ownStatus === null && ownDescription === null;
+  // Two things have to be true for the fallback to apply: the row carries nothing
+  // of its own, and it is not one this modal wrote.
+  //
+  // Emptiness alone is not enough. A degree marked "Still studying" writes no
+  // status by design, and its dates and description are optional — so a perfectly
+  // modern row can be empty, and under a legacy school it would inherit that
+  // school's old dates and status. The type on the relation's own entity is the
+  // structural marker that tells them apart.
+  const isModern = (relation.entity?.relationsList ?? []).some(
+    row => row.type.id === SystemIds.TYPES_PROPERTY && row.toEntity?.id === modernType
+  );
+  const carriesNothing = ownStart === null && ownEnd === null && ownStatus === null && ownDescription === null;
+  const isLegacy = carriesNothing && !isModern;
 
   return {
     relationId: relation.id,
+    spaceId: relation.spaceId ?? null,
     tenureId: relation.entityId,
     subtree: readSubtree(relation.entity),
     subject: relation.toEntity ?? { id: relation.entityId, name: null },
@@ -255,6 +280,7 @@ function readCards<TEntry extends HistoryEntry>(
     const edgeRef: HistoryEdgeRef = {
       relationId: edge.id,
       stintId: edge.entityId,
+      spaceId: edge.spaceId ?? null,
       subtree: readSubtree(edge.entity),
     };
     const organization = edge.toEntity ?? { id: edge.entityId, name: null };
@@ -304,7 +330,8 @@ export function normalizeEmployment(edges: HistoryEdgeNode[]): EmploymentCard[] 
           relation,
           stintValues,
           stintRelations,
-          EMPLOYMENT_STATUS_PROPERTY
+          EMPLOYMENT_STATUS_PROPERTY,
+          ROLE_INFORMATION_TYPE
         );
         const tenureRelations = relation.entity?.relationsList ?? [];
 
@@ -334,7 +361,8 @@ export function normalizeEducation(edges: HistoryEdgeNode[]): EducationCard[] {
           relation,
           stintValues,
           stintRelations,
-          EDUCATION_STATUS_PROPERTY
+          EDUCATION_STATUS_PROPERTY,
+          DEGREE_INFORMATION_TYPE
         );
 
         const enrolmentRelations = relation.entity?.relationsList ?? [];

@@ -135,7 +135,12 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     if (ownerRef.current === entityId) return;
     ownerRef.current = entityId;
     resetForm();
-  }, [entityId, resetForm]);
+    // The queued positions and degrees belong to whoever was signed in when they
+    // were entered. Left alone they would publish into the new account's space,
+    // and the open sheet would still be editing the previous person's row.
+    history.discard();
+    setSheet(null);
+  }, [entityId, resetForm, history]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -428,6 +433,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                     kind="employment"
                     cards={history.employment}
                     disabled={isPublishing}
+                    isUnavailable={history.isUnavailable}
                     onAdd={() => openSheetFor('employment')}
                     onAddTo={card => openSheetFor('employment', card)}
                     onEditEntry={(card, entry) => openSheetOn('employment', card, entry)}
@@ -438,6 +444,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                     kind="education"
                     cards={history.education}
                     disabled={isPublishing}
+                    isUnavailable={history.isUnavailable}
                     onAdd={() => openSheetFor('education')}
                     onAddTo={card => openSheetFor('education', card)}
                     onEditEntry={(card, entry) => openSheetOn('education', card, entry)}

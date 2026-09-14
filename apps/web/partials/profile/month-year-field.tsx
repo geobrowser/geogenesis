@@ -16,6 +16,8 @@ type Props = {
   value: MonthYear | null;
   onChange: (value: MonthYear | null) => void;
   disabled?: boolean;
+  /** Extra years past the present, for a date that has not happened yet. */
+  aheadBy?: number;
 };
 
 const selectClassName =
@@ -28,8 +30,8 @@ const selectClassName =
  * first of January, so a day picker would advertise a precision nobody has —
  * and nobody filling in a CV remembers which Tuesday they started.
  */
-export function MonthYearField({ label, note, value, onChange, disabled }: Props) {
-  const years = React.useMemo(() => yearOptions(), []);
+export function MonthYearField({ label, note, value, onChange, disabled, aheadBy = 0 }: Props) {
+  const years = React.useMemo(() => yearOptions(new Date(), aheadBy), [aheadBy]);
 
   /**
    * The half-filled pair lives here rather than upstream.
