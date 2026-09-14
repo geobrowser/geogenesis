@@ -121,24 +121,58 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     getRecordingPlaybackUrlRef.current = recordingUrlMutation.mutateAsync;
   }, [recordingUrlMutation.mutateAsync]);
 
+  // Which recordings `urls` currently holds signed URLs for, so re-entering a card does
+  // not re-request them (GEO-2895).
+  //
+  // `enabled` is the card's activation state, and it flips every time the card crosses the
+  // viewport threshold while scrolling — in the explore feed that is a single
+  // `intersectionRatio >= 0.6` with no hysteresis, so it can flip several times on one
+  // drag. This effect depends on `enabled` and used to open with
+  // `setUrls({slot1: null, slot2: null})`, so each flip discarded URLs that were still
+  // good and issued two fresh requests. `src` going null renders the "Loading…"
+  // placeholder, which is the flicker: a card the viewer had already watched blanking and
+  // reloading as they scrolled past it.
+  //
+  // `useRecordingUrl` is a mutation rather than a query, so nothing upstream caches this —
+  // every discarded URL is a real round trip.
+  const fetchedForRef = React.useRef<string | null>(null);
+
   React.useEffect(() => {
     if (!enabled) return;
-    let cancelled = false;
-    setUrls({ slot1: null, slot2: null });
-    setError(null);
+
     if (!slot1RecordingFilename || !slot2RecordingFilename) {
       setError('This debate needs both recordings before it can be watched.');
       return;
     }
+
+    const recordingsKey = `${debate.id}|${slot1RecordingFilename}|${slot2RecordingFilename}`;
+    // Already holding URLs for exactly these recordings — a re-activation, not a new debate.
+    if (fetchedForRef.current === recordingsKey) return;
+
+    let cancelled = false;
+    fetchedForRef.current = recordingsKey;
+    const releaseKey = () => {
+      if (fetchedForRef.current === recordingsKey) fetchedForRef.current = null;
+    };
+    setUrls({ slot1: null, slot2: null });
+    setError(null);
 
     Promise.all([
       getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot1RecordingFilename }),
       getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot2RecordingFilename }),
     ])
       .then(([slot1Result, slot2Result]) => {
-        if (!cancelled) setUrls({ slot1: slot1Result.url, slot2: slot2Result.url });
+        // Scrolled away mid-flight: nothing is committed, so release the key or the card
+        // would hold a claim on URLs it never received and never fetch again.
+        if (cancelled) {
+          releaseKey();
+          return;
+        }
+        setUrls({ slot1: slot1Result.url, slot2: slot2Result.url });
       })
       .catch(caught => {
+        // Same on failure, otherwise one error leaves the card permanently on "Loading…".
+        releaseKey();
         if (!cancelled) setError(caught instanceof Error ? caught.message : 'Could not load recordings.');
       });
 
