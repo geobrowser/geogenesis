@@ -121,7 +121,10 @@ export function formatDuration(start: string | null, end: string | null, now = n
 
   // Inclusive of the month it started in, so a job begun and left in March reads
   // as a month rather than as nothing at all.
-  const total = months + 1;
+  return formatMonths(months + 1);
+}
+
+function formatMonths(total: number): string | null {
   const years = Math.floor(total / 12);
   const remainder = total % 12;
 
@@ -130,4 +133,63 @@ export function formatDuration(start: string | null, end: string | null, now = n
   if (remainder > 0) parts.push(`${remainder} ${remainder === 1 ? 'mo' : 'mos'}`);
 
   return parts.join(' ') || null;
+}
+
+/** One stretch of time a row covers. `isOpen` runs it up to the present. */
+export type DurationInterval = { start: string | null; end: string | null; isOpen: boolean };
+
+/**
+ * How long was actually spent across several rows, as against how long ago the
+ * first one started.
+ *
+ * Earliest start to latest end counts the time in between as time served: left
+ * an employer in 2016 and returned in 2024, and two years read as ten. So the
+ * stretches are merged and summed, with overlapping roles — a promotion held
+ * alongside the job it grew out of — counted once rather than twice.
+ *
+ * A row that is finished but never recorded when contributes nothing: there is
+ * no stretch to measure, and assuming one would invent tenure. An employer whose
+ * rows are all like that has no total, which is the honest answer.
+ */
+export function formatTotalDuration(intervals: DurationInterval[], now = new Date()): string | null {
+  const spans: { from: number; to: number }[] = [];
+
+  for (const interval of intervals) {
+    const start = fromGraphDate(interval.start);
+    if (!start) continue;
+
+    const end = interval.isOpen
+      ? { month: now.getUTCMonth() + 1, year: now.getUTCFullYear() }
+      : fromGraphDate(interval.end);
+    if (!end) continue;
+
+    const from = start.year * 12 + start.month;
+    const to = end.year * 12 + end.month;
+    if (to < from) continue;
+
+    spans.push({ from, to });
+  }
+
+  if (spans.length === 0) return null;
+
+  spans.sort((a, b) => a.from - b.from);
+
+  let total = 0;
+  let current = spans[0]!;
+
+  for (const span of spans.slice(1)) {
+    // Touching counts as continuous: March to June then July to September is one
+    // unbroken stretch, and inclusive months make either reading the same total.
+    if (span.from <= current.to + 1) {
+      current = { from: current.from, to: Math.max(current.to, span.to) };
+      continue;
+    }
+
+    total += current.to - current.from + 1;
+    current = span;
+  }
+
+  total += current.to - current.from + 1;
+
+  return formatMonths(total);
 }

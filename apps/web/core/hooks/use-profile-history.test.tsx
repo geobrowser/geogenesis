@@ -678,6 +678,56 @@ describe('waiting for the read to catch up', () => {
     };
   };
 
+  // Shown is not the same as queued. Kept in the queue, a published edit left
+  // Save lit and handed the same relations back — so reopening the modal before
+  // the read caught up published the whole thing a second time.
+  it('has nothing left to publish once the edit has gone out', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+    expect(result.current.hasPendingChanges).toBe(true);
+
+    act(() => result.current.settle());
+
+    expect(result.current.hasPendingChanges).toBe(false);
+    expect(result.current.stagePending()).toEqual({ values: [], relations: [] });
+    // Still on screen, though.
+    expect(result.current.employment.map(card => card.organization.name)).toEqual(['Fathom']);
+  });
+
+  // The read cannot say yet that the employer exists, so the usual lookup finds
+  // nothing and a second role there used to open a second edge to the company.
+  it('attaches a further role to the edge the published edit just created', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+    const stintId = result.current.stagePending().relations.find(r => r.type.id === EMPLOYMENT_PROPERTY)!.entityId;
+    act(() => result.current.settle());
+
+    act(() => result.current.addPosition(draft('Fathom', 'Product Lead')));
+
+    const { relations } = result.current.stagePending();
+
+    expect(relations.filter(r => r.type.id === EMPLOYMENT_PROPERTY)).toEqual([]);
+    expect(relations.find(r => r.type.id === ROLES_PROPERTY)?.fromEntity.id).toBe(stintId);
+  });
+
+  // The navbar keeps this hook mounted across a change of account, so an edit
+  // waiting to be readable would otherwise be shown over somebody else's history.
+  it('drops a published edit when the profile changes', () => {
+    const { result, rerender } = renderHook(({ entityId }) => useProfileHistory({ entityId, spaceId: SPACE_ID }), {
+      initialProps: { entityId: ENTITY_ID },
+    });
+
+    act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+    act(() => result.current.settle());
+    expect(result.current.employment.map(card => card.organization.name)).toEqual(['Fathom']);
+
+    rerender({ entityId: '0e2a6bbb2c0f4c9a9e1f5f7e2d3c4b5a' });
+
+    expect(result.current.employment).toEqual([]);
+  });
+
   it('keeps a published row on screen while the read still predates it', () => {
     const { result } = setup();
 

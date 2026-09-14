@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { formatDateRange, formatDuration } from '~/core/profile/history-dates';
+import { formatDateRange, formatDuration, formatTotalDuration } from '~/core/profile/history-dates';
 import {
   type EducationCard,
   type EmploymentCard,
@@ -171,18 +171,13 @@ function OrganizationAvatar({ name, url }: { name: string | null; url?: string |
 }
 
 function CardDuration({ entries }: { entries: HistoryEntry[] }) {
-  const starts = entries.map(entry => entry.startDate).filter((date): date is string => date !== null);
-  if (starts.length === 0) return null;
+  // Time actually spent here, not the distance from the first start to the last
+  // end — which counted a gap between two spells at the same employer as time
+  // served, and read eight years off for two years of work.
+  const duration = formatTotalDuration(
+    entries.map(entry => ({ start: entry.startDate, end: entry.endDate, isOpen: isOngoing(entry) }))
+  );
 
-  // Open at the employer if any row there is still running.
-  const isOpen = entries.some(entry => entry.startDate !== null && isOngoing(entry));
-  const ends = entries.map(entry => entry.endDate).filter((date): date is string => date !== null);
-
-  // `formatDuration` reads a null end as "through today", which is right for a
-  // row still running and wrong for one that finished without recording when.
-  if (!isOpen && ends.length === 0) return null;
-
-  const duration = formatDuration([...starts].sort()[0], isOpen ? null : ([...ends].sort().at(-1) ?? null));
   return duration ? <p className="text-metadata text-grey-04">{duration}</p> : null;
 }
 

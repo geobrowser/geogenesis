@@ -21,6 +21,7 @@ import {
   EMPLOYMENT_STATUS_PROPERTY,
   END_DATE_PROPERTY,
   FIELDS_OF_STUDY_PROPERTY,
+  FIELD_OF_STUDY_TYPE,
   GRADE_PROPERTY,
   JOB_TYPE,
   LOCATION_PROPERTY,
@@ -31,7 +32,13 @@ import {
   SKILLS_PROPERTY,
   START_DATE_PROPERTY,
 } from './history-ontology';
-import { type EducationDraft, type PositionDraft, stageEducation, stagePosition } from './stage-history';
+import {
+  type EducationDraft,
+  type PositionDraft,
+  educationDraftFromEntry,
+  stageEducation,
+  stagePosition,
+} from './stage-history';
 
 const context = { personEntityId: 'person-1', spaceId: 'space-1' };
 
@@ -395,5 +402,60 @@ describe('row identity', () => {
 
     const ids = values.map(value => value.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+/**
+ * A legacy record keeps its discipline as text on the stint, with no entity
+ * behind it. Editing such a row replaces it with a modern one, and the stint's
+ * copy only reaches legacy rows — so the text has to come along or it is gone.
+ */
+describe('educationDraftFromEntry', () => {
+  const legacyEntry = (fields: { id: string; name: string | null }[]) =>
+    ({
+      subject: { id: 'degree-bsc', name: 'B.Sc.' },
+      fields,
+      skills: [],
+      grade: null,
+      startDate: '2001-09-01Z',
+      endDate: '2004-06-01Z',
+      description: null,
+      status: 'completed' as const,
+    }) as unknown as Parameters<typeof educationDraftFromEntry>[1];
+
+  const organization = { id: 'org-northumbria', name: 'Northumbria University' };
+
+  // The bug: a date correction used to silently drop the subject of the degree.
+  it('carries the legacy text in as a field to create', () => {
+    const draft = educationDraftFromEntry(organization, legacyEntry([{ id: '', name: 'Computer Science' }]));
+
+    expect(draft.fields).toHaveLength(1);
+    expect(draft.fields[0]?.name).toBe('Computer Science');
+    expect(draft.fields[0]?.isNew).toBe(true);
+    // Needs an id of its own, or there is nothing for the relation to point at.
+    expect(draft.fields[0]?.id).not.toBe('');
+  });
+
+  it('writes that field as a real Field of study when the edit is staged', () => {
+    const draft = educationDraftFromEntry(organization, legacyEntry([{ id: '', name: 'Computer Science' }]));
+    const { values, relations } = stageEducation(draft, context);
+
+    const fieldId = draft.fields[0]!.id;
+
+    expect(values.some(value => value.entity.id === fieldId && value.value === 'Computer Science')).toBe(true);
+    expect(
+      relations.some(
+        relation =>
+          relation.fromEntity.id === fieldId &&
+          relation.type.id === SystemIds.TYPES_PROPERTY &&
+          relation.toEntity.id === FIELD_OF_STUDY_TYPE
+      )
+    ).toBe(true);
+  });
+
+  it('leaves a real Field of study alone', () => {
+    const draft = educationDraftFromEntry(organization, legacyEntry([{ id: 'field-cs', name: 'Computer Science' }]));
+
+    expect(draft.fields).toEqual([{ id: 'field-cs', name: 'Computer Science', isNew: false }]);
   });
 });

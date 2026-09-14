@@ -106,7 +106,7 @@ function entryFromDraft(
   };
 }
 
-const organizationOf = (draft: PositionDraft | EducationDraft) =>
+export const organizationOf = (draft: PositionDraft | EducationDraft) =>
   'company' in draft
     ? { id: draft.company.id, name: draft.company.name }
     : { id: draft.school.id, name: draft.school.name };

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatDateRange,
   formatDuration,
+  formatTotalDuration,
   fromGraphDate,
   isOrderedRange,
   toGraphDate,
@@ -126,5 +127,53 @@ describe('yearOptions', () => {
   // an expected graduation, which is why this is pinned.
   it('stops at the present', () => {
     expect(yearOptions(new Date('2026-09-13T00:00:00Z'))[0]).toBe(2026);
+  });
+});
+
+describe('formatTotalDuration', () => {
+  const NOW = new Date('2026-09-13T00:00:00Z');
+  const closed = (start: string, end: string) => ({ start, end, isOpen: false });
+
+  // The bug this exists for: earliest start to latest end counted the years away
+  // from an employer as years spent there.
+  it('does not count the gap between two spells at one employer', () => {
+    expect(formatTotalDuration([closed('2015-01-01Z', '2016-12-01Z'), closed('2024-01-01Z', '2025-12-01Z')], NOW)).toBe(
+      '4 yrs'
+    );
+  });
+
+  it('counts two roles held at once only once', () => {
+    expect(formatTotalDuration([closed('2020-01-01Z', '2022-12-01Z'), closed('2021-01-01Z', '2021-12-01Z')], NOW)).toBe(
+      '3 yrs'
+    );
+  });
+
+  it('joins a promotion that begins the month after the role it grew out of', () => {
+    expect(formatTotalDuration([closed('2024-01-01Z', '2024-03-01Z'), closed('2024-04-01Z', '2024-06-01Z')], NOW)).toBe(
+      '6 mos'
+    );
+  });
+
+  it('runs an unfinished row up to the present', () => {
+    expect(formatTotalDuration([{ start: '2026-01-01Z', end: null, isOpen: true }], NOW)).toBe('9 mos');
+  });
+
+  // Nothing to measure: a row that finished without recording when could have
+  // lasted a week or a decade, and assuming either invents tenure.
+  it('has no answer where the rows all ended at unknown dates', () => {
+    expect(formatTotalDuration([{ start: '2018-01-01Z', end: null, isOpen: false }], NOW)).toBeNull();
+  });
+
+  it('ignores a row with no dates at all', () => {
+    expect(formatTotalDuration([{ start: null, end: null, isOpen: false }], NOW)).toBeNull();
+  });
+
+  it('measures the rows it can when another has no end', () => {
+    expect(
+      formatTotalDuration(
+        [closed('2020-01-01Z', '2020-06-01Z'), { start: '2018-01-01Z', end: null, isOpen: false }],
+        NOW
+      )
+    ).toBe('6 mos');
   });
 });

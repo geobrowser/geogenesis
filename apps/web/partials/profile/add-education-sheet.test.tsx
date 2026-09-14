@@ -138,6 +138,32 @@ describe('AddEducationSheet', () => {
     expect(within(end).queryByRole('option', { name: nextYear })).not.toBeInTheDocument();
   });
 
+  // Capping the years was not enough on its own: in September, December of this
+  // year was still one click away.
+  it('does not offer a month later this year either', async () => {
+    renderSheet();
+
+    await userEvent.selectOptions(screen.getByLabelText('Start year'), String(new Date().getUTCFullYear()));
+
+    const months = within(screen.getByLabelText('Start month')).getAllByRole('option');
+    const laterThisYear = months.slice(new Date().getUTCMonth() + 2);
+
+    // `slice` past the current month; every one of those is out of reach.
+    for (const month of laterThisYear) expect(month).toBeDisabled();
+    expect(months[new Date().getUTCMonth() + 1]).not.toBeDisabled();
+  });
+
+  // The other order, which no disabled option can catch: December first, then
+  // this year. The month goes rather than a future date being stored.
+  it('drops a month that the year turns into the future', async () => {
+    const { onSave } = renderSheet();
+
+    await userEvent.selectOptions(screen.getByLabelText('Start month'), '12');
+    await userEvent.selectOptions(screen.getByLabelText('Start year'), String(new Date().getUTCFullYear()));
+
+    expect(screen.getByLabelText('Start month')).toHaveValue('');
+  });
+
   it('offers the three states dates alone cannot express', () => {
     renderSheet();
 

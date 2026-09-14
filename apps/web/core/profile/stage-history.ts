@@ -540,10 +540,19 @@ export function educationDraftFromEntry(
   return {
     school: { id: organization.id, name: organization.name, isNew: false },
     degree: { id: entry.subject.id, name: entry.subject.name, isNew: false },
-    // The legacy field-of-study text is shown with no id behind it. There is no
-    // entity to relate to, so it cannot come back into a draft — it stays where
-    // it is, on the stint, until someone picks a real Field of study.
-    fields: entry.fields.filter(field => field.id !== '').map(field => ({ ...field, isNew: false })),
+    // The legacy field-of-study text is shown with no id behind it, because it is
+    // text on the stint rather than a relation to anything.
+    //
+    // Editing is where it stops being text. The replacement row is a modern one,
+    // and the stint's copy only reaches legacy rows — so dropping it here meant a
+    // date correction silently lost the subject the degree was in. Carried in as
+    // an entity to create instead, which is the migration this text has always
+    // been described as waiting for: it shows in the sheet as a new Field of
+    // study, named and typed when the modal saves, and can be removed there like
+    // any other.
+    fields: entry.fields.map(field =>
+      field.id === '' ? { id: ID.createEntityId(), name: field.name, isNew: true } : { ...field, isNew: false }
+    ),
     skills: entry.skills.map(skill => ({ id: skill.id, name: skill.name, isNew: false })),
     grade: entry.grade === null ? '' : String(entry.grade),
     startDate: entry.startDate,

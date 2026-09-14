@@ -23,6 +23,7 @@ import {
   isPending,
   mergePendingEducation,
   mergePendingEmployment,
+  organizationOf,
   pendingDraftFor,
   pendingOrganizationIds,
   replacePendingAddition,
@@ -57,6 +58,27 @@ const VISIBLE_RELATION_TYPES = new Set([EMPLOYMENT_PROPERTY, ROLES_PROPERTY, EDU
 
 /** What a published edit expects the next read to show, once it lands. */
 type Expectation = { added: string[]; removed: string[]; since: number };
+
+/**
+ * An edit that has been published but is not readable yet.
+ *
+ * Held apart from the queue rather than left in it. The rows are kept only so
+ * the modal can go on showing them; they are no longer the user's to change,
+ * and leaving them queued meant Save stayed lit and `stagePending()` handed the
+ * already-published relations back for a second proposal.
+ */
+type Published = {
+  /** The queue as it was, for display only. */
+  rows: PendingHistory;
+  /**
+   * Stints minted for organisations that were new to the profile.
+   *
+   * So a further row at one of them joins the edge just published rather than
+   * opening a second — the read cannot say yet that the first one exists.
+   */
+  stints: Record<string, string>;
+  expectation: Expectation;
+};
 
 /**
  * How long to keep showing a published edit the read has not caught up with.
@@ -160,9 +182,10 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    * back, and the edit looked like it had been lost — `settleSuccess` in
    * `use-edit-profile` avoids exactly this for the name and photo, and says so.
    *
-   * So the rows stay until a read agrees with them.
+   * So the rows stay until a read agrees with them — here rather than in
+   * `pending`, which is what can still be edited and published.
    */
-  const [awaiting, setAwaiting] = React.useState<Expectation | null>(null);
+  const [published, setPublished] = React.useState<Published | null>(null);
 
   const queryKey = profileHistoryQueryKey(entityId);
 
@@ -173,7 +196,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     staleTime: 60_000,
     // Only while something is outstanding. Asking again on a timer is the only
     // way to learn the indexer has caught up; there is nothing to subscribe to.
-    refetchInterval: awaiting ? 5_000 : false,
+    refetchInterval: published ? 5_000 : false,
   });
 
   /**
@@ -183,7 +206,23 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    * has no edge yet. Without this a card showed an initial before saving and a
    * logo afterwards, which made the merged view look like it was guessing.
    */
-  const pendingOrgIds = React.useMemo(() => pendingOrganizationIds(pending), [pending]);
+  /**
+   * Everything the modal should show over the graph's answer: the queue, and an
+   * edit already published that the read has not caught up with.
+   */
+  const shown = React.useMemo(
+    (): PendingHistory =>
+      published === null
+        ? pending
+        : {
+            positions: [...published.rows.positions, ...pending.positions],
+            education: [...published.rows.education, ...pending.education],
+            removals: [...published.rows.removals, ...pending.removals],
+          },
+    [pending, published]
+  );
+
+  const pendingOrgIds = React.useMemo(() => pendingOrganizationIds(shown), [shown]);
 
   const { data: pendingAvatars } = useQuery({
     queryKey: entityAvatarsQueryKey(pendingOrgIds),
@@ -216,8 +255,12 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    */
   const attachmentFor = React.useCallback(
     (kind: Kind, organizationId: string) =>
-      savedStintFor(kind === 'employment' ? (data?.employment ?? []) : (data?.education ?? []), organizationId),
-    [data?.education, data?.employment, savedStintFor]
+      savedStintFor(kind === 'employment' ? (data?.employment ?? []) : (data?.education ?? []), organizationId) ??
+      // The read is a minute or two behind a publish, and cannot say yet that an
+      // employer added in it exists. Without this, adding a second role there
+      // before it catches up opens a second edge to the same company.
+      published?.stints[organizationId],
+    [data?.education, data?.employment, published, savedStintFor]
   );
 
   const addPosition = React.useCallback(
@@ -333,17 +376,27 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    * publish layer reads only the id off a tombstone, so these carry the minimum a
    * delete needs rather than the row as it stands in the graph.
    */
-  const staged = React.useMemo((): StagedRows & { expectation: Expectation | null } => {
+  const staged = React.useMemo((): StagedRows & {
+    expectation: Expectation | null;
+    stints: Record<string, string>;
+  } => {
     const context = { personEntityId: entityId, spaceId };
     const mint = () => ID.createEntityId();
 
+    const sharedPositions = shareStintsByOrganization(pending.positions, mint);
+    const sharedEducation = shareStintsByOrganization(pending.education, mint);
+
+    // Which stint each organisation's rows were written under. Remembered past a
+    // publish so a row added at the same employer before the read catches up
+    // joins that edge rather than opening a second one to it.
+    const stints: Record<string, string> = {};
+    for (const { draft, newStintId } of [...sharedPositions, ...sharedEducation]) {
+      stints[organizationOf(draft).id] = newStintId;
+    }
+
     const additions = [
-      ...shareStintsByOrganization(pending.positions, mint).map(({ draft, newStintId }) =>
-        stagePosition(draft, context, newStintId)
-      ),
-      ...shareStintsByOrganization(pending.education, mint).map(({ draft, newStintId }) =>
-        stageEducation(draft, context, newStintId)
-      ),
+      ...sharedPositions.map(({ draft, newStintId }) => stagePosition(draft, context, newStintId)),
+      ...sharedEducation.map(({ draft, newStintId }) => stageEducation(draft, context, newStintId)),
     ];
 
     const tombstone = (id: string, typeId: string, ownerId: string): Relation => ({
@@ -416,6 +469,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
         expectedThere.length > 0 || expectedGone.length > 0
           ? { added: expectedThere, removed: expectedGone, since: 0 }
           : null,
+      stints,
     };
   }, [data?.education, data?.employment, entityId, pending, spaceId]);
 
@@ -457,15 +511,17 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
   const settle = React.useCallback(() => {
     const expectation = staged.expectation;
 
-    if (expectation === null) {
-      setPending(NOTHING_PENDING);
-      void queryClient.invalidateQueries({ queryKey });
-      return;
-    }
-
-    setAwaiting({ ...expectation, since: Date.now() });
+    // The queue empties either way. What was published is not the user's to edit
+    // or publish again, and leaving it queued kept Save lit and handed the same
+    // relations back to a second proposal.
+    setPending(NOTHING_PENDING);
+    setPublished(
+      expectation === null
+        ? null
+        : { rows: pending, stints: staged.stints, expectation: { ...expectation, since: Date.now() } }
+    );
     void queryClient.invalidateQueries({ queryKey });
-  }, [queryClient, queryKey, staged.expectation]);
+  }, [pending, queryClient, queryKey, staged.expectation, staged.stints]);
 
   /**
    * Let go of a published edit once the read catches up with it.
@@ -476,44 +532,53 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    * deadline below.
    */
   React.useEffect(() => {
-    if (awaiting === null) return;
+    if (published === null) return;
 
-    const isLate = Date.now() - awaiting.since > INDEXING_DEADLINE_MS;
+    const isLate = Date.now() - published.expectation.since > INDEXING_DEADLINE_MS;
 
     // Past the deadline the graph wins even though it disagrees. An edit that
     // never lands must not leave the modal insisting on it for the rest of the
     // session.
-    if (!isLate && !(data && reflects(data, awaiting))) return;
+    if (!isLate && !(data && reflects(data, published.expectation))) return;
 
     if (isLate) {
       console.warn('[profile-history] gave up waiting for a published edit to be readable', {
         entityId,
-        waitedMs: Date.now() - awaiting.since,
+        waitedMs: Date.now() - published.expectation.since,
       });
     }
 
-    setPending(NOTHING_PENDING);
-    setAwaiting(null);
-  }, [awaiting, data, dataUpdatedAt, entityId]);
+    setPublished(null);
+  }, [published, data, dataUpdatedAt, entityId]);
 
   /**
-   * Dismissing the modal forgets the draft — but not an edit already published.
-   * That one is not the user's to take back, and dropping it would put the
-   * pre-save state back on screen until the indexer caught up.
+   * Nothing survives a change of profile.
+   *
+   * This hook outlives one by design — the navbar keeps it mounted so a publish
+   * the user walked away from still lands — so an edit waiting to become
+   * readable would otherwise be shown over somebody else's history, and its
+   * minted stints offered to rows at their employers.
    */
-  const discard = React.useCallback(() => {
-    if (awaiting !== null) return;
+  React.useEffect(() => {
     setPending(NOTHING_PENDING);
-  }, [awaiting]);
+    setPublished(null);
+  }, [entityId]);
+
+  /**
+   * Dismissing the modal forgets the draft. An edit already published is not in
+   * the draft to forget — it is held separately, and stays on screen until the
+   * read catches up with it.
+   */
+  const discard = React.useCallback(() => setPending(NOTHING_PENDING), []);
 
   const employment = React.useMemo(
-    () => mergePendingEmployment(data?.employment ?? [], pending.positions, pending.removals, pendingAvatars),
-    [data?.employment, pending, pendingAvatars]
+    () => mergePendingEmployment(data?.employment ?? [], shown.positions, shown.removals, pendingAvatars),
+    [data?.employment, shown, pendingAvatars]
   );
 
   const education = React.useMemo(
-    () => mergePendingEducation(data?.education ?? [], pending.education, pending.removals, pendingAvatars),
-    [data?.education, pending, pendingAvatars]
+    () => mergePendingEducation(data?.education ?? [], shown.education, shown.removals, pendingAvatars),
+    [data?.education, shown, pendingAvatars]
   );
 
   return {

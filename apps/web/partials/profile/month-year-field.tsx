@@ -24,6 +24,17 @@ const selectClassName =
 export function MonthYearField({ label, value, onChange, disabled }: Props) {
   const years = React.useMemo(() => yearOptions(), []);
 
+  // The year list stops at the present, but the months did not — in September,
+  // December of this year was still one click away, which is a date that has not
+  // happened for a role said to have started or a degree said to have finished.
+  const { thisYear, thisMonth } = React.useMemo(() => {
+    const now = new Date();
+    return { thisYear: now.getUTCFullYear(), thisMonth: now.getUTCMonth() + 1 };
+  }, []);
+
+  const isAhead = (candidateMonth: number, candidateYear: number) =>
+    candidateYear === thisYear && candidateMonth > thisMonth;
+
   /**
    * The half-filled pair lives here rather than upstream.
    *
@@ -39,8 +50,14 @@ export function MonthYearField({ label, value, onChange, disabled }: Props) {
   const [year, setYear] = React.useState(value?.year ?? 0);
 
   const update = (next: { month?: number; year?: number }) => {
-    const nextMonth = next.month ?? month;
     const nextYear = next.year ?? year;
+    const candidate = next.month ?? month;
+
+    // Disabling the option covers picking a month with the year already set. The
+    // other order needs this: December chosen first, then this year, is a pair
+    // nothing rejected. The month goes rather than the date being stored ahead of
+    // now — the field then reads as unfinished, which is what it is.
+    const nextMonth = isAhead(candidate, nextYear) ? 0 : candidate;
 
     setMonth(nextMonth);
     setYear(nextYear);
@@ -60,7 +77,7 @@ export function MonthYearField({ label, value, onChange, disabled }: Props) {
         >
           <option value="">Month</option>
           {MONTH_NAMES.map((name, index) => (
-            <option key={name} value={index + 1}>
+            <option key={name} value={index + 1} disabled={isAhead(index + 1, year)}>
               {name}
             </option>
           ))}
