@@ -845,10 +845,15 @@ export function ClaimsTab({
           // from the one place it must not apply. Nor is it drawn signed out, where the viewer has
           // no positions for it to hide and it would be a switch with nothing behind it.
           //
-          // Inline on every surface that has one now. Explore's row used to also carry the source
-          // picker, which left "Hide my positions" nothing to fit into and pushed it onto a line of
-          // its own; with the picker gone it sits at the end of the menus like Lobby's does.
-          trailingInline
+          // Lobby's switch inline, Explore's wrapped — a difference in the labels rather than in the
+          // surfaces. `--text-metadata` is 16px, so "Hide my positions" and its toggle want ~170px
+          // against the ~368px a 400px panel has to spend, and the two menu pills have already taken
+          // most of it. Dropping the source picker bought room but not that much: the row still
+          // wraps, and inline there means `ml-auto` pinning the switch to the right margin of a line
+          // it is alone on — the stray control the wrapper exists to prevent.
+          //
+          // "Matches only" is short enough to sit beside them, which is why it says so.
+          trailingInline={isLobby}
           trailing={
             isLobby ? (
               trailing
@@ -1073,9 +1078,15 @@ type SpaceTopicFiltersProps = {
   /**
    * Keep {@link trailing} on the menus' own line, at the far end, however narrow the row gets.
    *
-   * For a control short enough to fit there at any width this row is drawn at — "Matches only".
-   * The default wraps it to a full-width line of its own once the row is narrow, which is right for
-   * a long label and wasteful for a short one.
+   * Only for a control that genuinely fits there at every width this row is drawn at, because it
+   * gives up the wrapper's protection: `ml-auto` on a control that *has* wrapped pins it to the
+   * right margin of a line it is alone on, which reads as something stray rather than as the end of
+   * the filter row.
+   *
+   * The measurement, since it is closer than it looks: `--text-metadata` is 16px, the two menu
+   * pills take the better part of the ~368px a 400px panel has, and what is left fits "Matches
+   * only" and not "Hide my positions". So this is a claim about a *label*, not about a surface —
+   * check a new one against the narrowest row it will be drawn in rather than inheriting it.
    */
   trailingInline?: boolean;
 };

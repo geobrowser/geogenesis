@@ -2362,17 +2362,24 @@ describe('claims the viewer has already answered', () => {
     });
 
     /**
-     * Inline, at the end of the menus — which it only fits because the source picker left.
+     * Wraps to its own line, left-aligned, where the row is narrow — which in a 400px panel is
+     * always.
      *
-     * While Explore's row also carried that dropdown, this label had nowhere to go in a ~400px
-     * panel and wrapped onto a line of its own. Dropping the picker (GEO-2863) is what bought the
-     * room, and is half the reason it went.
+     * `--text-metadata` is 16px, so this label and its toggle want about 170px, and the two menu
+     * pills have taken most of the ~368px the panel has. Dropping the source picker bought room but
+     * not enough, and pinned right on a line of its own the switch reads as a stray control rather
+     * than as the end of the filter row.
+     *
+     * Lobby's "Matches only" is short enough to sit beside the pills, and says so with
+     * `trailingInline` — the difference is the label, not the surface.
      */
-    it('sits at the end of the menus rather than wrapping', async () => {
+    it('wraps to its own line, left-aligned, rather than pinning right', async () => {
       render(<ClaimsTab />);
       await showAllClaims();
 
-      expect(screen.getByRole('switch', SWITCH).parentElement?.className).toBe('ml-auto');
+      const end = screen.getByRole('switch', SWITCH).parentElement;
+      expect(end?.className).toContain('w-full');
+      expect(end?.className).toContain('@lg:ml-auto');
     });
 
     it('leaves Lobby’s own switch inline at the end of the menus', async () => {
