@@ -67,11 +67,7 @@ function inDialog(sheet: React.ReactNode) {
 function renderSheet(overrides: Partial<Parameters<typeof AddEducationSheet>[0]> = {}) {
   const onSave = vi.fn();
   const onCancel = vi.fn();
-  render(
-    inDialog(
-      <AddEducationSheet spaceId="space-1" isSaving={false} onCancel={onCancel} onSave={onSave} {...overrides} />
-    )
-  );
+  render(inDialog(<AddEducationSheet spaceId="space-1" onCancel={onCancel} onSave={onSave} {...overrides} />));
   return { onSave, onCancel };
 }
 

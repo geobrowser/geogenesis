@@ -336,7 +336,6 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                     ((history.draftFor(sheet.editing.entry) as PositionDraft | undefined) ??
                       positionDraftFromEntry(sheet.editing.card.organization, sheet.editing.entry as EmploymentEntry))
                   }
-                  isSaving={false}
                   onCancel={() => setSheet(null)}
                   onSave={draft => {
                     const editing = sheet.editing;
@@ -354,7 +353,6 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                     ((history.draftFor(sheet.editing.entry) as EducationDraft | undefined) ??
                       educationDraftFromEntry(sheet.editing.card.organization, sheet.editing.entry as EducationEntry))
                   }
-                  isSaving={false}
                   onCancel={() => setSheet(null)}
                   onSave={draft => {
                     const editing = sheet.editing;

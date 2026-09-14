@@ -44,7 +44,6 @@ type Props = {
   company?: { id: string; name: string | null; stintId: string; isNew?: boolean };
   /** The row being changed, when this is an edit rather than an addition. */
   initial?: PositionDraft;
-  isSaving: boolean;
   onCancel: () => void;
   onSave: (draft: PositionDraft) => void;
 };
@@ -57,7 +56,7 @@ type Props = {
  * in here, so there is nothing a separate edit form could offer that this one
  * does not already ask.
  */
-export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel, onSave }: Props) {
+export function AddPositionSheet({ spaceId, company, initial, onCancel, onSave }: Props) {
   // Not `isNew: false`. A second role at a company created moments ago in
   // this same modal still has to write that company's name and type — and
   // asserting otherwise here published an Employment relation pointing at an
@@ -118,7 +117,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
   // A role still held has no end date whatever the picker shows, so the pair only
   // has to run forwards when it is actually going to be written.
   const isOrdered = isCurrent || isOrderedRange(start, end);
-  const canSave = pickedCompany !== null && title !== null && isOrdered && !isSaving;
+  const canSave = pickedCompany !== null && title !== null && isOrdered;
 
   const save = () => {
     if (!pickedCompany || !title) return;
@@ -143,13 +142,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
   };
 
   return (
-    <HistorySheet
-      title={initial ? 'Edit role' : 'Add role'}
-      isSaving={isSaving}
-      canSave={canSave}
-      onCancel={onCancel}
-      onSave={save}
-    >
+    <HistorySheet title={initial ? 'Edit role' : 'Add role'} canSave={canSave} onCancel={onCancel} onSave={save}>
       {/* Locked rather than hidden in the promotion case, so it still reads as an
           answered question and the role visibly attaches to that employer. */}
       <EntityField
@@ -187,7 +180,6 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
         value={employmentType}
         options={EMPLOYMENT_TYPE_OPTIONS}
         onChange={setEmploymentType}
-        disabled={isSaving}
       />
 
       {/* Above the dates, because it decides what the End picker is for: ticking
@@ -199,7 +191,6 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
         <Checkbox
           checked={isCurrent}
           onChange={() => setIsCurrent(current => !current)}
-          disabled={isSaving}
           role="checkbox"
           aria-checked={isCurrent}
           aria-label="I’m in this role now"
@@ -209,8 +200,8 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
 
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap items-end gap-4">
-          <MonthYearField label="Start" value={start} onChange={setStart} disabled={isSaving} />
-          <MonthYearField label="End" value={end} onChange={setEnd} disabled={isSaving || isCurrent} />
+          <MonthYearField label="Start" value={start} onChange={setStart} />
+          <MonthYearField label="End" value={end} onChange={setEnd} disabled={isCurrent} />
         </div>
         {/* Done is dead while this is true, and a dead button that says nothing
             is the worst version of a validation rule. */}
@@ -238,7 +229,6 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
         value={locationType}
         options={LOCATION_TYPE_OPTIONS}
         onChange={setLocationType}
-        disabled={isSaving}
       />
 
       <TextAreaField
@@ -246,7 +236,6 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
         value={description}
         onChange={setDescription}
         placeholder="Projects, problems you solved, or results you achieved"
-        disabled={isSaving}
       />
 
       <MultiEntityField
@@ -258,7 +247,6 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
         spaceId={spaceId}
         relationValueTypes={SKILL_FILTER}
         placeholder="Example: Product management"
-        disabled={isSaving}
         alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
         pinnedResults={pinnedSkills}
         pinnedLabel="Recommended for this role"
@@ -273,10 +261,7 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
               <ul className="flex flex-wrap gap-1.5">
                 {suggestions.map(suggestion => (
                   <li key={suggestion.id}>
-                    <SmallButton
-                      onClick={() => addSkill({ id: suggestion.id, name: suggestion.name, isNew: false })}
-                      disabled={isSaving}
-                    >
+                    <SmallButton onClick={() => addSkill({ id: suggestion.id, name: suggestion.name, isNew: false })}>
                       + {suggestion.name ?? 'Untitled'}
                     </SmallButton>
                   </li>

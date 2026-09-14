@@ -16,7 +16,6 @@ import { TextButton } from '~/design-system/text-button';
 
 type Props = {
   title: string;
-  isSaving: boolean;
   canSave: boolean;
   onCancel: () => void;
   onSave: () => void;
@@ -42,11 +41,11 @@ type Props = {
  * thing, so nothing is duplicated for screen readers alone. This sheet therefore
  * only makes sense inside a Radix dialog, which is the only place it is used.
  */
-export function HistorySheet({ title, isSaving, canSave, onCancel, onSave, children }: Props) {
+export function HistorySheet({ title, canSave, onCancel, onSave, children }: Props) {
   return (
     <div className="flex flex-col">
       <header className="flex items-center gap-2 px-5 py-4">
-        <SquareButton onClick={onCancel} disabled={isSaving} icon={<CheckCloseSmall />} aria-label="Back" />
+        <SquareButton onClick={onCancel} icon={<CheckCloseSmall />} aria-label="Back" />
         <Title asChild>
           <h2 className="text-smallTitle text-text">{title}</h2>
         </Title>
@@ -59,7 +58,7 @@ export function HistorySheet({ title, isSaving, canSave, onCancel, onSave, child
           <p className="text-metadata text-grey-04">Added to your profile when you save it.</p>
         </Description>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel} disabled={isSaving}>
+          <Button type="button" variant="secondary" onClick={onCancel}>
             Cancel
           </Button>
           <Button type="button" onClick={onSave} disabled={!canSave}>

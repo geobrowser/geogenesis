@@ -25,7 +25,6 @@ type Props = {
   school?: { id: string; name: string | null; stintId: string; isNew?: boolean };
   /** The row being changed, when this is an edit rather than an addition. */
   initial?: EducationDraft;
-  isSaving: boolean;
   onCancel: () => void;
   onSave: (draft: EducationDraft) => void;
 };
@@ -60,7 +59,7 @@ const STATUS_OPTIONS: { value: EducationStatus; label: string }[] = [
  * is made explicitly here, and "Still studying" writes no status at all rather
  * than inventing an option the ontology does not have.
  */
-export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel, onSave }: Props) {
+export function AddEducationSheet({ spaceId, school, initial, onCancel, onSave }: Props) {
   // Not `isNew: false`. A second role at a company created moments ago in
   // this same modal still has to write that company's name and type — and
   // asserting otherwise here published an Employment relation pointing at an
@@ -83,7 +82,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
   // Still studying writes no end date, so the pair only has to run forwards when
   // one is actually going to be written.
   const isOrdered = status === 'studying' || isOrderedRange(start, end);
-  const canSave = pickedSchool !== null && degree !== null && isOrdered && !isSaving;
+  const canSave = pickedSchool !== null && degree !== null && isOrdered;
 
   const save = () => {
     if (!pickedSchool || !degree) return;
@@ -106,7 +105,6 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
   return (
     <HistorySheet
       title={initial ? 'Edit education' : 'Add education'}
-      isSaving={isSaving}
       canSave={canSave}
       onCancel={onCancel}
       onSave={save}
@@ -145,7 +143,6 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
         spaceId={spaceId}
         relationValueTypes={FIELD_OF_STUDY_FILTER}
         placeholder="Example: Business"
-        disabled={isSaving}
       />
 
       <fieldset className="flex flex-col gap-1.5">
@@ -157,7 +154,6 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
               variant={status === option.value ? 'primary' : 'secondary'}
               aria-pressed={status === option.value}
               onClick={() => setStatus(option.value)}
-              disabled={isSaving}
             >
               {option.label}
             </SmallButton>
@@ -167,14 +163,14 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
 
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap items-end gap-4">
-          <MonthYearField label="Start" value={start} onChange={setStart} disabled={isSaving} />
+          <MonthYearField label="Start" value={start} onChange={setStart} />
           {/* No expected graduation, despite it being the obvious thing to want.
               "Still studying" writes no status — the ontology has no in-progress
               option — so an absent end date is the only thing saying a degree is
               unfinished. An expected end would take that away and read as having
               finished in the future: sorted among the completed, and measured to
               a date that has not happened. It needs a status to hang off first. */}
-          <MonthYearField label="End" value={end} onChange={setEnd} disabled={isSaving || status === 'studying'} />
+          <MonthYearField label="End" value={end} onChange={setEnd} disabled={status === 'studying'} />
         </div>
         {!isOrdered && (
           <span role="alert" className="text-metadata text-red-01">
@@ -192,7 +188,6 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
           step="any"
           value={grade}
           onChange={event => setGrade(event.currentTarget.value)}
-          disabled={isSaving}
           placeholder="Example: 3.8"
         />
       </LabelledField>
@@ -202,7 +197,6 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
         value={description}
         onChange={setDescription}
         placeholder="Activities, societies, or what you focused on"
-        disabled={isSaving}
       />
 
       <MultiEntityField
@@ -214,7 +208,6 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
         spaceId={spaceId}
         relationValueTypes={SKILL_FILTER}
         placeholder="Example: Statistics"
-        disabled={isSaving}
         alsoSearchSpaceIds={TAXONOMY_SPACE_ID_LIST}
       />
     </HistorySheet>

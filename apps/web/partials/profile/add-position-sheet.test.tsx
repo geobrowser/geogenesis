@@ -94,7 +94,6 @@ function inDialog(sheet: React.ReactNode) {
 function renderSheet(overrides: Partial<Parameters<typeof AddPositionSheet>[0]> = {}) {
   const props = {
     spaceId: 'space-1',
-    isSaving: false,
     onCancel: vi.fn(),
     onSave: vi.fn(),
     ...overrides,
