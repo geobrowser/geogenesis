@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
+import { AUTO_PAGES_WITHOUT_ROWS } from './use-bounded-paging';
 import { debatesHubExploreSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
@@ -2319,6 +2320,37 @@ describe('claims the viewer has already answered', () => {
     await waitFor(() => expect(screen.queryByText('One you have answered')).toBeNull());
     expect(screen.queryByText(/You’ve answered every claim here/)).toBeNull();
     expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
+  });
+
+  /**
+   * When the list stops advancing, it has to say so and offer to go on.
+   *
+   * The empty state carries that offer when there is nothing on screen; with rows on screen
+   * `HubQueryState` draws the rows instead, so the control has to live under the list. That is the
+   * ordinary shape of hitting the cap — a few claims found, then a run of pages with none — and a
+   * list that simply stopped, silently, is the failure the bound is supposed to be better than.
+   */
+  it('offers a way to go on when it stops advancing under a list that has rows', async () => {
+    mocks.taggedHasNextPage = true;
+    mocks.taggedClaims[DEBATE] = [featuredClaim(FEATURED_B, 'One you have not')];
+    mocks.debateClaimRows = [];
+
+    const view = render(<ClaimsTab />);
+    await showAllClaims();
+    expect(await screen.findByText('One you have not')).toBeInTheDocument();
+
+    // Page after page of claims the viewer has already answered, so the list never grows.
+    for (let page = 1; page <= AUTO_PAGES_WITHOUT_ROWS; page += 1) {
+      const answered = `${FEATURED_A.slice(0, -2)}${String(page).padStart(2, '0')}`;
+      mocks.taggedClaims[DEBATE] = [...mocks.taggedClaims[DEBATE]!, featuredClaim(answered, `Answered ${page}`)];
+      mocks.debateClaimRows = [...mocks.debateClaimRows, answeredRow(answered)];
+      view.rerender(<ClaimsTab />);
+    }
+
+    expect(await screen.findByRole('button', { name: 'Keep looking' })).toBeInTheDocument();
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
+    // The rows it did find are still there — this is a list that paused, not one that emptied.
+    expect(screen.getByText('One you have not')).toBeInTheDocument();
   });
 
   /**

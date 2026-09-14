@@ -801,6 +801,10 @@ export function ClaimsTab({
     // has been fetched than the row count suggests. Starting the next page a screenful or two early
     // is what keeps that from reading as a list that stops every time you reach the bottom.
     rootMargin: '1200px',
+    // The hub scrolls in its own panel, and `rootMargin` expands the root — so measured against the
+    // viewport the lead above buys nothing: the sentinel is clipped by the panel until it has been
+    // scrolled to, which is the moment the lead was meant to come before.
+    rootSelector: '[data-debates-hub-scroll]',
   });
 
   /**
