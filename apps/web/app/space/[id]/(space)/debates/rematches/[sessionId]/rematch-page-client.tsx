@@ -44,6 +44,7 @@ import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
 import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
+import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
 import { HideMyPositionsSwitch, MatchesOnlySwitch } from '~/core/debates/matchmaking/matches-only-switch';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
@@ -1625,6 +1626,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // hook. `narrowedClaims` is downstream of both, so a page they empty would not have counted.
     loaded: taggedCatalog.length,
     visible: visibleClaims.length,
+    settling: !rowsSettled,
     hasNextPage: taggedHasNextPage,
     fetchNextPage: fetchNextTaggedPage,
     // Every dimension the tagged query is keyed by, plus the source that chooses between the two
@@ -1633,7 +1635,26 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     resetKey: `${taggedListKey}:${source}`,
   });
 
-  const stillPaging = graphFiltered && visibleClaims.length === 0 && autoPages;
+  const stillPaging = graphFiltered && visibleClaims.length === 0 && (autoPages || !rowsSettled);
+
+  /**
+   * Both paging states belong to the tagged sources alone.
+   *
+   * The budget is not keyed on the tab — nor should it be, since the catalogue it is searching is
+   * the same one whichever tab is on screen — so without this a cap reached on Explore replaced the
+   * opponent tab's own empty message with one about answered claims, and offered an action that
+   * pages a catalogue that tab is not showing.
+   *
+   * And the wording only fits when something is being hidden. A tagged page can come back barren
+   * from the session's own exclusions — claims this pair has already debated — with the switch off
+   * entirely, and telling the viewer their positions emptied it explains something that is not
+   * happening.
+   */
+  const stoppedShortHere = stoppedShort && graphFiltered;
+  const searchingMessage = hidesAnswered ? 'Looking for claims you haven’t answered yet…' : 'Looking for more claims…';
+  const stoppedShortMessage = hidesAnswered
+    ? 'Nothing you haven’t already answered in the first few hundred claims.'
+    : 'Nothing in the first few hundred claims.';
 
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage: autoPages,
@@ -1998,9 +2019,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                       setMatchesOnly(next);
                     }}
                   />
-                ) : source === 'mine' ? null : (
+                ) : // Explore's alone, and it has to say so rather than falling through: `hidesAnswered`
+                // is gated on this tab, so on Related the switch drew a control that could not
+                // change a single row under it. Never on "My positions" either, which is the list
+                // it would empty.
+                tab === 'explore' && source !== 'mine' ? (
                   <HideMyPositionsSwitch checked={hideMyPositions} onChange={setHideMyPositions} />
-                )
+                ) : null
               }
               leading={
                 tab === 'explore' ? (
@@ -2057,9 +2082,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           isEmpty={showsSections ? visibleSections.length === 0 : visibleClaims.length === 0}
           emptyMessage={
             stillPaging
-              ? 'Looking for claims you haven’t answered yet…'
-              : stoppedShort
-                ? 'Nothing you haven’t already answered in the first few hundred claims.'
+              ? searchingMessage
+              : stoppedShortHere
+                ? stoppedShortMessage
                 : hasFilters
                   ? 'No claims match these filters.'
                   : matchesOnlyHere
@@ -2085,7 +2110,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           emptyAction={
             stillPaging
               ? undefined
-              : stoppedShort
+              : stoppedShortHere
                 ? { label: 'Keep looking', onClick: keepLooking }
                 : hasFilters
                   ? {
@@ -2135,6 +2160,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             at for its next page. */}
         {autoPages && graphFiltered ? (
           <div ref={sentinelRef} data-testid="rematch-claims-scroll-sentinel" className="h-px" />
+        ) : stoppedShortHere && visibleClaims.length > 0 ? (
+          // The empty state carries this offer when the list is empty and cannot when it is not —
+          // `HubQueryState` draws its action instead of the rows. Stopping short with rows on screen
+          // is the ordinary case, and without this the list quietly stopped paging.
+          <div className="flex justify-center pt-1">
+            <HubPillButton onClick={keepLooking}>Keep looking</HubPillButton>
+          </div>
         ) : null}
       </main>
 

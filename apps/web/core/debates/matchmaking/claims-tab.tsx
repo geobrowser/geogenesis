@@ -42,6 +42,7 @@ import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests } from './hooks';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
+import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { HideMyPositionsSwitch } from './matches-only-switch';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
@@ -771,6 +772,7 @@ export function ClaimsTab({
     // it look like no page had landed at all.
     loaded: graphSourced ? taggedClaims.length : pages.reduce((total, page) => total + page.claims.length, 0),
     visible: visibleClaims.length,
+    settling: answersInFlight,
     hasNextPage,
     fetchNextPage,
     resetKey: listKey,
@@ -793,7 +795,17 @@ export function ClaimsTab({
    * search goes on behind them, and a viewer watching it is told what it is doing rather than shown
    * a loading state that never resolves.
    */
-  const stillPaging = visibleClaims.length === 0 && autoPages;
+  const stillPaging = visibleClaims.length === 0 && (autoPages || answersInFlight);
+
+  // Lobby and Positions page too, and neither is hiding anything the viewer has answered — Positions
+  // *is* what they have answered. Blaming their own positions for an empty page there is an
+  // explanation of something that is not happening.
+  const searchingMessage = collapsesAnswered
+    ? 'Looking for claims you haven’t answered yet…'
+    : 'Looking for more claims…';
+  const stoppedShortMessage = collapsesAnswered
+    ? 'Nothing you haven’t already answered in the first few hundred claims.'
+    : 'Nothing in the first few hundred claims.';
 
   // Every hook above has run, so the cache is filled and the atoms are seeded; there is simply
   // nothing to draw. Placed here rather than early, which would break the rules of hooks.
@@ -902,9 +914,9 @@ export function ClaimsTab({
           // answered all of it is the collapse taking credit for an empty corpus (GEO-2863).
           emptyMessage={
             stillPaging
-              ? 'Looking for claims you haven’t answered yet…'
+              ? searchingMessage
               : stoppedShort
-                ? 'Nothing you haven’t already answered in the first few hundred claims.'
+                ? stoppedShortMessage
                 : collapsedEverything
                   ? 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
                   : hasNarrowingFilters
@@ -972,7 +984,17 @@ export function ClaimsTab({
           Not while the allowlist is pending, though: the tab is showing a four-row skeleton then,
           so the sentinel sits in view under it and pages the corpus on the strength of a loading
           state being visible — reading "the viewer reached the end" off a list that isn't there. */}
-        {autoPages ? <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" /> : null}
+        {autoPages ? (
+          <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
+        ) : stoppedShort && visibleClaims.length > 0 ? (
+          // The empty state carries this offer when the list is empty, and cannot when it is not —
+          // `HubQueryState` draws its action *instead of* the rows. Stopping short with rows on
+          // screen is the ordinary case, so without this the list simply stopped paging and said
+          // nothing, which is the one outcome the bound was meant to avoid.
+          <div className="flex justify-center pt-1">
+            <HubPillButton onClick={keepLooking}>Keep looking</HubPillButton>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -4,12 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AUTO_PAGES_WITHOUT_ROWS, useBoundedPaging } from './use-bounded-paging';
 
-type Props = { loaded: number; visible: number; hasNextPage?: boolean; resetKey?: string };
+type Props = { loaded: number; visible: number; settling?: boolean; hasNextPage?: boolean; resetKey?: string };
 
 function render(initial: Props, fetchNextPage = vi.fn()) {
   const view = renderHook(
-    ({ loaded, visible, hasNextPage = true, resetKey = 'list' }: Props) =>
-      useBoundedPaging({ loaded, visible, hasNextPage, fetchNextPage, resetKey }),
+    ({ loaded, visible, settling = false, hasNextPage = true, resetKey = 'list' }: Props) =>
+      useBoundedPaging({ loaded, visible, settling, hasNextPage, fetchNextPage, resetKey }),
     { initialProps: initial }
   );
 
@@ -64,6 +64,27 @@ describe('useBoundedPaging', () => {
 
     for (let tick = 0; tick < AUTO_PAGES_WITHOUT_ROWS * 2; tick += 1) {
       view.rerender({ loaded: 50, visible: 0 });
+    }
+
+    expect(view.result.current.autoPages).toBe(true);
+  });
+
+  /**
+   * A tagged page lands in two stages, and only the second says whether it was worth fetching.
+   *
+   * The catalog arrives first and its rows are held back until the lookup that classifies them
+   * returns, so judged on arrival *every* page is barren — and a list finding claims on every one
+   * of them still ran out of budget and stopped, for every viewer rather than the ones the bound is
+   * for.
+   */
+  it('waits for a page to finish arriving before calling it barren', () => {
+    const view = render({ loaded: 0, visible: 0 });
+
+    for (let page = 1; page <= AUTO_PAGES_WITHOUT_ROWS + 2; page += 1) {
+      // The catalog lands; its rows are not classified yet, so none of them can be shown.
+      view.rerender({ loaded: page * 50, visible: page - 1, settling: true });
+      // The lookup returns and the page turns out to have had something on it after all.
+      view.rerender({ loaded: page * 50, visible: page, settling: false });
     }
 
     expect(view.result.current.autoPages).toBe(true);

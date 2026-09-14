@@ -36,6 +36,7 @@ export const AUTO_PAGES_WITHOUT_ROWS = 5;
 export function useBoundedPaging({
   loaded,
   visible,
+  settling,
   hasNextPage,
   fetchNextPage,
   resetKey,
@@ -52,6 +53,16 @@ export function useBoundedPaging({
   loaded: number;
   /** Rows actually on screen — what a new page is supposed to add to. */
   visible: number;
+  /**
+   * Whether the rows just fetched are still resolving into rows that can be shown.
+   *
+   * A tagged page arrives in two stages: the catalog lands, and then the lookup that says which of
+   * it the viewer has already answered. Judged at the first stage every page looks barren, because
+   * its rows are deliberately held back until the second — so a list that was finding claims on
+   * every page still exhausted its budget and stopped. Accounting waits for the page to have
+   * finished becoming itself.
+   */
+  settling: boolean;
   hasNextPage: boolean;
   fetchNextPage: () => unknown;
   /** A different list: a different corpus to search, and a fresh budget to search it with. */
@@ -73,6 +84,10 @@ export function useBoundedPaging({
   }
 
   React.useEffect(() => {
+    // Nothing is judged mid-flight. A page is barren or not once it has finished arriving, and the
+    // second half of its arrival is the lookup that decides which of its rows can be shown.
+    if (settling) return;
+
     // Only when a page has actually landed. Rows leaving — the viewer answering one, a filter
     // narrowing — is not a barren fetch, and counting it would spend the budget on the viewer's own
     // typing.
@@ -84,7 +99,7 @@ export function useBoundedPaging({
     const grew = visible > seen.current.visible;
     seen.current = { ...seen.current, loaded, visible };
     setBarren(count => (grew ? 0 : count + 1));
-  }, [loaded, visible]);
+  }, [loaded, settling, visible]);
 
   const keepLooking = React.useCallback(() => {
     setBarren(0);

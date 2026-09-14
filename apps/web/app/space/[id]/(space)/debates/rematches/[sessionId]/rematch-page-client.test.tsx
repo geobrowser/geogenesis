@@ -4458,6 +4458,23 @@ describe('the Related tab', () => {
     mocks.relatedEntities = [sourceClaimEntity(), relatedEntity()];
   }
 
+  /**
+   * "Hide my positions" is Explore's, and Related must not draw it.
+   *
+   * `hidesAnswered` is gated on the Explore tab, so the switch fell through onto this one and drew
+   * a control that could not change a single row under it — the same fault as drawing it over a
+   * list it would empty, from the other direction.
+   */
+  it('does not draw Explore’s switch, which could not narrow this list', async () => {
+    debateWithRelated();
+    localStorage.setItem('rematchHideMyPositions', 'true');
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('A claim on the same topic');
+
+    expect(screen.queryByRole('switch', { name: 'Hide my positions' })).toBeNull();
+  });
+
   it('lands the pair on Related when the claim they argued has neighbours', async () => {
     debateWithRelated();
 
