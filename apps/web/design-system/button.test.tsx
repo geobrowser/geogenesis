@@ -33,3 +33,39 @@ describe('button type', () => {
     expect(screen.getByRole('button')).toHaveAttribute('type', 'submit');
   });
 });
+
+/**
+ * `disabled` drives the styling as well as the element, so each of these
+ * destructures it. Destructured and then not handed to the element, the button
+ * looks disabled and stays clickable and focusable — which is worse than not
+ * offering the state at all, because the caller believes it is blocked.
+ */
+describe('disabled', () => {
+  it.each([
+    [
+      'Button',
+      <Button key="b" disabled>
+        Go
+      </Button>,
+    ],
+    [
+      'SmallButton',
+      <SmallButton key="s" disabled>
+        Go
+      </SmallButton>,
+    ],
+    ['SquareButton', <SquareButton key="q" disabled aria-label="Go" />],
+    ['IconButton', <IconButton key="i" disabled aria-label="Go" icon={null} />],
+    ['AddTypeButton', <AddTypeButton key="a" disabled aria-label="Go" icon={null} label="Go" />],
+    [
+      'TextButton',
+      <TextButton key="t" disabled>
+        Go
+      </TextButton>,
+    ],
+  ])('%s blocks the click as well as looking blocked', (_name, element) => {
+    render(element);
+
+    expect(screen.getByRole('button')).toBeDisabled();
+  });
+});

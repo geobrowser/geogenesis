@@ -151,7 +151,10 @@ export const IconButton = forwardRef(function IconButton(
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
   return (
-    <button ref={ref} type="button" className={iconButtonClassNames({ disabled })} {...rest}>
+    // `disabled` drives the styling and the element alike. Destructured for the
+    // first and never handed to the second, the button looked disabled and stayed
+    // clickable — `table-block.tsx` passes it on a control mid-request.
+    <button ref={ref} type="button" disabled={disabled} className={iconButtonClassNames({ disabled })} {...rest}>
       {icon}
     </button>
   );

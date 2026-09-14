@@ -1,3 +1,4 @@
+import { Content, Root } from '@radix-ui/react-dialog';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -77,6 +78,19 @@ afterEach(() => {
   mocks.alreadyPicked = [];
 });
 
+/**
+ * Rendered inside a dialog, which is where these sheets live: the heading and the
+ * footer note are the dialog's accessible name and description, so they need
+ * something to register with.
+ */
+function inDialog(sheet: React.ReactNode) {
+  return (
+    <Root open>
+      <Content>{sheet}</Content>
+    </Root>
+  );
+}
+
 function renderSheet(overrides: Partial<Parameters<typeof AddPositionSheet>[0]> = {}) {
   const props = {
     spaceId: 'space-1',
@@ -85,7 +99,7 @@ function renderSheet(overrides: Partial<Parameters<typeof AddPositionSheet>[0]> 
     onSave: vi.fn(),
     ...overrides,
   };
-  render(<AddPositionSheet {...props} />);
+  render(inDialog(<AddPositionSheet {...props} />));
   return props;
 }
 

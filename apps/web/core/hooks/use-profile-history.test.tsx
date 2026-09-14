@@ -534,6 +534,41 @@ describe('useProfileHistory', () => {
       expect(relations.find(relation => relation.type.id === ROLES_PROPERTY)?.fromEntity.id).toBe(employment?.entityId);
     });
 
+    // Adding a role at an employer already listed joins that employer's edge.
+    // Moving one there has to do the same — it used to only know to drop the old
+    // edge, so the row opened a second Employment relation beside the one there.
+    it('joins the destination’s existing edge when a saved row moves onto it', () => {
+      mocks.employment = [savedCard('Geo', ['Engineer']), savedCard('Coinbase', ['Analyst'])];
+      const { result } = setup();
+
+      act(() => {
+        const card = result.current.employment.find(c => c.organization.name === 'Geo')!;
+        result.current.editEntry(card, card.entries[0], 'employment', draft('Coinbase', 'Engineer'));
+      });
+
+      const { relations } = result.current.stagePending();
+
+      // No new Employment edge: the role hangs off the one Coinbase already has.
+      expect(relations.filter(r => !r.isDeleted && r.type.id === EMPLOYMENT_PROPERTY)).toEqual([]);
+      expect(relations.find(r => !r.isDeleted && r.type.id === ROLES_PROPERTY)?.fromEntity.id).toBe('stint-Coinbase');
+    });
+
+    it('joins it when an unsaved row moves there too', () => {
+      mocks.employment = [savedCard('Coinbase', ['Analyst'])];
+      const { result } = setup();
+
+      act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+      act(() => {
+        const card = result.current.employment.find(c => c.organization.name === 'Fathom')!;
+        result.current.editEntry(card, card.entries[0], 'employment', draft('Coinbase', 'Engineer'));
+      });
+
+      const { relations } = result.current.stagePending();
+
+      expect(relations.filter(r => !r.isDeleted && r.type.id === EMPLOYMENT_PROPERTY)).toEqual([]);
+      expect(relations.find(r => !r.isDeleted && r.type.id === ROLES_PROPERTY)?.fromEntity.id).toBe('stint-Coinbase');
+    });
+
     it('rewrites an unsaved row in place rather than queuing a delete', () => {
       const { result } = setup();
 
@@ -611,5 +646,126 @@ describe('useProfileHistory', () => {
 
     expect(result.current.hasPendingChanges).toBe(false);
     expect(result.current.employment.map(card => card.organization.name)).toEqual(['Geo']);
+  });
+});
+
+/**
+ * Publishing is not the same as being readable: a write lands on chain in
+ * seconds and turns up in this query a minute or two later. These cover the
+ * window in between, where dropping the rows shows the state from before the
+ * save and reads as the edit having been lost.
+ */
+describe('waiting for the read to catch up', () => {
+  /**
+   * A saved card carrying the ids a published edit actually got.
+   *
+   * Both levels, because a read only agrees once it shows the edge as well as
+   * the row — the row alone would be a card hanging off nothing.
+   */
+  const indexedCard = (org: string, role: string, ids: { edge: string; row: string }) => {
+    const card = savedCard(org, [role]);
+    card.edges[0].relationId = ids.edge;
+    card.entries[0].relationId = ids.row;
+    card.entries[0].edge.relationId = ids.edge;
+    return card;
+  };
+
+  const publishedIds = (result: { current: ReturnType<typeof useProfileHistory> }) => {
+    const { relations } = result.current.stagePending();
+    return {
+      edge: relations.find(relation => relation.type.id === EMPLOYMENT_PROPERTY)!.id,
+      row: relations.find(relation => relation.type.id === ROLES_PROPERTY)!.id,
+    };
+  };
+
+  it('keeps a published row on screen while the read still predates it', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+    act(() => result.current.settle());
+
+    expect(result.current.employment.map(card => card.organization.name)).toEqual(['Fathom']);
+  });
+
+  it('lets go once the read shows the published row', () => {
+    const { result, rerender } = setup();
+
+    act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+    const ids = publishedIds(result);
+    act(() => result.current.settle());
+
+    mocks.employment = [indexedCard('Fathom', 'Engineer', ids)];
+    act(() => rerender());
+
+    // Still one card, now the graph's rather than ours.
+    expect(result.current.employment.map(card => card.organization.name)).toEqual(['Fathom']);
+    expect(result.current.hasPendingChanges).toBe(false);
+  });
+
+  it('keeps a removed row hidden until the read stops returning it', () => {
+    mocks.employment = [savedCard('Geo', ['Engineer'])];
+    const { result, rerender } = setup();
+
+    act(() => {
+      const card = result.current.employment[0];
+      result.current.removeEntry(card, card.entries[0], 'employment');
+    });
+    act(() => result.current.settle());
+
+    expect(result.current.employment).toEqual([]);
+
+    // The read still has it, so the removal stays applied.
+    act(() => rerender());
+    expect(result.current.employment).toEqual([]);
+
+    mocks.employment = [];
+    act(() => rerender());
+    expect(result.current.hasPendingChanges).toBe(false);
+  });
+
+  // An edit that never becomes readable must not leave the modal insisting on it
+  // for the rest of the session.
+  it('gives up after the deadline and shows what the graph says', () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      const { result, rerender } = setup();
+
+      act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+      act(() => result.current.settle());
+
+      expect(result.current.employment.map(card => card.organization.name)).toEqual(['Fathom']);
+
+      vi.setSystemTime(Date.now() + 121_000);
+      act(() => rerender());
+
+      expect(result.current.employment).toEqual([]);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  // Reopening and dismissing the modal is not a way to take back work already
+  // published — dropping it would put the pre-save state back on screen.
+  it('does not let a dismissal drop an edit that is already published', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+    act(() => result.current.settle());
+    act(() => result.current.discard());
+
+    expect(result.current.employment.map(card => card.organization.name)).toEqual(['Fathom']);
+  });
+
+  it('still forgets a draft that was never published', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+    act(() => result.current.discard());
+
+    expect(result.current.employment).toEqual([]);
   });
 });

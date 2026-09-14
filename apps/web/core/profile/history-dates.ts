@@ -30,20 +30,16 @@ const EARLIEST_YEAR = 1950;
 /**
  * Years to offer, newest first.
  *
- * `aheadBy` extends the top of the list into the future. Education needs it: its
- * End date is labelled "or expected", and a student graduating next year could
- * not enter the year they were being asked for. Employment has no equivalent —
- * nobody schedules the end of a job — so it keeps the present as its ceiling.
+ * The present is the ceiling. Education briefly reached past it, for an expected
+ * graduation — but a degree in progress is recorded by having no end date at
+ * all, so a date in the future would have said it had finished. Offering the
+ * years again needs a status that can carry "in progress" first.
  */
-export function yearOptions(now = new Date(), aheadBy = 0): number[] {
-  const latest = now.getUTCFullYear() + aheadBy;
+export function yearOptions(now = new Date()): number[] {
   const years: number[] = [];
-  for (let year = latest; year >= EARLIEST_YEAR; year--) years.push(year);
+  for (let year = now.getUTCFullYear(); year >= EARLIEST_YEAR; year--) years.push(year);
   return years;
 }
-
-/** How far ahead an expected graduation may reasonably sit. */
-export const EXPECTED_YEARS_AHEAD = 8;
 
 /**
  * Whether a picked pair runs forwards. Both halves optional, because an unfinished

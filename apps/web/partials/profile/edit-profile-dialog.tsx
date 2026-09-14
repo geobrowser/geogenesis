@@ -252,6 +252,13 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
 
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
+
+    // The sheet renders inside this form, so its fields can trigger the implicit
+    // submit — Enter in the grade box published the profile without the draft the
+    // sheet was holding, and closed the modal on top of it. Done hands the draft
+    // back directly; there is no submit here to reach for.
+    if (sheet) return;
+
     if (!canSave) return;
 
     // Save hands straight off to the status bar rather than holding the screen.

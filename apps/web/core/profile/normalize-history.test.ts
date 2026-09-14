@@ -246,6 +246,22 @@ describe('normalizeEducation', () => {
     expect(entry.description).toBeNull();
   });
 
+  // The legacy text sits on the stint, which a modern row can share. Ungated, a
+  // degree added under an old record inherited somebody else's discipline — and
+  // clearing the field on a legacy degree put the old one straight back, since
+  // the replacement is a modern row under the same record.
+  it('does not lend the legacy text field to a modern degree', () => {
+    const [card] = normalizeEducation([
+      edge('Northumbria University', {
+        values: [textValue(LEGACY_FIELD_OF_STUDY_PROPERTY, 'Computer Science')],
+        relations: [role('Ph.D.', { relations: [typedAs(DEGREE_INFORMATION_TYPE)] }, DEGREE_PROPERTY)],
+      }),
+    ]);
+
+    expect(card.entries[0].isLegacy).toBe(false);
+    expect(card.entries[0].fields).toEqual([]);
+  });
+
   it('prefers real Field of study relations over the legacy text', () => {
     const [card] = normalizeEducation([
       edge('Northumbria University', {

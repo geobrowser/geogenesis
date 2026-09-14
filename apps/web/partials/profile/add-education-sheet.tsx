@@ -2,13 +2,7 @@
 
 import * as React from 'react';
 
-import {
-  EXPECTED_YEARS_AHEAD,
-  type MonthYear,
-  fromGraphDate,
-  isOrderedRange,
-  toGraphDate,
-} from '~/core/profile/history-dates';
+import { type MonthYear, fromGraphDate, isOrderedRange, toGraphDate } from '~/core/profile/history-dates';
 import {
   DEGREE_TYPES,
   type EducationStatus,
@@ -168,16 +162,13 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap items-end gap-4">
           <MonthYearField label="Start" value={start} onChange={setStart} disabled={isSaving} />
-          {/* "or expected" is only true if the years on offer reach into the
-              future, which they did not. */}
-          <MonthYearField
-            label="End"
-            note="or expected"
-            value={end}
-            onChange={setEnd}
-            disabled={isSaving || status === 'studying'}
-            aheadBy={EXPECTED_YEARS_AHEAD}
-          />
+          {/* No expected graduation, despite it being the obvious thing to want.
+              "Still studying" writes no status — the ontology has no in-progress
+              option — so an absent end date is the only thing saying a degree is
+              unfinished. An expected end would take that away and read as having
+              finished in the future: sorted among the completed, and measured to
+              a date that has not happened. It needs a status to hang off first. */}
+          <MonthYearField label="End" value={end} onChange={setEnd} disabled={isSaving || status === 'studying'} />
         </div>
         {!isOrdered && (
           <span role="alert" className="text-metadata text-red-01">

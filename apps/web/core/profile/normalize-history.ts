@@ -375,7 +375,12 @@ export function normalizeEducation(edges: HistoryEdgeNode[]): EducationCard[] {
         // Eleven records predate `Fields of study` and keep the discipline as
         // text on the stint. Shown, never written — they are the seed for real
         // Field of study entities rather than a second way to store one.
-        const legacyField = textFor(stintValues, LEGACY_FIELD_OF_STUDY_PROPERTY);
+        //
+        // Only for the rows it belongs to, the same way the dates and status
+        // above fall back. The text sits on the stint, which a modern row can
+        // share: ungated, clearing a field put the old discipline straight back,
+        // and a degree added under an old record inherited someone else's.
+        const legacyField = entry.isLegacy ? textFor(stintValues, LEGACY_FIELD_OF_STUDY_PROPERTY) : null;
 
         return {
           ...entry,

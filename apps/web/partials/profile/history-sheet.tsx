@@ -1,5 +1,7 @@
 'use client';
 
+import { Description, Title } from '@radix-ui/react-dialog';
+
 import * as React from 'react';
 
 import type { EntityChoice } from '~/core/profile/stage-history';
@@ -33,19 +35,29 @@ type Props = {
  * Rendered in place of the modal's own body rather than over it — one thing on
  * screen at a time, and the fields underneath have nothing to do with the
  * position being added.
+ *
+ * Which means this replaces the modal's own `Title` and `Description` while it
+ * is up, leaving the dialog with no accessible name at all. The heading and the
+ * footer note stand in as those, through `asChild` — they already say the right
+ * thing, so nothing is duplicated for screen readers alone. This sheet therefore
+ * only makes sense inside a Radix dialog, which is the only place it is used.
  */
 export function HistorySheet({ title, isSaving, canSave, onCancel, onSave, children }: Props) {
   return (
     <div className="flex flex-col">
       <header className="flex items-center gap-2 px-5 py-4">
         <SquareButton onClick={onCancel} disabled={isSaving} icon={<CheckCloseSmall />} aria-label="Back" />
-        <h2 className="text-smallTitle text-text">{title}</h2>
+        <Title asChild>
+          <h2 className="text-smallTitle text-text">{title}</h2>
+        </Title>
       </header>
 
       <div className="flex flex-col gap-4 px-5">{children}</div>
 
       <footer className="mt-5 flex items-center justify-between gap-3 border-t border-grey-02 px-5 py-4">
-        <p className="text-metadata text-grey-04">Added to your profile when you save it.</p>
+        <Description asChild>
+          <p className="text-metadata text-grey-04">Added to your profile when you save it.</p>
+        </Description>
         <div className="flex items-center gap-2">
           <Button type="button" variant="secondary" onClick={onCancel} disabled={isSaving}>
             Cancel

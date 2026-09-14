@@ -1,3 +1,4 @@
+import { Content, Root } from '@radix-ui/react-dialog';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -50,10 +51,27 @@ afterEach(() => {
   pickCount = 0;
 });
 
+/**
+ * Rendered inside a dialog, which is where these sheets live: the heading and the
+ * footer note are the dialog's accessible name and description, so they need
+ * something to register with.
+ */
+function inDialog(sheet: React.ReactNode) {
+  return (
+    <Root open>
+      <Content>{sheet}</Content>
+    </Root>
+  );
+}
+
 function renderSheet(overrides: Partial<Parameters<typeof AddEducationSheet>[0]> = {}) {
   const onSave = vi.fn();
   const onCancel = vi.fn();
-  render(<AddEducationSheet spaceId="space-1" isSaving={false} onCancel={onCancel} onSave={onSave} {...overrides} />);
+  render(
+    inDialog(
+      <AddEducationSheet spaceId="space-1" isSaving={false} onCancel={onCancel} onSave={onSave} {...overrides} />
+    )
+  );
   return { onSave, onCancel };
 }
 
@@ -107,14 +125,17 @@ describe('AddEducationSheet', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('The end date is before the start date.');
   });
 
-  // "or expected" is only true if the years reach past the present.
-  it('offers years ahead of now for an expected graduation', () => {
+  // The field was labelled "End (or expected)" and offered eight years ahead,
+  // while being disabled by the one status where an expected date means
+  // anything. It cannot be stored either: "Still studying" writes no status, so
+  // the missing end date is the only thing saying a degree is unfinished.
+  it('does not offer a graduation date that has not happened', () => {
     renderSheet();
 
     const nextYear = String(new Date().getUTCFullYear() + 1);
     const end = screen.getByLabelText('End year');
 
-    expect(within(end).getByRole('option', { name: nextYear })).toBeInTheDocument();
+    expect(within(end).queryByRole('option', { name: nextYear })).not.toBeInTheDocument();
   });
 
   it('offers the three states dates alone cannot express', () => {

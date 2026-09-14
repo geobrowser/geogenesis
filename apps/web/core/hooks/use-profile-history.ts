@@ -47,6 +47,43 @@ const PROPERTIES: Record<Kind, { entry: string; card: string }> = {
 };
 
 /**
+ * The relation types the normalized cards actually surface.
+ *
+ * What "the indexer has caught up" is judged on. The rows and edges are the two
+ * levels a card shows an id for; everything below them — dates, status, skills —
+ * rides along in the same edit and is not separately observable here.
+ */
+const VISIBLE_RELATION_TYPES = new Set([EMPLOYMENT_PROPERTY, ROLES_PROPERTY, EDUCATION_PROPERTY, DEGREE_PROPERTY]);
+
+/** What a published edit expects the next read to show, once it lands. */
+type Expectation = { added: string[]; removed: string[]; since: number };
+
+/**
+ * How long to keep showing a published edit the read has not caught up with.
+ *
+ * Past this the graph's answer wins, even though it disagrees — an edit that
+ * never lands must not leave the modal insisting forever on something that is
+ * not there. Generous, because the wait is normally seconds and being wrong in
+ * this direction only costs a stale-looking row.
+ */
+const INDEXING_DEADLINE_MS = 120_000;
+
+/** Whether a read reflects everything a published edit said it would do. */
+function reflects(
+  cards: { employment: HistoryCard<HistoryEntry>[]; education: HistoryCard<HistoryEntry>[] },
+  expectation: Expectation
+) {
+  const present = new Set<string>();
+
+  for (const card of [...cards.employment, ...cards.education]) {
+    for (const edge of card.edges) present.add(edge.relationId);
+    for (const entry of card.entries) present.add(entry.relationId);
+  }
+
+  return expectation.added.every(id => present.has(id)) && expectation.removed.every(id => !present.has(id));
+}
+
+/**
  * Organisation edges left with nothing under them once everything queued lands.
  *
  * Worked out from the pending state as it finally stands, rather than when a row
@@ -114,13 +151,29 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
   const queryClient = useQueryClient();
   const [pending, setPending] = React.useState<PendingHistory>(NOTHING_PENDING);
 
+  /**
+   * A published edit the read has not caught up with yet.
+   *
+   * Publishing is not the same as being readable: the write lands on chain in
+   * seconds and turns up in this query a minute or two later. Clearing the
+   * pending rows on success and refetching therefore put the old answer straight
+   * back, and the edit looked like it had been lost — `settleSuccess` in
+   * `use-edit-profile` avoids exactly this for the name and photo, and says so.
+   *
+   * So the rows stay until a read agrees with them.
+   */
+  const [awaiting, setAwaiting] = React.useState<Expectation | null>(null);
+
   const queryKey = profileHistoryQueryKey(entityId);
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, dataUpdatedAt, isLoading, isError } = useQuery({
     queryKey,
     enabled: enabled && entityId !== '',
     queryFn: () => fetchProfileHistory(entityId),
     staleTime: 60_000,
+    // Only while something is outstanding. Asking again on a timer is the only
+    // way to learn the indexer has caught up; there is nothing to subscribe to.
+    refetchInterval: awaiting ? 5_000 : false,
   });
 
   /**
@@ -154,26 +207,39 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     []
   );
 
+  /**
+   * The saved edge a row at this organisation belongs on, where there is one.
+   *
+   * Asked wherever a row arrives at an organisation — adding one, or moving one
+   * there. Only adding used to ask, so moving a role to an employer already on
+   * the profile opened a second Employment edge beside the one that was there.
+   */
+  const attachmentFor = React.useCallback(
+    (kind: Kind, organizationId: string) =>
+      savedStintFor(kind === 'employment' ? (data?.employment ?? []) : (data?.education ?? []), organizationId),
+    [data?.education, data?.employment, savedStintFor]
+  );
+
   const addPosition = React.useCallback(
     (draft: PositionDraft) => {
-      const existingStintId = draft.existingStintId ?? savedStintFor(data?.employment ?? [], draft.company.id);
+      const existingStintId = draft.existingStintId ?? attachmentFor('employment', draft.company.id);
       setPending(current => ({
         ...current,
         positions: [...current.positions, { key: ID.createEntityId(), draft: { ...draft, existingStintId } }],
       }));
     },
-    [data?.employment, savedStintFor]
+    [attachmentFor]
   );
 
   const addEducation = React.useCallback(
     (draft: EducationDraft) => {
-      const existingStintId = draft.existingStintId ?? savedStintFor(data?.education ?? [], draft.school.id);
+      const existingStintId = draft.existingStintId ?? attachmentFor('education', draft.school.id);
       setPending(current => ({
         ...current,
         education: [...current.education, { key: ID.createEntityId(), draft: { ...draft, existingStintId } }],
       }));
     },
-    [data?.education, savedStintFor]
+    [attachmentFor]
   );
 
   /**
@@ -224,7 +290,14 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
       // The edge a row hangs off belongs to the organisation it was under. Move
       // the row to a different employer and that edge is the wrong one — kept, it
       // would publish the Roles relation under the company the row just left.
-      const reattached = { ...draft, existingStintId: staysPut ? draft.existingStintId : undefined };
+      //
+      // The destination may already have an edge of its own, which this row joins
+      // rather than opening a second one beside it. Dropping the old edge without
+      // asking for the new one is how it used to do exactly that.
+      const reattached = {
+        ...draft,
+        existingStintId: staysPut ? draft.existingStintId : attachmentFor(kind, organizationId),
+      };
 
       if (isPending(entry.relationId)) {
         setPending(current => replacePendingAddition(current, entry.relationId, reattached));
@@ -234,7 +307,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
       // The replacement attaches straight back to the edge when the employer is
       // unchanged. What hung off the row goes either way: the replacement writes
       // its own dates and skills, and the old ones are not merged into them.
-      const next = { ...reattached, existingStintId: staysPut ? entry.edge.stintId : undefined };
+      const next = { ...reattached, existingStintId: staysPut ? entry.edge.stintId : reattached.existingStintId };
 
       setPending(current => ({
         ...current,
@@ -249,7 +322,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
             : current.education,
       }));
     },
-    [rowRemoval]
+    [attachmentFor, rowRemoval]
   );
 
   /**
@@ -260,7 +333,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    * publish layer reads only the id off a tombstone, so these carry the minimum a
    * delete needs rather than the row as it stands in the graph.
    */
-  const staged = React.useMemo((): StagedRows => {
+  const staged = React.useMemo((): StagedRows & { expectation: Expectation | null } => {
     const context = { personEntityId: entityId, spaceId };
     const mint = () => ID.createEntityId();
 
@@ -295,12 +368,24 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
 
     const ours = (rowSpaceId: string | null) => rowSpaceId === null || rowSpaceId === spaceId;
 
+    // The rows and edges a read will show once this lands, as against everything
+    // hanging off them, which it does not surface an id for.
+    const expectedGone: string[] = [];
+    const expectedThere: string[] = [];
+
+    for (const rows of additions) {
+      for (const relation of rows.relations) {
+        if (VISIBLE_RELATION_TYPES.has(relation.type.id)) expectedThere.push(relation.id);
+      }
+    }
+
     for (const removal of removals) {
       // A relation in another space is not ours to delete, and a tombstone for it
       // would be a delete op aimed at a space the row is not in — the edit would
       // report success and change nothing.
       if (!ours(removal.spaceId)) continue;
 
+      expectedGone.push(removal.relationId);
       removedRelations.push(tombstone(removal.relationId, removal.typeId, removal.entityId));
 
       // The type is not known per row here, and the publish layer does not read
@@ -327,6 +412,10 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     return {
       values: [...additions.flatMap(rows => rows.values), ...removedValues],
       relations: [...additions.flatMap(rows => rows.relations), ...removedRelations],
+      expectation:
+        expectedThere.length > 0 || expectedGone.length > 0
+          ? { added: expectedThere, removed: expectedGone, since: 0 }
+          : null,
     };
   }, [data?.education, data?.employment, entityId, pending, spaceId]);
 
@@ -338,7 +427,12 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    * publish layer reads that as a different edit, throwing away a staged upload
    * and doing it again.
    */
-  const stagePending = React.useCallback(() => staged, [staged]);
+  const stagedRows = React.useMemo(
+    (): StagedRows => ({ values: staged.values, relations: staged.relations }),
+    [staged]
+  );
+
+  const stagePending = React.useCallback(() => stagedRows, [stagedRows]);
 
   /**
    * The draft behind an unsaved row, for the sheet to reopen on.
@@ -352,13 +446,65 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     [pending]
   );
 
-  /** Called once the save lands, so the merged view falls back to the graph's. */
+  /**
+   * Called once the save lands.
+   *
+   * The rows are not dropped here. A published edit takes a minute or two to
+   * become readable, so falling back to the graph's answer at this point shows
+   * the state from before the save — which reads as the edit having been lost.
+   * They are held until a read agrees with them, or until the deadline.
+   */
   const settle = React.useCallback(() => {
-    setPending(NOTHING_PENDING);
-    void queryClient.invalidateQueries({ queryKey });
-  }, [queryClient, queryKey]);
+    const expectation = staged.expectation;
 
-  const discard = React.useCallback(() => setPending(NOTHING_PENDING), []);
+    if (expectation === null) {
+      setPending(NOTHING_PENDING);
+      void queryClient.invalidateQueries({ queryKey });
+      return;
+    }
+
+    setAwaiting({ ...expectation, since: Date.now() });
+    void queryClient.invalidateQueries({ queryKey });
+  }, [queryClient, queryKey, staged.expectation]);
+
+  /**
+   * Let go of a published edit once the read catches up with it.
+   *
+   * Keyed on `dataUpdatedAt` rather than `data`: a refetch that returns the same
+   * rows is the ordinary case while waiting, and structural sharing hands back
+   * the identical object — which would never re-run this, and never reach the
+   * deadline below.
+   */
+  React.useEffect(() => {
+    if (awaiting === null) return;
+
+    const isLate = Date.now() - awaiting.since > INDEXING_DEADLINE_MS;
+
+    // Past the deadline the graph wins even though it disagrees. An edit that
+    // never lands must not leave the modal insisting on it for the rest of the
+    // session.
+    if (!isLate && !(data && reflects(data, awaiting))) return;
+
+    if (isLate) {
+      console.warn('[profile-history] gave up waiting for a published edit to be readable', {
+        entityId,
+        waitedMs: Date.now() - awaiting.since,
+      });
+    }
+
+    setPending(NOTHING_PENDING);
+    setAwaiting(null);
+  }, [awaiting, data, dataUpdatedAt, entityId]);
+
+  /**
+   * Dismissing the modal forgets the draft — but not an edit already published.
+   * That one is not the user's to take back, and dropping it would put the
+   * pre-save state back on screen until the indexer caught up.
+   */
+  const discard = React.useCallback(() => {
+    if (awaiting !== null) return;
+    setPending(NOTHING_PENDING);
+  }, [awaiting]);
 
   const employment = React.useMemo(
     () => mergePendingEmployment(data?.employment ?? [], pending.positions, pending.removals, pendingAvatars),

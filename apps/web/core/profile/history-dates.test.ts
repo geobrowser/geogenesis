@@ -120,14 +120,11 @@ describe('isOrderedRange', () => {
   });
 });
 
-describe('yearOptions ahead of the present', () => {
-  // Education's End is labelled "or expected", which was a promise the list of
-  // years did not keep.
-  it('reaches into the future when asked', () => {
-    expect(yearOptions(new Date('2026-09-13T00:00:00Z'), 8)[0]).toBe(2034);
-  });
-
-  it('stops at the present by default', () => {
+describe('yearOptions', () => {
+  // A degree in progress is recorded by having no end date, so a date in the
+  // future would say it had finished — education briefly offered those years for
+  // an expected graduation, which is why this is pinned.
+  it('stops at the present', () => {
     expect(yearOptions(new Date('2026-09-13T00:00:00Z'))[0]).toBe(2026);
   });
 });
