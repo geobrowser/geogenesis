@@ -65,7 +65,6 @@ export function PersonDebatesCollection({
     return map;
   }, [debates]);
 
-  // The claim each debate argued, read once for the Topic filter and for the side labels below.
   const claimIdByDebateId = React.useMemo(() => {
     const map = new Map<string, string>();
     for (const debate of debates) {
@@ -264,6 +263,12 @@ export function PersonDebatesCollection({
               const debateSpaceId = spaceByDebateId.get(debate.id);
               if (!debateSpaceId) return null;
 
+              const claimId = claimIdByDebateId.get(debate.id);
+              const claimTitle =
+                (claimId ? claimEntityByHex.get(uuidToHex(claimId))?.name?.trim() : null) ||
+                debate.name?.trim() ||
+                undefined;
+
               return (
                 <li key={debate.id}>
                   <DebateRow
@@ -275,6 +280,7 @@ export function PersonDebatesCollection({
                     keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
                     responseKind={responseKindByDebateId.get(debate.id) ?? 'stance'}
                     highlightedSpaceId={personId}
+                    claimTitle={claimTitle}
                   />
                 </li>
               );

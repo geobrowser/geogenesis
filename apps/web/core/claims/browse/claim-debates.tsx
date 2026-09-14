@@ -297,6 +297,7 @@ export function DebateRow({
   keyframeUrl,
   responseKind,
   highlightedSpaceId,
+  claimTitle,
 }: {
   debate: Entity;
   spaceId: string;
@@ -306,6 +307,7 @@ export function DebateRow({
   keyframeUrl: string | null;
   responseKind: 'stance' | 'veracity';
   highlightedSpaceId?: string;
+  claimTitle?: string | null;
 }) {
   const nameFor = (participantSpaceId: string) => profilesBySpaceId.get(participantSpaceId)?.name ?? 'Unnamed debater';
 
@@ -324,6 +326,11 @@ export function DebateRow({
         {keyframeUrl && <GeoImage value={keyframeUrl} alt="" fill sizes="56px" className="object-cover" />}
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
+        {claimTitle ? (
+          <Text as="span" variant="bodySemibold" color="text" className="line-clamp-2">
+            {claimTitle}
+          </Text>
+        ) : null}
         {sides.length > 0 ? (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             {sides.map((side, index) => {
@@ -366,7 +373,7 @@ export function DebateRow({
               );
             })}
           </div>
-        ) : (
+        ) : claimTitle ? null : (
           <Text as="span" variant="metadataMedium" color="text" className="truncate">
             {debate.name ?? 'Debate'}
           </Text>
