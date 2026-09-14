@@ -259,11 +259,34 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
     [spaceId, storage]
   );
 
+  /**
+   * Local, unpublished rows that these ids are about to replace.
+   *
+   * Taken before the write, because after it there is nothing left to find. Only
+   * rows that are local and not yet published: a published row's undo is simply
+   * clearing the local change, and putting an old version back would resurrect
+   * finished work as pending.
+   */
+  const takeDisplaced = React.useCallback((rows: { values: Value[]; relations: Relation[] }) => {
+    const isReplaceable = (row: { isLocal?: boolean; hasBeenPublished?: boolean }) =>
+      row.isLocal === true && row.hasBeenPublished !== true;
+
+    const valueIds = new Set(rows.values.map(value => value.id));
+    const relationIds = new Set(rows.relations.map(relation => relation.id));
+
+    return {
+      values: getValues({ includeDeleted: true, selector: v => valueIds.has(v.id) && isReplaceable(v) }),
+      relations: getRelations({ includeDeleted: true, selector: r => relationIds.has(r.id) && isReplaceable(r) }),
+    };
+  }, []);
+
   const stage = React.useCallback(
     async (
       draft: ProfileDraft,
       baseline: StagedEdit['baseline'],
-      extra: { values: Value[]; relations: Relation[] } = { values: [], relations: [] }
+      extra: ExtraRows = { values: [], relations: [] },
+      /** What those extra rows displaced, captured before they were written. */
+      displaced: ExtraRows = { values: [], relations: [] }
     ): Promise<StagedEdit> => {
       // Row ids this modal wrote, tracked as it goes so a failed upload can undo
       // the writes that already landed. Scoping the collection below to these —
@@ -273,8 +296,12 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       const written = {
         valueIds: new Set<string>(extra.values.map(value => value.id)),
         relationIds: new Set<string>(extra.relations.map(relation => relation.id)),
-        overwritten: [] as Value[],
-        overwrittenRelations: [] as Relation[],
+        // Seeded with whatever the extra rows displaced. They are written to the
+        // store before this runs, so by now the rows they replaced are gone and
+        // `snapshot` below would find nothing — a rollback would then restore the
+        // synced baseline over somebody else's unpublished draft.
+        overwritten: [...displaced.values],
+        overwrittenRelations: [...displaced.relations],
       };
       // Freshly minted image entities are ours by definition, so their rows can be
       // swept by entity id without that risk.
@@ -631,6 +658,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // out in the same edit as the four header fields, because Save means all of
       // it. Written into the store here so staging collects them like its own, and
       // so a failure rolls them back with the rest.
+      const displaced = takeDisplaced(extra);
       extra.values.forEach(value => (value.isDeleted ? storage.values.delete(value) : storage.values.set(value)));
       extra.relations.forEach(relation =>
         relation.isDeleted ? storage.relations.delete(relation) : storage.relations.set(relation)
@@ -651,7 +679,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         }
 
         try {
-          const stagedEdit = await stage(draft, baseline, extra);
+          const stagedEdit = await stage(draft, baseline, extra, displaced);
 
           // The account can change while that upload runs. The effect that abandons
           // an outstanding edit cannot see this one — `stagedRef` was still null
@@ -750,6 +778,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       settleSuccess,
       spaceId,
       stage,
+      takeDisplaced,
     ]
   );
 

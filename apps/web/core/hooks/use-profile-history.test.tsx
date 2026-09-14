@@ -277,6 +277,27 @@ describe('useProfileHistory', () => {
       expect(result.current.stagePending().relations).toEqual([]);
     });
 
+    // Removing the last saved role used to take the edge with it even when an
+    // unsaved role had attached to that same edge — and staging writes no
+    // replacement for an edge it was told already existed, so the new role
+    // published with nothing above it.
+    it('keeps the edge when an unsaved role still hangs off it', () => {
+      mocks.employment = [savedCard('Geo', ['Engineer'])];
+      const { result } = setup();
+
+      act(() => result.current.addPosition(draft('Geo', 'Product Lead', { existingStintId: 'stint-Geo' })));
+      act(() => {
+        const card = result.current.employment[0];
+        const saved = card.entries.find(entry => entry.subject.name === 'Engineer')!;
+        result.current.removeEntry(card, saved, 'employment');
+      });
+
+      const { relations } = result.current.stagePending();
+
+      expect(relations.filter(r => r.isDeleted).map(r => r.id)).toEqual(['rel-Engineer']);
+      expect(result.current.employment[0].entries.map(entry => entry.subject.name)).toEqual(['Product Lead']);
+    });
+
     it('forgets an unsaved row rather than queuing a delete for it', () => {
       const { result } = setup();
 
@@ -416,6 +437,25 @@ describe('useProfileHistory', () => {
       expect(values.filter(v => v.isDeleted).map(v => v.id)).toEqual(['value-old-description']);
     });
 
+    // The row is shown under the new employer, so it has to publish there too.
+    // The edge it used to hang off belongs to the company it just left.
+    it('drops the old edge when an unsaved row moves to another company', () => {
+      const { result } = setup();
+
+      act(() => result.current.addPosition(draft('Geo', 'Engineer', { existingStintId: 'stint-Geo' })));
+      act(() => {
+        const card = result.current.employment[0];
+        result.current.editEntry(card, card.entries[0], 'employment', draft('Coinbase', 'Engineer'));
+      });
+
+      const { relations } = result.current.stagePending();
+      const employment = relations.find(relation => relation.type.id === EMPLOYMENT_PROPERTY);
+
+      // A fresh edge to the new employer, not the one it arrived with.
+      expect(employment?.toEntity.id).toBe('org-Coinbase');
+      expect(relations.find(relation => relation.type.id === ROLES_PROPERTY)?.fromEntity.id).toBe(employment?.entityId);
+    });
+
     it('rewrites an unsaved row in place rather than queuing a delete', () => {
       const { result } = setup();
 
@@ -471,6 +511,17 @@ describe('useProfileHistory', () => {
 
       expect(status?.fromEntity.id).toBe(roles?.entityId);
     });
+  });
+
+  // The publish layer compares staged rows to tell a retry from a new edit, so
+  // rebuilding them per call made every retry look like a different edit — and
+  // restaging re-uploads the images.
+  it('returns the same rows for an unchanged pending state', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+
+    expect(result.current.stagePending()).toBe(result.current.stagePending());
   });
 
   it('drops everything pending when the modal is dismissed', () => {

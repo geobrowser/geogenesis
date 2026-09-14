@@ -98,7 +98,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
       endDate: status === 'studying' || !end ? null : toGraphDate(end),
       status,
       description,
-      // See the position sheet: a reopened row keeps the record it hung off.
+      // See the position sheet: `editEntry` drops this if the school has changed.
       existingStintId: school?.stintId ?? initial?.existingStintId,
     });
   };

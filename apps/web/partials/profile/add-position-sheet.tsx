@@ -130,8 +130,8 @@ export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel
       status: isCurrent ? 'current' : 'former',
       description,
       // The locked employer when adding beside one, otherwise whatever the row
-      // already hung off — a reopened row keeps its edge rather than opening a
-      // second one at the same company.
+      // arrived with. `editEntry` drops it if the company has changed — this
+      // sheet cannot tell, since it never saw the company the row started on.
       existingStintId: company?.stintId ?? initial?.existingStintId,
     });
   };

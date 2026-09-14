@@ -9,6 +9,8 @@ import { NOTHING_TO_CLEAN } from '~/core/profile/pending-history';
 
 import { HistorySection } from './history-section';
 
+const SPACE_ID = 'space-1';
+
 afterEach(cleanup);
 
 type Entry = EmploymentCard['entries'][number];
@@ -41,6 +43,7 @@ function renderSection(cards: EmploymentCard[] = [], overrides: Partial<Paramete
   const props = {
     kind: 'employment' as const,
     cards,
+    spaceId: SPACE_ID,
     onAdd: vi.fn(),
     onAddTo: vi.fn(),
     onEditEntry: vi.fn(),
@@ -189,6 +192,31 @@ describe('HistorySection', () => {
     renderSection([card('Geo', [{ ...row, status: 'current' }])]);
 
     expect(screen.getByText(/Jun 2022 – Present/)).toBeInTheDocument();
+  });
+
+  // A proposal reaches one space. Offering Edit or Remove on a row from another
+  // would queue a change staging cannot make, and Save would report success.
+  it('does not offer to change a row from another space', () => {
+    const row = entry('Engineer', '2022-06-01Z', null);
+    renderSection([card('Geo', [{ ...row, spaceId: 'some-other-space' }])]);
+
+    expect(screen.queryByRole('button', { name: 'Remove role Engineer' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /added in another space, so it cannot be edited here/ })).toBeDisabled();
+  });
+
+  // `formatDuration` reads a missing end as "through today", which is right for a
+  // row still running and wrong for one that finished without recording when.
+  it('shows no total for an employer whose rows all ended at unknown dates', () => {
+    const first = entry('Engineer', '2018-01-01Z', null);
+    const second = entry('Analyst', '2016-01-01Z', null);
+    renderSection([
+      card('Geo', [
+        { ...first, status: 'former' },
+        { ...second, status: 'former' },
+      ]),
+    ]);
+
+    expect(screen.queryByText(/yrs?|mos?/)).not.toBeInTheDocument();
   });
 
   it('locks every control while a save is in flight', () => {

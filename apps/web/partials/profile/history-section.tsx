@@ -18,6 +18,8 @@ type Kind = 'employment' | 'education';
 type Props = {
   kind: Kind;
   cards: (EmploymentCard | EducationCard)[];
+  /** Where this modal publishes; a row from anywhere else is read-only here. */
+  spaceId: string;
   disabled?: boolean;
   /** The read failed; what is on screen is not what is on the profile. */
   isUnavailable?: boolean;
@@ -62,6 +64,7 @@ const COPY: Record<Kind, { title: string; add: string; addHere: string; empty: s
 export function HistorySection({
   kind,
   cards,
+  spaceId,
   disabled,
   isUnavailable,
   onAdd,
@@ -116,6 +119,10 @@ export function HistorySection({
                         noun={copy.noun}
                         entry={entry}
                         disabled={disabled}
+                        // A proposal reaches one space. Offering Edit or Remove on
+                        // a row from another would queue a change that staging
+                        // cannot make, and Save would report success anyway.
+                        isReadOnly={entry.spaceId !== null && entry.spaceId !== spaceId}
                         onEdit={() => onEditEntry(card, entry)}
                         onRemove={() => onRemoveEntry(card, entry)}
                       />
@@ -171,6 +178,10 @@ function CardDuration({ entries }: { entries: HistoryEntry[] }) {
   });
   const ends = entries.map(entry => entry.endDate).filter((date): date is string => date !== null);
 
+  // `formatDuration` reads a null end as "through today", which is right for a
+  // row still running and wrong for one that finished without recording when.
+  if (!isOpen && ends.length === 0) return null;
+
   const duration = formatDuration([...starts].sort()[0], isOpen ? null : ([...ends].sort().at(-1) ?? null));
   return duration ? <p className="text-metadata text-grey-04">{duration}</p> : null;
 }
@@ -179,12 +190,14 @@ function EntryRow({
   noun,
   entry,
   disabled,
+  isReadOnly,
   onEdit,
   onRemove,
 }: {
   noun: string;
   entry: HistoryEntry;
   disabled?: boolean;
+  isReadOnly?: boolean;
   onEdit: () => void;
   onRemove: () => void;
 }) {
@@ -227,8 +240,10 @@ function EntryRow({
         <button
           type="button"
           onClick={onEdit}
-          disabled={disabled}
-          aria-label={`Edit ${noun} ${subject}`}
+          disabled={disabled || isReadOnly}
+          aria-label={
+            isReadOnly ? `${subject} — added in another space, so it cannot be edited here` : `Edit ${noun} ${subject}`
+          }
           className="w-full text-left"
         >
           <p className="truncate text-inputMedium text-text">{heading}</p>
@@ -274,7 +289,14 @@ function EntryRow({
         )}
       </div>
 
-      <SquareButton onClick={onRemove} disabled={disabled} icon={<Trash />} aria-label={`Remove ${noun} ${subject}`} />
+      {!isReadOnly && (
+        <SquareButton
+          onClick={onRemove}
+          disabled={disabled}
+          icon={<Trash />}
+          aria-label={`Remove ${noun} ${subject}`}
+        />
+      )}
     </li>
   );
 }

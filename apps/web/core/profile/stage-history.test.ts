@@ -25,6 +25,7 @@ import {
   JOB_TYPE,
   LOCATION_PROPERTY,
   LOCATION_TYPE_PROPERTY,
+  PLACE_TYPE,
   ROLES_PROPERTY,
   ROLE_INFORMATION_TYPE,
   SKILLS_PROPERTY,
@@ -211,12 +212,22 @@ describe('stagePosition', () => {
 
   // A city the graph has not heard of still has to be a place rather than a
   // string, or the next person typing it makes a second one.
-  it('names and types a city the user typed rather than picked', () => {
-    const { values } = stagePosition(position({ location: created('new-city', 'Cincinnati') }), context);
+  // The picker takes cities, regions, countries and places, so typing the created
+  // one as City recorded "United Kingdom" as a city. Place is true of all four.
+  it('names a location the user typed and types it as a Place', () => {
+    const { values, relations } = stagePosition(
+      position({ location: created('new-place', 'United Kingdom') }),
+      context
+    );
 
     expect(values).toContainEqual(
-      expect.objectContaining({ entity: { id: 'new-city', name: null }, value: 'Cincinnati' })
+      expect.objectContaining({ entity: { id: 'new-place', name: null }, value: 'United Kingdom' })
     );
+    expect(
+      byType(relations, SystemIds.TYPES_PROPERTY).some(
+        relation => relation.fromEntity.id === 'new-place' && relation.toEntity.id === PLACE_TYPE
+      )
+    ).toBe(true);
   });
 
   // Each level says what it is. Untyped, a relation entity is reachable only by

@@ -4,7 +4,6 @@ import { ID } from '~/core/id';
 import type { Relation, Value } from '~/core/types';
 
 import {
-  CITY_TYPE,
   DEGREE_INFORMATION_TYPE,
   DEGREE_PROPERTY,
   DEGREE_TYPE,
@@ -28,6 +27,7 @@ import {
   JOB_TYPE,
   LOCATION_PROPERTY,
   LOCATION_TYPE_PROPERTY,
+  PLACE_TYPE,
   ROLES_PROPERTY,
   ROLE_INFORMATION_TYPE,
   SCHOOL_TYPES,
@@ -318,10 +318,14 @@ export function stagePosition(
   // Beside the dates, for the same reason: a job moves city and goes remote
   // without becoming a different job.
   //
-  // A city typed rather than picked is named and typed like any other new entity.
-  // City rather than Place: someone filling in where they worked is naming a
-  // city, and an untyped one would not turn up for the next person who types it.
-  const locationEntity = newEntityRows(draft.location ?? { id: '', name: null, isNew: false }, spaceId, [CITY_TYPE]);
+  // A location typed rather than picked is named and typed like any other new
+  // entity — as a Place, the generic of the four the property accepts.
+  //
+  // Not City. The picker takes cities, regions, countries and places, so someone
+  // creating "United Kingdom" or "California" was recording it as a city. Place
+  // is true of all four, and the narrower type can be added by anyone who knows
+  // which it should be.
+  const locationEntity = newEntityRows(draft.location ?? { id: '', name: null, isNew: false }, spaceId, [PLACE_TYPE]);
 
   const location = draft.location
     ? [

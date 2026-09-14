@@ -432,7 +432,10 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   <HistorySection
                     kind="employment"
                     cards={history.employment}
-                    disabled={isPublishing}
+                    spaceId={spaceId}
+                    // Adding before the read lands cannot see an employer already
+                    // on the profile, and opens a second edge to it.
+                    disabled={isPublishing || history.isLoading}
                     isUnavailable={history.isUnavailable}
                     onAdd={() => openSheetFor('employment')}
                     onAddTo={card => openSheetFor('employment', card)}
@@ -443,7 +446,8 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   <HistorySection
                     kind="education"
                     cards={history.education}
-                    disabled={isPublishing}
+                    spaceId={spaceId}
+                    disabled={isPublishing || history.isLoading}
                     isUnavailable={history.isUnavailable}
                     onAdd={() => openSheetFor('education')}
                     onAddTo={card => openSheetFor('education', card)}
