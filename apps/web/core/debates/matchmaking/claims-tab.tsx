@@ -43,7 +43,7 @@ import { useDebateRequests } from './hooks';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
-import { HubQueryState } from './hub-states';
+import { HubQueryState, HubSkeleton } from './hub-states';
 import { HideMyPositionsSwitch } from './matches-only-switch';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
@@ -816,6 +816,20 @@ export function ClaimsTab({
    */
   const mayFetchAhead = autoPages && answersSettled && !answersInFlight;
 
+  /**
+   * Rows under the list while the next page is on its way.
+   *
+   * Only with claims already on screen: before that the tab is drawing its own loading state, and
+   * two of them stacked would read as two lists. What this covers is the moment after the viewer
+   * reaches the bottom, where an unmarked pause is indistinguishable from a list that has ended —
+   * and this one can be a couple of seconds, because a page's rows are fetched and classified
+   * before anything of it can be shown.
+   */
+  const loadingMore =
+    visibleClaims.length > 0 &&
+    hasNextPage &&
+    ((graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage) || answersInFlight);
+
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage: mayFetchAhead,
     isFetchingNextPage: graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage,
@@ -1027,6 +1041,12 @@ export function ClaimsTab({
           Not while the allowlist is pending, though: the tab is showing a four-row skeleton then,
           so the sentinel sits in view under it and pages the corpus on the strength of a loading
           state being visible — reading "the viewer reached the end" off a list that isn't there. */}
+        {loadingMore ? (
+          <div data-testid="claims-loading-more">
+            <HubSkeleton rows={2} />
+          </div>
+        ) : null}
+
         {mayFetchAhead ? (
           <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
         ) : stoppedShort && visibleClaims.length > 0 ? (

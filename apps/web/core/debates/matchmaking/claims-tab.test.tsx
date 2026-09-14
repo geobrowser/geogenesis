@@ -2373,6 +2373,31 @@ describe('claims the viewer has already answered', () => {
   });
 
   /**
+   * And says so while it goes, once there are rows to say it under.
+   *
+   * The wait after reaching the bottom is not brief here — a page is fetched and then classified
+   * before any of it can be shown — and unmarked it is indistinguishable from a list that has
+   * ended. Only with claims already on screen: before that the tab draws its own loading state, and
+   * two stacked read as two lists.
+   */
+  it('marks the wait for the next page under the rows it already has', async () => {
+    mocks.taggedHasNextPage = true;
+    mocks.taggedClaims[DEBATE] = [featuredClaim(FEATURED_B, 'One you have not')];
+
+    const view = render(<ClaimsTab />);
+    await showAllClaims();
+    await screen.findByText('One you have not');
+    expect(screen.queryByTestId('claims-loading-more')).toBeNull();
+
+    mocks.taggedRowsLoading = true;
+    view.rerender(<ClaimsTab />);
+
+    expect(screen.getByTestId('claims-loading-more')).toBeInTheDocument();
+    // Under the rows, not instead of them.
+    expect(screen.getByText('One you have not')).toBeInTheDocument();
+  });
+
+  /**
    * When the list stops advancing, it has to say so and offer to go on.
    *
    * The empty state carries that offer when there is nothing on screen; with rows on screen

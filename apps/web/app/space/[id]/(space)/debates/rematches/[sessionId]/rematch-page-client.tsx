@@ -45,7 +45,7 @@ import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmak
 import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
-import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
+import { HubQueryState, HubSkeleton } from '~/core/debates/matchmaking/hub-states';
 import { HideMyPositionsSwitch, MatchesOnlySwitch } from '~/core/debates/matchmaking/matches-only-switch';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import {
@@ -1685,6 +1685,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // row lookups ran back to back and the loading state never lifted.
   const mayFetchAhead = autoPages && !rowsInFlight;
 
+  // The same marker the hub draws, for the same gap: the moment after the viewer reaches the bottom,
+  // where an unmarked pause reads as a list that has ended. Only with rows already showing — the
+  // tab draws its own loading state before that.
+  const loadingMore =
+    graphFiltered && visibleClaims.length > 0 && taggedHasNextPage && (taggedFetchingNextPage || rowsInFlight);
+
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage: mayFetchAhead,
     isFetchingNextPage: taggedFetchingNextPage,
@@ -2191,6 +2197,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             while it is disabled, so `taggedHasNextPage` still answers true under a source that is
             not paging anything, and the sentinel would sit in view asking a list nobody is looking
             at for its next page. */}
+        {loadingMore ? (
+          <div data-testid="rematch-claims-loading-more">
+            <HubSkeleton rows={2} />
+          </div>
+        ) : null}
+
         {mayFetchAhead && graphFiltered ? (
           <div ref={sentinelRef} data-testid="rematch-claims-scroll-sentinel" className="h-px" />
         ) : stoppedShortHere && visibleClaims.length > 0 ? (
