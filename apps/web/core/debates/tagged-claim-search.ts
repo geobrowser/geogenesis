@@ -176,6 +176,15 @@ export function useTaggedClaimSearch({
     return idPages.length === 0 ? NO_SEARCH_IDS : idPages.flat();
   }, [searching, idPages]);
 
+  // Stable, so a caller can memoize a retry around it. A fresh closure per render is the identity
+  // churn `claims-tab` documents about `combine`, and a `useCallback` that closed over one would
+  // have been no better than none.
+  const { refetch } = searchQuery;
+  const refetchSearch = React.useCallback(() => {
+    if (!searching) return;
+    void refetch();
+  }, [refetch, searching]);
+
   return {
     claimIds,
     idPages,
@@ -187,6 +196,6 @@ export function useTaggedClaimSearch({
     hasNextPage: searching && searchQuery.hasNextPage,
     fetchNextPage: searching ? () => void searchQuery.fetchNextPage() : noFetch,
     isFetchingNextPage: searching && searchQuery.isFetchingNextPage,
-    refetch: searching ? () => void searchQuery.refetch() : noFetch,
+    refetch: refetchSearch,
   };
 }

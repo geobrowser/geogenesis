@@ -1,6 +1,13 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { keepPreviousData, useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query';
+import {
+  type UseQueryResult,
+  keepPreviousData,
+  useInfiniteQuery,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -347,6 +354,30 @@ function useTagSearch(tagId: string, filters: TaggedClaimFilters, enabled: boole
   return useTaggedClaimSearch({ tagId, search: filters.search, enabled });
 }
 
+/**
+ * What the per-page row requests add up to.
+ *
+ * The first page and the ones after it mean different things to a caller, and collapsing them was a
+ * regression: both surfaces hand `isLoading` to `HubQueryState`, which replaces the whole list with
+ * a skeleton — so reporting a load while an *appended* page hydrated blanked the list on every
+ * scroll. The first page is the list appearing; the rest is the list growing, which belongs to the
+ * next-page state.
+ *
+ * At module scope so it has one identity for the life of the module. `useQueries` re-runs `combine`
+ * whenever it changes, and a closure built per render is the churn `claims-tab` documents.
+ */
+function combineSearchPages(results: Array<UseQueryResult<ReturnType<typeof decodeTaggedClaimsPage>>>) {
+  return {
+    pages: results.map(result => result.data?.claims),
+    firstPagePending: results.length > 0 && results[0]!.isLoading,
+    appendedPending: results.slice(1).some(result => result.isLoading),
+    error: results.find(result => result.error)?.error ?? null,
+  };
+}
+
+/** Everything keyed below, for the retry that invalidates rather than refetches. */
+const TAGGED_SEARCH_CLAIMS_QUERY_PREFIX = ['tagged-claims', 'search-claims'] as const;
+
 /** One page of a search's rows. Distinct from the list key — see where it is used. */
 const taggedSearchClaimsQueryKey = (tagId: string, filters: TaggedClaimFilters, ids: string[]) =>
   ['tagged-claims', 'search-claims', tagId, filters.topicIds, filters.spaceIds, filters.eligibleSpaceIds, ids] as const;
@@ -458,11 +489,7 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
       staleTime: TAGGED_STALE_TIME,
       enabled: enabled && ids.length > 0,
     })),
-    combine: results => ({
-      pages: results.map(result => result.data?.claims),
-      isLoading: results.some(result => result.isLoading),
-      error: results.find(result => result.error)?.error ?? null,
-    }),
+    combine: combineSearchPages,
   });
 
   const searchClaims = React.useMemo(() => {
@@ -483,6 +510,13 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     }
     return claims;
   }, [search.claimIds, searchPages.pages]);
+
+  const cache = useQueryClient();
+  const searchRefetch = search.refetch;
+  const refetchSearching = React.useCallback(() => {
+    void cache.invalidateQueries({ queryKey: TAGGED_SEARCH_CLAIMS_QUERY_PREFIX });
+    searchRefetch();
+  }, [cache, searchRefetch]);
 
   const browsedClaims = React.useMemo(
     () => query.data?.pages.flatMap(page => page.claims) ?? NO_TAGGED_CLAIMS,
@@ -523,17 +557,25 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // While searching, the text lookup is part of the load: its ids are what the row request is
     // built from, so a caller reading "settled" before they land would show an empty list under a
     // query that is still being answered.
-    isLoading: enabled && (searching ? !search.settled || searchPages.isLoading : query.isLoading),
+    isLoading: enabled && (searching ? !search.settled || searchPages.firstPagePending : query.isLoading),
     error: enabled ? (searching ? (search.error ?? searchPages.error) : query.error) : null,
     // Paging follows whichever source is answering. A search's next page is another `/search`
     // offset, not a graph cursor — the cursor belongs to a query that is not running.
     hasNextPage: enabled && (searching ? search.hasNextPage : query.hasNextPage),
     fetchNextPage: enabled ? (searching ? search.fetchNextPage : query.fetchNextPage) : noFetch,
-    isFetchingNextPage: enabled && (searching ? search.isFetchingNextPage : query.isFetchingNextPage),
-    // Whichever source answered. The error behind the retry button can be the text lookup's or the
-    // row request's, and while a search is running the cursor query is not the one that failed —
-    // refetching it did nothing at all.
-    refetch: searching ? search.refetch : query.refetch,
+    // A page is not fetched until its rows are. Reported done when only the id lookup had returned,
+    // the consumers' scroll sentinel re-armed while hydration was still out and asked for another
+    // page immediately — draining a broad search into a pile of in-flight row queries instead of
+    // paging as rows appear.
+    isFetchingNextPage:
+      enabled && (searching ? search.isFetchingNextPage || searchPages.appendedPending : query.isFetchingNextPage),
+    // Whichever request failed, which is not always the one that would be refetched. While a search
+    // runs the cursor query is idle, so retrying *that* asked nothing again; and where the id
+    // lookup succeeded and a row page did not, retrying the id lookup returns the same ids under
+    // the same key and leaves the failed page exactly as it was. So the rows are invalidated by
+    // key — the approach `claims-tab` already takes for this, and for the same reason: a refetch
+    // handed out of a `combine` would be a new identity on every render.
+    refetch: searching ? refetchSearching : query.refetch,
   };
 }
 
@@ -697,7 +739,19 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
     // reconciling its selection against them would prune against a menu the viewer has moved on
     // from. `use-scoped-claims` excludes it from the indexed path's settled flag for the same
     // reason, and these two flags meet in one condition.
-    settled: enabled ? !counts.isLoading && !counts.isPlaceholderData && !counts.error : false,
+    /**
+     * Not settled while the search has pages left.
+     *
+     * These counts are over the ids fetched so far — at most one page of them — so for a broad
+     * query they describe a prefix of the result set rather than the set. Both surfaces read this
+     * flag as permission to reconcile the viewer's selection against the menu, and a topic whose
+     * claims sit on a later page is simply absent from a prefix: `keepSelectableTopics` then drops
+     * a selection that was never invalid. Held unsettled instead, which costs a menu that grows as
+     * the viewer scrolls and keeps what they picked.
+     */
+    settled: enabled
+      ? !counts.isLoading && !counts.isPlaceholderData && !counts.error && search.settled && !search.hasNextPage
+      : false,
     error: counts.error,
   };
 }
@@ -739,7 +793,10 @@ export function useTaggedSpaceFacet(tagId: string, filters: TaggedClaimFilters, 
     spaces: query.data ?? NO_FACET_COUNTS,
     isLoading: enabled && query.isLoading,
     // Placeholder data is the previous filter's counts; see the topic facet's note.
-    settled: enabled ? !query.isLoading && !query.isPlaceholderData && !query.error : false,
+    /** See the topic facet: counts over a prefix of the results are not an answer about the set. */
+    settled: enabled
+      ? !query.isLoading && !query.isPlaceholderData && !query.error && search.settled && !search.hasNextPage
+      : false,
     error: query.error,
   };
 }

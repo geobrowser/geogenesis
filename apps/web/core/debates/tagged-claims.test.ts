@@ -32,12 +32,23 @@ const graphqlMock = graphql as unknown as Mock;
 vi.mock('~/core/io/queries', () => ({ getResultsPage: vi.fn() }));
 const searchMock = getResultsPage as unknown as Mock;
 
-/** One page of `/search` results, as ids. */
+/**
+ * Pages of `/search` results, as ids, answered by the offset they were asked for.
+ *
+ * Keyed on the offset rather than on the call order, which is how the endpoint behaves and is
+ * load-bearing here: a *refetch* asks for the same offset again, and a counter handed it the next
+ * page instead — so a retry looked like an empty result and nothing about retrying could be
+ * tested.
+ */
 function respondWithSearch(pages: string[][], total = pages.flat().length) {
-  let index = 0;
-  searchMock.mockImplementation(() => {
-    const ids = pages[index] ?? [];
-    index += 1;
+  const byOffset = new Map<number, string[]>();
+  let offset = 0;
+  for (const page of pages) {
+    byOffset.set(offset, page);
+    offset += page.length;
+  }
+  searchMock.mockImplementation((args: { offset?: number }) => {
+    const ids = byOffset.get(args.offset ?? 0) ?? [];
     return Effect.succeed({
       results: ids.map(id => ({ id, name: id, description: null, spaces: [], types: [] })),
       total,
@@ -58,7 +69,10 @@ beforeEach(() => {
 });
 
 function wrapper({ children }: { children: React.ReactNode }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // One client for the life of the mount. Rebuilt in the render body, as it was, every re-render
+  // handed the tree a fresh cache — so nothing was ever really cached, and anything asserting
+  // about a *second* pass over the same key (a retry, an invalidation) could not be written.
+  const client = React.useMemo(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }), []);
   return React.createElement(QueryClientProvider, { client }, children);
 }
 
@@ -103,6 +117,21 @@ function respondWithPages(pages: unknown[][]) {
     const answered = asked ? nodes.filter(node => asked.includes((node as { id: string }).id)) : nodes;
     return Effect.succeed(
       decoder({ entitiesConnection: { pageInfo: { hasNextPage, endCursor: `cursor-${index}` }, nodes: answered } })
+    );
+  });
+}
+
+/**
+ * Answers the first request and holds every one after it, which is a search whose ids have arrived
+ * and whose appended page is still hydrating.
+ */
+function respondThenHold(firstPage: unknown[]) {
+  let index = 0;
+  graphqlMock.mockImplementation(({ decoder }) => {
+    index += 1;
+    if (index > 1) return Effect.never;
+    return Effect.succeed(
+      decoder({ entitiesConnection: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: firstPage } })
     );
   });
 }
@@ -464,6 +493,58 @@ describe('the filter it builds', () => {
     expect(searchMock.mock.calls.length).toBeGreaterThan(before);
   });
 
+  /**
+   * Both surfaces hand `isLoading` to `HubQueryState`, which replaces the whole list with a
+   * skeleton. So it has to mean "the list is appearing", not "something is in flight": reported
+   * while an appended page hydrated, every scroll blanked the rows the viewer was reading.
+   */
+  it('does not report a load while an appended page hydrates', async () => {
+    respondWithSearch([['a1'], ['a2']], 2);
+    respondThenHold([node('a1', 'One')]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    result.current.fetchNextPage();
+
+    // The second page's rows are still out, and the first page's are still on screen.
+    await waitFor(() => expect(result.current.isFetchingNextPage).toBe(true));
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.claims).toHaveLength(1);
+  });
+
+  /**
+   * A page is not fetched until its rows are. Reported done when only the ids had returned, the
+   * consumers' scroll sentinel re-armed while hydration was out and asked for the next page
+   * immediately — turning a broad search into a pile of in-flight row queries.
+   */
+  it('is still fetching the next page until its rows arrive', async () => {
+    respondWithSearch([['a1'], ['a2']], 2);
+    respondThenHold([node('a1', 'One')]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    result.current.fetchNextPage();
+
+    await waitFor(() => expect(result.current.isFetchingNextPage).toBe(true));
+  });
+
+  /**
+   * Where the id lookup succeeded and a row page did not, retrying the id lookup returns the same
+   * ids under the same key — the failed page stays exactly as it was, and the error outlives every
+   * press of Try again. So the rows are invalidated by key.
+   */
+  it('recovers a failed row hydration on retry', async () => {
+    respondWithSearch([['a1']]);
+    graphqlMock.mockImplementation(() => Effect.fail(new Error('hydration failed')));
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    respondWithPages([[node('a1', 'One')]]);
+    result.current.refetch();
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+  });
+
   it('asks for nothing at all when the search is only whitespace', async () => {
     respondWithPages([[node('a1', 'One')]]);
     const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: '   ' });
@@ -640,6 +721,24 @@ describe('the facet menus', () => {
     await waitFor(() => expect(result.current.settled).toBe(false));
     // Still drawn, which is the whole point of holding them — just not called an answer.
     expect(result.current.topics).toHaveLength(1);
+  });
+
+  /**
+   * The counts are over the ids fetched so far, which for a broad search is a prefix of the result
+   * set. Both surfaces read `settled` as permission to reconcile the viewer's selection against the
+   * menu, and a topic whose claims sit on a later page is absent from a prefix — so a valid
+   * selection was silently dropped.
+   */
+  it('does not call a facet settled while the search has pages left', async () => {
+    // More matches than the pages fetched so far, which is what a broad query looks like.
+    respondWithSearch([['a1']], 400);
+    respondWithGroups([{ id: TOPIC, count: 3 }]);
+    const { result } = renderHook(() => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, search: 'the' }, true), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.topics).toHaveLength(1));
+    expect(result.current.settled).toBe(false);
   });
 
   it('counts topics over the topic selection, not around it', async () => {
