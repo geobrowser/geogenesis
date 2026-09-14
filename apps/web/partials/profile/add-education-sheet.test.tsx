@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEGREE_TYPES, FIELD_OF_STUDY_TYPE, SCHOOL_TYPES } from '~/core/profile/history-ontology';
 
@@ -138,30 +138,53 @@ describe('AddEducationSheet', () => {
     expect(within(end).queryByRole('option', { name: nextYear })).not.toBeInTheDocument();
   });
 
-  // Capping the years was not enough on its own: in September, December of this
-  // year was still one click away.
-  it('does not offer a month later this year either', async () => {
-    renderSheet();
+  /**
+   * Both of the next two read "later this year", which is only a real month if
+   * the year still has some left. Run in December they were testing nothing —
+   * one silently, the other by indexing past the end of the list — so the clock
+   * is pinned to June rather than left to the calendar.
+   */
+  describe('with the clock at June', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.setSystemTime(new Date('2026-06-15T00:00:00Z'));
+    });
 
-    await userEvent.selectOptions(screen.getByLabelText('Start year'), String(new Date().getUTCFullYear()));
+    afterEach(() => vi.useRealTimers());
 
-    const months = within(screen.getByLabelText('Start month')).getAllByRole('option');
-    const laterThisYear = months.slice(new Date().getUTCMonth() + 2);
+    // Capping the years was not enough on its own: in June, December of this
+    // year was still one click away.
+    it('does not offer a month later this year either', async () => {
+      renderSheet();
 
-    // `slice` past the current month; every one of those is out of reach.
-    for (const month of laterThisYear) expect(month).toBeDisabled();
-    expect(months[new Date().getUTCMonth() + 1]).not.toBeDisabled();
-  });
+      await userEvent.selectOptions(screen.getByLabelText('Start year'), '2026');
 
-  // The other order, which no disabled option can catch: December first, then
-  // this year. The month goes rather than a future date being stored.
-  it('drops a month that the year turns into the future', async () => {
-    const { onSave } = renderSheet();
+      const months = within(screen.getByLabelText('Start month')).getAllByRole('option');
 
-    await userEvent.selectOptions(screen.getByLabelText('Start month'), '12');
-    await userEvent.selectOptions(screen.getByLabelText('Start year'), String(new Date().getUTCFullYear()));
+      // July onwards is out of reach; June itself is not.
+      for (const month of months.slice(7)) expect(month).toBeDisabled();
+      expect(months[6]).not.toBeDisabled();
+    });
 
-    expect(screen.getByLabelText('Start month')).toHaveValue('');
+    // The other order, which no disabled option can catch: December first, then
+    // this year. The month goes rather than a future date being stored.
+    it('drops a month that the year turns into the future', async () => {
+      renderSheet();
+
+      await userEvent.selectOptions(screen.getByLabelText('Start month'), '12');
+      await userEvent.selectOptions(screen.getByLabelText('Start year'), '2026');
+
+      expect(screen.getByLabelText('Start month')).toHaveValue('');
+    });
+
+    it('keeps a month the year leaves in the past', async () => {
+      renderSheet();
+
+      await userEvent.selectOptions(screen.getByLabelText('Start month'), '12');
+      await userEvent.selectOptions(screen.getByLabelText('Start year'), '2024');
+
+      expect(screen.getByLabelText('Start month')).toHaveValue('12');
+    });
   });
 
   it('offers the three states dates alone cannot express', () => {

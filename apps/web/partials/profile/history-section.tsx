@@ -140,7 +140,15 @@ export function HistorySection({
                   </ul>
 
                   <div className="mt-2">
-                    <TextButton type="button" color="ctaPrimary" onClick={() => onAddTo(card)} disabled={disabled}>
+                    {/* One of these per card, so the visible text alone named
+                        every employer's button identically. */}
+                    <TextButton
+                      type="button"
+                      color="ctaPrimary"
+                      onClick={() => onAddTo(card)}
+                      disabled={disabled}
+                      aria-label={`${copy.addHere} at ${card.organization.name ?? 'Untitled'}`}
+                    >
                       + {copy.addHere}
                     </TextButton>
                   </div>

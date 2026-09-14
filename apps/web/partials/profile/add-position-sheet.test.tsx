@@ -246,7 +246,7 @@ describe('AddPositionSheet', () => {
       const props = renderSheet({ initial });
 
       // The company's, which is the first of the two — the title has one too.
-      await userEvent.click(screen.getAllByRole('button', { name: 'Change' })[0]);
+      await userEvent.click(screen.getAllByRole('button', { name: /^Change / })[0]!);
       await userEvent.click(screen.getAllByRole('button', { name: /pick existing/ })[0]);
       await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
@@ -491,5 +491,17 @@ describe('a company created in this modal', () => {
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({ company: expect.objectContaining({ isNew: false }) })
     );
+  });
+});
+
+describe('the Change button beside a chosen entity', () => {
+  // Every picker renders one, so "Change" alone named Company, Title and
+  // Location identically.
+  it('says which field it changes', async () => {
+    renderSheet();
+
+    await userEvent.click(screen.getAllByRole('button', { name: /pick existing/ })[0]!);
+
+    expect(screen.getByRole('button', { name: 'Change Company' })).toBeInTheDocument();
   });
 });

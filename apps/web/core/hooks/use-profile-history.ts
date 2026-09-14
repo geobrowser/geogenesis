@@ -16,6 +16,7 @@ import {
 import type { EducationCard, EmploymentCard, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
 import {
   NOTHING_PENDING,
+  type PendingAddition,
   type PendingHistory,
   type PendingRemoval,
   dropPendingAddition,
@@ -234,17 +235,52 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
   const shown = React.useMemo((): PendingHistory => {
     if (published.length === 0) return pending;
 
-    // Marked, so the section can show them without offering to change them: the
-    // row's real relation id is not on screen, and both handlers would act on a
-    // queue it has already left.
-    const settling = (additions: PendingHistory['positions'] | PendingHistory['education']) =>
-      additions.map(addition => ({ ...addition, isSettling: true }));
+    /**
+     * A published row, brought up to date with what publishing it did.
+     *
+     * Marked `isSettling`, so the section shows it without offering to change
+     * it: the row's real relation id is not on screen, and both handlers would
+     * act on a queue it has already left.
+     *
+     * And rewritten against what went out, because the draft still describes the
+     * profile as it was *before* the save. Left as it was, the card it builds
+     * carries the placeholder stint `merge` invents for an organisation with no
+     * saved edge — so "Add another role here" handed that placeholder back as
+     * `existingStintId`, `shareStintsByOrganization` could not resolve it, and
+     * staging opened a second Employment edge to the same company. The
+     * organisation is no longer new either, and saying otherwise wrote its name
+     * and a second Types relation all over again.
+     */
+    const settled = <TDraft extends PositionDraft | EducationDraft>(
+      additions: PendingAddition<TDraft>[],
+      stints: Record<string, string>
+    ): PendingAddition<TDraft>[] =>
+      additions.map(addition => {
+        const organization = organizationOf(addition.draft);
+        const published = { isNew: false, id: organization.id, name: organization.name };
+
+        return {
+          ...addition,
+          isSettling: true,
+          draft: {
+            ...addition.draft,
+            existingStintId: stints[organization.id] ?? addition.draft.existingStintId,
+            ...('company' in addition.draft ? { company: published } : { school: published }),
+          },
+        };
+      });
 
     return {
-      positions: [...published.flatMap(record => settling(record.rows.positions)), ...pending.positions],
-      education: [...published.flatMap(record => settling(record.rows.education)), ...pending.education],
+      positions: [
+        ...published.flatMap(record => settled(record.rows.positions, record.stints.employment)),
+        ...pending.positions,
+      ],
+      education: [
+        ...published.flatMap(record => settled(record.rows.education, record.stints.education)),
+        ...pending.education,
+      ],
       removals: [...published.flatMap(record => record.rows.removals), ...pending.removals],
-    } as PendingHistory;
+    };
   }, [pending, published]);
 
   /**

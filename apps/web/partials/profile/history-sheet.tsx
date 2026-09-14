@@ -99,14 +99,28 @@ export function findOrCreate() {
  * without this the chosen company disappears back into a placeholder the moment
  * focus leaves it.
  */
-export function PickedEntity({ name, note, onClear }: { name: string | null; note?: string; onClear?: () => void }) {
+export function PickedEntity({
+  label,
+  name,
+  note,
+  onClear,
+}: {
+  /** The field this answers, for the Change button's name. */
+  label?: string;
+  name: string | null;
+  note?: string;
+  onClear?: () => void;
+}) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-2 rounded border border-grey-02 px-[10px] py-[9px]">
         <span className="truncate text-input text-text">{name ?? 'Untitled'}</span>
         {onClear && (
           <div className="shrink-0">
-            <TextButton type="button" onClick={onClear}>
+            {/* Every picker in the sheet renders one of these, so "Change" alone
+                gave Company, Title, Location and Degree the same name — nothing
+                to tell them apart by when moving button to button. */}
+            <TextButton type="button" onClick={onClear} aria-label={label ? `Change ${label}` : undefined}>
               Change
             </TextButton>
           </div>
@@ -195,7 +209,7 @@ export function EntityField({
         locked ? (
           <PickedEntity name={locked.name} note={locked.note} />
         ) : value ? (
-          <PickedEntity name={value.name} onClear={onClear} />
+          <PickedEntity label={label} name={value.name} onClear={onClear} />
         ) : (
           <SelectEntity
             spaceId={spaceId}

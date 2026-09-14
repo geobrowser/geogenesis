@@ -101,6 +101,9 @@ const indexedCard = (org: string, role: string, ids: { edge: string; row: string
   return card;
 };
 
+/** A company typed into the sheet, which nothing has written yet. */
+const newCompany = (name: string) => ({ id: `org-${name}`, name, isNew: true });
+
 const setup = () => renderHook(() => useProfileHistory({ entityId: ENTITY_ID, spaceId: SPACE_ID }));
 
 /** A subtree row in the space this modal publishes to, which is the common case. */
@@ -1003,5 +1006,66 @@ describe('a row that has been published but cannot be read yet', () => {
 
     const queued = result.current.employment.find(card => card.organization.name === 'Coinbase')!;
     expect(queued.entries[0].isSettling).toBeUndefined();
+  });
+});
+
+/**
+ * A published row's draft still describes the profile as it was before the save.
+ * Handed back unchanged, it reopens the sheet on a company that no longer needs
+ * creating, hanging off a stint that never existed.
+ */
+describe('adding another row at an employer created by the last save', () => {
+  /**
+   * What the section and sheet between them do on "Add another role here": the
+   * card's own edge, and the card's own organisation.
+   */
+  const addAnotherAt = (result: { current: ReturnType<typeof useProfileHistory> }, org: string, title: string) => {
+    const card = result.current.employment.find(entry => entry.organization.name === org)!;
+    return draft(org, title, {
+      existingStintId: card.edges[0]!.stintId,
+      company: { id: card.organization.id, name: card.organization.name, isNew: card.organization.isNew ?? false },
+    });
+  };
+
+  it('joins the edge that was published rather than opening a second', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Acme', 'Engineer', { company: newCompany('Acme') })));
+    const stintId = result.current.stagePending().relations.find(r => r.type.id === EMPLOYMENT_PROPERTY)!.entityId;
+    act(() => result.current.settle());
+
+    act(() => result.current.addPosition(addAnotherAt(result, 'Acme', 'Product Lead')));
+
+    const { relations } = result.current.stagePending();
+
+    expect(relations.filter(relation => relation.type.id === EMPLOYMENT_PROPERTY)).toEqual([]);
+    expect(relations.find(relation => relation.type.id === ROLES_PROPERTY)?.fromEntity.id).toBe(stintId);
+  });
+
+  it('does not write the company’s name and type a second time', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Acme', 'Engineer', { company: newCompany('Acme') })));
+    act(() => result.current.settle());
+
+    act(() => result.current.addPosition(addAnotherAt(result, 'Acme', 'Product Lead')));
+
+    const { values, relations } = result.current.stagePending();
+
+    expect(values.filter(value => value.entity.id === 'org-Acme')).toEqual([]);
+    expect(relations.filter(relation => relation.fromEntity.id === 'org-Acme')).toEqual([]);
+  });
+
+  // The card is what the section reads to build that request, so it has to stop
+  // describing the company as one still to be created.
+  it('stops marking the card’s organisation as new', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Acme', 'Engineer', { company: newCompany('Acme') })));
+    expect(result.current.employment[0].organization.isNew).toBe(true);
+
+    act(() => result.current.settle());
+
+    expect(result.current.employment[0].organization.isNew).toBe(false);
   });
 });

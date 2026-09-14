@@ -83,7 +83,7 @@ describe('HistorySection', () => {
     const cards = [card('Geo', [entry('Engineer', '2022-06-01Z', null)])];
     const props = renderSection(cards);
 
-    await userEvent.click(screen.getByRole('button', { name: '+ Add another role here' }));
+    await userEvent.click(screen.getByRole('button', { name: /Add another role here/ }));
 
     expect(props.onAddTo).toHaveBeenCalledWith(cards[0]);
   });
@@ -223,7 +223,7 @@ describe('HistorySection', () => {
     renderSection([card('Geo', [entry('Engineer', '2022-06-01Z', null)])], { disabled: true });
 
     expect(screen.getByRole('button', { name: '+ Add experience' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '+ Add another role here' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Add another role here/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Edit role Engineer' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Remove role Engineer' })).toBeDisabled();
   });
@@ -287,5 +287,22 @@ describe('a row still being written to the graph', () => {
 
     expect(screen.getByRole('button', { name: 'Remove role Engineer' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit role Engineer' })).not.toBeDisabled();
+  });
+});
+
+/**
+ * These repeat — one per card, one per picker — so the visible text alone gives
+ * every copy the same name, and there is nothing to tell them apart by when
+ * moving button to button.
+ */
+describe('buttons that appear more than once', () => {
+  it('says which employer another role would be added at', () => {
+    renderSection([
+      card('Geo', [entry('Engineer', '2022-06-01Z', null)]),
+      card('Coinbase', [entry('Analyst', '2019-01-01Z', '2021-01-01Z', 'Coinbase')]),
+    ]);
+
+    expect(screen.getByRole('button', { name: 'Add another role here at Geo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add another role here at Coinbase' })).toBeInTheDocument();
   });
 });
