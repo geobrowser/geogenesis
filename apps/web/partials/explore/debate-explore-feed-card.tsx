@@ -160,7 +160,13 @@ export function DebateExploreFeedCard({
       {/* Cap the media at the width the designs (and the full-screen feed) use — feed columns,
           especially data blocks, can be much wider and full-bleed videos dwarf the card. */}
       <div className="w-full max-w-[480px]">
-        {readyDebate ? <DebateCardVideos debate={readyDebate} active={active} /> : <DebateVideoSkeleton />}
+        {readyDebate ? (
+          // `nearViewport` is the same 800px-margin gate the geo-chat lookups already use, so
+          // the recordings resolve while the card is still approaching rather than on arrival.
+          <DebateCardVideos debate={readyDebate} active={active} preload={nearViewport} />
+        ) : (
+          <DebateVideoSkeleton />
+        )}
       </div>
 
       <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
@@ -221,9 +227,17 @@ function DebateCardExtras({ debate, spaceId }: { debate: Debate; spaceId: string
 
 // Separate component so useDebateVotes (which queries as soon as it mounts) only runs once the
 // debate is loaded and known to be watchable.
-function DebateCardVideos({ debate, active }: { debate: Debate; active: boolean }) {
+function DebateCardVideos({
+  debate,
+  active,
+  preload,
+}: {
+  debate: Debate;
+  active: boolean;
+  preload: boolean;
+}) {
   const votes = useDebateVotes(debate);
-  return <DebateFeedPlayer debate={debate} active={active} votes={votes} />;
+  return <DebateFeedPlayer debate={debate} active={active} preload={preload} votes={votes} />;
 }
 
 function DebateVideoSkeleton() {

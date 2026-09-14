@@ -105,8 +105,8 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
 }));
 
 vi.mock('./debate-feed-player', () => ({
-  DebateFeedPlayer: ({ debate, active }: { debate: Debate; active: boolean }) => (
-    <div data-testid={`player-${debate.id}`} data-active={active} />
+  DebateFeedPlayer: ({ debate, active, preload }: { debate: Debate; active: boolean; preload?: boolean }) => (
+    <div data-testid={`player-${debate.id}`} data-active={active} data-preload={preload ? 'true' : 'false'} />
   ),
 }));
 
@@ -947,5 +947,54 @@ describe('DebatesBrowseFeed ordering', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
     expect(screen.queryByRole('heading', { name: 'Debates are useful' })).not.toBeInTheDocument();
+  });
+});
+
+// Each debate needs two signed recording URLs, and until they land the player shows a
+// "Loading…" placeholder instead of a <video>. Fetching them only once a card is active is
+// what makes arriving at a debate feel glitchy (GEO-2895) — so the NEXT one preloads.
+describe('DebatesBrowseFeed — preloading the next debate (GEO-2895)', () => {
+  beforeEach(() => {
+    mocks.debates = [
+      completedDebate('debate-1', 'First claim', '2026-07-02T00:01:10.000Z'),
+      completedDebate('debate-2', 'Second claim', '2026-07-02T00:02:10.000Z'),
+      completedDebate('debate-3', 'Third claim', '2026-07-02T00:03:10.000Z'),
+    ];
+  });
+
+  // Asserted relationally rather than by debate id: the feed renders in ranked order
+  // (useDebatesBestOrder), so which debate lands first is not this test's business.
+  function playersInRenderOrder() {
+    return screen.getAllByTestId(/^player-/).map(el => ({
+      id: el.getAttribute('data-testid'),
+      active: el.getAttribute('data-active') === 'true',
+      preload: el.getAttribute('data-preload') === 'true',
+    }));
+  }
+
+  it('preloads the debate immediately after the active one, and only that one', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    const players = playersInRenderOrder();
+    const activeIndex = players.findIndex(p => p.active);
+
+    expect(activeIndex).toBeGreaterThanOrEqual(0);
+    expect(players[activeIndex + 1]?.preload).toBe(true);
+
+    // Every other card loads nothing: not the active one (already loading because it is
+    // active), and not two ahead — a vertical one-at-a-time feed would otherwise fetch
+    // recordings most viewers never reach.
+    players.forEach((p, i) => {
+      if (i !== activeIndex + 1) expect(p.preload).toBe(false);
+    });
+  });
+
+  it('preloading never makes a card active — it loads without autoplaying off-screen', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    const players = playersInRenderOrder();
+
+    expect(players.filter(p => p.active)).toHaveLength(1);
+    for (const p of players) {
+      if (p.preload) expect(p.active).toBe(false);
+    }
   });
 });
