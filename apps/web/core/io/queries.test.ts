@@ -87,6 +87,18 @@ describe('buildSearchPath', () => {
       expect(new URL(`https://x${path}`).searchParams.get('tag_ids')!.split(',')).toHaveLength(MAX_SEARCH_FILTER_IDS);
     });
 
+    // The type list fails the same way and so is capped the same way. `useSearch` passes whatever
+    // `filterByTypes` it was given, and a data-table filter can hold more than ten.
+    it('caps the type list at ten as well', () => {
+      const types = Array.from(
+        { length: 13 },
+        (_, index) => `96f859efa1ca4b229372c86ad58b6${String(index).padStart(3, '0')}`
+      );
+      const path = buildSearchPath({ query: 'trump', typeIds: types });
+
+      expect(new URL(`https://x${path}`).searchParams.get('type_ids')!.split(',')).toHaveLength(MAX_SEARCH_FILTER_IDS);
+    });
+
     it('composes with the type filter, which the endpoint ANDs against it', () => {
       const path = buildSearchPath({
         query: 'trump',

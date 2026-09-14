@@ -335,15 +335,6 @@ const taggedClaimsDocument = parse(TAGGED_CLAIMS_SOURCE) as TypedDocumentNode<
  * knowledge graph rather than geo-chat, so a socket event says nothing about them.
  */
 /**
- * The spaces a text search runs in: the picked ones where the viewer picked any, otherwise
- * everything they may be shown. The same precedence the filter uses, so the search and the filter
- * cannot be scoped to different sets.
- */
-function searchSpaceIds(filters: TaggedClaimFilters): string[] | null {
-  return filters.spaceIds.length > 0 ? filters.spaceIds : filters.eligibleSpaceIds;
-}
-
-/**
  * The text search behind all three queries in this module, resolved once.
  *
  * Called by each of them rather than threaded through from the caller: the key is a function of the
@@ -353,7 +344,7 @@ function searchSpaceIds(filters: TaggedClaimFilters): string[] | null {
  * wiring, which is the arrangement this module exists to avoid.
  */
 function useTagSearch(tagId: string, filters: TaggedClaimFilters, enabled: boolean): TaggedClaimSearch {
-  return useTaggedClaimSearch({ tagId, search: filters.search, spaceIds: searchSpaceIds(filters), enabled });
+  return useTaggedClaimSearch({ tagId, search: filters.search, enabled });
 }
 
 /** One page of a search's rows. Distinct from the list key — see where it is used. */
@@ -539,7 +530,10 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     hasNextPage: enabled && (searching ? search.hasNextPage : query.hasNextPage),
     fetchNextPage: enabled ? (searching ? search.fetchNextPage : query.fetchNextPage) : noFetch,
     isFetchingNextPage: enabled && (searching ? search.isFetchingNextPage : query.isFetchingNextPage),
-    refetch: query.refetch,
+    // Whichever source answered. The error behind the retry button can be the text lookup's or the
+    // row request's, and while a search is running the cursor query is not the one that failed —
+    // refetching it did nothing at all.
+    refetch: searching ? search.refetch : query.refetch,
   };
 }
 

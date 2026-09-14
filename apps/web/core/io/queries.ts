@@ -1125,7 +1125,9 @@ export type SearchResultsPage = {
 
 /**
  * How many `type_ids` / `tag_ids` values the endpoint accepts. Past this it answers `400`, so it is
- * a limit rather than a suggestion.
+ * a limit rather than a suggestion — and applied to both, because both fail the same way. Every
+ * REST search in the app is built in this function, so a filter that grew an eleventh value
+ * anywhere upstream would take a whole surface down instead of degrading.
  */
 export const MAX_SEARCH_FILTER_IDS = 10;
 
@@ -1147,8 +1149,9 @@ export function buildSearchPath(args: ResultsArgs): string {
   }
 
   if (args.typeIds?.length) {
-    // REST endpoint expects UUIDs with hyphens
-    params.set('type_ids', args.typeIds.map(toUuid).join(','));
+    // REST endpoint expects UUIDs with hyphens, and caps this at ten exactly as it caps `tag_ids`
+    // — measured: an eleventh value is a `400`, not a truncated answer.
+    params.set('type_ids', args.typeIds.slice(0, MAX_SEARCH_FILTER_IDS).map(toUuid).join(','));
   }
 
   if (args.tagIds?.length) {

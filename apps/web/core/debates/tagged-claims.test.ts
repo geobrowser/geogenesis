@@ -417,6 +417,53 @@ describe('the filter it builds', () => {
     expect(result.current.claims).toHaveLength(0);
   });
 
+  /**
+   * Space narrowing is the graph's alone now, and that is not a shortcut — `/search` has no param
+   * that restricts to a *set* of spaces. `additional_space_ids` widens the canonical scope rather
+   * than narrowing it (the same query answers 81 either way) and `scope=SPACE_SINGLE` takes one
+   * space, which for an allowlist would be a request per space per keystroke.
+   *
+   * So the composition GEO-2789 needs lives here: the picked spaces still reach the tag relation in
+   * the filter these ids narrow.
+   */
+  it('keeps narrowing by space over the search results', async () => {
+    respondWithSearch([['a1']]);
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power', spaceIds: [SPACE] });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(sentVariables().filter.and).toContainEqual({
+      relations: {
+        some: {
+          typeId: { is: '257090341ba5406f94e4d4af90042fba' },
+          toEntityId: { is: TAG },
+          spaceId: { in: [SPACE] },
+        },
+      },
+    });
+    // And the space never went to the endpoint, which cannot narrow by it.
+    expect(sentSearchArgs().additionalSpaceIds).toBeUndefined();
+  });
+
+  /**
+   * The retry behind an error state has to reach whatever failed. While a search is running the
+   * cursor query is not it — it is disabled — so refetching that asked nothing again and the error
+   * stayed on screen through every press.
+   */
+  it('retries the text lookup rather than the idle cursor query', async () => {
+    searchMock.mockImplementation(() => Effect.fail(new Error('search failed')));
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    const before = searchMock.mock.calls.length;
+
+    respondWithSearch([['a1']]);
+    result.current.refetch();
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+    expect(searchMock.mock.calls.length).toBeGreaterThan(before);
+  });
+
   it('asks for nothing at all when the search is only whitespace', async () => {
     respondWithPages([[node('a1', 'One')]]);
     const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: '   ' });

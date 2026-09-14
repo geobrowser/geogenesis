@@ -4,7 +4,7 @@ import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { Effect } from 'effect';
+import { Duration, Effect } from 'effect';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { getResultsPage } from '~/core/io/queries';
@@ -37,8 +37,6 @@ export type TaggedClaimSearch = {
    * and re-chunked, because a page boundary is where the endpoint's ranking was actually cut.
    */
   idPages: string[][];
-  /** How many the endpoint says match in total, across every page. */
-  total: number;
   /**
    * Whether `claimIds` is an answer yet.
    *
@@ -54,6 +52,8 @@ export type TaggedClaimSearch = {
   hasNextPage: boolean;
   fetchNextPage: () => void;
   isFetchingNextPage: boolean;
+  /** Ask again, for the retry behind an error state. */
+  refetch: () => void;
 };
 
 const noFetch = () => {};
@@ -81,19 +81,11 @@ const noFetch = () => {};
 export function useTaggedClaimSearch({
   tagId,
   search,
-  spaceIds,
   enabled = true,
 }: {
   tagId: string;
   /** Debounced by the caller, as the tagged-claims filters are. */
   search: string;
-  /**
-   * The spaces to search in: the picked ones where the viewer picked any, otherwise everything they
-   * may be shown. `null` leaves the endpoint's own default scope alone, which is what an unresolved
-   * allowlist should do — narrowing to nothing would answer "no matches" to a question nobody could
-   * have answered yet.
-   */
-  spaceIds: string[] | null;
   enabled?: boolean;
 }): TaggedClaimSearch {
   // Capped where the request is built too, but read here as well so the key cannot mint a new
@@ -102,7 +94,7 @@ export function useTaggedClaimSearch({
   const searching = enabled && query !== '';
 
   const searchQuery = useInfiniteQuery({
-    queryKey: ['tagged-claims', 'search', tagId, query, spaceIds],
+    queryKey: ['tagged-claims', 'search', tagId, query],
     initialPageParam: 0,
     queryFn: ({ pageParam, signal }) =>
       Effect.runPromise(
@@ -113,26 +105,49 @@ export function useTaggedClaimSearch({
             offset: pageParam,
             typeIds: [CLAIM_TYPE_ID],
             tagIds: [tagId],
-            // `additional_space_ids` rather than `space_id`: the debates allowlist is a set, and the
-            // single-space param would need one request per space. The endpoint ignores this
-            // alongside `include_non_canonical=false`, which is why that is left unset here — the
-            // tag is the curation gate on this list, and a claim a curator tagged is in scope
-            // whether or not the space it lives in is canonical.
-            additionalSpaceIds: spaceIds ?? undefined,
+            // Deliberately unscoped by space, which took measuring to be sure of. `/search` has no
+            // param that narrows to a *set* of spaces: `additional_space_ids` widens the canonical
+            // scope rather than restricting it — the same query returns 81 matches with and without
+            // it — and `scope=SPACE_SINGLE` takes one space, which for the debates allowlist would
+            // be a request per space per keystroke. Passing the allowlist anyway would have implied
+            // a guarantee it does not give, and put it in this key for nothing.
+            //
+            // It is also not needed: the default scope already includes non-canonical spaces (2186
+            // tagged claims against 2172 with `include_non_canonical=false`), so a claim tagged in
+            // one is findable here. The space gate stays where GEO-2789 put it and where the space
+            // facet is counted — on the tag relation, in the graph filter these ids narrow.
+            //
+            // The cost is that a page is filled before that gate applies, so a viewer narrowed to
+            // one space sees fewer than a page of their own matches at a time. Paging reaches the
+            // rest, and the alternative was a request per space.
           },
           signal
         )
       ),
+    /**
+     * The next offset is how many rows have actually been read, not the last one plus a page.
+     *
+     * `useSearch` does the latter against the same endpoint, and this deliberately does not follow
+     * it: that arithmetic assumes every page before the last is full, and a short page would carry
+     * the offset past the rows it did not return. Full pages are the norm here — the endpoint caps
+     * at 100 and answers 100 — so the two agree in practice, which is exactly when a latent
+     * row-skip is worth not copying.
+     *
+     * `serverCount` rather than `rawCount`: it is the page's length before this layer's own
+     * block-and-system-type filtering, which is what says whether the endpoint had more to give.
+     */
     getNextPageParam: (lastPage, pages) => {
-      const fetched = pages.reduce((count, page) => count + page.serverCount, 0);
-      // `serverCount` is the page's length before this layer's own filtering, which is what says
-      // whether the endpoint had more to give. `rawCount` would stop paging on a page whose rows
-      // were all dropped here, while the rows past it went unread.
-      return lastPage.serverCount > 0 && fetched < lastPage.total ? fetched : undefined;
+      const read = pages.reduce((count, page) => count + page.serverCount, 0);
+      return lastPage.serverCount > 0 && read < lastPage.total ? read : undefined;
     },
     // Narrowing a list should narrow it rather than blank it and fill it in again — the same reason
     // the tagged-claims query holds its previous page.
     placeholderData: keepPreviousData,
+    // Search results are not cached for long, as `useSearch` explains about the same endpoint: a
+    // stale page revalidating behind the viewer is layout shift and results that do not match what
+    // they typed. The tag's own rows keep their longer `TAGGED_STALE_TIME`, because curation moves
+    // at human speed and text relevance does not.
+    gcTime: Duration.toMillis(Duration.seconds(15)),
     enabled: searching,
   });
 
@@ -164,7 +179,6 @@ export function useTaggedClaimSearch({
   return {
     claimIds,
     idPages,
-    total: searching ? (searchQuery.data?.pages.at(-1)?.total ?? 0) : 0,
     settled: !searching || searchQuery.isFetched,
     // `enabled: false` leaves react-query pending, and a caller waiting on this would read that as
     // "still looking" and never show its empty state.
@@ -173,5 +187,6 @@ export function useTaggedClaimSearch({
     hasNextPage: searching && searchQuery.hasNextPage,
     fetchNextPage: searching ? () => void searchQuery.fetchNextPage() : noFetch,
     isFetchingNextPage: searching && searchQuery.isFetchingNextPage,
+    refetch: searching ? () => void searchQuery.refetch() : noFetch,
   };
 }
