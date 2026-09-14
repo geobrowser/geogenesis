@@ -1581,11 +1581,23 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    *
    * Per source, because a different query answers for each: the tag's rows for Explore's two
    * catalogues, the curated lookup for Recommended.
+   *
+   * Two signals rather than one, and the difference is the error term — the same split the hub
+   * keeps between `taggedAnswersReady` and `answersInFlight`.
+   *
+   * `rowsSettled` asks whether the answer can be *trusted*, which is what deciding a missing row
+   * needs: a lookup that failed knows nothing, so its rows stay unknown and are never hidden.
+   *
+   * `rowsInFlight` asks only whether it is still running, which is what every gate about *waiting*
+   * needs. Driving those off the error term too meant a failed metadata lookup — one `tabError`
+   * deliberately treats as survivable — left the tab hiding every unclassified claim behind an
+   * endless "Looking for claims…", with no way out but a reload.
    */
   const rowsSettled =
     source === 'recommended'
       ? !curatedClaimsQuery.isLoading && !curatedClaimsQuery.error
       : !taggedClaimsSettling && !taggedClaimsQuery.error;
+  const rowsInFlight = source === 'recommended' ? curatedClaimsQuery.isLoading : taggedClaimsSettling;
 
   const answeredStateOf = React.useCallback(
     (claim: DebateRematchClaim): AnsweredState => {
@@ -1613,7 +1625,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     resetKey: sessionId,
     // Same rule as the hub's: a row nobody has classified yet is not ready to be drawn while the
     // lookup that would classify it is still out.
-    classifying: !rowsSettled,
+    classifying: rowsInFlight,
   });
 
   const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
@@ -1626,7 +1638,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // hook. `narrowedClaims` is downstream of both, so a page they empty would not have counted.
     loaded: taggedCatalog.length,
     visible: visibleClaims.length,
-    settling: !rowsSettled,
+    settling: rowsInFlight,
+    // The browse catalogue is warmed from the opponent's tab, so while the viewer is anywhere but
+    // the tagged sources these counts are describing two different lists at once.
+    paused: !graphFiltered,
     hasNextPage: taggedHasNextPage,
     fetchNextPage: fetchNextTaggedPage,
     // Every dimension the tagged query is keyed by, plus the source that chooses between the two
@@ -1635,7 +1650,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     resetKey: `${taggedListKey}:${source}`,
   });
 
-  const stillPaging = graphFiltered && visibleClaims.length === 0 && (autoPages || !rowsSettled);
+  const stillPaging = graphFiltered && visibleClaims.length === 0 && (autoPages || rowsInFlight);
 
   /**
    * Both paging states belong to the tagged sources alone.

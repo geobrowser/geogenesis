@@ -37,6 +37,7 @@ export function useBoundedPaging({
   loaded,
   visible,
   settling,
+  paused = false,
   hasNextPage,
   fetchNextPage,
   resetKey,
@@ -63,6 +64,16 @@ export function useBoundedPaging({
    * finished becoming itself.
    */
   settling: boolean;
+  /**
+   * Stop accounting entirely, keeping the budget for when the list comes back.
+   *
+   * For a surface whose paged list is not the one on screen. The debate-again flow warms its browse
+   * catalogue from the opponent's tab, so `loaded` counted a page nobody was looking at against a
+   * `visible` taken from a different tab's rows — marking the warm page barren, and then counting
+   * it a second time when the warm-up ended, `loaded` fell to zero and Explore fetched it back from
+   * cache. A budget can be spent before the viewer has opened the list at all.
+   */
+  paused?: boolean;
   hasNextPage: boolean;
   fetchNextPage: () => unknown;
   /** A different list: a different corpus to search, and a fresh budget to search it with. */
@@ -84,9 +95,13 @@ export function useBoundedPaging({
   }
 
   React.useEffect(() => {
-    // Nothing is judged mid-flight. A page is barren or not once it has finished arriving, and the
-    // second half of its arrival is the lookup that decides which of its rows can be shown.
-    if (settling) return;
+    // Nothing is judged mid-flight, and nothing at all while this list is not the one on screen.
+    // Both return *before* the snapshot is updated, so the budget and the count it is measured
+    // against come back exactly as they were left.
+    //
+    // A page is barren or not once it has finished arriving, and the second half of its arrival is
+    // the lookup that decides which of its rows can be shown.
+    if (paused || settling) return;
 
     // Only when a page has actually landed. Rows leaving — the viewer answering one, a filter
     // narrowing — is not a barren fetch, and counting it would spend the budget on the viewer's own
@@ -99,7 +114,7 @@ export function useBoundedPaging({
     const grew = visible > seen.current.visible;
     seen.current = { ...seen.current, loaded, visible };
     setBarren(count => (grew ? 0 : count + 1));
-  }, [loaded, settling, visible]);
+  }, [loaded, paused, settling, visible]);
 
   const keepLooking = React.useCallback(() => {
     setBarren(0);

@@ -4,12 +4,19 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AUTO_PAGES_WITHOUT_ROWS, useBoundedPaging } from './use-bounded-paging';
 
-type Props = { loaded: number; visible: number; settling?: boolean; hasNextPage?: boolean; resetKey?: string };
+type Props = {
+  loaded: number;
+  visible: number;
+  settling?: boolean;
+  paused?: boolean;
+  hasNextPage?: boolean;
+  resetKey?: string;
+};
 
 function render(initial: Props, fetchNextPage = vi.fn()) {
   const view = renderHook(
-    ({ loaded, visible, settling = false, hasNextPage = true, resetKey = 'list' }: Props) =>
-      useBoundedPaging({ loaded, visible, settling, hasNextPage, fetchNextPage, resetKey }),
+    ({ loaded, visible, settling = false, paused = false, hasNextPage = true, resetKey = 'list' }: Props) =>
+      useBoundedPaging({ loaded, visible, settling, paused, hasNextPage, fetchNextPage, resetKey }),
     { initialProps: initial }
   );
 
@@ -88,6 +95,45 @@ describe('useBoundedPaging', () => {
     }
 
     expect(view.result.current.autoPages).toBe(true);
+  });
+
+  /**
+   * A list nobody is looking at spends nothing.
+   *
+   * The debate-again flow warms its browse catalogue from the opponent's tab, so while the viewer is
+   * elsewhere `loaded` describes one list and `visible` another — and the budget was spent on pages
+   * nobody had asked for, before Explore was ever opened.
+   */
+  describe('while the paged list is not the one on screen', () => {
+    it('spends nothing on it', () => {
+      const view = render({ loaded: 0, visible: 0 });
+
+      for (let page = 1; page <= AUTO_PAGES_WITHOUT_ROWS + 2; page += 1) {
+        view.rerender({ loaded: page * 50, visible: 0, paused: true });
+      }
+
+      expect(view.result.current.autoPages).toBe(true);
+    });
+
+    // And the page it warmed is not counted twice — once while away, once on arrival — which is
+    // what happens if the snapshot moves while nobody is measuring against it.
+    it('counts the warmed page once, when the viewer arrives', () => {
+      const view = render({ loaded: 0, visible: 0 });
+
+      // Warmed while away, then dropped when the warm-up ends, then fetched back from cache.
+      view.rerender({ loaded: 50, visible: 0, paused: true });
+      view.rerender({ loaded: 0, visible: 0, paused: true });
+      view.rerender({ loaded: 50, visible: 0 });
+
+      // One barren page spent, not two — so four more are still available.
+      for (let page = 2; page <= AUTO_PAGES_WITHOUT_ROWS - 1; page += 1) {
+        view.rerender({ loaded: page * 50, visible: 0 });
+      }
+      expect(view.result.current.autoPages).toBe(true);
+
+      view.rerender({ loaded: AUTO_PAGES_WITHOUT_ROWS * 50, visible: 0 });
+      expect(view.result.current.autoPages).toBe(false);
+    });
   });
 
   it('gives the viewer a way to go on, and a fresh budget with it', () => {

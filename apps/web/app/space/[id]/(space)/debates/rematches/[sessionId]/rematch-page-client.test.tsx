@@ -151,6 +151,7 @@ const mocks = vi.hoisted(() => ({
   curatedIds: [] as string[],
   savedClaims: null as DebateRematchClaim[] | null,
   browsedLookupLoading: false,
+  browsedLookupError: null as Error | null,
   currentUserId: 'user-local' as string | null,
   geoChatAuthenticated: true,
   spaceAllowlist: null as Set<string> | null,
@@ -313,6 +314,11 @@ function rematchClaimsLookup(claimIds: string[]) {
   const isCuratedLookup = mocks.curatedIds.length > 0 && claimIds.every(claimId => mocks.curatedIds.includes(claimId));
   if (mocks.browsedLookupLoading && !isCuratedLookup) {
     return { data: { claims: [], excluded_claim_ids: [] }, isLoading: true, error: null };
+  }
+  // Settled *and* failed, which is a different answer from still running — react-query drops
+  // `isLoading` either way, and the page has to tell them apart.
+  if (mocks.browsedLookupError && !isCuratedLookup) {
+    return { data: { claims: [], excluded_claim_ids: [] }, isLoading: false, error: mocks.browsedLookupError };
   }
   return {
     data: { claims: mocks.claims, excluded_claim_ids: mocks.excludedClaimIds },
@@ -896,6 +902,7 @@ beforeEach(() => {
   mocks.curatedIds = [];
   mocks.savedClaims = null;
   mocks.browsedLookupLoading = false;
+  mocks.browsedLookupError = null;
   mocks.currentUserId = 'user-local';
   mocks.geoChatAuthenticated = true;
   mocks.responseIndexingStatus = null;
@@ -4214,6 +4221,27 @@ describe('Hide my positions', () => {
     // Kept, and not by luck: geo-chat holds no row for this one, which is what a claim nobody has
     // answered looks like. A switch that read that as an answer would hide the whole corpus.
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  /**
+   * A failed row lookup must not brick the tab.
+   *
+   * That lookup is metadata — `tabError` deliberately survives it, because the claims themselves
+   * came from the graph and read perfectly well without it. But the flag saying it had *settled*
+   * also carried whether it had settled *successfully*, and the gates about waiting were driven off
+   * the same value: so a failure left every unclassified claim held back behind a "Looking for
+   * claims…" that could never finish, with nothing on screen and no way out but a reload.
+   *
+   * Trust and in-flight are two questions. A failure knows nothing, so its rows stay unknown and
+   * are never hidden — and a list that is too wide beats one that never fills.
+   */
+  it('shows the claims when the row lookup fails, rather than waiting forever', async () => {
+    mocks.browsedLookupError = new Error('rows exploded');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.queryByText(/Looking for claims/)).toBeNull();
   });
 
   /**
