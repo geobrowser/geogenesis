@@ -98,6 +98,8 @@ export function pendingClaimResponse(queryKey: readonly unknown[], data: unknown
     personalSpaceId: String(personalSpaceId),
     /** Used to distinguish confirmed responses from rolled-back responses. */
     status: indexingState.status,
+    /** One per submission, so each submission is reported once. */
+    runId: indexingState.runId,
   };
 }
 
@@ -196,11 +198,11 @@ export function useClaimResponseIndexedNotifier(
       // readiness and takes the report immediately.
       //
       // Keyed separately from the indexed notification so both fire: this one makes the opposite
-      // side's Request debate appear at once, that one reconciles it. Keyed on the position too,
-      // so toggling a side off and on again is reported rather than swallowed as a duplicate.
+      // side's Request debate appear at once, that one reconciles it. Keyed on the run, so picking
+      // a side this session already reported is reported again rather than left for indexing.
       const pending = pendingClaimResponse(event.query.queryKey, event.query.state.data);
       if (!pending) return;
-      startNotification(`${queryHash}:pending:${String(pending.position)}`, pending);
+      startNotification(`${queryHash}:pending:${pending.runId}`, pending);
     });
 
     for (const [notificationKey, interrupted] of interruptedNotifications.current) {

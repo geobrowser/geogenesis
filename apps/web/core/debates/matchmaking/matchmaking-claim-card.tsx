@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
-import { viewerResponseFromDirection } from '~/core/claims/browse/claim-position-summaries';
+import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-position-summaries';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
@@ -673,41 +673,24 @@ function RespondableControls({
   );
 
   /**
-   * The viewer's own side, with the indexed read standing in where geo-chat has no answer.
+   * The viewer's own side, with the indexed read standing in where geo-chat has no answer (GEO-2823).
    *
-   * The half of GEO-2823 that was actually costing people their position. The optimistic snapshot
-   * is a *shared* store keyed on the claim, so whichever surface first sees geo-chat confirm the
-   * response retires the optimism for all of them — and a surface whose only source is geo-chat
-   * then falls back to an endpoint that has not caught up. Take a side in the hub panel and it
-   * vanished about ten seconds later while the explore card, which already had this fallback
-   * through `useClaimResponseState`, went on showing it.
-   *
-   * `indexedViewerDirection`, emphatically not `viewerDirection`. The latter folds the in-flight
-   * snapshot in, so substituting it here would make this an echo of the client's own write: the
-   * retire effect below compares geo-chat's copy against what it expected, and against an echo that
-   * comparison is trivially true. It would then bin the optimism the instant indexing reported
-   * done, before anything independent had confirmed it — which is the symptom this memo exists to
-   * remove, re-created one layer down.
-   *
-   * Held while that read is still in flight, because `null` is its answer for "no side" *and* for
-   * "not yet". Substituting on "not yet" draws both pills unselected for someone who holds one, and
-   * a press then republishes their side instead of clearing it. The hub tabs are where that bites:
-   * their `answersReady` waits on geo-chat's rows and knows nothing about this second source.
-   *
-   * `reconcileWithIndexedResponse={false}` opts a host out. The rematch picker does, because its
-   * sides are the graph's and geo-chat's silence there is not the same fact — see
-   * `viewerResponseUnknown` and GEO-2807.
+   * The optimistic snapshot is shared across surfaces, so once any of them retires it, a surface
+   * reading geo-chat alone drops a side geo-chat has not caught up on. The rematch picker opts out:
+   * its sides are the graph's, and geo-chat's silence there is not the same fact (GEO-2807).
    */
   const resolvedReadiness = React.useMemo(() => {
-    if (!reconcileWithIndexedResponse || viewerResponseUnknown || readiness.viewer_response) return readiness;
-    // Never settled for this claim, so there is nothing to stand in with — the wait the comment
-    // above describes, before it has anything to remember.
-    if (settledDirection === null) return readiness;
-    const indexed = viewerResponseFromDirection(
-      settledDirection === 'none' ? null : settledDirection,
-      readiness.response_kind
-    );
-    return indexed ? { ...readiness, viewer_response: indexed } : readiness;
+    if (!reconcileWithIndexedResponse || viewerResponseUnknown) return readiness;
+    // `settledDirection` is null until this claim has settled once, which is the read still loading.
+    const viewerResponse = viewerResponseWithIndexedFallback({
+      viewerResponse: readiness.viewer_response,
+      indexedDirection: settledDirection === 'none' ? null : settledDirection,
+      isIndexedLoading: settledDirection === null,
+      responseKind: readiness.response_kind,
+    });
+    return viewerResponse === (readiness.viewer_response ?? null)
+      ? readiness
+      : { ...readiness, viewer_response: viewerResponse };
   }, [readiness, reconcileWithIndexedResponse, settledDirection, viewerResponseUnknown]);
 
   /**

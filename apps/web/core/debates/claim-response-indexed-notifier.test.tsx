@@ -113,6 +113,39 @@ describe('useClaimResponseIndexedNotifier', () => {
     await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
   });
 
+  // Every submission is reported, even one repeating a side reported earlier for the same claim.
+  it('reports each submission in flight, including a side already reported this session', async () => {
+    const { queryClient, wrapper } = createHarness();
+    renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });
+    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'] as const;
+    const pending = (expectedResponse: 'positive' | 'negative') => ({
+      entityId: 'claim-1',
+      expectedResponse,
+      personalSpaceId: 'profile-1',
+      responseKind: 'stance',
+      spaceId: 'space-1',
+    });
+
+    act(() =>
+      queryClient.setQueryData(queryKey, { status: 'reconciling', pending: pending('positive'), runId: 'run-1' })
+    );
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(1));
+    act(() =>
+      queryClient.setQueryData(queryKey, { status: 'reconciling', pending: pending('negative'), runId: 'run-2' })
+    );
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
+    act(() =>
+      queryClient.setQueryData(queryKey, { status: 'reconciling', pending: pending('positive'), runId: 'run-3' })
+    );
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(3));
+    expect(mocks.notify.mock.calls[2]?.[3]).toBe(true);
+
+    // The same submission cycling through its states is still one report.
+    act(() => queryClient.setQueryData(queryKey, { status: 'delayed', pending: pending('positive'), runId: 'run-3' }));
+    await Promise.resolve();
+    expect(mocks.notify).toHaveBeenCalledTimes(3);
+  });
+
   it('reports cleared responses and ignores curation indexing', async () => {
     const { queryClient, wrapper } = createHarness();
     renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });

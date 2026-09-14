@@ -12,7 +12,7 @@ import { hasUnpublishedClaimResponseKindEdit } from '~/core/responses/entity-res
 import type { Entity } from '~/core/types';
 
 import { claimResponseKind } from '../response-kind';
-import { positionSummariesFromCounts, viewerResponseFromDirection } from './claim-position-summaries';
+import { positionSummariesFromCounts, viewerResponseWithIndexedFallback } from './claim-position-summaries';
 import { type ClaimResponseSummary, useClaimResponseSummary } from './claim-response-summary';
 
 export type ClaimResponseState = {
@@ -164,11 +164,16 @@ export function useClaimResponseState({
       // viewer's own side reads as unselected for as long as the row is out — and permanently in a
       // space geo-chat does not index — which turns a click on it into a republish rather than a
       // clear.
-      viewer_response: row?.viewer_response ?? viewerResponseFromDirection(summary.viewerDirection, responseKind),
+      viewer_response: viewerResponseWithIndexedFallback({
+        viewerResponse: row?.viewer_response,
+        indexedDirection: summary.indexedViewerDirection,
+        isIndexedLoading: summary.isViewerResponseLoading,
+        responseKind,
+      }),
       viewer_debate_ready: row?.viewer_debate_ready ?? false,
       readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
     }),
-    [responseKind, row, summary.viewerDirection]
+    [responseKind, row, summary.indexedViewerDirection, summary.isViewerResponseLoading]
   );
 
   return {
