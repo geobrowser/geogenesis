@@ -497,6 +497,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // space and then narrowed under the viewer.
   const {
     claims: taggedCatalog,
+    fetched: taggedFetched,
     isLoading: taggedCatalogLoading,
     error: taggedCatalogError,
     hasNextPage: taggedHasNextPage,
@@ -1641,7 +1642,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const { autoPages, stoppedShort, keepLooking } = useBoundedPaging({
     // The tag's own page, before the exclusions and the publishability gate run over it — see the
     // hook. `narrowedClaims` is downstream of both, so a page they empty would not have counted.
-    loaded: taggedCatalog.length,
+    loaded: taggedFetched,
     visible: visibleClaims.length,
     settling: rowsInFlight,
     // The browse catalogue is warmed from the opponent's tab, so while the viewer is anywhere but
@@ -1677,8 +1678,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const stoppedShortHere = stoppedShort && graphFiltered;
   const searchingMessage = hidesAnswered ? 'Looking for claims you haven’t answered yet…' : 'Looking for more claims…';
   const stoppedShortMessage = hidesAnswered
-    ? 'Nothing you haven’t already answered in the first few hundred claims.'
-    : 'Nothing in the first few hundred claims.';
+    ? 'Nothing you haven’t already answered in the claims searched so far.'
+    : 'Nothing in the claims searched so far.';
 
   // Not while the rows for what is already here are still coming. The two pull against each other
   // otherwise — see the hub, where fetching a page ahead of an empty list meant the catalog and the

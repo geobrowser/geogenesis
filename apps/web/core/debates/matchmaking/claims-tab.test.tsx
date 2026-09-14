@@ -362,6 +362,7 @@ vi.mock('../tagged-claims', async importOriginal => ({
     const claims = enabled && !mocks.taggedCatalogError ? applyServerFilters(taggedRowsFor(tagId), filters) : [];
     return {
       claims,
+      fetched: claims.length,
       isLoading: enabled && mocks.featuredLoading,
       // Disabled means no answer, not the last one — the hook masks all of these, so the mock has
       // to as well or a test can exercise a state production cannot reach.

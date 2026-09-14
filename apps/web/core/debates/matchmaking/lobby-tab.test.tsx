@@ -157,6 +157,28 @@ describe('LobbyTab', () => {
     });
 
     /**
+     * And once, or Lobby becomes a tab the viewer cannot stay on.
+     *
+     * The hub unmounts this tab when they leave it, so everything the step-back knows is recomputed
+     * from scratch on every arrival — and with "Matches only" defaulting on, a viewer with no
+     * matches and an empty wider list was walked off Lobby *every time they opened it*. Lobby is
+     * the tab the hub opens on, so there was nowhere else for them to be and no way to stay.
+     */
+    it('does not walk the viewer off Lobby a second time', () => {
+      mocks.widerEmpty = true;
+      const store = createStore();
+      const { onTabChange } = renderLobby(store);
+      expect(onTabChange).toHaveBeenCalledWith('explore');
+
+      // Leaving the tab and coming back: a new mount, the same session.
+      cleanup();
+      const returning = renderLobby(store);
+
+      expect(returning.onTabChange).not.toHaveBeenCalled();
+      expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
+    });
+
+    /**
      * An outage is not an answer about the viewer.
      *
      * react-query drops `isLoading` on failure, so a failed lookup reads from here exactly like a

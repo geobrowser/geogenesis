@@ -9,7 +9,7 @@ import { useMatchmakingMatches } from './hooks';
 import { MatchesList } from './matches-list';
 import { MatchesOnlySwitch } from './matches-only-switch';
 import { type NarrowedListState, useNarrowedDefault } from './use-narrowed-default';
-import { type DebatesHubTab, debatesHubMatchesOnlyAtom } from '~/atoms';
+import { type DebatesHubTab, debatesHubLeftLobbyForExploreAtom, debatesHubMatchesOnlyAtom } from '~/atoms';
 
 /**
  * The hub's landing tab, and the single answer to "what can I debate right now" (GEO-2861).
@@ -55,8 +55,22 @@ export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =>
 
   const { showNarrowed, steppedBack, rearm } = useNarrowedDefault(matchesOnly, matchesState);
 
-  // Held still so `ClaimsTab`'s report effect is not re-armed on every render of this one.
-  const showExplore = React.useCallback(() => onTabChange('explore'), [onTabChange]);
+  /**
+   * Once a session, and held outside this component because this component does not last.
+   *
+   * `HubSwap` unmounts the tab when the viewer leaves it, so everything `useNarrowedDefault` knows
+   * is recomputed from scratch on every arrival. With "Matches only" defaulting on, a viewer with
+   * no matches and an empty `debate_now` list was therefore moved off Lobby *every time they opened
+   * it* — and Lobby is the tab the hub opens on, so there was no way to stay. The rematch page
+   * guards the same move with a ref keyed on its session; this is that, for a tab that dies.
+   *
+   * Held still as well, so `ClaimsTab`'s report effect is not re-armed on every render of this one.
+   */
+  const [leftForExplore, setLeftForExplore] = useAtom(debatesHubLeftLobbyForExploreAtom);
+  const showExplore = React.useCallback(() => {
+    setLeftForExplore(true);
+    onTabChange('explore');
+  }, [onTabChange, setLeftForExplore]);
 
   const toggle = (
     <MatchesOnlySwitch
@@ -87,7 +101,7 @@ export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =>
       // Only on the automatic path. A viewer who turned the switch off themselves and found an
       // empty Lobby asked a question and got an answer; moving them off the tab would be answering
       // a different one. `steppedBack` is exactly "nobody chose this list".
-      onSettledEmpty={steppedBack ? showExplore : undefined}
+      onSettledEmpty={steppedBack && !leftForExplore ? showExplore : undefined}
     />
   );
 }

@@ -353,7 +353,7 @@ export function ClaimsTab({
   //
   // A curation tag lives in the knowledge graph and geo-chat indexes neither of them — so unlike the
   // position filter this can't be a query param, and unlike the old client-side topic cut it can't
-  // run over the loaded pages either: tagged claims are a few hundred out of a corpus of hundreds of
+  // run over the loaded pages either: tagged claims are a couple of thousand out of a corpus of
   // thousands, so a page-local filter would page for a very long time before it found one.
   //
   // GEO-2771 moved `all` here from the index for the same reason it was always true of `featured`,
@@ -384,6 +384,7 @@ export function ClaimsTab({
   const taggedEnabled = graphSourced && !spacesPending;
   const {
     claims: taggedClaims,
+    fetched: taggedFetched,
     isLoading: taggedLoading,
     error: taggedError,
     hasNextPage: taggedHasNextPage,
@@ -784,7 +785,7 @@ export function ClaimsTab({
     // The server's own count, before the space and publishability gates run over it. A page they
     // empty entirely is the barren case this bound is for, and counting the gated rows would make
     // it look like no page had landed at all.
-    loaded: graphSourced ? taggedClaims.length : pages.reduce((total, page) => total + page.claims.length, 0),
+    loaded: graphSourced ? taggedFetched : pages.reduce((total, page) => total + page.claims.length, 0),
     visible: visibleClaims.length,
     settling: answersInFlight,
     hasNextPage,
@@ -865,8 +866,8 @@ export function ClaimsTab({
     ? 'Looking for claims you haven’t answered yet…'
     : 'Looking for more claims…';
   const stoppedShortMessage = collapsesAnswered
-    ? 'Nothing you haven’t already answered in the first few hundred claims.'
-    : 'Nothing in the first few hundred claims.';
+    ? 'Nothing you haven’t already answered in the claims searched so far.'
+    : 'Nothing in the claims searched so far.';
 
   // Every hook above has run, so the cache is filled and the atoms are seeded; there is simply
   // nothing to draw. Placed here rather than early, which would break the rules of hooks.

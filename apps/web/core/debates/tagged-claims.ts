@@ -19,9 +19,9 @@ import { type RelationFacetCount, decodeRelationFacet, relationFacetDocument } f
  * paged by the server.
  *
  * GEO-2683 for `Featured`, GEO-2771 for `Debate`, GEO-2798 for this shape. The tag is what gets
- * asked for, rather than the claims and then their tags: a tagged set is a few hundred out of three
- * hundred thousand, so a filter applied to pages of claims would page for a very long time before
- * it found one. That ratio is also why these lists do not go through geo-chat at all — the graph
+ * asked for, rather than the claims and then their tags: the Debate tag is ~2,000 claims out of
+ * hundreds of thousands, so a filter applied to pages of claims would page for a very long time
+ * before it found one. That ratio is also why these lists do not go through geo-chat at all — the graph
  * owns tags, so it can answer *which* claims, leaving geo-chat to answer about them.
  *
  * This module used to fetch the whole tagged set and do everything else in memory: ranking, search,
@@ -126,8 +126,8 @@ export type TaggedClaimFilters = {
    *
    * Matched a word at a time rather than as a phrase — see {@link searchTerms}. The app's own
    * search endpoint would be the fuzzy, relevance-ranked alternative, and it cannot serve this
-   * list: it has no notion of the curation tag, and the tagged set is a few hundred claims inside a
-   * corpus of hundreds of thousands, so its ranked page is all corpus and no tagged claim. Measured
+   * list: it has no notion of the curation tag, and the tagged set is a couple of thousand claims
+   * inside a corpus of hundreds of thousands, so its ranked page is all corpus and no tagged claim. Measured
    * on the Debate tag: of the top 100 hits for "Allegations" scoped to Claim, none were tagged, and
    * a tagged claim *named* "Allegations of an affair…" came back 521st of 697. Scoping the request
    * to the eight tagged spaces one at a time recovered one of the two the filter below already
@@ -218,6 +218,12 @@ function decodeTaggedClaimsPage(data: TaggedClaimsQuery) {
 
   return {
     claims,
+    // What the server actually returned, before the two `continue`s above. Callers that need to
+    // know a *page arrived* have to count this rather than `claims`: a page of nodes that all lack
+    // a name, or a placeable tag space, decodes to nothing — and a caller reading the decoded
+    // length cannot tell that from no page at all. `useBoundedPaging` is the one that must, or the
+    // page goes uncharged and its sentinel keeps asking for more.
+    fetched: data.entitiesConnection?.nodes?.length ?? 0,
     hasNextPage: data.entitiesConnection?.pageInfo?.hasNextPage ?? false,
     endCursor: data.entitiesConnection?.pageInfo?.endCursor ?? null,
   };
@@ -386,6 +392,12 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     [query.data?.pages]
   );
 
+  /** Rows the server has returned across every page held, decodable or not — see `fetched`. */
+  const fetched = React.useMemo(
+    () => query.data?.pages.reduce((total, page) => total + page.fetched, 0) ?? 0,
+    [query.data?.pages]
+  );
+
   return {
     // Disabled means no answer, not the last one.
     //
@@ -396,6 +408,7 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // wasteful — `fetchNextPage` is a manual call and ignores `enabled`, so a sentinel reading a
     // cached `true` pages a query whose scope has not been resolved yet, from an old cursor.
     claims: enabled ? claims : NO_TAGGED_CLAIMS,
+    fetched: enabled ? fetched : 0,
     // `enabled: false` leaves react-query pending, and a caller waiting on this would read that as
     // "still looking" and never show its empty state.
     isLoading: enabled && query.isLoading,
