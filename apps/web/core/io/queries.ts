@@ -942,6 +942,14 @@ interface ResultsArgs {
   query: string;
   spaceId?: string;
   typeIds?: string[];
+  /**
+   * Narrow to entities carrying a `Tags` relation to one of these (GEO-2876). ANDed with
+   * `typeIds`, ORed among themselves — so several tags widen the set while a type narrows it.
+   *
+   * The to-entity, not the Tags property: the property id is the same for every tag, and asking
+   * with it would match the entire tagged corpus.
+   */
+  tagIds?: string[];
   limit?: number;
   offset?: number;
   additionalSpaceIds?: string[];
@@ -1115,6 +1123,12 @@ export type SearchResultsPage = {
   serverCount: number;
 };
 
+/**
+ * How many `type_ids` / `tag_ids` values the endpoint accepts. Past this it answers `400`, so it is
+ * a limit rather than a suggestion.
+ */
+export const MAX_SEARCH_FILTER_IDS = 10;
+
 export function buildSearchPath(args: ResultsArgs): string {
   const params = new URLSearchParams();
   // Every REST search in the app arrives here — the ten-odd `useSearch` surfaces through
@@ -1135,6 +1149,14 @@ export function buildSearchPath(args: ResultsArgs): string {
   if (args.typeIds?.length) {
     // REST endpoint expects UUIDs with hyphens
     params.set('type_ids', args.typeIds.map(toUuid).join(','));
+  }
+
+  if (args.tagIds?.length) {
+    // REST endpoint expects UUIDs with hyphens, and answers `400` past ten values rather than
+    // truncating. Capped here rather than left to the caller for the same reason the query length
+    // is: every REST search in the app arrives at this function, so a filter that grew an eleventh
+    // tag upstream would take a whole surface down instead of degrading.
+    params.set('tag_ids', args.tagIds.slice(0, MAX_SEARCH_FILTER_IDS).map(toUuid).join(','));
   }
 
   const scopesAdditionalSpaces = Boolean(args.additionalSpaceIds?.length) && !args.spaceId;

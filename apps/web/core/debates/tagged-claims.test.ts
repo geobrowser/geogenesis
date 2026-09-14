@@ -7,12 +7,12 @@ import * as Effect from 'effect/Effect';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { graphql } from '~/core/io/graphql-client';
+import { getResultsPage } from '~/core/io/queries';
 
 import {
   NO_TAGGED_CLAIM_FILTERS,
   TAGGED_CLAIMS_PAGE_SIZE,
   type TaggedClaimFilters,
-  searchTerms,
   useTaggedClaims,
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
@@ -27,8 +27,34 @@ const TOPIC = '5d050707bc5840119b1e81ad3adb6244';
 vi.mock('~/core/io/graphql-client', () => ({ graphql: vi.fn() }));
 const graphqlMock = graphql as unknown as Mock;
 
+// Search is answered by the REST endpoint now (GEO-2898), so it is a dependency of this module
+// rather than part of the filter it builds.
+vi.mock('~/core/io/queries', () => ({ getResultsPage: vi.fn() }));
+const searchMock = getResultsPage as unknown as Mock;
+
+/** One page of `/search` results, as ids. */
+function respondWithSearch(pages: string[][], total = pages.flat().length) {
+  let index = 0;
+  searchMock.mockImplementation(() => {
+    const ids = pages[index] ?? [];
+    index += 1;
+    return Effect.succeed({
+      results: ids.map(id => ({ id, name: id, description: null, spaces: [], types: [] })),
+      total,
+      rawCount: ids.length,
+      serverCount: ids.length,
+    });
+  });
+}
+
+/** What the module asked the search endpoint for. */
+function sentSearchArgs(call = 0) {
+  return searchMock.mock.calls[call][0] as Record<string, any>;
+}
+
 beforeEach(() => {
   graphqlMock.mockReset();
+  searchMock.mockReset();
 });
 
 function wrapper({ children }: { children: React.ReactNode }) {
@@ -66,12 +92,17 @@ function node(
 /** Answers each successive request with the next page, the last one closing the connection. */
 function respondWithPages(pages: unknown[][]) {
   let index = 0;
-  graphqlMock.mockImplementation(({ decoder }) => {
+  graphqlMock.mockImplementation(({ decoder, variables }) => {
     const nodes = pages[index] ?? [];
     const hasNextPage = index < pages.length - 1;
     index += 1;
+    // Only the rows that were asked for, where the request named ids. The connection answers a
+    // filter; a double that handed back its whole page regardless could not tell an id filter that
+    // works from one that is ignored — and every search request names ids.
+    const asked = (variables as any)?.filter?.and?.find((clause: any) => clause.id?.in)?.id?.in as string[] | undefined;
+    const answered = asked ? nodes.filter(node => asked.includes((node as { id: string }).id)) : nodes;
     return Effect.succeed(
-      decoder({ entitiesConnection: { pageInfo: { hasNextPage, endCursor: `cursor-${index}` }, nodes } })
+      decoder({ entitiesConnection: { pageInfo: { hasNextPage, endCursor: `cursor-${index}` }, nodes: answered } })
     );
   });
 }
@@ -260,37 +291,130 @@ describe('the filter it builds', () => {
     });
   });
 
-  it('sends the search term to the server rather than filtering here', async () => {
+  /**
+   * The text goes to `/search` and comes back as ids, and it is the ids that narrow this filter.
+   * That is what lets the matching be fuzzy, stemmed and relevance-ranked while the tag, the topics
+   * and the spaces keep being answered by the graph over the set it returned.
+   */
+  it('narrows by the ids the search endpoint matched rather than by the text', async () => {
+    respondWithSearch([['a1']]);
     respondWithPages([[node('a1', 'One')]]);
     const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'nuclear' });
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    expect(sentVariables().filter.and).toContainEqual({ name: { includesInsensitive: 'nuclear' } });
+    expect(sentSearchArgs().query).toBe('nuclear');
+    expect(sentVariables().filter.and).toContainEqual({ id: { in: ['a1'] } });
+    // And nothing matches the text on the graph any more.
+    expect(sentVariables().filter.and.some((clause: any) => clause.name !== undefined)).toBe(false);
   });
 
-  it('matches a multi-word search a word at a time, so the words need not be adjacent', async () => {
-    // A phrase match is what this used to be, and it was the whole limitation: "Trump affair" found
-    // nothing, while two tagged claims say "an affair between President Donald Trump". One ANDed
-    // clause per word finds those and still cannot return anything a phrase match would have.
+  // The tag is what made this possible (GEO-2876). Without it the tagged set — a few hundred claims
+  // in a corpus of hundreds of thousands — never reached a ranked page: "trump" answered with five
+  // entities named "Trump" and no claims at all.
+  it('asks the endpoint for the tag and the Claim type', async () => {
+    respondWithSearch([['a1']]);
     respondWithPages([[node('a1', 'One')]]);
-    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: '  Trump   affair ' });
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'nuclear' });
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    const nameClauses = sentVariables().filter.and.filter((clause: any) => clause.name !== undefined);
-    expect(nameClauses).toEqual([
-      { name: { includesInsensitive: 'Trump' } },
-      { name: { includesInsensitive: 'affair' } },
+    expect(sentSearchArgs().tagIds).toEqual([TAG]);
+    expect(sentSearchArgs().typeIds).toEqual(['96f859efa1ca4b229372c86ad58b694b']);
+  });
+
+  /**
+   * A search that matched nothing and no search at all are opposite answers, and only one of them
+   * narrows. `id: { in: [] }` returns nothing, which is what "no matches" should show; leaving the
+   * clause out would show the whole tag under a query that matched none of it.
+   */
+  it('asks for no claims at all when the search matched none', async () => {
+    respondWithSearch([[]], 0);
+    respondWithPages([[]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'nothingmatchesthis' });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.claims).toHaveLength(0);
+  });
+
+  // Topics and spaces are still the graph's to answer, over the ids the search returned — which is
+  // the whole reason the search resolves to ids rather than filtering the page in the client.
+  it('keeps narrowing by topic over the search results', async () => {
+    respondWithSearch([['a1', 'a2']]);
+    respondWithPages([[node('a1', 'One', { topics: [{ id: TOPIC, name: 'Nuclear' }] })]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power', topicIds: [TOPIC] });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    const and = sentVariables().filter.and;
+    expect(and).toContainEqual({ id: { in: ['a1', 'a2'] } });
+    expect(and).toContainEqual({
+      relations: { some: { typeId: { is: '806d52bc27e94c9193c057978b093351' }, toEntityId: { is: TOPIC } } },
+    });
+  });
+
+  /**
+   * Relevance is the reason for the move, and the graph cannot supply it: `entitiesConnection` is
+   * ordered `RANKING_SCORE_DESC`, which describes how prominent a claim is rather than how well it
+   * answers what was typed. So the endpoint's order is imposed on each page it returned.
+   */
+  it('lists a page in the endpoint order rather than the graph ranking', async () => {
+    respondWithSearch([['a2', 'a1']]);
+    // The graph hands them back the other way round, which is what ranking score does.
+    respondWithPages([[node('a1', 'Less relevant', { rankingScore: '99' }), node('a2', 'Most relevant')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+
+    expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a2', 'a1']);
+  });
+
+  /**
+   * The endpoint caps a page at 100 rows however large a limit is asked for, so a broad search has
+   * more than it returns — paging it is asking for the next offset, not for a graph cursor. The
+   * cursor belongs to a query that does not run while a search does.
+   */
+  it('pages the search rather than the cursor', async () => {
+    respondWithSearch([['a1'], ['a2']], 2);
+    respondWithPages([[node('a1', 'One')], [node('a2', 'Two')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+    expect(result.current.hasNextPage).toBe(true);
+
+    result.current.fetchNextPage();
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+    // The second request was another offset into the same search.
+    expect(sentSearchArgs(1).offset).toBe(1);
+  });
+
+  // An entity is returned once per space it is tagged in, and the endpoint pages over those rows —
+  // so a claim tagged in two spaces can close one page and open the next. Hydrated twice, it would
+  // be drawn twice.
+  it('does not list a claim twice when it spans a page boundary', async () => {
+    respondWithSearch([['a1'], ['a1', 'a2']], 3);
+    // Each graph page holds both rows; which of them comes back is the id filter's answer.
+    respondWithPages([
+      [node('a1', 'One'), node('a2', 'Two')],
+      [node('a1', 'One'), node('a2', 'Two')],
     ]);
-  });
-
-  it('stops at eight words, so one request cannot grow without bound', async () => {
-    respondWithPages([[node('a1', 'One')]]);
-    const search = Array.from({ length: 12 }, (_, index) => `w${index}`).join(' ');
-    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search });
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    expect(searchTerms(search)).toHaveLength(8);
-    expect(sentVariables().filter.and.filter((clause: any) => clause.name !== undefined)).toHaveLength(8);
+    result.current.fetchNextPage();
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+    expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a1', 'a2']);
+  });
+
+  /**
+   * The rows are built from the ids, so the text lookup is part of the load rather than something
+   * beside it. Reported settled too early, a caller shows its empty state under a query that is
+   * still being answered.
+   */
+  it('is still loading while the text lookup is out', async () => {
+    searchMock.mockImplementation(() => Effect.never);
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(true));
+    expect(result.current.claims).toHaveLength(0);
   });
 
   it('asks for nothing at all when the search is only whitespace', async () => {
@@ -477,6 +601,7 @@ describe('the facet menus', () => {
     // and co-occurrence (GEO-2696): the menu answers "what else do the claims I have narrowed to
     // carry", so the selection *is* applied — and each picked topic comes back with its current
     // count, which is what lets it be un-picked.
+    respondWithSearch([['a1']]);
     respondWithGroups([{ id: TOPIC, count: 12 }]);
     const { result } = renderHook(
       () => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, topicIds: [TOPIC], search: 'x' }, true),
@@ -484,8 +609,29 @@ describe('the facet menus', () => {
     );
     await waitFor(() => expect(result.current.topics).toHaveLength(1));
 
-    const fromEntity = sentVariables().fromEntity;
-    expect(fromEntity.and).toContainEqual({ name: { includesInsensitive: 'x' } });
+    // This hook's own counts requests, identified by the topic it was narrowed to. Hooks from
+    // earlier cases in this file stay mounted and refetch into the same mock, so neither an index
+    // nor a total describes this one.
+    const counts = graphqlMock.mock.calls
+      .map(call => call[0].variables as Record<string, any>)
+      .filter(
+        variables =>
+          variables.groupBy?.includes('TO_ENTITY_ID') && JSON.stringify(variables.fromEntity?.and ?? []).includes(TOPIC)
+      );
+    const fromEntity = counts.at(-1)!.fromEntity;
+    // The counts describe the search's results, which is what riding the same filter buys: the
+    // ids narrow the facet exactly as they narrow the list.
+    expect(fromEntity.and).toContainEqual({ id: { in: ['a1'] } });
+    // And never asked over an empty id list. Counted before the search answered, the first request
+    // asks for the topics of the claims in `[]` — an answer that is always "none", spent
+    // immediately before the real one and read by the menu in between.
+    //
+    // Asserted as a property rather than a request count: hooks from earlier cases in this file
+    // are still mounted and refetch into the same mock, so counting calls measures them too.
+    // And never asked over an empty id list. Counted before the search answered, the first request
+    // asks for the topics of the claims in `[]` — an answer that is always "none", spent
+    // immediately before the real one and read by the menu in between.
+    expect(counts.some(variables => JSON.stringify(variables.fromEntity).includes('"in":[]'))).toBe(false);
     expect(
       fromEntity.and.filter((clause: any) => clause.relations?.some?.typeId?.is === '806d52bc27e94c9193c057978b093351')
     ).toHaveLength(1);
