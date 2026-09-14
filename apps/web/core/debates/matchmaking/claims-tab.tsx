@@ -1042,7 +1042,11 @@ export function ClaimsTab({
           so the sentinel sits in view under it and pages the corpus on the strength of a loading
           state being visible — reading "the viewer reached the end" off a list that isn't there. */}
         {loadingMore ? (
-          <div data-testid="claims-loading-more">
+          // Its own breathing room rather than the column's. The cards above sit `gap-2` apart
+          // inside their list, and this lands a rung further out on the column's `gap-3` — close
+          // enough to read as one more card, clipped, rather than as the list saying it is still
+          // working. Pushed clear, it reads as what it is.
+          <div data-testid="claims-loading-more" className="pt-2">
             <HubSkeleton rows={2} />
           </div>
         ) : null}

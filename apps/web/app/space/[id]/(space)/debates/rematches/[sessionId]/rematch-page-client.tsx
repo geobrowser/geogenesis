@@ -2198,7 +2198,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             not paging anything, and the sentinel would sit in view asking a list nobody is looking
             at for its next page. */}
         {loadingMore ? (
-          <div data-testid="rematch-claims-loading-more">
+          // Its own breathing room rather than the column's. The cards above sit `gap-2` apart
+          // inside their list, and this lands a rung further out on the column's `gap-3` — close
+          // enough to read as one more card, clipped, rather than as the list saying it is still
+          // working. Pushed clear, it reads as what it is.
+          <div data-testid="rematch-claims-loading-more" className="pt-2">
             <HubSkeleton rows={2} />
           </div>
         ) : null}
