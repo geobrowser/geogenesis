@@ -1684,6 +1684,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     hasNextPage: autoPages,
     isFetchingNextPage: taggedFetchingNextPage,
     fetchNextPage: fetchNextTaggedPage,
+    // Same reason as the hub's: a page of fifty can add three rows once the filter has run, so the
+    // next one has to start well before the viewer reaches the bottom of what is showing.
+    rootMargin: '1200px',
   });
 
   // Each tab draws from a different set of queries, so each waits on its own. The allowlist narrows

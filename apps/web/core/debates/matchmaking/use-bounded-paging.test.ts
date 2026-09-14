@@ -24,15 +24,18 @@ function render(initial: Props, fetchNextPage = vi.fn()) {
 }
 
 /** Pages that arrive with nothing the viewer can see, which is what the budget is spent on. */
+/** A catalog page, as the tagged query fetches them. */
+const PAGE = 50;
+
 function barrenPages(view: ReturnType<typeof render>, count: number, from = 0, resetKey?: string) {
   for (let page = 1; page <= count; page += 1) {
-    view.rerender({ loaded: from + page * 50, visible: 0, resetKey });
+    view.rerender({ loaded: from + page * PAGE, visible: 0, resetKey });
   }
 }
 
 describe('useBoundedPaging', () => {
   it('advances on its own while there are pages to fetch', () => {
-    const { result } = render({ loaded: 50, visible: 10 });
+    const { result } = render({ loaded: PAGE, visible: 10 });
 
     expect(result.current.autoPages).toBe(true);
     expect(result.current.stoppedShort).toBe(false);
@@ -55,9 +58,13 @@ describe('useBoundedPaging', () => {
   it('spends nothing on a page that turns something up', () => {
     const view = render({ loaded: 0, visible: 0 });
 
+    // One short of the cap, then a page with something on it, then one short of the cap again.
+    // Counted from the constant rather than written out: this case is about the reset, and a page
+    // number that quietly stopped being the next one turned it into a case about nothing.
+    const upToTheCap = (AUTO_PAGES_WITHOUT_ROWS - 1) * PAGE;
     barrenPages(view, AUTO_PAGES_WITHOUT_ROWS - 1);
-    view.rerender({ loaded: 250, visible: 3 });
-    barrenPages(view, AUTO_PAGES_WITHOUT_ROWS - 1, 250);
+    view.rerender({ loaded: upToTheCap + PAGE, visible: 3 });
+    barrenPages(view, AUTO_PAGES_WITHOUT_ROWS - 1, upToTheCap + PAGE);
 
     expect(view.result.current.autoPages).toBe(true);
   });
@@ -67,10 +74,10 @@ describe('useBoundedPaging', () => {
    * without a page having landed — and counting that would spend their budget on their own typing.
    */
   it('spends nothing when rows leave without a page arriving', () => {
-    const view = render({ loaded: 50, visible: 5 });
+    const view = render({ loaded: PAGE, visible: 5 });
 
     for (let tick = 0; tick < AUTO_PAGES_WITHOUT_ROWS * 2; tick += 1) {
-      view.rerender({ loaded: 50, visible: 0 });
+      view.rerender({ loaded: PAGE, visible: 0 });
     }
 
     expect(view.result.current.autoPages).toBe(true);
@@ -89,9 +96,9 @@ describe('useBoundedPaging', () => {
 
     for (let page = 1; page <= AUTO_PAGES_WITHOUT_ROWS + 2; page += 1) {
       // The catalog lands; its rows are not classified yet, so none of them can be shown.
-      view.rerender({ loaded: page * 50, visible: page - 1, settling: true });
+      view.rerender({ loaded: page * PAGE, visible: page - 1, settling: true });
       // The lookup returns and the page turns out to have had something on it after all.
-      view.rerender({ loaded: page * 50, visible: page, settling: false });
+      view.rerender({ loaded: page * PAGE, visible: page, settling: false });
     }
 
     expect(view.result.current.autoPages).toBe(true);
@@ -109,7 +116,7 @@ describe('useBoundedPaging', () => {
       const view = render({ loaded: 0, visible: 0 });
 
       for (let page = 1; page <= AUTO_PAGES_WITHOUT_ROWS + 2; page += 1) {
-        view.rerender({ loaded: page * 50, visible: 0, paused: true });
+        view.rerender({ loaded: page * PAGE, visible: 0, paused: true });
       }
 
       expect(view.result.current.autoPages).toBe(true);
@@ -121,17 +128,17 @@ describe('useBoundedPaging', () => {
       const view = render({ loaded: 0, visible: 0 });
 
       // Warmed while away, then dropped when the warm-up ends, then fetched back from cache.
-      view.rerender({ loaded: 50, visible: 0, paused: true });
+      view.rerender({ loaded: PAGE, visible: 0, paused: true });
       view.rerender({ loaded: 0, visible: 0, paused: true });
-      view.rerender({ loaded: 50, visible: 0 });
+      view.rerender({ loaded: PAGE, visible: 0 });
 
       // One barren page spent, not two — so four more are still available.
       for (let page = 2; page <= AUTO_PAGES_WITHOUT_ROWS - 1; page += 1) {
-        view.rerender({ loaded: page * 50, visible: 0 });
+        view.rerender({ loaded: page * PAGE, visible: 0 });
       }
       expect(view.result.current.autoPages).toBe(true);
 
-      view.rerender({ loaded: AUTO_PAGES_WITHOUT_ROWS * 50, visible: 0 });
+      view.rerender({ loaded: AUTO_PAGES_WITHOUT_ROWS * PAGE, visible: 0 });
       expect(view.result.current.autoPages).toBe(false);
     });
   });
@@ -169,9 +176,9 @@ describe('useBoundedPaging', () => {
     barrenPages(view, AUTO_PAGES_WITHOUT_ROWS);
 
     // The same counts as the previous list reached, under a new key.
-    view.rerender({ loaded: AUTO_PAGES_WITHOUT_ROWS * 50, visible: 0, resetKey: 'another list' });
+    view.rerender({ loaded: AUTO_PAGES_WITHOUT_ROWS * PAGE, visible: 0, resetKey: 'another list' });
     // One page in already, so the budget runs out one page sooner than a standing start.
-    barrenPages(view, AUTO_PAGES_WITHOUT_ROWS - 1, AUTO_PAGES_WITHOUT_ROWS * 50, 'another list');
+    barrenPages(view, AUTO_PAGES_WITHOUT_ROWS - 1, AUTO_PAGES_WITHOUT_ROWS * PAGE, 'another list');
 
     expect(view.result.current.autoPages).toBe(false);
   });
@@ -181,7 +188,7 @@ describe('useBoundedPaging', () => {
     const view = render({ loaded: 0, visible: 0 });
     barrenPages(view, AUTO_PAGES_WITHOUT_ROWS);
 
-    view.rerender({ loaded: 250, visible: 0, hasNextPage: false });
+    view.rerender({ loaded: AUTO_PAGES_WITHOUT_ROWS * PAGE, visible: 0, hasNextPage: false });
 
     expect(view.result.current.stoppedShort).toBe(false);
     expect(view.result.current.autoPages).toBe(false);

@@ -5,11 +5,18 @@ import * as React from 'react';
 /**
  * How many pages the list may fetch on its own without turning up a single row to show.
  *
- * Five pages is 250 claims, which is deep enough that a viewer with an ordinary backlog never
- * reaches it and shallow enough that one who does is not left waiting on a dozen round trips they
- * did not ask for.
+ * Fifteen pages is 750 claims. Five was the first guess and it was too tight: the counter resets on
+ * any page that shows something, so reaching it at all means 250 answered claims in a row — which
+ * is not the extreme case it sounded like, but the ordinary one for the viewer this feature is for.
+ * They scrolled a short way and the list stopped, which is the failure this bound was supposed to
+ * be preferable to.
+ *
+ * There is no number that is right for someone who has answered *everything*, because the filter
+ * runs on rows the server has already sent. GEO-2894 is what fixes that; until then this is set
+ * where it is rarely reached rather than where it is cheap, and the fifteen round trips it allows
+ * are the price of the filter being on this side of the wire at all.
  */
-export const AUTO_PAGES_WITHOUT_ROWS = 5;
+export const AUTO_PAGES_WITHOUT_ROWS = 15;
 
 /**
  * Keeps a client-side filter from paging the whole corpus on the viewer's behalf (GEO-2863).

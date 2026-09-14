@@ -796,6 +796,11 @@ export function ClaimsTab({
     hasNextPage: autoPages,
     isFetchingNextPage: graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage,
     fetchNextPage,
+    // Further ahead than the default, because this list is filtered after it arrives: a page of
+    // fifty can add three rows, so the end of what is on screen is much closer to the end of what
+    // has been fetched than the row count suggests. Starting the next page a screenful or two early
+    // is what keeps that from reading as a list that stops every time you reach the bottom.
+    rootMargin: '1200px',
   });
 
   /**
