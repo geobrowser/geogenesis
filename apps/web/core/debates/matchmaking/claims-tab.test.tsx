@@ -2330,7 +2330,7 @@ describe('claims the viewer has already answered', () => {
    * about to take back. The sentinel fetches as soon as the list is short — on an empty list, a
    * page ahead of the viewport, that is immediately. Together the catalog and the row lookups ran
    * back to back, the quiet render never came, and the skeleton stayed up for as long as the paging
-   * lasted: a minute, once the budget was fifteen pages.
+   * lasted: a minute, once the budget was raised to its present size.
    */
   it('does not fetch ahead until it has drawn once', async () => {
     mocks.taggedHasNextPage = true;

@@ -132,7 +132,9 @@ describe('useBoundedPaging', () => {
       view.rerender({ loaded: 0, visible: 0, paused: true });
       view.rerender({ loaded: PAGE, visible: 0 });
 
-      // One barren page spent, not two — so four more are still available.
+      // One barren page spent, not two — so the budget still reaches its last page below rather
+      // than running out one short of it. Counted from the constant, because the arithmetic here is
+      // the assertion and a number written out stops being one the moment the cap moves.
       for (let page = 2; page <= AUTO_PAGES_WITHOUT_ROWS - 1; page += 1) {
         view.rerender({ loaded: page * PAGE, visible: 0 });
       }

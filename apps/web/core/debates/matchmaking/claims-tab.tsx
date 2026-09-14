@@ -801,7 +801,7 @@ export function ClaimsTab({
    * fetches the next page as soon as the list is short, which — on an empty list, a page ahead of
    * the viewport — is immediately. So the catalog and the row lookups ran back to back, the quiet
    * render never came, and the gate held a skeleton up for as long as the paging lasted. Raising
-   * the budget to fifteen pages made that a minute.
+   * the budget to its present size made that a minute.
    *
    * Paging waits for the gate instead. The first page paints, and everything after it arrives under
    * a list the viewer can already read — which is the only state in which fetching ahead is worth

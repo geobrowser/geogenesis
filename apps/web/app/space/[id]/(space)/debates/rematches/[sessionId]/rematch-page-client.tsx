@@ -1377,18 +1377,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // The opponent tab's own three sources rather than `tabError`, which is declared below and is a
   // composite over every tab's. Same set, asked here because this runs before it.
   const opponentTabError = sessionQuery.error ?? positions.error ?? opponentEntitiesQuery.error;
-  // `isPlaceholderData` as well as `isLoading`, and it is the one that bites here. The positions
-  // query holds the previous pair's answer while a new one is fetched, and `participantSidesOn`
-  // filters those rows against the *current* participants — so the first render of a new rematch
-  // reports settled, with an empty list, for a pair whose positions have not arrived. This decides
-  // once and keeps it, so that read stuck: the viewer was stepped back off the matches list and,
-  // with nothing else on the tab, walked to Explore, for a pair that may have had several.
+  // `isFetching` as well as `isLoading`, and it is the one that bites here — see the hook, which
+  // spells out the two ways an answer can look settled and be somebody else's or yesterday's. A
+  // decision taken on either sticks: the viewer is stepped back off the matches list and, with
+  // nothing else on the tab, walked to Explore, for a pair that may have had several.
   const opponentTabSettled =
-    tab === 'opponent' &&
-    !positions.isLoading &&
-    !positions.isPlaceholderData &&
-    !opponentClaimsSettling &&
-    !opponentTabError;
+    tab === 'opponent' && !positions.isLoading && !positions.isFetching && !opponentClaimsSettling && !opponentTabError;
   const rematchState: NarrowedListState = !opponentTabSettled
     ? 'pending'
     : claims.some(isRematchable)
@@ -2132,7 +2126,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           // go, this is still looking.
           // `stillPaging` is deliberately not in here. A search that has to walk pages is a thing to
           // say — see `searchingMessage` below — not a skeleton to sit behind, and with a budget of
-          // fifteen pages a skeleton behind it is a minute of nothing.
+          // a budget this size a skeleton behind it is a minute of nothing.
           isLoading={tabIsLoading && (showsSections ? visibleSections.length === 0 : visibleClaims.length === 0)}
           error={tabError}
           isEmpty={showsSections ? visibleSections.length === 0 : visibleClaims.length === 0}

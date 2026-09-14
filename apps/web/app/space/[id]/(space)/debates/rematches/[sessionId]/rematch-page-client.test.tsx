@@ -143,7 +143,7 @@ const mocks = vi.hoisted(() => ({
   positions: [] as ParticipantPosition[],
   positionsLoading: false,
   positionsError: null as unknown,
-  positionsPlaceholder: false,
+  positionsFetching: false,
   positionParticipants: [] as string[][],
   recommendedSections: [] as Array<{ id: string; name: string; claimIds: string[] }>,
   recommendedEntities: [] as Array<Record<string, unknown>>,
@@ -588,10 +588,10 @@ vi.mock('~/core/debates/participant-positions', async importOriginal => {
       return {
         byClaim: actual.groupParticipantPositions(mocks.positions),
         isLoading: mocks.positionsLoading,
-        // The previous pair's answer, held while this one is fetched. Reported as its own state
-        // because `isLoading` is false for it and the rows it carries are filtered to nothing
-        // against the current participants — settled and empty, for a pair nobody has asked about.
-        isPlaceholderData: mocks.positionsPlaceholder,
+        // An answer for this key still on its way — whether that is the previous pair's rows held
+        // over, or this pair's cached rows while the mount refetch runs. `isLoading` is false for
+        // both, and both can be empty where the answer arriving is not.
+        isFetching: mocks.positionsLoading || mocks.positionsFetching,
         error: mocks.positionsError,
       };
     },
@@ -900,7 +900,7 @@ beforeEach(() => {
   ];
   mocks.positionsLoading = false;
   mocks.positionsError = null;
-  mocks.positionsPlaceholder = false;
+  mocks.positionsFetching = false;
   mocks.positionParticipants.length = 0;
   mocks.recommendedSections = [];
   mocks.recommendedEntities = [];
@@ -4381,16 +4381,19 @@ describe('the matches-only default', () => {
   });
 
   /**
-   * Neither is the previous pair's answer, held while this one is fetched.
+   * Neither is an answer that is still being replaced.
    *
-   * The positions query keeps the last list rather than blanking, and `participantSidesOn` filters
-   * those rows against the *current* participants — so the first render of a new rematch reports
-   * settled with nothing on it, for a pair whose positions are still in flight. This decides once
-   * and keeps it, so that read stuck: stepped back off the matches list, and with nothing else on
-   * the tab, walked to Explore, for a pair that may have had several matches waiting.
+   * Two ways this looks settled and is not, and `isLoading` is false for both. A *new* pair is
+   * served the last pair's rows, which `participantSidesOn` then filters to nothing against the
+   * current participants. A *returning* pair is served its own cached rows while the mount refetch
+   * runs — the ordinary case, with a 5s stale time and a poll behind it — and yesterday's answer
+   * can be empty where today's is not.
+   *
+   * This decides once and keeps it, so either read sticks: stepped back off the matches list and,
+   * with nothing else on the tab, walked to Explore, for a pair that may have had several waiting.
    */
-  it('does not decide on the previous pair’s positions', async () => {
-    mocks.positionsPlaceholder = true;
+  it('does not decide while the positions are still being replaced', async () => {
+    mocks.positionsFetching = true;
     mocks.positions = [];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
