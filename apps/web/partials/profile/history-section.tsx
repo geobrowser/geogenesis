@@ -125,10 +125,14 @@ export function HistorySection({
                         noun={copy.noun}
                         entry={entry}
                         disabled={disabled}
-                        // A proposal reaches one space. Offering Edit or Remove on
-                        // a row from another would queue a change that staging
-                        // cannot make, and Save would report success anyway.
-                        isReadOnly={entry.spaceId !== null && entry.spaceId !== spaceId}
+                        // A proposal reaches one space, and an edit that has
+                        // gone out is no longer in the queue these handlers act
+                        // on — offering either would queue a change that quietly
+                        // does nothing.
+                        isReadOnly={entry.isSettling === true || (entry.spaceId !== null && entry.spaceId !== spaceId)}
+                        readOnlyReason={
+                          entry.isSettling === true ? 'saved, and still being written to the graph' : undefined
+                        }
                         onEdit={() => onEditEntry(card, entry)}
                         onRemove={() => onRemoveEntry(card, entry)}
                       />
@@ -186,6 +190,7 @@ function EntryRow({
   entry,
   disabled,
   isReadOnly,
+  readOnlyReason,
   onEdit,
   onRemove,
 }: {
@@ -193,6 +198,8 @@ function EntryRow({
   entry: HistoryEntry;
   disabled?: boolean;
   isReadOnly?: boolean;
+  /** Why, for the label. Defaults to the space mismatch, which is the older case. */
+  readOnlyReason?: string;
   onEdit: () => void;
   onRemove: () => void;
 }) {
@@ -237,7 +244,9 @@ function EntryRow({
           onClick={onEdit}
           disabled={disabled || isReadOnly}
           aria-label={
-            isReadOnly ? `${subject} — added in another space, so it cannot be edited here` : `Edit ${noun} ${subject}`
+            isReadOnly
+              ? `${subject} — ${readOnlyReason ?? 'added in another space'}, so it cannot be edited here`
+              : `Edit ${noun} ${subject}`
           }
           className="w-full text-left"
         >

@@ -66,6 +66,11 @@ type Expectation = { added: string[]; removed: string[]; since: number };
  * the modal can go on showing them; they are no longer the user's to change,
  * and leaving them queued meant Save stayed lit and `stagePending()` handed the
  * already-published relations back for a second proposal.
+ *
+ * Kept as a list. Nothing stops a second save inside the first one's window, and
+ * replacing the record dropped the first edit from the screen, stopped anyone
+ * waiting for it, and lost the stints it had minted — so a row added at that
+ * employer afterwards opened a duplicate edge. Each waits for its own read.
  */
 type Published = {
   /** The queue as it was, for display only. */
@@ -201,7 +206,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    * So the rows stay until a read agrees with them — here rather than in
    * `pending`, which is what can still be edited and published.
    */
-  const [published, setPublished] = React.useState<Published | null>(null);
+  const [published, setPublished] = React.useState<Published[]>([]);
 
   const queryKey = profileHistoryQueryKey(entityId);
 
@@ -212,7 +217,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     staleTime: 60_000,
     // Only while something is outstanding. Asking again on a timer is the only
     // way to learn the indexer has caught up; there is nothing to subscribe to.
-    refetchInterval: published ? 5_000 : false,
+    refetchInterval: published.length > 0 ? 5_000 : false,
   });
 
   /**
@@ -226,17 +231,21 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    * Everything the modal should show over the graph's answer: the queue, and an
    * edit already published that the read has not caught up with.
    */
-  const shown = React.useMemo(
-    (): PendingHistory =>
-      published === null
-        ? pending
-        : {
-            positions: [...published.rows.positions, ...pending.positions],
-            education: [...published.rows.education, ...pending.education],
-            removals: [...published.rows.removals, ...pending.removals],
-          },
-    [pending, published]
-  );
+  const shown = React.useMemo((): PendingHistory => {
+    if (published.length === 0) return pending;
+
+    // Marked, so the section can show them without offering to change them: the
+    // row's real relation id is not on screen, and both handlers would act on a
+    // queue it has already left.
+    const settling = (additions: PendingHistory['positions'] | PendingHistory['education']) =>
+      additions.map(addition => ({ ...addition, isSettling: true }));
+
+    return {
+      positions: [...published.flatMap(record => settling(record.rows.positions)), ...pending.positions],
+      education: [...published.flatMap(record => settling(record.rows.education)), ...pending.education],
+      removals: [...published.flatMap(record => record.rows.removals), ...pending.removals],
+    } as PendingHistory;
+  }, [pending, published]);
 
   /**
    * Relations on their way out, queued or already published.
@@ -275,6 +284,18 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     []
   );
 
+  /** The stint an edit still becoming readable minted for this organisation. */
+  const settledStintFor = React.useCallback(
+    (kind: Kind, organizationId: string) => {
+      for (let index = published.length - 1; index >= 0; index--) {
+        const stint = published[index]!.stints[kind][organizationId];
+        if (stint !== undefined) return stint;
+      }
+      return undefined;
+    },
+    [published]
+  );
+
   /**
    * The saved edge a row at this organisation belongs on, where there is one.
    *
@@ -292,8 +313,11 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
       // The read is a minute or two behind a publish, and cannot say yet that an
       // employer added in it exists. Without this, adding a second role there
       // before it catches up opens a second edge to the same company.
-      published?.stints[kind][organizationId],
-    [data?.education, data?.employment, outstandingRemovals, published, savedStintFor]
+      //
+      // Searched back to front: where the same employer was added twice inside
+      // the window, the later edit's edge is the one to join.
+      settledStintFor(kind, organizationId),
+    [data?.education, data?.employment, outstandingRemovals, savedStintFor, settledStintFor]
   );
 
   const addPosition = React.useCallback(
@@ -555,18 +579,21 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     // or publish again, and leaving it queued kept Save lit and handed the same
     // relations back to a second proposal.
     setPending(NOTHING_PENDING);
-    setPublished(
+    setPublished(current =>
       expectation === null
-        ? null
-        : {
-            // `staged.removals`, not `pending.removals`: the organisation edges
-            // this edit emptied were worked out during staging and were never in
-            // the queue. Without them the next edit cannot tell that an edge it
-            // can still see in the stale read has already gone.
-            rows: { ...pending, removals: staged.removals },
-            stints: staged.stints,
-            expectation: { ...expectation, since: Date.now() },
-          }
+        ? current
+        : [
+            ...current,
+            {
+              // `staged.removals`, not `pending.removals`: the organisation edges
+              // this edit emptied were worked out during staging and were never in
+              // the queue. Without them the next edit cannot tell that an edge it
+              // can still see in the stale read has already gone.
+              rows: { ...pending, removals: staged.removals },
+              stints: staged.stints,
+              expectation: { ...expectation, since: Date.now() },
+            },
+          ]
     );
     void queryClient.invalidateQueries({ queryKey });
   }, [pending, queryClient, queryKey, staged.expectation, staged.removals, staged.stints]);
@@ -580,23 +607,29 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    * deadline below.
    */
   React.useEffect(() => {
-    if (published === null) return;
+    if (published.length === 0) return;
 
-    const isLate = Date.now() - published.expectation.since > INDEXING_DEADLINE_MS;
+    const now = Date.now();
 
-    // Past the deadline the graph wins even though it disagrees. An edit that
-    // never lands must not leave the modal insisting on it for the rest of the
-    // session.
-    if (!isLate && !(data && reflects(data, published.expectation))) return;
+    // Each waits for its own read. Two saves inside one window can become
+    // readable in either order, and letting go of both because the later one
+    // arrived would put the earlier one's rows back to how they were.
+    const outstanding = published.filter(record => {
+      // Past the deadline the graph wins even though it disagrees. An edit that
+      // never lands must not leave the modal insisting on it for the rest of the
+      // session.
+      if (now - record.expectation.since > INDEXING_DEADLINE_MS) {
+        console.warn('[profile-history] gave up waiting for a published edit to be readable', {
+          entityId,
+          waitedMs: now - record.expectation.since,
+        });
+        return false;
+      }
 
-    if (isLate) {
-      console.warn('[profile-history] gave up waiting for a published edit to be readable', {
-        entityId,
-        waitedMs: Date.now() - published.expectation.since,
-      });
-    }
+      return !(data && reflects(data, record.expectation));
+    });
 
-    setPublished(null);
+    if (outstanding.length !== published.length) setPublished(outstanding);
   }, [published, data, dataUpdatedAt, entityId]);
 
   /**
@@ -609,7 +642,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    */
   React.useEffect(() => {
     setPending(NOTHING_PENDING);
-    setPublished(null);
+    setPublished([]);
   }, [entityId]);
 
   /**

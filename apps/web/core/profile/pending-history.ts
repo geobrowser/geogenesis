@@ -38,7 +38,12 @@ export type PendingRemoval = {
 };
 
 /** A draft plus the key its synthetic rows are built from. */
-export type PendingAddition<TDraft> = { key: string; draft: TDraft };
+export type PendingAddition<TDraft> = {
+  key: string;
+  draft: TDraft;
+  /** Already published, and shown only until the read catches up with it. */
+  isSettling?: boolean;
+};
 
 export type PendingHistory = {
   positions: PendingAddition<PositionDraft>[];
@@ -90,12 +95,14 @@ function entryFromDraft(
   key: string,
   draft: PositionDraft | EducationDraft,
   subject: { id: string; name: string | null },
-  edge: HistoryEdgeRef
+  edge: HistoryEdgeRef,
+  isSettling?: boolean
 ): HistoryEntry {
   return {
     relationId: `${PENDING_PREFIX}${key}`,
     spaceId: null,
     tenureId: `${PENDING_PREFIX}${key}-tenure`,
+    isSettling,
     subtree: NOTHING_TO_CLEAN,
     edge,
     subject,
@@ -193,7 +200,7 @@ export function mergePendingEmployment(
     additions.map(addition => ({
       ...addition,
       entry: (edge: HistoryEdgeRef) => ({
-        ...entryFromDraft(addition.key, addition.draft, addition.draft.title, edge),
+        ...entryFromDraft(addition.key, addition.draft, addition.draft.title, edge, addition.isSettling),
         status: addition.draft.status,
         employmentType: addition.draft.employmentType,
         skills: addition.draft.skills,
@@ -217,7 +224,7 @@ export function mergePendingEducation(
     additions.map(addition => ({
       ...addition,
       entry: (edge: HistoryEdgeRef) => ({
-        ...entryFromDraft(addition.key, addition.draft, addition.draft.degree, edge),
+        ...entryFromDraft(addition.key, addition.draft, addition.draft.degree, edge, addition.isSettling),
         status: addition.draft.status,
         fields: addition.draft.fields,
         skills: addition.draft.skills,

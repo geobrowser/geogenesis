@@ -125,6 +125,14 @@ export type HistoryEntry = {
    * since writing to the tenure would leave the stint's copy behind.
    */
   isLegacy: boolean;
+  /**
+   * Published, but not readable yet.
+   *
+   * Shown so a save does not appear to have been lost while the indexer catches
+   * up — but not editable: the row's real relation id is not on screen, so Edit
+   * and Remove would act on a queue it is no longer in and silently do nothing.
+   */
+  isSettling?: boolean;
 };
 
 export type EmploymentEntry = HistoryEntry & {

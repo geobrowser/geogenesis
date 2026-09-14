@@ -306,8 +306,21 @@ export const SelectEntity = ({
 
   const hasResults = results.length > 0;
 
+  /**
+   * Whether the three key handlers below should act.
+   *
+   * They are bound to the window, not to the input, so having results is not
+   * enough — a closed search box with results still standing answered keys meant
+   * for whatever the user was actually typing in. Pinned results made that the
+   * normal state rather than a corner case: they need no query, so a picker that
+   * had never been opened still had results, and Enter in a textarea two fields
+   * away chose the first recommended skill. The arrow handlers `preventDefault`,
+   * so they were also stopping the caret moving anywhere on the page.
+   */
+  const isNavigable = isSearchOpen && hasResults;
+
   useKey('Enter', () => {
-    if (!hasResults) return;
+    if (!isNavigable) return;
 
     const result = results[selectedIndex];
 
@@ -324,21 +337,21 @@ export const SelectEntity = ({
   });
 
   useKey('ArrowUp', event => {
-    if (!hasResults) return;
+    if (!isNavigable) return;
 
     event.preventDefault();
     setSelectedIndex(prev => (prev - 1 + results.length) % results.length);
   });
 
   useKey('ArrowDown', event => {
-    if (!hasResults) return;
+    if (!isNavigable) return;
 
     event.preventDefault();
     setSelectedIndex(prev => (prev + 1) % results.length);
   });
 
   useEffect(() => {
-    if (!hasResults) return;
+    if (!isNavigable) return;
 
     const element = document.querySelector(`#select-entity-result-${selectedIndex}`);
 

@@ -87,6 +87,20 @@ const educationDraft = (school: string, degree: string): EducationDraft => ({
   description: '',
 });
 
+/**
+ * A saved card carrying the ids a published edit actually got.
+ *
+ * Both levels, because a read only agrees once it shows the edge as well as the
+ * row — the row alone would be a card hanging off nothing.
+ */
+const indexedCard = (org: string, role: string, ids: { edge: string; row: string }) => {
+  const card = savedCard(org, [role]);
+  card.edges[0].relationId = ids.edge;
+  card.entries[0].relationId = ids.row;
+  card.entries[0].edge.relationId = ids.edge;
+  return card;
+};
+
 const setup = () => renderHook(() => useProfileHistory({ entityId: ENTITY_ID, spaceId: SPACE_ID }));
 
 /** A subtree row in the space this modal publishes to, which is the common case. */
@@ -668,20 +682,6 @@ describe('useProfileHistory', () => {
  * save and reads as the edit having been lost.
  */
 describe('waiting for the read to catch up', () => {
-  /**
-   * A saved card carrying the ids a published edit actually got.
-   *
-   * Both levels, because a read only agrees once it shows the edge as well as
-   * the row — the row alone would be a card hanging off nothing.
-   */
-  const indexedCard = (org: string, role: string, ids: { edge: string; row: string }) => {
-    const card = savedCard(org, [role]);
-    card.edges[0].relationId = ids.edge;
-    card.entries[0].relationId = ids.row;
-    card.entries[0].edge.relationId = ids.edge;
-    return card;
-  };
-
   const publishedIds = (result: { current: ReturnType<typeof useProfileHistory> }) => {
     const { relations } = result.current.stagePending();
     return {
@@ -922,5 +922,86 @@ describe('a second edit inside the indexing window', () => {
     expect(employment).toBeDefined();
     expect(employment?.entityId).not.toBe('stint-Geo');
     expect(relations.find(r => !r.isDeleted && r.type.id === ROLES_PROPERTY)?.fromEntity.id).toBe(employment?.entityId);
+  });
+});
+
+describe('two saves inside one indexing window', () => {
+  // Replacing the record dropped the first edit from the screen, stopped anyone
+  // waiting for it, and lost the stints it had minted.
+  it('keeps showing the first edit after the second is published', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+    act(() => result.current.settle());
+
+    act(() => result.current.addPosition(draft('Coinbase', 'Analyst')));
+    act(() => result.current.settle());
+
+    expect(result.current.employment.map(card => card.organization.name).sort()).toEqual(['Coinbase', 'Fathom']);
+  });
+
+  it('still joins the first edit’s edge afterwards', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+    const stintId = result.current.stagePending().relations.find(r => r.type.id === EMPLOYMENT_PROPERTY)!.entityId;
+    act(() => result.current.settle());
+
+    act(() => result.current.addPosition(draft('Coinbase', 'Analyst')));
+    act(() => result.current.settle());
+
+    // A third role, back at the employer from the first edit.
+    act(() => result.current.addPosition(draft('Fathom', 'Product Lead')));
+
+    const { relations } = result.current.stagePending();
+    expect(relations.filter(r => r.type.id === EMPLOYMENT_PROPERTY)).toEqual([]);
+    expect(relations.find(r => r.type.id === ROLES_PROPERTY)?.fromEntity.id).toBe(stintId);
+  });
+
+  it('lets go of each as its own read lands', () => {
+    const { result, rerender } = setup();
+
+    act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+    const first = result.current.stagePending().relations;
+    act(() => result.current.settle());
+
+    act(() => result.current.addPosition(draft('Coinbase', 'Analyst')));
+    act(() => result.current.settle());
+
+    // Only the first edit becomes readable.
+    mocks.employment = [
+      indexedCard('Fathom', 'Engineer', {
+        edge: first.find(r => r.type.id === EMPLOYMENT_PROPERTY)!.id,
+        row: first.find(r => r.type.id === ROLES_PROPERTY)!.id,
+      }),
+    ];
+    act(() => rerender());
+
+    // The second is still held over the graph's answer, which does not have it.
+    expect(result.current.employment.map(card => card.organization.name).sort()).toEqual(['Coinbase', 'Fathom']);
+  });
+});
+
+describe('a row that has been published but cannot be read yet', () => {
+  it('is marked so the section will not offer to change it', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+    expect(result.current.employment[0].entries[0].isSettling).toBeUndefined();
+
+    act(() => result.current.settle());
+
+    expect(result.current.employment[0].entries[0].isSettling).toBe(true);
+  });
+
+  it('leaves a row still in the queue alone', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+    act(() => result.current.settle());
+    act(() => result.current.addPosition(draft('Coinbase', 'Analyst')));
+
+    const queued = result.current.employment.find(card => card.organization.name === 'Coinbase')!;
+    expect(queued.entries[0].isSettling).toBeUndefined();
   });
 });

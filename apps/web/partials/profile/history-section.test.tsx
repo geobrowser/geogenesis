@@ -260,3 +260,32 @@ describe('an entity with no name', () => {
     expect(screen.getByText(/Skills: Untitled/)).toBeInTheDocument();
   });
 });
+
+/**
+ * A published row is shown so a save does not look lost, but its real relation
+ * id is not on screen — Edit and Remove would act on a queue it has already
+ * left, and silently do nothing.
+ */
+describe('a row still being written to the graph', () => {
+  it('does not offer to change it', () => {
+    const row = entry('Engineer', '2022-06-01Z', null);
+    renderSection([card('Geo', [{ ...row, isSettling: true }])]);
+
+    expect(screen.queryByRole('button', { name: 'Remove role Engineer' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /still being written to the graph/ })).toBeDisabled();
+  });
+
+  it('says why, rather than blaming the space', () => {
+    const row = entry('Engineer', '2022-06-01Z', null);
+    renderSection([card('Geo', [{ ...row, isSettling: true }])]);
+
+    expect(screen.queryByRole('button', { name: /added in another space/ })).not.toBeInTheDocument();
+  });
+
+  it('still offers to change a row that is only queued', () => {
+    renderSection([card('Geo', [entry('Engineer', '2022-06-01Z', null)])]);
+
+    expect(screen.getByRole('button', { name: 'Remove role Engineer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit role Engineer' })).not.toBeDisabled();
+  });
+});
