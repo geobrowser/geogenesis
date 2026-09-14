@@ -38,12 +38,16 @@ vi.mock('~/design-system/select-entity', () => ({
     onCreateEntity,
     pinnedResults,
     autoFocus,
+    deferCreate,
+    inputLabelledBy,
     onDone,
   }: {
     relationValueTypes?: { id: string; name: string | null }[];
     onCreateEntity?: (result: { id: string; name: string | null }) => void | string;
     pinnedResults?: { id: string; name: string | null }[];
     autoFocus?: boolean;
+    deferCreate?: boolean;
+    inputLabelledBy?: string;
     onDone: (result: { id: string; name: string | null }, fromCreateFn?: boolean) => void;
   }) => (
     <div>
@@ -53,6 +57,8 @@ vi.mock('~/design-system/select-entity', () => ({
         data-can-create={onCreateEntity ? 'yes' : 'no'}
         data-pinned={(pinnedResults ?? []).map(result => result.name).join('|')}
         data-autofocus={autoFocus ? 'yes' : 'no'}
+        data-defer-create={deferCreate ? 'yes' : 'no'}
+        data-labelled-by={inputLabelledBy ?? ''}
         onClick={() => onDone({ id: 'picked-id', name: 'Coinbase' })}
       >
         pick existing
@@ -413,5 +419,30 @@ describe('AddPositionSheet', () => {
 
     expect(screen.getByText('Added to your profile when you save it.')).toBeInTheDocument();
     expect(screen.queryByText(/publishes to your space/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('every picker', () => {
+  const pickers = () => screen.getAllByRole('button', { name: /pick existing/ });
+
+  // Creating through a picker used to name the entity in the store there and
+  // then, so backing out of the sheet left the name behind on an entity nothing
+  // pointed at. The sheet writes that name itself when the modal saves.
+  it('leaves the writing to the modal’s save', () => {
+    renderSheet();
+
+    for (const picker of pickers()) expect(picker).toHaveAttribute('data-defer-create', 'yes');
+  });
+
+  // The search box is not inside a `<label>`, so without this it is announced by
+  // its placeholder — "Example: Microsoft" where the field says Company.
+  it('is named by the label above it', () => {
+    renderSheet();
+
+    for (const picker of pickers()) {
+      const labelId = picker.getAttribute('data-labelled-by');
+      expect(labelId).toBeTruthy();
+      expect(document.getElementById(labelId as string)?.textContent).toBeTruthy();
+    }
   });
 });

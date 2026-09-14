@@ -65,6 +65,23 @@ type SelectEntityProps = {
     verified?: boolean;
     renderableType?: SwitchableRenderableType;
   }) => void | string;
+  /**
+   * Hand the new entity to `onDone` without writing it to the store.
+   *
+   * For a caller that publishes on its own schedule — a modal whose Save is the
+   * only thing that should reach the graph. Creating here names the entity
+   * immediately, so backing out of such a modal used to leave the name behind as
+   * an unrelated local edit, on an entity nothing pointed at. A caller that sets
+   * this owns writing the name itself.
+   */
+  deferCreate?: boolean;
+  /**
+   * Id of the element naming this search box, for a caller whose visible label
+   * sits outside it. The input is not wrapped in a `<label>` — it renders inside
+   * a popover anchor — so without this it is announced by its placeholder, which
+   * says "Example: Microsoft" where the field is called "Company".
+   */
+  inputLabelledBy?: string;
   spaceId: string;
   relationValueTypes?: Property['relationValueTypes'];
   placeholder?: string;
@@ -115,6 +132,8 @@ type TypeFilter = { typeId: string; typeName: string | null };
 export const SelectEntity = ({
   onDone,
   onCreateEntity,
+  deferCreate,
+  inputLabelledBy,
   spaceId,
   relationValueTypes,
   placeholder = 'Find or create...',
@@ -269,12 +288,18 @@ export const SelectEntity = ({
     }
 
     // Create new entity with name and types using internal id
-    storage.entities.name.set(newEntityId, spaceId, query);
+    if (!deferCreate) {
+      storage.entities.name.set(newEntityId, spaceId, query);
+    }
     onDone?.({ id: newEntityId, name: query, space: spaceId }, true);
     onQueryChange('');
     setIsSearchOpen(false);
     setSelectedIndex(0);
-    setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
+    // Nothing to announce or link to yet when the caller is publishing it later —
+    // the toast points at an entity that does not exist until their save lands.
+    if (!deferCreate) {
+      setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
+    }
   };
 
   const hasNoFilters = !typeFilter && !spaceFilter && allowedTypes.length === 0;
@@ -415,6 +440,7 @@ export const SelectEntity = ({
           <input
             ref={inputCallbackRef}
             type="text"
+            aria-labelledby={inputLabelledBy}
             value={query}
             onChange={({ currentTarget: { value } }) => {
               onQueryChange(value);

@@ -71,6 +71,12 @@ export function HistorySheet({ title, isSaving, canSave, onCancel, onSave, child
  * Nothing to decorate here: the sheet types and names what it creates when the
  * modal saves, so this only has to exist. Returning nothing keeps the id
  * `SelectEntity` minted, which is the one it hands back to `onDone`.
+ *
+ * Both pickers pass `deferCreate` alongside it, which is what makes that true.
+ * Creating otherwise names the entity in the store there and then — so closing
+ * the sheet, or the modal, left the name behind on an entity nothing pointed at,
+ * and a later failed publish would snapshot and restore that stray write. The
+ * name this sheet does want is written by `newEntityRows` when the modal saves.
  */
 export function findOrCreate() {
   return undefined;
@@ -103,12 +109,26 @@ export function PickedEntity({ name, note, onClear }: { name: string | null; not
  * A label above a control. The pickers below are buttons rather than form
  * controls, so this is a `div` and the label is a `span` — wrapping a button in
  * a `<label>` names nothing.
+ *
+ * Which leaves the label unattached, so `children` is given the span's id to
+ * point at. A search box that does not take it is announced by its placeholder
+ * instead: "Example: Microsoft" where the field is called "Company".
  */
-export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+export function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode | ((labelId: string) => React.ReactNode);
+}) {
+  const labelId = React.useId();
+
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-metadataMedium text-grey-04">{label}</span>
-      {children}
+      <span id={labelId} className="text-metadataMedium text-grey-04">
+        {label}
+      </span>
+      {typeof children === 'function' ? children(labelId) : children}
     </div>
   );
 }
@@ -159,25 +179,29 @@ export function EntityField({
 }) {
   return (
     <Field label={label}>
-      {locked ? (
-        <PickedEntity name={locked.name} note={locked.note} />
-      ) : value ? (
-        <PickedEntity name={value.name} onClear={onClear} />
-      ) : (
-        <SelectEntity
-          spaceId={spaceId}
-          relationValueTypes={relationValueTypes}
-          placeholder={placeholder}
-          alsoSearchSpaceIds={alsoSearchSpaceIds}
-          autoFocus={autoFocus}
-          onCreateEntity={findOrCreate}
-          onDone={(result, fromCreateFn) =>
-            onChange({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
-          }
-          width="full"
-          {...picker}
-        />
-      )}
+      {labelId =>
+        locked ? (
+          <PickedEntity name={locked.name} note={locked.note} />
+        ) : value ? (
+          <PickedEntity name={value.name} onClear={onClear} />
+        ) : (
+          <SelectEntity
+            spaceId={spaceId}
+            relationValueTypes={relationValueTypes}
+            placeholder={placeholder}
+            alsoSearchSpaceIds={alsoSearchSpaceIds}
+            autoFocus={autoFocus}
+            inputLabelledBy={labelId}
+            onCreateEntity={findOrCreate}
+            deferCreate
+            onDone={(result, fromCreateFn) =>
+              onChange({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })
+            }
+            width="full"
+            {...picker}
+          />
+        )
+      }
     </Field>
   );
 }
@@ -292,47 +316,53 @@ export function MultiEntityField({
 
   return (
     <Field label={label}>
-      {items.length > 0 && (
-        <ul className="flex flex-wrap gap-1.5">
-          {items.map(item => (
-            <li key={item.id}>
-              <SmallButton
-                onClick={() => onChange(items.filter(other => other.id !== item.id))}
-                disabled={disabled}
-                aria-label={`Remove ${noun} ${item.name ?? noun}`}
-              >
-                <span>{item.name ?? 'Untitled'}</span>
-                {item.isNew && <span className="text-ctaPrimary">NEW</span>}
-                <CloseSmall />
-              </SmallButton>
-            </li>
-          ))}
-        </ul>
-      )}
+      {labelId => (
+        <>
+          {items.length > 0 && (
+            <ul className="flex flex-wrap gap-1.5">
+              {items.map(item => (
+                <li key={item.id}>
+                  <SmallButton
+                    onClick={() => onChange(items.filter(other => other.id !== item.id))}
+                    disabled={disabled}
+                    aria-label={`Remove ${noun} ${item.name ?? noun}`}
+                  >
+                    <span>{item.name ?? 'Untitled'}</span>
+                    {item.isNew && <span className="text-ctaPrimary">NEW</span>}
+                    <CloseSmall />
+                  </SmallButton>
+                </li>
+              ))}
+            </ul>
+          )}
 
-      {isAdding || items.length === 0 ? (
-        <SelectEntity
-          spaceId={spaceId}
-          relationValueTypes={relationValueTypes}
-          placeholder={placeholder}
-          alsoSearchSpaceIds={alsoSearchSpaceIds}
-          autoFocus={isAdding}
-          pinnedResults={pinnedResults}
-          pinnedLabel={pinnedLabel}
-          restLabel={restLabel}
-          onCreateEntity={findOrCreate}
-          onDone={(result, fromCreateFn) => add({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })}
-          width="full"
-        />
-      ) : (
-        <div className="self-start">
-          <TextButton type="button" color="ctaPrimary" onClick={() => setIsAdding(true)} disabled={disabled}>
-            {addLabel}
-          </TextButton>
-        </div>
-      )}
+          {isAdding || items.length === 0 ? (
+            <SelectEntity
+              spaceId={spaceId}
+              relationValueTypes={relationValueTypes}
+              placeholder={placeholder}
+              alsoSearchSpaceIds={alsoSearchSpaceIds}
+              autoFocus={isAdding}
+              inputLabelledBy={labelId}
+              pinnedResults={pinnedResults}
+              pinnedLabel={pinnedLabel}
+              restLabel={restLabel}
+              onCreateEntity={findOrCreate}
+              deferCreate
+              onDone={(result, fromCreateFn) => add({ id: result.id, name: result.name, isNew: Boolean(fromCreateFn) })}
+              width="full"
+            />
+          ) : (
+            <div className="self-start">
+              <TextButton type="button" color="ctaPrimary" onClick={() => setIsAdding(true)} disabled={disabled}>
+                {addLabel}
+              </TextButton>
+            </div>
+          )}
 
-      {extra}
+          {extra}
+        </>
+      )}
     </Field>
   );
 }

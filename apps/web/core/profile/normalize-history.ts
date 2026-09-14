@@ -394,6 +394,27 @@ export function normalizeEducation(edges: HistoryEdgeNode[]): EducationCard[] {
 }
 
 /**
+ * Whether a row is still running.
+ *
+ * A missing end date does not say so on its own. Plenty of finished roles and
+ * degrees have no end recorded — the status is what tells them apart, and
+ * reading the gap as "still there" sorted a completed 2022 degree ahead of one
+ * that ended in 2024, and measured its duration up to today.
+ *
+ * Only "current" and "studying" are open; "former", "completed" and "incomplete"
+ * are not. A row from before the status existed has none, and falls back to the
+ * old reading of a missing end date.
+ *
+ * The single definition of this: the row, its duration, the card's duration and
+ * the sort order all derive openness from here, having each answered it
+ * differently before.
+ */
+export function isOngoing(entry: { endDate: string | null; status?: string | null }) {
+  if (entry.endDate !== null) return false;
+  return entry.status == null || entry.status === 'current' || entry.status === 'studying';
+}
+
+/**
  * Most recent first, and anything still open ahead of anything ended. A row with
  * no dates at all sorts last rather than jumping the list on an empty string.
  *
@@ -403,8 +424,8 @@ export function normalizeEducation(edges: HistoryEdgeNode[]): EducationCard[] {
  * refetched.
  */
 export function byMostRecent(a: HistoryEntry, b: HistoryEntry) {
-  const aOpen = a.startDate !== null && a.endDate === null;
-  const bOpen = b.startDate !== null && b.endDate === null;
+  const aOpen = a.startDate !== null && isOngoing(a);
+  const bOpen = b.startDate !== null && isOngoing(b);
   if (aOpen !== bOpen) return aOpen ? -1 : 1;
 
   const aKey = a.endDate ?? a.startDate;

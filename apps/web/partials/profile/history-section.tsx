@@ -5,7 +5,13 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { formatDateRange, formatDuration } from '~/core/profile/history-dates';
-import type { EducationCard, EmploymentCard, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
+import {
+  type EducationCard,
+  type EmploymentCard,
+  type HistoryCard,
+  type HistoryEntry,
+  isOngoing,
+} from '~/core/profile/normalize-history';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
 import { ClampedText } from '~/design-system/clamped-text';
@@ -168,14 +174,8 @@ function CardDuration({ entries }: { entries: HistoryEntry[] }) {
   const starts = entries.map(entry => entry.startDate).filter((date): date is string => date !== null);
   if (starts.length === 0) return null;
 
-  // Open at the employer if any row there is still running — by its status where
-  // it has one, since a missing end date on a finished row means only that nobody
-  // wrote it down.
-  const isOpen = entries.some(entry => {
-    const status = 'status' in entry ? (entry as { status: string | null }).status : null;
-    const stillRunning = status === null || status === 'current' || status === 'studying';
-    return entry.startDate !== null && entry.endDate === null && stillRunning;
-  });
+  // Open at the employer if any row there is still running.
+  const isOpen = entries.some(entry => entry.startDate !== null && isOngoing(entry));
   const ends = entries.map(entry => entry.endDate).filter((date): date is string => date !== null);
 
   // `formatDuration` reads a null end as "through today", which is right for a
@@ -201,11 +201,7 @@ function EntryRow({
   onEdit: () => void;
   onRemove: () => void;
 }) {
-  // What an absent end date means here. A role says so through its status, and
-  // a degree through its three-way one — where only "studying" is still running,
-  // and a status that was never recorded falls back to the old reading.
-  const status = 'status' in entry ? (entry as { status: string | null }).status : null;
-  const isOpen = status === null || status === 'current' || status === 'studying';
+  const isOpen = isOngoing(entry);
 
   const dates = formatDateRange(entry.startDate, entry.endDate, isOpen);
   const duration = isOpen || entry.endDate !== null ? formatDuration(entry.startDate, entry.endDate) : null;

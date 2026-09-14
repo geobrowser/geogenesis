@@ -17,8 +17,11 @@ import {
 } from './history-ontology';
 import {
   type HistoryEdgeNode,
+  type HistoryEntry,
   type HistoryRelationNode,
   type HistoryValueNode,
+  byMostRecent,
+  isOngoing,
   normalizeEducation,
   normalizeEmployment,
 } from './normalize-history';
@@ -343,5 +346,74 @@ describe('the organisation avatar', () => {
     const cards = normalizeEmployment([withImage('Geo', [textValue(NAME_PROPERTY, 'Geo avatar')])]);
 
     expect(cards[0].avatarUrl).toBeNull();
+  });
+});
+
+describe('isOngoing', () => {
+  const row = (over: Partial<{ endDate: string | null; status: string | null }>) => ({
+    endDate: null,
+    status: null,
+    ...over,
+  });
+
+  it('is closed once an end date is recorded, whatever the status says', () => {
+    expect(isOngoing(row({ endDate: '2024-01-01Z', status: 'current' }))).toBe(false);
+  });
+
+  it('is open for the statuses that mean still there', () => {
+    expect(isOngoing(row({ status: 'current' }))).toBe(true);
+    expect(isOngoing(row({ status: 'studying' }))).toBe(true);
+  });
+
+  // The bug this exists for: a finished row often has no end date recorded, and
+  // reading that gap as "still there" put it at the top of the list and measured
+  // its duration up to today.
+  it('is closed for the statuses that mean finished, even with no end date', () => {
+    expect(isOngoing(row({ status: 'former' }))).toBe(false);
+    expect(isOngoing(row({ status: 'completed' }))).toBe(false);
+    expect(isOngoing(row({ status: 'incomplete' }))).toBe(false);
+  });
+
+  // Rows written before the status existed have none, and there is nothing else
+  // to go on.
+  it('falls back to the missing end date where no status was recorded', () => {
+    expect(isOngoing(row({ status: null }))).toBe(true);
+    expect(isOngoing({ endDate: null })).toBe(true);
+  });
+});
+
+describe('byMostRecent', () => {
+  const entry = (name: string, over: Partial<HistoryEntry> & { status?: string | null }) =>
+    ({ subject: { id: name, name }, startDate: '2018-01-01Z', endDate: null, ...over }) as unknown as HistoryEntry;
+
+  const order = (rows: HistoryEntry[]) => [...rows].sort(byMostRecent).map(row => row.subject.name);
+
+  it('puts what is still running first', () => {
+    const running = entry('Current', { status: 'current' });
+    const ended = entry('Ended', { status: 'former', endDate: '2024-01-01Z' });
+
+    expect(order([ended, running])).toEqual(['Current', 'Ended']);
+  });
+
+  // A completed degree with no end date used to count as open and jump the list.
+  it('does not promote a finished row that never recorded its end', () => {
+    const completed = entry('Completed 2022', { status: 'completed', startDate: '2020-01-01Z' });
+    const ended = entry('Ended 2024', { status: 'completed', startDate: '2021-01-01Z', endDate: '2024-01-01Z' });
+
+    expect(order([completed, ended])).toEqual(['Ended 2024', 'Completed 2022']);
+  });
+
+  it('sorts two finished rows by when they ended', () => {
+    const older = entry('Older', { status: 'former', endDate: '2020-01-01Z' });
+    const newer = entry('Newer', { status: 'former', endDate: '2023-01-01Z' });
+
+    expect(order([older, newer])).toEqual(['Newer', 'Older']);
+  });
+
+  it('sorts a row with no dates at all last', () => {
+    const dated = entry('Dated', { status: 'former', endDate: '2020-01-01Z' });
+    const undated = entry('Undated', { status: 'former', startDate: null });
+
+    expect(order([undated, dated])).toEqual(['Dated', 'Undated']);
   });
 });

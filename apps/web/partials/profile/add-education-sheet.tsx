@@ -22,7 +22,7 @@ import type { EducationDraft, EntityChoice } from '~/core/profile/stage-history'
 import { SmallButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
 
-import { EntityField, HistorySheet, MultiEntityField, TextAreaField } from './history-sheet';
+import { EntityField, HistorySheet, LabelledField, MultiEntityField, TextAreaField } from './history-sheet';
 import { MonthYearField } from './month-year-field';
 
 type Props = {
@@ -186,8 +186,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
         )}
       </div>
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-metadataMedium text-grey-04">Grade</span>
+      <LabelledField label="Grade">
         {/* A number, because the property is a decimal. A classification or a
             pass has nowhere to go here and belongs in the description. */}
         <Input
@@ -199,7 +198,7 @@ export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel
           disabled={isSaving}
           placeholder="Example: 3.8"
         />
-      </label>
+      </LabelledField>
 
       <TextAreaField
         label="Description"
