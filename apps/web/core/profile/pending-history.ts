@@ -108,8 +108,8 @@ function entryFromDraft(
 
 export const organizationOf = (draft: PositionDraft | EducationDraft) =>
   'company' in draft
-    ? { id: draft.company.id, name: draft.company.name }
-    : { id: draft.school.id, name: draft.school.name };
+    ? { id: draft.company.id, name: draft.company.name, isNew: draft.company.isNew }
+    : { id: draft.school.id, name: draft.school.name, isNew: draft.school.isNew };
 
 /**
  * Saved records with everything still pending folded in, so the list reads as the

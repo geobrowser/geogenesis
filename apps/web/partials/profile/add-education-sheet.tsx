@@ -21,7 +21,8 @@ import { MonthYearField } from './month-year-field';
 
 type Props = {
   spaceId: string;
-  school?: { id: string; name: string | null; stintId: string };
+  /** `isNew` where it was created in this modal and still needs naming. */
+  school?: { id: string; name: string | null; stintId: string; isNew?: boolean };
   /** The row being changed, when this is an edit rather than an addition. */
   initial?: EducationDraft;
   isSaving: boolean;
@@ -60,7 +61,12 @@ const STATUS_OPTIONS: { value: EducationStatus; label: string }[] = [
  * than inventing an option the ontology does not have.
  */
 export function AddEducationSheet({ spaceId, school, initial, isSaving, onCancel, onSave }: Props) {
-  const locked = !initial && school ? { id: school.id, name: school.name, isNew: false } : null;
+  // Not `isNew: false`. A second role at a company created moments ago in
+  // this same modal still has to write that company's name and type — and
+  // asserting otherwise here published an Employment relation pointing at an
+  // entity nothing had ever named, which then could not even be searched for
+  // to repair.
+  const locked = !initial && school ? { id: school.id, name: school.name, isNew: school.isNew ?? false } : null;
 
   const [pickedSchool, setPickedSchool] = React.useState<EntityChoice | null>(
     initial ? initial.school : (locked ?? null)

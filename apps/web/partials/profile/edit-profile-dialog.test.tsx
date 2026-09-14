@@ -315,6 +315,25 @@ describe('EditProfileDialog', () => {
     expect(descriptionField()).toHaveValue('Arrived with the entity.');
   });
 
+  // `history.isLoading` cannot see this window on its own: until the profile
+  // entity resolves there is no id to read history for, so that query never
+  // starts and reports neither loading nor failed. Both sections rendered
+  // "Nothing here yet" with a live Add button, and a role added then queued a
+  // second edge to an employer already on the profile.
+  it('holds Add until the profile itself has hydrated', () => {
+    mocks.isLoading = true;
+    renderDialog();
+
+    expect(screen.getByRole('button', { name: /Add experience/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Add education/ })).toBeDisabled();
+  });
+
+  it('offers Add once it has', () => {
+    renderDialog();
+
+    expect(screen.getByRole('button', { name: /Add experience/ })).not.toBeDisabled();
+  });
+
   it('holds save until the entity has hydrated', () => {
     mocks.isLoading = true;
     mocks.current = { ...mocks.current, name: 'Changed' };

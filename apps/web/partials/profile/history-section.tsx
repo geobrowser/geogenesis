@@ -216,7 +216,11 @@ function EntryRow({
   const skills = 'skills' in entry ? (entry as { skills: { name: string | null }[] }).skills : [];
   const grade = 'grade' in entry ? (entry as { grade: number | null }).grade : null;
 
-  const heading = fields.length > 0 ? `${subject}, ${fields.map(field => field.name).join(', ')}` : subject;
+  // Guarded the way every other name here is. The graph does hold unnamed
+  // entities, and these two are the accessible headings — unguarded, a field of
+  // study with no name was read aloud as "BSc, null".
+  const heading =
+    fields.length > 0 ? `${subject}, ${fields.map(field => field.name ?? 'Untitled').join(', ')}` : subject;
 
   return (
     <li className="flex items-start justify-between gap-2">
@@ -271,7 +275,7 @@ function EntryRow({
         {skills.length > 0 && (
           <div className="mt-1">
             <ClampedText
-              text={`Skills: ${skills.map(skill => skill.name).join(', ')}`}
+              text={`Skills: ${skills.map(skill => skill.name ?? 'Untitled').join(', ')}`}
               maxLines={2}
               variant="metadata"
               textClassName="text-grey-04"

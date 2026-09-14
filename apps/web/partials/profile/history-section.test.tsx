@@ -235,3 +235,28 @@ describe('HistorySection', () => {
     expect(screen.getByRole('button', { name: '+ Add education' })).toBeInTheDocument();
   });
 });
+
+/**
+ * The graph holds unnamed entities, and these two strings are the row's heading
+ * and its skills line — both read aloud. Unguarded they rendered the literal
+ * word "null".
+ */
+describe('an entity with no name', () => {
+  it('does not put null in the heading', () => {
+    // An education row, which the employment-shaped helper does not build — the
+    // section takes either, and only the copy differs.
+    const row = { ...entry('B.Sc.', '2018-01-01Z', '2021-06-01Z'), fields: [{ id: 'field-1', name: null }] };
+    renderSection([card('Northumbria', [row as unknown as Entry])], { kind: 'education' });
+
+    expect(screen.queryByText(/null/)).not.toBeInTheDocument();
+    expect(screen.getByText('B.Sc., Untitled')).toBeInTheDocument();
+  });
+
+  it('does not put null in the skills line', () => {
+    const row = entry('Engineer', '2018-01-01Z', null);
+    renderSection([card('Geo', [{ ...row, skills: [{ id: 'skill-1', name: null }] }])]);
+
+    expect(screen.queryByText(/null/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Skills: Untitled/)).toBeInTheDocument();
+  });
+});

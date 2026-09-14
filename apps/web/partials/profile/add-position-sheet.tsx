@@ -40,7 +40,8 @@ const SKILL_FILTER = [{ id: SKILL_TYPE, name: 'Skill' }];
 type Props = {
   spaceId: string;
   /** Pre-filled and locked when adding a second role at a company already listed. */
-  company?: { id: string; name: string | null; stintId: string };
+  /** `isNew` where it was created in this modal and still needs naming. */
+  company?: { id: string; name: string | null; stintId: string; isNew?: boolean };
   /** The row being changed, when this is an edit rather than an addition. */
   initial?: PositionDraft;
   isSaving: boolean;
@@ -57,7 +58,12 @@ type Props = {
  * does not already ask.
  */
 export function AddPositionSheet({ spaceId, company, initial, isSaving, onCancel, onSave }: Props) {
-  const locked = !initial && company ? { id: company.id, name: company.name, isNew: false } : null;
+  // Not `isNew: false`. A second role at a company created moments ago in
+  // this same modal still has to write that company's name and type — and
+  // asserting otherwise here published an Employment relation pointing at an
+  // entity nothing had ever named, which then could not even be searched for
+  // to repair.
+  const locked = !initial && company ? { id: company.id, name: company.name, isNew: company.isNew ?? false } : null;
 
   const [pickedCompany, setPickedCompany] = React.useState<EntityChoice | null>(
     initial ? initial.company : (locked ?? null)

@@ -11,7 +11,7 @@ import {
 } from '~/core/profile/history-ontology';
 import type { EmploymentCard } from '~/core/profile/normalize-history';
 import { NOTHING_TO_CLEAN } from '~/core/profile/pending-history';
-import type { PositionDraft } from '~/core/profile/stage-history';
+import type { EducationDraft, PositionDraft } from '~/core/profile/stage-history';
 
 import { useProfileHistory } from './use-profile-history';
 
@@ -73,6 +73,18 @@ const draft = (company: string, title: string, overrides: Partial<PositionDraft>
   status: 'current',
   description: '',
   ...overrides,
+});
+
+const educationDraft = (school: string, degree: string): EducationDraft => ({
+  school: { id: `org-${school}`, name: school, isNew: false },
+  degree: { id: `degree-${degree}`, name: degree, isNew: false },
+  fields: [],
+  skills: [],
+  grade: '',
+  startDate: '2018-01-01Z',
+  endDate: null,
+  status: 'studying',
+  description: '',
 });
 
 const setup = () => renderHook(() => useProfileHistory({ entityId: ENTITY_ID, spaceId: SPACE_ID }));
@@ -817,5 +829,98 @@ describe('waiting for the read to catch up', () => {
     act(() => result.current.discard());
 
     expect(result.current.employment).toEqual([]);
+  });
+});
+
+/**
+ * The window between publishing and being able to read it back. `data` is up to
+ * two minutes stale in here, so anything reasoning from it has to discount the
+ * edit that just went out.
+ */
+describe('a second edit inside the indexing window', () => {
+  it('does not hand a job the stint of a degree at the same organisation', () => {
+    const { result } = setup();
+
+    // Boston University, first as a school.
+    act(() => result.current.addEducation(educationDraft('Boston University', 'Ph.D.')));
+    act(() => result.current.settle());
+
+    // Then as an employer. The read cannot see either yet.
+    act(() => result.current.addPosition(draft('Boston University', 'Lecturer')));
+
+    const { relations } = result.current.stagePending();
+    const employment = relations.find(relation => relation.type.id === EMPLOYMENT_PROPERTY);
+
+    // An Employment edge of its own, not the education record's stint.
+    expect(employment).toBeDefined();
+    expect(relations.find(relation => relation.type.id === ROLES_PROPERTY)?.fromEntity.id).toBe(employment?.entityId);
+  });
+
+  // Remove one of two roles and save; the edge is rightly kept. Remove the other
+  // before the read catches up and the edge has nothing left under it — but the
+  // stale read still shows the first role, so it used to look occupied.
+  it('takes the edge when the second removal empties it', () => {
+    mocks.employment = [savedCard('Geo', ['Engineer', 'Product Lead'])];
+    const { result } = setup();
+
+    act(() => {
+      const card = result.current.employment[0];
+      result.current.removeEntry(
+        card,
+        card.entries.find(e => e.subject.name === 'Engineer')!,
+        'employment'
+      );
+    });
+    act(() => result.current.settle());
+
+    act(() => {
+      const card = result.current.employment[0];
+      result.current.removeEntry(card, card.entries[0], 'employment');
+    });
+
+    expect(
+      tombstones(result.current.stagePending().relations)
+        .map(relation => relation.id)
+        .sort()
+    ).toEqual(['edge-Geo', 'rel-Product Lead'].sort());
+  });
+
+  // The same edit twice: the edge removal derived during staging has to be
+  // remembered, or the next save tombstones it again.
+  it('does not delete the same edge twice', () => {
+    mocks.employment = [savedCard('Geo', ['Engineer'])];
+    const { result } = setup();
+
+    act(() => {
+      const card = result.current.employment[0];
+      result.current.removeEntry(card, card.entries[0], 'employment');
+    });
+    act(() => result.current.settle());
+
+    act(() => result.current.addPosition(draft('Fathom', 'Engineer')));
+
+    expect(tombstones(result.current.stagePending().relations)).toEqual([]);
+  });
+
+  // The edge was tombstoned by the last save, but the stale read still lists it.
+  it('does not hang a new role off an edge the last save deleted', () => {
+    mocks.employment = [savedCard('Geo', ['Engineer'])];
+    const { result } = setup();
+
+    act(() => {
+      const card = result.current.employment[0];
+      result.current.removeEntry(card, card.entries[0], 'employment');
+    });
+    act(() => result.current.settle());
+
+    act(() => result.current.addPosition(draft('Geo', 'Product Lead')));
+
+    const { relations } = result.current.stagePending();
+    const employment = relations.find(relation => !relation.isDeleted && relation.type.id === EMPLOYMENT_PROPERTY);
+
+    // A fresh edge, not the stint of the one just deleted.
+    expect(employment).toBeDefined();
+    expect(employment?.entityId).not.toBe('stint-Geo');
+    expect(relations.find(r => !r.isDeleted && r.type.id === ROLES_PROPERTY)?.fromEntity.id).toBe(employment?.entityId);
   });
 });

@@ -460,3 +460,36 @@ describe('every picker', () => {
     }
   });
 });
+
+/**
+ * A company typed into this modal does not exist until the modal saves, and the
+ * row that writes its name is whichever one ends up being published. A second
+ * role added at that same card therefore has to carry the flag too — asserting
+ * `isNew: false` published an Employment relation pointing at an entity nothing
+ * had ever named, which could not then be searched for to repair.
+ */
+describe('a company created in this modal', () => {
+  it('keeps needing its name written when a second role is added there', async () => {
+    const { onSave } = renderSheet({
+      company: { id: 'org-acme', name: 'Acme', stintId: 'stint-acme', isNew: true },
+    });
+
+    await userEvent.click(screen.getAllByRole('button', { name: /pick existing/ })[0]!);
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ company: expect.objectContaining({ isNew: true }) }));
+  });
+
+  it('does not claim that of a company already on the graph', async () => {
+    const { onSave } = renderSheet({
+      company: { id: 'org-geo', name: 'Geo', stintId: 'stint-geo' },
+    });
+
+    await userEvent.click(screen.getAllByRole('button', { name: /pick existing/ })[0]!);
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ company: expect.objectContaining({ isNew: false }) })
+    );
+  });
+});

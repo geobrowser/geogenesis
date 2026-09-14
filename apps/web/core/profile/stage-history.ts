@@ -489,7 +489,7 @@ export function stageEducation(
  * nothing is `isNew` — the entities all exist already.
  */
 export function positionDraftFromEntry(
-  organization: { id: string; name: string | null },
+  organization: { id: string; name: string | null; isNew?: boolean },
   entry: {
     subject: { id: string; name: string | null };
     employmentType: { id: string; name: string | null } | null;
@@ -503,7 +503,10 @@ export function positionDraftFromEntry(
   }
 ): PositionDraft {
   return {
-    company: { id: organization.id, name: organization.name, isNew: false },
+    // Whatever the card says. A company typed into this modal and not yet
+    // published still needs its name written, and asserting otherwise here
+    // points the relation at an entity nothing ever names.
+    company: { id: organization.id, name: organization.name, isNew: organization.isNew ?? false },
     title: { id: entry.subject.id, name: entry.subject.name, isNew: false },
     // Kept as it stands even when it is not one of the eight the dropdown offers.
     // The select shows nothing for an id it does not know, but the draft still
@@ -525,7 +528,7 @@ export function positionDraftFromEntry(
 }
 
 export function educationDraftFromEntry(
-  organization: { id: string; name: string | null },
+  organization: { id: string; name: string | null; isNew?: boolean },
   entry: {
     subject: { id: string; name: string | null };
     fields: { id: string; name: string | null }[];
@@ -538,7 +541,10 @@ export function educationDraftFromEntry(
   }
 ): EducationDraft {
   return {
-    school: { id: organization.id, name: organization.name, isNew: false },
+    // Whatever the card says. A company typed into this modal and not yet
+    // published still needs its name written, and asserting otherwise here
+    // points the relation at an entity nothing ever names.
+    school: { id: organization.id, name: organization.name, isNew: organization.isNew ?? false },
     degree: { id: entry.subject.id, name: entry.subject.name, isNew: false },
     // The legacy field-of-study text is shown with no id behind it, because it is
     // text on the stint rather than a relation to anything.

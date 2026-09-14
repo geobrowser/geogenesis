@@ -144,7 +144,12 @@ export type EducationEntry = HistoryEntry & {
 
 /** An organisation and everything held there. One card in the resting state. */
 export type HistoryCard<TEntry> = {
-  organization: NamedRef;
+  /**
+   * `isNew` where the organisation was typed into this modal and does not exist
+   * yet. Carried because a second row added at that card has to know to write
+   * the name and type too — whichever row ends up being the one published.
+   */
+  organization: NamedRef & { isNew?: boolean };
   /**
    * Every Employment/Education edge pointing at this organisation.
    *

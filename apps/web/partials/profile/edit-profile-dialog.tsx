@@ -68,7 +68,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
    * `editing` is the row the sheet was opened on, where it was opened on one.
    * Saving then replaces that row rather than adding beside it.
    */
-  type Organization = { id: string; name: string | null; stintId: string };
+  type Organization = { id: string; name: string | null; stintId: string; isNew?: boolean };
   type Editing = { card: HistoryCard<HistoryEntry>; entry: HistoryEntry };
 
   const [sheet, setSheet] = React.useState<
@@ -81,7 +81,15 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     // Any of the card's edges will do as the one to hang a new row off; a card
     // holds more than one only where the same employer was recorded twice.
     const org = card?.edges[0]
-      ? { id: card.organization.id, name: card.organization.name, stintId: card.edges[0].stintId }
+      ? {
+          id: card.organization.id,
+          name: card.organization.name,
+          stintId: card.edges[0].stintId,
+          // Carried, not assumed false: a card for a company typed into this
+          // modal is one whose name has not been written yet, and the row added
+          // here may end up being the only one that publishes.
+          isNew: card.organization.isNew,
+        }
       : undefined;
     setSheet(kind === 'employment' ? { kind: 'position', company: org } : { kind: 'education', school: org });
   };
@@ -197,6 +205,18 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   // be seeded from the profile endpoint alone, and saving against no relations
   // would duplicate an image edge rather than retarget it.
   const isUnavailable = !isLoading && (!canEdit || !isHydrated);
+
+  /**
+   * Whether the history on screen is the profile's own.
+   *
+   * `history.isLoading` alone is not enough: until the profile entity resolves
+   * there is no id to read history for, so that query never starts and reports
+   * neither loading nor failed. Both sections rendered "Nothing here yet" with a
+   * live Add button, and a role added then queued a second edge to an employer
+   * already on the profile — the duplicate this modal takes such trouble to
+   * avoid, reached while it was still looking the other way.
+   */
+  const isHistoryReady = isHydrated && !isLoading && !history.isLoading;
 
   // Trim only what the user actually typed. A stored value with stray whitespace
   // is not a change until they touch the field — comparing a trimmed draft against
@@ -442,7 +462,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                     spaceId={spaceId}
                     // Adding before the read lands cannot see an employer already
                     // on the profile, and opens a second edge to it.
-                    disabled={isPublishing || history.isLoading}
+                    disabled={isPublishing || !isHistoryReady}
                     isUnavailable={history.isUnavailable}
                     onAdd={() => openSheetFor('employment')}
                     onAddTo={card => openSheetFor('employment', card)}
@@ -454,7 +474,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                     kind="education"
                     cards={history.education}
                     spaceId={spaceId}
-                    disabled={isPublishing || history.isLoading}
+                    disabled={isPublishing || !isHistoryReady}
                     isUnavailable={history.isUnavailable}
                     onAdd={() => openSheetFor('education')}
                     onAddTo={card => openSheetFor('education', card)}

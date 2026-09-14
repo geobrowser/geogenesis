@@ -71,12 +71,19 @@ type Published = {
   /** The queue as it was, for display only. */
   rows: PendingHistory;
   /**
-   * Stints minted for organisations that were new to the profile.
+   * Stints minted for organisations that were new to the profile, per kind.
    *
    * So a further row at one of them joins the edge just published rather than
    * opening a second — the read cannot say yet that the first one exists.
+   *
+   * Kept apart by kind because an organisation can be both: a university that
+   * employs people has an Education record and an Employment record, and one map
+   * keyed on the organisation alone handed a job the degree's stint. Staging then
+   * wrote no Employment relation at all, because it had been told the edge
+   * existed — so the job hung off the education record and never appeared under
+   * Experience.
    */
-  stints: Record<string, string>;
+  stints: Record<Kind, Record<string, string>>;
   expectation: Expectation;
 };
 
@@ -108,20 +115,26 @@ function reflects(
 /**
  * Organisation edges left with nothing under them once everything queued lands.
  *
- * Worked out from the pending state as it finally stands, rather than when a row
- * is removed, because what hangs off an edge keeps changing after that: an
- * unsaved sibling that was keeping it alive can itself be dropped or moved to
- * another employer, and a row can be added at an employer whose last saved row is
+ * Worked out from the state as it finally stands, rather than when a row is
+ * removed, because what hangs off an edge keeps changing after that: an unsaved
+ * sibling that was keeping it alive can itself be dropped or moved to another
+ * employer, and a row can be added at an employer whose last saved row is
  * already queued to go. Deciding on the way past left an empty Employment edge
  * behind in the first case, and published the new row under a deleted edge in the
  * second.
  *
+ * "As it stands" includes an edit already published, because `data` here does
+ * not: it lags a publish by a minute or two. Removing one of two roles, saving,
+ * then removing the other inside that window read the first as still present —
+ * so the edge survived with nothing under it, and once the read caught up the
+ * card had no rows left to render and no way to reach the employer again.
+ *
  * Counted per edge rather than per card: a card can group several edges to one
  * employer, and a row under a different edge cannot keep this one alive.
  */
-function orphanedEdges(saved: HistoryCard<HistoryEntry>[], kind: Kind, pending: PendingHistory): PendingRemoval[] {
-  const removed = new Set(pending.removals.map(removal => removal.relationId));
-  const additions = kind === 'employment' ? pending.positions : pending.education;
+function orphanedEdges(saved: HistoryCard<HistoryEntry>[], kind: Kind, outstanding: PendingHistory): PendingRemoval[] {
+  const removed = new Set(outstanding.removals.map(removal => removal.relationId));
+  const additions = kind === 'employment' ? outstanding.positions : outstanding.education;
 
   // Every stint something will still hang off afterwards — saved rows that are
   // staying, and unsaved rows that attached themselves to a saved edge.
@@ -139,7 +152,10 @@ function orphanedEdges(saved: HistoryCard<HistoryEntry>[], kind: Kind, pending: 
 
   for (const card of saved) {
     for (const edge of card.edges) {
-      if (kept.has(edge.stintId) || isPending(edge.relationId)) continue;
+      // Already on its way out, from this edit or the one before it. Tombstoning
+      // it again would put a second delete in the next proposal for a relation
+      // that is gone.
+      if (kept.has(edge.stintId) || isPending(edge.relationId) || removed.has(edge.relationId)) continue;
 
       // Only an edge this edit emptied. One that arrived already carrying nothing
       // is not ours to tidy up, and deleting it would be a change nobody asked for.
@@ -222,6 +238,14 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     [pending, published]
   );
 
+  /**
+   * Relations on their way out, queued or already published.
+   *
+   * The read still returns the published ones for a minute or two, so anything
+   * reasoning from `data` has to discount them by hand.
+   */
+  const outstandingRemovals = React.useMemo(() => new Set(shown.removals.map(removal => removal.relationId)), [shown]);
+
   const pendingOrgIds = React.useMemo(() => pendingOrganizationIds(shown), [shown]);
 
   const { data: pendingAvatars } = useQuery({
@@ -240,9 +264,14 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    * exists to prevent.
    */
   const savedStintFor = React.useCallback(
-    (cards: HistoryCard<HistoryEntry>[], organizationId: string) =>
-      cards.find(card => card.organization.id === organizationId)?.edges.find(edge => !isPending(edge.relationId))
-        ?.stintId,
+    (cards: HistoryCard<HistoryEntry>[], organizationId: string, removed: Set<string>) =>
+      cards
+        .find(card => card.organization.id === organizationId)
+        // Not one already on its way out. The read lags a publish by a minute or
+        // two, so an edge deleted by the last edit is still in it — attaching a
+        // new row to that one wrote a Roles relation under an Employment edge
+        // that no longer existed, and the role published unreachable.
+        ?.edges.find(edge => !isPending(edge.relationId) && !removed.has(edge.relationId))?.stintId,
     []
   );
 
@@ -255,12 +284,16 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    */
   const attachmentFor = React.useCallback(
     (kind: Kind, organizationId: string) =>
-      savedStintFor(kind === 'employment' ? (data?.employment ?? []) : (data?.education ?? []), organizationId) ??
+      savedStintFor(
+        kind === 'employment' ? (data?.employment ?? []) : (data?.education ?? []),
+        organizationId,
+        outstandingRemovals
+      ) ??
       // The read is a minute or two behind a publish, and cannot say yet that an
       // employer added in it exists. Without this, adding a second role there
       // before it catches up opens a second edge to the same company.
-      published?.stints[organizationId],
-    [data?.education, data?.employment, published, savedStintFor]
+      published?.stints[kind][organizationId],
+    [data?.education, data?.employment, outstandingRemovals, published, savedStintFor]
   );
 
   const addPosition = React.useCallback(
@@ -378,7 +411,9 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    */
   const staged = React.useMemo((): StagedRows & {
     expectation: Expectation | null;
-    stints: Record<string, string>;
+    stints: Record<Kind, Record<string, string>>;
+    /** Including the organisation edges derived above, which `pending` never held. */
+    removals: PendingRemoval[];
   } => {
     const context = { personEntityId: entityId, spaceId };
     const mint = () => ID.createEntityId();
@@ -389,10 +424,12 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     // Which stint each organisation's rows were written under. Remembered past a
     // publish so a row added at the same employer before the read catches up
     // joins that edge rather than opening a second one to it.
-    const stints: Record<string, string> = {};
-    for (const { draft, newStintId } of [...sharedPositions, ...sharedEducation]) {
-      stints[organizationOf(draft).id] = newStintId;
-    }
+    //
+    // Per kind: the same organisation can hold both an Employment record and an
+    // Education record, and they are different edges.
+    const stints: Record<Kind, Record<string, string>> = { employment: {}, education: {} };
+    for (const { draft, newStintId } of sharedPositions) stints.employment[organizationOf(draft).id] = newStintId;
+    for (const { draft, newStintId } of sharedEducation) stints.education[organizationOf(draft).id] = newStintId;
 
     const additions = [
       ...sharedPositions.map(({ draft, newStintId }) => stagePosition(draft, context, newStintId)),
@@ -413,10 +450,12 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     const removedRelations: Relation[] = [];
     const removedValues: Value[] = [];
 
+    // Decided against everything outstanding, but only the new ones go out: an
+    // edit already published has had its removals published with it.
     const removals = [
       ...pending.removals,
-      ...orphanedEdges(data?.employment ?? [], 'employment', pending),
-      ...orphanedEdges(data?.education ?? [], 'education', pending),
+      ...orphanedEdges(data?.employment ?? [], 'employment', shown),
+      ...orphanedEdges(data?.education ?? [], 'education', shown),
     ];
 
     const ours = (rowSpaceId: string | null) => rowSpaceId === null || rowSpaceId === spaceId;
@@ -470,8 +509,9 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
           ? { added: expectedThere, removed: expectedGone, since: 0 }
           : null,
       stints,
+      removals,
     };
-  }, [data?.education, data?.employment, entityId, pending, spaceId]);
+  }, [data?.education, data?.employment, entityId, pending, shown, spaceId]);
 
   /**
    * The rows this pending state publishes.
@@ -518,10 +558,18 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     setPublished(
       expectation === null
         ? null
-        : { rows: pending, stints: staged.stints, expectation: { ...expectation, since: Date.now() } }
+        : {
+            // `staged.removals`, not `pending.removals`: the organisation edges
+            // this edit emptied were worked out during staging and were never in
+            // the queue. Without them the next edit cannot tell that an edge it
+            // can still see in the stale read has already gone.
+            rows: { ...pending, removals: staged.removals },
+            stints: staged.stints,
+            expectation: { ...expectation, since: Date.now() },
+          }
     );
     void queryClient.invalidateQueries({ queryKey });
-  }, [pending, queryClient, queryKey, staged.expectation, staged.stints]);
+  }, [pending, queryClient, queryKey, staged.expectation, staged.removals, staged.stints]);
 
   /**
    * Let go of a published edit once the read catches up with it.
