@@ -2323,6 +2323,32 @@ describe('claims the viewer has already answered', () => {
   });
 
   /**
+   * Fetching ahead must not hold the first paint hostage.
+   *
+   * The gate waits for a render with nothing in flight, so the tab never shows a screenful it is
+   * about to take back. The sentinel fetches as soon as the list is short — on an empty list, a
+   * page ahead of the viewport, that is immediately. Together the catalog and the row lookups ran
+   * back to back, the quiet render never came, and the skeleton stayed up for as long as the paging
+   * lasted: a minute, once the budget was fifteen pages.
+   */
+  it('does not fetch ahead until it has drawn once', async () => {
+    mocks.taggedHasNextPage = true;
+    mocks.taggedRowsLoading = true;
+    mocks.taggedClaims[DEBATE] = [featuredClaim(FEATURED_B, 'One you have not')];
+
+    const view = render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
+
+    mocks.taggedRowsLoading = false;
+    view.rerender(<ClaimsTab />);
+
+    expect(await screen.findByText('One you have not')).toBeInTheDocument();
+    expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
+  });
+
+  /**
    * When the list stops advancing, it has to say so and offer to go on.
    *
    * The empty state carries that offer when there is nothing on screen; with rows on screen

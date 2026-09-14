@@ -1680,8 +1680,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     ? 'Nothing you haven’t already answered in the first few hundred claims.'
     : 'Nothing in the first few hundred claims.';
 
+  // Not while the rows for what is already here are still coming. The two pull against each other
+  // otherwise — see the hub, where fetching a page ahead of an empty list meant the catalog and the
+  // row lookups ran back to back and the loading state never lifted.
+  const mayFetchAhead = autoPages && !rowsInFlight;
+
   const sentinelRef = useInfiniteScrollSentinel({
-    hasNextPage: autoPages,
+    hasNextPage: mayFetchAhead,
     isFetchingNextPage: taggedFetchingNextPage,
     fetchNextPage: fetchNextTaggedPage,
     // Same reason as the hub's: a page of fifty can add three rows once the filter has run, so the
@@ -2102,9 +2107,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           // corpus goes on past them — and the empty state below would announce that as "no other
           // eligible claims", of rows nobody has fetched. While the sentinel still has somewhere to
           // go, this is still looking.
-          isLoading={
-            (tabIsLoading || stillPaging) && (showsSections ? visibleSections.length === 0 : visibleClaims.length === 0)
-          }
+          // `stillPaging` is deliberately not in here. A search that has to walk pages is a thing to
+          // say — see `searchingMessage` below — not a skeleton to sit behind, and with a budget of
+          // fifteen pages a skeleton behind it is a minute of nothing.
+          isLoading={tabIsLoading && (showsSections ? visibleSections.length === 0 : visibleClaims.length === 0)}
           error={tabError}
           isEmpty={showsSections ? visibleSections.length === 0 : visibleClaims.length === 0}
           emptyMessage={
@@ -2185,7 +2191,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             while it is disabled, so `taggedHasNextPage` still answers true under a source that is
             not paging anything, and the sentinel would sit in view asking a list nobody is looking
             at for its next page. */}
-        {autoPages && graphFiltered ? (
+        {mayFetchAhead && graphFiltered ? (
           <div ref={sentinelRef} data-testid="rematch-claims-scroll-sentinel" className="h-px" />
         ) : stoppedShortHere && visibleClaims.length > 0 ? (
           // The empty state carries this offer when the list is empty and cannot when it is not —

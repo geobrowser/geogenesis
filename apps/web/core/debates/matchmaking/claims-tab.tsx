@@ -792,8 +792,24 @@ export function ClaimsTab({
     resetKey: listKey,
   });
 
+  /**
+   * The list does not fetch ahead until it has drawn once.
+   *
+   * These two were pulling against each other. The first-paint gate waits for a render where
+   * nothing is in flight, so the tab never shows a screenful it is about to take back; the sentinel
+   * fetches the next page as soon as the list is short, which — on an empty list, a page ahead of
+   * the viewport — is immediately. So the catalog and the row lookups ran back to back, the quiet
+   * render never came, and the gate held a skeleton up for as long as the paging lasted. Raising
+   * the budget to fifteen pages made that a minute.
+   *
+   * Paging waits for the gate instead. The first page paints, and everything after it arrives under
+   * a list the viewer can already read — which is the only state in which fetching ahead is worth
+   * anything to them anyway.
+   */
+  const mayFetchAhead = autoPages && answersSettled;
+
   const sentinelRef = useInfiniteScrollSentinel({
-    hasNextPage: autoPages,
+    hasNextPage: mayFetchAhead,
     isFetchingNextPage: graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage,
     fetchNextPage,
     // Further ahead than the default, because this list is filtered after it arrives: a page of
@@ -818,7 +834,7 @@ export function ClaimsTab({
    * search goes on behind them, and a viewer watching it is told what it is doing rather than shown
    * a loading state that never resolves.
    */
-  const stillPaging = visibleClaims.length === 0 && (autoPages || answersInFlight);
+  const stillPaging = visibleClaims.length === 0 && (mayFetchAhead || answersInFlight);
 
   // Lobby and Positions page too, and neither is hiding anything the viewer has answered — Positions
   // *is* what they have answered. Blaming their own positions for an empty page there is an
@@ -1003,7 +1019,7 @@ export function ClaimsTab({
           Not while the allowlist is pending, though: the tab is showing a four-row skeleton then,
           so the sentinel sits in view under it and pages the corpus on the strength of a loading
           state being visible — reading "the viewer reached the end" off a list that isn't there. */}
-        {autoPages ? (
+        {mayFetchAhead ? (
           <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
         ) : stoppedShort && visibleClaims.length > 0 ? (
           // The empty state carries this offer when the list is empty, and cannot when it is not —
