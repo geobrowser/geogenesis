@@ -805,8 +805,16 @@ export function ClaimsTab({
    * Paging waits for the gate instead. The first page paints, and everything after it arrives under
    * a list the viewer can already read — which is the only state in which fetching ahead is worth
    * anything to them anyway.
+   *
+   * And it waits for each page's answers as well, which is the part that keeps it finite. A page
+   * arrives, its rows are held back while they are classified, the list stays short, and a sentinel
+   * a page ahead of the viewport fires again — while `useBoundedPaging` skips its accounting for
+   * exactly that window, because a page mid-classification cannot yet be called barren. So the
+   * budget was never charged and the loop had nothing to stop it: it walked the corpus as fast as
+   * the network allowed, hundreds of requests deep. Serialising the two closes it. Every page is
+   * charged before the next one starts, which is what the budget was counting on all along.
    */
-  const mayFetchAhead = autoPages && answersSettled;
+  const mayFetchAhead = autoPages && answersSettled && !answersInFlight;
 
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage: mayFetchAhead,

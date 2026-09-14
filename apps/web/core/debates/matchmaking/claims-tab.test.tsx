@@ -2349,6 +2349,30 @@ describe('claims the viewer has already answered', () => {
   });
 
   /**
+   * And it waits for each page's answers, not only the first — which is what keeps it finite.
+   *
+   * A page arrives, its rows are held back while they are classified, the list stays short, and a
+   * sentinel a page ahead of the viewport fires again. `useBoundedPaging` skips its accounting for
+   * exactly that window, because a page mid-classification cannot yet be called barren — so the
+   * budget was never charged and nothing stopped the loop. It walked the corpus as fast as the
+   * network allowed: a thousand requests and twenty-five megabytes, on one tab.
+   */
+  it('does not start a page while the last one is still being classified', async () => {
+    mocks.taggedHasNextPage = true;
+    mocks.taggedClaims[DEBATE] = [featuredClaim(FEATURED_B, 'One you have not')];
+
+    const view = render(<ClaimsTab />);
+    await showAllClaims();
+    expect(await screen.findByTestId('claims-scroll-sentinel')).toBeInTheDocument();
+
+    // The next page's rows go out; until they answer, nothing else may be asked for.
+    mocks.taggedRowsLoading = true;
+    view.rerender(<ClaimsTab />);
+
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
+  });
+
+  /**
    * When the list stops advancing, it has to say so and offer to go on.
    *
    * The empty state carries that offer when there is nothing on screen; with rows on screen
