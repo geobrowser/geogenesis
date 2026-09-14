@@ -575,7 +575,13 @@ export function ClaimsTab({
   //
   // Spaces are not debounced on the way into the tagged query (`taggedFilters`), so the live
   // selection is the right one for them. The two differ on purpose; this key follows each.
-  const listKey = `${debouncedSearch}|${spaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}`;
+  //
+  // The *eligible* set too, which is not something the viewer picks. It goes out with the query, so
+  // a membership landing or a space ceasing to be publishable makes this a different corpus — and
+  // everything keyed on "which list is this" has to hear about it. The paging budget is the one
+  // that bites: a corpus that had reached the cap handed its exhaustion to the corpus that replaced
+  // it, which then arrived stopped.
+  const listKey = `${debouncedSearch}|${spaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}|${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}`;
   const claims = useStableListOrder(graphSourced ? taggedEntries : serverClaims, claimRowKey, listKey);
 
   /**

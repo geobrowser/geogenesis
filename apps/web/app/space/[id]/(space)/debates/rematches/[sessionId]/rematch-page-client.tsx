@@ -1213,8 +1213,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * to bridge a refetch of *the same* list, and the paging budget, which must start over when the
    * list changes. The debounced topics rather than the live ones, because that is what the query
    * uses; spaces are not debounced on the way in, so those are live.
+   *
+   * The eligible set is in it too, and it is the one nobody picks: it goes out with the query, so a
+   * membership landing or a space ceasing to be publishable makes this a different corpus. Left
+   * out, a corpus that had reached the paging cap handed its exhaustion to the one that replaced
+   * it, which arrived already stopped.
    */
-  const taggedListKey = `${sessionId}:${claimsTagId}:${debouncedSearch}:${spaceIds.join(',')}:${debouncedTopicIds.join(',')}`;
+  const taggedListKey = `${sessionId}:${claimsTagId}:${debouncedSearch}:${spaceIds.join(',')}:${debouncedTopicIds.join(',')}:${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}`;
 
   const taggedClaims = useLastSettled(taggedRowsNow, taggedClaimsSettling, taggedListKey);
 

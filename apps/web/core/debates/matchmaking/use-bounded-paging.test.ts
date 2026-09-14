@@ -24,9 +24,9 @@ function render(initial: Props, fetchNextPage = vi.fn()) {
 }
 
 /** Pages that arrive with nothing the viewer can see, which is what the budget is spent on. */
-function barrenPages(view: ReturnType<typeof render>, count: number, from = 0) {
+function barrenPages(view: ReturnType<typeof render>, count: number, from = 0, resetKey?: string) {
   for (let page = 1; page <= count; page += 1) {
-    view.rerender({ loaded: from + page * 50, visible: 0 });
+    view.rerender({ loaded: from + page * 50, visible: 0, resetKey });
   }
 }
 
@@ -154,6 +154,26 @@ describe('useBoundedPaging', () => {
     view.rerender({ loaded: 0, visible: 0, resetKey: 'another list' });
 
     expect(view.result.current.autoPages).toBe(true);
+  });
+
+  /**
+   * And charges the new list for its own first page.
+   *
+   * Two corpora can start at identical counts — two fifty-row pages that both collapse to nothing —
+   * and the reset happens during render while the accounting happens in an effect. With nothing in
+   * that effect's inputs having changed, it never ran for the new list, so its opening page went
+   * uncharged and the cap allowed one page more than it should.
+   */
+  it('charges a new list for the page it starts on', () => {
+    const view = render({ loaded: 0, visible: 0 });
+    barrenPages(view, AUTO_PAGES_WITHOUT_ROWS);
+
+    // The same counts as the previous list reached, under a new key.
+    view.rerender({ loaded: AUTO_PAGES_WITHOUT_ROWS * 50, visible: 0, resetKey: 'another list' });
+    // One page in already, so the budget runs out one page sooner than a standing start.
+    barrenPages(view, AUTO_PAGES_WITHOUT_ROWS - 1, AUTO_PAGES_WITHOUT_ROWS * 50, 'another list');
+
+    expect(view.result.current.autoPages).toBe(false);
   });
 
   // Reaching the end of the corpus is not stopping short of it, and must not offer to go on.

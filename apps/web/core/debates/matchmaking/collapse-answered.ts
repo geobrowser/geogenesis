@@ -120,7 +120,16 @@ export function useCollapseAnswered<T>(
   // one commit classify the new rows against the old list's history, which is the whole of what
   // this prevents.
   const lastResetKey = React.useRef(resetKey);
-  if (lastResetKey.current !== resetKey) {
+  const lastEnabled = React.useRef(enabled);
+  // Switching off is a reset too, and not only for tidiness.
+  //
+  // Nothing is recorded while the filter is off, so a row seen unanswered before it was switched
+  // off and answered while it was off comes back still marked as seen — and on the debate-again
+  // flow, where the hold is indefinite, "seen unanswered" means *keep for good*. Switching the
+  // filter back on then failed to hide it, permanently. What is on screen when it comes back on is
+  // the backlog, whatever happened while nobody was watching.
+  const switchedOff = lastEnabled.current && !enabled;
+  if (lastResetKey.current !== resetKey || switchedOff) {
     lastResetKey.current = resetKey;
     seenUnanswered.current.clear();
     foldedOut.current.clear();
@@ -129,6 +138,7 @@ export function useCollapseAnswered<T>(
     timers.current.clear();
     setHolding(current => (current.size === 0 ? current : new Set()));
   }
+  lastEnabled.current = enabled;
 
   // Every render rather than on a dependency list, and that is the cheaper of the two: the callbacks
   // come from the caller, so a list would either churn on inline ones or go stale on memoized ones.

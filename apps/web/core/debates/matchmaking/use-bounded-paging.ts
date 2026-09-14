@@ -114,7 +114,11 @@ export function useBoundedPaging({
     const grew = visible > seen.current.visible;
     seen.current = { ...seen.current, loaded, visible };
     setBarren(count => (grew ? 0 : count + 1));
-  }, [loaded, paused, settling, visible]);
+    // `resetKey` among them, though it is read during render rather than here: the reset zeroes the
+    // snapshot, and without it in this list React has no reason to re-run when two corpora happen to
+    // start at the same counts — two fifty-row pages that both collapse to nothing, say. The new
+    // list's first barren page then went uncharged and the cap allowed a page more than it should.
+  }, [loaded, paused, resetKey, settling, visible]);
 
   const keepLooking = React.useCallback(() => {
     setBarren(0);

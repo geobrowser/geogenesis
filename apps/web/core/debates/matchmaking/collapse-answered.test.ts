@@ -14,15 +14,15 @@ function row(id: string, state: AnsweredState): Row {
 
 function render(initial: Row[], enabled = true, holdMs: number | null = HOLD, resetKey?: string) {
   return renderHook(
-    ({ rows, key }: { rows: Row[]; key?: string | undefined }) =>
+    ({ rows, key, on = enabled }: { rows: Row[]; key?: string | undefined; on?: boolean }) =>
       useCollapseAnswered(rows, {
         keyOf: candidate => candidate.id,
         answeredStateOf: candidate => candidate.state,
-        enabled,
+        enabled: on,
         holdMs,
         resetKey: key,
       }),
-    { initialProps: { rows: initial, key: resetKey } as { rows: Row[]; key?: string } }
+    { initialProps: { rows: initial, key: resetKey } as { rows: Row[]; key?: string; on?: boolean } }
   );
 }
 
@@ -276,6 +276,24 @@ describe('useCollapseAnswered', () => {
 
       expect(ids(result.current)).toEqual(['a']);
     });
+  });
+
+  /**
+   * Turning the filter off and on again starts the question over.
+   *
+   * Nothing is recorded while it is off, so a row seen unanswered before and answered *during*
+   * came back still marked as seen — and on the debate-again flow "seen unanswered" means keep for
+   * good. An enabled switch then failed to hide it, for the rest of the visit. What is on screen
+   * when it comes back on is the backlog, whatever happened while nobody was watching.
+   */
+  it('treats what it finds on the way back on as the backlog', () => {
+    const { result, rerender } = render([row('a', 'unanswered')], true, null);
+
+    rerender({ rows: [row('a', 'unanswered')], on: false });
+    rerender({ rows: [row('a', 'answered')], on: false });
+    rerender({ rows: [row('a', 'answered')], on: true });
+
+    expect(result.current).toEqual([]);
   });
 
   it('does nothing at all when it is off', () => {
