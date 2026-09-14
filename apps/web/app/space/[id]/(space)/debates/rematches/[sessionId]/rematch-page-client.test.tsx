@@ -1403,15 +1403,11 @@ describe('DebateRematchPageClient', () => {
       expect(topicMenu.className).not.toContain('ml-auto');
       expect(topicMenu.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-      // The far end only where the row is wide enough to have one. Narrow, the switch wraps to a
-      // line of its own, and pinned right it read as a stray control rather than as the end of the
-      // filter row — so it goes full width and left-aligned there instead.
-      //
-      // A container query and not a viewport one, which is the part worth pinning: the two narrow
-      // cases are not both small screens. The debates side panel is ~400px wide on any desktop.
-      const end = toggle.parentElement;
-      expect(end?.className).toContain('@lg:ml-auto');
-      expect(end?.className).toContain('w-full');
+      // Behind a growable gap rather than `ml-auto`, which is what decides where it goes when it
+      // does *not* fit: the spacer absorbs the slack on the menus' line, so the switch ends the row
+      // where there is room and starts its own line at the left where there is not. `ml-auto` would
+      // pin it to the right margin of that line instead, with nothing beside it.
+      expect(toggle.previousElementSibling?.className).toContain('flex-1');
     });
 
     // A fixed order, so a source that appears doesn't reshuffle the ones already in the menu.

@@ -1652,7 +1652,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // Every dimension the tagged query is keyed by, plus the source that chooses between the two
     // catalogues. A budget spent searching one list must not be held against the next: narrowing to
     // a space, or typing, asks a different question and deserves its own.
-    resetKey: `${taggedListKey}:${source}`,
+    // The switch joins them, because it decides which fetched rows can be *seen*: turning it off
+    // makes a barren page full retrospectively, and without this the list stayed capped over rows it
+    // had just revealed. The stored preference rather than `hidesAnswered`, which also carries the
+    // tab — keyed on that, every tab switch would spend the pause `paused` exists to protect.
+    resetKey: `${taggedListKey}:${source}:${hideMyPositions}`,
   });
 
   const stillPaging = graphFiltered && visibleClaims.length === 0 && (autoPages || rowsInFlight);

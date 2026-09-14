@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   /** What the matches lookup answers, and whether it has answered at all. */
   matches: [{ id: 'match-1' }] as unknown[],
   matchesLoading: false,
+  matchesFetching: false,
   matchesError: null as unknown,
   /** Whether the wider list reports a corpus with nothing in it — the last rung of the ladder. */
   widerEmpty: false,
@@ -22,6 +23,7 @@ vi.mock('./hooks', () => ({
   useMatchmakingMatches: () => ({
     data: { matches: mocks.matches },
     isLoading: mocks.matchesLoading,
+    isFetching: mocks.matchesLoading || mocks.matchesFetching,
     error: mocks.matchesError,
   }),
 }));
@@ -71,6 +73,7 @@ const toggle = () => screen.getByRole('switch', { name: 'Matches only' });
 beforeEach(() => {
   mocks.matches = [{ id: 'match-1' }];
   mocks.matchesLoading = false;
+  mocks.matchesFetching = false;
   mocks.matchesError = null;
   mocks.widerEmpty = false;
 });
@@ -174,6 +177,23 @@ describe('LobbyTab', () => {
       renderLobby();
 
       expect(screen.getByTestId('matches-list')).toBeInTheDocument();
+    });
+
+    /**
+     * Including when "still out" looks settled.
+     *
+     * With something in the cache react-query reports `isLoading: false` while the mount refetch is
+     * in flight, so yesterday's empty answer arrives looking like today's. This hook decides once
+     * and keeps it, so a viewer with matches waiting would have been stepped back onto the wider
+     * list on the strength of a stale one.
+     */
+    it('does not decide on a cached answer while the refetch is in flight', () => {
+      mocks.matchesFetching = true;
+
+      renderLobby();
+
+      expect(screen.getByTestId('matches-list')).toBeInTheDocument();
+      expect(toggle()).toHaveAttribute('aria-checked', 'true');
     });
   });
 

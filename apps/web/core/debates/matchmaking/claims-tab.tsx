@@ -576,12 +576,20 @@ export function ClaimsTab({
   // Spaces are not debounced on the way into the tagged query (`taggedFilters`), so the live
   // selection is the right one for them. The two differ on purpose; this key follows each.
   //
+  // And the switch, because it decides which of the fetched rows can be *seen* — so turning it off
+  // turns a barren page into a full one retrospectively. Without it a list that had reached the
+  // paging cap stayed capped after the viewer revealed everything it had been hiding, and ordinary
+  // scrolling did not resume until they pressed "Keep looking" for rows already on screen.
+  //
+  // The stored preference rather than `collapsesAnswered`, which also carries which surface this is:
+  // keyed on that, every surface would reset the others' budgets for no reason.
+  //
   // The *eligible* set too, which is not something the viewer picks. It goes out with the query, so
   // a membership landing or a space ceasing to be publishable makes this a different corpus — and
   // everything keyed on "which list is this" has to hear about it. The paging budget is the one
   // that bites: a corpus that had reached the cap handed its exhaustion to the corpus that replaced
   // it, which then arrived stopped.
-  const listKey = `${debouncedSearch}|${spaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}|${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}`;
+  const listKey = `${debouncedSearch}|${spaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}|${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}|${hideMyPositions}`;
   const claims = useStableListOrder(graphSourced ? taggedEntries : serverClaims, claimRowKey, listKey);
 
   /**
@@ -851,15 +859,6 @@ export function ClaimsTab({
           // from the one place it must not apply. Nor is it drawn signed out, where the viewer has
           // no positions for it to hide and it would be a switch with nothing behind it.
           //
-          // Lobby's switch inline, Explore's wrapped — a difference in the labels rather than in the
-          // surfaces. `--text-metadata` is 16px, so "Hide my positions" and its toggle want ~170px
-          // against the ~368px a 400px panel has to spend, and the two menu pills have already taken
-          // most of it. Dropping the source picker bought room but not that much: the row still
-          // wraps, and inline there means `ml-auto` pinning the switch to the right margin of a line
-          // it is alone on — the stray control the wrapper exists to prevent.
-          //
-          // "Matches only" is short enough to sit beside them, which is why it says so.
-          trailingInline={isLobby}
           trailing={
             isLobby ? (
               trailing
@@ -1081,20 +1080,6 @@ type SpaceTopicFiltersProps = {
    * at the edge than as a fourth pill in the run.
    */
   trailing?: React.ReactNode;
-  /**
-   * Keep {@link trailing} on the menus' own line, at the far end, however narrow the row gets.
-   *
-   * Only for a control that genuinely fits there at every width this row is drawn at, because it
-   * gives up the wrapper's protection: `ml-auto` on a control that *has* wrapped pins it to the
-   * right margin of a line it is alone on, which reads as something stray rather than as the end of
-   * the filter row.
-   *
-   * The measurement, since it is closer than it looks: `--text-metadata` is 16px, the two menu
-   * pills take the better part of the ~368px a 400px panel has, and what is left fits "Matches
-   * only" and not "Hide my positions". So this is a claim about a *label*, not about a surface —
-   * check a new one against the narrowest row it will be drawn in rather than inheriting it.
-   */
-  trailingInline?: boolean;
 };
 
 /**
@@ -1115,7 +1100,6 @@ export function SpaceTopicFilters({
   countsPending,
   leading,
   trailing,
-  trailingInline = false,
 }: SpaceTopicFiltersProps) {
   const facetSpaceIds = React.useMemo(() => facetSpaces.map(space => space.id), [facetSpaces]);
 
@@ -1186,22 +1170,26 @@ export function SpaceTopicFilters({
           countsPending={countsPending}
         />
       ) : null}
-      {/* `ml-auto` so it sits at the end whatever is in front of it, and keeps sitting there when a
-          menu drops out of the row — the topic menu is conditional.
+      {/* A growable gap rather than `ml-auto`, which is what lets this be right about both cases
+          without anyone having to measure the label.
 
-          Only where the row is wide enough to have an end worth sitting at — and only for a control
-          long enough to need the room. Narrow, a long one wraps onto a line of its own, and
-          `ml-auto` then pinned it to the right margin with nothing beside it, which reads as a stray
-          control rather than as the last item of the filter row. Full width and left-aligned there
-          instead, under the menus it belongs with.
+          `ml-auto` pushes the control to the end of whatever line it lands on — including a line it
+          wrapped onto alone, where being pinned to the right margin reads as something stray rather
+          than as the end of the filter row. The alternative was a container query, which only moved
+          the problem: it needs a threshold, and the threshold is a guess about how wide "Hide my
+          positions" renders next to two menus whose labels are the viewer's spaces.
 
-          A container query rather than a viewport one, because the two narrow cases are not both
-          small screens: the debates side panel is ~400px wide on the largest desktop there is.
-
-          `trailingInline` opts out, for a control that fits beside the menus at any width this row
-          is drawn at — Lobby's "Matches only". Left to wrap it would take a whole line to say two
-          words, which is worse than the crowding the wrapping avoids. */}
-      {trailing ? <div className={trailingInline ? 'ml-auto' : 'w-full @lg:ml-auto @lg:w-auto'}>{trailing}</div> : null}
+          A zero-basis spacer needs none of that. It absorbs the slack on the menus' line, so the
+          control sits at the far end while there is room for it; when there is not, the control
+          wraps and the spacer stays behind — leaving it at the *start* of its own line, which is
+          where a wrapped control belongs. Flex works out which of those is true, at every width,
+          for whatever the label happens to be. */}
+      {trailing ? (
+        <>
+          <div className="flex-1" aria-hidden />
+          {trailing}
+        </>
+      ) : null}
     </div>
   );
 }

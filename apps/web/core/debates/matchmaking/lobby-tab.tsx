@@ -41,8 +41,13 @@ export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =>
   // outage reads from here exactly like a viewer with nobody to debate. Stepping back on that would
   // take the matches list away over a request that could simply be retried — and `MatchesList` has
   // the retry, where the wider list this would fall to has nothing to say about it.
+  // `isFetching`, not `isLoading`. With something in the cache react-query reports `isLoading:
+  // false` while the mount refetch is still out, so yesterday's empty answer would have been taken
+  // as today's — and this hook decides once and keeps it, so a viewer with matches waiting could
+  // have been stepped back onto the wider list on the strength of a stale one. Later refetches are
+  // harmless, because by then the decision is made.
   const matchesState: NarrowedListState =
-    matchesQuery.isLoading || matchesQuery.error
+    matchesQuery.isLoading || matchesQuery.isFetching || matchesQuery.error
       ? 'pending'
       : (matchesQuery.data?.matches.length ?? 0) === 0
         ? 'empty'

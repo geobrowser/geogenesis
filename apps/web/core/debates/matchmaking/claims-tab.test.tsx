@@ -2362,31 +2362,29 @@ describe('claims the viewer has already answered', () => {
     });
 
     /**
-     * Wraps to its own line, left-aligned, where the row is narrow — which in a 400px panel is
-     * always.
+     * Sits at the end of the menus, behind a growable gap rather than `ml-auto`.
      *
-     * `--text-metadata` is 16px, so this label and its toggle want about 170px, and the two menu
-     * pills have taken most of the ~368px the panel has. Dropping the source picker bought room but
-     * not enough, and pinned right on a line of its own the switch reads as a stray control rather
-     * than as the end of the filter row.
-     *
-     * Lobby's "Matches only" is short enough to sit beside the pills, and says so with
-     * `trailingInline` — the difference is the label, not the surface.
+     * The distinction is what the control does when it *doesn't* fit. `ml-auto` pushes it to the end
+     * of whatever line it lands on, including one it wrapped onto alone — pinned to the right
+     * margin with nothing beside it, which reads as something stray. A zero-basis spacer absorbs
+     * the slack on the menus' line instead, so a wrapped control starts its own line at the left and
+     * an unwrapped one still ends the row. No threshold to guess, and no measuring a label whose
+     * neighbours are named after the viewer's own spaces.
      */
-    it('wraps to its own line, left-aligned, rather than pinning right', async () => {
+    it('sits behind a growable gap, so it ends the row or starts its own line', async () => {
       render(<ClaimsTab />);
       await showAllClaims();
 
-      const end = screen.getByRole('switch', SWITCH).parentElement;
-      expect(end?.className).toContain('w-full');
-      expect(end?.className).toContain('@lg:ml-auto');
+      const spacer = screen.getByRole('switch', SWITCH).previousElementSibling;
+      expect(spacer?.className).toContain('flex-1');
+      expect(spacer?.getAttribute('aria-hidden')).toBe('true');
     });
 
-    it('leaves Lobby’s own switch inline at the end of the menus', async () => {
+    it('lays Lobby’s own switch out the same way', async () => {
       render(<ClaimsTab variant="lobby" trailing={<button type="button">Matches only</button>} />);
 
-      const end = (await screen.findByRole('button', { name: 'Matches only' })).parentElement;
-      expect(end?.className).toBe('ml-auto');
+      const toggle = await screen.findByRole('button', { name: 'Matches only' });
+      expect(toggle.previousElementSibling?.className).toContain('flex-1');
     });
 
     /**
