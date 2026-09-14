@@ -145,6 +145,27 @@ describe('useBoundedPaging', () => {
     });
   });
 
+  /**
+   * A new list's first page is judged against its own rows, not the ones it replaced.
+   *
+   * While nothing is loaded for a list, what is on screen belongs to the previous one — held by
+   * `keepPreviousData` on the caller's side. Taken as a baseline, that turns a productive first
+   * page into a barren one whenever it shows fewer claims than the list before it happened to,
+   * which for a narrowing filter is the ordinary case.
+   */
+  it('does not judge a new list against the rows of the one it replaced', () => {
+    const view = render({ loaded: 0, visible: 0 });
+
+    // The previous list's rows, still showing while the new list's count reads zero.
+    view.rerender({ loaded: 0, visible: 10 });
+    // This list's first page: fewer rows than were showing, but eight of its own.
+    view.rerender({ loaded: PAGE, visible: 8 });
+
+    // Productive, so the budget is untouched — one short of the cap still leaves it advancing.
+    barrenPages(view, AUTO_PAGES_WITHOUT_ROWS - 1, PAGE);
+    expect(view.result.current.autoPages).toBe(true);
+  });
+
   it('gives the viewer a way to go on, and a fresh budget with it', () => {
     const view = render({ loaded: 0, visible: 0 });
     barrenPages(view, AUTO_PAGES_WITHOUT_ROWS);

@@ -574,8 +574,14 @@ export function ClaimsTab({
   // old query's rows, and the claims the viewer had answered painted and then vanished, which is
   // the first-paint bug this PR fixed arriving by a second route.
   //
-  // Spaces are not debounced on the way into the tagged query (`taggedFilters`), so the live
-  // selection is the right one for them. The two differ on purpose; this key follows each.
+  // Spaces follow whichever query this surface is actually making, which is not the same answer for
+  // both. The tagged query takes the live selection (`taggedFilters`); the index query takes the
+  // debounced one (`useScopedMatchmakingClaims`, above). Keyed on the live value for both, Lobby
+  // and Positions reset their budget at the tick while still receiving the previous selection's
+  // pages — charging one of its barren pages to a list that had not been asked for yet.
+  //
+  // The rule this key exists to keep is that it names the list the queries are fetching. That is a
+  // rule about each query, not a property of any one field.
   //
   // And the switch, because it decides which of the fetched rows can be *seen* — so turning it off
   // turns a barren page into a full one retrospectively. Without it a list that had reached the
@@ -590,7 +596,8 @@ export function ClaimsTab({
   // everything keyed on "which list is this" has to hear about it. The paging budget is the one
   // that bites: a corpus that had reached the cap handed its exhaustion to the corpus that replaced
   // it, which then arrived stopped.
-  const listKey = `${debouncedSearch}|${spaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}|${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}|${hideMyPositions}`;
+  const keyedSpaceIds = graphSourced ? spaceIds : debouncedSpaceIds;
+  const listKey = `${debouncedSearch}|${keyedSpaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}|${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}|${hideMyPositions}`;
   const claims = useStableListOrder(graphSourced ? taggedEntries : serverClaims, claimRowKey, listKey);
 
   /**

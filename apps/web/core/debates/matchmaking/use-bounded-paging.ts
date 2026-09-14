@@ -101,6 +101,16 @@ export function useBoundedPaging({
     if (barren !== 0) setBarren(0);
   }
 
+  /**
+   * Rows on screen that belong to *this* list.
+   *
+   * With nothing loaded for it, whatever is showing is the previous list's, held while this one is
+   * fetched — `keepPreviousData` on one side of the caller, a masked count on the other. Recorded
+   * as a baseline, those rows become what this list's first page is judged against: a page turning
+   * up eight claims where the last list was showing ten counts as barren, having produced eight.
+   */
+  const visibleHere = loaded === 0 ? 0 : visible;
+
   React.useEffect(() => {
     // Nothing is judged mid-flight, and nothing at all while this list is not the one on screen.
     // Both return *before* the snapshot is updated, so the budget and the count it is measured
@@ -114,18 +124,18 @@ export function useBoundedPaging({
     // narrowing — is not a barren fetch, and counting it would spend the budget on the viewer's own
     // typing.
     if (loaded <= seen.current.loaded) {
-      seen.current = { ...seen.current, loaded, visible };
+      seen.current = { ...seen.current, loaded, visible: visibleHere };
       return;
     }
 
-    const grew = visible > seen.current.visible;
-    seen.current = { ...seen.current, loaded, visible };
+    const grew = visibleHere > seen.current.visible;
+    seen.current = { ...seen.current, loaded, visible: visibleHere };
     setBarren(count => (grew ? 0 : count + 1));
     // `resetKey` among them, though it is read during render rather than here: the reset zeroes the
     // snapshot, and without it in this list React has no reason to re-run when two corpora happen to
     // start at the same counts — two fifty-row pages that both collapse to nothing, say. The new
     // list's first barren page then went uncharged and the cap allowed a page more than it should.
-  }, [loaded, paused, resetKey, settling, visible]);
+  }, [loaded, paused, resetKey, settling, visibleHere]);
 
   const keepLooking = React.useCallback(() => {
     setBarren(0);
