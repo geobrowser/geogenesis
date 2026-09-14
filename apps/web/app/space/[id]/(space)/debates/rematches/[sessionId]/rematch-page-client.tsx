@@ -1377,7 +1377,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // The opponent tab's own three sources rather than `tabError`, which is declared below and is a
   // composite over every tab's. Same set, asked here because this runs before it.
   const opponentTabError = sessionQuery.error ?? positions.error ?? opponentEntitiesQuery.error;
-  const opponentTabSettled = tab === 'opponent' && !positions.isLoading && !opponentClaimsSettling && !opponentTabError;
+  // `isPlaceholderData` as well as `isLoading`, and it is the one that bites here. The positions
+  // query holds the previous pair's answer while a new one is fetched, and `participantSidesOn`
+  // filters those rows against the *current* participants — so the first render of a new rematch
+  // reports settled, with an empty list, for a pair whose positions have not arrived. This decides
+  // once and keeps it, so that read stuck: the viewer was stepped back off the matches list and,
+  // with nothing else on the tab, walked to Explore, for a pair that may have had several.
+  const opponentTabSettled =
+    tab === 'opponent' &&
+    !positions.isLoading &&
+    !positions.isPlaceholderData &&
+    !opponentClaimsSettling &&
+    !opponentTabError;
   const rematchState: NarrowedListState = !opponentTabSettled
     ? 'pending'
     : claims.some(isRematchable)
@@ -1699,6 +1710,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // Same reason as the hub's: a page of fifty can add three rows once the filter has run, so the
     // next one has to start well before the viewer reaches the bottom of what is showing.
     rootMargin: '1200px',
+    // And measured against the layer this page scrolls in, not the viewport. `rootMargin` expands
+    // the root, and the `fixed inset-0` wrapper below clips the sentinel before viewport
+    // intersection is computed — so against the viewport the lead above buys nothing at all, which
+    // is the same trap the hub had until it named its panel.
+    rootSelector: '[data-rematch-scroll]',
   });
 
   // Each tab draws from a different set of queries, so each waits on its own. The allowlist narrows
@@ -1956,7 +1972,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // soon as one of them isn't `visible`, so `overflow-y-auto` alone left this layer horizontally
     // scrollable. Anything wider than the viewport — the tab strip, on a phone — panned the whole
     // screen sideways instead of scrolling itself.
-    <div className="fixed inset-0 z-[150] overflow-x-hidden overflow-y-auto bg-white text-text">
+    <div data-rematch-scroll className="fixed inset-0 z-[150] overflow-x-hidden overflow-y-auto bg-white text-text">
       <main className="mx-auto min-h-dvh w-full max-w-[720px] px-5 pt-8 pb-8 sm:px-8">
         {/* Pinned together, tabs included. The list pages forever, so both the tab strip and the
             controls under it were a full scroll away by the time the viewer wanted either — and

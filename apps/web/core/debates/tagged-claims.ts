@@ -392,10 +392,19 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     [query.data?.pages]
   );
 
-  /** Rows the server has returned across every page held, decodable or not — see `fetched`. */
+  /**
+   * Rows the server has returned across every page held, decodable or not — see `fetched`.
+   *
+   * Zero while the *previous* filter's pages are being held. `keepPreviousData` is right for the
+   * list — narrowing should narrow rather than blank and refill — but a count is not a list: the
+   * caller has already reset its paging budget for the new filter, so handing it the old one's
+   * total charges a page that belongs to a different question. The real first page then arrives at
+   * an equal or smaller count and is never evaluated, leaving the budget a page out in whichever
+   * direction the previous list happened to point.
+   */
   const fetched = React.useMemo(
-    () => query.data?.pages.reduce((total, page) => total + page.fetched, 0) ?? 0,
-    [query.data?.pages]
+    () => (query.isPlaceholderData ? 0 : (query.data?.pages.reduce((total, page) => total + page.fetched, 0) ?? 0)),
+    [query.data?.pages, query.isPlaceholderData]
   );
 
   return {

@@ -143,6 +143,7 @@ const mocks = vi.hoisted(() => ({
   positions: [] as ParticipantPosition[],
   positionsLoading: false,
   positionsError: null as unknown,
+  positionsPlaceholder: false,
   positionParticipants: [] as string[][],
   recommendedSections: [] as Array<{ id: string; name: string; claimIds: string[] }>,
   recommendedEntities: [] as Array<Record<string, unknown>>,
@@ -587,6 +588,10 @@ vi.mock('~/core/debates/participant-positions', async importOriginal => {
       return {
         byClaim: actual.groupParticipantPositions(mocks.positions),
         isLoading: mocks.positionsLoading,
+        // The previous pair's answer, held while this one is fetched. Reported as its own state
+        // because `isLoading` is false for it and the rows it carries are filtered to nothing
+        // against the current participants — settled and empty, for a pair nobody has asked about.
+        isPlaceholderData: mocks.positionsPlaceholder,
         error: mocks.positionsError,
       };
     },
@@ -895,6 +900,7 @@ beforeEach(() => {
   ];
   mocks.positionsLoading = false;
   mocks.positionsError = null;
+  mocks.positionsPlaceholder = false;
   mocks.positionParticipants.length = 0;
   mocks.recommendedSections = [];
   mocks.recommendedEntities = [];
@@ -4372,6 +4378,23 @@ describe('the matches-only default', () => {
     await screen.findByText('A claim only Salina answered');
 
     expect(localStorage.getItem('rematchMatchesOnly')).toBe('true');
+  });
+
+  /**
+   * Neither is the previous pair's answer, held while this one is fetched.
+   *
+   * The positions query keeps the last list rather than blanking, and `participantSidesOn` filters
+   * those rows against the *current* participants — so the first render of a new rematch reports
+   * settled with nothing on it, for a pair whose positions are still in flight. This decides once
+   * and keeps it, so that read stuck: stepped back off the matches list, and with nothing else on
+   * the tab, walked to Explore, for a pair that may have had several matches waiting.
+   */
+  it('does not decide on the previous pair’s positions', async () => {
+    mocks.positionsPlaceholder = true;
+    mocks.positions = [];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(switchNode()).toHaveAttribute('aria-checked', 'true'));
   });
 
   /**

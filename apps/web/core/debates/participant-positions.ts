@@ -446,5 +446,19 @@ export function useParticipantPositions(
     [query.data, ownPending]
   );
 
-  return { byClaim, isLoading: query.isLoading, error: query.error };
+  return {
+    byClaim,
+    isLoading: query.isLoading,
+    /**
+     * Whether `byClaim` is the *previous* key's answer, held while this one is fetched.
+     *
+     * Callers drawing a list can ignore it — holding the last one is the whole point, and
+     * `participantSidesOn` keeps a departed participant's rows off the screen. Callers *deciding*
+     * something cannot: those two facts together mean a new pair's first render reports positions
+     * that belong to the last pair and are then filtered to nothing, which is indistinguishable
+     * from a pair with no positions unless you ask.
+     */
+    isPlaceholderData: query.isPlaceholderData,
+    error: query.error,
+  };
 }
