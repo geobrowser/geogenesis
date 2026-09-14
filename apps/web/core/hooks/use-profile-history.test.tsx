@@ -298,6 +298,84 @@ describe('useProfileHistory', () => {
       expect(result.current.employment[0].entries.map(entry => entry.subject.name)).toEqual(['Product Lead']);
     });
 
+    // The edge was kept because an unsaved role had attached to it. Dropping that
+    // role takes the reason with it, so the edge has to go after all — deciding on
+    // the way past the removal left it behind, empty.
+    it('takes the edge once the unsaved role keeping it alive is dropped too', () => {
+      mocks.employment = [savedCard('Geo', ['Engineer'])];
+      const { result } = setup();
+
+      act(() => result.current.addPosition(draft('Geo', 'Product Lead', { existingStintId: 'stint-Geo' })));
+      act(() => {
+        const card = result.current.employment[0];
+        result.current.removeEntry(
+          card,
+          card.entries.find(entry => entry.subject.name === 'Engineer')!,
+          'employment'
+        );
+      });
+      act(() => {
+        const card = result.current.employment[0];
+        result.current.removeEntry(card, card.entries[0], 'employment');
+      });
+
+      expect(
+        tombstones(result.current.stagePending().relations)
+          .map(relation => relation.id)
+          .sort()
+      ).toEqual(['edge-Geo', 'rel-Engineer'].sort());
+      expect(result.current.employment).toEqual([]);
+    });
+
+    // Same reason, by the other route out: the unsaved role is still there, but it
+    // is no longer at this employer.
+    it('takes the edge once the unsaved role keeping it alive moves elsewhere', () => {
+      mocks.employment = [savedCard('Geo', ['Engineer'])];
+      const { result } = setup();
+
+      act(() => result.current.addPosition(draft('Geo', 'Product Lead', { existingStintId: 'stint-Geo' })));
+      act(() => {
+        const card = result.current.employment[0];
+        result.current.removeEntry(
+          card,
+          card.entries.find(entry => entry.subject.name === 'Engineer')!,
+          'employment'
+        );
+      });
+      act(() => {
+        const card = result.current.employment[0];
+        result.current.editEntry(card, card.entries[0], 'employment', draft('Fathom', 'Product Lead'));
+      });
+
+      expect(
+        tombstones(result.current.stagePending().relations)
+          .map(relation => relation.id)
+          .sort()
+      ).toEqual(['edge-Geo', 'rel-Engineer'].sort());
+      expect(result.current.employment.map(card => card.organization.name)).toEqual(['Fathom']);
+    });
+
+    // The reverse order. The edge was on its way out, and a new role arriving at
+    // that employer is reason enough to keep it — `savedStintFor` hands the new row
+    // that very edge, and publishing under a deleted one strands it.
+    it('keeps the edge when a new role arrives at an employer whose last role is going', () => {
+      mocks.employment = [savedCard('Geo', ['Engineer'])];
+      const { result } = setup();
+
+      act(() => {
+        const card = result.current.employment[0];
+        result.current.removeEntry(card, card.entries[0], 'employment');
+      });
+      act(() => result.current.addPosition(draft('Geo', 'Product Lead')));
+
+      const { relations } = result.current.stagePending();
+
+      expect(tombstones(relations).map(relation => relation.id)).toEqual(['rel-Engineer']);
+      // Attached to the edge that survived, rather than opening a second one.
+      expect(relations.find(relation => relation.type.id === EMPLOYMENT_PROPERTY)).toBeUndefined();
+      expect(relations.find(relation => relation.type.id === ROLES_PROPERTY)?.fromEntity.id).toBe('stint-Geo');
+    });
+
     it('forgets an unsaved row rather than queuing a delete for it', () => {
       const { result } = setup();
 

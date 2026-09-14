@@ -47,6 +47,59 @@ const PROPERTIES: Record<Kind, { entry: string; card: string }> = {
 };
 
 /**
+ * Organisation edges left with nothing under them once everything queued lands.
+ *
+ * Worked out from the pending state as it finally stands, rather than when a row
+ * is removed, because what hangs off an edge keeps changing after that: an
+ * unsaved sibling that was keeping it alive can itself be dropped or moved to
+ * another employer, and a row can be added at an employer whose last saved row is
+ * already queued to go. Deciding on the way past left an empty Employment edge
+ * behind in the first case, and published the new row under a deleted edge in the
+ * second.
+ *
+ * Counted per edge rather than per card: a card can group several edges to one
+ * employer, and a row under a different edge cannot keep this one alive.
+ */
+function orphanedEdges(saved: HistoryCard<HistoryEntry>[], kind: Kind, pending: PendingHistory): PendingRemoval[] {
+  const removed = new Set(pending.removals.map(removal => removal.relationId));
+  const additions = kind === 'employment' ? pending.positions : pending.education;
+
+  // Every stint something will still hang off afterwards — saved rows that are
+  // staying, and unsaved rows that attached themselves to a saved edge.
+  const kept = new Set<string>();
+  for (const card of saved) {
+    for (const entry of card.entries) {
+      if (!removed.has(entry.relationId)) kept.add(entry.edge.stintId);
+    }
+  }
+  for (const addition of additions) {
+    if (addition.draft.existingStintId) kept.add(addition.draft.existingStintId);
+  }
+
+  const orphans: PendingRemoval[] = [];
+
+  for (const card of saved) {
+    for (const edge of card.edges) {
+      if (kept.has(edge.stintId) || isPending(edge.relationId)) continue;
+
+      // Only an edge this edit emptied. One that arrived already carrying nothing
+      // is not ours to tidy up, and deleting it would be a change nobody asked for.
+      if (!card.entries.some(entry => entry.edge.stintId === edge.stintId)) continue;
+
+      orphans.push({
+        relationId: edge.relationId,
+        entityId: edge.stintId,
+        typeId: PROPERTIES[kind].card,
+        spaceId: edge.spaceId,
+        subtree: edge.subtree,
+      });
+    }
+  }
+
+  return orphans;
+}
+
+/**
  * Work and education on the viewer's own profile (GEO-2858).
  *
  * Nothing here writes on its own. Adding a position, editing one, adding a degree
@@ -124,57 +177,20 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
   );
 
   /**
-   * What removing one row costs: the row itself, and the organisation edge it
-   * hung off once nothing saved is left under it.
+   * What removing one row costs.
    *
-   * Counted over that row's own edge rather than the whole card — a card can
-   * group several edges to one employer, and a sibling under a different edge
-   * cannot keep this one alive.
+   * The row alone. Whether the organisation edge above it goes too is not
+   * decided here — see `orphanedEdges`, which works it out from the pending
+   * state as it finally stands.
    */
-  const removalsFor = React.useCallback(
-    (card: HistoryCard<HistoryEntry>, entry: HistoryEntry, kind: Kind, queued: PendingHistory) => {
-      const properties = PROPERTIES[kind];
-
-      // Anything that will still hang off this edge once the removal lands.
-      //
-      // Saved rows other than this one count, and so do unsaved rows that attached
-      // themselves to the same edge: adding a second role at an employer and then
-      // removing the saved one used to delete the edge underneath the new role,
-      // and `stagePosition` writes no replacement for an edge it was told already
-      // existed — so the new role published with nothing above it.
-      const savedSiblings = card.entries.filter(
-        other =>
-          other.relationId !== entry.relationId &&
-          other.edge.stintId === entry.edge.stintId &&
-          !isPending(other.relationId)
-      );
-
-      const pendingOnThisEdge = [...queued.positions, ...queued.education].some(
-        addition => addition.draft.existingStintId === entry.edge.stintId
-      );
-
-      const removals: PendingRemoval[] = [
-        {
-          relationId: entry.relationId,
-          entityId: entry.tenureId,
-          typeId: properties.entry,
-          spaceId: entry.spaceId,
-          subtree: entry.subtree,
-        },
-      ];
-
-      if (savedSiblings.length === 0 && !pendingOnThisEdge && !isPending(entry.edge.relationId)) {
-        removals.push({
-          relationId: entry.edge.relationId,
-          entityId: entry.edge.stintId,
-          typeId: properties.card,
-          spaceId: entry.edge.spaceId,
-          subtree: entry.edge.subtree,
-        });
-      }
-
-      return removals;
-    },
+  const rowRemoval = React.useCallback(
+    (entry: HistoryEntry, kind: Kind): PendingRemoval => ({
+      relationId: entry.relationId,
+      entityId: entry.tenureId,
+      typeId: PROPERTIES[kind].entry,
+      spaceId: entry.spaceId,
+      subtree: entry.subtree,
+    }),
     []
   );
 
@@ -186,12 +202,9 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
         return;
       }
 
-      setPending(current => ({
-        ...current,
-        removals: [...current.removals, ...removalsFor(card, entry, kind, current)],
-      }));
+      setPending(current => ({ ...current, removals: [...current.removals, rowRemoval(entry, kind)] }));
     },
-    [removalsFor]
+    [rowRemoval]
   );
 
   /**
@@ -218,28 +231,14 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
         return;
       }
 
-      // Only the row when the employer is unchanged — the edge it hangs off is
-      // still wanted, and the replacement attaches straight back to it. What hung
-      // off the row goes either way: the replacement writes its own dates and
-      // skills, and the old ones are not merged into them.
+      // The replacement attaches straight back to the edge when the employer is
+      // unchanged. What hung off the row goes either way: the replacement writes
+      // its own dates and skills, and the old ones are not merged into them.
       const next = { ...reattached, existingStintId: staysPut ? entry.edge.stintId : undefined };
 
       setPending(current => ({
         ...current,
-        removals: [
-          ...current.removals,
-          ...(staysPut
-            ? [
-                {
-                  relationId: entry.relationId,
-                  entityId: entry.tenureId,
-                  typeId: PROPERTIES[kind].entry,
-                  spaceId: entry.spaceId,
-                  subtree: entry.subtree,
-                },
-              ]
-            : removalsFor(card, entry, kind, current)),
-        ],
+        removals: [...current.removals, rowRemoval(entry, kind)],
         positions:
           kind === 'employment'
             ? [...current.positions, { key: ID.createEntityId(), draft: next as PositionDraft }]
@@ -250,7 +249,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
             : current.education,
       }));
     },
-    [removalsFor]
+    [rowRemoval]
   );
 
   /**
@@ -288,9 +287,15 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     const removedRelations: Relation[] = [];
     const removedValues: Value[] = [];
 
+    const removals = [
+      ...pending.removals,
+      ...orphanedEdges(data?.employment ?? [], 'employment', pending),
+      ...orphanedEdges(data?.education ?? [], 'education', pending),
+    ];
+
     const ours = (rowSpaceId: string | null) => rowSpaceId === null || rowSpaceId === spaceId;
 
-    for (const removal of pending.removals) {
+    for (const removal of removals) {
       // A relation in another space is not ours to delete, and a tombstone for it
       // would be a delete op aimed at a space the row is not in — the edit would
       // report success and change nothing.
@@ -323,7 +328,7 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
       values: [...additions.flatMap(rows => rows.values), ...removedValues],
       relations: [...additions.flatMap(rows => rows.relations), ...removedRelations],
     };
-  }, [entityId, pending, spaceId]);
+  }, [data?.education, data?.employment, entityId, pending, spaceId]);
 
   /**
    * The rows this pending state publishes.

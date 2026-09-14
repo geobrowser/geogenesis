@@ -654,17 +654,24 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       setErrorMessage(null);
       ownsPendingError.current = false;
 
-      // Rows from elsewhere in the modal — the work and education sections — go
-      // out in the same edit as the four header fields, because Save means all of
-      // it. Written into the store here so staging collects them like its own, and
-      // so a failure rolls them back with the rest.
-      const displaced = takeDisplaced(extra);
-      extra.values.forEach(value => (value.isDeleted ? storage.values.delete(value) : storage.values.set(value)));
-      extra.relations.forEach(relation =>
-        relation.isDeleted ? storage.relations.delete(relation) : storage.relations.set(relation)
-      );
-
       if (!stagedRef.current) {
+        // Rows from elsewhere in the modal — the work and education sections — go
+        // out in the same edit as the four header fields, because Save means all
+        // of it. Written into the store here so staging collects them like its
+        // own, and so a failure rolls them back with the rest.
+        //
+        // Only alongside a fresh staging. A retry of an unchanged edit re-sends
+        // rows already written, and `set` re-stamps `timestamp` on the way past —
+        // while the undo recorded above still holds the first attempt's. Rollback
+        // clears by that timestamp, to avoid deleting a draft another editor made
+        // at the same id since, so a rewritten row stopped looking like ours:
+        // Cancel after a second failure left the history edits in the store.
+        const displaced = takeDisplaced(extra);
+        extra.values.forEach(value => (value.isDeleted ? storage.values.delete(value) : storage.values.set(value)));
+        extra.relations.forEach(relation =>
+          relation.isDeleted ? storage.relations.delete(relation) : storage.relations.set(relation)
+        );
+
         // Staging uploads to IPFS before `makeProposal` touches the status bar, and
         // that upload can be long. Closing during it is meant to hand off to the
         // toast, so the toast has to already be saying something — otherwise the
