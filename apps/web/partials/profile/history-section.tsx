@@ -280,7 +280,16 @@ function EntryRow({
             wall of text between the reader and the Save button. */}
         {entry.description && (
           <div className="mt-1">
-            <ClampedText text={entry.description} maxLines={3} variant="metadata" textClassName="text-text" />
+            {/* Named, because a card of roles puts several of these on screen
+                and the visible word is More either way. Both halves matter: one
+                row can clamp its description and its skills. */}
+            <ClampedText
+              text={entry.description}
+              label={`description for ${subject}`}
+              maxLines={3}
+              variant="metadata"
+              textClassName="text-text"
+            />
           </div>
         )}
 
@@ -293,6 +302,7 @@ function EntryRow({
           <div className="mt-1">
             <ClampedText
               text={`Skills: ${skills.map(skill => skill.name ?? 'Untitled').join(', ')}`}
+              label={`skills for ${subject}`}
               maxLines={2}
               variant="metadata"
               textClassName="text-grey-04"

@@ -491,9 +491,14 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
     for (const { draft, newStintId } of sharedPositions) stints.employment[organizationOf(draft).id] = newStintId;
     for (const { draft, newStintId } of sharedEducation) stints.education[organizationOf(draft).id] = newStintId;
 
+    // One set for the whole edit: a company created here and given two roles, or
+    // one new skill added to both of them, is described once rather than once per
+    // row — each row minting its own Types relation published the edge twice.
+    const minted = new Set<string>();
+
     const additions = [
-      ...sharedPositions.map(({ draft, newStintId }) => stagePosition(draft, context, newStintId)),
-      ...sharedEducation.map(({ draft, newStintId }) => stageEducation(draft, context, newStintId)),
+      ...sharedPositions.map(({ draft, newStintId }) => stagePosition(draft, context, newStintId, minted)),
+      ...sharedEducation.map(({ draft, newStintId }) => stageEducation(draft, context, newStintId, minted)),
     ];
 
     const tombstone = (id: string, typeId: string, ownerId: string): Relation => ({

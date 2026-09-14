@@ -1,3 +1,4 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { act, renderHook } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -1067,5 +1068,53 @@ describe('adding another row at an employer created by the last save', () => {
     act(() => result.current.settle());
 
     expect(result.current.employment[0].organization.isNew).toBe(false);
+  });
+});
+
+/**
+ * A new entity can be named by more than one row of the same edit. The name
+ * value survives that — its id is derived from entity, property and space, so
+ * the second write lands on the first — but each Types relation gets a freshly
+ * minted id, and both publish.
+ */
+describe('a new entity named twice in one save', () => {
+  const typesFor = (relations: { type: { id: string }; fromEntity: { id: string } }[], entityId: string) =>
+    relations.filter(relation => relation.type.id === SystemIds.TYPES_PROPERTY && relation.fromEntity.id === entityId);
+
+  it('types a company created here once, however many roles hang off it', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Acme', 'Engineer', { company: newCompany('Acme') })));
+    act(() => result.current.addPosition(draft('Acme', 'Product Lead', { company: newCompany('Acme') })));
+
+    const { relations, values } = result.current.stagePending();
+
+    expect(typesFor(relations, 'org-Acme')).toHaveLength(1);
+    expect(values.filter(value => value.entity.id === 'org-Acme')).toHaveLength(1);
+  });
+
+  it('types a skill added to two roles once', () => {
+    const { result } = setup();
+
+    const skill = { id: 'skill-new', name: 'Forecasting', isNew: true };
+    act(() => result.current.addPosition(draft('Geo', 'Engineer', { skills: [skill] })));
+    act(() => result.current.addPosition(draft('Coinbase', 'Analyst', { skills: [skill] })));
+
+    expect(typesFor(result.current.stagePending().relations, 'skill-new')).toHaveLength(1);
+  });
+
+  // Both rows still publish; it is only the entity's own description that is
+  // shared between them.
+  it('still writes both rows', () => {
+    const { result } = setup();
+
+    act(() => result.current.addPosition(draft('Acme', 'Engineer', { company: newCompany('Acme') })));
+    act(() => result.current.addPosition(draft('Acme', 'Product Lead', { company: newCompany('Acme') })));
+
+    const { relations } = result.current.stagePending();
+
+    expect(relations.filter(relation => relation.type.id === ROLES_PROPERTY)).toHaveLength(2);
+    // And one edge between them, as before.
+    expect(relations.filter(relation => relation.type.id === EMPLOYMENT_PROPERTY)).toHaveLength(1);
   });
 });

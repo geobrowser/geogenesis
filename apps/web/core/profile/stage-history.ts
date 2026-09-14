@@ -127,14 +127,36 @@ function valueRow(params: {
 }
 
 /**
+ * Entities already described by this edit, so nothing describes them twice.
+ *
+ * One save can name the same new entity from several rows — two roles at a
+ * company created here, one new skill on both of them, a title held at two
+ * startups. The name value survives that (its id is derived from entity,
+ * property and space, so the second write lands on the first), but each Types
+ * relation gets a freshly minted id, and both publish: an entity with the same
+ * type edge twice over.
+ *
+ * Passed through staging rather than deduplicated afterwards, because only the
+ * caller staging a whole edit knows what counts as "this edit".
+ */
+export type MintedEntities = Set<string>;
+
+/**
  * A company, job title, school or field the user typed rather than picked.
  *
  * `SelectEntity` mints the id and hands it back; nothing exists behind it until
  * someone writes a name. Without this the relation points at an entity with no
  * name, which renders as a blank row that cannot be searched for afterwards.
  */
-function newEntityRows(choice: EntityChoice, spaceId: string, typeIds: string[] = []): StagedRows {
+function newEntityRows(
+  choice: EntityChoice,
+  spaceId: string,
+  typeIds: string[] = [],
+  minted: MintedEntities = new Set()
+): StagedRows {
   if (!choice.isNew || !choice.name) return { values: [], relations: [] };
+  if (minted.has(choice.id)) return { values: [], relations: [] };
+  minted.add(choice.id);
 
   const values = [
     valueRow({
@@ -255,10 +277,12 @@ export function stagePosition(
    * caller so two roles added at the same new employer in one sitting share an
    * Employment edge rather than each opening their own.
    */
-  newStintId: string = ID.createEntityId()
+  newStintId: string = ID.createEntityId(),
+  /** Shared across one edit, so a new entity named by two rows is written once. */
+  minted: MintedEntities = new Set()
 ): StagedRows {
-  const company = newEntityRows(draft.company, spaceId, [EMPLOYER_TYPE]);
-  const title = newEntityRows(draft.title, spaceId, [JOB_TYPE]);
+  const company = newEntityRows(draft.company, spaceId, [EMPLOYER_TYPE], minted);
+  const title = newEntityRows(draft.title, spaceId, [JOB_TYPE], minted);
 
   let stintId = draft.existingStintId;
   const employment: StagedRows = { values: [], relations: [] };
@@ -325,7 +349,12 @@ export function stagePosition(
   // creating "United Kingdom" or "California" was recording it as a city. Place
   // is true of all four, and the narrower type can be added by anyone who knows
   // which it should be.
-  const locationEntity = newEntityRows(draft.location ?? { id: '', name: null, isNew: false }, spaceId, [PLACE_TYPE]);
+  const locationEntity = newEntityRows(
+    draft.location ?? { id: '', name: null, isNew: false },
+    spaceId,
+    [PLACE_TYPE],
+    minted
+  );
 
   const location = draft.location
     ? [
@@ -351,7 +380,7 @@ export function stagePosition(
       ]
     : [];
 
-  const skillRows = draft.skills.map(skill => newEntityRows(skill, spaceId, [SKILL_TYPE]));
+  const skillRows = draft.skills.map(skill => newEntityRows(skill, spaceId, [SKILL_TYPE], minted));
   const skillEdges = draft.skills.map(skill =>
     relationRow({
       spaceId,
@@ -381,10 +410,12 @@ export function stagePosition(
 export function stageEducation(
   draft: EducationDraft,
   { personEntityId, spaceId }: Context,
-  newStintId: string = ID.createEntityId()
+  newStintId: string = ID.createEntityId(),
+  /** Shared across one edit, so a new entity named by two rows is written once. */
+  minted: MintedEntities = new Set()
 ): StagedRows {
-  const school = newEntityRows(draft.school, spaceId, SCHOOL_TYPES);
-  const degree = newEntityRows(draft.degree, spaceId, [DEGREE_TYPE]);
+  const school = newEntityRows(draft.school, spaceId, SCHOOL_TYPES, minted);
+  const degree = newEntityRows(draft.degree, spaceId, [DEGREE_TYPE], minted);
 
   let recordId = draft.existingStintId;
   const education: StagedRows = { values: [], relations: [] };
@@ -416,9 +447,9 @@ export function stageEducation(
 
   const enrolmentType = typeRow(spaceId, enrolmentId, DEGREE_INFORMATION_TYPE, 'Degree information');
 
-  const fieldRows = draft.fields.map(field => newEntityRows(field, spaceId, [FIELD_OF_STUDY_TYPE]));
+  const fieldRows = draft.fields.map(field => newEntityRows(field, spaceId, [FIELD_OF_STUDY_TYPE], minted));
 
-  const skillRows = draft.skills.map(skill => newEntityRows(skill, spaceId, [SKILL_TYPE]));
+  const skillRows = draft.skills.map(skill => newEntityRows(skill, spaceId, [SKILL_TYPE], minted));
   const skillEdges = draft.skills.map(skill =>
     relationRow({ spaceId, typeId: SKILLS_PROPERTY, typeName: 'Skills', fromId: enrolmentId, to: skill })
   );

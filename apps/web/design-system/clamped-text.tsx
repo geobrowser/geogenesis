@@ -29,6 +29,17 @@ type ClampedTextProps = {
   maxLines?: number;
   variant?: TypographyName;
   textClassName?: string;
+  /**
+   * What the toggle expands, for its accessible name — "description for
+   * Engineer", say, giving "Show more description for Engineer".
+   *
+   * Worth passing wherever more than one of these can be on screen at once. The
+   * visible word is always More or Less, so without it a page of clamped rows
+   * offers a list of identical buttons and no way to tell which opens what. It
+   * has to separate the rows *and* the fields: one row can clamp both its
+   * description and its skills.
+   */
+  label?: string;
 };
 
 // No type of its own: the toggle takes the variant of the text it belongs to, so
@@ -103,6 +114,7 @@ export function ClampedText({
   maxLines = 3,
   variant = 'body',
   textClassName = '',
+  label,
 }: ClampedTextProps) {
   assertSupportedMaxLines(maxLines);
 
@@ -153,6 +165,7 @@ export function ClampedText({
               type="button"
               onClick={() => setExpanded(false)}
               aria-expanded={true}
+              aria-label={label ? `Show less ${label}` : undefined}
               className={cx(typeClassName, TOGGLE_CLASS)}
             >
               Less
@@ -173,6 +186,7 @@ export function ClampedText({
             type="button"
             onClick={() => setExpanded(true)}
             aria-expanded={false}
+            aria-label={label ? `Show more ${label}` : undefined}
             className={cx(typeClassName, TOGGLE_CLASS)}
           >
             More
