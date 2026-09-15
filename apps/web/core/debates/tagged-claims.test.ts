@@ -864,12 +864,15 @@ describe('the facet menus', () => {
   });
 
   /**
-   * The counts are over the ids fetched so far, which for a broad search is a prefix of the result
-   * set. Both surfaces read `settled` as permission to reconcile the viewer's selection against the
-   * menu, and a topic whose claims sit on a later page is absent from a prefix — so a valid
-   * selection was silently dropped.
+   * Two questions with different answers while a search is paging, which is why there are two flags.
+   *
+   * The counts are real counts of the ids fetched so far, so they are perfectly good to draw — and
+   * reading them as unsettled blanked both menus for the whole of a broad search, which is how that
+   * was found. They are not counts of *everything* that matched, though, and a topic whose claims
+   * sit on a later page is absent from a prefix — so reconciling a selection against them drops one
+   * that was never invalid.
    */
-  it('does not call a facet settled while the search has pages left', async () => {
+  it('has counts to draw but not counts of everything while the search has pages left', async () => {
     // More matches than the pages fetched so far, which is what a broad query looks like.
     respondWithSearch([['a1']], 400);
     respondWithGroups([{ id: TOPIC, count: 3 }]);
@@ -878,17 +881,31 @@ describe('the facet menus', () => {
     });
 
     await waitFor(() => expect(result.current.topics).toHaveLength(1));
-    expect(result.current.settled).toBe(false);
+    expect(result.current.settled).toBe(true);
+    expect(result.current.complete).toBe(false);
+  });
+
+  // And both, once the search has nothing left to page.
+  it('is complete once the search is exhausted', async () => {
+    respondWithSearch([['a1']], 1);
+    respondWithGroups([{ id: TOPIC, count: 3 }]);
+    const { result } = renderHook(
+      () => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, search: 'trump' }, true),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(result.current.complete).toBe(true));
+    expect(result.current.settled).toBe(true);
   });
 
   /**
    * A failed lookup is not an answer. It leaves no ids, so a facet counted over them describes
-   * nothing — and both surfaces read `settled` as permission to reconcile the viewer's selection
-   * against the menu, so settling here would drop a valid selection for the duration of a search
+   * nothing — and both surfaces read `complete` as permission to reconcile the viewer's selection
+   * against the menu, so completing here would drop a valid selection for the duration of a search
    * outage. The module already holds its facets over a failed *count* for this reason; a failed
    * search is the same thing one step earlier.
    */
-  it('does not call a facet settled when the search itself failed', async () => {
+  it('does not call a facet complete when the search itself failed', async () => {
     searchMock.mockImplementation(() => Effect.fail(new Error('search failed')));
     respondWithGroups([{ id: TOPIC, count: 3 }]);
     const { result } = renderHook(
@@ -896,10 +913,13 @@ describe('the facet menus', () => {
       { wrapper }
     );
 
-    await waitFor(() => expect(result.current.settled).toBe(false));
-    // And held there rather than settling a moment later on the empty result.
+    // `complete`, which is what gates reconciling a selection. Whether there are counts to *draw*
+    // is a separate question with its own flag, and drawing whatever exists during an outage is
+    // not the harm — dropping the viewer's topics is.
+    await waitFor(() => expect(result.current.complete).toBe(false));
+    // And held there rather than completing a moment later on the empty result.
     await new Promise(resolve => setTimeout(resolve, 150));
-    expect(result.current.settled).toBe(false);
+    expect(result.current.complete).toBe(false);
   });
 
   it('counts topics over the topic selection, not around it', async () => {

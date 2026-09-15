@@ -1815,9 +1815,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // already cached settles it instantly while the facet is still out, and the menu it hands over
     // in that gap is empty for the same reason an outage's is. Same rule as the two above, applied
     // to the one source whose menu does not come from its own rows.
-    const resolved = !topicsSettling && !tabIsLoading && !tabError && (!graphFiltered || taggedTopicFacet.settled);
+    //
+    // `complete` rather than `settled`: with a search running, the counts are over the ids fetched
+    // so far, and a topic whose claims are on a later page is missing from a menu that is otherwise
+    // perfectly good to look at. Reconciling against that drops a selection that was never invalid.
+    const resolved = !topicsSettling && !tabIsLoading && !tabError && (!graphFiltered || taggedTopicFacet.complete);
     setTopicIds(current => keepSelectableTopics(current, facetTopics, resolved));
-  }, [facetTopics, graphFiltered, tabError, tabIsLoading, taggedTopicFacet.settled, topicsSettling]);
+  }, [facetTopics, graphFiltered, tabError, tabIsLoading, taggedTopicFacet.complete, topicsSettling]);
 
   // The curated tab groups by block rather than listing flat, but narrows on the same filters.
   const showsSections = tab === 'explore' && source === 'recommended';

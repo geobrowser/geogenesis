@@ -635,6 +635,26 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
  * -----------------------------------------------------------------------------------------------*/
 
 /*
+ * Why both facets report two flags rather than one. The distinction is the whole of it, and neither
+ * name means much alone.
+ *
+ * `settled` — there are counts to draw. What a menu asks before it stops showing skeletons. Left
+ * exactly as it was before this split, because six things read it and its timing is what they are
+ * built against: an idle query counts as settled, which is a brief window and a deliberate one.
+ *
+ * `complete` — they are counts of *everything* that matched. What a caller asks before reconciling
+ * a viewer's selection against the menu, because a selection is only invalid if the thing it names
+ * is genuinely absent.
+ *
+ * They came apart with GEO-2898. A text search resolves to ids a page at a time, and the counts are
+ * over the ids in hand — so for a broad query they are real counts of a prefix. Reading that as
+ * "not settled" kept the selection safe and blanked the menus for the whole search, which is how
+ * this was found: the debate-again picker showed empty count chips against a search with more than
+ * one page of results. Reading it as "settled" draws the counts and drops a topic whose claims sit
+ * on a later page. Only two flags answer both.
+ */
+
+/*
  * Counts for one dimension of the menu come from the shared relation-facet
  * query (core/io/relation-facet.ts — grown here for GEO-2796/2798, extracted
  * once the data-table dropdowns adopted the same mechanism). Grouped over the
@@ -790,17 +810,10 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
     // reconciling its selection against them would prune against a menu the viewer has moved on
     // from. `use-scoped-claims` excludes it from the indexed path's settled flag for the same
     // reason, and these two flags meet in one condition.
-    /**
-     * Not settled while the search has pages left.
-     *
-     * These counts are over the ids fetched so far — at most one page of them — so for a broad
-     * query they describe a prefix of the result set rather than the set. Both surfaces read this
-     * flag as permission to reconcile the viewer's selection against the menu, and a topic whose
-     * claims sit on a later page is simply absent from a prefix: `keepSelectableTopics` then drops
-     * a selection that was never invalid. Held unsettled instead, which costs a menu that grows as
-     * the viewer scrolls and keeps what they picked.
-     */
-    settled: enabled
+    /** Whether there are counts to draw. See the note above these hooks. */
+    settled: enabled ? !counts.isLoading && !counts.isPlaceholderData && !counts.error : false,
+    /** Whether they are counts of everything. See the note above these hooks. */
+    complete: enabled
       ? !counts.isLoading && !counts.isPlaceholderData && !counts.error && search.settled && !search.hasNextPage
       : false,
     error: counts.error,
@@ -844,8 +857,10 @@ export function useTaggedSpaceFacet(tagId: string, filters: TaggedClaimFilters, 
     spaces: query.data ?? NO_FACET_COUNTS,
     isLoading: enabled && query.isLoading,
     // Placeholder data is the previous filter's counts; see the topic facet's note.
-    /** See the topic facet: counts over a prefix of the results are not an answer about the set. */
-    settled: enabled
+    /** Whether there are counts to draw. See the note above these hooks. */
+    settled: enabled ? !query.isLoading && !query.isPlaceholderData && !query.error : false,
+    /** Whether they are counts of everything. See the note above these hooks. */
+    complete: enabled
       ? !query.isLoading && !query.isPlaceholderData && !query.error && search.settled && !search.hasNextPage
       : false,
     error: query.error,

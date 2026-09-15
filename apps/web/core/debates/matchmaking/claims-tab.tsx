@@ -542,6 +542,18 @@ export function ClaimsTab({
     ? !spacesPending && topicFacet.settled && spaceFacet.settled
     : claimsQuery.facetsSettled;
 
+  /**
+   * And whether those counts cover everything that matched, which is a different question with a
+   * different answer while a text search is paging — see the note above the facet hooks in `tagged-claims`. Drawing a menu wants
+   * the flag above; reconciling a selection against one wants this.
+   *
+   * geo-chat's own facets answer both with one flag: its counts are over the whole result, so there
+   * is no prefix to distinguish.
+   */
+  const facetsComplete = graphSourced
+    ? !spacesPending && topicFacet.complete && spaceFacet.complete
+    : claimsQuery.facetsSettled;
+
   // The menu, and the handlers that drive it. Defaults to the spaces the viewer belongs to
   // (GEO-2789) and is held until the menu has finished arriving as well as the gates: the seed
   // fires once, so taking it against a half-built list leaves a member space that turned up a
@@ -554,7 +566,9 @@ export function ClaimsTab({
     // The menu *and* the viewer's spaces, both. Sign-up sends one membership proposal per picked
     // space and they land seconds apart, so the first non-empty answer is a fraction of what the
     // reader chose — and the seed fires once. Same reason the explore feed reports it (GEO-2834).
-    pending: spacesPending || !facetsSettled || isSettlingMemberships,
+    // `facetsComplete`, because the seed fires once: spending it against a menu that is still only a
+    // prefix of the search leaves the viewer with whichever spaces happened to be on the first page.
+    pending: spacesPending || !facetsComplete || isSettlingMemberships,
     // The selection now outlives this mount, so the seed has to as well. Without this, closing the
     // panel and reopening it would re-seed the member spaces over a filter the viewer had cleared
     // on purpose — deciding they meant something other than what they asked for, which is the one
@@ -749,8 +763,8 @@ export function ClaimsTab({
   // `facetsSettled` is still true from it — reconciling repeatedly against one stale answer and
   // draining the whole selection in a single tick, rather than one pick per server response.
   React.useEffect(() => {
-    setTopicIds(current => keepSelectableTopics(current, facetTopics, facetsSettled && !topicsSettling));
-  }, [facetTopics, facetsSettled, topicsSettling]);
+    setTopicIds(current => keepSelectableTopics(current, facetTopics, facetsComplete && !topicsSettling));
+  }, [facetTopics, facetsComplete, topicsSettling]);
 
   // Featured is not counted: it chooses which list is on screen rather than narrowing one, so an
   // empty Featured tab should say nothing is featured — not that filters are hiding things — and

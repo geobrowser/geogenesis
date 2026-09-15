@@ -389,6 +389,10 @@ vi.mock('../tagged-claims', async importOriginal => ({
       topics: [...counts.values()],
       isLoading: enabled && mocks.featuredLoading,
       settled: enabled && !mocks.featuredLoading && !mocks.taggedCatalogError,
+      // The same answer as `settled` here: these doubles have no notion of a text search paging, so
+      // the counts they give are always counts of the whole result. The two come apart only while a
+      // search has pages left — see the note above the facet hooks.
+      complete: enabled && !mocks.featuredLoading && !mocks.taggedCatalogError,
       error: mocks.taggedCatalogError,
     };
   },
@@ -408,6 +412,10 @@ vi.mock('../tagged-claims', async importOriginal => ({
       spaces: [...counts.values()],
       isLoading: enabled && mocks.featuredLoading,
       settled: enabled && !mocks.featuredLoading && !mocks.taggedCatalogError,
+      // The same answer as `settled` here: these doubles have no notion of a text search paging, so
+      // the counts they give are always counts of the whole result. The two come apart only while a
+      // search has pages left — see the note above the facet hooks.
+      complete: enabled && !mocks.featuredLoading && !mocks.taggedCatalogError,
       error: mocks.taggedCatalogError,
     };
   },
