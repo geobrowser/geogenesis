@@ -2257,6 +2257,34 @@ describe('claims the viewer has already answered', () => {
   });
 
   /**
+   * Reported on a brand new account: Explore cycles. Skeleton, a screenful of cards nobody can
+   * press, "looking for claims you haven't answered yet", skeleton again, for as long as the viewer
+   * watches it.
+   *
+   * geo-chat refuses every viewer-relative read until it has registered the account, so the rows
+   * lookup 401s — and then the next page puts a fresh batch in flight while the failed one is still
+   * in the array. Both flags are true at once, which is the state this pins: the collapse is
+   * `classifying`, so it holds *everything*, the tab reads an empty list, bounded paging advances
+   * looking for the rows the hold is what is keeping off screen, and that page starts the next
+   * lookup to be held on in turn. It is the barren-corpus loop reached by a different road, and the
+   * bound cannot help — the pages are not barren.
+   *
+   * A viewer whose account does not exist yet holds no positions, so there is nothing to hide and a
+   * failed lookup cannot be the reason a row disappears. The list draws.
+   */
+  it('draws the list rather than cycling when the answers cannot be had at all', async () => {
+    mocks.taggedRowsError = true;
+    mocks.taggedRowsLoading = true;
+    mocks.taggedHasNextPage = true;
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByText('One you have answered')).toBeInTheDocument();
+    expect(screen.getByText('One you have not')).toBeInTheDocument();
+    expect(screen.queryByText('Looking for claims you haven\u2019t answered yet\u2026')).toBeNull();
+  });
+
+  /**
    * Reported: the tab draws a screenful, and then a dozen claims vanish at once as the rows land.
    *
    * The catalog arrives a hop before the per-space rows, so every claim is drawn while its side is

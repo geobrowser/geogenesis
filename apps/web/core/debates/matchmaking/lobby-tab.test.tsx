@@ -259,6 +259,24 @@ describe('LobbyTab', () => {
     expect(onTabChange).toHaveBeenCalledWith('explore');
   });
 
+  /**
+   * And the Lobby they come back to is still the narrowed one.
+   *
+   * Stepping back is for a viewer who has been told they have no matches. A refused lookup has told
+   * them nothing — and the wider list here is sourced the same way, so it would be just as empty and
+   * would say nothing about why. `matchesState` calls a refusal `pending` for exactly this, but the
+   * warming-up shape reaches it as `failureReason` while the retries are still out rather than as a
+   * settled `error`, which is a different path into the same decision and worth holding on its own.
+   */
+  it('keeps them on the matches list rather than the wider one', () => {
+    mocks.matchesFailureReason = new GeoChatRequestError('not yet', null, 401);
+    mocks.matchesFetching = true;
+
+    renderLobby();
+
+    expect(screen.getByTestId('matches-list')).toBeInTheDocument();
+  });
+
   // Once, like the other move: coming back gets them the message and leaves them on it.
   it('leaves them on Lobby if they come back to it', () => {
     mocks.matchesFailureReason = new GeoChatRequestError('not yet', null, 401);

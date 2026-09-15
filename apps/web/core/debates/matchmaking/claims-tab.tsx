@@ -639,7 +639,38 @@ export function ClaimsTab({
   // a viewer it has no account for — so the collapse is a no-op and the switch is a control that
   // cannot do anything. Both go, rather than leaving one drawn over the other's nothing.
   const hidesMyPositions = authenticated && hideMyPositions;
-  const collapsesAnswered = !isLobby && filter !== 'mine' && hidesMyPositions;
+
+  /**
+   * And not when the answers cannot be had at all, which is a different thing from not having them
+   * yet.
+   *
+   * A brand new account is the case this is for: geo-chat refuses every viewer-relative read until
+   * it has registered them, so the per-space rows 401 and `viewer_response` never arrives for any
+   * claim. The collapse then sits in `classifying` forever, and everything downstream of it follows
+   * — the tab holds its skeleton on `answersSettled`, `stillPaging` reads an empty list, bounded
+   * paging advances looking for rows the hold is what is keeping off screen, and the next page puts
+   * another lookup in flight to be held on in turn. The viewer watches it cycle: skeleton, a
+   * screenful of un-pressable cards, "looking for claims you haven't answered yet", skeleton again.
+   *
+   * It is the barren-corpus loop from GEO-2863 reached by a different road, and the bound is no
+   * help here — the pages are not barren, the rows are being held back.
+   *
+   * Turning the collapse off is not a fallback, it is the correct answer: a viewer whose account
+   * does not exist yet holds no positions, so there is nothing to hide, and a lookup that failed
+   * cannot be the reason a row disappears. The same reasoning is already written into
+   * `taggedAnswersReady` and into `answersInFlight` below — this is the one place that had not
+   * agreed with it.
+   *
+   * Latched per list, because `isError` clears the moment a later page's batch goes out and comes
+   * back true when it fails in turn. Read live, the collapse would switch off and on with it and
+   * take the rows away again on each swing. A new list is a new question.
+   */
+  const answersFailed = graphSourced && authenticated && taggedRows.isError;
+  const answersUnavailableForRef = React.useRef<string | null>(null);
+  if (answersFailed) answersUnavailableForRef.current = listKey;
+  const answersUnavailable = answersUnavailableForRef.current === listKey;
+
+  const collapsesAnswered = !isLobby && filter !== 'mine' && hidesMyPositions && !answersUnavailable;
   const answeredStateOf = React.useCallback(
     (entry: MatchmakingClaim): AnsweredState =>
       !taggedAnswersReady ? 'unknown' : entry.viewer_response !== null ? 'answered' : 'unanswered',
