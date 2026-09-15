@@ -12,7 +12,7 @@ import { Text } from '~/design-system/text';
 import { CommentSection } from '~/partials/comments/comments-section';
 import { ExploreCommentsIcon } from '~/partials/explore/explore-comments-icon';
 
-import { ProposalSidePanelShell } from './proposal-side-panel';
+import { ProposalSidePanelShell, useExclusiveProposalPanel } from './proposal-side-panel';
 
 type ProposalCommentsValue = {
   proposalId: string;
@@ -52,8 +52,7 @@ export function ProposalCommentsProvider({
   count: number;
   children: React.ReactNode;
 }) {
-  const [isPanelOpen, setIsPanelOpen] = React.useState(false);
-  const togglePanel = React.useCallback(() => setIsPanelOpen(open => !open), []);
+  const { isPanelOpen, togglePanel } = useExclusiveProposalPanel('comments');
   const liveCount = useCommentCount(proposalId, count);
 
   const value = React.useMemo<ProposalCommentsValue>(
@@ -77,6 +76,9 @@ export function ProposalCommentsHeadButton() {
         'inline-flex h-6 shrink-0 items-center gap-1.5 rounded border px-1.5 text-metadata leading-none text-text transition-colors',
         'border-grey-02 bg-white hover:border-text'
       )}
+      // The rendered content is a number, so without this the accessible name is "3". `title` is
+      // only consulted after name-from-content, so it does not stand in for one.
+      aria-label={`Comments (${ctx.count})`}
       title="Comments"
       aria-expanded={ctx.isPanelOpen}
     >

@@ -1,5 +1,7 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 import { useState } from 'react';
 
@@ -11,6 +13,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
 import { getStaleProposalVoteToastMessage, useVote } from '~/core/hooks/use-vote';
 import { Proposal, VoteWithProfile } from '~/core/io/dto/proposals';
+import { proposalCommentVotesQueryKey } from '~/core/io/query-keys';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
 
@@ -70,6 +73,7 @@ export function AcceptOrReject({
   const reportError = useReportError();
   const [, setToast] = useToast();
   const closeProposal = useCloseProposal(spaceId);
+  const queryClient = useQueryClient();
 
   // Which side the user just clicked. Held locally so the confirmed pill can
   // show the right label after the tx succeeds, even if the atom clears in the
@@ -131,7 +135,13 @@ export function AcceptOrReject({
   // user is now.
   const onVoteSuccess = () => {
     for (const delayMs of [800, 3_000, 7_000, 15_000, 30_000]) {
-      window.setTimeout(() => router.refresh(), delayMs);
+      window.setTimeout(() => {
+        router.refresh();
+        // `router.refresh()` re-runs server components and leaves client caches alone, so the votes
+        // behind the comment attribution badges have to be invalidated by hand — otherwise an open
+        // comments panel keeps badging this voter with the vote they just changed (GEO-2907).
+        queryClient.invalidateQueries({ queryKey: proposalCommentVotesQueryKey(proposalId) });
+      }, delayMs);
     }
   };
 

@@ -41,7 +41,7 @@ import {
 } from '~/partials/review/bounty-linking';
 import type { Bounty } from '~/partials/review/bounty-linking/types';
 
-import { ProposalSidePanelShell } from './proposal-side-panel';
+import { ProposalSidePanelShell, useExclusiveProposalPanel } from './proposal-side-panel';
 
 type ProviderProps = {
   daoSpaceId: string;
@@ -109,7 +109,7 @@ export function ProposalBountiesProvider({
   const [draftIds, setDraftIds] = React.useState<Set<string>>(() => new Set());
   const [isSaving, setIsSaving] = React.useState(false);
   const [optimisticLinkedIds, setOptimisticLinkedIds] = React.useState<string[] | null>(null);
-  const [isPanelOpen, setIsPanelOpen] = React.useState(false);
+  const { isPanelOpen, togglePanel } = useExclusiveProposalPanel('bounties');
 
   const { data: space } = useQuery({
     queryKey: ['space', daoSpaceId],
@@ -427,16 +427,15 @@ export function ProposalBountiesProvider({
     });
   }, []);
 
-  const togglePanel = React.useCallback(() => {
-    setIsPanelOpen(prev => {
-      const next = !prev;
-      if (!next) {
-        // Closing the panel discards any unsaved drafts.
-        setDraftIds(new Set(effectiveLinkedIds));
-      }
-      return next;
-    });
-  }, [effectiveLinkedIds]);
+  // Closing the panel discards any unsaved drafts — watched as a transition rather than done inside
+  // the toggle, because the panel now also closes when the comments panel takes the screen's slot.
+  const wasPanelOpen = React.useRef(isPanelOpen);
+  React.useEffect(() => {
+    if (wasPanelOpen.current && !isPanelOpen) {
+      setDraftIds(new Set(effectiveLinkedIds));
+    }
+    wasPanelOpen.current = isPanelOpen;
+  }, [isPanelOpen, effectiveLinkedIds]);
 
   const isLoadingAvailable = isAuthor && (isLoadingSpaces || isLoadingRemote);
 
@@ -640,6 +639,9 @@ export function ProposalBountyHeadButton() {
             'inline-flex h-6 shrink-0 items-center gap-1.5 rounded border px-1.5 text-metadata leading-none text-text transition-colors',
             'border-grey-02 bg-white hover:border-text'
           )}
+          // Same reason as the comments pill beside it: the content is a bare count, so the button
+          // needs to say what the count is of.
+          aria-label={isAuthor && n === 0 ? 'Link to bounty' : `Bounties (${n})`}
           title="Bounties"
           aria-expanded={isPanelOpen}
         >

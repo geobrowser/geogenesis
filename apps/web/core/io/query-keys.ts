@@ -34,3 +34,14 @@ export function profileBySpaceIdQueryKey(spaceId: string) {
 export function spacesByIdsQueryKey(spaceIds: string[]) {
   return ['spaces-by-ids', normalizeSpaceIds(spaceIds)] as const;
 }
+
+/**
+ * The votes behind a proposal's comment attribution badges.
+ *
+ * Shared because casting a vote has to invalidate it: `AcceptOrReject` only schedules
+ * `router.refresh()`, which re-runs server components and leaves a client cache untouched, so an
+ * open comments panel would keep badging the voter with the vote they just changed.
+ */
+export function proposalCommentVotesQueryKey(entityId: string) {
+  return ['proposal-comment-votes', entityId] as const;
+}
