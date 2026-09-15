@@ -1168,6 +1168,37 @@ describe('All claims reads the Debate tag', () => {
     expect(screen.queryByRole('button', { name: 'My positions' })).toBeNull();
   });
 
+  it('gives the workspace one claim per row, at any width', async () => {
+    mocks.taggedClaims['55c95b2626f8482cb9739ea99dfde438'] = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Rail beats road for freight'),
+    ];
+    const { container } = render(<ClaimsTab layout="workspace" />);
+    await showAllClaims();
+
+    const first = screen.getByText('Nuclear power is the cheapest clean energy');
+    const second = screen.getByText('Rail beats road for freight');
+    let list: HTMLElement | null = first.parentElement;
+    while (list && !list.contains(second)) list = list.parentElement;
+
+    expect(list).not.toBeNull();
+    expect(list?.className).toContain('flex-col');
+    expect(list?.className).not.toContain('grid');
+
+    expect(container.innerHTML).not.toContain('/claims:grid-cols');
+  });
+
+  it('hides the workspace’s menus at the rail’s width without hiding the picker', async () => {
+    render(<ClaimsTab layout="workspace" scopePicker={<button type="button">Lobby</button>} />);
+    await showAllClaims();
+
+    const hidden = (node: HTMLElement | null) => node?.closest('[class*="@[72rem]/hub:hidden"]') ?? null;
+
+    expect(hidden(screen.getByRole('button', { name: /Any space/ }))).not.toBeNull();
+    expect(hidden(screen.getByRole('button', { name: 'Lobby' }))).toBeNull();
+    expect(hidden(screen.getByLabelText('Search claims'))).toBeNull();
+  });
+
   it('asks the graph for the Debate tag rather than the index', async () => {
     mocks.taggedClaims['55c95b2626f8482cb9739ea99dfde438'] = [
       featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),

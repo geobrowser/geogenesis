@@ -10,9 +10,10 @@ import type { MatchmakingMatch } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateActivity } from '../hooks';
 import { claimRowKey } from './claim-row-key';
-import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
+import { type ClaimsLayout, HubListColumns, HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests, useMatchmakingMatches } from './hooks';
+import { HubFacetRail } from './hub-facet-rail';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
@@ -52,11 +53,19 @@ import {
 export function MatchesList({
   onTabChange,
   trailing,
+  scopePicker,
+  layout = 'panel',
 }: {
-  onTabChange: (tab: DebatesHubTab) => void;
+  /** Only reached from the empty state's action, so the rail need not pass one. */
+  onTabChange?: (tab: DebatesHubTab) => void;
   /** Lobby's "Matches only" switch, at the end of the filter row. */
   trailing?: React.ReactNode;
+  /** Leading the filter row, as on `ClaimsTab` — Lobby's two lists share the control. */
+  scopePicker?: React.ReactNode;
+  /** As on `ClaimsTab`: the workspace draws an open facet rail beside this list. */
+  layout?: ClaimsLayout;
 }) {
+  const workspace = layout === 'workspace';
   // Lobby's one selection, shared with its toggled-off state (GEO-2861) — the toggle narrows the
   // list, and would be a strange place to also change which spaces the viewer had picked.
   //
@@ -226,11 +235,25 @@ export function MatchesList({
   const filteredByViewer = filtered.length === 0 && serverMatches.length > 0;
 
   return (
-    <div className="flex flex-col">
+    <HubListColumns
+      workspace={workspace}
+      rail={
+        <HubFacetRail
+          facetSpaces={facetSpaces}
+          spaceIds={spaceIds}
+          onSpaceToggle={onSpaceToggle}
+          onSpacesClear={onSpacesClear}
+          facetTopics={facetTopics}
+          topicIds={topicIds}
+          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+          onTopicsClear={() => setTopicIds([])}
+        />
+      }
+    >
       {/* One pinned header rather than a pinned card above scrolling filters: two stickies would
           both claim `top-0` and overlap, and the outbound card is conditional so the filters
           couldn't be offset by a known height. */}
-      <HubStickyControls>
+      <HubStickyControls workspaceStickyOffset={workspace}>
         {outbound ? <OutboundRequestCard request={outbound} /> : null}
         <Input
           withSearchIcon
@@ -241,6 +264,8 @@ export function MatchesList({
         />
 
         <SpaceTopicFilters
+          leading={scopePicker}
+          menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
           spaceIds={spaceIds}
           onSpaceToggle={onSpaceToggle}
           onSpacesClear={onSpacesClear}
@@ -312,7 +337,11 @@ export function MatchesList({
                     setTopicIds([]);
                   },
                 }
-              : { label: 'Explore claims', onClick: () => onTabChange('explore') }
+              : // In the rail there is no tab to change to, and the claims list is already on screen
+                // beside this, so the "somewhere to go" half has nowhere to send anyone.
+                onTabChange
+                ? { label: 'Explore claims', onClick: () => onTabChange('explore') }
+                : undefined
           }
         >
           <HubCardList>
@@ -322,7 +351,7 @@ export function MatchesList({
           </HubCardList>
         </HubQueryState>
       </div>
-    </div>
+    </HubListColumns>
   );
 }
 
