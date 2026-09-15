@@ -139,6 +139,8 @@ export function useClaimResponseIndexedNotifier(
   // instead of racing it.
   const lanes = React.useRef(new Map<string, ReportLane>());
   const activeAccountKey = React.useRef<string | null>(null);
+  // The account and personal space the notifier last reported for.
+  const confirmedIdentity = React.useRef<{ accountKey: string; personalSpaceId: string } | null>(null);
 
   React.useEffect(() => {
     const laneMap = lanes.current;
@@ -148,15 +150,24 @@ export function useClaimResponseIndexedNotifier(
     };
   }, []);
 
-  // Signed out: nothing queued may be sent, including under whoever signs in next.
+  // Another account's reports never go out: cancel them the moment the account changes or signs out,
+  // without waiting for the new account's personal space to load.
   React.useEffect(() => {
-    if (accountKey) return;
-    for (const lane of lanes.current.values()) cancelLane(lane);
-    lanes.current.clear();
+    for (const [laneKey, lane] of lanes.current) {
+      if (lane.accountKey === accountKey) continue;
+      cancelLane(lane);
+      lanes.current.delete(laneKey);
+    }
   }, [accountKey]);
 
   React.useEffect(() => {
     if (!enabled || !accountKey || !personalSpaceId) return;
+    // Just after a switch the personal-space query can still hold the previous account's space.
+    const previous = confirmedIdentity.current;
+    if (previous && previous.accountKey !== accountKey && sameSpaceId(previous.personalSpaceId, personalSpaceId)) {
+      return;
+    }
+    confirmedIdentity.current = { accountKey, personalSpaceId };
     activeAccountKey.current = accountKey;
     const viewerSpaceId = personalSpaceId;
 
@@ -253,15 +264,9 @@ export function useClaimResponseIndexedNotifier(
       send(lane, next);
     };
 
-    // Another account's reports can never be sent now. One still in flight is cancelled before it
-    // can pick up this account's session; this account's own lanes resume where they left off.
-    for (const [laneKey, lane] of lanes.current) {
-      if (lane.accountKey === accountKey) {
-        drain(lane);
-      } else {
-        cancelLane(lane);
-        lanes.current.delete(laneKey);
-      }
+    // This account's own lanes resume where they left off.
+    for (const lane of lanes.current.values()) {
+      if (lane.accountKey === accountKey) drain(lane);
     }
 
     const unsubscribe = queryClient.getQueryCache().subscribe(event => {

@@ -135,6 +135,16 @@ describe('useClaimResponseState and the viewer’s side', () => {
     expect(result.current.readiness.viewer_response).toBeNull();
   });
 
+  // A row that names no side is not an answer yet: pressing a side the viewer already holds would
+  // publish it again instead of clearing it.
+  it('waits for the indexed read before calling a silent row resolved', () => {
+    mocks.summary = { isViewerResponseLoading: true };
+    expect(render(entityWith(), rowWith(null)).current.isViewerResponseResolved).toBe(false);
+    expect(
+      render(entityWith(), rowWith({ position: true, position_label: 'Agree' })).current.isViewerResponseResolved
+    ).toBe(true);
+  });
+
   it('substitutes nothing while the indexed read is still in flight', () => {
     mocks.summary = { isViewerResponseLoading: true, indexedViewerDirection: 'positive' };
     const result = render(entityWith(), rowWith(null));

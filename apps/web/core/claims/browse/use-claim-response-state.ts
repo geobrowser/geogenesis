@@ -38,7 +38,7 @@ export type ClaimResponseState = {
    * neither side — and pressing the side they already hold *republishes* it rather than clearing
    * it, because the control reads the same state the display does.
    *
-   * geo-chat's row carries `viewer_response` directly, so a row is an answer on its own. Otherwise
+   * A geo-chat row that names the viewer's side is an answer on its own. Otherwise
    * it takes the on-chain read landing — including under a batch, where "landing" means the batch's
    * own readiness and a failed batch never resolves.
    */
@@ -188,7 +188,7 @@ export function useClaimResponseState({
     // window where the counts had landed and the viewer's side had not: a signed-in viewer who has
     // already agreed sees both pills unselected, and pressing the one they hold republishes it
     // instead of clearing it — the exact failure this field exists to prevent.
-    isViewerResponseResolved: row !== null || (!summary.isLoading && !summary.isViewerResponseLoading),
+    isViewerResponseResolved: Boolean(row?.viewer_response) || (!summary.isLoading && !summary.isViewerResponseLoading),
     summary,
     claim,
     positions,

@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GeoChatRequestError } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 
-const mocks = vi.hoisted(() => ({ notify: vi.fn() }));
+const mocks = vi.hoisted(() => ({ notify: vi.fn(), personalSpaceId: 'profile-1' as string | null }));
 
 vi.mock('./api', async importOriginal => ({
   ...(await importOriginal<typeof import('./api')>()),
@@ -16,13 +16,14 @@ vi.mock('./api', async importOriginal => ({
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
-  usePersonalSpaceId: () => ({ personalSpaceId: 'profile-1' }),
+  usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId }),
 }));
 
 describe('useClaimResponseIndexedNotifier', () => {
   beforeEach(() => {
     mocks.notify.mockReset();
     mocks.notify.mockResolvedValue(undefined);
+    mocks.personalSpaceId = 'profile-1';
   });
 
   it('notifies geo-chat once when a claim response indexing run is confirmed', async () => {
@@ -374,6 +375,83 @@ describe('useClaimResponseIndexedNotifier', () => {
     expect(mocks.notify).toHaveBeenCalledTimes(1);
 
     await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
+  });
+
+  it("cancels another account's report as soon as the account changes, before its space loads", async () => {
+    const signals: AbortSignal[] = [];
+    mocks.notify.mockImplementation((...args: unknown[]) => {
+      signals.push(args.at(-1) as AbortSignal);
+      return new Promise<void>(() => {});
+    });
+    const { queryClient, wrapper } = createHarness();
+    const getPrivyIdentityToken = vi.fn();
+    const { rerender } = renderHook(
+      ({ accountKey }) => useClaimResponseIndexedNotifier(true, getPrivyIdentityToken, accountKey),
+      { initialProps: { accountKey: 'account-1' }, wrapper }
+    );
+
+    act(() => {
+      queryClient.setQueryData(['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'], {
+        status: 'reconciling',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'positive',
+          personalSpaceId: 'profile-1',
+          responseKind: 'stance',
+          spaceId: 'space-1',
+        },
+        runId: 'run-before-switch',
+      });
+    });
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(1));
+
+    mocks.personalSpaceId = null;
+    rerender({ accountKey: 'account-2' });
+    await waitFor(() => expect(signals[0]?.aborted).toBe(true));
+  });
+
+  it("ignores the previous account's personal space until the new account's loads", async () => {
+    const { queryClient, wrapper } = createHarness();
+    const getPrivyIdentityToken = vi.fn();
+    const { rerender } = renderHook(
+      ({ accountKey }) => useClaimResponseIndexedNotifier(true, getPrivyIdentityToken, accountKey),
+      { initialProps: { accountKey: 'account-1' }, wrapper }
+    );
+    const indexedFor = (personalSpaceId: string, runId: string) => ({
+      status: 'indexed',
+      pending: {
+        entityId: 'claim-1',
+        expectedResponse: 'positive',
+        personalSpaceId,
+        responseKind: 'stance',
+        spaceId: 'space-1',
+      },
+      runId,
+    });
+
+    // The account has switched, but the personal-space query still holds account-1's space.
+    rerender({ accountKey: 'account-2' });
+    act(() => {
+      queryClient.setQueryData(
+        ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'],
+        indexedFor('profile-1', 'run-stale')
+      );
+    });
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(mocks.notify).not.toHaveBeenCalled();
+
+    mocks.personalSpaceId = 'profile-2';
+    rerender({ accountKey: 'account-2' });
+    act(() => {
+      queryClient.setQueryData(
+        ['entity-response-indexing', 'profile-2', 'claim-1', 'space-1', 'stance'],
+        indexedFor('profile-2', 'run-new-account')
+      );
+    });
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(1));
+    expect(mocks.notify.mock.calls[0]?.[5]).toBe('account-2');
   });
 
   it('reports cleared responses and ignores curation indexing', async () => {
