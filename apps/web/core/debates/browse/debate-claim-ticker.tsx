@@ -211,7 +211,7 @@ export function DebateClaimTickerCard({
       // also toggle playback.
       onClick={event => event.stopPropagation()}
       style={{ opacity }}
-      className="pointer-events-auto flex max-w-[min(24rem,78%)] items-start gap-2 rounded bg-black/65 px-2 py-1 backdrop-blur-[2px]"
+      className="pointer-events-auto flex w-full items-start gap-2 rounded bg-black/65 px-2 py-1 backdrop-blur-[2px]"
     >
       <span className="text-[0.8125rem] leading-snug text-white">{claim.text}</span>
       <TickerClaimControls
@@ -234,11 +234,14 @@ export function DebateClaimTickerCard({
  */
 export function DebateClaimTickerStack({
   cards,
+  maxWidth,
   rowsByClaimId,
   entitiesByClaimId,
   onAnswered,
 }: {
   cards: StackedCard[];
+  /** The name row's width, so a line never runs past the debater's position chip. */
+  maxWidth?: number | null;
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
   onAnswered: (claimId: string) => void;
@@ -246,7 +249,10 @@ export function DebateClaimTickerStack({
   if (cards.length === 0) return null;
 
   return (
-    <div className="flex w-full flex-col items-start gap-1">
+    <div
+      style={maxWidth ? { maxWidth } : undefined}
+      className="flex w-full flex-col items-start gap-1"
+    >
       {cards.map(card => (
         <DebateClaimTickerCard
           key={card.window.claim.id}
@@ -362,13 +368,15 @@ function TickerClaimControls({
  * already draws: agreeing with a position and verifying a fact are different acts, and a thumb on
  * "the SEC sued Coinbase" reads as approval rather than confirmation.
  */
-function ClaimIconButton({
+export function ClaimIconButton({
   responseKind,
   position,
   label,
   selected,
   disabled,
   title,
+  surface = 'video',
+  size = 'sm',
   onClick,
 }: {
   responseKind: 'stance' | 'veracity' | 'curation';
@@ -377,7 +385,10 @@ function ClaimIconButton({
   selected: boolean;
   disabled: boolean;
   title: string;
-  onClick: () => void;
+  /** `video` sits on the dark scrim over a frame; `card` on white. */
+  surface?: 'video' | 'card';
+  size?: 'sm' | 'md';
+  onClick?: () => void;
 }) {
   const Icon = responseKind === 'veracity' ? (position ? ChevronUp : ChevronDown) : position ? ThumbUp : ThumbDown;
 
@@ -388,16 +399,29 @@ function ClaimIconButton({
       aria-pressed={selected}
       title={title}
       disabled={disabled}
-      onClick={onClick}
+      onClick={
+        onClick &&
+        (event => {
+          event.stopPropagation();
+          onClick();
+        })
+      }
       className={cx(
-        'grid size-5 place-items-center rounded-sm transition-colors disabled:cursor-default',
-        // Recessive until it matters: dim on the line, bright on hover, and unmistakable once the
+        'grid place-items-center rounded-sm transition-colors disabled:cursor-default',
+        size === 'md' ? 'size-8' : 'size-5',
+        // Recessive until it matters: dim at rest, brighter on hover, and unmistakable once the
         // reader has actually taken a side.
-        selected
-          ? position
-            ? 'bg-white/15 text-green'
-            : 'bg-white/15 text-red-01'
-          : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
+        surface === 'video'
+          ? selected
+            ? position
+              ? 'bg-white/15 text-green'
+              : 'bg-white/15 text-red-01'
+            : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
+          : selected
+            ? position
+              ? 'bg-successTertiary text-green'
+              : 'bg-errorTertiary text-red-01'
+            : 'text-grey-04 hover:bg-grey-01 hover:text-text disabled:hover:bg-transparent disabled:hover:text-grey-04'
       )}
     >
       <Icon filled={selected} />

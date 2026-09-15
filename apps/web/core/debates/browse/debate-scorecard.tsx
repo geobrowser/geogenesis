@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { type TimedClaim, formatTimecode } from '~/core/debates/claim-timing';
@@ -12,7 +10,7 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 
-import type { DebateTicker } from './debate-claim-ticker';
+import { ClaimIconButton, type DebateTicker } from './debate-claim-ticker';
 
 /**
  * The ask, once the video has stopped.
@@ -48,13 +46,25 @@ export function DebateScorecard({ ticker, onReplay }: { ticker: DebateTicker; on
 
   return (
     <div className="pointer-events-auto w-full max-w-[24rem] overflow-hidden rounded-lg bg-white shadow-card">
-      <header className="border-b border-divider px-4 py-3">
-        <p className="text-smallTitle text-text">{next ? 'Where do you stand?' : 'That is all of them'}</p>
-        <p className="mt-0.5 text-footnote tabular-nums text-grey-04">
-          {next
-            ? `${answerable.length} claims were made · ${answered.size} answered`
-            : `You answered ${answered.size} of ${answerable.length}. Now say who won.`}
-        </p>
+      <header className="flex items-start justify-between gap-3 border-b border-divider px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-smallTitle text-text">{next ? 'Where do you stand?' : 'That is all of them'}</p>
+          <p className="mt-0.5 text-footnote tabular-nums text-grey-04">
+            {next
+              ? `${answerable.length} claims were made · ${answered.size} answered`
+              : `You answered ${answered.size} of ${answerable.length}. Now say who won.`}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={event => {
+            event.stopPropagation();
+            onReplay();
+          }}
+          className="shrink-0 text-metadata text-grey-04 transition-colors hover:text-text"
+        >
+          Watch again
+        </button>
       </header>
 
       {next ? (
@@ -65,33 +75,9 @@ export function DebateScorecard({ ticker, onReplay }: { ticker: DebateTicker; on
           row={rowsByClaimId.get(next.id) ?? null}
           entity={entitiesByClaimId.get(next.id) ?? null}
           onAnswered={onAnswered}
+          onSkip={skip}
         />
       ) : null}
-
-      <footer className="flex items-center justify-between gap-3 px-4 py-2.5">
-        <button
-          type="button"
-          onClick={event => {
-            event.stopPropagation();
-            onReplay();
-          }}
-          className="text-metadata text-grey-04 transition-colors hover:text-text"
-        >
-          Watch again
-        </button>
-        {next ? (
-          <button
-            type="button"
-            onClick={event => {
-              event.stopPropagation();
-              skip(next.id);
-            }}
-            className="text-metadata text-grey-04 transition-colors hover:text-text"
-          >
-            Skip
-          </button>
-        ) : null}
-      </footer>
     </div>
   );
 }
@@ -109,12 +95,14 @@ function ScorecardClaim({
   row,
   entity,
   onAnswered,
+  onSkip,
 }: {
   claim: TimedClaim;
   speaker: string | null;
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string) => void;
+  onSkip: (claimId: string) => void;
 }) {
   const promptSignIn = usePrivySignIn();
   // Narrowed by the caller, which only passes claims that have a space to publish into.
@@ -153,25 +141,47 @@ function ScorecardClaim({
 
   return (
     <div className="px-4 py-3.5">
-      <p className="text-footnote text-grey-04">
-        {speaker ? `${speaker} said` : 'Said'}
-        {claim.timing ? ` at ${formatTimecode(claim.timing.startMs)}` : null}
-      </p>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="min-w-0 truncate text-footnote text-grey-04">
+          {speaker ? `${speaker} said` : 'Said'}
+          {claim.timing ? ` at ${formatTimecode(claim.timing.startMs)}` : null}
+        </p>
+        <button
+          type="button"
+          onClick={event => {
+            event.stopPropagation();
+            onSkip(claim.id);
+          }}
+          className="shrink-0 text-metadata text-grey-04 transition-colors hover:text-text"
+        >
+          Skip
+        </button>
+      </div>
       <p className="mt-1.5 text-metadataMedium leading-snug text-text">{claim.text}</p>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <SideButton
+      {/* The same control as the floating lines, so answering here and answering there look like
+          the same act rather than two different features. */}
+      <div className="mt-2.5 flex items-center gap-1">
+        <ClaimIconButton
+          responseKind={responseKind}
+          position
+          size="md"
+          surface="card"
           label={copy.positiveAction}
-          tone="positive"
+          selected={control.viewerPosition === true}
           disabled={!control.canRespond}
-          title={control.actionTitle(true)}
+          title={control.actionTitle(true) || copy.positiveAction}
           onClick={() => control.respond(true)}
         />
-        <SideButton
+        <ClaimIconButton
+          responseKind={responseKind}
+          position={false}
+          size="md"
+          surface="card"
           label={copy.negativeAction}
-          tone="negative"
+          selected={control.viewerPosition === false}
           disabled={!control.canRespond}
-          title={control.actionTitle(false)}
+          title={control.actionTitle(false) || copy.negativeAction}
           onClick={() => control.respond(false)}
         />
       </div>
@@ -182,39 +192,5 @@ function ScorecardClaim({
         </p>
       ) : null}
     </div>
-  );
-}
-
-function SideButton({
-  label,
-  tone,
-  disabled,
-  title,
-  onClick,
-}: {
-  label: string;
-  tone: 'positive' | 'negative';
-  disabled: boolean;
-  title: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      title={title || undefined}
-      disabled={disabled}
-      onClick={event => {
-        event.stopPropagation();
-        onClick();
-      }}
-      className={cx(
-        'rounded-md border border-grey-02 px-3 py-2 text-metadataMedium text-text transition-colors disabled:cursor-default disabled:opacity-50',
-        tone === 'positive'
-          ? 'hover:border-green hover:bg-successTertiary'
-          : 'hover:border-red-01 hover:bg-errorTertiary'
-      )}
-    >
-      {label}
-    </button>
   );
 }
