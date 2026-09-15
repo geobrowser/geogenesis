@@ -30,10 +30,9 @@ vi.mock('./use-request-countdown', () => ({
   useUnexpiredRequests: (requests: unknown[]) => requests,
 }));
 
-// The three lists are the panel's own and have their own suites; this one is about which of them
-// the rail shows, in what order, and what stands in for the two that need an account.
+// Both lists are the panel's own and have their own suites; this one is about which of them the
+// rail shows, in what order, and what stands in for the one that needs an account.
 vi.mock('./requests-tab', () => ({ RequestsTab: () => <div data-testid="requests-tab" /> }));
-vi.mock('./matches-list', () => ({ MatchesList: () => <div data-testid="matches-list" /> }));
 vi.mock('./people-tab', () => ({ PeopleTab: () => <div data-testid="people-tab" /> }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
@@ -50,21 +49,20 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('HubLiveRail', () => {
-  // Ordered by urgency rather than by the tab order it inherits: a request expires in ~25 minutes,
-  // matches are pairable now, presence is the slowest of the three.
-  it('stacks requests, then matches, then who is available', () => {
+  // Ordered by urgency: a request expires in ~25 minutes, where presence is the slower of the two.
+  it('stacks requests, then who is available', () => {
     // Requests only draws while one is pending, so the order it sits in is only observable with one.
     mocks.incoming = [{ id: 'request-1', expires_at: '2099-01-01T00:00:00.000Z' }];
     render(<HubLiveRail />);
 
-    const rendered = ['requests-tab', 'matches-list', 'people-tab'].map(id => screen.getByTestId(id));
+    const rendered = ['requests-tab', 'people-tab'].map(id => screen.getByTestId(id));
     for (const [index, node] of rendered.slice(0, -1).entries()) {
       const next = rendered[index + 1];
       expect(Boolean(node.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     }
   });
 
-  it('leaves Requests out entirely when nothing is pending, so Matches sits at the top', () => {
+  it('leaves Requests out entirely when nothing is pending, so People sits at the top', () => {
     render(<HubLiveRail />);
 
     // The heading too, not just the list: an empty section is exactly the thing being removed, and
@@ -72,9 +70,7 @@ describe('HubLiveRail', () => {
     expect(screen.queryByTestId('requests-tab')).not.toBeInTheDocument();
     expect(screen.queryByText('Requests')).not.toBeInTheDocument();
 
-    const matches = screen.getByTestId('matches-list');
-    const people = screen.getByTestId('people-tab');
-    expect(Boolean(matches.compareDocumentPosition(people) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(screen.getByTestId('people-tab')).toBeInTheDocument();
   });
 
   // Also open for a pending challenge — RequestsTab shows those too.
@@ -101,14 +97,13 @@ describe('HubLiveRail', () => {
 
   // Signed out the rail loses two of its three lists. Two empty headings would say nothing, so it
   // keeps the one that still answers and explains the two that need an account.
-  it('keeps People signed out and explains what the other two would offer', () => {
+  it('keeps People signed out and explains what the account-gated one would offer', () => {
     mocks.authenticated = false;
     render(<HubLiveRail />);
 
     expect(screen.getByTestId('people-tab')).toBeInTheDocument();
     expect(screen.queryByTestId('requests-tab')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('matches-list')).not.toBeInTheDocument();
-    expect(screen.getByText(/paired with someone who disagrees/)).toBeInTheDocument();
+    expect(screen.getByText(/debate requests sent to you/)).toBeInTheDocument();
   });
 
   it('routes the signed-out prompt into Privy', () => {

@@ -21,6 +21,7 @@ import {
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
+  debatesHubMatchesOnlyAtom,
   debatesHubPositionsSearchAtom,
   debatesHubPositionsSpaceIdsAtom,
   debatesHubPositionsSpaceSeedSpentAtom,
@@ -650,10 +651,44 @@ describe('the way out to the full-screen hub', () => {
   it('offers it from every tab, not just the one it was added on', () => {
     for (const tab of ['requests', 'lobby', 'explore', 'positions', 'people'] as const) {
       const view = renderOpen(tab);
-      expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute('href', '/matchmaking');
+      // The route, whatever the tab hands over with it.
+      expect(screen.getByRole('link', { name: /open full screen/i }).getAttribute('href')).toMatch(/^\/matchmaking/);
       cleanup();
       void view;
     }
+  });
+
+  it.each([
+    ['explore', 'all'],
+    ['positions', 'mine'],
+    ['lobby', 'debate_now'],
+  ] as const)('opens the workspace on the list %s was showing', (tab, list) => {
+    renderOpen(tab);
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe(list);
+  });
+
+  it.each(['requests', 'people'] as const)('hands over no list from %s, which is not one', tab => {
+    renderOpen(tab);
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(href).toBe('/matchmaking');
+  });
+
+  it('hands over the wider list from Lobby, not what its toggle says', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'lobby' });
+    store.set(debatesHubMatchesOnlyAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe('debate_now');
   });
 
   /**
@@ -665,7 +700,7 @@ describe('the way out to the full-screen hub', () => {
 
     const link = screen.getByRole('link', { name: /open full screen/i });
     expect(link.tagName).toBe('A');
-    expect(link).toHaveAttribute('href', '/matchmaking');
+    expect(link.getAttribute('href')).toMatch(/^\/matchmaking/);
   });
 
   it('closes the panel, so it is not left over the page it navigated to', () => {
@@ -679,8 +714,8 @@ describe('the way out to the full-screen hub', () => {
 });
 
 describe('the filters the expand link carries', () => {
-  it('links to a bare route when nothing is narrowed', () => {
-    renderOpen('explore');
+  it('links to a bare route when nothing is narrowed and nothing handed over', () => {
+    renderOpen('people');
 
     expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute('href', '/matchmaking');
   });

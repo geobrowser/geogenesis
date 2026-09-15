@@ -2,9 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import { fromClaimsFilterSearch, toClaimsFilterSearch } from './claims-filter-params';
 
-const NOTHING_NARROWED = { search: '', spaceIds: [], topicIds: [] };
+const LISTS = ['featured', 'all', 'mine', 'debate_now', 'matches'];
+
+const NOTHING_NARROWED = { list: null, search: '', spaceIds: [], topicIds: [] };
 
 describe('toClaimsFilterSearch', () => {
+  it('leaves out the source the workspace opens on anyway', () => {
+    expect(toClaimsFilterSearch({ ...NOTHING_NARROWED, list: 'featured' }, 'featured')).toBe('');
+  });
+
+  it('carries a source the viewer actually moved to', () => {
+    expect(toClaimsFilterSearch({ ...NOTHING_NARROWED, list: 'matches' }, 'featured')).toBe('list=matches');
+  });
+
   it('leaves an unfiltered list with no query at all', () => {
     // So expanding from an untouched panel gives a bare `/matchmaking` worth sharing.
     expect(toClaimsFilterSearch(NOTHING_NARROWED)).toBe('');
@@ -12,6 +22,7 @@ describe('toClaimsFilterSearch', () => {
 
   it('carries every dimension the tab holds', () => {
     const search = toClaimsFilterSearch({
+      list: null,
       search: 'climate',
       spaceIds: ['space-a', 'space-b'],
       topicIds: ['topic-a'],
@@ -33,10 +44,11 @@ describe('toClaimsFilterSearch', () => {
 });
 
 describe('fromClaimsFilterSearch', () => {
-  const read = (search: string) => fromClaimsFilterSearch(new URLSearchParams(search));
+  const read = (search: string) => fromClaimsFilterSearch(new URLSearchParams(search), LISTS);
 
   it('round-trips what the link wrote', () => {
     const filters = {
+      list: 'matches',
       search: 'energy policy',
       spaceIds: ['space-a', 'space-b'],
       topicIds: ['topic-a', 'topic-b'],
@@ -49,12 +61,12 @@ describe('fromClaimsFilterSearch', () => {
     expect(read('')).toEqual(NOTHING_NARROWED);
   });
 
-  /**
-   * Which list the workspace shows is not the URL's to decide — it mounts Explore, and the other two
-   * lists are tabs in the panel. A hand-written or bookmarked `scope` is ignored rather than honoured
-   * halfway.
-   */
-  it('ignores a scope left over from a link that carried one', () => {
+  // Drop a list the surface does not offer (stale link, typo, or signed-out).
+  it('drops a list the surface does not offer', () => {
+    expect(fromClaimsFilterSearch(new URLSearchParams('list=matches'), ['featured', 'all']).list).toBeNull();
+  });
+
+  it('ignores a scope left over from the param this replaced', () => {
     expect(read('scope=matches&q=climate')).toEqual({ ...NOTHING_NARROWED, search: 'climate' });
   });
 

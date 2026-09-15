@@ -9,19 +9,18 @@ import { Text } from '~/design-system/text';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
-import { MatchesList } from './matches-list';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
 import { useUnexpiredRequests } from './use-request-countdown';
 
 /**
- * The workspace's right rail: the three lists that are only useful *while* you are doing something
- * else, stacked so they stop being modal.
+ * The workspace's right rail: requests and presence — the two lists that are only useful *while*
+ * you are doing something else, stacked so they stop being modal.
  */
 export function HubLiveRail() {
   const { authenticated, ready } = useGeoChatAuth();
 
-  // Hide Requests when nothing is pending so Matches sits at the top. Same sources as RequestsTab,
+  // Hide Requests when nothing is pending so People sits at the top. Same sources as RequestsTab,
   // including expiry and pending challenges.
   const requestsQuery = useDebateRequests(authenticated);
   const { data: activity } = useDebateActivity(authenticated);
@@ -42,9 +41,6 @@ export function HubLiveRail() {
               <RequestsTab dense />
             </RailSection>
           )}
-          <RailSection label="Matches">
-            <MatchesList dense />
-          </RailSection>
           <RailSection label="Available now">
             <PeopleTab dense />
           </RailSection>
@@ -56,7 +52,7 @@ export function HubLiveRail() {
   );
 }
 
-/** Signed out: keep People, explain Requests/Matches instead of two empty headings. */
+/** Signed out: keep People, explain Requests instead of an empty heading. */
 function SignedOutRail() {
   const promptSignIn = usePrivySignIn();
 
@@ -64,10 +60,10 @@ function SignedOutRail() {
     <>
       <section className="flex flex-col gap-2 rounded-lg border border-grey-02 bg-white p-4">
         <Text as="h3" variant="footnoteMedium" color="text">
-          Requests and matches
+          Requests
         </Text>
         <Text as="p" variant="footnote" color="grey-04">
-          Sign in to be paired with someone who disagrees, and to see debate requests sent to you.
+          Sign in to see debate requests sent to you.
         </Text>
         <div className="pt-1">
           <HubPillButton onClick={promptSignIn}>Sign in</HubPillButton>

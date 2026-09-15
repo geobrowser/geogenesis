@@ -227,6 +227,22 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('MatchesList', () => {
+  /**
+   * The workspace draws an open facet rail beside its list, and this is one of the two lists the
+   * source picker can put there.
+   */
+  it('draws the workspace facet rail, the way the claims list does', () => {
+    render(<MatchesList onTabChange={vi.fn()} layout="workspace" />);
+
+    expect(screen.getByTestId('hub-facet-rail')).toBeInTheDocument();
+  });
+
+  it('leaves the rail out of the panel', () => {
+    render(<MatchesList onTabChange={vi.fn()} />);
+
+    expect(screen.queryByTestId('hub-facet-rail')).toBeNull();
+  });
+
   it('offers exactly two response actions, labelled for the claim', () => {
     render(<MatchesList onTabChange={vi.fn()} />);
 

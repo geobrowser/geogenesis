@@ -1188,6 +1188,16 @@ describe('All claims reads the Debate tag', () => {
     expect(container.innerHTML).not.toContain('/claims:grid-cols');
   });
 
+  it('asks the graph for the Featured tag, not the Debate one', async () => {
+    const FEATURED_TAG = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
+    mocks.taggedClaims[FEATURED_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab variant="featured" />);
+
+    expect(await screen.findByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    expect(mocks.tagsAskedFor).toContain(FEATURED_TAG);
+    expect(mocks.tagsAskedFor).not.toContain(DEBATE_TAG);
+  });
+
   it('asks the graph for the Debate tag rather than the index', async () => {
     mocks.taggedClaims['55c95b2626f8482cb9739ea99dfde438'] = [
       featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),

@@ -408,15 +408,22 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
 /**
  * The way out to the full-screen hub at `/matchmaking`.
  */
+function workspaceListFor(tab: DebatesHubTab): string | null {
+  if (tab === 'explore') return 'all';
+  if (tab === 'positions') return 'mine';
+  if (tab === 'lobby') return 'debate_now';
+  return null;
+}
+
 function ExpandToWorkspaceLink() {
-  const { close } = useDebatesHub();
+  const { activeTab, close } = useDebatesHub();
 
   // Explore's, because that is the variant the workspace mounts. All three are atoms, so they
   // survive the tab being unmounted — which is the only reason the search used to be left behind.
   const search = useAtomValue(debatesHubExploreSearchAtom);
   const spaceIds = useAtomValue(debatesHubExploreSpaceIdsAtom);
   const topicIds = useAtomValue(debatesHubExploreTopicIdsAtom);
-  const query = toClaimsFilterSearch({ search, spaceIds, topicIds });
+  const query = toClaimsFilterSearch({ list: workspaceListFor(activeTab), search, spaceIds, topicIds }, 'featured');
 
   return (
     <div className="shrink-0 border-t border-grey-02 px-4 py-2.5">
