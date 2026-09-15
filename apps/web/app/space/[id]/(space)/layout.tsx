@@ -87,7 +87,11 @@ export default async function Layout(props0: LayoutProps) {
       >
         <SpaceChromeGate keepChrome={isProfile}>
           <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
-          <SpaceHeaderContentGate serverHasSidebar={hasSidebar} isExternalTopic={isExternalTopic}>
+          <SpaceHeaderContentGate
+            serverHasSidebar={hasSidebar}
+            isExternalTopic={isExternalTopic}
+            alwaysHasSidebar={isProfile}
+          >
             <div className="space-y-2">
               <EditableSpaceHeading
                 spaceId={spaceId}

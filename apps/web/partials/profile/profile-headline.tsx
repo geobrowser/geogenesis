@@ -1,8 +1,9 @@
 'use client';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import type { CurrentRole } from '~/core/profile/profile-summary';
 
-import { Avatar } from '~/design-system/avatar';
+import { FallbackImage } from '~/design-system/fallback-image';
 
 import { ProfileEntityLink } from './profile-entity-link';
 
@@ -24,16 +25,17 @@ export function ProfileHeadline({ roles, spaceId }: Props) {
   if (roles.length === 0) return null;
 
   return (
-    <ul className="mt-1 flex flex-col gap-0.5">
+    // `mb-4` rather than `mb-1`: the description below pulls itself up by 12px
+    // to sit tight under the name, which is right when it *is* under the name
+    // and wrong here, where three current roles sit between them. The margin
+    // pays that back and leaves a real gap.
+    <ul className="mt-3 mb-4 flex flex-col gap-1">
       {roles.map(role => (
         <li key={`${role.kind}-${role.organizationId}-${role.subject}`} className="flex items-center gap-2">
-          {/*
-           * `Avatar` sizes to its box, not to `size` — that prop only reaches
-           * the generated fallback — so an organisation with a logo needs this
-           * wrapper or it fills the row.
-           */}
+          {/* Geo's placeholder where a company has no logo, and a fixed box
+              around it — the same pair the cards below use. */}
           <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm bg-grey-01">
-            <Avatar size={16} value={role.organizationId} avatarUrl={role.avatarUrl ?? undefined} square />
+            <FallbackImage value={role.avatarUrl ?? PLACEHOLDER_SPACE_IMAGE} sizes="16px" className="object-cover" />
           </span>
           <span className="min-w-0 truncate text-metadata text-text">
             <ProfileEntityLink entityId={role.subjectId} spaceId={spaceId} className="hover:underline">

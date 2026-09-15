@@ -67,9 +67,24 @@ type SpaceHeaderContentGateProps = {
   children: React.ReactNode;
   serverHasSidebar: boolean;
   isExternalTopic: boolean;
+  /**
+   * A profile always has a rail, on every one of its tabs (GEO-2859).
+   *
+   * Not a hint: the rail is part of the page rather than something a route
+   * might grow, so the header is the wider variant from the server render
+   * onwards. Left to the signals below it, the header settled at content width
+   * while the rail beside it kept the wider one, and the name and description
+   * stopped short of a rail that ran past them.
+   */
+  alwaysHasSidebar?: boolean;
 };
 
-export function SpaceHeaderContentGate({ children, serverHasSidebar, isExternalTopic }: SpaceHeaderContentGateProps) {
+export function SpaceHeaderContentGate({
+  children,
+  serverHasSidebar,
+  isExternalTopic,
+  alwaysHasSidebar = false,
+}: SpaceHeaderContentGateProps) {
   const sidebarContent = useAtomValue(spaceSidebarHasContentAtom);
   const isSeedRoute = useIsSidebarSeedRoute();
 
@@ -79,7 +94,9 @@ export function SpaceHeaderContentGate({ children, serverHasSidebar, isExternalT
   // the header automatically. Before the atom is set (SSR / first paint) fall back
   // to the server's per-space signal, but only on routes that actually render a rail,
   // so a non-rail tab is never seeded wide and a rail route never flashes.
-  const hasSidebar = !isExternalTopic && (sidebarContent !== null ? sidebarContent : serverHasSidebar && isSeedRoute);
+  const hasSidebar =
+    alwaysHasSidebar ||
+    (!isExternalTopic && (sidebarContent !== null ? sidebarContent : serverHasSidebar && isSeedRoute));
 
   return <SpaceHeaderContentContainer hasSidebar={hasSidebar}>{children}</SpaceHeaderContentContainer>;
 }
