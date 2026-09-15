@@ -12,8 +12,9 @@ import { PersonRecordFeed } from './person-record-feed';
  * page over — the same reason Positions renders cards rather than opening the
  * first claim. `DebateExploreFeedCard` still plays the debate in place.
  *
- * Unpaged, deliberately: the list is bounded by how many debates one person has
- * argued, which is eleven at the top of the graph.
+ * Unpaged, and so with nothing to scroll for: the list is bounded by how many
+ * debates one person has argued, which is eleven at the top of the graph, and
+ * the relation query takes the lot in one request.
  */
 export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
   const { rows, isLoading, isError } = usePersonDebates(spaceId, true);
@@ -26,17 +27,11 @@ export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
     <PersonRecordFeed
       rows={rows}
       isLoading={isLoading}
-      isPlaceholderData={false}
-      hasNextPage={false}
-      endCursor={null}
       loadingLabel="Loading debates…"
       // Said here rather than by the browse feed, which offers "Start one from
       // the Claims tab" — right for a space with no debates in it, wrong for a
       // person who has never been in one.
       emptyLabel="No debates yet."
-      canGoBack={false}
-      onBack={() => {}}
-      onNext={() => {}}
     />
   );
 }

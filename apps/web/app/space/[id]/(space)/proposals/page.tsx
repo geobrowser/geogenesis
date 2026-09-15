@@ -6,7 +6,6 @@ import { notFound } from 'next/navigation';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph';
 import type { Profile } from '~/core/types';
 
-import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { PersonProposalsTab } from '~/partials/profile/person-proposals-tab';
 
 import { cachedFetchSpace } from '../../cached-fetch-space';
@@ -39,11 +38,7 @@ export default async function ProposalsPage(props: Props) {
   // per row, and the rows carry no proposer of their own to disagree with it.
   const [proposer] = await Effect.runPromise(fetchProfilesBySpaceIds([params.id]));
 
-  return (
-    <EntityPageContentContainer>
-      <PersonProposalsTab spaceId={params.id} proposer={proposer ?? fallbackProposer(params.id)} />
-    </EntityPageContentContainer>
-  );
+  return <PersonProposalsTab spaceId={params.id} proposer={proposer ?? fallbackProposer(params.id)} />;
 }
 
 /** Someone the graph has no profile row for yet. The rows still render, unnamed. */

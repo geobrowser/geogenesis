@@ -5,13 +5,13 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { PersonProposal, PersonProposalsPage } from '~/core/profile/use-person-proposals';
+import type { PersonProposal } from '~/core/profile/use-person-proposals';
 import type { Profile } from '~/core/types';
 
 import { PersonProposalsTab } from './person-proposals-tab';
 
 const mocks = vi.hoisted(() => ({
-  page: null as PersonProposalsPage | null,
+  proposals: [] as PersonProposal[],
   isLoading: false,
   /** Every space id set the label lookup was asked for, in render order. */
   labelCalls: [] as string[][],
@@ -21,9 +21,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/core/profile/use-person-proposals', () => ({
   usePersonProposals: () => ({
-    page: mocks.page ?? { proposals: [], endCursor: null, hasNextPage: false, totalCount: 0 },
+    proposals: mocks.proposals,
     isLoading: mocks.isLoading,
-    isPlaceholderData: false,
+    isFetchingNextPage: false,
+    hasNextPage: false,
+    fetchNextPage: () => {},
   }),
 }));
 
@@ -93,7 +95,7 @@ function proposal(overrides: Partial<PersonProposal> = {}): PersonProposal {
 }
 
 function setPage(proposals: PersonProposal[]) {
-  mocks.page = { proposals, endCursor: null, hasNextPage: false, totalCount: proposals.length };
+  mocks.proposals = proposals;
 }
 
 function renderTab() {
@@ -102,7 +104,7 @@ function renderTab() {
 
 describe('PersonProposalsTab', () => {
   beforeEach(() => {
-    mocks.page = null;
+    mocks.proposals = [];
     mocks.isLoading = false;
     mocks.labelCalls = [];
     mocks.rowProps = [];
@@ -217,11 +219,13 @@ describe('PersonProposalsTab', () => {
     expect(screen.getByText('No proposals yet')).toBeInTheDocument();
   });
 
-  it('hides the pager when there is only one page', () => {
+  it('scrolls rather than paging', () => {
     setPage([proposal()]);
 
     renderTab();
 
+    // 765 rows on the reference account: a Next button would make the record
+    // something you click through rather than read down.
     expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Previous' })).toBeNull();
   });

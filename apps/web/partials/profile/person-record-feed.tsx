@@ -4,11 +4,14 @@ import * as React from 'react';
 
 import type { ExploreFeedItem, ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { useInfiniteSentinel } from '~/core/profile/use-infinite-sentinel';
+
+import { Skeleton } from '~/design-system/skeleton';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
 /**
- * A page of a person's record, rendered as explore cards (GEO-2859).
+ * A person's record, rendered as explore cards (GEO-2859).
  *
  * Shared by Positions and Debates, which differ only in where their ids come
  * from. `ExploreFeedCard` is the same dispatcher the explore feed uses, so a
@@ -22,25 +25,19 @@ import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 export function PersonRecordFeed({
   rows,
   isLoading,
-  isPlaceholderData,
-  hasNextPage,
-  endCursor,
+  isFetchingNextPage = false,
+  hasNextPage = false,
+  fetchNextPage,
   loadingLabel,
   emptyLabel,
-  canGoBack,
-  onBack,
-  onNext,
 }: {
   rows: ExploreFeedRow[];
   isLoading: boolean;
-  isPlaceholderData: boolean;
-  hasNextPage: boolean;
-  endCursor: string | null;
+  isFetchingNextPage?: boolean;
+  hasNextPage?: boolean;
+  fetchNextPage?: () => void;
   loadingLabel: string;
   emptyLabel: string;
-  canGoBack: boolean;
-  onBack: () => void;
-  onNext: (cursor: string) => void;
 }) {
   // Looked up once for the page. These are routinely spaces the viewer has never
   // opened, which the browse sidebar cannot name.
@@ -52,6 +49,13 @@ export function PersonRecordFeed({
     [labelsById, rows]
   );
 
+  const noop = React.useCallback(() => {}, []);
+  const sentinelRef = useInfiniteSentinel({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage: fetchNextPage ?? noop,
+  });
+
   if (isLoading && rows.length === 0) {
     return <p className="py-6 text-metadata text-grey-04">{loadingLabel}</p>;
   }
@@ -59,8 +63,6 @@ export function PersonRecordFeed({
   if (rows.length === 0) {
     return <p className="py-6 text-metadata text-grey-04">{emptyLabel}</p>;
   }
-
-  const showPager = canGoBack || (hasNextPage && endCursor !== null);
 
   return (
     <div className="pt-1">
@@ -76,24 +78,15 @@ export function PersonRecordFeed({
         />
       ))}
 
-      {showPager && (
-        <div className="mt-4 flex items-center justify-between">
-          <button
-            type="button"
-            disabled={!canGoBack || isPlaceholderData}
-            onClick={onBack}
-            className="text-metadata text-ctaPrimary disabled:text-grey-03"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            disabled={!hasNextPage || endCursor === null || isPlaceholderData}
-            onClick={() => endCursor && onNext(endCursor)}
-            className="text-metadata text-ctaPrimary disabled:text-grey-03"
-          >
-            Next
-          </button>
+      {/* Well above the fold, so the next page is already in by the time the
+          reader gets here — the same margin the explore feed uses. */}
+      <div ref={sentinelRef} className="h-4 w-full" aria-hidden />
+
+      {isFetchingNextPage && (
+        <div className="mt-4 space-y-4">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Skeleton key={index} className="h-24 w-full" />
+          ))}
         </div>
       )}
     </div>

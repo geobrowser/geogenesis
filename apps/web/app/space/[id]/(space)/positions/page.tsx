@@ -2,7 +2,6 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
-import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { PersonPositionsTab } from '~/partials/profile/person-positions-tab';
 
 import { cachedFetchSpace } from '../../cached-fetch-space';
@@ -30,9 +29,5 @@ export default async function PositionsPage(props: Props) {
     notFound();
   }
 
-  return (
-    <EntityPageContentContainer>
-      <PersonPositionsTab spaceId={params.id} />
-    </EntityPageContentContainer>
-  );
+  return <PersonPositionsTab spaceId={params.id} />;
 }

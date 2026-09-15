@@ -31,22 +31,28 @@ export function ProfileHeadline({ roles, spaceId }: Props) {
     // pays that back and leaves a real gap.
     <ul className="mt-3 mb-4 flex flex-col gap-1">
       {roles.map(role => (
-        <li key={`${role.kind}-${role.organizationId}-${role.subject}`} className="flex items-center gap-2">
-          {/* Geo's placeholder where a company has no logo, and a fixed box
-              around it — the same pair the cards below use. */}
-          <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm bg-grey-01">
-            <FallbackImage value={role.avatarUrl ?? PLACEHOLDER_SPACE_IMAGE} sizes="16px" className="object-cover" />
-          </span>
-          <span className="min-w-0 truncate text-metadata text-text">
+        <li key={`${role.kind}-${role.organizationId}-${role.subject}`} className="min-w-0 truncate">
+          <span className="text-metadata text-text">
             <ProfileEntityLink entityId={role.subjectId} spaceId={spaceId} className="hover:underline">
               {role.subject}
             </ProfileEntityLink>{' '}
-            <span className="text-grey-04">
-              at{' '}
-              <ProfileEntityLink entityId={role.organizationId} spaceId={spaceId} className="hover:underline">
-                {role.organization}
-              </ProfileEntityLink>
+            <span className="text-grey-04">at </span>
+            {/*
+             * The logo sits with the company, not at the head of the line. It is
+             * the company's mark: in front of the role it read as an icon for
+             * the job, and three different marks down the left edge read as a
+             * list of kinds rather than of employers.
+             */}
+            <span className="relative mr-1 -mb-0.5 inline-block h-4 w-4 shrink-0 overflow-hidden rounded-sm bg-grey-01 align-baseline">
+              <FallbackImage value={role.avatarUrl ?? PLACEHOLDER_SPACE_IMAGE} sizes="16px" className="object-cover" />
             </span>
+            <ProfileEntityLink
+              entityId={role.organizationId}
+              spaceId={spaceId}
+              className="text-grey-04 hover:underline"
+            >
+              {role.organization}
+            </ProfileEntityLink>
           </span>
         </li>
       ))}

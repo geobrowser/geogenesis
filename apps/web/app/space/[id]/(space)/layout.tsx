@@ -8,6 +8,7 @@ import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-bl
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
 import { EntityId } from '~/core/io/substream-schema';
+import { profileLinks } from '~/core/profile/profile-links';
 import { SpaceVerifyButton } from '~/core/space/space-verify-button';
 import { RouteEditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -21,12 +22,14 @@ import { Spacer } from '~/design-system/spacer';
 import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-header';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
+import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-profile-bio-starter-merge';
 import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
 import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
 import { PersonalSpaceHeadline } from '~/partials/profile/personal-space-profile';
 import { ProfileActions } from '~/partials/profile/profile-actions';
+import { ProfileRail } from '~/partials/profile/profile-rail';
 import { AddDataPanel } from '~/partials/space-page/add-data-panel';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
@@ -74,6 +77,32 @@ export default async function Layout(props0: LayoutProps) {
    * other is worse than neither.
    */
   const isProfile = props.space?.type === 'PERSONAL' && Spaces.hasTopicEntity(props.space);
+
+  /**
+   * The rail lives here rather than on the Overview page (GEO-2859).
+   *
+   * It is part of the profile, not of one tab: rendered per-page it appeared on
+   * Overview and vanished on Debates, Positions and Proposals, and the main
+   * column jumped a rail's width on every tab change. Here it is rendered once,
+   * above `children`, and every tab lands in the column beside it.
+   *
+   * `space.entity` is the topic — the person — and `SpaceEntityDto` has already
+   * scoped its values and relations to this space, which is the filtering the
+   * Overview page used to do by hand.
+   */
+  const profileRail = isProfile ? (
+    <ProfileRail
+      spaceId={spaceId}
+      personEntityId={props.id}
+      types={(props.space?.entity?.types ?? []).map(type => ({ id: type.id, name: type.name ?? null }))}
+      links={profileLinks(
+        (props.space?.entity?.values ?? []).map(value => ({ property: { id: value.property.id }, value: value.value }))
+      )}
+      systemEntityId={props.space?.entity?.id ?? spaceId}
+      address={props.space?.address ?? null}
+      spaceType={props.space?.type ?? 'PERSONAL'}
+    />
+  ) : null;
 
   return (
     <EntityStoreProvider id={props.id} spaceId={spaceId}>
@@ -170,7 +199,7 @@ export default async function Layout(props0: LayoutProps) {
           </SpaceHeaderContentGate>
           <Spacer height={20} />
         </SpaceChromeGate>
-        {children}
+        {isProfile ? <EntityPageSidebarLayout sidebar={profileRail}>{children}</EntityPageSidebarLayout> : children}
       </RouteEditorProvider>
     </EntityStoreProvider>
   );
