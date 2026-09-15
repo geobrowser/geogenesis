@@ -5,11 +5,13 @@ import type { ReactNode } from 'react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GeoChatRequestError } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 
 const mocks = vi.hoisted(() => ({ notify: vi.fn() }));
 
-vi.mock('./api', () => ({
+vi.mock('./api', async importOriginal => ({
+  ...(await importOriginal<typeof import('./api')>()),
   notifyClaimResponseIndexed: (...args: unknown[]) => mocks.notify(...args),
 }));
 
@@ -144,6 +146,68 @@ describe('useClaimResponseIndexedNotifier', () => {
     act(() => queryClient.setQueryData(queryKey, { status: 'delayed', pending: pending('positive'), runId: 'run-3' }));
     await Promise.resolve();
     expect(mocks.notify).toHaveBeenCalledTimes(3);
+  });
+
+  // One request per claim at a time, so geo-chat cannot apply an older switch after a newer one.
+  it('sends a claim’s reports one at a time and ends on the newest', async () => {
+    const releases: Array<() => void> = [];
+    mocks.notify.mockImplementation(() => new Promise<void>(resolve => releases.push(resolve)));
+    const { queryClient, wrapper } = createHarness();
+    renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });
+    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'] as const;
+    const pending = (expectedResponse: 'positive' | 'negative') => ({
+      entityId: 'claim-1',
+      expectedResponse,
+      personalSpaceId: 'profile-1',
+      responseKind: 'stance',
+      spaceId: 'space-1',
+    });
+
+    act(() =>
+      queryClient.setQueryData(queryKey, { status: 'reconciling', pending: pending('positive'), runId: 'run-1' })
+    );
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(1));
+    act(() =>
+      queryClient.setQueryData(queryKey, { status: 'reconciling', pending: pending('negative'), runId: 'run-2' })
+    );
+    act(() =>
+      queryClient.setQueryData(queryKey, { status: 'reconciling', pending: pending('positive'), runId: 'run-3' })
+    );
+    await Promise.resolve();
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+
+    await act(async () => releases[0]?.());
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
+    expect(mocks.notify.mock.calls[1]?.[3]).toBe(true);
+
+    await act(async () => releases[1]?.());
+    await Promise.resolve();
+    expect(mocks.notify).toHaveBeenCalledTimes(2);
+  });
+
+  it('waits out Retry-After and sends a rate-limited report again', async () => {
+    mocks.notify
+      .mockRejectedValueOnce(new GeoChatRequestError('rate limited', 'rate_limited', 429, 20))
+      .mockResolvedValue(undefined);
+    const { queryClient, wrapper } = createHarness();
+    renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });
+
+    act(() => {
+      queryClient.setQueryData(['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'], {
+        status: 'indexed',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'positive',
+          personalSpaceId: 'profile-1',
+          responseKind: 'stance',
+          spaceId: 'space-1',
+        },
+        runId: 'run-rate-limited',
+      });
+    });
+
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
+    expect(mocks.notify.mock.calls[1]?.slice(0, 4)).toEqual(['space-1', 'claim-1', 'stance', true]);
   });
 
   it('reports cleared responses and ignores curation indexing', async () => {

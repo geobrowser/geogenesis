@@ -6,10 +6,19 @@ import * as React from 'react';
 
 import type { EntityResponseIndexingState } from '~/core/hooks/use-entity-vote';
 
-import { type DebateResponseKind, type GetPrivyIdentityToken, notifyClaimResponseIndexed } from './api';
+import {
+  type DebateResponseKind,
+  GeoChatRequestError,
+  type GetPrivyIdentityToken,
+  notifyClaimResponseIndexed,
+} from './api';
 import { refreshRematchClaimBatches, rematchClaimBatchesWithClaim } from './rematch-claims-query-key';
 
 const MAX_NOTIFIED_RUNS = 256;
+/** Wait after a 429 that carries no `Retry-After`. */
+const RATE_LIMITED_RETRY_MS = 5_000;
+/** Attempts after a 429 before a report is dropped. */
+const MAX_RATE_LIMITED_RETRIES = 3;
 
 /**
  * Every query whose answer a position write changes, as key prefixes (GEO-2814).
@@ -38,10 +47,19 @@ type NotifiableClaimResponse = Pick<
   NonNullable<ReturnType<typeof pendingClaimResponse>>,
   'entityId' | 'position' | 'responseKind' | 'spaceId'
 >;
-type InterruptedNotification = {
-  accountKey: string;
+type ClaimReport = {
+  /** The indexing query's hash: one viewer, claim, space and response kind. */
+  laneKey: string;
   notificationKey: string;
   response: NotifiableClaimResponse;
+};
+type InterruptedNotification = ClaimReport & { accountKey: string };
+type ReportLane = {
+  inFlight: boolean;
+  /** The newest report that arrived while the lane was busy; it supersedes any older one. */
+  waiting: ClaimReport | null;
+  retryTimer: ReturnType<typeof setTimeout> | null;
+  rateLimitedRetries: number;
 };
 
 export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: unknown) {
@@ -116,25 +134,47 @@ export function useClaimResponseIndexedNotifier(
   React.useEffect(() => {
     if (!enabled || !accountKey) return;
 
-    const notificationControllers = new Map<AbortController, InterruptedNotification>();
+    // Reports for one claim go out one at a time, so geo-chat, which keeps whichever arrives last,
+    // cannot apply an older switch after a newer one.
+    const lanes = new Map<string, ReportLane>();
+    const inFlight = new Map<AbortController, ClaimReport>();
 
     const forgetNotification = (notificationKey: string) => {
       notifiedRuns.current.delete(notificationKey);
       notifiedRunOrder.current = notifiedRunOrder.current.filter(key => key !== notificationKey);
     };
 
-    const startNotification = (notificationKey: string, response: NotifiableClaimResponse) => {
-      if (notifiedRuns.current.has(notificationKey)) return;
-
-      notifiedRuns.current.add(notificationKey);
-      notifiedRunOrder.current.push(notificationKey);
-      if (notifiedRunOrder.current.length > MAX_NOTIFIED_RUNS) {
-        const expired = notifiedRunOrder.current.shift();
-        if (expired) notifiedRuns.current.delete(expired);
+    const laneFor = (laneKey: string) => {
+      let lane = lanes.get(laneKey);
+      if (!lane) {
+        lane = { inFlight: false, waiting: null, retryTimer: null, rateLimitedRetries: 0 };
+        lanes.set(laneKey, lane);
       }
+      return lane;
+    };
 
+    // The only refresh guaranteed to postdate the notification, so every surface reading geo-chat's
+    // copy of the position — the rematch picker (GEO-2603) and the readiness sources (GEO-2814) —
+    // is asked again here, whether or not the notification succeeded.
+    const refreshReadiness = (response: NotifiableClaimResponse) => {
+      void refreshRematchClaimBatches(queryClient, rematchClaimBatchesWithClaim(accountKey, response.entityId));
+      for (const queryKey of readinessQueryPrefixes(accountKey, response.spaceId)) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+    };
+
+    const drain = (lane: ReportLane) => {
+      if (lane.inFlight || lane.retryTimer || !lane.waiting) return;
+      const next = lane.waiting;
+      lane.waiting = null;
+      send(lane, next);
+    };
+
+    const send = (lane: ReportLane, report: ClaimReport) => {
+      lane.inFlight = true;
       const controller = new AbortController();
-      notificationControllers.set(controller, { accountKey, notificationKey, response });
+      inFlight.set(controller, report);
+      const { response } = report;
       void notifyClaimResponseIndexed(
         response.spaceId,
         response.entityId,
@@ -144,71 +184,80 @@ export function useClaimResponseIndexedNotifier(
         accountKey,
         controller.signal
       )
+        .then(() => {
+          lane.rateLimitedRetries = 0;
+        })
         .catch(error => {
-          // Swallowed so `.finally` still runs and the promise never rejects unhandled. This used
-          // to invalidate the claims query as a fallback; the refresh below now covers that key on
-          // every path, so a second one here would only make "the notification failed" and "the
-          // notification succeeded" indistinguishable at the cache (GEO-2814).
           if (isAbortError(error)) return;
+          if (
+            error instanceof GeoChatRequestError &&
+            error.status === 429 &&
+            lane.rateLimitedRetries < MAX_RATE_LIMITED_RETRIES
+          ) {
+            lane.rateLimitedRetries += 1;
+            // A newer report waiting behind this one already carries the newer answer.
+            lane.waiting ??= report;
+            lane.retryTimer = setTimeout(() => {
+              lane.retryTimer = null;
+              drain(lane);
+            }, error.retryAfterMs ?? RATE_LIMITED_RETRY_MS);
+            return;
+          }
+          lane.rateLimitedRetries = 0;
+          // Not delivered, so a later event for the same submission may try again.
+          forgetNotification(report.notificationKey);
         })
         .finally(() => {
-          notificationControllers.delete(controller);
+          inFlight.delete(controller);
           if (controller.signal.aborted) return;
-          // GEO-2603. This call is what puts the response in geo-chat's copy, and the rematch
-          // picker gates Request debate on geo-chat agreeing the viewer has taken a side. The
-          // picker refreshes its batches off the same `indexed` event that starts this notification,
-          // so that refetch races the notification and usually loses — leaving the button hidden
-          // until something unrelated happened to refetch. Asking again once the notification has
-          // settled is the only refresh guaranteed to postdate it.
-          void refreshRematchClaimBatches(queryClient, rematchClaimBatchesWithClaim(accountKey, response.entityId));
-
-          // GEO-2814. The rematch picker was the only surface refreshed here, so every *other*
-          // Request debate control converged on geo-chat's new answer by luck — whenever its own
-          // query happened to refetch next. Explore asks per card behind `nearViewport`, so
-          // scrolling refetches it constantly and its button opened first; the hub asks once per
-          // tab and sat on a stale answer, which is the reported inconsistency.
-          //
-          // The same argument as the rematch refresh above applies to all of them: this is the
-          // only refresh guaranteed to postdate the notification, so it is where they belong.
-          // Invalidated by prefix rather than by exact key because the claims queries are keyed by
-          // claim-id batch and the hub's by filter set — neither is reconstructable from here.
-          for (const queryKey of readinessQueryPrefixes(accountKey, response.spaceId)) {
-            void queryClient.invalidateQueries({ queryKey });
-          }
+          lane.inFlight = false;
+          refreshReadiness(response);
+          drain(lane);
         });
+    };
+
+    const report = (next: ClaimReport) => {
+      if (notifiedRuns.current.has(next.notificationKey)) return;
+
+      notifiedRuns.current.add(next.notificationKey);
+      notifiedRunOrder.current.push(next.notificationKey);
+      if (notifiedRunOrder.current.length > MAX_NOTIFIED_RUNS) {
+        const expired = notifiedRunOrder.current.shift();
+        if (expired) notifiedRuns.current.delete(expired);
+      }
+
+      const lane = laneFor(next.laneKey);
+      if (lane.inFlight || lane.retryTimer) {
+        lane.waiting = next;
+        return;
+      }
+      send(lane, next);
     };
 
     const unsubscribe = queryClient.getQueryCache().subscribe(event => {
       if (event.type !== 'updated' || event.action.type !== 'success') return;
-      const queryHash = event.query.queryHash;
+      const laneKey = event.query.queryHash;
 
+      // Still sent once the chain confirms: if the in-flight report named a position the write never
+      // landed, this one carries the truth and geo-chat converges on it.
       const indexed = claimResponseIndexedEvent(event.query.queryKey, event.query.state.data);
       if (indexed) {
-        // Still sent once the chain confirms, and it is not redundant: this is the reconciliation
-        // half. If the in-flight notification below reported a position the write never landed,
-        // this one carries the truth and geo-chat converges on it.
-        startNotification(`${queryHash}:${indexed.runId}`, indexed);
+        report({ laneKey, notificationKey: `${laneKey}:${indexed.runId}`, response: indexed });
         return;
       }
 
-      // GEO-2784. Tell geo-chat the moment the write starts rather than when it finishes.
-      // `web.write.entity_response` is p50 9.9s / p95 48.6s, and geo-chat used to refuse an
-      // unindexed position outright (409 `claim_response_not_indexed`), so nobody could be offered
-      // a debate against a position for ~10s after the click. geo-chat is now the authority on
-      // readiness and takes the report immediately.
-      //
-      // Keyed separately from the indexed notification so both fire: this one makes the opposite
-      // side's Request debate appear at once, that one reconciles it. Keyed on the run, so picking
-      // a side this session already reported is reported again rather than left for indexing.
+      // GEO-2784: tell geo-chat the moment the write starts rather than when it indexes, so the
+      // opposite side's Request debate appears at once. Keyed apart from the indexed report so both
+      // are sent.
       const pending = pendingClaimResponse(event.query.queryKey, event.query.state.data);
       if (!pending) return;
-      startNotification(`${queryHash}:pending:${pending.runId}`, pending);
+      report({ laneKey, notificationKey: `${laneKey}:pending:${pending.runId}`, response: pending });
     });
 
     for (const [notificationKey, interrupted] of interruptedNotifications.current) {
       interruptedNotifications.current.delete(notificationKey);
       if (interrupted.accountKey === accountKey) {
-        startNotification(notificationKey, interrupted.response);
+        report(interrupted);
       } else {
         forgetNotification(notificationKey);
       }
@@ -216,12 +265,21 @@ export function useClaimResponseIndexedNotifier(
 
     return () => {
       unsubscribe();
-      for (const [controller, interrupted] of notificationControllers) {
-        interruptedNotifications.current.set(interrupted.notificationKey, interrupted);
-        forgetNotification(interrupted.notificationKey);
-        controller.abort();
+      // Each lane's newest unsent report is replayed if this account is re-enabled; a waiting
+      // report supersedes the one in flight.
+      const newest = new Map<string, ClaimReport>();
+      for (const inFlightReport of inFlight.values()) newest.set(inFlightReport.laneKey, inFlightReport);
+      for (const [laneKey, lane] of lanes) {
+        if (lane.retryTimer) clearTimeout(lane.retryTimer);
+        if (lane.waiting) newest.set(laneKey, lane.waiting);
       }
-      notificationControllers.clear();
+      for (const interrupted of newest.values()) {
+        interruptedNotifications.current.set(interrupted.notificationKey, { ...interrupted, accountKey });
+        forgetNotification(interrupted.notificationKey);
+      }
+      for (const controller of inFlight.keys()) controller.abort();
+      inFlight.clear();
+      lanes.clear();
     };
   }, [accountKey, enabled, getPrivyIdentityToken, queryClient]);
 }
