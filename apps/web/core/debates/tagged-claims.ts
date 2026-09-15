@@ -526,33 +526,47 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
   }, [cache, searchRefetch]);
 
   /**
-   * Still settling if either hop is: the ids, or the rows those ids are drawn from.
+   * Whether the row set is still incomplete — either hop of it: the ids, or the rows those ids are
+   * drawn from, on any page rather than only the first.
    *
-   * A failure is settled — there is an error state to draw, and holding rows behind it would say
+   * Any page, because a filter change re-keys every page at once: page one can come back with no
+   * matching rows while page two is still out, and reading that as complete committed an empty
+   * prefix and said "no matches" about a search that had them. Appending while scrolling is the
+   * same state and costs nothing here — the rows already on screen are what is held, and the
+   * loading flag below asks whether anything is held rather than whether anything is in flight.
+   *
+   * A failure is complete: there is an error state to draw, and holding rows behind it would say
    * the list is still coming.
    */
   const searchRowsSettling =
     searching &&
     search.error === null &&
     searchPages.error === null &&
-    (!search.settled || searchPages.firstPagePending);
-
-  /**
-   * The rows a viewer is reading stay until the rows that replace them arrive.
-   *
-   * Editing a search re-asks both hops, and each one blanking the list was a separate flash: the
-   * first was fixed by the search query's own placeholder, the second needed this, because a new id
-   * set is a new key for the row request with nothing behind it. Reset on the tag, which is the
-   * coarsest thing this hold can belong to — holding Featured's rows under All claims would be
-   * holding the wrong list, while holding a query's rows across the next keystroke is the point.
-   */
-  const searchClaims = useLastSettled(searchClaimsNow, searchRowsSettling, tagId);
+    (!search.settled || searchPages.firstPagePending || searchPages.appendedPending);
 
   const browsedClaims = React.useMemo(
     () => query.data?.pages.flatMap(page => page.claims) ?? NO_TAGGED_CLAIMS,
     [query.data?.pages]
   );
-  const claims = browsing ? browsedClaims : searchClaims;
+
+  /**
+   * What is on screen stays on screen until what replaces it arrives.
+   *
+   * Both lists go through one hold, which is the fix for the case a search-only hold could not
+   * reach: the *first* search. Browsing seeds nothing into a hold it never passes through, so the
+   * first query found nothing held and drew a skeleton over the rows the viewer was reading — the
+   * same flash as an edited search, at the one moment it is most obviously a narrowing of what is
+   * already there.
+   *
+   * Browsing is never settling here: its own query keeps its previous page through a filter change
+   * (`placeholderData`), so by the time a value reaches this hold it is one worth holding.
+   *
+   * Reset on the tag, the coarsest thing this hold can belong to — Featured's rows held under All
+   * claims would be the wrong list, where a query's rows held across the next keystroke is the
+   * point.
+   */
+  const claimsNow = browsing ? browsedClaims : searchClaimsNow;
+  const claims = useLastSettled(claimsNow, searchRowsSettling, tagId);
 
   /**
    * Rows the server has returned across every page held, decodable or not — see `fetched`.
@@ -594,7 +608,7 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // with nothing to show", because that is the question a skeleton answers: a search being
     // re-asked with the previous rows still held is not a list appearing, and drawing a skeleton
     // over readable rows is the flash all of this exists to avoid.
-    isLoading: enabled && (searching ? searchRowsSettling && searchClaims.length === 0 : query.isLoading),
+    isLoading: enabled && (searching ? searchRowsSettling && claims.length === 0 : query.isLoading),
     error: enabled ? (searching ? (search.error ?? searchPages.error) : query.error) : null,
     // Paging follows whichever source is answering. A search's next page is another `/search`
     // offset, not a graph cursor — the cursor belongs to a query that is not running.

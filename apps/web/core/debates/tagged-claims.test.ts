@@ -604,6 +604,63 @@ describe('the filter it builds', () => {
   });
 
   /**
+   * The first search is a narrowing of a list that is already on screen, which makes it the most
+   * obvious place not to blank it — and the one a search-only hold could not reach, because
+   * browsing passes nothing through that hold to be held.
+   */
+  it('keeps the browsed rows on screen while the first search runs', async () => {
+    respondWithPages([[node('a1', 'One'), node('a2', 'Two')]]);
+    const { result, rerender } = renderEditableClaims(NO_TAGGED_CLAIM_FILTERS);
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+
+    // The first query's ids are still out.
+    searchMock.mockImplementation(() => Effect.never);
+    rerender({ filters: { ...NO_TAGGED_CLAIM_FILTERS, search: 'power' } });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.claims).toHaveLength(2);
+  });
+
+  /**
+   * A filter change re-keys every page of an already-paged search at once, and the pages do not
+   * come back together. Reading the first one as the whole answer committed an empty prefix and
+   * reported "no matches" about a search that had them on the page still in flight.
+   */
+  it('does not report an empty result while a later page is still out', async () => {
+    respondWithSearch([['a1'], ['a2']], 2);
+    respondWithPages([
+      [node('a1', 'One'), node('a2', 'Two')],
+      [node('a1', 'One'), node('a2', 'Two')],
+    ]);
+    const { result, rerender } = renderEditableClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+    result.current.fetchNextPage();
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+
+    // A topic is picked. Every page is re-asked; the first answers with nothing that carries the
+    // topic, and the second has not answered at all.
+    let calls = 0;
+    graphqlMock.mockImplementation(({ decoder }) => {
+      calls += 1;
+      if (calls > 1) return Effect.never;
+      return Effect.succeed(
+        decoder({ entitiesConnection: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } })
+      );
+    });
+    rerender({ filters: { ...NO_TAGGED_CLAIM_FILTERS, search: 'power', topicIds: [TOPIC] } });
+
+    await waitFor(() => expect(calls).toBeGreaterThan(1));
+
+    // Watched over the window rather than sampled once: the empty prefix is committed the moment
+    // the first page resolves, which is a tick that a single assertion can land either side of.
+    for (let tick = 0; tick < 20; tick += 1) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      // Still the rows from before the pick, never an empty list the second page will refute.
+      expect(result.current.claims).toHaveLength(2);
+    }
+  });
+
+  /**
    * A page can dedupe to nothing — every row a repeat of one already seen, which the endpoint's
    * per-space paging makes possible. Left in the list of pages it becomes a row request with no
    * ids, which never resolves, and the rows are read in order until one is missing: every page
