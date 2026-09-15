@@ -83,6 +83,15 @@ const EMPTY_PARTICIPANTS: DebateParticipantSummary[] = [];
 const TRANSIENT_RETRIES = 3;
 
 /**
+ * And how many times one refused for an account that does not exist *yet*.
+ *
+ * Longer because the thing it is waiting for is longer: a fresh sign-up was refused for a minute or
+ * two before geo-chat had registered it. With the backoff below that is six requests spread across
+ * about a minute, after which the viewer is told what is happening and can ask again themselves.
+ */
+const WARMING_UP_RETRIES = 6;
+
+/**
  * Every query in this file is keyed on the viewer's account, and they all fail together for an
  * account geo-chat has not finished registering.
  *
@@ -99,17 +108,28 @@ const TRANSIENT_RETRIES = 3;
  * 404 that means matchmaking is not deployed, the 400 that means the request was malformed — and
  * asking again gets the same answer. Those still surface at once.
  */
-const viewerReadRetryOptions = {
+const viewerReadRetryOptions = (accountKey: string | null) => ({
   retry: (failureCount: number, error: Error) => {
+    // An account geo-chat has not registered yet is the long one. It refuses the session exchange
+    // with a 401 and keeps refusing for a minute or two after sign-up, then simply starts working —
+    // so this waits it out rather than handing the viewer a button as the only way through. The
+    // backoff below reaches a minute in six requests.
+    // Only for a viewer we have an identity for. Without one a refusal is the plain refusal it
+    // looks like — the hub asks for its anonymous lists without a token, and geo-chat is entitled to
+    // say no — and `isSignInRequired` turns that into the sign-in prompt at once. Waiting a minute
+    // first would be waiting for something that is not coming.
+    if (accountKey && error instanceof GeoChatRequestError && (error.status === 401 || error.status === 403)) {
+      return failureCount < WARMING_UP_RETRIES;
+    }
     if (failureCount >= TRANSIENT_RETRIES) return false;
     if (error instanceof GeoChatRequestError) return error.status >= 500;
     // Not a reply at all — a dropped connection, a parse failure — which is the other kind of maybe.
     return true;
   },
-  // Half a second, then one, then two: short enough to read as loading rather than as a wait, and
-  // spread enough that the three do not arrive together.
-  retryDelay: (failureCount: number) => Math.min(500 * 2 ** failureCount, 5_000),
-} as const;
+  // Half a second, then one, two, four: short enough at the start to read as loading rather than as
+  // a wait, and long enough by the end to sit out a registration without asking sixty times.
+  retryDelay: (failureCount: number) => Math.min(500 * 2 ** failureCount, 20_000),
+});
 
 export function useDebatePeople(enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
@@ -117,7 +137,7 @@ export function useDebatePeople(enabled: boolean) {
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
-    ...viewerReadRetryOptions,
+    ...viewerReadRetryOptions(accountKey),
     // `accountKey` is null signed out, which keys the anonymous list separately from anyone's —
     // so signing in cannot serve the signed-out answer, and signing out cannot leak the other way.
     queryKey: debateQueryKeys.people(accountKey),
@@ -149,7 +169,7 @@ export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boo
 
   const infinite = useInfiniteQuery({
     ...debateQueryNetworkOptions,
-    ...viewerReadRetryOptions,
+    ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.matchmakingClaims(accountKey, query),
     queryFn: ({ pageParam, signal }) =>
       listMatchmakingClaims(
@@ -209,7 +229,7 @@ export function useMatchmakingMatches(enabled: boolean) {
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
-    ...viewerReadRetryOptions,
+    ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.matches(accountKey),
     queryFn: ({ signal }) => listMatchmakingMatches(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
@@ -251,7 +271,7 @@ export function useDebateRequests(enabled: boolean) {
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
-    ...viewerReadRetryOptions,
+    ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.requests(accountKey),
     queryFn: ({ signal }) => listDebateRequests(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
@@ -293,7 +313,7 @@ export function useDebateBlocks(enabled: boolean) {
 
   return useQuery({
     ...debateQueryNetworkOptions,
-    ...viewerReadRetryOptions,
+    ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.blocks(accountKey),
     queryFn: ({ signal }) => listDebateBlocks(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,

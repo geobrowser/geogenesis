@@ -31,6 +31,26 @@ export function isSignInRequired(error: unknown) {
 }
 
 /**
+ * geo-chat refusing a viewer it has not finished registering.
+ *
+ * The same 401 the refusal above is, and a different thing entirely: this viewer *is* signed in —
+ * Privy says so, and the session exchange is being made with their token. geo-chat simply does not
+ * have them yet, which is true of every account for a minute or two after it is created.
+ *
+ * Told apart by who is asking rather than by the status, because the status cannot tell them apart:
+ * a caller offering a sign-in action is asking on behalf of somebody who might not be signed in, and
+ * one that is not has already established that they are. So this is the same predicate read from the
+ * other side, and `HubQueryState` picks whichever of the two fits its caller.
+ *
+ * Worth a state of its own because both of the alternatives lie. "Sign in to see this" is wrong to
+ * somebody who just did, and "Something went wrong" is wrong about something that is going right and
+ * is not finished.
+ */
+export function isAccountWarmingUp(error: unknown) {
+  return error instanceof GeoChatRequestError && (error.status === 401 || error.status === 403);
+}
+
+/**
  * Horizontally neutral: every tab already insets its content by 16px, so self-padding here would
  * double it and make the empty state sit further in than the list it replaces.
  */
@@ -105,13 +125,34 @@ export function HubQueryState({
   children,
 }: HubQueryStateProps) {
   const needsSignIn = Boolean(signInAction) && isSignInRequired(error);
-  const state = needsSignIn ? 'sign-in' : error ? 'error' : isLoading ? 'loading' : isEmpty ? 'empty' : 'content';
+  // The same refusal, read for a caller that has already established the viewer is signed in — so
+  // it is geo-chat not knowing them yet rather than them needing to sign in. See the predicate.
+  const warmingUp = !signInAction && isAccountWarmingUp(error);
+  const state = needsSignIn
+    ? 'sign-in'
+    : warmingUp
+      ? 'warming-up'
+      : error
+        ? 'error'
+        : isLoading
+          ? 'loading'
+          : isEmpty
+            ? 'empty'
+            : 'content';
 
   return (
     <HubSwap activeKey={state}>
       {state === 'sign-in' ? (
         <HubMessage action={<HubPillButton onClick={signInAction!.onClick}>{signInAction!.label}</HubPillButton>}>
           {signInAction!.message}
+        </HubMessage>
+      ) : state === 'warming-up' ? (
+        // Deliberately not "Something went wrong", which is wrong about something going right, and
+        // not the sign-in prompt, which is wrong at somebody who just did. The reads behind this
+        // keep asking on their own — see `viewerReadRetryOptions` — so the button is a way to hurry
+        // it rather than the only way out.
+        <HubMessage action={onRetry ? <HubPillButton onClick={onRetry}>Try again</HubPillButton> : null}>
+          Setting up your account. This takes a moment after you sign up.
         </HubMessage>
       ) : state === 'error' ? (
         <HubMessage

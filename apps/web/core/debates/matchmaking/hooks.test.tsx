@@ -7,12 +7,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type Debate, GeoChatRequestError } from '../api';
 import { clearEnteringDebate, useEnteringDebateId } from '../debate-entry-intent';
-import { useAcceptDebateRequest, useMatchmakingMatches } from './hooks';
+import { useAcceptDebateRequest, useDebatePeople, useMatchmakingMatches } from './hooks';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   acceptDebateRequest: vi.fn(),
   listMatchmakingMatches: vi.fn(),
+  listDebatePeople: vi.fn(),
+  accountKey: 'user-a' as string | null,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -25,6 +27,7 @@ vi.mock('../api', async importOriginal => {
     ...actual,
     acceptDebateRequest: mocks.acceptDebateRequest,
     listMatchmakingMatches: mocks.listMatchmakingMatches,
+    listDebatePeople: mocks.listDebatePeople,
   };
 });
 
@@ -32,7 +35,11 @@ vi.mock('../hooks', async importOriginal => {
   const actual = await importOriginal<typeof import('../hooks')>();
   return {
     ...actual,
-    useGeoChatAuth: () => ({ accountKey: 'user-a', authenticated: true, getPrivyIdentityToken: vi.fn() }),
+    useGeoChatAuth: () => ({
+      accountKey: mocks.accountKey,
+      authenticated: mocks.accountKey !== null,
+      getPrivyIdentityToken: vi.fn(),
+    }),
   };
 });
 
@@ -54,6 +61,8 @@ beforeEach(() => {
   mocks.push.mockReset();
   mocks.acceptDebateRequest.mockReset();
   mocks.listMatchmakingMatches.mockReset();
+  mocks.listDebatePeople.mockReset();
+  mocks.accountKey = 'user-a';
   clearEnteringDebate();
 });
 
@@ -117,14 +126,45 @@ describe('viewer-relative reads and a backend catching up', () => {
     expect(mocks.listMatchmakingMatches).toHaveBeenCalledTimes(2);
   });
 
-  // A refusal is geo-chat telling us something. Asking three times gets the same answer, and the
-  // viewer waits out two pointless round trips before being told what it already knew.
+  // A malformed request is geo-chat telling us something. Asking three times gets the same answer,
+  // and the viewer waits out two pointless round trips before being told what it already knew.
   it('takes a refusal at its word', async () => {
-    mocks.listMatchmakingMatches.mockRejectedValue(new GeoChatRequestError('no', 'forbidden', 403));
+    mocks.listMatchmakingMatches.mockRejectedValue(new GeoChatRequestError('no', 'bad_request', 400));
 
     const { result } = renderHook(() => useMatchmakingMatches(true), { wrapper: retryingWrapper });
 
     await waitFor(() => expect(result.current.error).toBeTruthy());
     expect(mocks.listMatchmakingMatches).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * A 401 is two different things, told apart by whether we have an identity at all.
+   *
+   * With one, it is geo-chat not having registered this viewer yet — true of every account for a
+   * minute or two after sign-up, and the reported bug. Without one, it is the plain refusal it looks
+   * like: the hub asks for its anonymous lists without a token, and waiting a minute for that would
+   * be waiting for something that is not coming.
+   */
+  it('waits out a refusal aimed at a viewer it has an identity for', async () => {
+    mocks.listMatchmakingMatches
+      .mockRejectedValueOnce(new GeoChatRequestError('not yet', null, 401))
+      .mockResolvedValue({ matches: [] });
+
+    const { result } = renderHook(() => useMatchmakingMatches(true), { wrapper: retryingWrapper });
+
+    await waitFor(() => expect(result.current.data).toEqual({ matches: [] }));
+    expect(mocks.listMatchmakingMatches).toHaveBeenCalledTimes(2);
+  });
+
+  // Through People, which is one of the two lists the hub asks for without a token — the matches
+  // query is simply not made without an account, so it cannot show this either way.
+  it('does not wait one out for a viewer it has no identity for', async () => {
+    mocks.accountKey = null;
+    mocks.listDebatePeople.mockRejectedValue(new GeoChatRequestError('no', null, 401));
+
+    const { result } = renderHook(() => useDebatePeople(true), { wrapper: retryingWrapper });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    expect(mocks.listDebatePeople).toHaveBeenCalledTimes(1);
   });
 });

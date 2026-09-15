@@ -1792,7 +1792,11 @@ async function createGeoChatSession(privyToken: string): Promise<GeoChatSession>
     headers: { Authorization: `Bearer ${privyToken}` },
   });
 
-  if (!response.ok) throw new Error(await errorMessage(response));
+  // `requestError`, not a bare `Error`: the status is the only thing that tells a caller what kind
+  // of failure this is, and throwing it away made every one of them "Something went wrong". A 401
+  // here is geo-chat saying it does not know this account *yet* — which it says to a viewer who has
+  // only just signed up, for as long as it takes to register them.
+  if (!response.ok) throw await requestError(response);
   return response.json() as Promise<GeoChatSession>;
 }
 
@@ -1803,7 +1807,7 @@ async function refreshGeoChatSession(refreshToken: string): Promise<GeoChatSessi
     body: JSON.stringify({ refresh_token: refreshToken }),
   });
 
-  if (!response.ok) throw new Error(await errorMessage(response));
+  if (!response.ok) throw await requestError(response);
   return response.json() as Promise<GeoChatSession>;
 }
 
@@ -1877,14 +1881,5 @@ function decodeGeoChatAccessToken(token: string | undefined): { user_id?: string
     return JSON.parse(window.atob(padded)) as { user_id?: string };
   } catch {
     return null;
-  }
-}
-
-async function errorMessage(response: Response) {
-  try {
-    const body = (await response.json()) as { error?: { message?: string } };
-    return body.error?.message || `${response.status} ${response.statusText}`;
-  } catch {
-    return `${response.status} ${response.statusText}`;
   }
 }
