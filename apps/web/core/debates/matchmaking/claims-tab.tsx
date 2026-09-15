@@ -9,7 +9,6 @@ import { useAtom } from 'jotai';
 import { useSearchParams } from 'next/navigation';
 
 import { claimResponseKind } from '~/core/claims/response-kind';
-import { FEATURED_TAG_ID } from '~/core/constants';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -78,14 +77,13 @@ import {
 /**
  * Which list a surface is showing.
  *
- * `all` and `featured` are the tab's own rather than geo-chat's: the index has no notion of those
- * tags, so each swaps the list's *source* for the knowledge graph rather than changing a query
- * param (GEO-2771).
+ * `all` is the tab's own rather than geo-chat's: the index has no notion of that tag, so it swaps
+ * the list's *source* for the knowledge graph rather than changing a query param (GEO-2771).
  *
  * `mine` and `debate_now` stay geo-chat's. Both are viewer-relative and scored on who is available
  * and who this viewer is already pair-blocked with, which is not in the graph at any price.
  */
-type ClaimsTabFilter = 'all' | 'featured' | 'mine' | 'debate_now';
+type ClaimsTabFilter = 'all' | 'mine' | 'debate_now';
 
 /**
  * The one filter the graph answers, and the tag it asks for.
@@ -95,13 +93,11 @@ type ClaimsTabFilter = 'all' | 'featured' | 'mine' | 'debate_now';
  */
 const TAG_FOR_FILTER: Partial<Record<ClaimsTabFilter, string>> = {
   all: DEBATE_TAG_ID,
-  featured: FEATURED_TAG_ID,
 };
 
 /** What an empty list means, which differs by where the list came from. */
 const NOTHING_HERE: Record<ClaimsTabFilter, string> = {
   all: 'No claims have been tagged for debate yet.',
-  featured: 'No claims have been featured yet.',
   mine: 'You haven’t taken a position on any claims yet.',
   debate_now: 'Nobody is ready to debate you on a claim right now.',
 };
@@ -141,7 +137,7 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
  * the atoms come from here rather than being read directly. Featured shares Explore's atoms: both
  * describe the corpus, so a space picked on one still applies on the other.
  */
-export type ClaimsTabVariant = 'explore' | 'featured' | 'lobby' | 'positions';
+export type ClaimsTabVariant = 'explore' | 'lobby' | 'positions';
 
 /**
  * Which surface is drawing it, which is a different question from which list it draws (GEO-2726).
@@ -163,16 +159,13 @@ export type ClaimsLayout = 'panel' | 'workspace';
  * mount, because a link is the one way onto this surface with no session behind it — a shared or
  * reopened `/matchmaking?…` meets those atoms at their defaults. Seeding only; nothing goes back.
  */
-const EXPLORE_ATOMS = {
-  spaceIds: debatesHubExploreSpaceIdsAtom,
-  topicIds: debatesHubExploreTopicIdsAtom,
-  search: debatesHubExploreSearchAtom,
-  seedSpent: debatesHubExploreSpaceSeedSpentAtom,
-} as const;
-
 const VARIANT_ATOMS = {
-  explore: EXPLORE_ATOMS,
-  featured: EXPLORE_ATOMS,
+  explore: {
+    spaceIds: debatesHubExploreSpaceIdsAtom,
+    topicIds: debatesHubExploreTopicIdsAtom,
+    search: debatesHubExploreSearchAtom,
+    seedSpent: debatesHubExploreSpaceSeedSpentAtom,
+  },
   positions: {
     spaceIds: debatesHubPositionsSpaceIdsAtom,
     topicIds: debatesHubPositionsTopicIdsAtom,
@@ -256,8 +249,7 @@ export function ClaimsTab({
   // tagged corpus, Positions is the viewer's own, Lobby is `debate_now` — and each of the two
   // viewer-relative ones is a tab that `SIGNED_OUT_TABS` keeps off the signed-out hub, which is
   // what used to be a coercion here.
-  const filter: ClaimsTabFilter =
-    variant === 'lobby' ? 'debate_now' : variant === 'positions' ? 'mine' : variant === 'featured' ? 'featured' : 'all';
+  const filter: ClaimsTabFilter = variant === 'lobby' ? 'debate_now' : variant === 'positions' ? 'mine' : 'all';
   // Held outside this component so they survive it. The hub closes on any outside pointer-down,
   // so dismissing a dropdown by clicking away unmounts this tab — and with `useState` that took
   // the viewer's selection with it (GEO-2850).
@@ -1038,42 +1030,40 @@ export function ClaimsTab({
             conditional so the filters could not be offset by a known height. */}
         {outbound ? <OutboundRequestCard request={outbound} /> : null}
 
-        <HubSearchRow leading={scopePicker}>
-          <Input
-            withSearchIcon
-            value={search}
-            onChange={event => setSearch(event.currentTarget.value)}
-            placeholder="Search claims"
-            aria-label="Search claims"
-          />
-        </HubSearchRow>
+        <Input
+          withSearchIcon
+          value={search}
+          onChange={event => setSearch(event.currentTarget.value)}
+          placeholder="Search claims"
+          aria-label="Search claims"
+        />
 
-        <div className={workspace ? '@[72rem]/hub:hidden' : undefined}>
-          <SpaceTopicFilters
-            spaceIds={spaceIds}
-            onSpaceToggle={onSpaceToggle}
-            onSpacesClear={onSpacesClear}
-            topicIds={topicIds}
-            onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-            onTopicsClear={() => setTopicIds([])}
-            facetSpaces={facetSpaces}
-            facetTopics={facetTopics}
-            countsPending={countsPending}
-            // Lobby passes its own ("Matches only"); Explore draws the one that hides answered claims.
-            // Positions draws neither: it *is* the list of answered claims, so hiding them there
-            // could only empty it — a broken tab rather than a filter — and the state cannot be set
-            // from the one place it must not apply. Nor is it drawn signed out, where the viewer has
-            // no positions for it to hide and it would be a switch with nothing behind it.
-            //
-            trailing={
-              isLobby ? (
-                trailing
-              ) : filter === 'mine' || !authenticated ? null : (
-                <HideMyPositionsSwitch checked={hideMyPositions} onChange={setHideMyPositions} />
-              )
-            }
-          />
-        </div>
+        <SpaceTopicFilters
+          leading={scopePicker}
+          menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
+          spaceIds={spaceIds}
+          onSpaceToggle={onSpaceToggle}
+          onSpacesClear={onSpacesClear}
+          topicIds={topicIds}
+          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+          onTopicsClear={() => setTopicIds([])}
+          facetSpaces={facetSpaces}
+          facetTopics={facetTopics}
+          countsPending={countsPending}
+          // Lobby passes its own ("Matches only"); Explore draws the one that hides answered claims.
+          // Positions draws neither: it *is* the list of answered claims, so hiding them there
+          // could only empty it — a broken tab rather than a filter — and the state cannot be set
+          // from the one place it must not apply. Nor is it drawn signed out, where the viewer has
+          // no positions for it to hide and it would be a switch with nothing behind it.
+          //
+          trailing={
+            isLobby ? (
+              trailing
+            ) : filter === 'mine' || !authenticated ? null : (
+              <HideMyPositionsSwitch checked={hideMyPositions} onChange={setHideMyPositions} />
+            )
+          }
+        />
       </HubStickyControls>
 
       <div className="flex flex-col gap-3 px-4 py-3">
@@ -1269,18 +1259,6 @@ export function HubListColumns({
   );
 }
 
-export function HubSearchRow({ leading, children }: { leading?: React.ReactNode; children: React.ReactNode }) {
-  if (!leading) return <>{children}</>;
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className="shrink-0">{leading}</div>
-      {/* `min-w-0` so a long placeholder cannot push the row wider than the column. */}
-      <div className="min-w-0 flex-1">{children}</div>
-    </div>
-  );
-}
-
 export function HubStickyControls({
   children,
   workspaceStickyOffset = false,
@@ -1356,6 +1334,7 @@ type SpaceTopicFiltersProps = {
    * at the edge than as a fourth pill in the run.
    */
   trailing?: React.ReactNode;
+  menusClassName?: string;
 };
 
 /**
@@ -1376,7 +1355,9 @@ export function SpaceTopicFilters({
   countsPending,
   leading,
   trailing,
+  menusClassName,
 }: SpaceTopicFiltersProps) {
+  const menu = (node: React.ReactNode) => (menusClassName ? <div className={menusClassName}>{node}</div> : node);
   const facetSpaceIds = React.useMemo(() => facetSpaces.map(space => space.id), [facetSpaces]);
 
   const { labelsById, isLoading: labelsLoading } = useSpaceLabels(facetSpaceIds);
@@ -1420,32 +1401,36 @@ export function SpaceTopicFilters({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {leading}
-      <HubMultiFilterMenu
-        label={spaceMenuLabel}
-        labelPending={spaceIds.length === 1 && !onlySpace && labelsLoading}
-        options={spaceOptions}
-        values={spaceIds}
-        onToggle={onSpaceToggle}
-        onClear={onSpacesClear}
-        clearLabel="Any space"
-        countsPending={countsPending}
-        showImages
-      />
-      {facetTopics && topicIds && onTopicToggle && onTopicsClear ? (
-        // Beside the space menu, never pushed to the far end. The rematch picker used to do that
-        // with the width it has spare, and once "Matches only" arrived at that end the two sat
-        // together there — a menu and a switch, reading as one control. The menus belong with each
-        // other; the switch is what the end of the row is for.
+      {menu(
         <HubMultiFilterMenu
-          label={topicMenuLabel}
-          options={topicOptions}
-          values={topicIds}
-          onToggle={onTopicToggle}
-          onClear={onTopicsClear}
-          clearLabel="Any topic"
+          label={spaceMenuLabel}
+          labelPending={spaceIds.length === 1 && !onlySpace && labelsLoading}
+          options={spaceOptions}
+          values={spaceIds}
+          onToggle={onSpaceToggle}
+          onClear={onSpacesClear}
+          clearLabel="Any space"
           countsPending={countsPending}
+          showImages
         />
-      ) : null}
+      )}
+      {facetTopics && topicIds && onTopicToggle && onTopicsClear
+        ? // Beside the space menu, never pushed to the far end. The rematch picker used to do that
+          // with the width it has spare, and once "Matches only" arrived at that end the two sat
+          // together there — a menu and a switch, reading as one control. The menus belong with each
+          // other; the switch is what the end of the row is for.
+          menu(
+            <HubMultiFilterMenu
+              label={topicMenuLabel}
+              options={topicOptions}
+              values={topicIds}
+              onToggle={onTopicToggle}
+              onClear={onTopicsClear}
+              clearLabel="Any topic"
+              countsPending={countsPending}
+            />
+          )
+        : null}
       {/* A growable gap rather than `ml-auto`, which is what lets this be right about both cases
           without anyone having to measure the label.
 

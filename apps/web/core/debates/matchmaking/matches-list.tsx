@@ -10,7 +10,7 @@ import type { MatchmakingMatch } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateActivity } from '../hooks';
 import { claimRowKey } from './claim-row-key';
-import { type ClaimsLayout, HubListColumns, HubSearchRow, HubStickyControls, SpaceTopicFilters } from './claims-tab';
+import { type ClaimsLayout, HubListColumns, HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubFacetRail } from './hub-facet-rail';
@@ -60,7 +60,7 @@ export function MatchesList({
   onTabChange?: (tab: DebatesHubTab) => void;
   /** Lobby's "Matches only" switch, at the end of the filter row. */
   trailing?: React.ReactNode;
-  /** Rendered left of the search box, as on `ClaimsTab` — Lobby's two lists share the control. */
+  /** Leading the filter row, as on `ClaimsTab` — Lobby's two lists share the control. */
   scopePicker?: React.ReactNode;
   /** As on `ClaimsTab`: the workspace draws an open facet rail beside this list. */
   layout?: ClaimsLayout;
@@ -255,29 +255,27 @@ export function MatchesList({
           couldn't be offset by a known height. */}
       <HubStickyControls workspaceStickyOffset={workspace}>
         {outbound ? <OutboundRequestCard request={outbound} /> : null}
-        <HubSearchRow leading={scopePicker}>
-          <Input
-            withSearchIcon
-            value={search}
-            onChange={event => setSearch(event.currentTarget.value)}
-            placeholder="Search claims"
-            aria-label="Search claims"
-          />
-        </HubSearchRow>
+        <Input
+          withSearchIcon
+          value={search}
+          onChange={event => setSearch(event.currentTarget.value)}
+          placeholder="Search claims"
+          aria-label="Search claims"
+        />
 
-        <div className={workspace ? '@[72rem]/hub:hidden' : undefined}>
-          <SpaceTopicFilters
-            spaceIds={spaceIds}
-            onSpaceToggle={onSpaceToggle}
-            onSpacesClear={onSpacesClear}
-            topicIds={topicIds}
-            onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-            onTopicsClear={() => setTopicIds([])}
-            facetSpaces={facetSpaces}
-            facetTopics={facetTopics}
-            trailing={trailing}
-          />
-        </div>
+        <SpaceTopicFilters
+          leading={scopePicker}
+          menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
+          spaceIds={spaceIds}
+          onSpaceToggle={onSpaceToggle}
+          onSpacesClear={onSpacesClear}
+          topicIds={topicIds}
+          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+          onTopicsClear={() => setTopicIds([])}
+          facetSpaces={facetSpaces}
+          facetTopics={facetTopics}
+          trailing={trailing}
+        />
       </HubStickyControls>
 
       <div className="flex flex-col gap-3 px-4 py-3">

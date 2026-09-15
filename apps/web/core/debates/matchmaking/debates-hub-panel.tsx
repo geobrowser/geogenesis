@@ -37,6 +37,12 @@ import {
   debatesHubExploreSpaceIdsAtom,
   debatesHubExploreTopicIdsAtom,
   debatesHubFiltersOwnerAtom,
+  debatesHubLobbySearchAtom,
+  debatesHubLobbySpaceIdsAtom,
+  debatesHubLobbyTopicIdsAtom,
+  debatesHubPositionsSearchAtom,
+  debatesHubPositionsSpaceIdsAtom,
+  debatesHubPositionsTopicIdsAtom,
   resetDebatesHubFiltersAtom,
 } from '~/atoms';
 
@@ -407,23 +413,38 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
 
 /**
  * The way out to the full-screen hub at `/matchmaking`.
+ *
+ * Values match the workspace picker (`lobby` / `explore` / `positions`). Lobby is omitted from the
+ * URL as the workspace default.
  */
 function workspaceListFor(tab: DebatesHubTab): string | null {
-  if (tab === 'explore') return 'all';
-  if (tab === 'positions') return 'mine';
-  if (tab === 'lobby') return 'debate_now';
+  if (tab === 'explore' || tab === 'positions' || tab === 'lobby') return tab;
   return null;
 }
 
 function ExpandToWorkspaceLink() {
   const { activeTab, close } = useDebatesHub();
 
-  // Explore's, because that is the variant the workspace mounts. All three are atoms, so they
-  // survive the tab being unmounted — which is the only reason the search used to be left behind.
-  const search = useAtomValue(debatesHubExploreSearchAtom);
-  const spaceIds = useAtomValue(debatesHubExploreSpaceIdsAtom);
-  const topicIds = useAtomValue(debatesHubExploreTopicIdsAtom);
-  const query = toClaimsFilterSearch({ list: workspaceListFor(activeTab), search, spaceIds, topicIds }, 'featured');
+  const exploreSearch = useAtomValue(debatesHubExploreSearchAtom);
+  const exploreSpaceIds = useAtomValue(debatesHubExploreSpaceIdsAtom);
+  const exploreTopicIds = useAtomValue(debatesHubExploreTopicIdsAtom);
+  const lobbySearch = useAtomValue(debatesHubLobbySearchAtom);
+  const lobbySpaceIds = useAtomValue(debatesHubLobbySpaceIdsAtom);
+  const lobbyTopicIds = useAtomValue(debatesHubLobbyTopicIdsAtom);
+  const positionsSearch = useAtomValue(debatesHubPositionsSearchAtom);
+  const positionsSpaceIds = useAtomValue(debatesHubPositionsSpaceIdsAtom);
+  const positionsTopicIds = useAtomValue(debatesHubPositionsTopicIdsAtom);
+
+  const filters =
+    activeTab === 'lobby'
+      ? { search: lobbySearch, spaceIds: lobbySpaceIds, topicIds: lobbyTopicIds }
+      : activeTab === 'positions'
+        ? { search: positionsSearch, spaceIds: positionsSpaceIds, topicIds: positionsTopicIds }
+        : activeTab === 'explore'
+          ? { search: exploreSearch, spaceIds: exploreSpaceIds, topicIds: exploreTopicIds }
+          : { search: '', spaceIds: [] as string[], topicIds: [] as string[] };
+
+  const query = toClaimsFilterSearch({ list: workspaceListFor(activeTab), ...filters }, 'lobby');
 
   return (
     <div className="shrink-0 border-t border-grey-02 px-4 py-2.5">

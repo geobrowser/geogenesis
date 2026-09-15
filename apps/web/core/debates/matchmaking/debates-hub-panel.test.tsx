@@ -659,14 +659,20 @@ describe('the way out to the full-screen hub', () => {
   });
 
   it.each([
-    ['explore', 'all'],
-    ['positions', 'mine'],
-    ['lobby', 'debate_now'],
+    ['explore', 'explore'],
+    ['positions', 'positions'],
   ] as const)('opens the workspace on the list %s was showing', (tab, list) => {
     renderOpen(tab);
 
     const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
     expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe(list);
+  });
+
+  it('omits Lobby from the URL, which is the workspace default', () => {
+    renderOpen('lobby');
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBeNull();
   });
 
   it.each(['requests', 'people'] as const)('hands over no list from %s, which is not one', tab => {
@@ -676,7 +682,7 @@ describe('the way out to the full-screen hub', () => {
     expect(href).toBe('/matchmaking');
   });
 
-  it('hands over the wider list from Lobby, not what its toggle says', () => {
+  it('hands over Lobby from Lobby, not what its Matches-only toggle says', () => {
     const store = createStore();
     store.set(debatesHubAtom, { tab: 'lobby' });
     store.set(debatesHubMatchesOnlyAtom, true);
@@ -688,7 +694,8 @@ describe('the way out to the full-screen hub', () => {
     );
 
     const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
-    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe('debate_now');
+    // Default list is omitted; the toggle never becomes its own `list` value.
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBeNull();
   });
 
   /**
@@ -721,9 +728,8 @@ describe('the filters the expand link carries', () => {
   });
 
   /**
-   * Which list the workspace draws is not the link's to say. It mounts Explore, and the other two
-   * claim lists are tabs in the panel with no counterpart over there — so a `scope` in this URL
-   * could only name something the destination has no way to show.
+   * `scope` was the old param name. The workspace reads `list` now; a leftover `scope` must not
+   * become that choice.
    */
   it('carries no scope, which the workspace has no way to honour', () => {
     const store = createStore();
@@ -757,8 +763,25 @@ describe('the filters the expand link carries', () => {
     const params = new URLSearchParams(href.split('?')[1] ?? '');
     // Carried with the rest: the search is an atom now, so it outlives the tab being unmounted,
     // which was the one reason this link used to leave it behind.
+    expect(params.get('list')).toBe('explore');
     expect(params.get('q')).toBe('nuclear');
     expect(params.get('spaces')).toBe('space-a');
     expect(params.get('topics')).toBe('topic-a,topic-b');
+  });
+
+  it('carries Lobby’s narrowing, not Explore’s', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'lobby' });
+    store.set(debatesHubLobbySearchAtom, 'climate');
+    store.set(debatesHubExploreSearchAtom, 'nuclear');
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('q')).toBe('climate');
   });
 });

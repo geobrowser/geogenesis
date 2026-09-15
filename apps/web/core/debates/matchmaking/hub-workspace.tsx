@@ -8,29 +8,22 @@ import { Text } from '~/design-system/text';
 
 import { useGeoChatAuth } from '../hooks';
 import { fromClaimsFilterSearch } from './claims-filter-params';
-import { ClaimsTab } from './claims-tab';
+import { ClaimsTab, type ClaimsTabVariant } from './claims-tab';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubLiveRail } from './hub-live-rail';
-import { MatchesList } from './matches-list';
+import { LobbyTab } from './lobby-tab';
 import type { DebatesHubTab } from '~/atoms';
 
-/**
- * Which claims the centre column is showing.
- */
-type HubList = 'featured' | 'all' | 'mine' | 'debate_now' | 'matches';
-
-const LIST_OPTIONS: HubFilterOption<HubList>[] = [
-  { value: 'featured', label: 'Featured' },
-  { value: 'all', label: 'All claims' },
-  { value: 'mine', label: 'My positions' },
-  { value: 'debate_now', label: 'Debate now' },
-  { value: 'matches', label: 'Matches' },
+const LIST_OPTIONS: HubFilterOption<ClaimsTabVariant>[] = [
+  { value: 'lobby', label: 'Lobby' },
+  { value: 'explore', label: 'Explore' },
+  { value: 'positions', label: 'My positions' },
 ];
 
 /**
- * The two sources a signed-out viewer can be offered, and the reason the other three cannot.
+ * The one a signed-out viewer can be offered, and the reason the other two cannot.
  */
-const SIGNED_OUT_LISTS: HubList[] = ['featured', 'all'];
+const SIGNED_OUT_LISTS: ClaimsTabVariant[] = ['explore'];
 
 /**
  * Full-screen matchmaking hub (GEO-2726): claims centre, facet + live rails.
@@ -38,7 +31,7 @@ const SIGNED_OUT_LISTS: HubList[] = ['featured', 'all'];
  * Width is capped by the shell's 1200px `<main>`.
  */
 export function DebatesHubWorkspace() {
-  const [list, setList] = React.useState<HubList>('featured');
+  const [list, setList] = React.useState<ClaimsTabVariant>('lobby');
 
   const { authenticated } = useGeoChatAuth();
 
@@ -59,21 +52,18 @@ export function DebatesHubWorkspace() {
     [authenticated]
   );
 
-  const shown = options.some(option => option.value === list) ? list : 'featured';
+  const shown = options.some(option => option.value === list) ? list : 'explore';
 
   const showList = React.useCallback((tab: DebatesHubTab) => {
-    if (tab === 'explore') setList('all');
-    else if (tab === 'positions') setList('mine');
-    else if (tab === 'lobby') setList('debate_now');
+    if (tab === 'explore' || tab === 'positions' || tab === 'lobby') setList(tab);
   }, []);
 
   const picker = (
     <HubFilterMenu
-      label={options.find(option => option.value === shown)?.label ?? 'Featured'}
+      label={options.find(option => option.value === shown)?.label ?? 'Explore'}
       options={options}
       value={shown}
       onChange={setList}
-      size="field"
     />
   );
 
@@ -87,22 +77,10 @@ export function DebatesHubWorkspace() {
 
       <div className="flex gap-8 px-4">
         <div className="min-w-0 flex-1">
-          {shown === 'matches' ? (
-            <MatchesList onTabChange={showList} layout="workspace" scopePicker={picker} />
+          {shown === 'lobby' ? (
+            <LobbyTab onTabChange={showList} layout="workspace" scopePicker={picker} />
           ) : (
-            <ClaimsTab
-              variant={
-                shown === 'debate_now'
-                  ? 'lobby'
-                  : shown === 'mine'
-                    ? 'positions'
-                    : shown === 'featured'
-                      ? 'featured'
-                      : 'explore'
-              }
-              layout="workspace"
-              scopePicker={picker}
-            />
+            <ClaimsTab variant={shown} layout="workspace" scopePicker={picker} />
           )}
         </div>
 

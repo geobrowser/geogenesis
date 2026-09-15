@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { Button, SmallButton } from '~/design-system/button';
+import { SmallButton } from '~/design-system/button';
 import { CheckboxVisual } from '~/design-system/checkbox';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -39,7 +39,6 @@ type Props<T extends string> = {
    * something else entirely and would otherwise tell a screen reader it was loading a space name.
    */
   labelPendingAnnouncement?: string;
-  size?: 'pill' | 'field';
 };
 
 /**
@@ -58,7 +57,6 @@ export function HubFilterMenu<T extends string>({
   showImages,
   labelPending,
   labelPendingAnnouncement = 'Loading space name',
-  size = 'pill',
 }: Props<T>) {
   const [open, setOpen] = React.useState(false);
 
@@ -70,14 +68,14 @@ export function HubFilterMenu<T extends string>({
       className="max-w-[280px]"
       // Space names come from the knowledge graph and can be long enough to burst the pill.
       trigger={
-        <Button variant="secondary" small={size === 'pill'} icon={<ChevronDownSmall />} className="max-w-[160px]">
+        <SmallButton icon={<ChevronDownSmall />} className="max-w-[160px]">
           {labelPending ? (
             // Sized to the pill's line box so the trigger doesn't resize when the name lands.
             <Skeleton className="h-[1em] w-16" aria-label={labelPendingAnnouncement} />
           ) : (
             <span className="truncate">{label}</span>
           )}
-        </Button>
+        </SmallButton>
       }
     >
       <>

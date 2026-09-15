@@ -1188,14 +1188,15 @@ describe('All claims reads the Debate tag', () => {
     expect(container.innerHTML).not.toContain('/claims:grid-cols');
   });
 
-  it('asks the graph for the Featured tag, not the Debate one', async () => {
-    const FEATURED_TAG = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
-    mocks.taggedClaims[FEATURED_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
-    render(<ClaimsTab variant="featured" />);
+  it('hides the workspace’s menus at the rail’s width without hiding the picker', async () => {
+    render(<ClaimsTab layout="workspace" scopePicker={<button type="button">Lobby</button>} />);
+    await showAllClaims();
 
-    expect(await screen.findByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
-    expect(mocks.tagsAskedFor).toContain(FEATURED_TAG);
-    expect(mocks.tagsAskedFor).not.toContain(DEBATE_TAG);
+    const hidden = (node: HTMLElement | null) => node?.closest('[class*="@[72rem]/hub:hidden"]') ?? null;
+
+    expect(hidden(screen.getByRole('button', { name: /Any space/ }))).not.toBeNull();
+    expect(hidden(screen.getByRole('button', { name: 'Lobby' }))).toBeNull();
+    expect(hidden(screen.getByLabelText('Search claims'))).toBeNull();
   });
 
   it('asks the graph for the Debate tag rather than the index', async () => {

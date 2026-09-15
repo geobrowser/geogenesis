@@ -2,17 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import { fromClaimsFilterSearch, toClaimsFilterSearch } from './claims-filter-params';
 
-const LISTS = ['featured', 'all', 'mine', 'debate_now', 'matches'];
+const LISTS = ['lobby', 'explore', 'positions'];
 
 const NOTHING_NARROWED = { list: null, search: '', spaceIds: [], topicIds: [] };
 
 describe('toClaimsFilterSearch', () => {
   it('leaves out the source the workspace opens on anyway', () => {
-    expect(toClaimsFilterSearch({ ...NOTHING_NARROWED, list: 'featured' }, 'featured')).toBe('');
+    expect(toClaimsFilterSearch({ ...NOTHING_NARROWED, list: 'lobby' }, 'lobby')).toBe('');
   });
 
   it('carries a source the viewer actually moved to', () => {
-    expect(toClaimsFilterSearch({ ...NOTHING_NARROWED, list: 'matches' }, 'featured')).toBe('list=matches');
+    expect(toClaimsFilterSearch({ ...NOTHING_NARROWED, list: 'explore' }, 'lobby')).toBe('list=explore');
   });
 
   it('leaves an unfiltered list with no query at all', () => {
@@ -48,7 +48,7 @@ describe('fromClaimsFilterSearch', () => {
 
   it('round-trips what the link wrote', () => {
     const filters = {
-      list: 'matches',
+      list: 'explore',
       search: 'energy policy',
       spaceIds: ['space-a', 'space-b'],
       topicIds: ['topic-a', 'topic-b'],
@@ -63,7 +63,7 @@ describe('fromClaimsFilterSearch', () => {
 
   // Drop a list the surface does not offer (stale link, typo, or signed-out).
   it('drops a list the surface does not offer', () => {
-    expect(fromClaimsFilterSearch(new URLSearchParams('list=matches'), ['featured', 'all']).list).toBeNull();
+    expect(fromClaimsFilterSearch(new URLSearchParams('list=matches'), ['lobby', 'explore']).list).toBeNull();
   });
 
   it('ignores a scope left over from the param this replaced', () => {

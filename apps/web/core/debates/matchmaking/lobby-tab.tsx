@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 
 import { isAccountWarmingUpQuery } from '../api';
-import { ClaimsTab } from './claims-tab';
+import { type ClaimsLayout, ClaimsTab } from './claims-tab';
 import { useMatchmakingMatches } from './hooks';
 import { MatchesList } from './matches-list';
 import { MatchesOnlySwitch } from './matches-only-switch';
@@ -31,7 +31,15 @@ import { type DebatesHubTab, debatesHubLeftLobbyForExploreAtom, debatesHubMatche
  * place: the switch sits at the end of the filter row on both sides, which is what keeps it from
  * moving under the pointer as the list changes.
  */
-export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
+export function LobbyTab({
+  onTabChange,
+  layout,
+  scopePicker,
+}: {
+  onTabChange: (tab: DebatesHubTab) => void;
+  layout?: ClaimsLayout;
+  scopePicker?: React.ReactNode;
+}) {
   const [matchesOnly, setMatchesOnly] = useAtom(debatesHubMatchesOnlyAtom);
 
   // Asked here rather than left to `MatchesList`, because the answer decides which of the two lists
@@ -105,10 +113,12 @@ export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =>
   // their space menus differently, and describe an empty list in different words — the only thing
   // they share is the toggle and the selection it sits beside, which is exactly what is passed.
   return showNarrowed ? (
-    <MatchesList onTabChange={onTabChange} trailing={toggle} />
+    <MatchesList onTabChange={onTabChange} layout={layout} scopePicker={scopePicker} trailing={toggle} />
   ) : (
     <ClaimsTab
       variant="lobby"
+      layout={layout}
+      scopePicker={scopePicker}
       trailing={toggle}
       // The last rung of the same ladder. Having stepped back from matches to the wider list and
       // found that empty too, there is nothing on this tab for the viewer to do, and Explore is the
