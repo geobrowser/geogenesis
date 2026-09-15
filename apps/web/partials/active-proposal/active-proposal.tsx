@@ -1,7 +1,9 @@
 import * as React from 'react';
 
+import { Effect } from 'effect';
 import { redirect } from 'next/navigation';
 
+import { getEntityCommentCount } from '~/core/io/queries';
 import { fetchProposal } from '~/core/io/subgraph';
 import {
   getIsProposalEnded,
@@ -15,6 +17,7 @@ import {
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { GovernanceOutcomeDate, GovernanceOutcomeTime } from '~/partials/governance/governance-outcome-timestamp';
 import { ProposalPathLabel } from '~/partials/governance/proposal-path-label';
 
@@ -55,6 +58,12 @@ async function ReviewProposal({ proposalId, spaceId }: Props) {
   if (!proposal) {
     redirect(`/space/${spaceId}/governance`);
   }
+
+  // Every proposal has a system entity at its own id, in its own space, so its comments are the
+  // comments on that entity and nothing new has to be stored (GEO-2907). Counted here so the
+  // button can say how many there are before the panel is opened; a failed count reads as none
+  // rather than taking the page down over a number beside an icon.
+  const commentCount = await Effect.runPromise(getEntityCommentCount(proposal.id)).catch(() => 0);
 
   const votes = proposal.proposalVotes.nodes;
   const votesCount = proposal.proposalVotes.totalCount;
@@ -99,6 +108,7 @@ async function ReviewProposal({ proposalId, spaceId }: Props) {
 
         <div className="inline-flex shrink-0 items-center gap-2">
           {isAddEdit && <ProposalBountyHeadButton />}
+          <EntityCommentsButton entityId={proposal.id} spaceId={spaceId} count={commentCount} />
           <AcceptOrReject
             spaceId={spaceId}
             proposalId={proposal.id}
