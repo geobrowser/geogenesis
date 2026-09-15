@@ -219,8 +219,13 @@ async function ReviewProposal({ proposalId, spaceId }: Props) {
 
   // Comments are on every proposal type — the screen in the designs is an editor request, which
   // has no diff and no bounties — so this provider wraps whatever the bounty one does or doesn't.
+  //
+  // The proposal's own space, not the route's. Nothing above verifies that this proposal belongs to
+  // the space in the URL, and the difference is durable here rather than cosmetic: the thread's space
+  // is written into every comment published on it, and it decides which space's roles the badges are
+  // about. The rest of the screen reads the route's space, which is a wider question than this.
   const commentable = (
-    <ProposalCommentsProvider proposalId={proposal.id} spaceId={spaceId} count={commentCount}>
+    <ProposalCommentsProvider proposalId={proposal.id} spaceId={proposal.space.id} count={commentCount}>
       {body}
     </ProposalCommentsProvider>
   );

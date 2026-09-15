@@ -7,7 +7,7 @@ import * as React from 'react';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { proposalCommentVotesQueryKey } from '~/core/io/query-keys';
-import { fetchProposal } from '~/core/io/subgraph/fetch-proposal';
+import { fetchProposalVotes } from '~/core/io/subgraph/fetch-proposal';
 
 import { useOptimisticVoteChoice } from '~/partials/governance/optimistic-voted-atom';
 
@@ -54,20 +54,10 @@ export function useProposalCommentAttribution({
   const { data: proposal } = useQuery({
     queryKey: proposalCommentVotesQueryKey(entityId ?? ''),
     enabled: enabled && Boolean(entityId),
-    queryFn: async ({ signal }) => {
-      const found = await fetchProposal({ id: entityId!, signal });
-      // Not a proposal — or one the API will not answer for. Either way there is nothing to say
-      // about the people commenting on it, and `null` is what says that.
-      if (!found) return null;
-
-      return {
-        spaceId: found.space.id,
-        // `accountId` is the voter's personal space id, despite the name — see `SubstreamVote`.
-        // Already the internal vocabulary: `fetchProposal` runs the wire value through
-        // `convertVoteOption`, so these are ACCEPT / REJECT / ABSTAIN.
-        votes: found.proposalVotes.nodes.map(node => ({ voterSpaceId: node.accountId, vote: node.vote })),
-      };
-    },
+    // The votes-only reader, not `fetchProposal`: that one also hydrates the creator's profile and
+    // every voter's, which this query would discard — and it is invalidated repeatedly as a vote
+    // settles through the indexer, so the waste would repeat with it.
+    queryFn: ({ signal }) => fetchProposalVotes({ id: entityId!, signal }),
   });
 
   // The vote the reader just cast, before the chain and the indexer have caught up. `AcceptOrReject`
