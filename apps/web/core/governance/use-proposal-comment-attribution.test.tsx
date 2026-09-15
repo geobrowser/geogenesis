@@ -103,12 +103,16 @@ describe('useProposalCommentAttribution', () => {
    * disagree those ids answer a question about a different space, and a wrong role on a named person
    * is worse than no badge. The vote survives, because it is the proposal's own record.
    */
-  it('drops editor roles when the proposal lives in a different space than the one being read', async () => {
+  it('drops both roles when the proposal lives in a different space than the one being read', async () => {
     fetchProposal.mockResolvedValue(proposal(OTHER_SPACE_ID));
 
     const { result } = render();
 
+    // The vote survives — it is the proposal's own record — but claims no role behind it.
     await waitFor(() => expect(result.current.get(EDITOR_SPACE_ID)).toEqual({ role: null, vote: 'REJECT' }));
+    // Membership came from the same request as editorship, so it answers about the same wrong space.
+    // A commenter who is merely a member would otherwise still be labelled "Member" here.
+    expect(result.current.get(MEMBER_SPACE_ID)).toBeUndefined();
   });
 
   /**
