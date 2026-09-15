@@ -24,6 +24,7 @@ import {
   useOptimisticVoteChoice,
   useRemoveOptimisticVote,
 } from '~/partials/governance/optimistic-voted-atom';
+import { revalidateGovernanceProposals } from '~/partials/governance/revalidate-governance-proposals';
 
 import { Execute } from './execute';
 import { useCloseProposal } from './use-close-proposal';
@@ -130,8 +131,12 @@ export function AcceptOrReject({
   // subsequently-navigated route is harmless — it just refreshes wherever the
   // user is now.
   const onVoteSuccess = () => {
-    for (const delayMs of [800, 3_000, 7_000, 15_000, 30_000]) {
-      window.setTimeout(() => router.refresh(), delayMs);
+    for (const delayMs of [800, 15_000]) {
+      window.setTimeout(() => {
+        void revalidateGovernanceProposals(spaceId)
+          .catch(() => {})
+          .finally(() => router.refresh());
+      }, delayMs);
     }
   };
 
