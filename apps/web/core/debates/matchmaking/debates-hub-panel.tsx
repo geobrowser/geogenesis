@@ -43,16 +43,18 @@ const TABS: { id: DebatesHubTab; label: string }[] = [
   { id: 'lobby', label: 'Lobby' },
   { id: 'people', label: 'People' },
   { id: 'explore', label: 'Explore' },
+  { id: 'positions', label: 'Positions' },
   { id: 'requests', label: 'Requests' },
 ];
 
 /**
- * GEO-2725. Lobby and Requests are a particular person's, so signed out they have no possible
- * contents — not an empty list but a meaningless one. Both of Lobby's lists are viewer-relative:
+ * GEO-2725. Lobby, Positions and Requests are a particular person's, so signed out they have no
+ * possible contents — not an empty list but a meaningless one. Both of Lobby's lists are viewer-relative:
  * geo-chat scores `debate_now` on who is available to debate *you*, and a match is a claim you hold
  * a side on. Explore and People describe the world rather than the viewer, so both read fine
- * anonymously and are what the hub offers before sign-in (GEO-2861) — Explore's own viewer-relative
- * source, "My positions", leaves its menu signed out for the same reason.
+ * anonymously and are what the hub offers before sign-in (GEO-2861). Positions is the third of the
+ * viewer's own: it was a source inside Explore's picker and left that menu signed out for exactly
+ * this reason, so promoting it to a tab (GEO-2863) promotes the rule with it.
  *
  * In the order the anonymous row draws them, and it is read that way below rather than used to
  * filter the signed-in order. Filtered, this list said what the row contained and `TABS` quietly
@@ -358,17 +360,33 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
             picked and fire B's first query with A's space ids, an instant before the effect
             corrects both. One render, but it is the wrong viewer's data. */}
         {!ready || !filtersReconciled ? null : (
-          <HubSwap activeKey={activeTab}>
-            {activeTab === 'requests' ? (
-              <RequestsTab />
-            ) : activeTab === 'lobby' ? (
-              <LobbyTab onTabChange={changeTab} />
-            ) : activeTab === 'explore' ? (
-              <ClaimsTab />
-            ) : (
-              <PeopleTab onTabChange={changeTab} />
-            )}
-          </HubSwap>
+          <>
+            <HubSwap activeKey={activeTab}>
+              {activeTab === 'requests' ? (
+                <RequestsTab />
+              ) : activeTab === 'lobby' ? (
+                <LobbyTab onTabChange={changeTab} />
+              ) : activeTab === 'explore' ? (
+                <ClaimsTab />
+              ) : activeTab === 'positions' ? (
+                <ClaimsTab variant="positions" />
+              ) : (
+                <PeopleTab onTabChange={changeTab} />
+              )}
+            </HubSwap>
+            {/* Explore's four serial round trips, started from whichever tab the viewer is on
+                instead of from the moment they ask for Explore — see `ClaimsTab`'s `warm`. The hub
+                opens on the Lobby and Explore is one press away, so the chain has the whole time
+                the viewer spends reading this tab to finish, and usually has.
+
+                Inside the readiness gate above for the reason that gate exists: warming with the
+                previous account's filter bar would fill the cache under the wrong viewer's query
+                keys, which is worse than not warming at all.
+
+                Dropped once Explore is the open tab, so the real one is the only instance holding
+                the selection atoms and geo-chat's space scopes. */}
+            {activeTab === 'explore' ? null : <ClaimsTab warm />}
+          </>
         )}
       </motion.div>
     </div>

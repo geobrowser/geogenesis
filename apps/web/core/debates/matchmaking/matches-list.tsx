@@ -9,6 +9,7 @@ import { Input } from '~/design-system/input';
 import type { MatchmakingMatch } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateActivity } from '../hooks';
+import { claimRowKey } from './claim-row-key';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests, useMatchmakingMatches } from './hooks';
@@ -87,11 +88,7 @@ export function MatchesList({
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
 
   // Same hold as Explore's list: standing down from one claim shouldn't reshuffle the rest.
-  const matches = useStableListOrder(
-    serverMatches,
-    match => `${match.claim.space_id}:${match.claim.claim_entity_id}`,
-    spaceIds.join(',')
-  );
+  const matches = useStableListOrder(serverMatches, claimRowKey, spaceIds.join(','));
 
   // Topics are Knowledge Graph data that `/matchmaking/matches` does not carry — `match.topics` is
   // empty on every row, the same way `MatchmakingClaim.topics` is — and there is no facet beside it
@@ -319,7 +316,7 @@ export function MatchesList({
         >
           <HubCardList>
             {filtered.map(match => (
-              <MatchCard key={`${match.claim.space_id}:${match.claim.claim_entity_id}`} match={match} />
+              <MatchCard key={claimRowKey(match)} match={match} />
             ))}
           </HubCardList>
         </HubQueryState>

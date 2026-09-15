@@ -11,6 +11,7 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from '~/core/debates/api';
 import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
+import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 
 import { DebateRematchPageClient } from './rematch-page-client';
@@ -141,6 +142,8 @@ const mocks = vi.hoisted(() => ({
   /** Both participants' graph positions. */
   positions: [] as ParticipantPosition[],
   positionsLoading: false,
+  positionsError: null as unknown,
+  positionsFetching: false,
   positionParticipants: [] as string[][],
   recommendedSections: [] as Array<{ id: string; name: string; claimIds: string[] }>,
   recommendedEntities: [] as Array<Record<string, unknown>>,
@@ -149,6 +152,7 @@ const mocks = vi.hoisted(() => ({
   curatedIds: [] as string[],
   savedClaims: null as DebateRematchClaim[] | null,
   browsedLookupLoading: false,
+  browsedLookupError: null as Error | null,
   currentUserId: 'user-local' as string | null,
   geoChatAuthenticated: true,
   spaceAllowlist: null as Set<string> | null,
@@ -312,6 +316,11 @@ function rematchClaimsLookup(claimIds: string[]) {
   if (mocks.browsedLookupLoading && !isCuratedLookup) {
     return { data: { claims: [], excluded_claim_ids: [] }, isLoading: true, error: null };
   }
+  // Settled *and* failed, which is a different answer from still running — react-query drops
+  // `isLoading` either way, and the page has to tell them apart.
+  if (mocks.browsedLookupError && !isCuratedLookup) {
+    return { data: { claims: [], excluded_claim_ids: [] }, isLoading: false, error: mocks.browsedLookupError };
+  }
   return {
     data: { claims: mocks.claims, excluded_claim_ids: mocks.excludedClaimIds },
     isLoading: false,
@@ -418,6 +427,7 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
     const claims = enabled && !mocks.featuredCatalogError ? applyServerFilters(taggedRowsFor(tagId), filters) : [];
     return {
       claims,
+      fetched: claims.length,
       isLoading: enabled && mocks.featuredCatalogLoading,
       error: enabled ? mocks.featuredCatalogError : null,
       hasNextPage: enabled && mocks.taggedHasNextPage,
@@ -578,7 +588,11 @@ vi.mock('~/core/debates/participant-positions', async importOriginal => {
       return {
         byClaim: actual.groupParticipantPositions(mocks.positions),
         isLoading: mocks.positionsLoading,
-        error: null,
+        // An answer for this key still on its way — whether that is the previous pair's rows held
+        // over, or this pair's cached rows while the mount refetch runs. `isLoading` is false for
+        // both, and both can be empty where the answer arriving is not.
+        isFetching: mocks.positionsLoading || mocks.positionsFetching,
+        error: mocks.positionsError,
       };
     },
   };
@@ -822,6 +836,13 @@ beforeEach(() => {
   mocks.entityHydrations.length = 0;
   mocks.singleHydrationErrorFor = null;
   localStorage.clear();
+  // Both standing preferences off, so every list below is the whole of what its fixture put in it.
+  //
+  // They ship *on* (GEO-2863), and the cases that are about the defaults set them back. Every other
+  // case here is about something else — search, topics, sections, allowed spaces — and one that has
+  // to reason about which of its own rows a default removed is a case about two things.
+  localStorage.setItem('rematchMatchesOnly', 'false');
+  localStorage.setItem('rematchHideMyPositions', 'false');
 
   clearDebateReturnDestination();
   mocks.replace.mockReset();
@@ -878,6 +899,8 @@ beforeEach(() => {
     position('profile-remote', CLAIM_SHARED, SPACE_1, false),
   ];
   mocks.positionsLoading = false;
+  mocks.positionsError = null;
+  mocks.positionsFetching = false;
   mocks.positionParticipants.length = 0;
   mocks.recommendedSections = [];
   mocks.recommendedEntities = [];
@@ -886,6 +909,7 @@ beforeEach(() => {
   mocks.curatedIds = [];
   mocks.savedClaims = null;
   mocks.browsedLookupLoading = false;
+  mocks.browsedLookupError = null;
   mocks.currentUserId = 'user-local';
   mocks.geoChatAuthenticated = true;
   mocks.responseIndexingStatus = null;
@@ -1384,8 +1408,13 @@ describe('DebateRematchPageClient', () => {
 
       expect(topicMenu.parentElement).toBe(spaceMenu.parentElement);
       expect(topicMenu.className).not.toContain('ml-auto');
-      expect(toggle.closest('.ml-auto')).not.toBeNull();
       expect(topicMenu.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+      // Behind a growable gap rather than `ml-auto`, which is what decides where it goes when it
+      // does *not* fit: the spacer absorbs the slack on the menus' line, so the switch ends the row
+      // where there is room and starts its own line at the left where there is not. `ml-auto` would
+      // pin it to the right margin of that line instead, with nothing beside it.
+      expect(toggle.previousElementSibling?.className).toContain('flex-1');
     });
 
     // A fixed order, so a source that appears doesn't reshuffle the ones already in the menu.
@@ -1644,8 +1673,10 @@ describe('DebateRematchPageClient', () => {
       await chooseSource('My positions');
 
       expect(await screen.findByText('Only mine')).toBeInTheDocument();
-      // A claim nobody has answered belongs to the corpus, not to this list.
-      expect(screen.queryByText('A newly published claim')).toBeNull();
+      // A claim nobody has answered belongs to the corpus, not to this list. Waited for rather than
+      // asserted outright: the previous source's cards fade out on a switch, so one can still be on
+      // screen for a couple of frames after the new list has drawn.
+      await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
     });
 
     /**
@@ -4112,6 +4143,360 @@ function claimSummary(id: string, claim: string) {
 }
 
 /**
+ * "Hide my positions" (GEO-2863).
+ *
+ * The hub collapses answered claims outright; this page offers it as a switch, because here the
+ * same fact means the opposite. `debateRequestGate` refuses a request from someone holding no
+ * position, so an answered claim is the one this page can act on — hiding them by default would
+ * empty it of everything it exists for, and strand any claim the viewer answered and the opponent
+ * did not, which is on no other tab in the flow.
+ *
+ * What made it worth offering is the complaint behind it: a reader with a long history of positions
+ * scrolls past all of them to reach anything new.
+ */
+describe('Hide my positions', () => {
+  const SWITCH = { name: 'Hide my positions' } as const;
+
+  /**
+   * Waits out a collapsing card before asserting that a row is still on screen.
+   *
+   * A row leaving stays in the DOM while it fades, so `findByText` resolves on the ghost of one on
+   * its way out — and a case asserting "this must not leave" passes on the very thing it exists to
+   * catch. Only the "still here" assertions need it; "gone" ones are `waitFor`'d instead, which
+   * waits for the removal rather than racing it.
+   */
+  async function settleExit() {
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, HUB_CARD_EXIT_TRANSITION.duration * 1000 + 150));
+    });
+  }
+
+  /** The row the browse list carries for a claim, with the viewer's side on it or without. */
+  function browsedClaim(viewerPosition: boolean | null) {
+    return {
+      ...sharedClaim(),
+      claim: {
+        id: CLAIM_MORE,
+        space_id: SPACE_2,
+        claim_entity_id: CLAIM_MORE,
+        claim: 'A newly published claim',
+        description: null,
+      },
+      // Emptied so the viewer's side comes from `viewer_position` alone, the way geo-chat's own row
+      // carries it — `sharedClaim` fills this in for both participants.
+      participants: [],
+      viewer_position: viewerPosition,
+    };
+  }
+
+  // The outer fixture turns both standing preferences off so the rest of the suite sees whole
+  // lists; these cases are the ones about the shipped default, so they put it back.
+  beforeEach(() => {
+    localStorage.setItem('rematchHideMyPositions', 'true');
+  });
+
+  it('is on by default', async () => {
+    // Not merely restored from storage. The enclosing setup writes this key so the rest of the
+    // cases run against the shipped behaviour; a case about the *default* has to take it away
+    // again, or it passes on a value it wrote itself and would keep passing if the atom flipped.
+    localStorage.removeItem('rematchHideMyPositions');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('brings the answered claims back when it is turned off', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('switch', SWITCH));
+
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+  });
+
+  it('drops the claims the viewer has already answered', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    // Kept, and not by luck: geo-chat holds no row for this one, which is what a claim nobody has
+    // answered looks like. A switch that read that as an answer would hide the whole corpus.
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  /**
+   * A failed row lookup must not brick the tab.
+   *
+   * That lookup is metadata — `tabError` deliberately survives it, because the claims themselves
+   * came from the graph and read perfectly well without it. But the flag saying it had *settled*
+   * also carried whether it had settled *successfully*, and the gates about waiting were driven off
+   * the same value: so a failure left every unclassified claim held back behind a "Looking for
+   * claims…" that could never finish, with nothing on screen and no way out but a reload.
+   *
+   * Trust and in-flight are two questions. A failure knows nothing, so its rows stay unknown and
+   * are never hidden — and a list that is too wide beats one that never fills.
+   */
+  it('shows the claims when the row lookup fails, rather than waiting forever', async () => {
+    mocks.browsedLookupError = new Error('rows exploded');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.queryByText(/Looking for claims/)).toBeNull();
+  });
+
+  /**
+   * The case the hold is actually for, and the one a row-present fixture misses.
+   *
+   * Most of a tag catalogue has no geo-chat row at all — a row appears when somebody answers. So
+   * the claim a viewer browses to, takes a side on, and is then a press away from requesting a
+   * debate on goes *straight* from "no row" to answered. Read as unknown, that transition was never
+   * recorded as on-screen-unanswered, and the row was dropped the instant it was answered.
+   */
+  it('keeps a claim that had no row at all until the viewer answered it', async () => {
+    mocks.claims = [sharedClaim()];
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+
+    mocks.claims = [sharedClaim(), browsedClaim(true)];
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await settleExit();
+
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  /**
+   * The half that makes the switch safe to offer.
+   *
+   * Answering here is the first move of requesting a debate rather than the end of an interaction,
+   * so the row the viewer has just acted on must stay — folding it away would take the "Request
+   * debate" button they were reaching for with it.
+   *
+   * That it stays *for good* rather than for a moment is `useCollapseAnswered`'s own suite, which
+   * owns the clock. This asserts the half that is this page's: the row does not leave on the answer.
+   */
+  it('keeps a position the viewer takes while it is on', async () => {
+    mocks.claims = [sharedClaim(), browsedClaim(null)];
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+
+    mocks.claims = [sharedClaim(), browsedClaim(true)];
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleExit();
+
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  /**
+   * A list the switch emptied says so, rather than blaming the corpus.
+   *
+   * The only empty state here that is true of a list *with rows in it*. Without it, Explore told a
+   * viewer there were no other eligible claims when what had happened is that they had answered the
+   * ones there are — and under a filter it offered "Clear filters" for rows no filter was hiding.
+   */
+  it('says the viewer answered these rather than that there are none', async () => {
+    // Every tagged claim answered, so the catalogue has rows and the switch hides all of them.
+    mocks.claims = [sharedClaim(), browsedClaim(true)];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(await screen.findByText(/You’ve answered every claim here/)).toBeInTheDocument();
+    expect(screen.queryByText(/No other eligible claims/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Show my positions' })).toBeInTheDocument();
+  });
+
+  // And the way out actually works: the rows were there the whole time.
+  it('brings them back from that empty state', async () => {
+    mocks.claims = [sharedClaim(), browsedClaim(true)];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show my positions' }));
+
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  // It is that backlog by definition, so the switch could only ever empty it — a broken tab rather
+  // than a filter. Not drawn rather than drawn and ignored, so the state cannot be set from a tab
+  // where it does nothing.
+  it('is not offered on My positions', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showExplore();
+    await chooseSource('My positions');
+
+    expect(screen.queryByRole('switch', SWITCH)).toBeNull();
+  });
+
+  // One switch per tab. The opponent's tab has its own, and everything on it is a claim they
+  // answered — hiding the ones the viewer answered too would take the matches away.
+  it('is not offered on the opponent tab, which has its own switch', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(screen.queryByRole('switch', SWITCH)).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Matches only' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * "Matches only" ships on, and steps back rather than opening onto nothing.
+ *
+ * A rematch needs both of you holding opposite sides of the same claim, which a returning pair
+ * often does not have yet — so the setting most people want is also the one most likely to have
+ * nothing behind it. The preference stands; only whether it applies on arrival is decided here.
+ */
+describe('the matches-only default', () => {
+  const OPPONENT_ONLY = '019fedb7-5b96-7e83-9f66-7bc2ad4f9953';
+  const switchNode = () => screen.getByRole('switch', { name: 'Matches only' });
+
+  beforeEach(() => {
+    localStorage.setItem('rematchMatchesOnly', 'true');
+  });
+
+  /** One position of theirs and none of the viewer's: nothing to go again on, something to show. */
+  function nothingToRematch() {
+    mocks.savedClaims = [];
+    mocks.claims = [];
+    mocks.entities = [{ ...sharedEntity(), id: OPPONENT_ONLY, name: 'A claim only Salina answered' }];
+    mocks.positions = [position('profile-remote', OPPONENT_ONLY, SPACE_1, true)];
+  }
+
+  it('opens on the matches, which is what the page is for', async () => {
+    // The atom's own default, not the one this describe writes — see the note above.
+    localStorage.removeItem('rematchMatchesOnly');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+    expect(switchNode()).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('steps back to their positions when there is no rematch to be had', async () => {
+    nothingToRematch();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('A claim only Salina answered')).toBeInTheDocument();
+  });
+
+  // Or the switch describes something other than the list beneath it, and pressing it appears to do
+  // nothing — it would be setting the preference to the value it already held.
+  it('says so on the switch, and lets the viewer ask for the empty list anyway', async () => {
+    nothingToRematch();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('A claim only Salina answered');
+
+    expect(switchNode()).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(switchNode());
+
+    await waitFor(() => expect(screen.queryByText('A claim only Salina answered')).toBeNull());
+    expect(switchNode()).toHaveAttribute('aria-checked', 'true');
+  });
+
+  /**
+   * One quiet evening is not a change of mind. Writing the step back would make it one, and over
+   * enough evenings would walk every viewer off the setting they chose.
+   */
+  it('leaves the stored preference alone when it steps back', async () => {
+    nothingToRematch();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('A claim only Salina answered');
+
+    expect(localStorage.getItem('rematchMatchesOnly')).toBe('true');
+  });
+
+  /**
+   * Neither is an answer that is still being replaced.
+   *
+   * Two ways this looks settled and is not, and `isLoading` is false for both. A *new* pair is
+   * served the last pair's rows, which `participantSidesOn` then filters to nothing against the
+   * current participants. A *returning* pair is served its own cached rows while the mount refetch
+   * runs — the ordinary case, with a 5s stale time and a poll behind it — and yesterday's answer
+   * can be empty where today's is not.
+   *
+   * This decides once and keeps it, so either read sticks: stepped back off the matches list and,
+   * with nothing else on the tab, walked to Explore, for a pair that may have had several waiting.
+   */
+  it('does not decide while the positions are still being replaced', async () => {
+    mocks.positionsFetching = true;
+    mocks.positions = [];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(switchNode()).toHaveAttribute('aria-checked', 'true'));
+  });
+
+  /**
+   * A failed lookup is not an answer about this pair.
+   *
+   * react-query drops `isLoading` on failure, so an outage reads from here exactly like two people
+   * with nothing to go again on. Stepping back on it would swap away the list that carries the
+   * retry, for a list that cannot explain why it is the one on screen — and the same outage would
+   * then walk the viewer to Explore on the rung below.
+   */
+  it('holds the matches list when the lookup failed rather than answered', async () => {
+    nothingToRematch();
+    mocks.positionsError = new Error('positions exploded');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(switchNode()).toHaveAttribute('aria-checked', 'true'));
+    expect(screen.queryByText('A claim only Salina answered')).toBeNull();
+  });
+
+  it('does not walk the viewer to Explore on a failed lookup either', async () => {
+    mocks.savedClaims = [];
+    mocks.claims = [];
+    mocks.entities = [];
+    mocks.positions = [];
+    mocks.positionsError = new Error('positions exploded');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(switchNode()).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'All claims' })).toBeNull();
+  });
+
+  /**
+   * None of this may travel to the next rematch.
+   *
+   * The route reuses this component when it moves between sessions, so every latch here is keyed on
+   * the session id — the step back, the viewer's own answer to the switch, and the move to Explore.
+   * Unkeyed, a pair with no match taught the page that the *next* pair had none either.
+   */
+  it('decides again for the next rematch rather than carrying the last one’s answer', async () => {
+    nothingToRematch();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('A claim only Salina answered');
+    expect(switchNode()).toHaveAttribute('aria-checked', 'false');
+
+    // The next pair does have a match — the default fixture's opposed positions.
+    mocks.entities = [sharedEntity()];
+    mocks.positions = [
+      position('profile-local', CLAIM_SHARED, SPACE_1, true),
+      position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+    ];
+    rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+    expect(switchNode()).toHaveAttribute('aria-checked', 'true');
+  });
+
+  // The last rung. No rematch to be had and no positions of theirs to make one out of, so there is
+  // no version of this tab with anything on it — and Explore is the corpus rather than this pair.
+  it('moves on to Explore when they have no positions either', async () => {
+    mocks.savedClaims = [];
+    mocks.claims = [];
+    mocks.entities = [];
+    mocks.positions = [];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: 'All claims' })).toBeInTheDocument();
+  });
+});
+
+/**
  * GEO-2758. The Related tab: claims sharing a topic with the one this pair just argued, and where
  * they land when there is one.
  *
@@ -4152,6 +4537,23 @@ describe('the Related tab', () => {
     mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity()];
     mocks.relatedEntities = [sourceClaimEntity(), relatedEntity()];
   }
+
+  /**
+   * "Hide my positions" is Explore's, and Related must not draw it.
+   *
+   * `hidesAnswered` is gated on the Explore tab, so the switch fell through onto this one and drew
+   * a control that could not change a single row under it — the same fault as drawing it over a
+   * list it would empty, from the other direction.
+   */
+  it('does not draw Explore’s switch, which could not narrow this list', async () => {
+    debateWithRelated();
+    localStorage.setItem('rematchHideMyPositions', 'true');
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('A claim on the same topic');
+
+    expect(screen.queryByRole('switch', { name: 'Hide my positions' })).toBeNull();
+  });
 
   it('lands the pair on Related when the claim they argued has neighbours', async () => {
     debateWithRelated();
