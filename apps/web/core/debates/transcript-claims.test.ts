@@ -17,12 +17,18 @@ type Claim = {
   position?: string;
   /** null models a claim the graph reports no space for. */
   spaceId?: string | null;
+  /**
+   * Values on the block → claim relation entity, where timecodes live. Integers arrive from the
+   * API as strings, so these fixtures are written as strings too.
+   */
+  offsets?: Array<{ propertyId: string; integer?: string | null } | null>;
 };
 
 type Block = {
   id: string;
   position?: string;
   author?: string | null;
+  markdown?: string | null;
   claims: Claim[];
 };
 
@@ -38,11 +44,13 @@ function response(blocks: Block[], transcriptPosition = 'a0'): DebateTranscriptC
               position: block.position ?? 'a0',
               toEntity: {
                 id: block.id,
+                markdown: block.markdown === undefined ? [] : [{ spaceId: SPACE, text: block.markdown }],
                 authors: block.author === null ? [] : [{ position: 'a0', toEntity: { id: block.author ?? PRESTON } }],
                 claims: block.claims.map(claim => {
                   const spaceId = claim.spaceId === undefined ? SPACE : claim.spaceId;
                   return {
                     position: claim.position ?? 'a0',
+                    entity: claim.offsets === undefined ? null : { valuesList: claim.offsets },
                     toEntity: {
                       id: claim.id,
                       // Aggregated across spaces, so it is only the resolver's last resort.
@@ -445,5 +453,57 @@ describe('space scoping', () => {
     );
 
     expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBe(NAMING);
+  });
+});
+
+describe('published timecodes', () => {
+  const START = 'a1d1cb557b184238ba0ec78ba7f289fb';
+  const END = '79a677b597f84ca8a1cf24eef7837b61';
+
+  const offsets = (start: string | null, end: string | null) => [
+    { propertyId: START, integer: start },
+    { propertyId: END, integer: end },
+  ];
+
+  it('reads the pair off the relation entity, parsing the strings the API sends', () => {
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1', offsets: offsets('134600', '143140') }] }]));
+
+    expect(all[0].publishedTiming).toEqual({ startMs: 134600, endMs: 143140 });
+  });
+
+  it('reports no timing for the debates that predate timecodes', () => {
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1' }] }]));
+
+    expect(all[0].publishedTiming).toBeNull();
+  });
+
+  // Each of these would otherwise be drawn on the timeline as a real moment. Falling back to
+  // matching against the transcript is both honest and, in practice, right.
+  it.each([
+    ['only a start', offsets('1000', null)],
+    ['only an end', offsets(null, '2000')],
+    ['an unparseable value', offsets('about a minute in', '2000')],
+    ['a negative start', offsets('-500', '2000')],
+    ['an end at the start', offsets('2000', '2000')],
+    ['an end before the start', offsets('4000', '2000')],
+  ])('discards a pair with %s', (_label, values) => {
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1', offsets: values }] }]));
+
+    expect(all[0].publishedTiming).toBeNull();
+  });
+
+  it('carries the block each claim was said in, so its turn can be located on the recording', () => {
+    const { all, blocks } = group(
+      response([
+        { id: 'block-1', markdown: 'The first turn, as spoken.', claims: [{ id: 'c1' }] },
+        { id: 'block-2', markdown: 'The reply.', author: ARTURAS, claims: [{ id: 'c2' }] },
+      ])
+    );
+
+    expect(all.map(claim => claim.blockId)).toEqual(['block-1', 'block-2']);
+    expect(blocks).toEqual([
+      { id: 'block-1', authorSpaceId: PRESTON, text: 'The first turn, as spoken.' },
+      { id: 'block-2', authorSpaceId: ARTURAS, text: 'The reply.' },
+    ]);
   });
 });
