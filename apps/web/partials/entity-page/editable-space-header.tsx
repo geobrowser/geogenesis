@@ -143,7 +143,11 @@ export function EditableSpaceHeading({
 
   return (
     <>
-      <div className="relative flex items-center justify-between">
+      {/* Wraps rather than squeezing: a long name beside Edit profile, a vote
+          pair, history and the overflow menu has nowhere to go on a phone, and
+          `justify-between` would have compressed the controls into each other.
+          Only engages when it has to, so nothing changes on a wide screen. */}
+      <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <EntityPageTitle
           value={name ?? ''}
           isEditing={isEditing}
@@ -152,7 +156,7 @@ export function EditableSpaceHeading({
           className="min-w-0 grow"
         />
         {(actionsComponent || isSpacePage) && (
-          <div className="inline-flex items-center gap-4">
+          <div className="inline-flex shrink-0 items-center gap-4">
             {actionsComponent}
             {isSpacePage && (
               <>

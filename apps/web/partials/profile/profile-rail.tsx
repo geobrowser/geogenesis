@@ -21,7 +21,7 @@ import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-smal
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 import { StickySideRail } from '~/partials/entity-page/sticky-side-rail';
 
-type Props = {
+export type ProfileRailProps = {
   /** The personal space being viewed. */
   spaceId: string;
   /** The person entity, for the join date. */
@@ -45,25 +45,47 @@ type Props = {
  * Rule-separated sections rather than bordered cards, which is how every other
  * rail in the app composes.
  */
-export function ProfileRail({ spaceId, personEntityId, types, links, systemEntityId, address, spaceType }: Props) {
+export function ProfileRail(props: ProfileRailProps) {
+  return (
+    <StickySideRail>
+      <ProfileRailSections {...props} />
+    </StickySideRail>
+  );
+}
+
+/**
+ * The cards themselves, without the rail around them.
+ *
+ * `StickySideRail` drops itself below 1024px — a rail narrower than 280px stops
+ * being readable — so on a phone these facts have nowhere to go. The About tab
+ * renders this same set in the main column instead, which is why the two are
+ * separable at all.
+ */
+export function ProfileRailSections({
+  spaceId,
+  personEntityId,
+  types,
+  links,
+  systemEntityId,
+  address,
+  spaceType,
+}: ProfileRailProps) {
   const { facts, isLoading } = useProfileFacts({ spaceId, personEntityId });
 
   return (
-    <StickySideRail>
-      <div className="flex flex-col gap-4">
-        {facts.spaces.length > 0 && <SpacesSection spaces={facts.spaces} />}
-        {links.length > 0 && <LinksSection links={links} />}
-        <AboutSection
-          facts={facts}
-          isLoading={isLoading}
-          types={types}
-          spaceId={spaceId}
-          systemEntityId={systemEntityId}
-          address={address}
-          spaceType={spaceType}
-        />
-      </div>
-    </StickySideRail>
+    <div className="flex flex-col gap-4">
+      {facts.spaces.length > 0 && <SpacesSection spaces={facts.spaces} />}
+      {links.length > 0 && <LinksSection links={links} />}
+      <AboutSection
+        facts={facts}
+        isLoading={isLoading}
+        types={types}
+        spaceId={spaceId}
+        systemEntityId={systemEntityId}
+        address={address}
+        spaceType={spaceType}
+      />
+    </div>
   );
 }
 
@@ -176,11 +198,11 @@ function AboutSection({
 }: {
   facts: ReturnType<typeof useProfileFacts>['facts'];
   isLoading: boolean;
-  types: Props['types'];
+  types: ProfileRailProps['types'];
   spaceId: string;
   systemEntityId: string;
   address: string | null;
-  spaceType: Props['spaceType'];
+  spaceType: ProfileRailProps['spaceType'];
 }) {
   const joined = formatJoined(facts.joinedAt);
   const elapsed = timeOnGeo(facts.joinedAt);
@@ -390,7 +412,7 @@ function SystemRecord({
   spaceId: string;
   systemEntityId: string;
   address: string | null;
-  spaceType: Props['spaceType'];
+  spaceType: ProfileRailProps['spaceType'];
 }) {
   return (
     // A grey strip flush to the card's bottom edge, with an arrow that turns as
