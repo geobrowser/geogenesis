@@ -89,8 +89,13 @@ vi.mock('~/design-system/fallback-image', () => ({
   FallbackImage: () => <div data-testid="image" />,
 }));
 
-vi.mock('~/partials/entity-page/entity-row-actions', () => ({
-  EntityRowActions: ({ children }: { children: React.ReactNode }) => <div data-testid="row-actions">{children}</div>,
+// The card renders the real `DebateInteractionBar` — sharing it with the full-screen feed is the
+// point of these assertions — so only its vote control is stood in for. The real one reaches the
+// sync store, Privy and the onboarding atoms, none of which this card's behavior depends on.
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  EntityVoteButtons: ({ entityId, presentation }: { entityId: string; presentation?: string }) => (
+    <div data-testid="vote-buttons" data-entity={entityId} data-presentation={presentation} />
+  ),
 }));
 
 vi.mock('./explore-join-space-button', () => ({
@@ -261,6 +266,31 @@ describe('DebateExploreFeedCard', () => {
     // And it does still give way once the card has genuinely left.
     intersectAll(0.4);
     expect(isActive()).toBe('false');
+  });
+
+  it("renders the same interaction bar the full-screen feed does, with the card's own counts", () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+
+    // The bar's horizontal presentation, not the inline arrows the other explore cards use.
+    expect(screen.getByTestId('vote-buttons').getAttribute('data-presentation')).toBe('debate-horizontal');
+
+    // Counts come from what the card already has: the feed's comment count and the shared
+    // transcript-claims query, rather than a thread fetch per card.
+    const comments = screen.getByRole('button', { name: 'Comments' });
+    expect(comments.textContent).toBe('3');
+    expect(screen.getByRole('button', { name: 'Claims' }).textContent).toBe('3');
+
+    // Marked as an opener so pressing it while the global comments panel is open switches the
+    // panel to this debate instead of reading as an outside click that dismisses it.
+    expect(comments.hasAttribute('data-entity-comments-opener')).toBe(true);
+  });
+
+  it('keeps votes and comments while the debate is still loading', () => {
+    renderCard();
+    expect(screen.getByTestId('vote-buttons')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Comments' })).toBeDefined();
   });
 
   it('shows Claims and Share actions once the debate is ready, opening the claims panel on demand', () => {

@@ -5,6 +5,7 @@ import * as React from 'react';
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
+import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
 import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
@@ -13,18 +14,14 @@ import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
-import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
-
 import { ExploreCardEntityLink } from './explore-card-entity-link';
-import { ExploreClaimsIcon } from './explore-claims-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
-import { ExploreShareIcon } from './explore-share-icon';
 import { SpaceThumb } from './space-thumb';
 
 /** Visible fraction at which a card takes over playback, and the one it must fall back to
@@ -50,8 +47,14 @@ type DebateExploreFeedCardProps = {
 
 /**
  * The explore-feed rendition of a published Debate: the same two synchronized debater videos as
- * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting), framed
- * in the explore card chrome — meta row, claim title, and the standard entity actions.
+ * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting) over the
+ * same interaction bar, framed in the explore card chrome — meta row, title, and the media capped
+ * to the card's width.
+ *
+ * Both renditions render `DebateFeedPlayer` and `DebateInteractionBar`, so everything inside the
+ * debate itself — the videos, the debater identities and position chips, the winner share, the
+ * vote pill and the counts — is one component in both places rather than two that look alike
+ * (GEO-2912).
  */
 export function DebateExploreFeedCard({
   item,
@@ -191,57 +194,75 @@ export function DebateExploreFeedCard({
         )}
       </div>
 
-      <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
-        <EntityCommentsButton entityId={item.entityId} spaceId={item.spaceId} count={item.commentCount} />
-        {readyDebate ? <DebateCardExtras debate={readyDebate} spaceId={item.spaceId} /> : null}
-      </EntityRowActions>
+      <DebateCardActions item={item} debate={readyDebate} className="mt-1" />
     </article>
   );
 }
 
 /**
- * The Claims and Share actions from the full-screen feed's interaction bar, restyled to sit in the
- * explore card's footer. Claims opens the same DebateClaimsPanel (as a right-hand overlay, since
- * the explore feed has no side rail); Share opens the same DebateShareDialog.
+ * The card's footer: the same `DebateInteractionBar` the full-screen feed renders beside its
+ * videos, in its horizontal orientation (GEO-2912). Sharing the bar rather than restyling a
+ * second one is what keeps the vote pill, the score and the counts from drifting apart again.
+ *
+ * Three differences from the full-screen feed, all of them about where a control leads rather
+ * than what it looks like:
+ *  - Comments open the app's global panel, as they do from every other explore card, instead of
+ *    the feed's own side rail.
+ *  - The comment count is the one the explore feed already resolved for the card, so a page of
+ *    debates doesn't fetch a thread apiece to render a number.
+ *  - Claims open `DebateClaimsPanel` as a right-hand overlay, since the explore feed has no rail
+ *    to put it in.
+ *
+ * Rendered before the debate resolves, too — the videos are a skeleton at that point and a
+ * footer that appears late would shift the card under the reader. Until then it carries the
+ * votes and comments, which need no debate, and leaves out Claims and Share, which do.
  */
-function DebateCardExtras({ debate, spaceId }: { debate: Debate; spaceId: string }) {
+function DebateCardActions({
+  item,
+  debate,
+  className,
+}: {
+  item: ExploreFeedItem;
+  debate: Debate | null;
+  className?: string;
+}) {
   const [claimsOpen, setClaimsOpen] = React.useState(false);
-  const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
   const share = useDebateShareAction();
+  const { commentsTarget, openComments } = useEntityCommentsPanel();
+  // Nulls until the debate resolves, which the hook reads as "not enabled" — the count it feeds
+  // isn't rendered until then either.
+  const { claims } = useDebateTranscriptClaims(debate?.id ?? null, debate?.claim.space_id ?? null);
 
   return (
     <>
-      <button
-        type="button"
-        aria-label="Claims"
-        onClick={() => setClaimsOpen(true)}
-        className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
-      >
-        <ExploreClaimsIcon />
-        <span className="text-[14px] font-normal tabular-nums">{claims.totalCount}</span>
-      </button>
-      <button
-        type="button"
-        aria-label="Share debate"
-        aria-haspopup="dialog"
-        aria-expanded={share.open}
-        onClick={share.onOpen}
-        className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
-      >
-        <ExploreShareIcon />
-        <span className="text-[14px] font-normal">Share</span>
-      </button>
-      <DebateShareDialog
-        open={share.open}
-        onOpenChange={share.onOpenChange}
-        debate={debate}
-        spaceId={spaceId}
-        openerRef={share.openerRef}
+      <DebateInteractionBar
+        orientation="horizontal"
+        className={className}
+        entityId={item.entityId}
+        spaceId={item.spaceId}
+        commentCount={item.commentCount}
+        commentsPanelOpen={commentsTarget?.entityId === item.entityId}
+        onComment={() => openComments(item.entityId, item.spaceId)}
+        claimsCount={claims.totalCount}
+        onClaims={debate ? () => setClaimsOpen(true) : undefined}
+        onShare={debate ? share.onOpen : undefined}
+        shareOpen={share.open}
       />
-      {claimsOpen ? (
-        <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
-          <DebateClaimsPanel debate={debate} onClose={() => setClaimsOpen(false)} />
-        </div>
+      {debate ? (
+        <>
+          <DebateShareDialog
+            open={share.open}
+            onOpenChange={share.onOpenChange}
+            debate={debate}
+            spaceId={item.spaceId}
+            openerRef={share.openerRef}
+          />
+          {claimsOpen ? (
+            <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
+              <DebateClaimsPanel debate={debate} onClose={() => setClaimsOpen(false)} />
+            </div>
+          ) : null}
+        </>
       ) : null}
     </>
   );
@@ -249,15 +270,7 @@ function DebateCardExtras({ debate, spaceId }: { debate: Debate; spaceId: string
 
 // Separate component so useDebateVotes (which queries as soon as it mounts) only runs once the
 // debate is loaded and known to be watchable.
-function DebateCardVideos({
-  debate,
-  active,
-  preload,
-}: {
-  debate: Debate;
-  active: boolean;
-  preload: boolean;
-}) {
+function DebateCardVideos({ debate, active, preload }: { debate: Debate; active: boolean; preload: boolean }) {
   const votes = useDebateVotes(debate);
   return <DebateFeedPlayer debate={debate} active={active} preload={preload} votes={votes} />;
 }
