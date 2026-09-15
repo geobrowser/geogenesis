@@ -1,4 +1,4 @@
-import type { EducationCard, EmploymentCard, HistoryCard, HistoryEntry } from './normalize-history';
+import type { EducationCard, EmploymentCard, HistoryCard, HistoryEntry, NamedRef } from './normalize-history';
 import { isOngoing } from './normalize-history';
 
 /** One thing a person is doing now, for the headline under their name. */
@@ -7,6 +7,8 @@ export type CurrentRole = {
   kind: 'employment' | 'education';
   /** The role or degree. */
   subject: string;
+  /** The entity behind it, so the headline can open it. */
+  subjectId: string;
   /** Where they hold it. */
   organization: string;
   organizationId: string;
@@ -29,6 +31,7 @@ export function currentRoles(employment: EmploymentCard[], education: EducationC
         .map(entry => ({
           kind,
           subject: entry.subject.name ?? 'Untitled',
+          subjectId: entry.subject.id,
           organization: card.organization.name ?? 'Untitled',
           organizationId: card.organization.id,
           avatarUrl: card.avatarUrl ?? null,
@@ -50,24 +53,38 @@ export function currentRoles(employment: EmploymentCard[], education: EducationC
  *
  * Fields of study count. They are what a degree taught, and without them a
  * bachelor's contributes nothing to a list of what somebody knows.
+ *
+ * Each keeps its entity id, because a skill on a profile is a link to everyone
+ * else who has it. The first id wins where two rows name the same skill: they
+ * are the same entity in every case that matters, and a legacy field of study
+ * carrying no id loses to a real one rather than the other way round.
  */
-export function collectSkills(employment: EmploymentCard[], education: EducationCard[]): string[] {
-  const seen = new Map<string, string>();
+export function collectSkills(employment: EmploymentCard[], education: EducationCard[]): NamedRef[] {
+  const seen = new Map<string, NamedRef>();
 
-  const add = (name: string | null) => {
-    if (name === null) return;
-    const key = name.trim().toLowerCase();
-    if (key !== '' && !seen.has(key)) seen.set(key, name.trim());
+  const add = (ref: NamedRef) => {
+    if (ref.name === null) return;
+    const name = ref.name.trim();
+    const key = name.toLowerCase();
+    if (key === '') return;
+
+    const existing = seen.get(key);
+    if (existing === undefined) {
+      seen.set(key, { id: ref.id, name });
+      return;
+    }
+    // An id where we had none: the same skill, now openable.
+    if (existing.id === '' && ref.id !== '') seen.set(key, { id: ref.id, name });
   };
 
   for (const card of employment) {
-    for (const entry of card.entries) entry.skills.forEach(skill => add(skill.name));
+    for (const entry of card.entries) entry.skills.forEach(add);
   }
 
   for (const card of education) {
     for (const entry of card.entries) {
-      entry.skills.forEach(skill => add(skill.name));
-      entry.fields.forEach(field => add(field.name));
+      entry.skills.forEach(add);
+      entry.fields.forEach(add);
     }
   }
 

@@ -8,7 +8,7 @@ import { ID } from '~/core/id';
 import { type ProfileLink } from '~/core/profile/profile-links';
 import { collectSkills, currentRoles } from '~/core/profile/profile-summary';
 
-import { AddRecordDialog } from './add-record-dialog';
+import { EditRecordDialog } from './edit-record-dialog';
 import { ProfileHeadline } from './profile-headline';
 import { ProfileRecordSection, ProfileSkillsSection } from './profile-record-sections';
 
@@ -32,7 +32,7 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
   const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
 
   const history = useProfileHistory({ entityId: personEntityId, spaceId });
-  const [adding, setAdding] = React.useState<'employment' | 'education' | null>(null);
+  const [editing, setEditing] = React.useState<'employment' | 'education' | null>(null);
 
   const skills = React.useMemo(
     () => collectSkills(history.employment, history.education),
@@ -56,17 +56,24 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
         kind="employment"
         cards={history.employment}
         isOwner={isOwner}
-        onAdd={() => setAdding('employment')}
+        onEdit={() => setEditing('employment')}
+        spaceId={spaceId}
       />
       <ProfileRecordSection
         kind="education"
         cards={history.education}
         isOwner={isOwner}
-        onAdd={() => setAdding('education')}
+        onEdit={() => setEditing('education')}
+        spaceId={spaceId}
       />
-      <ProfileSkillsSection skills={skills} isOwner={isOwner} />
+      <ProfileSkillsSection skills={skills} isOwner={isOwner} spaceId={spaceId} />
 
-      <AddRecordDialog kind={adding} onOpenChange={() => setAdding(null)} entityId={personEntityId} spaceId={spaceId} />
+      <EditRecordDialog
+        kind={editing}
+        onOpenChange={() => setEditing(null)}
+        entityId={personEntityId}
+        spaceId={spaceId}
+      />
     </div>
   );
 }

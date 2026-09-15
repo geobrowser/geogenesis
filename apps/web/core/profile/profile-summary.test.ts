@@ -113,7 +113,13 @@ describe('collectSkills', () => {
       [educationCard('Purdue', { name: 'B.Sc.', fields: ['Computer Science'], skills: ['Quantitative research'] })]
     );
 
-    expect(skills).toEqual(['Market research', 'Product life-cycle', 'Quantitative research', 'Computer Science']);
+    // Names *and* ids: a skill on a profile is a link to everyone else who has it.
+    expect(skills).toEqual([
+      { id: 'skill-Market research', name: 'Market research' },
+      { id: 'skill-Product life-cycle', name: 'Product life-cycle' },
+      { id: 'skill-Quantitative research', name: 'Quantitative research' },
+      { id: 'field-Computer Science', name: 'Computer Science' },
+    ]);
   });
 
   // Two roles claim Market research on the reference account.
@@ -126,20 +132,38 @@ describe('collectSkills', () => {
       []
     );
 
-    expect(skills).toEqual(['Market research', 'Business analysis']);
+    // The first spelling and the first id win; the second row's differently
+    // cased duplicate is the same skill.
+    expect(skills).toEqual([
+      { id: 'skill-Market research', name: 'Market research' },
+      { id: 'skill-Business analysis', name: 'Business analysis' },
+    ]);
   });
 
   // Without this a bachelor's contributes nothing to a list of what someone knows.
   it('counts a field of study as a skill', () => {
     const skills = collectSkills([], [educationCard('Purdue', { name: 'B.Sc.', fields: ['Mechanical Engineering'] })]);
 
-    expect(skills).toEqual(['Mechanical Engineering']);
+    expect(skills).toEqual([{ id: 'field-Mechanical Engineering', name: 'Mechanical Engineering' }]);
   });
 
   it('ignores an unnamed skill rather than rendering a blank chip', () => {
     const card = employmentCard('Geo', [{ name: 'Engineer', skills: ['Real'] }]);
     card.entries[0]!.skills.push({ id: 'skill-none', name: null });
 
-    expect(collectSkills([card], [])).toEqual(['Real']);
+    expect(collectSkills([card], [])).toEqual([{ id: 'skill-Real', name: 'Real' }]);
+  });
+
+  it('takes the id from whichever row has one', () => {
+    // A legacy field of study is a string on the relation with no entity behind
+    // it. Met first, it must not deny the real entity's id to the chip — an id
+    // of '' renders as plain text rather than a link.
+    const legacy = educationCard('Purdue', { name: 'B.Sc.', fields: ['Finance'] });
+    legacy.entries[0]!.fields = [{ id: '', name: 'Finance' }];
+
+    const employment = employmentCard('Geo', [{ name: 'Analyst', skills: ['Finance'] }]);
+
+    expect(collectSkills([], [legacy])).toEqual([{ id: '', name: 'Finance' }]);
+    expect(collectSkills([employment], [legacy])).toEqual([{ id: 'skill-Finance', name: 'Finance' }]);
   });
 });

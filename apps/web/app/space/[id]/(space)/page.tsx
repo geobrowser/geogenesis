@@ -208,8 +208,13 @@ async function PersonalSpaceBody({
             <Editor spaceId={spaceId} shouldHandleOwnSpacing />
           </React.Suspense>
 
-          <Spacer height={24} />
-          <ToggleEntityPage id={topicEntityId} spaceId={spaceId} />
+          {/*
+           * No properties panel. Every property it would list is already on this
+           * page in a form a reader understands — the types in the rail, the
+           * links beside them, the history in its own sections — and the raw
+           * table underneath them says the same things again in the graph's
+           * vocabulary rather than a person's.
+           */}
           <Spacer height={40} />
 
           <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>

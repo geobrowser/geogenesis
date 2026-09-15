@@ -55,29 +55,23 @@ describe('SpacePageMetadataHeader', () => {
     expect(screen.getByTestId('vote-buttons')).toBeInTheDocument();
   });
 
-  it('hides both on a profile, where they are rendered elsewhere', () => {
-    // Two vote pairs on one entity is the failure this guards: the profile's
-    // action row carries its own, and the types move to the rail.
-    render(<SpacePageMetadataHeader spaceId="space-1" membersComponent={members} hideTypesAndVotes />);
+  it('renders nothing at all for a reader on a profile', () => {
+    // Every part of the row is rendered elsewhere on a profile or says nothing
+    // about a person. Two vote pairs on one entity is the sharpest version:
+    // the profile's action row carries its own.
+    const { container } = render(
+      <SpacePageMetadataHeader spaceId="space-1" membersComponent={members} profileChrome />
+    );
 
-    expect(screen.queryByText('Space')).toBeNull();
-    expect(screen.queryByText('Person')).toBeNull();
-    expect(screen.queryByTestId('vote-buttons')).toBeNull();
-  });
-
-  it('keeps members and Add data on a profile', () => {
-    render(<SpacePageMetadataHeader spaceId="space-1" membersComponent={members} hideTypesAndVotes />);
-
-    expect(screen.getByTestId('members')).toBeInTheDocument();
-    expect(screen.getByTestId('add-data')).toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('still edits types on a profile in edit mode', () => {
-    // The rail's pills are read-only, so suppressing the editor here would
-    // leave a profile with no way to add a type at all.
+    // The rail's pills are read-only, so suppressing the whole row for the
+    // editor too would leave a profile with no way to add a type at all.
     mocks.editable = true;
 
-    render(<SpacePageMetadataHeader spaceId="space-1" membersComponent={members} hideTypesAndVotes />);
+    render(<SpacePageMetadataHeader spaceId="space-1" membersComponent={members} profileChrome />);
 
     expect(screen.getByTestId('types-editor')).toBeInTheDocument();
   });

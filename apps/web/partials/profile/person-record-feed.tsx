@@ -65,7 +65,15 @@ export function PersonRecordFeed({
   return (
     <div className="pt-1">
       {items.map(item => (
-        <ExploreFeedCard key={`${item.entityId}-${item.spaceId}`} item={item} hideJoinButton />
+        <ExploreFeedCard
+          key={`${item.entityId}-${item.spaceId}`}
+          item={item}
+          hideJoinButton
+          // The claim opens in the side panel rather than navigating, as it does
+          // on Explore: this is a list somebody is reading down, and losing the
+          // page to read one row is a worse trade here than it is anywhere.
+          titleOpensSidePanel
+        />
       ))}
 
       {showPager && (

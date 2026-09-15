@@ -10,25 +10,31 @@ import {
   type EmploymentCard,
   type HistoryCard,
   type HistoryEntry,
+  type NamedRef,
   isOngoing,
 } from '~/core/profile/normalize-history';
 
 import { Avatar } from '~/design-system/avatar';
 import { SquareButton } from '~/design-system/button';
 import { ClampedText } from '~/design-system/clamped-text';
+import { EditSmall } from '~/design-system/icons/edit-small';
+
+import { ProfileEntityLink } from './profile-entity-link';
 
 type Kind = 'employment' | 'education';
 
-const COPY: Record<Kind, { title: string; empty: string; add: string }> = {
+const COPY: Record<Kind, { title: string; empty: string; add: string; edit: string }> = {
   employment: {
     title: 'Experience',
     empty: 'Nothing here yet.',
     add: 'Add a role and it appears on your profile',
+    edit: 'Edit experience',
   },
   education: {
     title: 'Education',
     empty: 'Nothing here yet.',
     add: 'Add a school and it appears on your profile',
+    edit: 'Edit education',
   },
 };
 
@@ -41,12 +47,28 @@ const COPY: Record<Kind, { title: string; empty: string; add: string }> = {
  */
 const SHOWN = 2;
 
+/** How many skills the section shows before offering the rest. */
+const SHOWN_SKILLS = 8;
+
+/**
+ * The Geo relation pill, as `LinkableChip` draws it.
+ *
+ * Spelled out rather than borrowed, because a skill is a name rather than a
+ * link and `LinkableChip` is an anchor. Same border, radius, padding and type,
+ * so the two read as one family.
+ */
+const SKILL_CHIP =
+  'inline-flex items-center rounded border border-grey-02 bg-white px-1.5 py-1 text-metadataMedium leading-4.5! font-normal! text-text';
+
 type Props = {
   kind: Kind;
   cards: (EmploymentCard | EducationCard)[];
-  /** Only the owner sees an empty section, and only the owner can add to one. */
+  /** Only the owner sees an empty section, and only the owner can act on one. */
   isOwner: boolean;
-  onAdd: () => void;
+  /** Opens this section's editor — add, change and remove, all in one place. */
+  onEdit: () => void;
+  /** Where every name on this card opens, which is the space the profile is in. */
+  spaceId: string;
 };
 
 /**
@@ -61,7 +83,7 @@ type Props = {
  * for anyone else it is a fact about somebody they cannot act on, and four empty
  * cards make an active account look abandoned.
  */
-export function ProfileRecordSection({ kind, cards, isOwner, onAdd }: Props) {
+export function ProfileRecordSection({ kind, cards, isOwner, onEdit, spaceId }: Props) {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const copy = COPY[kind];
 
@@ -78,17 +100,19 @@ export function ProfileRecordSection({ kind, cards, isOwner, onAdd }: Props) {
             <span className="rounded bg-grey-01 px-1.5 font-mono text-tag text-grey-04">{cards.length}</span>
           )}
         </h3>
-        {isOwner && (
-          <SquareButton onClick={onAdd} aria-label={`Add ${kind === 'employment' ? 'a position' : 'education'}`}>
-            +
-          </SquareButton>
-        )}
+        {/*
+         * A pen, not a plus. The section's own control should offer everything
+         * that can be done to the section: a plus could only add, so removing a
+         * role meant leaving the profile for the Edit profile modal, which also
+         * edits your banner and your name.
+         */}
+        {isOwner && <SquareButton onClick={onEdit} icon={<EditSmall />} aria-label={copy.edit} />}
       </header>
 
       {cards.length === 0 ? (
         <div className="rounded-lg border border-dashed border-grey-02 px-3 py-4 text-center">
           <p className="text-metadata text-grey-04">{copy.empty}</p>
-          <button type="button" onClick={onAdd} className="mt-1 text-metadata text-ctaPrimary hover:underline">
+          <button type="button" onClick={onEdit} className="mt-1 text-metadata text-ctaPrimary hover:underline">
             {copy.add}
           </button>
         </div>
@@ -96,7 +120,7 @@ export function ProfileRecordSection({ kind, cards, isOwner, onAdd }: Props) {
         <ul className="flex flex-col divide-y divide-divider rounded-lg border border-grey-02">
           {shown.map(card => (
             <li key={card.organization.id} className="p-4">
-              <OrganizationBlock card={card} isExpanded={isExpanded} />
+              <OrganizationBlock card={card} isExpanded={isExpanded} spaceId={spaceId} />
             </li>
           ))}
         </ul>
@@ -115,7 +139,15 @@ export function ProfileRecordSection({ kind, cards, isOwner, onAdd }: Props) {
   );
 }
 
-function OrganizationBlock({ card, isExpanded }: { card: HistoryCard<HistoryEntry>; isExpanded: boolean }) {
+function OrganizationBlock({
+  card,
+  isExpanded,
+  spaceId,
+}: {
+  card: HistoryCard<HistoryEntry>;
+  isExpanded: boolean;
+  spaceId: string;
+}) {
   // Time actually spent here, not the distance from the first start to the last
   // end — a gap between two spells at one employer is not time served.
   const duration = formatTotalDuration(
@@ -127,17 +159,31 @@ function OrganizationBlock({ card, isExpanded }: { card: HistoryCard<HistoryEntr
   const hasRun = card.entries.length > 1;
 
   return (
-    <div className="flex gap-3">
-      <Avatar size={36} value={card.organization.id} avatarUrl={card.avatarUrl ?? undefined} square />
+    <div className="flex min-w-0 gap-3">
+      {/*
+       * The box is the size, not the prop. `Avatar` renders `h-full w-full`
+       * once it has an image — `size` only reaches the generated fallback — so
+       * an organisation with a logo filled the whole column and pushed the
+       * dates out over the rail.
+       */}
+      <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded bg-grey-01">
+        <Avatar size={36} value={card.organization.id} avatarUrl={card.avatarUrl ?? undefined} square />
+      </span>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-smallTitle text-text">{card.organization.name ?? 'Untitled'}</p>
+        <ProfileEntityLink
+          entityId={card.organization.id}
+          spaceId={spaceId}
+          className="block truncate text-smallTitle text-text hover:underline"
+        >
+          {card.organization.name ?? 'Untitled'}
+        </ProfileEntityLink>
         {duration && <p className="text-metadata text-grey-04">{duration}</p>}
 
         <ul className={cx('mt-2 flex flex-col gap-3', hasRun && 'border-l border-grey-02 pl-3')}>
           {card.entries.map(entry => (
             <li key={entry.relationId}>
-              <EntryRow entry={entry} isExpanded={isExpanded} />
+              <EntryRow entry={entry} isExpanded={isExpanded} spaceId={spaceId} />
             </li>
           ))}
         </ul>
@@ -146,28 +192,42 @@ function OrganizationBlock({ card, isExpanded }: { card: HistoryCard<HistoryEntr
   );
 }
 
-function EntryRow({ entry, isExpanded }: { entry: HistoryEntry; isExpanded: boolean }) {
+function EntryRow({ entry, isExpanded, spaceId }: { entry: HistoryEntry; isExpanded: boolean; spaceId: string }) {
   const isOpen = isOngoing(entry);
   const subject = entry.subject.name ?? 'Untitled';
 
   const dates = formatDateRange(entry.startDate, entry.endDate, isOpen);
   const duration = isOpen || entry.endDate !== null ? formatDuration(entry.startDate, entry.endDate) : null;
 
-  const fields = 'fields' in entry ? (entry as { fields: { name: string | null }[] }).fields : [];
-  const skills = 'skills' in entry ? (entry as { skills: { name: string | null }[] }).skills : [];
+  const fields = 'fields' in entry ? (entry as { fields: NamedRef[] }).fields : [];
+  const skills = 'skills' in entry ? (entry as { skills: NamedRef[] }).skills : [];
   const employmentType =
     'employmentType' in entry ? (entry as { employmentType: { name: string | null } | null }).employmentType : null;
   const location = 'location' in entry ? (entry as { location: { name: string | null } | null }).location : null;
   const locationType =
     'locationType' in entry ? (entry as { locationType: { name: string | null } | null }).locationType : null;
 
-  const heading = fields.length > 0 ? `${subject}, ${fields.map(f => f.name ?? 'Untitled').join(', ')}` : subject;
   const place = [location?.name, locationType?.name].filter(Boolean).join(' · ');
   const meta = [dates, duration, employmentType?.name, place].filter(Boolean).join(' · ');
 
   return (
     <div className="min-w-0">
-      <p className="truncate text-inputMedium text-text">{heading}</p>
+      {/* The degree and its fields are separate entities that read as one line —
+          "Doctor of Philosophy, Finance" — so each is its own link rather than
+          one link over the sentence. */}
+      <p className="truncate text-inputMedium text-text">
+        <ProfileEntityLink entityId={entry.subject.id} spaceId={spaceId} className="hover:underline">
+          {subject}
+        </ProfileEntityLink>
+        {fields.map((field, index) => (
+          <React.Fragment key={`${field.id}-${index}`}>
+            {index === 0 ? ', ' : ', '}
+            <ProfileEntityLink entityId={field.id} spaceId={spaceId} className="hover:underline">
+              {field.name ?? 'Untitled'}
+            </ProfileEntityLink>
+          </React.Fragment>
+        ))}
+      </p>
       {meta && <p className="text-metadata text-grey-04">{meta}</p>}
 
       {entry.description && (
@@ -191,18 +251,13 @@ function EntryRow({ entry, isExpanded }: { entry: HistoryEntry; isExpanded: bool
       {skills.length > 0 && (
         <ul className="mt-1.5 flex flex-wrap gap-1">
           {(isExpanded ? skills : skills.slice(0, 4)).map((skill, index) => (
-            <li
-              key={`${skill.name ?? 'untitled'}-${index}`}
-              className="rounded-full border border-grey-02 px-2 py-px text-smallButton text-grey-04"
-            >
-              {skill.name ?? 'Untitled'}
+            <li key={`${skill.name ?? 'untitled'}-${index}`}>
+              <ProfileEntityLink entityId={skill.id} spaceId={spaceId} className={cx(SKILL_CHIP, 'hover:border-text')}>
+                {skill.name ?? 'Untitled'}
+              </ProfileEntityLink>
             </li>
           ))}
-          {!isExpanded && skills.length > 4 && (
-            <li className="rounded-full border border-ctaTertiary px-2 py-px text-smallButton text-ctaPrimary">
-              +{skills.length - 4}
-            </li>
-          )}
+          {!isExpanded && skills.length > 4 && <li className={cx(SKILL_CHIP, 'text-grey-04')}>+{skills.length - 4}</li>}
         </ul>
       )}
     </div>
@@ -217,13 +272,21 @@ function EntryRow({ entry, isExpanded }: { entry: HistoryEntry; isExpanded: bool
  * account, of which Purdue contributes two — and only because a field of study
  * counts as a skill.
  */
-export function ProfileSkillsSection({ skills, isOwner }: { skills: string[]; isOwner: boolean }) {
+export function ProfileSkillsSection({
+  skills,
+  isOwner,
+  spaceId,
+}: {
+  skills: NamedRef[];
+  isOwner: boolean;
+  spaceId: string;
+}) {
   const [showAll, setShowAll] = React.useState(false);
 
   if (skills.length === 0 && !isOwner) return null;
   if (skills.length === 0) return null;
 
-  const shown = showAll ? skills : skills.slice(0, 8);
+  const shown = showAll ? skills : skills.slice(0, SHOWN_SKILLS);
 
   return (
     <section className="flex flex-col">
@@ -232,23 +295,29 @@ export function ProfileSkillsSection({ skills, isOwner }: { skills: string[]; is
         <span className="rounded bg-grey-01 px-1.5 font-mono text-tag text-grey-04">{skills.length}</span>
       </h3>
 
-      <ul className="flex flex-wrap gap-1.5 rounded-lg border border-grey-02 p-4">
+      {/* The toggle sits inside the container, in the flow of the chips it
+          controls — below the box it reads as a control over the section, which
+          is a different and larger promise than "show the rest of these". */}
+      <ul className="flex flex-wrap items-center gap-1.5 rounded-lg border border-grey-02 p-4">
         {shown.map(skill => (
-          <li key={skill} className="rounded-full border border-grey-02 px-2.5 py-0.5 text-smallButton text-grey-04">
-            {skill}
+          <li key={`${skill.id}-${skill.name}`}>
+            <ProfileEntityLink entityId={skill.id} spaceId={spaceId} className={cx(SKILL_CHIP, 'hover:border-text')}>
+              {skill.name ?? 'Untitled'}
+            </ProfileEntityLink>
           </li>
         ))}
+        {skills.length > SHOWN_SKILLS && (
+          <li>
+            <button
+              type="button"
+              onClick={() => setShowAll(value => !value)}
+              className={cx(SKILL_CHIP, 'text-grey-04 hover:border-text hover:text-text')}
+            >
+              {showAll ? 'Show fewer' : `+${skills.length - SHOWN_SKILLS} more`}
+            </button>
+          </li>
+        )}
       </ul>
-
-      {skills.length > 8 && (
-        <button
-          type="button"
-          onClick={() => setShowAll(value => !value)}
-          className="mt-2 self-start text-metadata text-ctaPrimary hover:underline"
-        >
-          {showAll ? 'Show fewer' : `Show all ${skills.length} skills`}
-        </button>
-      )}
     </section>
   );
 }

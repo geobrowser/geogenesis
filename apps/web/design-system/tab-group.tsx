@@ -15,7 +15,15 @@ import { validateEntityId } from '~/core/utils/utils';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 interface TabGroupProps {
-  tabs: Array<{ href: string; label: string; badge?: string; disabled?: boolean; hidden?: boolean }>;
+  tabs: Array<{
+    href: string;
+    label: string;
+    badge?: string;
+    disabled?: boolean;
+    hidden?: boolean;
+    /** Draws a rule before this tab, marking where one group of tabs ends and another begins. */
+    dividerBefore?: boolean;
+  }>;
   className?: string;
 }
 
@@ -116,7 +124,10 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
       >
         <div className="relative flex w-max items-center gap-6 pb-2">
           {tabs.map(t => (
-            <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+            <React.Fragment key={t.href}>
+              {t.dividerBefore && <span aria-hidden className="h-4 w-px shrink-0 bg-grey-02" />}
+              <Tab href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+            </React.Fragment>
           ))}
         </div>
         <div className="sticky right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />

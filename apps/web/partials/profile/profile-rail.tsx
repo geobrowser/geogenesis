@@ -1,5 +1,7 @@
 'use client';
 
+import * as Popover from '@radix-ui/react-popover';
+
 import * as React from 'react';
 
 import Link from 'next/link';
@@ -10,9 +12,10 @@ import { type ProfileLink } from '~/core/profile/profile-links';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { AvatarGroup } from '~/design-system/avatar-group';
+import { LinkableChip } from '~/design-system/chip';
 import { SpacePillSectionHeading } from '~/design-system/space-pill';
 
+import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 import { type SideRailSection, SideRailSections } from '~/partials/entity-page/sticky-side-rail';
 
 type Props = {
@@ -119,7 +122,7 @@ function LinksSection({ links }: { links: ProfileLink[] }) {
               href={link.href}
               target="_blank"
               rel="noreferrer"
-              className="min-w-0 flex-1 truncate text-metadata text-ctaPrimary hover:underline"
+              className="min-w-0 flex-1 truncate text-right text-metadata text-text hover:underline"
             >
               {link.handle}
             </a>
@@ -154,11 +157,32 @@ function AboutSection({
     <section className="flex flex-col">
       <SpacePillSectionHeading>About</SpacePillSectionHeading>
 
+      {/*
+       * What the account *is* first, then what it has done. Joined and Space
+       * type never change and are read once; the three counts change constantly
+       * and are the rows a returning reader scans for, so they sit last, next to
+       * each other, where a set of numbers reads as a set.
+       */}
       <dl className="flex flex-col">
-        {/* Counts first. They are what the rest of this section explains. */}
-        <Fact label="Proposals" value={isLoading ? null : facts.proposals.toLocaleString()} />
-        <Fact label="Positions" value={isLoading ? null : facts.positions.toLocaleString()} />
-        <Fact label="Debates" value={isLoading ? null : facts.debates.toLocaleString()} />
+        {joined && <Fact label="Joined" value={elapsed ? `${joined} · ${elapsed}` : joined} />}
+
+        <Fact label="Space type" value={spaceType === 'PERSONAL' ? 'Personal' : 'DAO'} />
+
+        {types.length > 0 && (
+          <Row label="Types">
+            {/* `LinkableChip` is the relation pill every other surface draws —
+                bordered, text-coloured, border-text on hover. The bespoke blue
+                pill this replaced read as a link, which is the one thing a
+                relation chip is not. */}
+            <span className="flex flex-wrap justify-end gap-1">
+              {types.map(type => (
+                <LinkableChip key={type.id} href={NavUtils.toEntity(spaceId, type.id)}>
+                  {type.name ?? 'Untitled'}
+                </LinkableChip>
+              ))}
+            </span>
+          </Row>
+        )}
 
         {facts.verifiedBy.length > 0 && (
           <Row label="Verified by">
@@ -166,25 +190,23 @@ function AboutSection({
           </Row>
         )}
 
-        {joined && <Fact label="Joined" value={elapsed ? `${joined} · ${elapsed}` : joined} />}
-
-        <Fact label="Space type" value={spaceType === 'PERSONAL' ? 'Personal' : 'DAO'} />
-
-        {types.length > 0 && (
-          <Row label="Types">
-            <span className="flex flex-wrap justify-end gap-1">
-              {types.map(type => (
-                <Link
-                  key={type.id}
-                  href={NavUtils.toEntity(spaceId, type.id)}
-                  className="rounded-full border border-grey-02 px-2 py-px text-tag text-ctaPrimary hover:border-ctaPrimary"
-                >
-                  {type.name ?? 'Untitled'}
-                </Link>
-              ))}
-            </span>
-          </Row>
-        )}
+        {/* Each count is the tab that lists what it counts, which is the only
+            question a number like this raises. */}
+        <Fact
+          label="Debates"
+          value={isLoading ? null : facts.debates.toLocaleString()}
+          href={`/space/${spaceId}/debates`}
+        />
+        <Fact
+          label="Positions"
+          value={isLoading ? null : facts.positions.toLocaleString()}
+          href={`/space/${spaceId}/positions`}
+        />
+        <Fact
+          label="Proposals"
+          value={isLoading ? null : facts.proposals.toLocaleString()}
+          href={`/space/${spaceId}/proposals`}
+        />
 
         {address && <Fact label="Account" value={shortenAddress(address)} mono />}
       </dl>
@@ -203,13 +225,36 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function Fact({ label, value, mono }: { label: string; value: string | null; mono?: boolean }) {
+function Fact({
+  label,
+  value,
+  mono,
+  href,
+}: {
+  label: string;
+  value: string | null;
+  mono?: boolean;
+  /** Where the value goes when it stands for a list. */
+  href?: string;
+}) {
+  if (value === null) {
+    return (
+      <Row label={label}>
+        <span className="inline-block h-4 w-10 animate-pulse rounded bg-grey-01" />
+      </Row>
+    );
+  }
+
+  const text = <span className={mono ? 'font-mono text-tag text-text' : 'text-metadata text-text'}>{value}</span>;
+
   return (
     <Row label={label}>
-      {value === null ? (
-        <span className="inline-block h-4 w-10 animate-pulse rounded bg-grey-01" />
+      {href ? (
+        <Link href={href} className="hover:underline">
+          {text}
+        </Link>
       ) : (
-        <span className={mono ? 'font-mono text-tag text-text' : 'text-metadata text-text'}>{value}</span>
+        text
       )}
     </Row>
   );
@@ -222,48 +267,54 @@ function Fact({ label, value, mono }: { label: string; value: string | null; mon
  * verifier's own space, and a person's is simply the personal one.
  */
 function VerifiedBy({ verifiers }: { verifiers: Verifier[] }) {
-  const [isOpen, setIsOpen] = React.useState(false);
-  const shown = verifiers.slice(0, 3);
-  const rest = verifiers.length - shown.length;
+  const verifierSpaceIds = React.useMemo(() => verifiers.map(verifier => verifier.spaceId), [verifiers]);
 
   return (
-    <div className="relative inline-flex flex-col items-end">
-      <button
-        type="button"
-        onClick={() => setIsOpen(open => !open)}
-        aria-expanded={isOpen}
+    // A popover rather than a boolean and a positioned div: outside-click,
+    // Escape, focus return and the aria wiring are the behaviours people expect
+    // of a thing that opened, and hand-rolling them got only the toggle right.
+    <Popover.Root>
+      <Popover.Trigger
         aria-label={`Verified by ${verifiers.length} ${verifiers.length === 1 ? 'space or person' : 'spaces and people'}`}
         className="inline-flex items-center gap-2 text-metadata text-text hover:underline"
       >
-        <AvatarGroup>
-          {shown.map(verifier => (
-            <AvatarGroup.Item key={verifier.spaceId} size={20}>
-              <Avatar size={20} value={verifier.spaceId} avatarUrl={verifier.avatarUrl ?? undefined} />
-            </AvatarGroup.Item>
-          ))}
-        </AvatarGroup>
-        <span>{rest > 0 ? `+${rest}` : verifiers.length}</span>
-      </button>
+        {/* The same face pile a claim card draws over its agree and disagree
+            counts: overlapped avatars, then a +N badge in the same ring. It
+            resolves its own images from the space ids, which is why the stack
+            is the whole control rather than a stack plus a count. */}
+        <RankingAggregatedSubmitterAvatars submitterSpaceIds={verifierSpaceIds} size={20} maxVisible={3} />
+      </Popover.Trigger>
 
-      {isOpen && (
-        <ul className="absolute top-full right-0 z-30 mt-1 max-h-64 w-64 overflow-y-auto rounded-lg border border-grey-02 bg-white py-1 shadow-dropdown">
-          {verifiers.map(verifier => (
-            <li key={verifier.spaceId}>
-              <Link
-                href={NavUtils.toSpace(verifier.spaceId)}
-                className="flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-grey-01"
-              >
-                <Avatar size={20} value={verifier.spaceId} avatarUrl={verifier.avatarUrl ?? undefined} />
-                <span className="min-w-0 flex-1 truncate text-metadata text-text">
-                  {verifier.name ?? (verifier.isPerson ? 'Untitled person' : 'Untitled space')}
-                </span>
-                <span className="shrink-0 text-tag text-grey-04">{verifier.isPerson ? 'Person' : 'Space'}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+      <Popover.Portal>
+        <Popover.Content
+          align="end"
+          sideOffset={4}
+          className="z-100 max-h-64 w-64 overflow-y-auto rounded-lg border border-grey-02 bg-white py-1 shadow-dropdown"
+        >
+          <ul>
+            {verifiers.map(verifier => (
+              <li key={verifier.spaceId}>
+                <Link
+                  href={NavUtils.toSpace(verifier.spaceId)}
+                  className="flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-grey-01"
+                >
+                  {/* `Avatar` is `h-full w-full` when it has an image — it sizes
+                      to its box, and `size` only reaches the generated fallback.
+                      Unwrapped, a verifier with a logo filled the row. */}
+                  <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full bg-grey-01">
+                    <Avatar size={20} value={verifier.spaceId} avatarUrl={verifier.avatarUrl ?? undefined} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-metadata text-text">
+                    {verifier.name ?? (verifier.isPerson ? 'Untitled person' : 'Untitled space')}
+                  </span>
+                  <span className="shrink-0 text-tag text-grey-04">{verifier.isPerson ? 'Person' : 'Space'}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 

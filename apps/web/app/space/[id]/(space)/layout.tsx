@@ -108,9 +108,18 @@ export default async function Layout(props0: LayoutProps) {
               />
               {isProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={props.id} />}
               <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
+              {/*
+               * A profile renders none of this row. Types move to the rail's
+               * About section, the vote pair into the action row beside Edit
+               * profile, and Import and the member avatars say nothing about a
+               * person — a personal space's only member is its owner. The
+               * editor still gets the row, because that is where types are
+               * added and the rail's pills are a read-only view — which is
+               * decided inside the component, since edit mode is client state.
+               */}
               <SpacePageMetadataHeader
                 spaceId={spaceId}
-                hideTypesAndVotes={isProfile}
+                profileChrome={isProfile}
                 membersComponent={
                   <div className="flex items-center gap-2">
                     <React.Suspense fallback={<MembersSkeleton />}>
@@ -131,7 +140,16 @@ export default async function Layout(props0: LayoutProps) {
                 <>
                   <PersonalProfileBioStarterMerge entityId={props.id} spaceId={spaceId} />
                   <PersonalProfileSuggestedTaskSync entityId={props.id} spaceId={spaceId} />
-                  <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} withBottomSpacing={false} />
+                  {/*
+                   * The Get started card is off on a profile: its three prompts
+                   * — bio, skills, post — are all things the profile itself now
+                   * offers in place, on the section they belong to, and a
+                   * banner above the fold repeating them is the loudest thing
+                   * on a page about a person.
+                   */}
+                  {!isProfile && (
+                    <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} withBottomSpacing={false} />
+                  )}
                 </>
               ) : null}
               <TypeSchemaInline entityId={props.id} spaceId={spaceId} />

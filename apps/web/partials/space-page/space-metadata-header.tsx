@@ -18,21 +18,25 @@ interface SpacePageMetadataHeaderProps {
   spaceId: string;
   membersComponent: React.ReactElement<any>;
   /**
-   * A profile renders the types and the vote pair elsewhere (GEO-2859).
+   * This row belongs to a space, not a person (GEO-2859).
    *
-   * Types move to the rail's About section, where there is room to say what
-   * they are; the votes move up into the action row beside Edit profile, which
-   * is where every other judgement about this person is made. Suppressed here
-   * rather than moved, because a second vote pair on the same entity is two
-   * controls that fight over one number.
+   * Every part of it is either rendered elsewhere on a profile or says nothing
+   * about one: types move to the rail's About section, the vote pair up into
+   * the action row beside Edit profile, and Import and the member avatars
+   * describe a space whose only member is its owner. So a reader sees none of
+   * it — moving the votes rather than suppressing them would leave two controls
+   * fighting over one number.
+   *
+   * The editor keeps the row, because the types editor lives in it and the
+   * rail's pills are a read-only view.
    */
-  hideTypesAndVotes?: boolean;
+  profileChrome?: boolean;
 }
 
 export function SpacePageMetadataHeader({
   spaceId,
   membersComponent,
-  hideTypesAndVotes = false,
+  profileChrome = false,
 }: SpacePageMetadataHeaderProps) {
   const [addTypeState, setAddTypeState] = React.useState(false);
 
@@ -49,6 +53,8 @@ export function SpacePageMetadataHeader({
   ));
 
   const editable = useUserIsEditing(spaceId);
+
+  if (profileChrome && !editable) return null;
 
   return (
     <div className="relative z-20 flex flex-wrap items-center justify-between gap-y-4 text-text">
@@ -71,13 +77,13 @@ export function SpacePageMetadataHeader({
               </button>
             )}
           </div>
-        ) : hideTypesAndVotes ? null : (
+        ) : (
           additionalTypeChips
         )}
         {membersComponent}
         <AddDataChip spaceId={spaceId} />
       </div>
-      {!hideTypesAndVotes && <EntityVoteButtons entityId={id} spaceId={spaceId} />}
+      <EntityVoteButtons entityId={id} spaceId={spaceId} />
     </div>
   );
 }

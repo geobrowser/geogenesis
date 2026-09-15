@@ -1,11 +1,10 @@
 'use client';
 
-import Link from 'next/link';
-
 import type { CurrentRole } from '~/core/profile/profile-summary';
-import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+
+import { ProfileEntityLink } from './profile-entity-link';
 
 type Props = {
   roles: CurrentRole[];
@@ -28,14 +27,23 @@ export function ProfileHeadline({ roles, spaceId }: Props) {
     <ul className="mt-1 flex flex-col gap-0.5">
       {roles.map(role => (
         <li key={`${role.kind}-${role.organizationId}-${role.subject}`} className="flex items-center gap-2">
-          <Avatar size={16} value={role.organizationId} avatarUrl={role.avatarUrl ?? undefined} square />
+          {/*
+           * `Avatar` sizes to its box, not to `size` — that prop only reaches
+           * the generated fallback — so an organisation with a logo needs this
+           * wrapper or it fills the row.
+           */}
+          <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm bg-grey-01">
+            <Avatar size={16} value={role.organizationId} avatarUrl={role.avatarUrl ?? undefined} square />
+          </span>
           <span className="min-w-0 truncate text-metadata text-text">
-            {role.subject}{' '}
+            <ProfileEntityLink entityId={role.subjectId} spaceId={spaceId} className="hover:underline">
+              {role.subject}
+            </ProfileEntityLink>{' '}
             <span className="text-grey-04">
               at{' '}
-              <Link href={NavUtils.toEntity(spaceId, role.organizationId)} className="hover:underline">
+              <ProfileEntityLink entityId={role.organizationId} spaceId={spaceId} className="hover:underline">
                 {role.organization}
-              </Link>
+              </ProfileEntityLink>
             </span>
           </span>
         </li>
