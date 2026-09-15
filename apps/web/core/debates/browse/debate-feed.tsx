@@ -159,13 +159,26 @@ export function DebatesBrowseFeed({
     return [anchor, ...sorted];
   }, [candidates, processedIds, initialDebateId, rankByDebateId, bestOrderLoading]);
 
-  // Topics live on the claim entity (not the debates API), so resolve them once
-  // for the space and map claim entity id -> topic names.
+  // Topics live on the claim entity (not the debates API), so they are resolved
+  // separately and mapped claim entity id -> topic names.
+  //
+  // A sourced feed asks by claim id rather than by space. Its debates come from
+  // wherever this person argued, so scoping to the space in the route — their
+  // own personal space — would match none of the claims and drop every topic
+  // chip. A space's own feed keeps the space filter: the claims are all in it,
+  // and one query beats a growing id list.
+  const sourceClaimIds = React.useMemo(
+    () => (source === undefined ? null : [...new Set(candidates.map(debate => debate.claim.claim_entity_id))]),
+    [source, candidates]
+  );
   const { entities: claims } = useQueryEntities({
-    where: {
-      spaces: [{ equals: spaceId }],
-      types: [{ id: { equals: CLAIM_TYPE_ID } }],
-    },
+    where:
+      sourceClaimIds === null
+        ? { spaces: [{ equals: spaceId }], types: [{ id: { equals: CLAIM_TYPE_ID } }] }
+        : { id: { in: sourceClaimIds } },
+    // Nothing to ask for before the source has answered, and an empty `in` is
+    // not a question worth sending.
+    enabled: sourceClaimIds === null || sourceClaimIds.length > 0,
     first: 50,
     placeholderData: keepPreviousData,
     includeUnpublishedLocal: true,
