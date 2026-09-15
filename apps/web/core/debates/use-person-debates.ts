@@ -1,89 +1,56 @@
 'use client';
 
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
-import * as React from 'react';
-
-import { getDebate } from '~/core/debates/api';
-import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '~/core/debates/hooks';
+import { ID } from '~/core/id';
 import { fetchPersonDebates, personDebatesQueryKey } from '~/core/io/subgraph/fetch-person-debates';
-
-import type { Debate } from '~/core/debates/api';
+import type { PersonDebate } from '~/core/io/subgraph/fetch-person-debates';
+import { fetchExploreRowsByIds } from '~/core/profile/explore-rows-by-ids';
 
 /**
- * Every debate a person argued, playable (GEO-2859).
+ * Every debate a person argued, as explore cards (GEO-2859).
  *
- * Two sources, because neither can answer alone. **The graph knows which
- * debates** — a debate names its participants with a relation, and that is the
- * only record of it that covers personal spaces. **geo-chat knows how to play
- * one** — the video, the timings, the participants — and it indexes DAO spaces
- * only, so `list_space_debates` on a personal space answers `space_not_found`.
+ * The graph is the only source that can answer this. A debate names its sides
+ * with a relation pointed at the arguer's personal space, and geo-chat — which
+ * would otherwise be the obvious place to ask — indexes DAO spaces only, so
+ * `list_space_debates` on a personal space answers `space_not_found`.
  *
- * What makes the pair work is that `getDebate` is addressed by debate id rather
- * than by space. So the graph supplies the list and geo-chat hydrates each one,
- * and neither is asked a question it cannot answer.
+ * Nothing is hydrated from geo-chat here. `DebateExploreFeedCard` does that
+ * itself, viewport-gated, and falls back to the generic card when a debate
+ * cannot actually be watched — so a record of ten debates makes no video
+ * requests until the reader scrolls to one.
  *
- * The cost is one request per debate. Acceptable at this size — the most active
- * debater in the graph has eleven — and they share `debateQueryKeys.debate`, so
- * a debate already fetched by the room or the browse feed is already warm.
+ * Unpaged: the most active debater in the graph has eleven, and the relation
+ * query takes the lot in one request.
  */
 export function usePersonDebates(spaceId: string, enabled: boolean) {
-  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const query = useQuery({
+    queryKey: [...personDebatesQueryKey(spaceId), 'explore-rows'] as const,
+    queryFn: async ({ signal }) => {
+      const listed = await fetchPersonDebates(spaceId);
 
-  const listQuery = useQuery({
-    queryKey: personDebatesQueryKey(spaceId),
-    queryFn: () => fetchPersonDebates(spaceId),
+      return {
+        rows: await fetchExploreRowsByIds(
+          listed.map(debate => debate.id),
+          signal
+        ),
+        // Which side this person argued, by debate. Kept even though no card
+        // renders it yet: it comes off the relation and nothing downstream can
+        // recover it, so dropping it here would mean re-querying to add the
+        // badge later.
+        sideByDebateId: new Map<string, PersonDebate['side']>(
+          listed.map(debate => [ID.uuidToHex(debate.id), debate.side])
+        ),
+      };
+    },
     enabled: enabled && spaceId !== '',
     staleTime: 60_000,
   });
 
-  const listed = React.useMemo(() => listQuery.data ?? [], [listQuery.data]);
-
-  const hydrated = useQueries({
-    queries: listed.map(debate => ({
-      ...debateQueryNetworkOptions,
-      queryKey: debateQueryKeys.debate(debate.id),
-      queryFn: ({ signal }: { signal: AbortSignal }) =>
-        getDebate(
-          debate.id,
-          authenticated ? getPrivyIdentityToken : undefined,
-          authenticated ? accountKey : null,
-          signal
-        ),
-      enabled: enabled && listed.length > 0,
-    })),
-  });
-
-  const debates = React.useMemo(
-    () => hydrated.map(query => query.data).filter((debate): debate is Debate => debate != null),
-    [hydrated]
-  );
-
-  // Which side this person argued, by debate, for the badge the record shows.
-  // It is the point of the row here rather than incidental to it.
-  const sideByDebateId = React.useMemo(
-    () => new Map(listed.map(debate => [debate.id, debate.side])),
-    [listed]
-  );
-
-  // The space each debate lives in, for the space filter. It comes off the
-  // relation rather than the debate: geo-chat's record has no space on it.
-  const spaceByDebateId = React.useMemo(
-    () => new Map(listed.map(debate => [debate.id, debate.spaceId])),
-    [listed]
-  );
-
-  // Held while the list is resolving *or* while any debate is still arriving —
-  // a partially hydrated feed would paint, then reorder under the reader.
-  const isLoading = listQuery.isLoading || hydrated.some(query => query.isLoading);
-
   return {
-    debates,
-    sideByDebateId,
-    spaceByDebateId,
-    isLoading,
-    isError: listQuery.isError,
-    /** The list resolved and this person has never been in a debate. */
-    isEmpty: !listQuery.isLoading && listed.length === 0,
+    rows: query.data?.rows ?? [],
+    sideByDebateId: query.data?.sideByDebateId ?? new Map<string, PersonDebate['side']>(),
+    isLoading: query.isLoading,
+    isError: query.isError,
   };
 }

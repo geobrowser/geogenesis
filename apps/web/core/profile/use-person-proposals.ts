@@ -21,9 +21,12 @@ export type PersonProposal = {
   status: ProposalStatus;
   /** Unix seconds. Zero means the indexer has not stamped one. */
   createdAt: number;
+  /** Unix seconds. Zero until the first vote opens the window — see `proposalTimestampSeconds`. */
+  startTime: number;
   endTime: number;
   yes: number;
   no: number;
+  abstain: number;
 };
 
 export type PersonProposalsPage = {
@@ -41,9 +44,11 @@ type ProposalNode = {
   name: string | null;
   createdAt: string | null;
   executedAt: string | null;
+  startTime: string | null;
   endTime: string | null;
   yesCount: string | null;
   noCount: string | null;
+  abstainCount: string | null;
 };
 
 interface NetworkResult {
@@ -91,9 +96,11 @@ function personProposalsQuery(spaceId: string, first: number, after: string | nu
         name
         createdAt
         executedAt
+        startTime
         endTime
         yesCount
         noCount
+        abstainCount
       }
     }
   }`;
@@ -199,9 +206,11 @@ export function usePersonProposals({
             type: node.name !== null ? 'ADD_EDIT' : (actionTypes.get(ID.uuidToHex(node.id)) ?? 'ADD_EDIT'),
             status: deriveProposalStatus(node.executedAt, endTime),
             createdAt: Number(node.createdAt ?? 0),
+            startTime: Number(node.startTime ?? 0),
             endTime,
             yes: Number(node.yesCount ?? 0),
             no: Number(node.noCount ?? 0),
+            abstain: Number(node.abstainCount ?? 0),
           } satisfies PersonProposal;
         }),
         endCursor: connection?.pageInfo?.endCursor ?? null,

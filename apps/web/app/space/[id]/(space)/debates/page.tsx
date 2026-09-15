@@ -2,7 +2,8 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
-import { PersonDebateFeed } from '~/core/debates/browse/person-debate-feed';
+import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
+import { PersonDebatesTab } from '~/partials/profile/person-debates-tab';
 
 import { cachedFetchSpace } from '../../cached-fetch-space';
 import { DebatesPageClient } from './debates-page-client';
@@ -20,11 +21,19 @@ export default async function DebatesPage(props: Props) {
 
   const space = await cachedFetchSpace(params.id);
 
-  // A personal space gets its owner's debates rather than the space's own, which
-  // geo-chat cannot answer for: it indexes DAO spaces only. Same feed, different
-  // list — see `usePersonDebates`.
+  // A personal space shows the person's own debates as cards, inside the
+  // profile. Not the full-screen player: this is a record being read beside the
+  // rest of a profile, and the player takes the page over.
   if (space?.type === 'PERSONAL') {
-    return <PersonDebateFeed spaceId={params.id} />;
+    return (
+      // `pb-16` because `Main` drops its own padding on this route — see
+      // `SpaceChromeGate`, which puts the top half back above the header.
+      <div className="pb-16">
+        <EntityPageContentContainer>
+          <PersonDebatesTab spaceId={params.id} />
+        </EntityPageContentContainer>
+      </div>
+    );
   }
 
   // Full-bleed: no content-width container. The feed fills the viewport itself.

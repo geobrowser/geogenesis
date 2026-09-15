@@ -1,6 +1,10 @@
 import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
+import { Effect } from 'effect';
 import { notFound } from 'next/navigation';
+
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph';
+import type { Profile } from '~/core/types';
 
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { PersonProposalsTab } from '~/partials/profile/person-proposals-tab';
@@ -30,9 +34,27 @@ export default async function ProposalsPage(props: Props) {
     notFound();
   }
 
+  // One lookup for the page. Every row on it was proposed by the same person —
+  // the one whose profile this is — so the byline is resolved here rather than
+  // per row, and the rows carry no proposer of their own to disagree with it.
+  const [proposer] = await Effect.runPromise(fetchProfilesBySpaceIds([params.id]));
+
   return (
     <EntityPageContentContainer>
-      <PersonProposalsTab spaceId={params.id} />
+      <PersonProposalsTab spaceId={params.id} proposer={proposer ?? fallbackProposer(params.id)} />
     </EntityPageContentContainer>
   );
+}
+
+/** Someone the graph has no profile row for yet. The rows still render, unnamed. */
+function fallbackProposer(spaceId: string): Profile {
+  return {
+    id: spaceId,
+    spaceId,
+    name: null,
+    avatarUrl: null,
+    coverUrl: null,
+    address: spaceId as `0x${string}`,
+    profileLink: null,
+  };
 }
