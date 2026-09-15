@@ -295,6 +295,7 @@ function ClaimHeader({
   endSlot,
   isControversial,
   onOpenClaim,
+  compactTitle = false,
 }: {
   claim: DebateClaimSummary;
   isOnGraph: boolean;
@@ -302,8 +303,12 @@ function ClaimHeader({
   /** Flagged beside the space chip — what kind of claim this is, which is the row's own question. */
   isControversial?: boolean;
   onOpenClaim?: () => void;
+  compactTitle?: boolean;
 }) {
-  const claimTextClassName = 'mb-3 block text-metadataMedium leading-snug text-pretty line-clamp-3';
+  const claimTextClassName = cx(
+    'mb-3 block text-metadataMedium leading-snug text-pretty',
+    compactTitle ? 'line-clamp-2 min-h-[calc(1.375em*2)]' : 'line-clamp-3'
+  );
 
   const openable = isOnGraph ? (
     onOpenClaim ? (
@@ -779,6 +784,7 @@ function RespondableControls({
         isOnGraph
         onOpenClaim={onOpenClaim}
         isControversial={summary.isControversial}
+        compactTitle={Boolean(recordPerson)}
         endSlot={
           endSlot ??
           (hideEndSlot ? null : (
@@ -1024,6 +1030,7 @@ function UnresolvableControls({
         claim={claim}
         isOnGraph={false}
         onOpenClaim={onOpenClaim}
+        compactTitle={Boolean(recordPerson)}
         endSlot={
           /* The slot stays live even though the graph cannot resolve this claim, because nothing in
              it needs the graph. Both the match and the debate are geo-chat state, and the request is
