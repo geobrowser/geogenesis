@@ -4,6 +4,7 @@ import { MAX_SEARCH_QUERY_LENGTH } from '~/core/io/search-query';
 
 import {
   GeoChatRequestError,
+  GeoChatSessionError,
   blockDebateUser,
   completeLocalRecordingUpload,
   createDebateRequest,
@@ -948,5 +949,12 @@ describe('geo-chat session sharing', () => {
 
     await result;
     expect((requestSignal as AbortSignal | null)?.aborted).toBe(true);
+  });
+});
+
+describe('GeoChatSessionError', () => {
+  it('keeps the Retry-After delay of the error it wraps', () => {
+    const wrapped = new GeoChatSessionError(new GeoChatRequestError('Too many requests', 'rate_limited', 429, 1_500));
+    expect(wrapped.retryAfterMs).toBe(1_500);
   });
 });

@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import type { EntityResponseIndexingState } from '~/core/hooks/use-entity-vote';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 
 import {
   type DebateResponseKind,
@@ -64,6 +65,8 @@ type ReportLane = {
   rateLimitedRetries: number;
   /** The last report accepted into this lane. A repeat of it is the same run firing again. */
   lastKey: string | null;
+  /** The report `rateLimitedRetries` counts for; each report gets its own retry budget. */
+  retrying: string | null;
 };
 
 export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: unknown) {
@@ -131,6 +134,7 @@ export function useClaimResponseIndexedNotifier(
   accountKey: string | null
 ) {
   const queryClient = useQueryClient();
+  const { personalSpaceId } = usePersonalSpaceId();
   // Lanes outlive the effect, so a re-enabled notifier queues behind a report still in flight
   // instead of racing it.
   const lanes = React.useRef(new Map<string, ReportLane>());
@@ -152,8 +156,9 @@ export function useClaimResponseIndexedNotifier(
   }, [accountKey]);
 
   React.useEffect(() => {
-    if (!enabled || !accountKey) return;
+    if (!enabled || !accountKey || !personalSpaceId) return;
     activeAccountKey.current = accountKey;
+    const viewerSpaceId = personalSpaceId;
 
     // The only refresh guaranteed to postdate the notification, so every surface reading geo-chat's
     // copy of the position — the rematch picker (GEO-2603) and the readiness sources (GEO-2814) —
@@ -190,24 +195,28 @@ export function useClaimResponseIndexedNotifier(
       )
         .then(() => {
           lane.rateLimitedRetries = 0;
+          lane.retrying = null;
         })
         .catch(error => {
           if (isAbortError(error)) return;
-          if (
-            error instanceof GeoChatRequestError &&
-            error.status === 429 &&
-            lane.rateLimitedRetries < MAX_RATE_LIMITED_RETRIES
-          ) {
-            lane.rateLimitedRetries += 1;
-            // A newer report waiting behind this one already carries the newer answer.
-            lane.waiting ??= report;
-            lane.retryTimer = setTimeout(() => {
-              lane.retryTimer = null;
-              drain(lane);
-            }, error.retryAfterMs ?? RATE_LIMITED_RETRY_MS);
-            return;
+          if (error instanceof GeoChatRequestError && error.status === 429) {
+            if (lane.retrying !== report.notificationKey) {
+              lane.retrying = report.notificationKey;
+              lane.rateLimitedRetries = 0;
+            }
+            if (lane.rateLimitedRetries < MAX_RATE_LIMITED_RETRIES) {
+              lane.rateLimitedRetries += 1;
+              // A newer report waiting behind this one already carries the newer answer.
+              lane.waiting ??= report;
+              lane.retryTimer = setTimeout(() => {
+                lane.retryTimer = null;
+                drain(lane);
+              }, error.retryAfterMs ?? RATE_LIMITED_RETRY_MS);
+              return;
+            }
           }
           lane.rateLimitedRetries = 0;
+          lane.retrying = null;
           // Not delivered, so the same report may be sent again.
           if (lane.lastKey === report.notificationKey) lane.lastKey = null;
         })
@@ -229,6 +238,7 @@ export function useClaimResponseIndexedNotifier(
           retryTimer: null,
           rateLimitedRetries: 0,
           lastKey: null,
+          retrying: null,
         };
         lanes.current.set(next.laneKey, lane);
       }
@@ -256,6 +266,11 @@ export function useClaimResponseIndexedNotifier(
 
     const unsubscribe = queryClient.getQueryCache().subscribe(event => {
       if (event.type !== 'updated' || event.action.type !== 'success') return;
+      // An indexing query names the personal space that wrote it. Another account's can still settle
+      // after a switch, and must not be reported under this one.
+      const [scope, writerSpaceId] = event.query.queryKey;
+      if (scope !== 'entity-response-indexing' || typeof writerSpaceId !== 'string') return;
+      if (!sameSpaceId(writerSpaceId, viewerSpaceId)) return;
       const laneKey = `${accountKey}|${event.query.queryHash}`;
       const identity = { accountKey, getPrivyIdentityToken };
 
@@ -285,7 +300,7 @@ export function useClaimResponseIndexedNotifier(
         lane.retryTimer = null;
       }
     };
-  }, [accountKey, enabled, getPrivyIdentityToken, queryClient]);
+  }, [accountKey, enabled, getPrivyIdentityToken, personalSpaceId, queryClient]);
 }
 
 function cancelLane(lane: ReportLane) {
@@ -294,6 +309,10 @@ function cancelLane(lane: ReportLane) {
   if (lane.retryTimer) clearTimeout(lane.retryTimer);
   lane.retryTimer = null;
   lane.waiting = null;
+}
+
+function sameSpaceId(left: string, right: string) {
+  return left.replace(/-/g, '').toLowerCase() === right.replace(/-/g, '').toLowerCase();
 }
 
 function isAbortError(error: unknown) {

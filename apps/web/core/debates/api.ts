@@ -1661,7 +1661,7 @@ export class GeoChatRequestError extends Error {
  */
 export class GeoChatSessionError extends GeoChatRequestError {
   constructor(error: GeoChatRequestError) {
-    super(error.message, error.code, error.status);
+    super(error.message, error.code, error.status, error.retryAfterMs);
     this.name = 'GeoChatSessionError';
   }
 }

@@ -15,6 +15,10 @@ vi.mock('./api', async importOriginal => ({
   notifyClaimResponseIndexed: (...args: unknown[]) => mocks.notify(...args),
 }));
 
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: 'profile-1' }),
+}));
+
 describe('useClaimResponseIndexedNotifier', () => {
   beforeEach(() => {
     mocks.notify.mockReset();
@@ -270,6 +274,67 @@ describe('useClaimResponseIndexedNotifier', () => {
     act(() => queryClient.setQueryData(queryKey, state('indexed', 'positive', 'run-1')));
     await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(3));
     expect(mocks.notify.mock.calls[2]?.[3]).toBe(true);
+  });
+
+  it('ignores an indexing event written by another personal space', async () => {
+    const { queryClient, wrapper } = createHarness();
+    renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });
+
+    act(() => {
+      queryClient.setQueryData(['entity-response-indexing', 'profile-2', 'claim-1', 'space-1', 'stance'], {
+        status: 'indexed',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'positive',
+          personalSpaceId: 'profile-2',
+          responseKind: 'stance',
+          spaceId: 'space-1',
+        },
+        runId: 'run-other-account',
+      });
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+
+  it('gives each report its own Retry-After budget', async () => {
+    const rateLimited = () => new GeoChatRequestError('rate limited', 'rate_limited', 429, 10);
+    let rejectFirst: ((error: unknown) => void) | undefined;
+    mocks.notify
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectFirst = reject;
+          })
+      )
+      .mockRejectedValueOnce(rateLimited())
+      .mockRejectedValueOnce(rateLimited())
+      .mockRejectedValueOnce(rateLimited())
+      .mockResolvedValue(undefined);
+    const { queryClient, wrapper } = createHarness();
+    renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });
+    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'] as const;
+    const pending = (expectedResponse: 'positive' | 'negative', runId: string) => ({
+      status: 'reconciling',
+      pending: {
+        entityId: 'claim-1',
+        expectedResponse,
+        personalSpaceId: 'profile-1',
+        responseKind: 'stance',
+        spaceId: 'space-1',
+      },
+      runId,
+    });
+
+    act(() => queryClient.setQueryData(queryKey, pending('positive', 'run-1')));
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(1));
+    act(() => queryClient.setQueryData(queryKey, pending('negative', 'run-2')));
+
+    // run-1's 429 hands the lane to run-2, which must still get all three retries of its own.
+    await act(async () => rejectFirst?.(rateLimited()));
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(5));
+    expect(mocks.notify.mock.calls.slice(1).every(call => call[3] === false)).toBe(true);
   });
 
   it('reports cleared responses and ignores curation indexing', async () => {
