@@ -22,6 +22,17 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 const mocks = vi.hoisted(() => ({
   debateQuery: { data: undefined as Debate | undefined, isError: false },
   mediaQuery: { data: undefined as { artifacts: { kind: string }[] } | undefined, isError: false },
+  hubOpen: vi.fn(),
+  hubClose: vi.fn(),
+  /** Whether the debates hub is already showing. */
+  hubIsOpen: false,
+  openPrivySignIn: vi.fn(),
+  /** What the button asked to happen once Privy finishes. */
+  privyOnComplete: undefined as undefined | (() => void),
+  /** Privy's answer, which is the authority on whether anyone is signed in. */
+  authenticated: true,
+  /** False while Privy is still restoring the session. */
+  authReady: true,
 }));
 
 type ObserverRecord = {
@@ -37,6 +48,28 @@ vi.mock('~/core/state/feature-flags', () => ({}));
 vi.mock('~/core/debates/hooks', () => ({
   useDebate: () => mocks.debateQuery,
   useDebateMedia: () => mocks.mediaQuery,
+  useGeoChatAuth: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated, accountKey: 'user-a' }),
+}));
+
+// What "Join a debate" reaches for. Stood up the same way the full-screen feed's suite stands them
+// up, so both surfaces' copies of these assertions are asking the same questions of the same seams.
+vi.mock('~/core/debates/matchmaking/use-debates-hub', () => ({
+  useDebatesHub: () => ({
+    isOpen: mocks.hubIsOpen,
+    activeTab: 'lobby' as const,
+    open: mocks.hubOpen,
+    close: mocks.hubClose,
+    toggle: vi.fn(),
+    setTab: vi.fn(),
+  }),
+}));
+
+// Reaches for next-navigation and Privy context these tests do not stand up.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: (onComplete?: () => void) => {
+    mocks.privyOnComplete = onComplete;
+    return mocks.openPrivySignIn;
+  },
 }));
 
 vi.mock('~/core/debates/use-debate-votes', () => ({
@@ -159,6 +192,11 @@ beforeEach(() => {
   observers = [];
   mocks.debateQuery = { data: undefined, isError: false };
   mocks.mediaQuery = { data: undefined, isError: false };
+  // Not mock fns, so `clearAllMocks` does not restore them.
+  mocks.hubIsOpen = false;
+  mocks.authenticated = true;
+  mocks.authReady = true;
+  mocks.privyOnComplete = undefined;
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -218,9 +256,60 @@ describe('DebateExploreFeedCard', () => {
   it('shows the card chrome with video placeholders while the debate loads', () => {
     renderCard();
     expect(screen.getByText('Fast fashion should be discouraged with higher taxation')).toBeDefined();
-    expect(screen.getByText('View all')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Join a debate' })).toBeDefined();
     expect(screen.queryByTestId('player')).toBeNull();
     expect(screen.queryByTestId('fallback')).toBeNull();
+  });
+
+  /**
+   * The card carries the full-screen header's own "Join a debate", which replaced a "View all"
+   * link into the space's debates. It is the shared `JoinDebateButton`, so these check the card is
+   * wired to it rather than re-deciding anything — the decisions themselves are the same code the
+   * full-screen feed's suite covers.
+   */
+  describe('Join a debate', () => {
+    it('opens the debates hub on Lobby', () => {
+      renderCard();
+      fireEvent.click(screen.getByRole('button', { name: 'Join a debate' }));
+      expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
+    });
+
+    it('sends a signed-out viewer to sign in, then opens the hub without a second press', () => {
+      mocks.authenticated = false;
+      renderCard();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Join a debate' }));
+      expect(mocks.openPrivySignIn).toHaveBeenCalledOnce();
+      expect(mocks.hubOpen).not.toHaveBeenCalled();
+
+      act(() => mocks.privyOnComplete?.());
+      expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
+    });
+
+    it('does nothing until Privy has restored the session', () => {
+      mocks.authReady = false;
+      mocks.authenticated = false;
+      renderCard();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Join a debate' }));
+      expect(mocks.openPrivySignIn).not.toHaveBeenCalled();
+      expect(mocks.hubOpen).not.toHaveBeenCalled();
+    });
+
+    it('closes the hub when pressed a second time', () => {
+      mocks.hubIsOpen = true;
+      renderCard();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Join a debate' }));
+      expect(mocks.hubClose).toHaveBeenCalledOnce();
+      expect(mocks.hubOpen).not.toHaveBeenCalled();
+    });
+
+    // The hub dismisses itself on outside pointerdown and exempts anything marked as an opener.
+    it('marks the button as a hub opener so the panel does not dismiss on pointerdown', () => {
+      renderCard();
+      expect(screen.getByRole('button', { name: 'Join a debate' }).hasAttribute('data-debates-hub-opener')).toBe(true);
+    });
   });
 
   /**

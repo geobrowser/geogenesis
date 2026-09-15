@@ -6,6 +6,7 @@ import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
+import { JoinDebateButton } from '~/core/debates/browse/join-debate-button';
 import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
@@ -184,46 +185,48 @@ export function DebateExploreFeedCard({
       // note in `styles.css`: the same card is drawn in the feed, a side panel and a data block.
       className="@container flex flex-col gap-2 border-b border-divider py-4 last:border-b-0"
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          {!hideSpaceLink ? (
-            <Link
-              href={NavUtils.toSpace(item.spaceId)}
-              className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
-            >
-              <SpaceThumb image={item.spaceImage} name={item.spaceName} />
-              <span className="min-w-0 truncate">{item.spaceName}</span>
-            </Link>
-          ) : null}
-          {!hideJoinButton && !item.isMemberOrEditor ? (
-            // The design puts the join CTA as a compact chip beside the space name (the right
-            // side holds "View all"), unlike the generic card's right-aligned button.
-            <ExploreJoinSpaceButton
-              spaceId={item.spaceId}
-              hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
-              variant="pill"
-              label="Join"
-            />
-          ) : null}
-          <span className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
-            Debate
-          </span>
-          <span className="text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">{timeAgo}</span>
-        </div>
-        <Link
-          href={`/space/${item.spaceId}/debates`}
-          className="flex h-7 shrink-0 items-center rounded-full border border-grey-02 px-[11px] text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:border-text"
-        >
-          View all
-        </Link>
-      </div>
-
-      <DebateCardTitle item={item} debate={readyDebate} opensSidePanel={titleOpensSidePanel} />
-
       <div className="flex items-stretch gap-3">
-        {/* Cap the media at the width the designs (and the full-screen feed) use — feed columns,
-            especially data blocks, can be much wider and full-bleed videos dwarf the card. */}
-        <div className="w-full max-w-[480px] min-w-0">
+        {/* Meta, title and media share one column capped at the width the designs (and the
+            full-screen feed) use — feed columns, especially data blocks, can be much wider and
+            full-bleed videos dwarf the card. Capping the whole column rather than the media alone
+            is what puts "Join a debate" on the videos' right edge instead of the card's, and it is
+            the arrangement full screen already has: header above the media, bar beside it. */}
+        <div className="flex w-full max-w-[480px] min-w-0 flex-col gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              {!hideSpaceLink ? (
+                <Link
+                  href={NavUtils.toSpace(item.spaceId)}
+                  className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
+                >
+                  <SpaceThumb image={item.spaceImage} name={item.spaceName} />
+                  <span className="min-w-0 truncate">{item.spaceName}</span>
+                </Link>
+              ) : null}
+              {!hideJoinButton && !item.isMemberOrEditor ? (
+                // The design puts the join CTA as a compact chip beside the space name, unlike the
+                // generic card's right-aligned button — the right side holds the debate CTA.
+                <ExploreJoinSpaceButton
+                  spaceId={item.spaceId}
+                  hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
+                  variant="pill"
+                  label="Join"
+                />
+              ) : null}
+              <span className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
+                Debate
+              </span>
+              <span className="text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">{timeAgo}</span>
+            </div>
+            {/* The same control the full-screen header carries, at the card's own type scale. It
+                replaced a "View all" link into this space's debates: the card is already a debate
+                you can watch, so the CTA worth the corner is the one that puts you in one rather
+                than one that lists more. */}
+            <JoinDebateButton className="!text-[14px]" />
+          </div>
+
+          <DebateCardTitle item={item} debate={readyDebate} opensSidePanel={titleOpensSidePanel} />
+
           {readyDebate ? (
             // `nearViewport` is the same 800px-margin gate the geo-chat lookups already use, so
             // the recordings resolve while the card is still approaching rather than on arrival.
@@ -231,21 +234,22 @@ export function DebateExploreFeedCard({
           ) : (
             <DebateVideoSkeleton />
           )}
+
+          {/* Too narrow for the rail: the same bar as a row beneath the videos, which is the move
+              the full-screen feed makes at its own narrow widths. Both orientations are always in
+              the DOM and the container query hides one — `display: none` takes it out of the tab
+              order and the accessibility tree with it, so only the visible one is ever reachable.
+              Wrapper controls display so it doesn't collide with the bar's own `flex`. */}
+          <div data-testid="debate-card-interaction-row" className="mt-1 hidden debate-card-narrow:block">
+            <DebateInteractionBar orientation="horizontal" {...interactionProps} />
+          </div>
         </div>
+
         {/* A rail down the right of the videos, bottom-aligned, exactly as the full-screen feed
             arranges it at the widths that fit one. */}
         <div data-testid="debate-card-interaction-rail" className="flex flex-col justify-end debate-card-narrow:hidden">
           <DebateInteractionBar orientation="vertical" {...interactionProps} />
         </div>
-      </div>
-
-      {/* Too narrow for the rail: the same bar as a row beneath the videos, which is the move the
-          full-screen feed makes at its own narrow widths. Both are always in the DOM and the
-          container query hides one — `display: none` takes it out of the tab order and the
-          accessibility tree with it, so only the visible one is ever reachable. Wrapper controls
-          display so it doesn't collide with the bar's own `flex`. */}
-      <div data-testid="debate-card-interaction-row" className="mt-1 hidden debate-card-narrow:block">
-        <DebateInteractionBar orientation="horizontal" {...interactionProps} />
       </div>
 
       {readyDebate ? (
