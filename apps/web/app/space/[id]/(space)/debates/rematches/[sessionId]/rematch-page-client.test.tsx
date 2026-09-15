@@ -454,6 +454,10 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
       topics: mocks.topicFacetSettled ? [...counts.values(), ...(enabled ? mocks.facetOnlyTopics : [])] : [],
       isLoading: false,
       settled: enabled && !mocks.featuredCatalogError && mocks.topicFacetSettled,
+      // The same answer as `settled` here: these doubles have no notion of a text search paging, so
+      // the counts they give are always counts of the whole result. The two come apart only while a
+      // search has pages left — see the note above the facet hooks.
+      complete: enabled && !mocks.featuredCatalogError && mocks.topicFacetSettled,
       error: null,
     };
   },
@@ -472,6 +476,10 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
       spaces: [...counts.values(), ...(enabled ? mocks.facetOnlySpaces : [])],
       isLoading: false,
       settled: enabled && !mocks.featuredCatalogError,
+      // The same answer as `settled` here: these doubles have no notion of a text search paging, so
+      // the counts they give are always counts of the whole result. The two come apart only while a
+      // search has pages left — see the note above the facet hooks.
+      complete: enabled && !mocks.featuredCatalogError,
       error: null,
     };
   },

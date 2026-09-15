@@ -7,12 +7,12 @@ import * as Effect from 'effect/Effect';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { graphql } from '~/core/io/graphql-client';
+import { getResultsPage } from '~/core/io/queries';
 
 import {
   NO_TAGGED_CLAIM_FILTERS,
   TAGGED_CLAIMS_PAGE_SIZE,
   type TaggedClaimFilters,
-  searchTerms,
   useTaggedClaims,
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
@@ -27,12 +27,52 @@ const TOPIC = '5d050707bc5840119b1e81ad3adb6244';
 vi.mock('~/core/io/graphql-client', () => ({ graphql: vi.fn() }));
 const graphqlMock = graphql as unknown as Mock;
 
+// Search is answered by the REST endpoint now (GEO-2898), so it is a dependency of this module
+// rather than part of the filter it builds.
+vi.mock('~/core/io/queries', () => ({ getResultsPage: vi.fn() }));
+const searchMock = getResultsPage as unknown as Mock;
+
+/**
+ * Pages of `/search` results, as ids, answered by the offset they were asked for.
+ *
+ * Keyed on the offset rather than on the call order, which is how the endpoint behaves and is
+ * load-bearing here: a *refetch* asks for the same offset again, and a counter handed it the next
+ * page instead — so a retry looked like an empty result and nothing about retrying could be
+ * tested.
+ */
+function respondWithSearch(pages: string[][], total = pages.flat().length) {
+  const byOffset = new Map<number, string[]>();
+  let offset = 0;
+  for (const page of pages) {
+    byOffset.set(offset, page);
+    offset += page.length;
+  }
+  searchMock.mockImplementation((args: { offset?: number }) => {
+    const ids = byOffset.get(args.offset ?? 0) ?? [];
+    return Effect.succeed({
+      results: ids.map(id => ({ id, name: id, description: null, spaces: [], types: [] })),
+      total,
+      rawCount: ids.length,
+      serverCount: ids.length,
+    });
+  });
+}
+
+/** What the module asked the search endpoint for. */
+function sentSearchArgs(call = 0) {
+  return searchMock.mock.calls[call][0] as Record<string, any>;
+}
+
 beforeEach(() => {
   graphqlMock.mockReset();
+  searchMock.mockReset();
 });
 
 function wrapper({ children }: { children: React.ReactNode }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // One client for the life of the mount. Rebuilt in the render body, as it was, every re-render
+  // handed the tree a fresh cache — so nothing was ever really cached, and anything asserting
+  // about a *second* pass over the same key (a retry, an invalidation) could not be written.
+  const client = React.useMemo(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }), []);
   return React.createElement(QueryClientProvider, { client }, children);
 }
 
@@ -66,18 +106,46 @@ function node(
 /** Answers each successive request with the next page, the last one closing the connection. */
 function respondWithPages(pages: unknown[][]) {
   let index = 0;
-  graphqlMock.mockImplementation(({ decoder }) => {
+  graphqlMock.mockImplementation(({ decoder, variables }) => {
     const nodes = pages[index] ?? [];
     const hasNextPage = index < pages.length - 1;
     index += 1;
+    // Only the rows that were asked for, where the request named ids. The connection answers a
+    // filter; a double that handed back its whole page regardless could not tell an id filter that
+    // works from one that is ignored — and every search request names ids.
+    const asked = (variables as any)?.filter?.and?.find((clause: any) => clause.id?.in)?.id?.in as string[] | undefined;
+    const answered = asked ? nodes.filter(node => asked.includes((node as { id: string }).id)) : nodes;
     return Effect.succeed(
-      decoder({ entitiesConnection: { pageInfo: { hasNextPage, endCursor: `cursor-${index}` }, nodes } })
+      decoder({ entitiesConnection: { pageInfo: { hasNextPage, endCursor: `cursor-${index}` }, nodes: answered } })
+    );
+  });
+}
+
+/**
+ * Answers the first request and holds every one after it, which is a search whose ids have arrived
+ * and whose appended page is still hydrating.
+ */
+function respondThenHold(firstPage: unknown[]) {
+  let index = 0;
+  graphqlMock.mockImplementation(({ decoder }) => {
+    index += 1;
+    if (index > 1) return Effect.never;
+    return Effect.succeed(
+      decoder({ entitiesConnection: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: firstPage } })
     );
   });
 }
 
 function renderClaims(filters: TaggedClaimFilters = NO_TAGGED_CLAIM_FILTERS, enabled = true) {
   return renderHook(() => useTaggedClaims(TAG, filters, enabled), { wrapper });
+}
+
+/** The same list, re-renderable with a new set of filters — an edited search, for instance. */
+function renderEditableClaims(initial: TaggedClaimFilters) {
+  return renderHook(({ filters }: { filters: TaggedClaimFilters }) => useTaggedClaims(TAG, filters, true), {
+    wrapper,
+    initialProps: { filters: initial },
+  });
 }
 
 /** The variables the module actually sent, which is where the filter shape lives. */
@@ -260,37 +328,361 @@ describe('the filter it builds', () => {
     });
   });
 
-  it('sends the search term to the server rather than filtering here', async () => {
+  /**
+   * The text goes to `/search` and comes back as ids, and it is the ids that narrow this filter.
+   * That is what lets the matching be fuzzy, stemmed and relevance-ranked while the tag, the topics
+   * and the spaces keep being answered by the graph over the set it returned.
+   */
+  it('narrows by the ids the search endpoint matched rather than by the text', async () => {
+    respondWithSearch([['a1']]);
     respondWithPages([[node('a1', 'One')]]);
     const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'nuclear' });
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    expect(sentVariables().filter.and).toContainEqual({ name: { includesInsensitive: 'nuclear' } });
+    expect(sentSearchArgs().query).toBe('nuclear');
+    expect(sentVariables().filter.and).toContainEqual({ id: { in: ['a1'] } });
+    // And nothing matches the text on the graph any more.
+    expect(sentVariables().filter.and.some((clause: any) => clause.name !== undefined)).toBe(false);
   });
 
-  it('matches a multi-word search a word at a time, so the words need not be adjacent', async () => {
-    // A phrase match is what this used to be, and it was the whole limitation: "Trump affair" found
-    // nothing, while two tagged claims say "an affair between President Donald Trump". One ANDed
-    // clause per word finds those and still cannot return anything a phrase match would have.
+  // The tag is what made this possible (GEO-2876). Without it the tagged set — a few hundred claims
+  // in a corpus of hundreds of thousands — never reached a ranked page: "trump" answered with five
+  // entities named "Trump" and no claims at all.
+  it('asks the endpoint for the tag and the Claim type', async () => {
+    respondWithSearch([['a1']]);
     respondWithPages([[node('a1', 'One')]]);
-    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: '  Trump   affair ' });
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'nuclear' });
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    const nameClauses = sentVariables().filter.and.filter((clause: any) => clause.name !== undefined);
-    expect(nameClauses).toEqual([
-      { name: { includesInsensitive: 'Trump' } },
-      { name: { includesInsensitive: 'affair' } },
+    expect(sentSearchArgs().tagIds).toEqual([TAG]);
+    expect(sentSearchArgs().typeIds).toEqual(['96f859efa1ca4b229372c86ad58b694b']);
+  });
+
+  /**
+   * A search that matched nothing and no search at all are opposite answers, and only one of them
+   * narrows. `id: { in: [] }` returns nothing, which is what "no matches" should show; leaving the
+   * clause out would show the whole tag under a query that matched none of it.
+   */
+  it('asks for no claims at all when the search matched none', async () => {
+    respondWithSearch([[]], 0);
+    respondWithPages([[]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'nothingmatchesthis' });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.claims).toHaveLength(0);
+  });
+
+  // Topics and spaces are still the graph's to answer, over the ids the search returned — which is
+  // the whole reason the search resolves to ids rather than filtering the page in the client.
+  it('keeps narrowing by topic over the search results', async () => {
+    respondWithSearch([['a1', 'a2']]);
+    respondWithPages([[node('a1', 'One', { topics: [{ id: TOPIC, name: 'Nuclear' }] })]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power', topicIds: [TOPIC] });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    const and = sentVariables().filter.and;
+    expect(and).toContainEqual({ id: { in: ['a1', 'a2'] } });
+    expect(and).toContainEqual({
+      relations: { some: { typeId: { is: '806d52bc27e94c9193c057978b093351' }, toEntityId: { is: TOPIC } } },
+    });
+  });
+
+  /**
+   * Relevance is the reason for the move, and the graph cannot supply it: `entitiesConnection` is
+   * ordered `RANKING_SCORE_DESC`, which describes how prominent a claim is rather than how well it
+   * answers what was typed. So the endpoint's order is imposed on each page it returned.
+   */
+  it('lists a page in the endpoint order rather than the graph ranking', async () => {
+    respondWithSearch([['a2', 'a1']]);
+    // The graph hands them back the other way round, which is what ranking score does.
+    respondWithPages([[node('a1', 'Less relevant', { rankingScore: '99' }), node('a2', 'Most relevant')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+
+    expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a2', 'a1']);
+  });
+
+  /**
+   * The endpoint caps a page at 100 rows however large a limit is asked for, so a broad search has
+   * more than it returns — paging it is asking for the next offset, not for a graph cursor. The
+   * cursor belongs to a query that does not run while a search does.
+   */
+  it('pages the search rather than the cursor', async () => {
+    respondWithSearch([['a1'], ['a2']], 2);
+    respondWithPages([[node('a1', 'One')], [node('a2', 'Two')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+    expect(result.current.hasNextPage).toBe(true);
+
+    result.current.fetchNextPage();
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+    // The second request was another offset into the same search.
+    expect(sentSearchArgs(1).offset).toBe(1);
+  });
+
+  // An entity is returned once per space it is tagged in, and the endpoint pages over those rows —
+  // so a claim tagged in two spaces can close one page and open the next. Hydrated twice, it would
+  // be drawn twice.
+  it('does not list a claim twice when it spans a page boundary', async () => {
+    respondWithSearch([['a1'], ['a1', 'a2']], 3);
+    // Each graph page holds both rows; which of them comes back is the id filter's answer.
+    respondWithPages([
+      [node('a1', 'One'), node('a2', 'Two')],
+      [node('a1', 'One'), node('a2', 'Two')],
     ]);
-  });
-
-  it('stops at eight words, so one request cannot grow without bound', async () => {
-    respondWithPages([[node('a1', 'One')]]);
-    const search = Array.from({ length: 12 }, (_, index) => `w${index}`).join(' ');
-    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search });
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    expect(searchTerms(search)).toHaveLength(8);
-    expect(sentVariables().filter.and.filter((clause: any) => clause.name !== undefined)).toHaveLength(8);
+    result.current.fetchNextPage();
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+    expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a1', 'a2']);
+  });
+
+  /**
+   * The rows are built from the ids, so the text lookup is part of the load rather than something
+   * beside it. Reported settled too early, a caller shows its empty state under a query that is
+   * still being answered.
+   */
+  it('is still loading while the text lookup is out', async () => {
+    searchMock.mockImplementation(() => Effect.never);
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(true));
+    expect(result.current.claims).toHaveLength(0);
+  });
+
+  /**
+   * Space narrowing is the graph's alone now, and that is not a shortcut — `/search` has no param
+   * that restricts to a *set* of spaces. `additional_space_ids` widens the canonical scope rather
+   * than narrowing it (the same query answers 81 either way) and `scope=SPACE_SINGLE` takes one
+   * space, which for an allowlist would be a request per space per keystroke.
+   *
+   * So the composition GEO-2789 needs lives here: the picked spaces still reach the tag relation in
+   * the filter these ids narrow.
+   */
+  it('keeps narrowing by space over the search results', async () => {
+    respondWithSearch([['a1']]);
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power', spaceIds: [SPACE] });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(sentVariables().filter.and).toContainEqual({
+      relations: {
+        some: {
+          typeId: { is: '257090341ba5406f94e4d4af90042fba' },
+          toEntityId: { is: TAG },
+          spaceId: { in: [SPACE] },
+        },
+      },
+    });
+    // And the space never went to the endpoint, which cannot narrow by it.
+    expect(sentSearchArgs().additionalSpaceIds).toBeUndefined();
+  });
+
+  /**
+   * The retry behind an error state has to reach whatever failed. While a search is running the
+   * cursor query is not it — it is disabled — so refetching that asked nothing again and the error
+   * stayed on screen through every press.
+   */
+  it('retries the text lookup rather than the idle cursor query', async () => {
+    searchMock.mockImplementation(() => Effect.fail(new Error('search failed')));
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    const before = searchMock.mock.calls.length;
+
+    respondWithSearch([['a1']]);
+    result.current.refetch();
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+    expect(searchMock.mock.calls.length).toBeGreaterThan(before);
+  });
+
+  /**
+   * Both surfaces hand `isLoading` to `HubQueryState`, which replaces the whole list with a
+   * skeleton. So it has to mean "the list is appearing", not "something is in flight": reported
+   * while an appended page hydrated, every scroll blanked the rows the viewer was reading.
+   */
+  it('does not report a load while an appended page hydrates', async () => {
+    respondWithSearch([['a1'], ['a2']], 2);
+    respondThenHold([node('a1', 'One')]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    result.current.fetchNextPage();
+
+    // The second page's rows are still out, and the first page's are still on screen.
+    await waitFor(() => expect(result.current.isFetchingNextPage).toBe(true));
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.claims).toHaveLength(1);
+  });
+
+  /**
+   * A page is not fetched until its rows are. Reported done when only the ids had returned, the
+   * consumers' scroll sentinel re-armed while hydration was out and asked for the next page
+   * immediately — turning a broad search into a pile of in-flight row queries.
+   */
+  it('is still fetching the next page until its rows arrive', async () => {
+    respondWithSearch([['a1'], ['a2']], 2);
+    respondThenHold([node('a1', 'One')]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    result.current.fetchNextPage();
+
+    await waitFor(() => expect(result.current.isFetchingNextPage).toBe(true));
+  });
+
+  /**
+   * Where the id lookup succeeded and a row page did not, retrying the id lookup returns the same
+   * ids under the same key — the failed page stays exactly as it was, and the error outlives every
+   * press of Try again. So the rows are invalidated by key.
+   */
+  it('recovers a failed row hydration on retry', async () => {
+    respondWithSearch([['a1']]);
+    graphqlMock.mockImplementation(() => Effect.fail(new Error('hydration failed')));
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    respondWithPages([[node('a1', 'One')]]);
+    result.current.refetch();
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+  });
+
+  /**
+   * Editing a search mints a new key, and `placeholderData` holds the previous search's ids and
+   * rows through it — the whole point being that narrowing a list narrows it rather than blanking
+   * it. Reporting a load there put a skeleton over rows that were on screen and readable, which is
+   * the flash the placeholder exists to prevent.
+   */
+  it('does not blank the list while an edited search is in flight', async () => {
+    respondWithSearch([['a1']]);
+    respondWithPages([[node('a1', 'One')]]);
+    const { result, rerender } = renderEditableClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    // The next keystroke's lookup is still out.
+    searchMock.mockImplementation(() => Effect.never);
+    rerender({ filters: { ...NO_TAGGED_CLAIM_FILTERS, search: 'powers' } });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.claims).toHaveLength(1);
+  });
+
+  /**
+   * And not on the second round trip either, which is where the first version of this fix still
+   * flashed. Holding the rows while the *ids* are re-fetched is half of it: the new ids are then a
+   * new key for the row request, with nothing behind it, so the list blanked one hop later. Rows
+   * are what the viewer is reading, and they stay until the rows that replace them arrive.
+   */
+  it('does not blank the list while an edited search hydrates its new ids', async () => {
+    respondWithSearch([['a1']]);
+    respondWithPages([[node('a1', 'One')]]);
+    const { result, rerender } = renderEditableClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    // The edited search answers with a different claim, and its rows are still out.
+    respondWithSearch([['a2']]);
+    graphqlMock.mockImplementation(() => Effect.never);
+    rerender({ filters: { ...NO_TAGGED_CLAIM_FILTERS, search: 'powers' } });
+
+    // Waited until the new ids' row request is actually out, or there is nothing to hold across
+    // yet and the assertion passes for want of a second round trip rather than because of it.
+    await waitFor(() =>
+      expect(graphqlMock.mock.calls.some(call => JSON.stringify(call[0].variables?.filter ?? {}).includes('a2'))).toBe(
+        true
+      )
+    );
+
+    // The ids have landed; their rows have not. The previous rows are still on screen.
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.claims).toHaveLength(1);
+  });
+
+  /**
+   * The first search is a narrowing of a list that is already on screen, which makes it the most
+   * obvious place not to blank it — and the one a search-only hold could not reach, because
+   * browsing passes nothing through that hold to be held.
+   */
+  it('keeps the browsed rows on screen while the first search runs', async () => {
+    respondWithPages([[node('a1', 'One'), node('a2', 'Two')]]);
+    const { result, rerender } = renderEditableClaims(NO_TAGGED_CLAIM_FILTERS);
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+
+    // The first query's ids are still out.
+    searchMock.mockImplementation(() => Effect.never);
+    rerender({ filters: { ...NO_TAGGED_CLAIM_FILTERS, search: 'power' } });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.claims).toHaveLength(2);
+  });
+
+  /**
+   * A filter change re-keys every page of an already-paged search at once, and the pages do not
+   * come back together. Reading the first one as the whole answer committed an empty prefix and
+   * reported "no matches" about a search that had them on the page still in flight.
+   */
+  it('does not report an empty result while a later page is still out', async () => {
+    respondWithSearch([['a1'], ['a2']], 2);
+    respondWithPages([
+      [node('a1', 'One'), node('a2', 'Two')],
+      [node('a1', 'One'), node('a2', 'Two')],
+    ]);
+    const { result, rerender } = renderEditableClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+    result.current.fetchNextPage();
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+
+    // A topic is picked. Every page is re-asked; the first answers with nothing that carries the
+    // topic, and the second has not answered at all.
+    let calls = 0;
+    graphqlMock.mockImplementation(({ decoder }) => {
+      calls += 1;
+      if (calls > 1) return Effect.never;
+      return Effect.succeed(
+        decoder({ entitiesConnection: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } })
+      );
+    });
+    rerender({ filters: { ...NO_TAGGED_CLAIM_FILTERS, search: 'power', topicIds: [TOPIC] } });
+
+    await waitFor(() => expect(calls).toBeGreaterThan(1));
+
+    // Watched over the window rather than sampled once: the empty prefix is committed the moment
+    // the first page resolves, which is a tick that a single assertion can land either side of.
+    for (let tick = 0; tick < 20; tick += 1) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      // Still the rows from before the pick, never an empty list the second page will refute.
+      expect(result.current.claims).toHaveLength(2);
+    }
+  });
+
+  /**
+   * A page can dedupe to nothing — every row a repeat of one already seen, which the endpoint's
+   * per-space paging makes possible. Left in the list of pages it becomes a row request with no
+   * ids, which never resolves, and the rows are read in order until one is missing: every page
+   * behind the empty one was hidden for good.
+   */
+  it('lists the pages behind one that deduped to nothing', async () => {
+    // The middle page repeats the first page's only claim.
+    respondWithSearch([['a1'], ['a1'], ['a2']], 3);
+    respondWithPages([
+      [node('a1', 'One'), node('a2', 'Two')],
+      [node('a1', 'One'), node('a2', 'Two')],
+      [node('a1', 'One'), node('a2', 'Two')],
+    ]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    result.current.fetchNextPage();
+    await waitFor(() => expect(result.current.hasNextPage).toBe(true));
+    result.current.fetchNextPage();
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+    expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a1', 'a2']);
   });
 
   it('asks for nothing at all when the search is only whitespace', async () => {
@@ -471,12 +863,72 @@ describe('the facet menus', () => {
     expect(result.current.topics).toHaveLength(1);
   });
 
+  /**
+   * Two questions with different answers while a search is paging, which is why there are two flags.
+   *
+   * The counts are real counts of the ids fetched so far, so they are perfectly good to draw — and
+   * reading them as unsettled blanked both menus for the whole of a broad search, which is how that
+   * was found. They are not counts of *everything* that matched, though, and a topic whose claims
+   * sit on a later page is absent from a prefix — so reconciling a selection against them drops one
+   * that was never invalid.
+   */
+  it('has counts to draw but not counts of everything while the search has pages left', async () => {
+    // More matches than the pages fetched so far, which is what a broad query looks like.
+    respondWithSearch([['a1']], 400);
+    respondWithGroups([{ id: TOPIC, count: 3 }]);
+    const { result } = renderHook(() => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, search: 'the' }, true), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.topics).toHaveLength(1));
+    expect(result.current.settled).toBe(true);
+    expect(result.current.complete).toBe(false);
+  });
+
+  // And both, once the search has nothing left to page.
+  it('is complete once the search is exhausted', async () => {
+    respondWithSearch([['a1']], 1);
+    respondWithGroups([{ id: TOPIC, count: 3 }]);
+    const { result } = renderHook(
+      () => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, search: 'trump' }, true),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(result.current.complete).toBe(true));
+    expect(result.current.settled).toBe(true);
+  });
+
+  /**
+   * A failed lookup is not an answer. It leaves no ids, so a facet counted over them describes
+   * nothing — and both surfaces read `complete` as permission to reconcile the viewer's selection
+   * against the menu, so completing here would drop a valid selection for the duration of a search
+   * outage. The module already holds its facets over a failed *count* for this reason; a failed
+   * search is the same thing one step earlier.
+   */
+  it('does not call a facet complete when the search itself failed', async () => {
+    searchMock.mockImplementation(() => Effect.fail(new Error('search failed')));
+    respondWithGroups([{ id: TOPIC, count: 3 }]);
+    const { result } = renderHook(
+      () => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, search: 'power' }, true),
+      { wrapper }
+    );
+
+    // `complete`, which is what gates reconciling a selection. Whether there are counts to *draw*
+    // is a separate question with its own flag, and drawing whatever exists during an outage is
+    // not the harm — dropping the viewer's topics is.
+    await waitFor(() => expect(result.current.complete).toBe(false));
+    // And held there rather than completing a moment later on the empty result.
+    await new Promise(resolve => setTimeout(resolve, 150));
+    expect(result.current.complete).toBe(false);
+  });
+
   it('counts topics over the topic selection, not around it', async () => {
     // The two menus are not symmetric, and that is the product's own rule. Spaces are OR, so the
     // space menu must not narrow by itself or every unpicked space would read zero. Topics are AND
     // and co-occurrence (GEO-2696): the menu answers "what else do the claims I have narrowed to
     // carry", so the selection *is* applied — and each picked topic comes back with its current
     // count, which is what lets it be un-picked.
+    respondWithSearch([['a1']]);
     respondWithGroups([{ id: TOPIC, count: 12 }]);
     const { result } = renderHook(
       () => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, topicIds: [TOPIC], search: 'x' }, true),
@@ -484,8 +936,29 @@ describe('the facet menus', () => {
     );
     await waitFor(() => expect(result.current.topics).toHaveLength(1));
 
-    const fromEntity = sentVariables().fromEntity;
-    expect(fromEntity.and).toContainEqual({ name: { includesInsensitive: 'x' } });
+    // This hook's own counts requests, identified by the topic it was narrowed to. Hooks from
+    // earlier cases in this file stay mounted and refetch into the same mock, so neither an index
+    // nor a total describes this one.
+    const counts = graphqlMock.mock.calls
+      .map(call => call[0].variables as Record<string, any>)
+      .filter(
+        variables =>
+          variables.groupBy?.includes('TO_ENTITY_ID') && JSON.stringify(variables.fromEntity?.and ?? []).includes(TOPIC)
+      );
+    const fromEntity = counts.at(-1)!.fromEntity;
+    // The counts describe the search's results, which is what riding the same filter buys: the
+    // ids narrow the facet exactly as they narrow the list.
+    expect(fromEntity.and).toContainEqual({ id: { in: ['a1'] } });
+    // And never asked over an empty id list. Counted before the search answered, the first request
+    // asks for the topics of the claims in `[]` — an answer that is always "none", spent
+    // immediately before the real one and read by the menu in between.
+    //
+    // Asserted as a property rather than a request count: hooks from earlier cases in this file
+    // are still mounted and refetch into the same mock, so counting calls measures them too.
+    // And never asked over an empty id list. Counted before the search answered, the first request
+    // asks for the topics of the claims in `[]` — an answer that is always "none", spent
+    // immediately before the real one and read by the menu in between.
+    expect(counts.some(variables => JSON.stringify(variables.fromEntity).includes('"in":[]'))).toBe(false);
     expect(
       fromEntity.and.filter((clause: any) => clause.relations?.some?.typeId?.is === '806d52bc27e94c9193c057978b093351')
     ).toHaveLength(1);
