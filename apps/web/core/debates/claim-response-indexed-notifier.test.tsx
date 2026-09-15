@@ -337,6 +337,45 @@ describe('useClaimResponseIndexedNotifier', () => {
     expect(mocks.notify.mock.calls.slice(1).every(call => call[3] === false)).toBe(true);
   });
 
+  it('keeps a Retry-After wait through a disable and re-enable', async () => {
+    mocks.notify
+      .mockRejectedValueOnce(new GeoChatRequestError('rate limited', 'rate_limited', 429, 300))
+      .mockResolvedValue(undefined);
+    const { queryClient, wrapper } = createHarness();
+    const getPrivyIdentityToken = vi.fn();
+    const { rerender } = renderHook(
+      ({ enabled }) => useClaimResponseIndexedNotifier(enabled, getPrivyIdentityToken, 'account-1'),
+      { initialProps: { enabled: true }, wrapper }
+    );
+
+    act(() => {
+      queryClient.setQueryData(['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'], {
+        status: 'indexed',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'positive',
+          personalSpaceId: 'profile-1',
+          responseKind: 'stance',
+          spaceId: 'space-1',
+        },
+        runId: 'run-retry-after',
+      });
+    });
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+
+    rerender({ enabled: false });
+    rerender({ enabled: true });
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
+  });
+
   it('reports cleared responses and ignores curation indexing', async () => {
     const { queryClient, wrapper } = createHarness();
     renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });

@@ -293,12 +293,8 @@ export function useClaimResponseIndexedNotifier(
     return () => {
       unsubscribe();
       activeAccountKey.current = null;
-      // A report already sent keeps running. A pending retry waits for this account to be active
-      // again, when the next run drains it.
-      for (const lane of lanes.current.values()) {
-        if (lane.retryTimer) clearTimeout(lane.retryTimer);
-        lane.retryTimer = null;
-      }
+      // A report already sent keeps running, and a Retry-After wait keeps its timer. Either drains
+      // once this account is active again.
     };
   }, [accountKey, enabled, getPrivyIdentityToken, personalSpaceId, queryClient]);
 }
