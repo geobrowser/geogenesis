@@ -3,7 +3,6 @@ import { renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
-import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useProposalCommentAttribution } from './use-proposal-comment-attribution';
@@ -16,7 +15,6 @@ const MEMBER_SPACE_ID = 'cc0bf85a27c217d75993bc785a15b198';
 const OTHER_EDITOR_SPACE_ID = 'b7e3a1d95c2f48e0a6d31f7c8b04e592';
 
 const fetchProposal = vi.fn();
-const getMemberSpaceIdsForSpace = vi.fn();
 
 // The app runs these under wagmi and jotai providers; here they are the two inputs being varied.
 let personalSpaceId: string | null = EDITOR_SPACE_ID;
@@ -32,11 +30,6 @@ vi.mock('~/partials/governance/optimistic-voted-atom', () => ({
 
 vi.mock('~/core/io/subgraph/fetch-proposal', () => ({
   fetchProposal: (options: { id: string }) => fetchProposal(options),
-}));
-
-vi.mock('~/core/access/space-access', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/access/space-access')>()),
-  getMemberSpaceIdsForSpace: (spaceId: string, ids: string[]) => getMemberSpaceIdsForSpace(spaceId, ids),
 }));
 
 let client: QueryClient;
@@ -58,9 +51,10 @@ function render(overrides: Partial<Parameters<typeof useProposalCommentAttributi
       useProposalCommentAttribution({
         entityId: PROPOSAL_ID,
         spaceId: SPACE_ID,
-        authorSpaceIds: [EDITOR_SPACE_ID, MEMBER_SPACE_ID],
         editorSpaceIds: new Set([EDITOR_SPACE_ID]),
-        isLoadingEditors: false,
+        memberSpaceIds: new Set([MEMBER_SPACE_ID]),
+        isLoadingRoles: false,
+        isRolesError: false,
         enabled: true,
         ...overrides,
       }),
@@ -71,10 +65,8 @@ function render(overrides: Partial<Parameters<typeof useProposalCommentAttributi
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   fetchProposal.mockReset();
-  getMemberSpaceIdsForSpace.mockReset();
   personalSpaceId = EDITOR_SPACE_ID;
   optimisticVote = undefined;
-  getMemberSpaceIdsForSpace.mockReturnValue(Effect.succeed(new Set([MEMBER_SPACE_ID])));
 });
 
 describe('useProposalCommentAttribution', () => {
@@ -87,18 +79,13 @@ describe('useProposalCommentAttribution', () => {
     expect(result.current.get(MEMBER_SPACE_ID)).toEqual({ role: 'member', vote: null });
   });
 
-  /**
-   * Every surface that renders comments mounts this hook. Membership is a request per comment author,
-   * and nothing outside a proposal badge wants it, so an entity that is not a proposal must not pay.
-   */
-  it('asks nothing about membership for an entity that is not a proposal', async () => {
+  it('says nothing about an entity that is not a proposal', async () => {
     fetchProposal.mockResolvedValue(null);
 
     const { result } = render();
 
     await waitFor(() => expect(fetchProposal).toHaveBeenCalled());
     expect(result.current.size).toBe(0);
-    expect(getMemberSpaceIdsForSpace).not.toHaveBeenCalled();
   });
 
   it('asks nothing at all while there are no comments to badge', async () => {
@@ -108,7 +95,6 @@ describe('useProposalCommentAttribution', () => {
 
     await waitFor(() => expect(result.current.size).toBe(0));
     expect(fetchProposal).not.toHaveBeenCalled();
-    expect(getMemberSpaceIdsForSpace).not.toHaveBeenCalled();
   });
 
   /**
@@ -134,22 +120,23 @@ describe('useProposalCommentAttribution', () => {
     fetchProposal.mockResolvedValue(proposal());
 
     const { result, rerender } = renderHook(
-      (props: { isLoadingEditors: boolean }) =>
+      (props: { isLoadingRoles: boolean }) =>
         useProposalCommentAttribution({
           entityId: PROPOSAL_ID,
           spaceId: SPACE_ID,
-          authorSpaceIds: [EDITOR_SPACE_ID, MEMBER_SPACE_ID],
           editorSpaceIds: new Set([EDITOR_SPACE_ID]),
+          memberSpaceIds: new Set([MEMBER_SPACE_ID]),
+          isRolesError: false,
           enabled: true,
           ...props,
         }),
-      { wrapper, initialProps: { isLoadingEditors: false } }
+      { wrapper, initialProps: { isLoadingRoles: false } }
     );
 
     // Every input has landed — so an empty map after the flip is the hold, not a race.
     await waitFor(() => expect(result.current.size).toBeGreaterThan(0));
 
-    rerender({ isLoadingEditors: true });
+    rerender({ isLoadingRoles: true });
 
     expect(result.current.size).toBe(0);
   });
@@ -181,14 +168,34 @@ describe('useProposalCommentAttribution', () => {
     expect(result.current.get(OTHER_EDITOR_SPACE_ID)).toEqual({ role: 'editor', vote: 'REJECT' });
   });
 
-  it('asks about membership in the proposal space, for the comment authors', async () => {
+  /**
+   * Empty role sets are how "nobody here holds a role" looks, so publishing them when the lookup
+   * failed would unbadge every editor on the page and leave their votes reading as a bare
+   * "Rejected" — stating something false rather than declining to state anything.
+   */
+  it('draws nothing when the role lookup failed, rather than reporting no roles', async () => {
     fetchProposal.mockResolvedValue(proposal());
 
-    render();
+    const { result, rerender } = renderHook(
+      (props: { isRolesError: boolean }) =>
+        useProposalCommentAttribution({
+          entityId: PROPOSAL_ID,
+          spaceId: SPACE_ID,
+          // Empty, as a failed lookup leaves them — the vote is what would still get published.
+          editorSpaceIds: new Set<string>(),
+          memberSpaceIds: new Set<string>(),
+          isLoadingRoles: false,
+          enabled: true,
+          ...props,
+        }),
+      { wrapper, initialProps: { isRolesError: false } }
+    );
 
-    await waitFor(() => expect(getMemberSpaceIdsForSpace).toHaveBeenCalled());
-    const [askedSpaceId, askedIds] = getMemberSpaceIdsForSpace.mock.calls[0];
-    expect(askedSpaceId).toBe(SPACE_ID);
-    expect([...askedIds].sort()).toEqual([EDITOR_SPACE_ID, MEMBER_SPACE_ID].sort());
+    // The vote alone does populate the map, badging the voter a bare "Rejected".
+    await waitFor(() => expect(result.current.get(EDITOR_SPACE_ID)).toEqual({ role: null, vote: 'REJECT' }));
+
+    rerender({ isRolesError: true });
+
+    expect(result.current.size).toBe(0);
   });
 });

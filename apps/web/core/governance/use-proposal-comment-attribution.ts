@@ -6,7 +6,6 @@ import * as React from 'react';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSpaceMemberIds } from '~/core/hooks/use-space-editor-ids';
 import { proposalCommentVotesQueryKey } from '~/core/io/query-keys';
 import { fetchProposal } from '~/core/io/subgraph/fetch-proposal';
 
@@ -29,27 +28,27 @@ const EMPTY_ATTRIBUTION: Map<string, ProposalCommentAttribution> = new Map();
  * now, which is what a reader weighing the comment wants. Snapshotting would mean writing role and
  * vote onto the comment at publish time, which is a different feature.
  *
- * `editorSpaceIds` is passed in because the comments section already has it: it asks who among the
- * comment authors is an editor in order to offer the "editors only" filter, so asking again here
- * would be the same requests twice. Membership is asked for here instead of there, because only this
- * badge needs it.
+ * The roles are passed in because the comments section already has them: it asks who among the
+ * comment authors holds a role in order to offer the "editors only" filter, and both roles come back
+ * from that one request — so asking again here would be the same request twice.
  */
 export function useProposalCommentAttribution({
   entityId,
   spaceId,
-  authorSpaceIds,
   editorSpaceIds,
-  isLoadingEditors,
+  memberSpaceIds,
+  isLoadingRoles,
+  isRolesError,
   enabled,
 }: {
   entityId: string | null;
   /** The space the comments section is reading, which for a proposal entity is the proposal's own. */
   spaceId: string;
-  /** The personal spaces of everyone who has commented — who the badges are actually about. */
-  authorSpaceIds: string[];
   editorSpaceIds: ReadonlySet<string>;
-  /** Whether that editor lookup is still in flight — see the hold below. */
-  isLoadingEditors: boolean;
+  memberSpaceIds: ReadonlySet<string>;
+  /** Whether that role lookup is still in flight, or failed outright — see the hold below. */
+  isLoadingRoles: boolean;
+  isRolesError: boolean;
   enabled: boolean;
 }): Map<string, ProposalCommentAttribution> {
   const { data: proposal } = useQuery({
@@ -71,11 +70,6 @@ export function useProposalCommentAttribution({
     },
   });
 
-  // Keyed on the proposal's own space, which is only known once the fetch above answers — so an
-  // entity that is not a proposal asks nothing, and every other surface that renders comments pays
-  // nothing for a lookup only this badge wants.
-  const { memberSpaceIds, isLoading: isLoadingMembers } = useSpaceMemberIds(proposal?.spaceId ?? '', authorSpaceIds);
-
   // The vote the reader just cast, before the chain and the indexer have caught up. `AcceptOrReject`
   // invalidates the query above on success, but that is a round trip away; this is the same
   // optimistic record the governance list uses to sink a card the moment it is voted on.
@@ -91,11 +85,16 @@ export function useProposalCommentAttribution({
   return React.useMemo(() => {
     if (!proposal) return EMPTY_ATTRIBUTION;
 
-    // Nothing is drawn until both role lookups have answered. They resolve independently of the
-    // votes, so drawing early means a voter reads as a bare "Rejected" and then becomes "Editor ·
-    // Rejected" a beat later — the page correcting itself about a person, which is the failure this
-    // badge is supposed to avoid. An absent badge is honest; a half-built one is not.
-    if (isLoadingEditors || isLoadingMembers) return EMPTY_ATTRIBUTION;
+    // Nothing is drawn until the roles have answered. They resolve independently of the votes, so
+    // drawing early means a voter reads as a bare "Rejected" and then becomes "Editor · Rejected" a
+    // beat later — the page correcting itself about a person, which is the failure this badge is
+    // supposed to avoid. An absent badge is honest; a half-built one is not.
+    //
+    // A failed lookup is held the same way rather than treated as an answer. Empty role sets are how
+    // "nobody here holds a role" looks, so publishing them on error would unbadge every editor on the
+    // page and leave their votes reading as a bare "Rejected" — stating something false rather than
+    // declining to state anything.
+    if (isLoadingRoles || isRolesError) return EMPTY_ATTRIBUTION;
 
     const votes =
       optimisticVote && personalSpaceId
@@ -115,8 +114,8 @@ export function useProposalCommentAttribution({
     editorsMatchProposalSpace,
     editorSpaceIds,
     memberSpaceIds,
-    isLoadingEditors,
-    isLoadingMembers,
+    isLoadingRoles,
+    isRolesError,
     optimisticVote,
     personalSpaceId,
   ]);

@@ -21,7 +21,7 @@ import { useCreateComment } from '~/core/hooks/use-create-comment';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useSpaceEditorIds } from '~/core/hooks/use-space-editor-ids';
+import { useSpaceRoles } from '~/core/hooks/use-space-editor-ids';
 import { uuidToHex } from '~/core/id/normalize';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
@@ -269,7 +269,13 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
     setComposerExpanded(true);
   }, [smartAccount, pendingComposer, entityId, setPendingComposer]);
   const commentAuthorSpaceIds = React.useMemo(() => collectCommentAuthorSpaceIds(comments), [comments]);
-  const { editorSpaceIds, isLoading: isLoadingEditors } = useSpaceEditorIds(spaceId, commentAuthorSpaceIds);
+  // Both roles from one request, so a badge cannot show half of someone's standing.
+  const {
+    editorSpaceIds,
+    memberSpaceIds,
+    isLoading: isLoadingRoles,
+    isError: isRolesError,
+  } = useSpaceRoles(spaceId, commentAuthorSpaceIds);
   // Resolves to an empty map unless this entity is a Debate. Gated on there being comments
   // so entity pages without any don't pay for the lookup.
   const debateVotesByVoter = useDebateVotesByVoter(entityId, totalCount > 0);
@@ -278,9 +284,10 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
   const proposalAttribution = useProposalCommentAttribution({
     entityId,
     spaceId,
-    authorSpaceIds: commentAuthorSpaceIds,
     editorSpaceIds,
-    isLoadingEditors,
+    memberSpaceIds,
+    isLoadingRoles,
+    isRolesError,
     enabled: totalCount > 0,
   });
 

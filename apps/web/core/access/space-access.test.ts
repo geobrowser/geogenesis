@@ -4,16 +4,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const queries = {
   getIsMemberOfSpace: vi.fn(),
   getIsEditorOfSpace: vi.fn(),
+  getSpaceRolesForParticipants: vi.fn(),
 };
 
 vi.mock('~/core/io/queries', () => queries);
 
-const { getEditorSpaceIdsForSpace, getSpaceAccess } = await import('./space-access');
+const { getEditorSpaceIdsForSpace, getSpaceAccess, getSpaceRoles } = await import('./space-access');
 
 describe('space-access', () => {
   beforeEach(() => {
     queries.getIsMemberOfSpace.mockReset();
     queries.getIsEditorOfSpace.mockReset();
+    queries.getSpaceRolesForParticipants.mockReset();
   });
 
   it('treats the owner of a personal space as editor and member without participant-list queries', async () => {
@@ -116,9 +118,9 @@ describe('space-access', () => {
     });
   });
 
-  it('resolves editor badges from server-filtered access checks', async () => {
-    queries.getIsEditorOfSpace.mockImplementation((_spaceId: string, memberSpaceId: string) =>
-      Effect.succeed(memberSpaceId === 'editorspaceid')
+  it('resolves editor badges from a server-filtered role lookup', async () => {
+    queries.getSpaceRolesForParticipants.mockReturnValue(
+      Effect.succeed({ editorSpaceIds: ['editorspaceid'], memberSpaceIds: ['editorspaceid', 'memberspaceid'] })
     );
 
     const editorIds = await Effect.runPromise(
@@ -126,5 +128,38 @@ describe('space-access', () => {
     );
 
     expect(editorIds).toEqual(new Set(['editorspaceid']));
+  });
+
+  /**
+   * One request for both roles rather than one per person per role. A thread's authors are asked
+   * about as a set, so the cost does not grow with the number of people in it.
+   */
+  it('asks about every participant at once, for both roles', async () => {
+    queries.getSpaceRolesForParticipants.mockReturnValue(
+      Effect.succeed({ editorSpaceIds: ['editorspaceid'], memberSpaceIds: ['memberspaceid'] })
+    );
+
+    const roles = await Effect.runPromise(
+      getSpaceRoles('dao-space-id', ['editor-space-id', 'member-space-id', 'Editor-Space-Id'])
+    );
+
+    expect(queries.getSpaceRolesForParticipants).toHaveBeenCalledTimes(1);
+    const [askedSpaceId, askedIds] = queries.getSpaceRolesForParticipants.mock.calls[0];
+    expect(askedSpaceId).toBe('daospaceid');
+    // Deduped across spellings, so the same person is not asked about twice.
+    expect(askedIds).toEqual(['editorspaceid', 'memberspaceid']);
+    expect(roles.editorSpaceIds).toEqual(new Set(['editorspaceid']));
+    expect(roles.memberSpaceIds).toEqual(new Set(['memberspaceid']));
+  });
+
+  /** A personal space holds every role in itself, and the participant lists do not say so. */
+  it('grants a personal space both roles in itself without asking', async () => {
+    queries.getSpaceRolesForParticipants.mockReturnValue(Effect.succeed({ editorSpaceIds: [], memberSpaceIds: [] }));
+
+    const roles = await Effect.runPromise(getSpaceRoles('personal-space-id', ['personal-space-id']));
+
+    expect(queries.getSpaceRolesForParticipants).not.toHaveBeenCalled();
+    expect(roles.editorSpaceIds).toEqual(new Set(['personalspaceid']));
+    expect(roles.memberSpaceIds).toEqual(new Set(['personalspaceid']));
   });
 });
