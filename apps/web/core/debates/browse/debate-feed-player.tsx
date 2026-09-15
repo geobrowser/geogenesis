@@ -18,8 +18,11 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
+import { ClaimScrubberMarkers, DebateClaimTickerCard, useDebateClaimTicker } from './debate-claim-ticker';
+import { DebateScorecard } from './debate-scorecard';
 import { Play, Speaker, SpeakerMuted } from './icons';
 import { WinnerVoteButton } from './winner-vote-button';
+import type { ClaimMarker } from '~/core/debates/claim-ticker';
 
 type DebateFeedPlayerProps = {
   debate: Debate;
@@ -95,6 +98,10 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     }
   }, [active, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend, userPaused]);
 
+  // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
+  // it belongs to is spoken, rather than appearing a beat late on the first one.
+  const ticker = useDebateClaimTicker(debate, playheadSeconds * 1000, active || preload);
+
   const showControls = ready && (userPaused || (playbackEnded && !hasVoted));
   // End of an unvoted debate offers a replay; a user pause shows the paused glyph.
   const showReplay = ready && playbackEnded && !hasVoted;
@@ -167,6 +174,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
               <FeedScrubber
                 currentTime={playheadSeconds}
                 duration={timelineSeconds}
+                markers={ticker.markers}
                 onSeek={seekBoth}
                 onScrubStart={beginScrub}
                 onScrubEnd={endScrub}
@@ -175,6 +183,29 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
           ) : null
         }
       />
+
+      {/* The seam between the two tiles is the one strip of the player that is never a face, so
+          the claim card and the end-of-debate card both sit there. `pointer-events-none` on the
+          positioner keeps the rest of the seam clickable for play/pause. */}
+      {ready && !playbackEnded && ticker.active && (
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-30 flex -translate-y-1/2 justify-center px-3">
+          <DebateClaimTickerCard
+            key={ticker.active.claim.id}
+            window={ticker.active}
+            speaker={ticker.speakerByClaimId.get(ticker.active.claim.id) ?? null}
+            row={ticker.rowsByClaimId.get(ticker.active.claim.id) ?? null}
+            entity={ticker.entitiesByClaimId.get(ticker.active.claim.id) ?? null}
+            onAnswered={ticker.onAnswered}
+            onDismiss={ticker.onDismiss}
+          />
+        </div>
+      )}
+
+      {ready && playbackEnded && (
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-30 flex -translate-y-1/2 justify-center px-3">
+          <DebateScorecard ticker={ticker} onReplay={playFromStart} />
+        </div>
+      )}
 
       {showPausedGlyph && (
         <button
@@ -402,12 +433,14 @@ const isScrubKey = (key: string) =>
 function FeedScrubber({
   currentTime,
   duration,
+  markers,
   onSeek,
   onScrubStart,
   onScrubEnd,
 }: {
   currentTime: number;
   duration: number;
+  markers: ClaimMarker[];
   onSeek: (seconds: number) => void;
   onScrubStart: () => void;
   onScrubEnd: () => void;
@@ -419,6 +452,9 @@ function FeedScrubber({
       <div className="relative h-(--track-height) w-full overflow-hidden rounded-full bg-white/40">
         <span className="absolute inset-y-0 left-0 rounded-full bg-white" style={{ width: `${progress}%` }} />
       </div>
+      {/* Above the track and below the range input, so a marker is clickable but a drag anywhere
+          along the bar still scrubs. */}
+      <ClaimScrubberMarkers markers={markers} onSeek={ms => onSeek(ms / 1000)} className="z-1" />
       <span
         className="pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.35)]"
         style={{ left: `calc(12px + ${progress}% * (100% - 24px) / 100%)` }}
