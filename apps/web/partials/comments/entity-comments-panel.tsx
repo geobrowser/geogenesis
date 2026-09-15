@@ -60,10 +60,11 @@ export function EntityCommentsPanel({
   const slideUpOpenCount = useAtomValue(slideUpOpenCountAtom);
   const setPanelHostElement = useSetAtom(commentsPanelHostElementAtom);
   const panelHostRef = React.useCallback(
-    (node: HTMLElement | null) => setPanelHostElement(node),
+    (node: HTMLElement | null) => {
+      setPanelHostElement(node);
+    },
     [setPanelHostElement]
   );
-  React.useEffect(() => () => setPanelHostElement(null), [setPanelHostElement]);
 
   return (
     <aside

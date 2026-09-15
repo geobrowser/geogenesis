@@ -109,10 +109,13 @@ async function ReviewProposal({ proposalId, spaceId }: Props) {
         <div className="inline-flex shrink-0 items-center gap-2">
           {/* The pills first, then one divider, then the decision. The divider used to be emitted
               by the bounty button, which meant it only appeared on an edit proposal and would have
-              doubled once a second pill sat beside it. It belongs to the group, not to a member. */}
+              doubled once a second pill sat beside it. It belongs to the group, not to a member.
+              `last:hidden` because `AcceptOrReject` renders nothing for a non-editor with no vote
+              of their own — the common case for a visitor — and a divider with nothing after it is
+              a stray line. */}
           {isAddEdit && <ProposalBountyHeadButton />}
           <ProposalCommentsHeadButton />
-          <span aria-hidden className="h-4 w-px shrink-0 self-center bg-grey-02" />
+          <span aria-hidden className="h-4 w-px shrink-0 self-center bg-grey-02 last:hidden" />
           <AcceptOrReject
             spaceId={spaceId}
             proposalId={proposal.id}

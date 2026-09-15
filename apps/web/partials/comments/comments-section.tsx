@@ -273,7 +273,15 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
   // Resolves to an empty map unless this entity is a Debate. Gated on there being comments
   // so entity pages without any don't pay for the lookup.
   const debateVotesByVoter = useDebateVotesByVoter(entityId, totalCount > 0);
-  const proposalAttribution = useProposalCommentAttribution(entityId, totalCount > 0);
+  // Resolves to an empty map unless this entity is a Proposal. Reuses the editor set gathered just
+  // above rather than asking the same question twice.
+  const proposalAttribution = useProposalCommentAttribution({
+    entityId,
+    spaceId,
+    authorSpaceIds: commentAuthorSpaceIds,
+    editorSpaceIds,
+    enabled: totalCount > 0,
+  });
 
   const [sortOrder, setSortOrder] = useState<CommentSortOrder>('newest');
   const [filter, setFilter] = useState<CommentFilter>('all');
