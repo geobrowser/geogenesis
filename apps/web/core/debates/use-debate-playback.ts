@@ -75,6 +75,26 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   /** Slot 1's last forward progress, for telling "stalled" apart from "merely not paused". */
   const primaryProgressRef = React.useRef<{ seconds: number; at: number } | null>(null);
   const lastSyncSeekAtRef = React.useRef(0);
+  /**
+   * Which resume attempt is current.
+   *
+   * `resumeBoth` awaits up to ~600ms confirming both elements really started (playback-utils
+   * polls 4x75ms, and twice if it has to retry muted). A feed card can cross its activation
+   * threshold more than once inside that window. The hysteresis added to the explore card
+   * alongside this makes that rarer, but it cannot make it impossible — any scroll, tap or
+   * scrub landing mid-confirm produces the same overlap, so correctness belongs here.
+   *
+   * Without this guard an interrupted attempt still ran its post-await writes:
+   *   - `suspend()` pauses the elements, so the confirm poll sees `paused` and reports
+   *     'blocked'. The card then shows "Could not play both videos" for a failure that never
+   *     happened and stays frozen until the viewer taps it — GEO-2895's "videos will look
+   *     frozen / stop auto playing ... was able to get it to play after clicking".
+   *   - an attempt that resolved after a suspend set `playing` back to true while the
+   *     elements were paused, and the autoplay effect's `!playing` guard then refused to
+   *     retry, so the card stayed stuck.
+   *   - `setUserPaused(false)` could erase a pause the viewer made during the await.
+   */
+  const resumeGenerationRef = React.useRef(0);
   const getRecordingPlaybackUrlRef = React.useRef(recordingUrlMutation.mutateAsync);
 
   const turnDurations = React.useMemo(
@@ -305,6 +325,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   }, [debate.first_participant_slot, offsets.slot1, offsets.slot2, seekVideosTo, timelineSeconds, turnDurations]);
 
   const pauseBoth = React.useCallback(() => {
+    // Supersede any resume still confirming, so it cannot un-pause the viewer.
+    resumeGenerationRef.current++;
     for (const video of videos()) video.pause();
     setPlaying(false);
     setUserPaused(true);
@@ -315,6 +337,9 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     const primaryVideo = slot1VideoRef.current;
     const secondaryVideo = slot2VideoRef.current;
     if (!primaryVideo || !secondaryVideo) return;
+    // Claim this attempt. Bumping on entry also supersedes an earlier resume that is still
+    // awaiting, so two overlapping activations cannot both write state.
+    const generation = ++resumeGenerationRef.current;
     setError(null);
     // Realign slot 2 to slot 1's position so a resume can't leave the recordings drifting.
     seekVideosTo(clampSeconds(primaryVideo.currentTime + offsets.slot1, timelineSeconds));
@@ -322,6 +347,10 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // policy) leaves the video paused rather than throwing — check both the
     // settled results and the paused state, and surface the error inline.
     const outcome = await playBothWithMutedFallback(primaryVideo, secondaryVideo);
+    // Superseded while we waited — something else owns these elements now. Every write below
+    // would describe a playback attempt that no longer exists, including the 'blocked' error,
+    // which at this point only means "someone paused us mid-confirm".
+    if (resumeGenerationRef.current !== generation) return;
     if (outcome === 'blocked') {
       primaryVideo.pause();
       secondaryVideo.pause();
@@ -384,6 +413,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   // Autoplay control for the feed: when a debate scrolls out of view we pause it
   // silently (without flipping userPaused, so it can auto-resume when back in view).
   const suspend = React.useCallback(() => {
+    // The card left the viewport; a resume still confirming is stale by definition.
+    resumeGenerationRef.current++;
     for (const video of videos()) video.pause();
     setPlaying(false);
     setTurnState(null);
@@ -399,6 +430,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // overwrite it with the now-paused `playing` value.
     if (isScrubbingRef.current) return;
     isScrubbingRef.current = true;
+    // The drag owns the playhead now; don't let a pending resume fight it.
+    resumeGenerationRef.current++;
     wasPlayingBeforeScrubRef.current = playing;
     setIsScrubbing(true);
     for (const video of videos()) video.pause();
