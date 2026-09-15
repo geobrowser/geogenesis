@@ -16,6 +16,7 @@ import {
   type DebateRequest,
   type DebateRequestParty,
   type DismissDebateRequestBody,
+  GeoChatRequestError,
   type MatchmakingClaimsQuery,
   acceptDebateRequest,
   blockDebateUser,
@@ -78,12 +79,45 @@ const EMPTY_PEOPLE: DebatePerson[] = [];
 const EMPTY_PARTIES: DebateRequestParty[] = [];
 const EMPTY_PARTICIPANTS: DebateParticipantSummary[] = [];
 
+/** How many times a viewer-relative read that might yet succeed repeats before it is called failed. */
+const TRANSIENT_RETRIES = 3;
+
+/**
+ * Every query in this file is keyed on the viewer's account, and they all fail together for an
+ * account geo-chat has not finished registering.
+ *
+ * Reported from a fresh sign-up: the hub sat in "Something went wrong" for a minute or two, on a
+ * backend that was about to work. Nothing here refetches on focus or reconnect, and
+ * `debateQueryNetworkOptions` does not retry — deliberately, because a public read answered 503
+ * should be one request rather than four — so a first read that failed stayed failed until the
+ * viewer pressed "Try again" or the panel remounted.
+ *
+ * Viewer-relative reads want the opposite of that. They are made once per panel open, by one
+ * account, and the failure they actually meet is a backend catching up with a viewer who exists.
+ *
+ * Only what might change, though. A 4xx is geo-chat telling us something — the sign-in refusal, the
+ * 404 that means matchmaking is not deployed, the 400 that means the request was malformed — and
+ * asking again gets the same answer. Those still surface at once.
+ */
+const viewerReadRetryOptions = {
+  retry: (failureCount: number, error: Error) => {
+    if (failureCount >= TRANSIENT_RETRIES) return false;
+    if (error instanceof GeoChatRequestError) return error.status >= 500;
+    // Not a reply at all — a dropped connection, a parse failure — which is the other kind of maybe.
+    return true;
+  },
+  // Half a second, then one, then two: short enough to read as loading rather than as a wait, and
+  // spread enough that the three do not arrive together.
+  retryDelay: (failureCount: number) => Math.min(500 * 2 ** failureCount, 5_000),
+} as const;
+
 export function useDebatePeople(enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   useMatchmakingScope(enabled);
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
+    ...viewerReadRetryOptions,
     // `accountKey` is null signed out, which keys the anonymous list separately from anyone's —
     // so signing in cannot serve the signed-out answer, and signing out cannot leak the other way.
     queryKey: debateQueryKeys.people(accountKey),
@@ -115,6 +149,7 @@ export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boo
 
   const infinite = useInfiniteQuery({
     ...debateQueryNetworkOptions,
+    ...viewerReadRetryOptions,
     queryKey: debateQueryKeys.matchmakingClaims(accountKey, query),
     queryFn: ({ pageParam, signal }) =>
       listMatchmakingClaims(
@@ -174,6 +209,7 @@ export function useMatchmakingMatches(enabled: boolean) {
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
+    ...viewerReadRetryOptions,
     queryKey: debateQueryKeys.matches(accountKey),
     queryFn: ({ signal }) => listMatchmakingMatches(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
@@ -215,6 +251,7 @@ export function useDebateRequests(enabled: boolean) {
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
+    ...viewerReadRetryOptions,
     queryKey: debateQueryKeys.requests(accountKey),
     queryFn: ({ signal }) => listDebateRequests(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
@@ -256,6 +293,7 @@ export function useDebateBlocks(enabled: boolean) {
 
   return useQuery({
     ...debateQueryNetworkOptions,
+    ...viewerReadRetryOptions,
     queryKey: debateQueryKeys.blocks(accountKey),
     queryFn: ({ signal }) => listDebateBlocks(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,

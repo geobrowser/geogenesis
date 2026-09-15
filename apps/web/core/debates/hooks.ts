@@ -86,6 +86,9 @@ import { type SpaceDebateSupport, useSpaceDebateSupport } from './space-debate-s
 import { withQueryData } from './with-query-data';
 
 export const debateQueryNetworkOptions = {
+  // Public and one-shot reads do not repeat themselves: a 503 answered to an anonymous visitor is
+  // one request, not four, and `hooks.test` holds that. Viewer-relative reads want the opposite —
+  // see `viewerReadRetryOptions` in the matchmaking hooks.
   retry: false,
   refetchOnReconnect: false,
   refetchOnWindowFocus: false,

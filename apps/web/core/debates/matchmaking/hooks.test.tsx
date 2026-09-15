@@ -5,13 +5,14 @@ import type { ReactNode } from 'react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Debate } from '../api';
+import { type Debate, GeoChatRequestError } from '../api';
 import { clearEnteringDebate, useEnteringDebateId } from '../debate-entry-intent';
-import { useAcceptDebateRequest } from './hooks';
+import { useAcceptDebateRequest, useMatchmakingMatches } from './hooks';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   acceptDebateRequest: vi.fn(),
+  listMatchmakingMatches: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -20,7 +21,11 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('../api', async importOriginal => {
   const actual = await importOriginal<typeof import('../api')>();
-  return { ...actual, acceptDebateRequest: mocks.acceptDebateRequest };
+  return {
+    ...actual,
+    acceptDebateRequest: mocks.acceptDebateRequest,
+    listMatchmakingMatches: mocks.listMatchmakingMatches,
+  };
 });
 
 vi.mock('../hooks', async importOriginal => {
@@ -31,7 +36,7 @@ vi.mock('../hooks', async importOriginal => {
   };
 });
 
-vi.mock('../debate-gateway', () => ({ useDebateGatewayScope: vi.fn() }));
+vi.mock('../debate-gateway', () => ({ useDebateGatewayScope: vi.fn(), useMatchmakingScope: () => true }));
 
 const debate = {
   id: 'debate-1',
@@ -48,6 +53,7 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   mocks.push.mockReset();
   mocks.acceptDebateRequest.mockReset();
+  mocks.listMatchmakingMatches.mockReset();
   clearEnteringDebate();
 });
 
@@ -83,5 +89,42 @@ describe('useAcceptDebateRequest', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mocks.push).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A viewer's own reads all fail together for an account geo-chat has not finished registering, and
+ * they all come good a moment later. Reported from a fresh sign-up: the hub sat in "Something went
+ * wrong" for a minute or two, because nothing here refetches on focus or reconnect and a first
+ * failure had nowhere to go but the "Try again" button.
+ */
+describe('viewer-relative reads and a backend catching up', () => {
+  /** The client's own retry is off, as the app's is; these queries carry their own. */
+  function retryingWrapper({ children }: { children: ReactNode }) {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  }
+
+  it('asks again when the server faults, and settles once it answers', async () => {
+    mocks.listMatchmakingMatches
+      .mockRejectedValueOnce(new GeoChatRequestError('nope', null, 503))
+      .mockResolvedValue({ matches: [] });
+
+    const { result } = renderHook(() => useMatchmakingMatches(true), { wrapper: retryingWrapper });
+
+    await waitFor(() => expect(result.current.data).toEqual({ matches: [] }));
+    expect(result.current.error).toBeNull();
+    expect(mocks.listMatchmakingMatches).toHaveBeenCalledTimes(2);
+  });
+
+  // A refusal is geo-chat telling us something. Asking three times gets the same answer, and the
+  // viewer waits out two pointless round trips before being told what it already knew.
+  it('takes a refusal at its word', async () => {
+    mocks.listMatchmakingMatches.mockRejectedValue(new GeoChatRequestError('no', 'forbidden', 403));
+
+    const { result } = renderHook(() => useMatchmakingMatches(true), { wrapper: retryingWrapper });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    expect(mocks.listMatchmakingMatches).toHaveBeenCalledTimes(1);
   });
 });
