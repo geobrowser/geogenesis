@@ -1,64 +1,37 @@
 'use client';
 
-import * as React from 'react';
-
-import { CursorPager, useCursorPages } from '~/core/claims/browse/use-cursor-pages';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 
-import { Skeleton } from '~/design-system/skeleton';
-
-import { SectionTitle } from '~/partials/entity-page/section-title';
-
-import { useTopicSpaceScope } from '../use-topic-space-scope';
-import { TopicClaimCard } from './topic-claim-card';
-import { useTopicLinkedEntities } from './use-topic-linked-entities';
-
-const CLAIMS_PAGE_SIZE = 4;
+import { TopicExploreSection, type TopicSectionMode } from './topic-explore-section';
 
 /**
- * The claims filed under this topic, as the cards the debates hub and the claim page already draw.
+ * Claims made about this topic.
  *
- * The one section on the page a reader can act on rather than read, which is why it sits directly
- * under the debates it feeds rather than among the rest of the material in Coverage.
- *
- * Claims live in whichever space filed them, and a topic aggregates across spaces — so unlike the
- * claim page, nothing here is scoped to the space in the route. Each card is scoped to its own.
+ * A Claim renders as `ClaimExploreFeedCard` — the explore feed's own card, with labelled position
+ * pills and the shared verdict column — because {@link TopicExploreSection} hands every row to
+ * `ExploreFeedCard`, which dispatches on the entity's types. This used to draw
+ * `MatchmakingClaimCard`, the bordered pill card built for the debates side panel, which meant a
+ * claim looked like one thing in Explore and another here (GEO-2910).
  */
-export function TopicClaims({ topicId, spaceId }: { topicId: string; spaceId: string }) {
-  const pages = useCursorPages();
-  const spaceIds = useTopicSpaceScope(spaceId);
-  const { entities, isLoading, isPlaceholderData, endCursor, hasNextPage } = useTopicLinkedEntities({
-    topicId,
-    typeIds: [CLAIM_TYPE_ID],
-    first: CLAIMS_PAGE_SIZE,
-    after: pages.cursor,
-    rankInSpaceId: spaceId,
-    spaceIds,
-  });
-
-  const claims = React.useMemo(() => entities.filter(entity => entity.name), [entities]);
-
-  if (isLoading && claims.length === 0) {
-    return <Skeleton className="h-[160px] w-full rounded-lg" />;
-  }
-
-  if (claims.length === 0 && pages.isFirstPage) return null;
-
+export function TopicClaims({
+  topicId,
+  spaceId,
+  mode,
+  viewAllSlot,
+}: {
+  topicId: string;
+  spaceId: string;
+  mode: TopicSectionMode;
+  viewAllSlot?: React.ReactNode;
+}) {
   return (
-    <section aria-label="Claims on this topic">
-      <SectionTitle>Claims</SectionTitle>
-      <div className="grid grid-cols-1 gap-3 @[560px]:grid-cols-2">
-        {claims.map(claim => (
-          <TopicClaimCard key={claim.id} claim={claim} fallbackSpaceId={spaceId} />
-        ))}
-      </div>
-      <CursorPager
-        isFirstPage={pages.isFirstPage}
-        hasNextPage={hasNextPage}
-        isLoading={isLoading || isPlaceholderData}
-        onPrevious={pages.toPrevious}
-        onNext={() => endCursor && pages.toNext(endCursor)}
-      />
-    </section>
+    <TopicExploreSection
+      topicId={topicId}
+      spaceId={spaceId}
+      typeIds={[CLAIM_TYPE_ID]}
+      label="Claims"
+      mode={mode}
+      viewAllSlot={viewAllSlot}
+    />
   );
 }

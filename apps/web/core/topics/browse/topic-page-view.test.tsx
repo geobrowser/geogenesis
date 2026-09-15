@@ -57,11 +57,27 @@ vi.mock('~/core/sync/use-store', () => ({
 // The page's modules each reach for the sync engine or geo-chat. None is what this file asserts,
 // and the header renders above all of them.
 vi.mock('./use-topic-ancestors', () => ({ useTopicAncestors: () => [] }));
-vi.mock('./topic-composition', () => ({ TopicComposition: () => null }));
 vi.mock('./topic-debates', () => ({ TopicDebates: () => null }));
 vi.mock('./topic-claims', () => ({ TopicClaims: () => null }));
 vi.mock('./topic-coverage', () => ({ TopicCoverage: () => null }));
 vi.mock('~/partials/comments/comments-section', () => ({ CommentSection: () => null }));
+// The header's new right-hand controls (GEO-2910). `EntityPageActions` mounts the vote buttons,
+// which reach wagmi; the comments button and the tab bar each reach the sync engine. None of them
+// is what this file asserts, which is the header's own text.
+vi.mock('~/partials/entity-page/entity-page-actions', () => ({ EntityPageActions: () => null }));
+vi.mock('~/partials/comments/entity-comments-button', () => ({ EntityCommentsButton: () => null }));
+vi.mock('~/core/hooks/use-comments', () => ({ useComments: () => ({ totalCount: 0 }) }));
+vi.mock('~/partials/editor/editor', () => ({ Editor: () => null }));
+vi.mock('~/partials/entity-page/entity-tabs', () => ({ useEntityTabEntities: () => ({ relations: [], entities: [] }) }));
+vi.mock('./topic-tabs', () => ({
+  TopicTabs: () => null,
+  TopicViewAll: () => null,
+  useTopicActiveTab: () => ({ builtIn: 'overview', entityTabId: null }),
+}));
+vi.mock('./use-topic-tab-counts', () => ({
+  useTopicTabCounts: () => ({ counts: { claims: 0, debates: 0, coverage: 0 }, isReady: false }),
+}));
+vi.mock('../use-topic-space-scope', () => ({ useTopicSpaceScope: () => undefined }));
 
 function topicEntity(description: string | null) {
   return {

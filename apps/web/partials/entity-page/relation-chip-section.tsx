@@ -29,6 +29,19 @@ export const META_CHIP_CLASS =
 const CHIP_CAP = 8;
 
 /**
+ * A second cap on the expanded run is deliberately *not* implemented here yet.
+ *
+ * It belongs in the design — `Stablecoins` has 108 subtopics and `Compute, chips & AI
+ * infrastructure` has 525, and revealing 525 chips in a page header is a different page rather than
+ * an expansion. But a cap without somewhere to send the remainder strands it: today `+N` is the
+ * only route to the 88th subtopic, so capping the expansion at twenty would hide 88 of them behind
+ * nothing at all. It needs the Subtopics tab to hand off to, and that is not this change.
+ *
+ * So the bug this fixes is the one that was reported — expanding with no way back — and the cap
+ * arrives with the surface that makes it safe (GEO-2910).
+ */
+
+/**
  * A labelled row of entity chips with a `+N` that reveals the rest.
  *
  * Chips rather than cards: fourteen of these should cost a line or two, not a screen. `+N` expands
@@ -84,6 +97,15 @@ export function RelationChipSection({
 
   if (relations.length === 0) return null;
 
+  // Unnamed relations are *not* dropped. `U.S.–NATO relations` has a subtopic whose name is the
+  // empty string, and the obvious fix is to hide it — but this section already answered that, with
+  // a test: it falls back to the entity id below, which is ugly and still navigates somewhere real.
+  // A chip the reader can follow beats a subtopic that silently does not exist.
+  //
+  // Same-name duplicates are left alone for a related reason. `Middle East` lists `Turkey's
+  // regional role` twice and `Stablecoins` lists `Global dollar system` twice, but those are
+  // *distinct entities* that happen to share a name — which is why the caller's dedupe on entity id
+  // cannot catch them — so dropping one would hide a real entity, chosen arbitrarily.
   const visible = expanded ? relations : relations.slice(0, CHIP_CAP);
   const hidden = relations.length - visible.length;
 
@@ -100,10 +122,15 @@ export function RelationChipSection({
             <span className="truncate">{relation.toEntity.name ?? relation.toEntity.id}</span>
           </Link>
         ))}
-        {hidden > 0 && (
+        {(hidden > 0 || expanded) && (
+          // One control, not two. `+N` used to set `expanded` to true and then unmount itself,
+          // which left a reader who had just opened 108 subtopics with nothing to press and no way
+          // back (GEO-2910). A toggle fixes that and costs nothing else: the button stays mounted
+          // across the change, so the collapse cannot drop focus to `<body>` the way a second,
+          // disappearing button would have.
           <button
             type="button"
-            aria-expanded={false}
+            aria-expanded={expanded}
             // `+3` alone is the whole accessible name without this, so a screen reader listing the
             // page's buttons announces a number and nothing about what it reveals. The visible text
             // leads the label rather than being replaced by it: WCAG's Label in Name asks that what
@@ -114,14 +141,14 @@ export function RelationChipSection({
             // can pluralise — it is a section name and already plural, so a single hidden chip read
             // as "show 1 more Topics". Naming the section as a place instead of a quantity is right
             // at every count and needs no plural rule.
-            aria-label={`+${hidden}, show ${hidden} more in ${label}`}
+            aria-label={expanded ? `Show fewer in ${label}` : `+${hidden}, show ${hidden} more in ${label}`}
             onClick={() => {
-              focusAfterExpandRef.current = true;
-              setExpanded(true);
+              focusAfterExpandRef.current = !expanded;
+              setExpanded(current => !current);
             }}
             className={`${META_CHIP_CLASS} text-grey-04 tabular-nums transition-colors hover:border-text hover:text-text`}
           >
-            +{hidden}
+            {expanded ? 'Show less' : `+${hidden}`}
           </button>
         )}
       </div>

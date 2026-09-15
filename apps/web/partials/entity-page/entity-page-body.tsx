@@ -1,5 +1,7 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import * as React from 'react';
 
 import { ClaimPageView } from '~/core/claims/browse/claim-page-view';
@@ -165,6 +167,12 @@ function useCustomBrowseView(entityId: string, spaceId: string): 'claim' | 'topi
   // replaced it a moment later, which read as the page loading twice.
   if (!entity) return isLoading ? 'pending' : 'generic';
   if (entity.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID))) return 'claim';
+  // A topic that is also a Space keeps the space's own UI (GEO-2910). 31 of the 194 topics carrying
+  // tabs are typed both, and a Space already reads the same `Tabs` property to build its bar — so
+  // drawing the topic view over one of them would put the same navigation in two places and leave
+  // "which of these is the real page" to the reader. The generic page is what a space entity
+  // rendered here before any of this, so deferring shows what was already right.
+  if (entity.types.some(type => ID.equals(type.id, SystemIds.SPACE_TYPE))) return 'generic';
   // After Claim, so an entity typed as both reads as the narrower of the two — a claim is a thing
   // to take a side on, which is more specific than a subject heading.
   if (entity.types.some(type => ID.equals(type.id, TOPIC_TYPE_ID))) return 'topic';
@@ -197,12 +205,49 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   // generic value sheet and swapping it out from under the reader.
   if (customView === 'pending') return null;
 
-  if (customView === 'claim') {
-    return <ClaimPageView entityId={entityId} spaceId={spaceId} />;
-  }
+  // The custom views are the page's *body*, not the page. They used to be returned from here
+  // whole, above the cover — which is why a topic with a cover image drew none of it, and why 719
+  // topics and 206 claims carrying one showed nothing (GEO-2910). The cover is restored once, here,
+  // rather than inside each view: two copies of this is how the two views drift apart.
+  //
+  // Only the cover. The votes belong in each view's own meta row and the tabs are interleaved with
+  // the topic's content, so those are the views' to place — this owns the one piece that sits
+  // above everything and is identical for both.
+  if (customView === 'claim' || customView === 'topic') {
+    const body =
+      customView === 'claim' ? (
+        <ClaimPageView entityId={entityId} spaceId={spaceId} />
+      ) : (
+        <TopicPageView
+          entityId={entityId}
+          spaceId={spaceId}
+          initialTabRelations={initialTabRelations}
+          tabEntities={tabEntities}
+        />
+      );
 
-  if (customView === 'topic') {
-    return <TopicPageView entityId={entityId} spaceId={spaceId} />;
+    if (props.variant === 'sidePanel') {
+      // `fitImage`, exactly as the generic panel below calls it. There is already an answer to
+      // "a cover in this panel" and a second one would only differ by accident.
+      const avatarUrl = props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null;
+      return (
+        <>
+          <EntityPageCover avatarUrl={avatarUrl} coverUrl={props.coverUrl} fitImage />
+          {body}
+        </>
+      );
+    }
+
+    return (
+      <>
+        {/* `showCover` and `coverSlot` are honoured for the same reason the generic route below
+            honours them: a community call puts its recording in this slot, and a caller that asked
+            for no cover meant it. */}
+        {(props.showCover ?? true) &&
+          (props.coverSlot ?? <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />)}
+        {body}
+      </>
+    );
   }
 
   const tabsSection = (
