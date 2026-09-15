@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
    * that here is what lets a test set one without implying the other.
    */
   summaryIndexedViewerDirection: null as 'positive' | 'negative' | null,
+  summaryViewerResponseLoading: false,
   spaceId: '019fedae-72b6-7ab2-927a-df044d57c566',
   viewerSpaceId: 'personal-space',
   /** Whether each render of the card's summary read was enabled, in order. */
@@ -88,7 +89,7 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
       {
         ...actual.summarizeClaimResponses(mocks.summaryPositive, mocks.summaryNegative),
         isLoading: false,
-        isViewerResponseLoading: false,
+        isViewerResponseLoading: mocks.summaryViewerResponseLoading,
         hasCounts: true,
         // Mirrors the hook: `viewerDirection` is the in-flight snapshot where there is one, the
         // indexed read otherwise. A mock that let the two drift is how the card's fallback ended up
@@ -226,6 +227,7 @@ beforeEach(() => {
   mocks.summaryPositive = 0;
   mocks.summaryNegative = 0;
   mocks.summaryIndexedViewerDirection = null;
+  mocks.summaryViewerResponseLoading = false;
   mocks.viewerSpaceId = 'personal-space';
   mocks.summaryEnabled = [];
 });
@@ -395,6 +397,44 @@ describe('position avatar stack', () => {
       // The side reads as held: pressing it clears rather than republishes.
       const agree = screen.getByRole('button', { name: /^Agree/ });
       expect(agree).toHaveAttribute('title', ENTITY_RESPONSE_COPY.stance.removePositive);
+    });
+
+    /**
+     * Reported: take a position in the panel and your face appears, vanishes a moment later, and comes
+     * back once geo-chat catches up — which the explore card never does.
+     *
+     * `isViewerResponseLoading` goes true again on every refetch of the indexed read, and the card
+     * withdrew the viewer's side whenever it did. So the side, and the avatar standing on it, blinked
+     * out and returned on a cadence nobody asked about. Worst on a fresh account, where geo-chat is
+     * refusing and cannot cover the gap.
+     */
+    it('keeps the viewer standing on their side while that read refetches', () => {
+      mocks.summaryIndexedViewerDirection = 'negative';
+      // Rendered through one client held across both passes: the point is a *re-render* of a card
+      // that is still mounted, and remounting it would reset exactly the memory under test.
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const card = () => (
+        <QueryClientProvider client={queryClient}>
+          <MatchmakingClaimCard
+            claim={claim}
+            positions={twoSides()}
+            readiness={readiness({ viewer_response: null })}
+            answersReady={false}
+            answersMayComeFromIndex
+          />
+        </QueryClientProvider>
+      );
+      const view = render(card());
+
+      const before = within(screen.getByRole('button', { name: /^Disagree/ })).getAllByTestId('avatar').length;
+
+      // The refetch: same answer still true, simply in flight again.
+      mocks.summaryViewerResponseLoading = true;
+      view.rerender(card());
+
+      const disagree = screen.getByRole('button', { name: /^Disagree/ });
+      expect(disagree).toHaveAttribute('title', ENTITY_RESPONSE_COPY.stance.removeNegative);
+      expect(within(disagree).getAllByTestId('avatar')).toHaveLength(before);
     });
 
     it('offers the debate on that side too, rather than waiting on geo-chat alone', () => {

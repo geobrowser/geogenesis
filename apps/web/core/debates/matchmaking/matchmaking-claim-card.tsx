@@ -642,18 +642,40 @@ function RespondableControls({
    * sides are the graph's and geo-chat's silence there is not the same fact — see
    * `viewerResponseUnknown` and GEO-2807.
    */
+  /**
+   * The last side the indexed read actually *settled* on, kept across its own refetches.
+   *
+   * Reported: take a position in the hub panel and your face appears, disappears a moment later, and
+   * comes back once geo-chat catches up — which the explore card never does.
+   *
+   * Reading the read live is what did it. `isViewerResponseLoading` goes true again on every
+   * refetch, and the substitution below was withdrawn whenever it did, so the viewer's side — and
+   * the avatar standing on it — blinked out and returned on a cadence nobody asked about. It shows
+   * up most on a fresh account because geo-chat, the other source, is refusing and cannot cover the
+   * gap.
+   *
+   * Settled, emphatically, not merely last-seen: a read that comes back with no side is an answer
+   * and is kept, so clearing a position still clears it. Only the window where the answer is
+   * *in flight* reuses the previous one, which is the window `null` means "not yet" in.
+   *
+   * Keyed by claim because the card is recycled down a virtualized list, and a remembered side
+   * belongs to the claim it was read for and to no other.
+   */
+  const claimKey = `${claim.space_id}:${claim.claim_entity_id}`;
+  const settledIndexedRef = React.useRef<{ key: string; direction: 'positive' | 'negative' | null } | null>(null);
+  if (!summary.isViewerResponseLoading) {
+    settledIndexedRef.current = { key: claimKey, direction: summary.indexedViewerDirection ?? null };
+  }
+  const settledIndexed = settledIndexedRef.current?.key === claimKey ? settledIndexedRef.current : null;
+
   const resolvedReadiness = React.useMemo(() => {
     if (!reconcileWithIndexedResponse || viewerResponseUnknown || readiness.viewer_response) return readiness;
-    if (summary.isViewerResponseLoading) return readiness;
-    const indexed = viewerResponseFromDirection(summary.indexedViewerDirection ?? null, readiness.response_kind);
+    // Never settled for this claim, so there is nothing to stand in with — the wait the comment
+    // above describes, before it has anything to remember.
+    if (!settledIndexed) return readiness;
+    const indexed = viewerResponseFromDirection(settledIndexed.direction, readiness.response_kind);
     return indexed ? { ...readiness, viewer_response: indexed } : readiness;
-  }, [
-    readiness,
-    reconcileWithIndexedResponse,
-    summary.indexedViewerDirection,
-    summary.isViewerResponseLoading,
-    viewerResponseUnknown,
-  ]);
+  }, [readiness, reconcileWithIndexedResponse, settledIndexed, viewerResponseUnknown]);
 
   /**
    * The side is known once *something* has answered for it — geo-chat, or the indexed read standing
@@ -661,7 +683,7 @@ function RespondableControls({
    * tells the gate the same thing, which otherwise goes on withholding a side the card now holds.
    */
   const sideKnown =
-    answersReady || (answersMayComeFromIndex && reconcileWithIndexedResponse && !summary.isViewerResponseLoading);
+    answersReady || (answersMayComeFromIndex && reconcileWithIndexedResponse && settledIndexed !== null);
 
   const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
     useClaimPositionControl({
