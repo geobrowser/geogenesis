@@ -51,13 +51,39 @@ export function DebatesBrowseFeed({
   spaceId,
   initialDebateId,
   fallback,
+  source,
 }: {
   spaceId: string;
   initialDebateId?: string;
   /** Rendered instead of the feed when {@link initialDebateId} can't be resolved in this space. */
   fallback?: React.ReactNode;
+  /**
+   * Debates to play, where the caller has its own list (GEO-2859).
+   *
+   * Omitted, the feed asks geo-chat for the space's debates, which is right for
+   * a DAO space and impossible for a personal one — geo-chat indexes DAO spaces
+   * only and answers `space_not_found` for the rest. A person's record supplies
+   * its own list, read from the graph and hydrated by debate id, and everything
+   * below here is unchanged.
+   */
+  source?: { debates: Debate[]; isLoading: boolean; isError: boolean };
 }) {
-  const debatesQuery = useSpaceDebates(spaceId, true);
+  // Called unconditionally and then ignored, rather than conditionally: a hook
+  // that runs on some renders and not others is not a hook. `enabled` is what
+  // keeps the request off the wire when the caller brought its own debates.
+  const spaceDebatesQuery = useSpaceDebates(spaceId, source === undefined);
+  const debatesQuery = React.useMemo(
+    () =>
+      source === undefined
+        ? spaceDebatesQuery
+        : {
+            data: { debates: source.debates },
+            isLoading: source.isLoading,
+            isError: source.isError,
+            error: null as Error | null,
+          },
+    [source, spaceDebatesQuery]
+  );
   const { space } = useSpace(spaceId);
 
   const listedDebates = React.useMemo(() => debatesQuery.data?.debates ?? [], [debatesQuery.data?.debates]);
@@ -99,7 +125,15 @@ export function DebatesBrowseFeed({
 
   // The same ranking the explore page's "Best" sort uses, so what plays after the debate you
   // opened is what that sort would have put in front of you.
-  const { rankByDebateId, isLoading: bestOrderLoading } = useDebatesBestOrder(spaceId, candidateIds.length > 0);
+  //
+  // Not asked for a caller-supplied list. The ranking is computed per space, and
+  // a person's debates span many of them — scoring them against the space whose
+  // page you happen to be on would order them by a measure none of them share.
+  // Those fall through to recency, which is the tiebreak this already uses.
+  const { rankByDebateId, isLoading: bestOrderLoading } = useDebatesBestOrder(
+    spaceId,
+    source === undefined && candidateIds.length > 0
+  );
 
   const debates = React.useMemo(() => {
     // Held back the way the media lookups hold it back — by having nothing to show yet rather than

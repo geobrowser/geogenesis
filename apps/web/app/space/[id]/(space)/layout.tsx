@@ -80,7 +80,7 @@ export default async function Layout(props0: LayoutProps) {
         initialTabs={props.tabs}
         initialCollectionItems={props.initialCollectionItems}
       >
-        <SpaceChromeGate>
+        <SpaceChromeGate keepChrome={isProfile}>
           <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
           <SpaceHeaderContentGate serverHasSidebar={hasSidebar} isExternalTopic={isExternalTopic}>
             <div className="space-y-2">

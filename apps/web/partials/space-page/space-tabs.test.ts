@@ -35,7 +35,16 @@ describe('buildSpaceTabs', () => {
       isDebugDebatesPageEnabled: false,
     });
 
-    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Activity']);
+    expect(tabs.find(tab => tab.label === 'Governance')).toBeUndefined();
+    expect(tabs.map(tab => tab.label)).toEqual([
+      'Overview',
+      'Facts',
+      'Sources',
+      'Debates',
+      'Positions',
+      'Proposals',
+      'Activity',
+    ]);
   });
 
   it('keeps an authored Claims tab because the system tab is no longer shown', () => {
@@ -93,7 +102,59 @@ describe('buildSpaceTabs', () => {
       isDebugDebatesPageEnabled: true,
     });
 
-    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Debug debates', 'Activity']);
+    expect(tabs.map(tab => tab.label)).toEqual([
+      'Overview',
+      'Facts',
+      'Sources',
+      'Debug debates',
+      'Debates',
+      'Positions',
+      'Proposals',
+      'Activity',
+    ]);
+  });
+
+  it('gives a person their own record tabs, and a space none of them', () => {
+    const person = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs: [],
+      typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
+      isDebugDebatesPageEnabled: false,
+    });
+
+    // Routes, not tab ids: these are pages of their own, not authored tabs on
+    // the home entity.
+    expect(person.filter(tab => ['Debates', 'Positions', 'Proposals'].includes(tab.label))).toEqual([
+      { label: 'Debates', href: `/space/${spaceId}/debates`, priority: 4 },
+      { label: 'Positions', href: `/space/${spaceId}/positions`, priority: 4 },
+      { label: 'Proposals', href: `/space/${spaceId}/proposals`, priority: 4 },
+    ]);
+
+    const space = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs: [],
+      typeIds: [SystemIds.SPACE_TYPE],
+      isDebugDebatesPageEnabled: false,
+    });
+
+    expect(space.map(tab => tab.label)).toEqual(['Overview', 'Governance', 'Activity']);
+  });
+
+  it("lets a person's authored Debates tab win over the system one", () => {
+    const tabs = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs: [{ label: 'Debates', href: `${overviewHref}?tabId=dynamic-debates` }],
+      typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
+      isDebugDebatesPageEnabled: false,
+    });
+
+    expect(tabs.filter(tab => tab.label === 'Debates')).toEqual([
+      { label: 'Debates', href: `${overviewHref}?tabId=dynamic-debates`, priority: 1 },
+    ]);
+    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Debates', 'Positions', 'Proposals', 'Activity']);
   });
 
   it('keeps the system Debug debates route when an authored tab has the same label', () => {
