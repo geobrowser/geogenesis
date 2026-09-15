@@ -24,6 +24,8 @@ import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-
 import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
 import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
+import { PersonalSpaceHeadline } from '~/partials/profile/personal-space-profile';
+import { ProfileActions } from '~/partials/profile/profile-actions';
 import { AddDataPanel } from '~/partials/space-page/add-data-panel';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
@@ -58,6 +60,16 @@ export default async function Layout(props0: LayoutProps) {
 
   const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
 
+  /**
+   * A personal space with a profile of its own (GEO-2859).
+   *
+   * Both halves matter. `PERSONAL` alone includes the 725 personal spaces with
+   * no person entity behind them, which have nothing to render a profile from;
+   * an external topic alone includes every DAO space whose topic is a subject
+   * rather than a someone.
+   */
+  const isProfile = props.space?.type === 'PERSONAL' && isExternalTopic;
+
   return (
     <EntityStoreProvider id={props.id} spaceId={spaceId}>
       <RouteEditorProvider
@@ -76,12 +88,20 @@ export default async function Layout(props0: LayoutProps) {
                 spaceId={spaceId}
                 entityId={props.id}
                 nameAccessoryComponent={
-                  props.space?.type === 'PERSONAL' ? <SpaceVerifyButton spaceId={spaceId} /> : null
+                  // The tick beside the name stays where it is for a space; on a
+                  // profile it moves into the action row, which is where every
+                  // other judgement about this person is made.
+                  props.space?.type === 'PERSONAL' && !isProfile ? <SpaceVerifyButton spaceId={spaceId} /> : null
                 }
                 actionsComponent={
-                  typeIds.includes(SystemIds.PERSON_TYPE) ? <ProfileDebateButton spaceId={spaceId} /> : null
+                  isProfile ? (
+                    <ProfileActions spaceId={spaceId} personEntityId={props.id} />
+                  ) : typeIds.includes(SystemIds.PERSON_TYPE) ? (
+                    <ProfileDebateButton spaceId={spaceId} />
+                  ) : null
                 }
               />
+              {isProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={props.id} />}
               <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
               <SpacePageMetadataHeader
                 spaceId={spaceId}

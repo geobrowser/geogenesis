@@ -9,6 +9,7 @@ import { notFound } from 'next/navigation';
 import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { firstLine } from '~/core/opengraph';
+import { profileLinks } from '~/core/profile/profile-links';
 import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
@@ -27,6 +28,8 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
+import { PersonalSpaceProfile } from '~/partials/profile/personal-space-profile';
+import { ProfileRail } from '~/partials/profile/profile-rail';
 import { SpaceOverviewSidePanelContainer } from '~/partials/space-page/space-overview-side-panel-container';
 import { SubtopicGalleryServerContainer } from '~/partials/space-page/subtopic-gallery-server-container';
 
@@ -84,6 +87,13 @@ export default async function SpacePage(props0: Props) {
   const space = await cachedFetchSpace(spaceId);
 
   if (Spaces.hasExternalTopic(space)) {
+    // A personal space with a profile is a person, and gets the profile page.
+    // Every other external-topic space — a DAO whose topic is a subject rather
+    // than a someone — keeps the single-column body it has today.
+    if (space.type === 'PERSONAL') {
+      return <PersonalSpaceBody space={space} topicEntityId={space.topicId} />;
+    }
+
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
@@ -127,6 +137,82 @@ export default async function SpacePage(props0: Props) {
         </React.Suspense>
       </TrackedErrorBoundary>
     </EntityPageSidebarLayout>
+  );
+}
+
+/**
+ * A personal space, as a profile (GEO-2859).
+ *
+ * Two columns: identity down the main one, and a rail of facts about the
+ * account that persists across every tab. The header above this — cover, name,
+ * the action row — is assembled in the layout, which is why none of it is here.
+ *
+ * A person has two ids and both are needed. Presentation hangs off the topic
+ * entity; every count in the rail keys on the space. They are different values,
+ * and passing the entity id to a count query returns zero rather than erroring.
+ */
+async function PersonalSpaceBody({
+  space,
+  topicEntityId,
+}: {
+  space: NonNullable<Awaited<ReturnType<typeof cachedFetchSpace>>>;
+  topicEntityId: string;
+}) {
+  const spaceId = space.id;
+  const topic = await getTopicEntityData(spaceId, topicEntityId);
+  const result = await cachedFetchEntityPage(topicEntityId, spaceId);
+  const entity = result?.entity;
+
+  // Scoped to this space. The same entity carries values written by other
+  // spaces — four Scores and a second Description on the reference account —
+  // and this page renders what *this* space claims about the person.
+  const ownValues = (entity?.values ?? []).filter(value => value.spaceId === spaceId);
+  const links = profileLinks(ownValues.map(value => ({ property: { id: value.property.id }, value: value.value })));
+  const types = (entity?.types ?? []).map(type => ({ id: type.id, name: type.name ?? null }));
+
+  return (
+    <EntityStoreProvider id={topicEntityId} spaceId={spaceId}>
+      <RouteEditorProvider
+        id={topicEntityId}
+        spaceId={spaceId}
+        initialBlocks={topic.blocks}
+        initialBlockRelations={topic.blockRelations}
+        initialTabs={topic.tabs}
+        initialCollectionItems={topic.initialCollectionItems}
+      >
+        <EntityPageSidebarLayout
+          sidebar={
+            <ProfileRail
+              spaceId={spaceId}
+              personEntityId={topicEntityId}
+              types={types}
+              links={links}
+              systemEntityId={space.entity.id}
+              address={space.address ?? null}
+              spaceType={space.type}
+            />
+          }
+        >
+          <PersonalSpaceProfile spaceId={spaceId} personEntityId={topicEntityId} links={links} />
+
+          <Spacer height={40} />
+
+          <React.Suspense fallback={null}>
+            <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+          </React.Suspense>
+
+          <Spacer height={24} />
+          <ToggleEntityPage id={topicEntityId} spaceId={spaceId} />
+          <Spacer height={40} />
+
+          <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+            <React.Suspense fallback={<div />}>
+              <BacklinksServerContainer entityId={topicEntityId} />
+            </React.Suspense>
+          </TrackedErrorBoundary>
+        </EntityPageSidebarLayout>
+      </RouteEditorProvider>
+    </EntityStoreProvider>
   );
 }
 
