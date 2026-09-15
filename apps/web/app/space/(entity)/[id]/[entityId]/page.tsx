@@ -3,8 +3,6 @@ import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { notFound } from 'next/navigation';
 
 import { bountiesEnabledForNetwork, isBountyEntity } from '~/core/bounties/config';
-import { EVENT_SCHEMA } from '~/core/community-calls/constants';
-import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { DebateEntityView } from '~/core/debates/browse/debate-entity-view';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import { isHiddenEntity } from '~/core/moderation/hidden';
@@ -12,7 +10,6 @@ import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
 
 import { BountyDetailHeader } from '~/partials/bounties/bounty-detail-header';
 import { BountyDetailSections } from '~/partials/bounties/bounty-detail-sections';
-import { CommunityCallRecording } from '~/partials/community-calls/community-call-recording';
 
 import { cachedFetchEntityPage } from './cached-fetch-entity';
 import DefaultEntityPage from './default-entity-page';
@@ -63,22 +60,11 @@ export default async function EntityTemplateStrategy(props: Props) {
     );
   }
 
-  // A community call's recording takes the cover slot; its agenda renders below as block content.
-  if (result?.entity?.types.some(t => t.id === EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE)) {
-    return (
-      <DefaultEntityPage
-        params={params}
-        searchParams={searchParams}
-        coverSlot={
-          <CommunityCallRecording
-            entityId={params.entityId}
-            spaceId={params.id}
-            serverRecordingUrls={getRecordingUrls(result.entity.relations)}
-          />
-        }
-      />
-    );
-  }
+  // A community call event has its own read view — see `CommunityCallEventPageView`, reached
+  // through `useCustomBrowseView` rather than from here so the entity side panel gets it too.
+  // It draws the recording itself, so there is no cover slot to set: doing both rendered the
+  // player twice. Edit mode still falls through to the value sheet, as it does for every custom
+  // view, which means an editor sees the `Recordings` relation rather than a player.
 
   // A bounty is an ordinary entity (markdown body, comments, backlinks, edit
   // mode all come from the default page) with its structured facts and

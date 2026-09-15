@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import { ClaimPageView } from '~/core/claims/browse/claim-page-view';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CommunityCallEventPageView } from '~/core/community-calls/browse/community-call-event-page-view';
+import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { TOPIC_TYPE_ID } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -155,7 +157,10 @@ function EditorFooter({
  * derived across every space either way, so this is about consistency with the controls the pages
  * render rather than about reaching a type a scoped read would miss.
  */
-function useCustomBrowseView(entityId: string, spaceId: string): 'claim' | 'topic' | 'generic' | 'pending' {
+function useCustomBrowseView(
+  entityId: string,
+  spaceId: string
+): 'claim' | 'topic' | 'communityCall' | 'generic' | 'pending' {
   const isEditing = useUserIsEditing(spaceId);
   const { entity, isLoading } = useQueryEntity({ id: entityId });
 
@@ -168,6 +173,7 @@ function useCustomBrowseView(entityId: string, spaceId: string): 'claim' | 'topi
   // After Claim, so an entity typed as both reads as the narrower of the two — a claim is a thing
   // to take a side on, which is more specific than a subject heading.
   if (entity.types.some(type => ID.equals(type.id, TOPIC_TYPE_ID))) return 'topic';
+  if (entity.types.some(type => ID.equals(type.id, EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE))) return 'communityCall';
   return 'generic';
 }
 
@@ -203,6 +209,10 @@ export function EntityPageBody(props: EntityPageBodyProps) {
 
   if (customView === 'topic') {
     return <TopicPageView entityId={entityId} spaceId={spaceId} />;
+  }
+
+  if (customView === 'communityCall') {
+    return <CommunityCallEventPageView entityId={entityId} spaceId={spaceId} />;
   }
 
   const tabsSection = (
