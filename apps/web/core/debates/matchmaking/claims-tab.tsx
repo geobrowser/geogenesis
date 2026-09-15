@@ -713,6 +713,13 @@ export function ClaimsTab({
   // never do: it read topics off the loaded claims, so the menu grew as the viewer scrolled and a
   // space whose first page happened to carry none looked like a space with no topics (GEO-2653).
   //
+  // With one exception since GEO-2898, and it is the one this paragraph is about. A text search is
+  // answered by `/search`, which hands back ids a page at a time and has no grouped counts to ask
+  // for — so while a search is running these counts are over the ids in hand, and the menu does
+  // grow as the viewer scrolls. Real counts of a prefix, which is why the facets report `complete`
+  // separately from `settled`: the menu is drawn from the counts, and nothing reconciles a
+  // selection against them until they cover the whole result.
+  //
   // Co-occurrence, since topics intersect (GEO-2696): counted over the claims that already carry
   // every picked topic, so the menu answers "what else do these claims carry" and the picked ones
   // come back with the current result count, which is what lets them be un-picked.
