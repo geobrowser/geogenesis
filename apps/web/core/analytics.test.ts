@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const analyticsScriptSrc = 'http://localhost:3000/geo-analytics-74547ebc4f57.js';
+const analyticsScriptSrc = 'http://localhost:3000/geo-analytics-8f8dba53d466.js';
 
 describe('analytics', () => {
   beforeEach(() => {
@@ -34,7 +34,7 @@ describe('analytics', () => {
     const script = document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader="true"]');
 
     expect(script?.src).toBe(analyticsScriptSrc);
-    expect(script?.integrity).toBe('sha256-dFR+vE9X9Ru7Y34e++tYcBi2mEkqYyrZbpzN3haRz3A=');
+    expect(script?.integrity).toBe('sha256-j426U9Rmd38aqJcds0bqAaOlribZukZWDJFfY8cZTbY=');
     expect(script?.crossOrigin).toBe('anonymous');
   });
 
