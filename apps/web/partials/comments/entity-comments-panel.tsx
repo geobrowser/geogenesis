@@ -76,7 +76,12 @@ export function EntityCommentsPanel({
         // `md:` is a max-width breakpoint here (styles.css is desktop-first), so the mobile layer has
         // to be raised too — a media-query rule of equal specificity beats the unprefixed one, which
         // would leave the bottom sheet at z-80 under the slide-up: the exact case being fixed.
-        slideUpOpenCount > 0 ? Z_LAYER_CLASS.commentsPanelOverSlideUpMobile : 'md:z-[80]',
+        //
+        // Scoped to the overlay, like the desktop layer below it. A docked panel is part of its own
+        // page, and on mobile it is `md:fixed` — so raising it would float it over a sheet it has
+        // nothing to do with. Written as one ternary so only one mobile z class is ever emitted:
+        // two of equal specificity would be settled by stylesheet order, not by this list.
+        presentation === 'overlay' && slideUpOpenCount > 0 ? Z_LAYER_CLASS.commentsPanelOverSlideUpMobile : 'md:z-[80]',
         // Above the page but below the entity side panel (z-200), which can be
         // opened on top of it from a comment author's name.
         presentation === 'overlay' && 'shadow-2xl fixed inset-y-0 right-0 md:inset-y-auto',

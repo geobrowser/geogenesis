@@ -76,11 +76,11 @@ export function useProposalCommentAttribution({
   const optimisticVote = useOptimisticVoteChoice(entityId ?? '');
   const { personalSpaceId } = usePersonalSpaceId();
 
-  // The editor set was gathered against the caller's space. For a proposal entity that is the
+  // Both role sets were gathered against the caller's space. For a proposal entity that is the
   // proposal's own space, which is the premise this feature rests on — but if the two ever disagree,
-  // those ids answer a question about a different space. Say nothing rather than badge someone with
-  // a role they may not hold here.
-  const editorsMatchProposalSpace = proposal ? normalizeSpaceId(proposal.spaceId) === normalizeSpaceId(spaceId) : false;
+  // those ids answer a question about a different space. Say nothing rather than badge someone with a
+  // role they may not hold here; the votes survive, because they are the proposal's own record.
+  const rolesMatchProposalSpace = proposal ? normalizeSpaceId(proposal.spaceId) === normalizeSpaceId(spaceId) : false;
 
   return React.useMemo(() => {
     if (!proposal) return EMPTY_ATTRIBUTION;
@@ -106,12 +106,12 @@ export function useProposalCommentAttribution({
 
     return proposalCommentAttribution({
       votes,
-      editorSpaceIds: editorsMatchProposalSpace ? editorSpaceIds : [],
-      memberSpaceIds,
+      editorSpaceIds: rolesMatchProposalSpace ? editorSpaceIds : [],
+      memberSpaceIds: rolesMatchProposalSpace ? memberSpaceIds : [],
     });
   }, [
     proposal,
-    editorsMatchProposalSpace,
+    rolesMatchProposalSpace,
     editorSpaceIds,
     memberSpaceIds,
     isLoadingRoles,

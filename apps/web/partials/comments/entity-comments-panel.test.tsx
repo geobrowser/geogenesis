@@ -38,6 +38,30 @@ describe('EntityCommentsPanel', () => {
     const panel = container.querySelector('[data-entity-comments-panel]')!;
     expect(panel.className).toContain(`z-[${Z_LAYERS.commentsPanelOverSlideUp}]`);
     expect(panel.className).not.toContain('z-[150]');
+    // The mobile layer has to be raised with it: `md:` is a max-width breakpoint here, so a
+    // media-query rule of equal specificity beats the unprefixed one and would strand the bottom
+    // sheet under the slide-up. Exactly one mobile z class, or stylesheet order decides which wins.
+    expect(panel.className).toContain(`md:z-[${Z_LAYERS.commentsPanelOverSlideUp}]`);
+    expect(panel.className).not.toContain('md:z-[80]');
+  });
+
+  /**
+   * A docked panel belongs to its own page, and on mobile it is `md:fixed` — a bottom sheet. Raising
+   * it would float it over a slide-up it has nothing to do with, so the raise is the overlay's alone.
+   */
+  it('leaves a docked panel at its own layer even while a slide-up is open', () => {
+    const store = createStore();
+    store.set(slideUpOpenCountAtom, 1);
+
+    const { container } = render(
+      <Provider store={store}>
+        <EntityCommentsPanel entityId="entity-1" spaceId="space-1" onClose={vi.fn()} presentation="docked" />
+      </Provider>
+    );
+
+    const panel = container.querySelector('[data-entity-comments-panel]')!;
+    expect(panel.className).toContain('md:z-[80]');
+    expect(panel.className).not.toContain(`z-[${Z_LAYERS.commentsPanelOverSlideUp}]`);
   });
 
   // And stays under the entity side panel's own layer when there is no sheet, which is the order
@@ -53,6 +77,7 @@ describe('EntityCommentsPanel', () => {
 
     const panel = container.querySelector('[data-entity-comments-panel]')!;
     expect(panel.className).toContain('z-[150]');
+    expect(panel.className).toContain('md:z-[80]');
     expect(panel.className).not.toContain(`z-[${Z_LAYERS.commentsPanelOverSlideUp}]`);
   });
 
