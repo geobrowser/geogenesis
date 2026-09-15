@@ -6,7 +6,7 @@
  *
  * Usage: bun scripts/verify-claim-timing.ts
  */
-import { activeTickerClaim, claimMarkers, tickerWindows } from '../core/debates/claim-ticker';
+import { claimMarkers, tickerStack, tickerWindows } from '../core/debates/claim-ticker';
 import { claimsInSpokenOrder, formatTimecode, resolveClaimTimings } from '../core/debates/claim-timing';
 import {
   AUTHORS_PROPERTY_ID,
@@ -118,8 +118,12 @@ console.log(`scrubber markers: ${markers.length}`);
 
 console.log('\nWhat the viewer sees, sampled every 10s:');
 for (let ms = 0; ms <= 270_000; ms += 10_000) {
-  const active = activeTickerClaim(windows, ms);
-  if (active) console.log(`  ${formatTimecode(ms).padStart(5)}  ${active.claim.text.slice(0, 62)}`);
+  const stack = tickerStack(windows, ms);
+  for (const card of stack) {
+    console.log(
+      `  ${formatTimecode(ms).padStart(5)}  [${card.opacity.toFixed(2)}]  ${card.window.claim.text.slice(0, 56)}`
+    );
+  }
 }
 
 const missing = ordered.filter(claim => claim.timing === null);

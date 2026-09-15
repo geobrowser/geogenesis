@@ -17,11 +17,12 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
-import { ClaimScrubberMarkers, DebateClaimTickerCard, useDebateClaimTicker } from './debate-claim-ticker';
+import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateScorecard } from './debate-scorecard';
 import { Play, Speaker, SpeakerMuted } from './icons';
 import { WinnerVoteButton } from './winner-vote-button';
-import type { ClaimMarker } from '~/core/debates/claim-ticker';
+import type { ClaimMarker, StackedCard } from '~/core/debates/claim-ticker';
+import type { DebateTicker } from './debate-claim-ticker';
 
 type DebateFeedPlayerProps = {
   debate: Debate;
@@ -115,6 +116,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
         subtitle={activeSlot === 1 ? subtitle : null}
+        claims={playbackEnded ? [] : (ticker.stacks.get(1) ?? [])}
+        ticker={ticker}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -153,6 +156,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
         subtitle={activeSlot === 2 ? subtitle : null}
+        claims={playbackEnded ? [] : (ticker.stacks.get(2) ?? [])}
+        ticker={ticker}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -182,23 +187,6 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
           ) : null
         }
       />
-
-      {/* The seam between the two tiles is the one strip of the player that is never a face, so
-          the claim card and the end-of-debate card both sit there. `pointer-events-none` on the
-          positioner keeps the rest of the seam clickable for play/pause. */}
-      {ready && !playbackEnded && ticker.active && (
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-30 flex -translate-y-1/2 justify-center px-3">
-          <DebateClaimTickerCard
-            key={ticker.active.claim.id}
-            window={ticker.active}
-            speaker={ticker.speakerByClaimId.get(ticker.active.claim.id) ?? null}
-            row={ticker.rowsByClaimId.get(ticker.active.claim.id) ?? null}
-            entity={ticker.entitiesByClaimId.get(ticker.active.claim.id) ?? null}
-            onAnswered={ticker.onAnswered}
-            onDismiss={ticker.onDismiss}
-          />
-        </div>
-      )}
 
       {ready && playbackEnded && (
         <div className="pointer-events-none absolute inset-x-0 top-1/2 z-30 flex -translate-y-1/2 justify-center px-3">
@@ -233,6 +221,8 @@ function DebaterVideo({
   audible,
   countdown,
   subtitle,
+  claims,
+  ticker,
   mutedByUser,
   isResuming,
   onPlaybackTick,
@@ -247,6 +237,9 @@ function DebaterVideo({
   audible: boolean;
   countdown: TurnState;
   subtitle: string | null;
+  /** The claims this debater is making right now, oldest first. */
+  claims: StackedCard[];
+  ticker: DebateTicker;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -332,6 +325,15 @@ function DebaterVideo({
           </span>
         </div>
       )}
+
+      {/* Above the name, in this debater's own corner. The subtitle sits higher up, so the two
+          do not collide. */}
+      <DebateClaimTickerStack
+        cards={claims}
+        rowsByClaimId={ticker.rowsByClaimId}
+        entitiesByClaimId={ticker.entitiesByClaimId}
+        onAnswered={ticker.onAnswered}
+      />
 
       {/* Debater identity: avatar + name + position, opens their personal space in the side panel. */}
       <button
