@@ -12,6 +12,7 @@ import { SpaceVerifyButton } from '~/core/space/space-verify-button';
 import { RouteEditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
+import { Spaces } from '~/core/utils/space';
 import { sortRelations } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -65,10 +66,14 @@ export default async function Layout(props0: LayoutProps) {
    *
    * Both halves matter. `PERSONAL` alone includes the 725 personal spaces with
    * no person entity behind them, which have nothing to render a profile from;
-   * an external topic alone includes every DAO space whose topic is a subject
+   * a topic entity alone includes every DAO space whose topic is a subject
    * rather than a someone.
+   *
+   * Must match the branch in `page.tsx` exactly — this decides the header and
+   * the chrome, that one decides the body, and a page with one and not the
+   * other is worse than neither.
    */
-  const isProfile = props.space?.type === 'PERSONAL' && isExternalTopic;
+  const isProfile = props.space?.type === 'PERSONAL' && Spaces.hasTopicEntity(props.space);
 
   return (
     <EntityStoreProvider id={props.id} spaceId={spaceId}>
@@ -105,6 +110,7 @@ export default async function Layout(props0: LayoutProps) {
               <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
               <SpacePageMetadataHeader
                 spaceId={spaceId}
+                hideTypesAndVotes={isProfile}
                 membersComponent={
                   <div className="flex items-center gap-2">
                     <React.Suspense fallback={<MembersSkeleton />}>

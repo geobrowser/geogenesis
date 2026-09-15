@@ -86,14 +86,21 @@ export default async function SpacePage(props0: Props) {
 
   const space = await cachedFetchSpace(spaceId);
 
-  if (Spaces.hasExternalTopic(space)) {
-    // A personal space with a profile is a person, and gets the profile page.
-    // Every other external-topic space — a DAO whose topic is a subject rather
-    // than a someone — keeps the single-column body it has today.
-    if (space.type === 'PERSONAL') {
-      return <PersonalSpaceBody space={space} topicEntityId={space.topicId} />;
-    }
+  // A personal space whose subject is a person entity gets the profile page.
+  //
+  // `hasTopicEntity`, not `hasExternalTopic`: the latter cannot return true for
+  // a space whose topic resolved, because `SpaceDto` builds `entity` from
+  // `topic ?? page` and the comparison is then always false. See the predicate's
+  // own doc comment, and `topic-predicates.test.ts`.
+  if (Spaces.hasTopicEntity(space) && space.type === 'PERSONAL') {
+    return <PersonalSpaceBody space={space} topicEntityId={space.topicId} />;
+  }
 
+  // Left on the old predicate deliberately. A DAO whose topic is a subject
+  // rather than a someone renders single-column today because this branch never
+  // fires, and making it fire is a change to every such space — GEO-2913, not
+  // a side effect of the profile work.
+  if (Spaces.hasExternalTopic(space)) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 

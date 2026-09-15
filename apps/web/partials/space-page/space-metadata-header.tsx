@@ -17,9 +17,23 @@ import { AddDataChip } from './add-data-panel';
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
   membersComponent: React.ReactElement<any>;
+  /**
+   * A profile renders the types and the vote pair elsewhere (GEO-2859).
+   *
+   * Types move to the rail's About section, where there is room to say what
+   * they are; the votes move up into the action row beside Edit profile, which
+   * is where every other judgement about this person is made. Suppressed here
+   * rather than moved, because a second vote pair on the same entity is two
+   * controls that fight over one number.
+   */
+  hideTypesAndVotes?: boolean;
 }
 
-export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePageMetadataHeaderProps) {
+export function SpacePageMetadataHeader({
+  spaceId,
+  membersComponent,
+  hideTypesAndVotes = false,
+}: SpacePageMetadataHeaderProps) {
   const [addTypeState, setAddTypeState] = React.useState(false);
 
   const { id } = useEntityStoreInstance();
@@ -39,6 +53,11 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
   return (
     <div className="relative z-20 flex flex-wrap items-center justify-between gap-y-4 text-text">
       <div className="flex items-center gap-1">
+        {/*
+         * The editor still edits types here even on a profile: the rail's
+         * pills are a read-only view, and the only other way to add a type
+         * would be a control the profile does not have.
+         */}
         {editable ? (
           <div className="box-border h-6">
             {types.length > 0 || (addTypeState && types.length === 0) ? (
@@ -52,13 +71,13 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
               </button>
             )}
           </div>
-        ) : (
+        ) : hideTypesAndVotes ? null : (
           additionalTypeChips
         )}
         {membersComponent}
         <AddDataChip spaceId={spaceId} />
       </div>
-      <EntityVoteButtons entityId={id} spaceId={spaceId} />
+      {!hideTypesAndVotes && <EntityVoteButtons entityId={id} spaceId={spaceId} />}
     </div>
   );
 }
