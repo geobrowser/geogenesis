@@ -1,6 +1,7 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
-import type React from 'react';
+import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -134,6 +135,7 @@ function watchableDebate(): Debate {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   observers = [];
   mocks.debateQuery = { data: undefined, isError: false };
   mocks.mediaQuery = { data: undefined, isError: false };
@@ -188,8 +190,16 @@ function intersectAll(ratio: number) {
   });
 }
 
+// The card is rendered inside the app's query provider — its comment count reads the comments
+// cache — so the harness has to provide one too, or the double is laxer than the real tree.
+let client: QueryClient;
+
+function wrapper({ children }: { children: React.ReactNode }) {
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
 function renderCard() {
-  return render(<DebateExploreFeedCard item={item} fallback={<div data-testid="fallback" />} />);
+  return render(<DebateExploreFeedCard item={item} fallback={<div data-testid="fallback" />} />, { wrapper });
 }
 
 describe('DebateExploreFeedCard', () => {
@@ -287,11 +297,11 @@ describe('DebateExploreFeedCard', () => {
   it('shows the Join-space chip to non-members and honors hideJoinButton', () => {
     const nonMemberItem = { ...item, isMemberOrEditor: false };
 
-    const { unmount } = render(<DebateExploreFeedCard item={nonMemberItem} fallback={<div />} />);
+    const { unmount } = render(<DebateExploreFeedCard item={nonMemberItem} fallback={<div />} />, { wrapper });
     expect(screen.getByTestId('join-button')).toBeDefined();
     unmount();
 
-    render(<DebateExploreFeedCard item={nonMemberItem} hideJoinButton fallback={<div />} />);
+    render(<DebateExploreFeedCard item={nonMemberItem} hideJoinButton fallback={<div />} />, { wrapper });
     expect(screen.queryByTestId('join-button')).toBeNull();
   });
 
