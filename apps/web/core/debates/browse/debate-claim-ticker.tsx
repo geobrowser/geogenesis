@@ -45,7 +45,9 @@ export type DebateTicker = {
   claims: TimedClaim[];
   /** Claim ids the viewer has answered this session. */
   answered: ReadonlySet<string>;
-  onAnswered: (claimId: string) => void;
+  /** Which way they answered each one, for the tally at the end. */
+  answers: ReadonlyMap<string, boolean>;
+  onAnswered: (claimId: string, position: boolean) => void;
   onDismiss: (claimId: string) => void;
   /** Per-claim lookups, hoisted so the card and the end-of-debate stack share one batch. */
   rowsByClaimId: Map<string, DebateClaim>;
@@ -65,13 +67,16 @@ export function useDebateClaimTicker(debate: Debate, playheadMs: number, enabled
   const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id, enabled);
   const { timings } = useClaimTimings(debate.id, claims, enabled);
 
-  const [answered, setAnswered] = React.useState<ReadonlySet<string>>(() => new Set());
+  const [answers, setAnswers] = React.useState<ReadonlyMap<string, boolean>>(() => new Map());
   const [dismissed, setDismissed] = React.useState<ReadonlySet<string>>(() => new Set());
 
-  const onAnswered = React.useCallback((claimId: string) => {
-    setAnswered(current => new Set(current).add(claimId));
+  const onAnswered = React.useCallback((claimId: string, position: boolean) => {
+    setAnswers(current => new Map(current).set(claimId, position));
     setDismissed(current => new Set(current).add(claimId));
   }, []);
+
+  // The ids alone, for every caller that only asks "has this been answered".
+  const answered = React.useMemo(() => new Set(answers.keys()), [answers]);
 
   const onDismiss = React.useCallback((claimId: string) => {
     setDismissed(current => new Set(current).add(claimId));
@@ -171,6 +176,7 @@ export function useDebateClaimTicker(debate: Debate, playheadMs: number, enabled
     markers,
     claims: timedClaims,
     answered,
+    answers,
     onAnswered,
     onDismiss,
     rowsByClaimId,
@@ -199,7 +205,7 @@ export function DebateClaimTickerCard({
   opacity?: number;
   row: DebateClaim | null;
   entity: Entity | null;
-  onAnswered: (claimId: string) => void;
+  onAnswered: (claimId: string, position: boolean) => void;
 }) {
   const { claim } = window;
 
@@ -244,7 +250,7 @@ export function DebateClaimTickerStack({
   maxWidth?: number | null;
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
-  onAnswered: (claimId: string) => void;
+  onAnswered: (claimId: string, position: boolean) => void;
 }) {
   if (cards.length === 0) return null;
 
@@ -291,7 +297,7 @@ function TickerClaimControls({
   spaceId: string;
   row: DebateClaim | null;
   entity: Entity | null;
-  onAnswered: (claimId: string) => void;
+  onAnswered: (claimId: string, position: boolean) => void;
 }) {
   const promptSignIn = usePrivySignIn();
   const {
@@ -316,17 +322,17 @@ function TickerClaimControls({
     offersDebate: false,
   });
 
-  const answered = control.viewerPosition !== null;
+  const position = control.viewerPosition;
 
   // Reported once, on the transition. The card stays up for the rest of its window so the viewer
-  // sees the split they just earned; it is the *next* seek past it that will skip it.
+  // sees the side they just took; it is the *next* seek past it that will skip it.
   const reported = React.useRef(false);
   React.useEffect(() => {
-    if (answered && !reported.current) {
+    if (position !== null && !reported.current) {
       reported.current = true;
-      onAnswered(claimId);
+      onAnswered(claimId, position);
     }
-  }, [answered, claimId, onAnswered]);
+  }, [position, claimId, onAnswered]);
 
   const copy = ENTITY_RESPONSE_COPY[responseKind];
 
