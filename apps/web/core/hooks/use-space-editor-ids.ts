@@ -4,47 +4,39 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
-import { getEditorSpaceIdsForSpace, getMemberSpaceIdsForSpace, normalizeSpaceId } from '~/core/access/space-access';
+import { type SpaceRoles, getSpaceRoles, normalizeSpaceId } from '~/core/access/space-access';
 
 const EMPTY_ROLE_SPACE_IDS = new Set<string>();
+const EMPTY_SPACE_ROLES: SpaceRoles = { editorSpaceIds: EMPTY_ROLE_SPACE_IDS, memberSpaceIds: EMPTY_ROLE_SPACE_IDS };
 
 /**
- * Which of `memberSpaceIds` hold `role` in the space. Both roles are asked the same way, so they
- * share one hook body — only the query key and the loader differ.
+ * Which of `memberSpaceIds` are editors of the space, and which are members.
+ *
+ * Both roles come from one request, so they arrive together — a caller that draws something about a
+ * person's standing cannot show half of it. `isError` is reported rather than folded into the empty
+ * sets, because a failed lookup and a space where nobody holds a role are not the same answer, and a
+ * caller that cannot tell them apart will state the second when it means the first.
  */
-function useSpaceRoleIds(role: 'editor' | 'member', spaceId: string, memberSpaceIds: string[], enabled = true) {
+export function useSpaceRoles(spaceId: string, memberSpaceIds: string[]) {
   const normalizedSpaceId = normalizeSpaceId(spaceId);
   const normalizedMemberSpaceIds = [...new Set(memberSpaceIds.map(normalizeSpaceId))].sort();
-  const load = role === 'editor' ? getEditorSpaceIdsForSpace : getMemberSpaceIdsForSpace;
 
-  const { data = EMPTY_ROLE_SPACE_IDS, isLoading } = useQuery({
-    queryKey: [`space-${role}-ids`, normalizedSpaceId, normalizedMemberSpaceIds],
-    queryFn: ({ signal }) => Effect.runPromise(load(normalizedSpaceId, normalizedMemberSpaceIds, signal)),
-    enabled: enabled && Boolean(normalizedSpaceId && normalizedMemberSpaceIds.length > 0),
+  const {
+    data = EMPTY_SPACE_ROLES,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ['space-roles', normalizedSpaceId, normalizedMemberSpaceIds],
+    queryFn: ({ signal }) => Effect.runPromise(getSpaceRoles(normalizedSpaceId, normalizedMemberSpaceIds, signal)),
+    enabled: Boolean(normalizedSpaceId && normalizedMemberSpaceIds.length > 0),
   });
 
-  return { data, isLoading };
+  return { ...data, isLoading, isError };
 }
 
+/** The editors half, for callers that only ask about editorship. */
 export function useSpaceEditorIds(spaceId: string, memberSpaceIds: string[]) {
-  const { data, isLoading } = useSpaceRoleIds('editor', spaceId, memberSpaceIds);
+  const { editorSpaceIds, isLoading, isError } = useSpaceRoles(spaceId, memberSpaceIds);
 
-  return {
-    editorSpaceIds: data,
-    isLoading,
-  };
-}
-
-/**
- * `enabled` because, unlike editorship, nothing on a generic entity needs to know who is merely a
- * member — only a proposal's comment badges do (GEO-2907), and a lookup per comment author is not
- * worth paying on every other surface that renders comments.
- */
-export function useSpaceMemberIds(spaceId: string, memberSpaceIds: string[], enabled = true) {
-  const { data, isLoading } = useSpaceRoleIds('member', spaceId, memberSpaceIds, enabled);
-
-  return {
-    memberSpaceIds: data,
-    isLoading,
-  };
+  return { editorSpaceIds, isLoading, isError };
 }

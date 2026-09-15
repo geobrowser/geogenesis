@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import type { Space } from '~/core/io/dto/spaces';
-import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
+import { getIsEditorOfSpace, getIsMemberOfSpace, getSpaceRolesForParticipants } from '~/core/io/queries';
 
 export type SpaceAccess = {
   isEditor: boolean;
@@ -96,37 +96,60 @@ export function getSpaceAccessById(spaceId: string, personalSpaceId: string, sig
 }
 
 /**
- * Which of these people hold `role` in the space, asked one person at a time.
- *
- * Server-filtered per person rather than read out of the space's participant lists, because those
- * lists are capped: a space with more participants than the cap would answer "not an editor" for
- * everyone past it, which is indistinguishable from a correct answer. Asking about the people we
- * actually care about has no such ceiling, and scales with them rather than with the space.
+ * Chunk size for the role lookup. The query caps returned rows by the number of ids asked about, so
+ * the two have to move together; this keeps both the URL and the response bounded.
  */
-function getRoleSpaceIdsForSpace(
-  role: 'editor' | 'member',
+const ROLE_LOOKUP_CHUNK = 100;
+
+export type SpaceRoles = {
+  editorSpaceIds: Set<string>;
+  memberSpaceIds: Set<string>;
+};
+
+/**
+ * Both roles, for the people asked about, in one request per chunk of 100.
+ *
+ * Server-filtered by the set rather than read out of the space's participant lists, because those
+ * lists are capped: a space with more participants than the cap would report everyone past it as
+ * holding no role, which is indistinguishable from a correct answer. Filtering by the people we
+ * actually care about has no such ceiling, and costs one request rather than one per person per role.
+ */
+export function getSpaceRoles(
   spaceId: string,
   participantSpaceIds: string[],
   signal?: AbortController['signal']
-) {
+): Effect.Effect<SpaceRoles, unknown> {
   const normalizedSpaceId = normalizeSpaceId(spaceId);
   const normalizedIds = [...new Set(participantSpaceIds.map(normalizeSpaceId))];
-  const hasRole = role === 'editor' ? getIsEditorOfSpace : getIsMemberOfSpace;
 
   return Effect.gen(function* () {
-    const checks = yield* Effect.forEach(
-      normalizedIds,
-      memberSpaceId =>
-        Effect.gen(function* () {
-          // A personal space holds every role in itself.
-          const holds =
-            memberSpaceId === normalizedSpaceId ? true : yield* hasRole(normalizedSpaceId, memberSpaceId, signal);
-          return { memberSpaceId, holds };
-        }),
-      { concurrency: 10 }
+    const editorSpaceIds = new Set<string>();
+    const memberSpaceIds = new Set<string>();
+
+    // A personal space holds every role in itself, and the participant lists do not say so.
+    if (normalizedIds.includes(normalizedSpaceId)) {
+      editorSpaceIds.add(normalizedSpaceId);
+      memberSpaceIds.add(normalizedSpaceId);
+    }
+
+    const toAsk = normalizedIds.filter(id => id !== normalizedSpaceId);
+    const chunks: string[][] = [];
+    for (let index = 0; index < toAsk.length; index += ROLE_LOOKUP_CHUNK) {
+      chunks.push(toAsk.slice(index, index + ROLE_LOOKUP_CHUNK));
+    }
+
+    const pages = yield* Effect.forEach(
+      chunks,
+      chunk => getSpaceRolesForParticipants(normalizedSpaceId, chunk, signal),
+      { concurrency: 4 }
     );
 
-    return new Set(checks.filter(check => check.holds).map(check => check.memberSpaceId));
+    for (const page of pages) {
+      for (const id of page.editorSpaceIds) editorSpaceIds.add(normalizeSpaceId(id));
+      for (const id of page.memberSpaceIds) memberSpaceIds.add(normalizeSpaceId(id));
+    }
+
+    return { editorSpaceIds, memberSpaceIds };
   });
 }
 
@@ -135,13 +158,5 @@ export function getEditorSpaceIdsForSpace(
   memberSpaceIds: string[],
   signal?: AbortController['signal']
 ) {
-  return getRoleSpaceIdsForSpace('editor', spaceId, memberSpaceIds, signal);
-}
-
-export function getMemberSpaceIdsForSpace(
-  spaceId: string,
-  memberSpaceIds: string[],
-  signal?: AbortController['signal']
-) {
-  return getRoleSpaceIdsForSpace('member', spaceId, memberSpaceIds, signal);
+  return Effect.map(getSpaceRoles(spaceId, memberSpaceIds, signal), roles => roles.editorSpaceIds);
 }

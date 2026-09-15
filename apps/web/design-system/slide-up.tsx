@@ -44,17 +44,27 @@ export const SlideUp = ({
     return () => setSlideUpOpenCount(count => Math.max(0, count - 1));
   }, [isOpen, setSlideUpOpenCount]);
 
+  // A panel raised above this sheet owns Escape while it is open. Both listen on the window and this
+  // sheet's listener is registered first — it was open first — so one press would otherwise close the
+  // panel and the sheet under it at once. The same one-layer-per-press rule the comments panel already
+  // follows for the entity side panel above it.
+  const raisedPanelOpen = entitySidePanelHost !== null || commentsPanelHost !== null;
+
   React.useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || deferEscapeClose) return;
+      // `isComposing` and `defaultPrevented` are guarded the way the panels above do it: mid-IME
+      // composition Escape ends the composition, and the sheet now contains a comment composer, so
+      // closing on it would take an unsent draft with it.
+      if (e.key !== 'Escape' || e.isComposing || e.defaultPrevented) return;
+      if (deferEscapeClose || raisedPanelOpen) return;
       setIsOpen(false);
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, setIsOpen, deferEscapeClose]);
+  }, [isOpen, setIsOpen, deferEscapeClose, raisedPanelOpen]);
 
   return (
     <AnimatePresence>
