@@ -25,6 +25,7 @@ import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 export function PersonRecordFeed({
   rows,
   isLoading,
+  isError = false,
   isFetchingNextPage = false,
   hasNextPage = false,
   fetchNextPage,
@@ -33,6 +34,8 @@ export function PersonRecordFeed({
 }: {
   rows: ExploreFeedRow[];
   isLoading: boolean;
+  /** Stops the sentinel asking again for a page that just failed. */
+  isError?: boolean;
   isFetchingNextPage?: boolean;
   hasNextPage?: boolean;
   fetchNextPage?: () => void;
@@ -53,6 +56,7 @@ export function PersonRecordFeed({
   const sentinelRef = useInfiniteSentinel({
     hasNextPage,
     isFetchingNextPage,
+    isError,
     fetchNextPage: fetchNextPage ?? noop,
   });
 
@@ -66,17 +70,26 @@ export function PersonRecordFeed({
 
   return (
     <div className="pt-1">
-      {items.map(item => (
-        <ExploreFeedCard
-          key={`${item.entityId}-${item.spaceId}`}
-          item={item}
-          hideJoinButton
-          // The claim opens in the side panel rather than navigating, as it does
-          // on Explore: this is a list somebody is reading down, and losing the
-          // page to read one row is a worse trade here than it is anywhere.
-          titleOpensSidePanel
-        />
-      ))}
+      {/*
+       * The cards get a wrapper of their own so the last one is actually
+       * `:last-child`. Each card draws its own rule and clears it with
+       * `last:border-b-0`; with the sentinel as their next sibling, the last
+       * card never matched and the list ended on a rule under nothing.
+       */}
+      <div>
+        {items.map(item => (
+          <ExploreFeedCard
+            key={`${item.entityId}-${item.spaceId}`}
+            item={item}
+            hideJoinButton
+            // The claim opens in the side panel rather than navigating, as it
+            // does on Explore: this is a list somebody is reading down, and
+            // losing the page to read one row is a worse trade here than it is
+            // anywhere.
+            titleOpensSidePanel
+          />
+        ))}
+      </div>
 
       {/* Well above the fold, so the next page is already in by the time the
           reader gets here — the same margin the explore feed uses. */}

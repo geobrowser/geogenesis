@@ -67,16 +67,15 @@ export default async function Layout(props0: LayoutProps) {
   /**
    * A personal space with a profile of its own (GEO-2859).
    *
-   * Both halves matter. `PERSONAL` alone includes the 725 personal spaces with
-   * no person entity behind them, which have nothing to render a profile from;
-   * a topic entity alone includes every DAO space whose topic is a subject
-   * rather than a someone.
+   * Both halves matter. `PERSONAL` alone includes the personal spaces with no
+   * person entity behind them, which have nothing to render a profile from; a
+   * person entity alone would include a Person written into a DAO space.
    *
-   * Must match the branch in `page.tsx` exactly — this decides the header and
-   * the chrome, that one decides the body, and a page with one and not the
-   * other is worse than neither.
+   * Shared with `page.tsx` rather than spelled out twice: this decides the
+   * header and the chrome, that one decides the body, and a page with one and
+   * not the other is worse than neither.
    */
-  const isProfile = props.space?.type === 'PERSONAL' && Spaces.hasTopicEntity(props.space);
+  const isProfile = Spaces.isPersonProfileSpace(props.space);
 
   /**
    * The rail lives here rather than on the Overview page (GEO-2859).
@@ -121,7 +120,13 @@ export default async function Layout(props0: LayoutProps) {
             isExternalTopic={isExternalTopic}
             alwaysHasSidebar={isProfile}
           >
-            <div className="space-y-2">
+            {/*
+             * Pulled up on a profile. The shared header leaves 40px under an
+             * avatar that already overhangs the cover by 40 — right for a space,
+             * where the name is the first thing under it, and too much here
+             * where a name, three roles and a bio all follow.
+             */}
+            <div className={isProfile ? '-mt-4 space-y-2' : 'space-y-2'}>
               <EditableSpaceHeading
                 spaceId={spaceId}
                 entityId={props.id}

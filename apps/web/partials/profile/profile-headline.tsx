@@ -19,10 +19,10 @@ type Props = {
  * account holds three at once — two jobs and a PhD — and choosing between them
  * would mean inventing a rule about which job is the real one.
  *
- * `quoteMedium` (17px) against the description's `body` (20px). At `metadata`
- * (16px) the two sat four pixels apart and read as one block set at two sizes
- * for no reason; a 17/20 step reads as a caption above a paragraph, which is
- * what it is.
+ * Set in `body`, exactly as the description below is. They are the same kind of
+ * statement about this person — one written, one derived — and any step between
+ * them reads as one block set at two sizes for no reason. The colour does the
+ * separating instead: the role in `text`, everything around it in `grey-04`.
  *
  * Renders nothing at all when there is nothing current, which is most accounts.
  */
@@ -30,14 +30,15 @@ export function ProfileHeadline({ roles, spaceId }: Props) {
   if (roles.length === 0) return null;
 
   return (
-    // `mb-5` pays back the description's own `-mt-3` — it pulls itself up to sit
-    // tight under the name, which is right when it is under the name and wrong
-    // with three roles in between — and leaves a real gap on top of that.
-    <ul className="mt-3 mb-5 flex flex-col gap-1.5">
+    // Centred between the name and the description: `mt-2` is the gap above,
+    // and `mb-5` is 20px less the description's own `-mt-3`, which pulls itself
+    // up to sit tight under the name — right when it *is* under the name, wrong
+    // with three roles in between. Both come out at 8px.
+    <ul className="mt-2 mb-5 flex flex-col gap-1">
       {roles.map(role => (
         <li
           key={`${role.kind}-${role.organizationId}-${role.subject}`}
-          className="flex min-w-0 items-center gap-2 text-quoteMedium"
+          className="flex min-w-0 items-center gap-2 text-body"
         >
           <span className="shrink-0">
             <ProfileEntityLink entityId={role.subjectId} spaceId={spaceId} className="text-text hover:underline">
