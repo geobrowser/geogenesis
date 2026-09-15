@@ -41,6 +41,8 @@ import {
 } from '~/partials/review/bounty-linking';
 import type { Bounty } from '~/partials/review/bounty-linking/types';
 
+import { ProposalSidePanelShell, useExclusiveProposalPanel } from './proposal-side-panel';
+
 type ProviderProps = {
   daoSpaceId: string;
   proposalId: string;
@@ -107,7 +109,7 @@ export function ProposalBountiesProvider({
   const [draftIds, setDraftIds] = React.useState<Set<string>>(() => new Set());
   const [isSaving, setIsSaving] = React.useState(false);
   const [optimisticLinkedIds, setOptimisticLinkedIds] = React.useState<string[] | null>(null);
-  const [isPanelOpen, setIsPanelOpen] = React.useState(false);
+  const { isPanelOpen, togglePanel } = useExclusiveProposalPanel('bounties');
 
   const { data: space } = useQuery({
     queryKey: ['space', daoSpaceId],
@@ -425,16 +427,15 @@ export function ProposalBountiesProvider({
     });
   }, []);
 
-  const togglePanel = React.useCallback(() => {
-    setIsPanelOpen(prev => {
-      const next = !prev;
-      if (!next) {
-        // Closing the panel discards any unsaved drafts.
-        setDraftIds(new Set(effectiveLinkedIds));
-      }
-      return next;
-    });
-  }, [effectiveLinkedIds]);
+  // Closing the panel discards any unsaved drafts — watched as a transition rather than done inside
+  // the toggle, because the panel now also closes when the comments panel takes the screen's slot.
+  const wasPanelOpen = React.useRef(isPanelOpen);
+  React.useEffect(() => {
+    if (wasPanelOpen.current && !isPanelOpen) {
+      setDraftIds(new Set(effectiveLinkedIds));
+    }
+    wasPanelOpen.current = isPanelOpen;
+  }, [isPanelOpen, effectiveLinkedIds]);
 
   const isLoadingAvailable = isAuthor && (isLoadingSpaces || isLoadingRemote);
 
@@ -638,6 +639,9 @@ export function ProposalBountyHeadButton() {
             'inline-flex h-6 shrink-0 items-center gap-1.5 rounded border px-1.5 text-metadata leading-none text-text transition-colors',
             'border-grey-02 bg-white hover:border-text'
           )}
+          // Same reason as the comments pill beside it: the content is a bare count, so the button
+          // needs to say what the count is of.
+          aria-label={isAuthor && n === 0 ? 'Link to bounty' : `Bounties (${n})`}
           title="Bounties"
           aria-expanded={isPanelOpen}
         >
@@ -645,7 +649,6 @@ export function ProposalBountyHeadButton() {
           <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
         </button>
       )}
-      <span aria-hidden className="h-4 w-px shrink-0 self-center bg-grey-02 last:hidden" />
     </>
   );
 }
@@ -674,86 +677,81 @@ export function ProposalBountyPanel() {
   const pluralize = (count: number) => (count === 1 ? 'bounty' : 'bounties');
 
   return (
-    <aside
-      className="sticky top-[52px] flex h-[calc(100vh-60px)] w-full max-w-[400px] shrink-0 flex-col self-start"
-      aria-label="Bounties"
-    >
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg border border-grey-02 bg-white">
-        {!isAuthor && (
-          <>
-            <div className="px-5 py-4">
-              <SectionHeader label={`${n} ${pluralize(n)} linked`} />
-            </div>
+    <ProposalSidePanelShell label="Bounties">
+      {!isAuthor && (
+        <>
+          <div className="px-5 py-4">
+            <SectionHeader label={`${n} ${pluralize(n)} linked`} />
+          </div>
+          <div className="border-t border-grey-02">
+            {n === 0 ? (
+              <p className="px-5 py-4 text-metadataMedium text-grey-04">No bounties linked</p>
+            ) : isLoadingLinkedEntities ? (
+              <p className="px-5 py-4 text-metadataMedium text-grey-04">Loading bounties…</p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-grey-02 px-5">
+                {linkedBountiesLabeled.map(b => (
+                  <li key={b.id} className="list-none py-2">
+                    <BountyReadOnly bounty={b} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </>
+      )}
+
+      {isAuthor && (
+        <>
+          <CollapsibleSectionHeader
+            label={`${linkedCount} ${pluralize(linkedCount)} linked`}
+            expanded={linkedExpanded}
+            onToggle={() => setLinkedExpanded(v => !v)}
+          />
+          {linkedExpanded && (
             <div className="border-t border-grey-02">
-              {n === 0 ? (
+              {(isLoadingLinks || isLoadingLinkedEntities) && draftBounties.length === 0 ? (
+                <p className="px-5 py-4 text-metadataMedium text-grey-04">Loading links…</p>
+              ) : draftBounties.length === 0 ? (
                 <p className="px-5 py-4 text-metadataMedium text-grey-04">No bounties linked</p>
-              ) : isLoadingLinkedEntities ? (
-                <p className="px-5 py-4 text-metadataMedium text-grey-04">Loading bounties…</p>
               ) : (
-                <ul className="flex flex-col divide-y divide-grey-02 px-5">
-                  {linkedBountiesLabeled.map(b => (
-                    <li key={b.id} className="list-none py-2">
-                      <BountyReadOnly bounty={b} />
-                    </li>
+                <div className="flex flex-col divide-y divide-grey-02 px-5">
+                  {draftBounties.map(b => (
+                    <BountyCard key={b.id} bounty={b} isSelected onToggle={toggleDraft} />
                   ))}
-                </ul>
+                </div>
               )}
             </div>
-          </>
-        )}
-
-        {isAuthor && (
-          <>
+          )}
+          <div className="border-t border-grey-02">
             <CollapsibleSectionHeader
-              label={`${linkedCount} ${pluralize(linkedCount)} linked`}
-              expanded={linkedExpanded}
-              onToggle={() => setLinkedExpanded(v => !v)}
+              label={`${availableCount} ${pluralize(availableCount)} available`}
+              expanded={availableExpanded}
+              onToggle={() => setAvailableExpanded(v => !v)}
             />
-            {linkedExpanded && (
-              <div className="border-t border-grey-02">
-                {(isLoadingLinks || isLoadingLinkedEntities) && draftBounties.length === 0 ? (
-                  <p className="px-5 py-4 text-metadataMedium text-grey-04">Loading links…</p>
-                ) : draftBounties.length === 0 ? (
-                  <p className="px-5 py-4 text-metadataMedium text-grey-04">No bounties linked</p>
-                ) : (
-                  <div className="flex flex-col divide-y divide-grey-02 px-5">
-                    {draftBounties.map(b => (
-                      <BountyCard key={b.id} bounty={b} isSelected onToggle={toggleDraft} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+          </div>
+          {availableExpanded && (
             <div className="border-t border-grey-02">
-              <CollapsibleSectionHeader
-                label={`${availableCount} ${pluralize(availableCount)} available`}
-                expanded={availableExpanded}
-                onToggle={() => setAvailableExpanded(v => !v)}
-              />
+              {isLoadingAvailable ? (
+                <p className="px-5 py-4 text-metadataMedium text-grey-04">Loading bounties…</p>
+              ) : availableBounties.length === 0 ? (
+                <p className="px-5 py-4 text-metadataMedium text-grey-04">
+                  {linkableBountiesLabeled.length === 0
+                    ? 'No allocated bounties available to link in current space'
+                    : 'No other allocated bounties in this space'}
+                </p>
+              ) : (
+                <div className="flex flex-col divide-y divide-grey-02 px-5">
+                  {availableBounties.map(b => (
+                    <BountyCard key={b.id} bounty={b} isSelected={false} onToggle={toggleDraft} />
+                  ))}
+                </div>
+              )}
             </div>
-            {availableExpanded && (
-              <div className="border-t border-grey-02">
-                {isLoadingAvailable ? (
-                  <p className="px-5 py-4 text-metadataMedium text-grey-04">Loading bounties…</p>
-                ) : availableBounties.length === 0 ? (
-                  <p className="px-5 py-4 text-metadataMedium text-grey-04">
-                    {linkableBountiesLabeled.length === 0
-                      ? 'No allocated bounties available to link in current space'
-                      : 'No other allocated bounties in this space'}
-                  </p>
-                ) : (
-                  <div className="flex flex-col divide-y divide-grey-02 px-5">
-                    {availableBounties.map(b => (
-                      <BountyCard key={b.id} bounty={b} isSelected={false} onToggle={toggleDraft} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </aside>
+          )}
+        </>
+      )}
+    </ProposalSidePanelShell>
   );
 }
 

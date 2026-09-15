@@ -17,6 +17,19 @@ export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
 export const entitySidePanelHostElementAtom = atom<HTMLElement | null>(null);
 
 /**
+ * The comments panel's own element, for the same reason the side panel registers one: a slide-up
+ * locks scrolling everywhere but its own subtree, and a panel portalled to the body is outside it.
+ */
+export const commentsPanelHostElementAtom = atom<HTMLElement | null>(null);
+
+/**
+ * How many slide-ups are open. A count rather than a flag because closing one while another is open
+ * must not report "none" — and because the answer is read by overlays deciding whether they have to
+ * clear one.
+ */
+export const slideUpOpenCountAtom = atom(0);
+
+/**
  * Whether a space rail is currently rendering content. The header lives in the
  * layout (separate DOM from the page body), so it can't use `has-[aside]`.
  */

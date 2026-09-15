@@ -1,7 +1,9 @@
 import * as React from 'react';
 
+import { Effect } from 'effect';
 import { redirect } from 'next/navigation';
 
+import { getEntityCommentCount } from '~/core/io/queries';
 import { fetchProposal } from '~/core/io/subgraph';
 import {
   getIsProposalEnded,
@@ -24,6 +26,7 @@ import { ActiveProposalSlideUp } from './active-proposal-slide-up';
 import { CloseProposalButton } from './close-proposal-button';
 import { ContentProposal } from './content-proposal';
 import { ProposalBountiesProvider, ProposalBountyHeadButton, ProposalBountyPanel } from './proposal-bounty-links';
+import { ProposalCommentsHeadButton, ProposalCommentsPanel, ProposalCommentsProvider } from './proposal-comments-panel';
 import { ProposalVoteRow } from './proposal-vote-row';
 import { SpaceTopicProposal } from './space-topic-proposal';
 import { SubspaceProposal } from './subspace-proposal';
@@ -55,6 +58,12 @@ async function ReviewProposal({ proposalId, spaceId }: Props) {
   if (!proposal) {
     redirect(`/space/${spaceId}/governance`);
   }
+
+  // Every proposal has a system entity at its own id, in its own space, so its comments are the
+  // comments on that entity and nothing new has to be stored (GEO-2907). Counted here so the
+  // button can say how many there are before the panel is opened; a failed count reads as none
+  // rather than taking the page down over a number beside an icon.
+  const commentCount = await Effect.runPromise(getEntityCommentCount(proposal.id)).catch(() => 0);
 
   const votes = proposal.proposalVotes.nodes;
   const votesCount = proposal.proposalVotes.totalCount;
@@ -98,7 +107,15 @@ async function ReviewProposal({ proposalId, spaceId }: Props) {
         </div>
 
         <div className="inline-flex shrink-0 items-center gap-2">
+          {/* The pills first, then one divider, then the decision. The divider used to be emitted
+              by the bounty button, which meant it only appeared on an edit proposal and would have
+              doubled once a second pill sat beside it. It belongs to the group, not to a member.
+              `last:hidden` because `AcceptOrReject` renders nothing for a non-editor with no vote
+              of their own — the common case for a visitor — and a divider with nothing after it is
+              a stray line. */}
           {isAddEdit && <ProposalBountyHeadButton />}
+          <ProposalCommentsHeadButton />
+          <span aria-hidden className="h-4 w-px shrink-0 self-center bg-grey-02 last:hidden" />
           <AcceptOrReject
             spaceId={spaceId}
             proposalId={proposal.id}
@@ -195,12 +212,26 @@ async function ReviewProposal({ proposalId, spaceId }: Props) {
           </div>
         </div>
         {isAddEdit && <ProposalBountyPanel />}
+        <ProposalCommentsPanel />
       </div>
     </>
   );
 
+  // Comments are on every proposal type — the screen in the designs is an editor request, which
+  // has no diff and no bounties — so this provider wraps whatever the bounty one does or doesn't.
+  //
+  // The proposal's own space, not the route's. Nothing above verifies that this proposal belongs to
+  // the space in the URL, and the difference is durable here rather than cosmetic: the thread's space
+  // is written into every comment published on it, and it decides which space's roles the badges are
+  // about. The rest of the screen reads the route's space, which is a wider question than this.
+  const commentable = (
+    <ProposalCommentsProvider proposalId={proposal.id} spaceId={proposal.space.id} count={commentCount}>
+      {body}
+    </ProposalCommentsProvider>
+  );
+
   if (!isAddEdit) {
-    return body;
+    return commentable;
   }
 
   return (
@@ -210,7 +241,7 @@ async function ReviewProposal({ proposalId, spaceId }: Props) {
       proposalName={proposal.name ?? proposalTitle}
       authorSpaceId={proposal.createdBy.spaceId}
     >
-      {body}
+      {commentable}
     </ProposalBountiesProvider>
   );
 }
