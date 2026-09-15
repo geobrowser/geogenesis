@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ClaimTiming, TimedClaim } from './claim-timing';
-import { CLAIM_LINGER_MS, cardOpacity, claimMarkers, scoreDebate, tickerStack, tickerWindows } from './claim-ticker';
+import { CLAIM_LINGER_MS, cardOpacity, claimMarkers, tickerStack, tickerWindows } from './claim-ticker';
 
 function timed(id: string, timing: ClaimTiming | null, text = `Claim ${id}`): TimedClaim {
   return { id, text, spaceId: 'space-1', blockId: 'block-1', publishedTiming: null, timing };
@@ -146,16 +146,5 @@ describe('claimMarkers', () => {
 
   it('draws nothing before the duration is known', () => {
     expect(claimMarkers([timed('a', confident(1_000, 2_000))], 0)).toEqual([]);
-  });
-});
-
-describe('scoreDebate', () => {
-  it('splits what the viewer answered from what they let go by', () => {
-    const claims = [timed('a', confident(1_000, 2_000)), timed('b', confident(3_000, 4_000))];
-
-    const score = scoreDebate(claims, new Set(['a']));
-
-    expect(score.answered).toEqual(['a']);
-    expect(score.unanswered.map(claim => claim.id)).toEqual(['b']);
   });
 });
