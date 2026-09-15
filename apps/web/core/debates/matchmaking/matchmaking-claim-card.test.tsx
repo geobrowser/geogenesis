@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
    */
   summaryIndexedViewerDirection: null as 'positive' | 'negative' | null,
   summaryViewerResponseLoading: false,
+  resetIndexing: vi.fn(),
   spaceId: '019fedae-72b6-7ab2-927a-df044d57c566',
   viewerSpaceId: 'personal-space',
   /** Whether each render of the card's summary read was enabled, in order. */
@@ -118,7 +119,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
     personalSpaceId: mocks.viewerSpaceId,
   }),
   useEntityResponseIndexingSnapshot: () => mocks.indexing,
-  useResetEntityResponseIndexingSnapshot: () => vi.fn(),
+  useResetEntityResponseIndexingSnapshot: () => mocks.resetIndexing,
 }));
 
 // useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
@@ -228,6 +229,7 @@ beforeEach(() => {
   mocks.summaryNegative = 0;
   mocks.summaryIndexedViewerDirection = null;
   mocks.summaryViewerResponseLoading = false;
+  mocks.resetIndexing.mockReset();
   mocks.viewerSpaceId = 'personal-space';
   mocks.summaryEnabled = [];
 });
@@ -435,6 +437,65 @@ describe('position avatar stack', () => {
       const disagree = screen.getByRole('button', { name: /^Disagree/ });
       expect(disagree).toHaveAttribute('title', ENTITY_RESPONSE_COPY.stance.removeNegative);
       expect(within(disagree).getAllByTestId('avatar')).toHaveLength(before);
+    });
+
+    /**
+     * The other half of the avatar blinking off, and the one that survived the first fix.
+     *
+     * The optimistic write is retired once the server agrees with it — but the readiness the card
+     * hands the check is the *merged* one, whose `viewer_response` falls back to the indexed read.
+     * On a fresh account the indexer caught up while geo-chat was still registering, so the write
+     * was confirmed against the client's other guess, retired, and the viewer's own avatar dropped
+     * off the side until geo-chat finally answered and put it back.
+     *
+     * It waits for geo-chat now. Nothing else can confirm a write made against geo-chat.
+     */
+    it('holds the viewer’s own write until geo-chat itself confirms it', () => {
+      mocks.indexing = {
+        status: 'indexed',
+        pending: { expectedResponse: 'positive' },
+        runId: 'run-1',
+      };
+      // The indexer has caught up; geo-chat has not, which is what `answersReady: false` says.
+      mocks.summaryIndexedViewerDirection = 'positive';
+
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ viewer_response: null })}
+          answersReady={false}
+          answersMayComeFromIndex
+        />
+      );
+
+      expect(mocks.resetIndexing).not.toHaveBeenCalled();
+      // And the side is still drawn as held, which is the part the viewer sees.
+      expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute(
+        'title',
+        ENTITY_RESPONSE_COPY.stance.removePositive
+      );
+    });
+
+    // And it does hand back, once geo-chat says the same thing.
+    it('retires it when geo-chat answers with the side the viewer took', () => {
+      mocks.indexing = {
+        status: 'indexed',
+        pending: { expectedResponse: 'positive' },
+        runId: 'run-1',
+      };
+
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ viewer_response: { position: true, position_label: 'Agree' } })}
+          answersReady
+          answersMayComeFromIndex
+        />
+      );
+
+      expect(mocks.resetIndexing).toHaveBeenCalledWith('run-1');
     });
 
     it('offers the debate on that side too, rather than waiting on geo-chat alone', () => {

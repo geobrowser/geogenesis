@@ -328,6 +328,7 @@ export function useClaimPositionControl({
   claim,
   positions,
   readiness,
+  serverReadiness = readiness,
   answersReady = true,
   responseBlockedReason = null,
   viewerIdentityPending,
@@ -338,6 +339,26 @@ export function useClaimPositionControl({
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
+  /**
+   * geo-chat's own answer about this viewer, or null while it has not given one.
+   *
+   * Only the retirement of an optimistic write reads this, and it has to: `readiness` may be the
+   * merged one, whose `viewer_response` falls back to the indexed read — the same distinction
+   * `useBackfillReadinessForHeldPosition` draws, for the same reason. Confirming a write against
+   * that is confirming it against the client's other guess rather than against the server.
+   *
+   * What it cost: take a position while geo-chat was still registering a new account, the indexer
+   * caught up first, the merged readiness "confirmed" the write and retired the optimism — and the
+   * viewer's own avatar dropped off the side until geo-chat finally answered and put it back.
+   *
+   * Null rather than a readiness with a null response, because geo-chat saying "no side" and geo-chat
+   * not having spoken are the same shape and opposite facts. Clearing a position is where that bites:
+   * the clear would confirm against silence and retire at once, and the indexed read — which has not
+   * caught up either — would then stand the viewer back up on the side they just left.
+   *
+   * Defaults to `readiness`, which is right for every host whose readiness *is* geo-chat's.
+   */
+  serverReadiness?: MatchmakingReadiness | null;
   /**
    * False while the claim's own state is still arriving.
    *
@@ -469,13 +490,16 @@ export function useClaimPositionControl({
   // neither side reports the response.
   React.useEffect(() => {
     if (responseIndexing.status !== 'indexed') return;
+    // Nothing to hand back to yet. The viewer's own write stands until the server it was made
+    // against says the same thing — see `serverReadiness`.
+    if (!serverReadiness) return;
     const expected = responseIndexing.pending.expectedResponse;
     const confirmed =
       expected === null
-        ? readiness.viewer_response === null
-        : readiness.viewer_response?.position === (expected === 'positive');
+        ? serverReadiness.viewer_response === null
+        : serverReadiness.viewer_response?.position === (expected === 'positive');
     if (confirmed) resetResponseIndexing(responseIndexing.runId);
-  }, [readiness.viewer_response, resetResponseIndexing, responseIndexing]);
+  }, [serverReadiness, resetResponseIndexing, responseIndexing]);
 
   const respond = (position: boolean) => {
     if (!isConnected) {
@@ -671,6 +695,9 @@ function RespondableControls({
       claim,
       positions,
       readiness: resolvedReadiness,
+      // The unmerged one, and only once geo-chat has actually answered for this claim — which is
+      // exactly what `answersReady` reports, before the index is allowed to stand in for it.
+      serverReadiness: answersReady ? readiness : null,
       answersReady: sideKnown,
       responseBlockedReason,
       viewerIdentityPending,
