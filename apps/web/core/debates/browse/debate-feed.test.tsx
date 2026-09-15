@@ -36,6 +36,8 @@ const mocks = vi.hoisted(() => ({
   anchorDebate: null as ReturnType<typeof completedDebate> | null,
   anchorLoading: false,
   anchorError: null as Error | null,
+  /** Every `where` the claim-topic lookup was called with, in render order. */
+  entityQueryWheres: [] as unknown[],
 }));
 
 type ObserverRecord = {
@@ -94,7 +96,10 @@ vi.mock('next/navigation', async () => {
 });
 
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: () => ({ entities: [], isLoading: false }),
+  useQueryEntities: ({ where }: { where: unknown }) => {
+    mocks.entityQueryWheres.push(where);
+    return { entities: [], isLoading: false };
+  },
 }));
 
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
@@ -996,5 +1001,58 @@ describe('DebatesBrowseFeed — preloading the next debate (GEO-2895)', () => {
     for (const p of players) {
       if (p.preload) expect(p.active).toBe(false);
     }
+  });
+});
+
+/**
+ * A feed handed its own list (GEO-2859), rather than fetching one for a space.
+ *
+ * This is how a person's debates reach the same full-screen player: geo-chat
+ * indexes DAO spaces only and cannot list a personal space's debates, so the
+ * graph supplies the list and the feed renders it.
+ */
+describe('DebatesBrowseFeed with a supplied source', () => {
+  const sourced = (debates: Debate[]) => ({ debates, isLoading: false, isError: false });
+
+  beforeEach(() => {
+    mocks.entityQueryWheres.length = 0;
+  });
+
+  it('asks for claim topics by id, not by the space in the route', () => {
+    const debates = [
+      completedDebate('debate-a', 'A claim', '2026-07-02T00:01:10.000Z'),
+      completedDebate('debate-b', 'Another claim', '2026-07-03T00:01:10.000Z'),
+    ];
+
+    render(<DebatesBrowseFeed spaceId="personal-space" source={sourced(debates)} />);
+
+    // Scoping to "personal-space" would match none of these claims — they live
+    // wherever the person argued — and every topic chip would silently vanish.
+    expect(mocks.entityQueryWheres.at(-1)).toEqual({
+      id: { in: ['claim-entity-debate-a', 'claim-entity-debate-b'] },
+    });
+  });
+
+  it('keeps the space filter when no source is supplied', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(mocks.entityQueryWheres.at(-1)).toMatchObject({ spaces: [{ equals: 'space-1' }] });
+  });
+
+  it('renders the supplied debates rather than the space listing', () => {
+    // Both read as having processed media, so what renders is decided by the
+    // source alone rather than by the readiness gate.
+    mocks.processedIds = ['debate-1', 'debate-z'];
+
+    // The space's own listing holds `debate-1`; the source does not.
+    render(
+      <DebatesBrowseFeed
+        spaceId="personal-space"
+        source={sourced([completedDebate('debate-z', 'Sourced claim', '2026-07-04T00:01:10.000Z')])}
+      />
+    );
+
+    expect(screen.getByTestId('player-debate-z')).toBeInTheDocument();
+    expect(screen.queryByTestId('player-debate-1')).toBeNull();
   });
 });
