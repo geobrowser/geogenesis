@@ -26,7 +26,11 @@ type SpaceTabsProps = {
 type BuiltSpaceTab = {
   label: string;
   href: string;
-  priority: 1 | 2 | 3 | 4 | 5;
+  priority: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  /** Draws a rule before this tab, separating the space's own tabs from authored ones. */
+  dividerBefore?: boolean;
+  /** Only shown at the widths where the side rail is dropped. */
+  onlyWhenNarrow?: boolean;
 };
 
 type BuildSpaceTabsParams = {
@@ -74,6 +78,23 @@ export function buildSpaceTabs({
     priority: 5,
   };
 
+  /**
+   * A person's record (GEO-2859).
+   *
+   * These are the person's, not the space's: debates they took a side in,
+   * claims they hold a position on, proposals they made anywhere. They stand in
+   * for both Governance and Activity, which is why a person gets neither — a
+   * personal space has no governance of its own, and Proposals is the same log
+   * Activity was showing, with the vote and the outcome on it.
+   */
+  const isPerson = typeIds.includes(SystemIds.PERSON_TYPE);
+
+  const PERSON_TABS: BuiltSpaceTab[] = [
+    { label: 'Debates', href: `/space/${spaceId}/debates`, priority: 4 },
+    { label: 'Positions', href: `/space/${spaceId}/positions`, priority: 4 },
+    { label: 'Proposals', href: `/space/${spaceId}/proposals`, priority: 4 },
+  ];
+
   tabs.push(...ALL_SPACES_TABS);
 
   if (typeIds.includes(SystemIds.SPACE_TYPE)) {
@@ -82,17 +103,39 @@ export function buildSpaceTabs({
       const visibleDynamicTabs =
         reservedLabels.size > 0 ? dynamicTabs.filter(tab => !reservedLabels.has(tab.label)) : dynamicTabs;
 
-      tabs.push(...visibleDynamicTabs.map(tab => ({ ...tab, priority: 1 as const })));
+      // A person's authored tabs go last, behind a rule: the three system tabs
+      // are the record everyone's profile has, and what this person chose to
+      // add is a different kind of thing. A space keeps them beside Overview,
+      // where its own content has always led.
+      tabs.push(
+        ...visibleDynamicTabs.map((tab, index) => ({
+          ...tab,
+          priority: (isPerson ? 6 : 1) as 1 | 6,
+          dividerBefore: isPerson && index === 0,
+        }))
+      );
     }
   }
 
   if (isDebugDebatesPageEnabled) tabs.push(DEBUG_DEBATES_TAB);
 
-  if (typeIds.includes(SystemIds.SPACE_TYPE) && !typeIds.includes(SystemIds.PERSON_TYPE)) {
+  if (typeIds.includes(SystemIds.SPACE_TYPE) && !isPerson) {
     tabs.push(...SOME_SPACES_TABS);
   }
 
-  tabs.push(ACTIVITY_TAB);
+  // Pushed after the dynamic tabs, so a person who authored their own "Debates"
+  // keeps it — the dedupe below is first-wins, the same way an authored Claims
+  // tab already beats the system one.
+  if (isPerson) {
+    tabs.push(...PERSON_TABS);
+
+    // Last, and only where the rail is not. Below 1024px `StickySideRail` drops
+    // itself rather than render something too narrow to read, and without this
+    // the spaces, links and counts are simply unreachable on a phone.
+    tabs.push({ label: 'About', href: `/space/${spaceId}/about`, priority: 7, onlyWhenNarrow: true });
+  }
+
+  if (!isPerson) tabs.push(ACTIVITY_TAB);
 
   const seen = new Map<string, BuiltSpaceTab>();
 
@@ -144,7 +187,8 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
 
   // Our Community tab renders for non-person spaces, always as the 2nd tab (after
   // Overview) — and in addition to any custom "Community" tab the space authored.
-  const showCommunity = typeIds.includes(SystemIds.SPACE_TYPE) && !typeIds.includes(SystemIds.PERSON_TYPE);
+  const isPersonSpace = typeIds.includes(SystemIds.PERSON_TYPE);
+  const showCommunity = typeIds.includes(SystemIds.SPACE_TYPE) && !isPersonSpace;
   // System tabs bracket the custom (dynamic) tabs: Overview + our Community lead,
   // Governance + Activity trail.
   const systemTabsBefore: Array<{ label: string; href: string }> = [{ label: 'Overview', href: overviewHref }];
@@ -158,7 +202,19 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
 
   if (showCommunity) systemTabsAfter.push({ label: 'Governance', href: `/space/${spaceId}/governance` });
 
-  systemTabsAfter.push({ label: 'Activity', href: `/space/${spaceId}/activity` });
+  // The same three the read-only path builds, so a person's record does not
+  // disappear the moment they switch their own profile into edit mode — and
+  // *before* the authored tabs, which is where they sit on a profile.
+  if (isPersonSpace) {
+    systemTabsBefore.push(
+      { label: 'Debates', href: `/space/${spaceId}/debates` },
+      { label: 'Positions', href: `/space/${spaceId}/positions` },
+      { label: 'Proposals', href: `/space/${spaceId}/proposals` }
+    );
+    systemTabsAfter.push({ label: 'About', href: `/space/${spaceId}/about` });
+  } else {
+    systemTabsAfter.push({ label: 'Activity', href: `/space/${spaceId}/activity` });
+  }
 
   if (editable && typeIds.includes(SystemIds.SPACE_TYPE)) {
     const editableTabs = sortedTabRelations.map((relation, i) => ({

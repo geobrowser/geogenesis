@@ -15,7 +15,23 @@ import { validateEntityId } from '~/core/utils/utils';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 interface TabGroupProps {
-  tabs: Array<{ href: string; label: string; badge?: string; disabled?: boolean; hidden?: boolean }>;
+  tabs: Array<{
+    href: string;
+    label: string;
+    badge?: string;
+    disabled?: boolean;
+    hidden?: boolean;
+    /** Draws a rule before this tab, marking where one group of tabs ends and another begins. */
+    dividerBefore?: boolean;
+    /**
+     * Only shown where the side rail is not.
+     *
+     * Breakpoints here are desktop-first (`lg` is max-width 1023px), and
+     * `StickySideRail` drops itself at exactly that width — so a tab reaching
+     * the rail's content appears precisely when the rail stops being there.
+     */
+    onlyWhenNarrow?: boolean;
+  }>;
   className?: string;
 }
 
@@ -116,7 +132,16 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
       >
         <div className="relative flex w-max items-center gap-6 pb-2">
           {tabs.map(t => (
-            <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+            <React.Fragment key={t.href}>
+              {t.dividerBefore && <span aria-hidden className="h-4 w-px shrink-0 bg-grey-02" />}
+              {t.onlyWhenNarrow ? (
+                <span className="hidden lg:contents">
+                  <Tab href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+                </span>
+              ) : (
+                <Tab href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+              )}
+            </React.Fragment>
           ))}
         </div>
         <div className="sticky right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
@@ -218,7 +243,21 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
   }
 
   return (
-    <Link className={tabGroupTabLinkStyles({ active, disabled })} href={href} prefetch>
+    <Link
+      className={tabGroupTabLinkStyles({ active, disabled })}
+      href={href}
+      prefetch
+      // The tab bar stays put when you change tabs. Next scrolls to the top on
+      // every navigation by default, which reads as the page throwing you back
+      // up for no reason — you have not left the page, you have changed a view
+      // inside it.
+      //
+      // It also took the underline with it: a shared-layout animation measures
+      // the marker before and after, and a scroll to top between those two
+      // measurements is a vertical delta it dutifully animates through — which
+      // is the underline flying up through the label rather than sliding across.
+      scroll={false}
+    >
       {label}
       {badge && <Badge>{badge}</Badge>}
       {active && (

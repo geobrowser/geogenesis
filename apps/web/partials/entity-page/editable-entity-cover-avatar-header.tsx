@@ -48,10 +48,17 @@ function computeLayout(hasCover: boolean, hasCoverImage: boolean, hasAvatar: boo
 
 export const EditableCoverAvatarHeader = ({
   avatarUrl,
+  contentMaxWidth = ENTITY_PAGE_CONTENT_MAX_WIDTH,
   coverUrl,
   fitImage = false,
 }: {
   avatarUrl: string | null;
+  /**
+   * How wide the text column under this header is, so the avatar can line up
+   * with it. Defaults to the ordinary page width; a surface that renders a rail
+   * — a profile — passes the wider with-sidebar width instead.
+   */
+  contentMaxWidth?: number;
   coverUrl: string | null;
   fitImage?: boolean;
 }) => {
@@ -130,8 +137,14 @@ export const EditableCoverAvatarHeader = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={TRANSITION}
+            // Centred in a box the width of the *text column*, so its left edge
+            // lands where the name below it starts. The cover is wider than the
+            // column at every width (1192 against 900 or 1142), so aligning to
+            // the cover instead puts the avatar 25–146px to the left of the
+            // name — which is why this takes the column's width rather than
+            // assuming one.
             className="absolute right-0 left-0 mx-auto flex justify-start"
-            style={{ bottom: -AVATAR_OVERFLOW, maxWidth: ENTITY_PAGE_CONTENT_MAX_WIDTH }}
+            style={{ bottom: -AVATAR_OVERFLOW, maxWidth: contentMaxWidth }}
           >
             <div className="flex h-20 w-20 items-center justify-center rounded-lg">
               <AvatarCoverInput

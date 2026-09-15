@@ -11,9 +11,9 @@ import { Effect, Either, Schema } from 'effect';
 import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
+import { Environment } from '~/core/environment';
 import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
 import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
-import { Environment } from '~/core/environment';
 import {
   type ApiProposalListItem,
   ApiProposalListResponseSchema,
@@ -26,23 +26,17 @@ import {
   restFetch,
 } from '~/core/io/rest';
 import { defaultProfile, fetchProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph';
-import {
-  fetchProposalSubmittedTimes,
-  getSubmittedTime,
-} from '~/core/io/subgraph/fetch-proposal-submitted-times';
+import { fetchProposalSubmittedTimes, getSubmittedTime } from '~/core/io/subgraph/fetch-proposal-submitted-times';
 import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-granted-membership-requests';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
 import { getIsProposalEnded, getMembershipProposalDisplayName, getProposalName } from '~/core/utils/utils';
 
-import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { GovernanceOutcomeDate, GovernanceOutcomeTime } from './governance-outcome-timestamp';
+import { GovernanceProposalRow } from './governance-proposal-row';
 import type { GovernanceProposalType } from './governance-proposal-type-filter';
-import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
 import { GovernanceRejectedProposalMenu } from './governance-rejected-proposal-menu';
-import { GovernanceStatusChip } from './governance-status-chip';
 import { ProposalListItem } from './proposal-list-item';
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
@@ -147,86 +141,39 @@ export async function GovernanceProposalsList({
 
           return (
             <ProposalListItem key={p.id} proposalId={p.id} baseOrder={baseOrder} canSink={p.bucket !== 'completed'}>
-              <div className="relative flex w-full flex-col gap-3 py-4">
+              <div className="relative">
                 <Link
                   href={`/space/${spaceId}/governance?proposalId=${p.id}`}
-                  className="absolute inset-0"
+                  className="absolute inset-0 z-0"
                   aria-label={proposalTitle}
                 />
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="min-w-0 flex-1 text-smallTitle">{proposalTitle}</h3>
-                    {showReopenMenu ? (
+                <GovernanceProposalRow
+                  title={proposalTitle}
+                  profile={displayProfile}
+                  timestampSeconds={timestampSeconds}
+                  yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
+                  noPercentage={percentageFromCounts(p.proposalVotes.noCount, p.proposalVotes.totalCount)}
+                  userVote={p.userVote}
+                  voter={
+                    profile || connectedAddress
+                      ? {
+                          address: connectedAddress,
+                          avatarUrl: profile?.avatarUrl ?? null,
+                        }
+                      : undefined
+                  }
+                  status={p.status}
+                  endTime={p.endTime}
+                  canExecute={p.canExecute}
+                  executeIn={{ spaceId, proposalId: p.id }}
+                  titleAccessory={
+                    showReopenMenu ? (
                       <div className="relative z-10">
                         <GovernanceRejectedProposalMenu proposalId={p.id} spaceId={spaceId} />
                       </div>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-breadcrumb text-grey-04">
-                    {displayProfile.profileLink ? (
-                      <Link
-                        href={displayProfile.profileLink}
-                        className="relative z-10 flex min-w-0 items-center gap-2 transition-colors duration-75 hover:text-text"
-                      >
-                        <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
-                          <Avatar
-                            avatarUrl={displayProfile.avatarUrl}
-                            value={displayProfile.address ?? displayProfile.id}
-                          />
-                        </div>
-                        <p className="min-w-0">{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
-                      </Link>
-                    ) : (
-                      <div className="flex min-w-0 items-center gap-2">
-                        <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
-                          <Avatar
-                            avatarUrl={displayProfile.avatarUrl}
-                            value={displayProfile.address ?? displayProfile.id}
-                          />
-                        </div>
-                        <p className="min-w-0">{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
-                      </div>
-                    )}
-                    {timestampSeconds > 0 && (
-                      <>
-                        <span aria-hidden className="shrink-0 select-none">
-                          ·
-                        </span>
-                        <GovernanceOutcomeDate geoTimeSeconds={timestampSeconds} className="shrink-0" />
-                        <span aria-hidden className="shrink-0 select-none">
-                          ·
-                        </span>
-                        <GovernanceOutcomeTime geoTimeSeconds={timestampSeconds} className="shrink-0 tabular-nums" />
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="inline-flex min-w-0 flex-3 items-center gap-8">
-                    <GovernanceProposalVoteState
-                      variant="space"
-                      yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
-                      noPercentage={percentageFromCounts(p.proposalVotes.noCount, p.proposalVotes.totalCount)}
-                      userVote={p.userVote}
-                      user={
-                        profile || connectedAddress
-                          ? {
-                              address: connectedAddress,
-                              avatarUrl: profile?.avatarUrl ?? null,
-                            }
-                          : undefined
-                      }
-                    />
-                  </div>
-
-                  <GovernanceStatusChip
-                    endTime={p.endTime}
-                    status={p.status}
-                    canExecute={p.canExecute}
-                    spaceId={spaceId}
-                    proposalId={p.id}
-                  />
-                </div>
+                    ) : null
+                  }
+                />
               </div>
             </ProposalListItem>
           );

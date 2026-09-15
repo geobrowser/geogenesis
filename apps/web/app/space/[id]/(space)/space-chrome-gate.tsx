@@ -9,14 +9,29 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 
 import { spaceSidebarHasContentAtom } from '~/atoms';
 
+const FULL_BLEED_ROUTE = /^(\/space\/[^/]+|\/root)\/debates(\/|$)/;
+
 /**
  * The debates surface is full-screen and edge-to-edge (TikTok-style feed): no
  * space header, metadata, or tabs. This gate hides that chrome on any
  * `/space/<id>/debates...` (or `/root/debates...`) route while keeping it everywhere else.
+ *
+ * Except on a person's profile (GEO-2859), where Debates is a *tab* rather than
+ * the whole surface. Stripping the chrome there removes the tab bar that got you
+ * here and leaves no way back to the profile.
  */
-export function SpaceChromeGate({ children }: { children: React.ReactNode }) {
+export function SpaceChromeGate({ children, keepChrome = false }: { children: React.ReactNode; keepChrome?: boolean }) {
   const pathname = usePathname();
-  if (pathname && /^(\/space\/[^/]+|\/root)\/debates(\/|$)/.test(pathname)) return null;
+  const isFullBleedRoute = pathname != null && FULL_BLEED_ROUTE.test(pathname);
+
+  if (isFullBleedRoute && !keepChrome) return null;
+
+  // `Main` drops its own vertical padding on this route, for the feed that
+  // normally fills it. A profile keeping its chrome has to put the top of that
+  // padding back, or its cover image sits flush against the navbar on this one
+  // tab and nowhere else. The bottom half belongs to the page's own content.
+  if (isFullBleedRoute) return <div className="pt-8">{children}</div>;
+
   return <>{children}</>;
 }
 
@@ -42,7 +57,9 @@ type SpaceHeaderContentContainerProps = {
 
 export function SpaceHeaderContentContainer({ children, hasSidebar }: SpaceHeaderContentContainerProps) {
   return (
-    <EntityPageContentContainer variant={hasSidebar ? 'with-sidebar' : 'content'}>{children}</EntityPageContentContainer>
+    <EntityPageContentContainer variant={hasSidebar ? 'with-sidebar' : 'content'}>
+      {children}
+    </EntityPageContentContainer>
   );
 }
 
@@ -50,9 +67,24 @@ type SpaceHeaderContentGateProps = {
   children: React.ReactNode;
   serverHasSidebar: boolean;
   isExternalTopic: boolean;
+  /**
+   * A profile always has a rail, on every one of its tabs (GEO-2859).
+   *
+   * Not a hint: the rail is part of the page rather than something a route
+   * might grow, so the header is the wider variant from the server render
+   * onwards. Left to the signals below it, the header settled at content width
+   * while the rail beside it kept the wider one, and the name and description
+   * stopped short of a rail that ran past them.
+   */
+  alwaysHasSidebar?: boolean;
 };
 
-export function SpaceHeaderContentGate({ children, serverHasSidebar, isExternalTopic }: SpaceHeaderContentGateProps) {
+export function SpaceHeaderContentGate({
+  children,
+  serverHasSidebar,
+  isExternalTopic,
+  alwaysHasSidebar = false,
+}: SpaceHeaderContentGateProps) {
   const sidebarContent = useAtomValue(spaceSidebarHasContentAtom);
   const isSeedRoute = useIsSidebarSeedRoute();
 
@@ -62,7 +94,9 @@ export function SpaceHeaderContentGate({ children, serverHasSidebar, isExternalT
   // the header automatically. Before the atom is set (SSR / first paint) fall back
   // to the server's per-space signal, but only on routes that actually render a rail,
   // so a non-rail tab is never seeded wide and a rail route never flashes.
-  const hasSidebar = !isExternalTopic && (sidebarContent !== null ? sidebarContent : serverHasSidebar && isSeedRoute);
+  const hasSidebar =
+    alwaysHasSidebar ||
+    (!isExternalTopic && (sidebarContent !== null ? sidebarContent : serverHasSidebar && isSeedRoute));
 
   return <SpaceHeaderContentContainer hasSidebar={hasSidebar}>{children}</SpaceHeaderContentContainer>;
 }

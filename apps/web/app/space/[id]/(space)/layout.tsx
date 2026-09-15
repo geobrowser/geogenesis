@@ -8,10 +8,12 @@ import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-bl
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
 import { EntityId } from '~/core/io/substream-schema';
+import { profileLinks } from '~/core/profile/profile-links';
 import { SpaceVerifyButton } from '~/core/space/space-verify-button';
 import { RouteEditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
+import { Spaces } from '~/core/utils/space';
 import { sortRelations } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -20,10 +22,15 @@ import { Spacer } from '~/design-system/spacer';
 import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-header';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
+import { ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH } from '~/partials/entity-page/entity-page-layout';
+import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-profile-bio-starter-merge';
 import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
 import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
+import { PersonalSpaceHeadline } from '~/partials/profile/personal-space-profile';
+import { ProfileActions } from '~/partials/profile/profile-actions';
+import { ProfileRail } from '~/partials/profile/profile-rail';
 import { AddDataPanel } from '~/partials/space-page/add-data-panel';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
@@ -58,6 +65,45 @@ export default async function Layout(props0: LayoutProps) {
 
   const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
 
+  /**
+   * A personal space with a profile of its own (GEO-2859).
+   *
+   * Both halves matter. `PERSONAL` alone includes the personal spaces with no
+   * person entity behind them, which have nothing to render a profile from; a
+   * person entity alone would include a Person written into a DAO space.
+   *
+   * Shared with `page.tsx` rather than spelled out twice: this decides the
+   * header and the chrome, that one decides the body, and a page with one and
+   * not the other is worse than neither.
+   */
+  const isProfile = Spaces.isPersonProfileSpace(props.space);
+
+  /**
+   * The rail lives here rather than on the Overview page (GEO-2859).
+   *
+   * It is part of the profile, not of one tab: rendered per-page it appeared on
+   * Overview and vanished on Debates, Positions and Proposals, and the main
+   * column jumped a rail's width on every tab change. Here it is rendered once,
+   * above `children`, and every tab lands in the column beside it.
+   *
+   * `space.entity` is the topic — the person — and `SpaceEntityDto` has already
+   * scoped its values and relations to this space, which is the filtering the
+   * Overview page used to do by hand.
+   */
+  const profileRail = isProfile ? (
+    <ProfileRail
+      spaceId={spaceId}
+      personEntityId={props.id}
+      types={(props.space?.entity?.types ?? []).map(type => ({ id: type.id, name: type.name ?? null }))}
+      links={profileLinks(
+        (props.space?.entity?.values ?? []).map(value => ({ property: { id: value.property.id }, value: value.value }))
+      )}
+      systemEntityId={props.space?.entity?.id ?? spaceId}
+      address={props.space?.address ?? null}
+      spaceType={props.space?.type ?? 'PERSONAL'}
+    />
+  ) : null;
+
   return (
     <EntityStoreProvider id={props.id} spaceId={spaceId}>
       <RouteEditorProvider
@@ -68,23 +114,61 @@ export default async function Layout(props0: LayoutProps) {
         initialTabs={props.tabs}
         initialCollectionItems={props.initialCollectionItems}
       >
-        <SpaceChromeGate>
-          <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
-          <SpaceHeaderContentGate serverHasSidebar={hasSidebar} isExternalTopic={isExternalTopic}>
-            <div className="space-y-2">
+        <SpaceChromeGate keepChrome={isProfile}>
+          {/*
+           * A profile's text column is the wider with-sidebar variant — the rail
+           * is part of the page — so the avatar lines up against that rather
+           * than against the ordinary page width.
+           */}
+          <EntityPageCover
+            avatarUrl={props.avatarUrl}
+            coverUrl={props.coverUrl}
+            contentMaxWidth={isProfile ? ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH : undefined}
+          />
+          <SpaceHeaderContentGate
+            serverHasSidebar={hasSidebar}
+            isExternalTopic={isExternalTopic}
+            alwaysHasSidebar={isProfile}
+          >
+            {/*
+             * Pulled up on a profile. The shared header leaves 40px under an
+             * avatar that already overhangs the cover by 40 — right for a space,
+             * where the name is the first thing under it, and too much here
+             * where a name, three roles and a bio all follow.
+             */}
+            <div className={isProfile ? '-mt-4 space-y-2' : 'space-y-2'}>
               <EditableSpaceHeading
                 spaceId={spaceId}
                 entityId={props.id}
+                keepSpaceActions={isProfile}
                 nameAccessoryComponent={
+                  // Beside the name on every personal space, profile or not. It
+                  // is a statement about who this is rather than an action on
+                  // them, and it reads as one where it sits.
                   props.space?.type === 'PERSONAL' ? <SpaceVerifyButton spaceId={spaceId} /> : null
                 }
                 actionsComponent={
-                  typeIds.includes(SystemIds.PERSON_TYPE) ? <ProfileDebateButton spaceId={spaceId} /> : null
+                  isProfile ? (
+                    <ProfileActions spaceId={spaceId} personEntityId={props.id} />
+                  ) : typeIds.includes(SystemIds.PERSON_TYPE) ? (
+                    <ProfileDebateButton spaceId={spaceId} />
+                  ) : null
                 }
               />
+              {isProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={props.id} />}
               <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
+              {/*
+               * A profile renders none of this row. Types move to the rail's
+               * About section, the vote pair into the action row beside Edit
+               * profile, and Import and the member avatars say nothing about a
+               * person — a personal space's only member is its owner. The
+               * editor still gets the row, because that is where types are
+               * added and the rail's pills are a read-only view — which is
+               * decided inside the component, since edit mode is client state.
+               */}
               <SpacePageMetadataHeader
                 spaceId={spaceId}
+                profileChrome={isProfile}
                 membersComponent={
                   <div className="flex items-center gap-2">
                     <React.Suspense fallback={<MembersSkeleton />}>
@@ -105,7 +189,16 @@ export default async function Layout(props0: LayoutProps) {
                 <>
                   <PersonalProfileBioStarterMerge entityId={props.id} spaceId={spaceId} />
                   <PersonalProfileSuggestedTaskSync entityId={props.id} spaceId={spaceId} />
-                  <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} withBottomSpacing={false} />
+                  {/*
+                   * The Get started card is off on a profile: its three prompts
+                   * — bio, skills, post — are all things the profile itself now
+                   * offers in place, on the section they belong to, and a
+                   * banner above the fold repeating them is the loudest thing
+                   * on a page about a person.
+                   */}
+                  {!isProfile && (
+                    <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} withBottomSpacing={false} />
+                  )}
                 </>
               ) : null}
               <TypeSchemaInline entityId={props.id} spaceId={spaceId} />
@@ -122,7 +215,7 @@ export default async function Layout(props0: LayoutProps) {
           </SpaceHeaderContentGate>
           <Spacer height={20} />
         </SpaceChromeGate>
-        {children}
+        {isProfile ? <EntityPageSidebarLayout sidebar={profileRail}>{children}</EntityPageSidebarLayout> : children}
       </RouteEditorProvider>
     </EntityStoreProvider>
   );
