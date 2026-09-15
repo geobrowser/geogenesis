@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ENTITY_ID_BATCH_SIZE,
-  MAX_SEARCH_FILTER_IDS,
   buildSearchPath,
   getBatchEntities,
   groupRestResults,
@@ -70,33 +69,6 @@ describe('buildSearchPath', () => {
     it('omits the param entirely when no tag is asked for', () => {
       expect(buildSearchPath({ query: 'trump', tagIds: [] })).toBe('/search?query=trump&limit=10&offset=0');
       expect(buildSearchPath({ query: 'trump' })).toBe('/search?query=trump&limit=10&offset=0');
-    });
-
-    /**
-     * Eleven values is a `400`, not a truncated answer — measured against the endpoint. Capping
-     * here rather than trusting the caller is the difference between a filter that degrades and a
-     * surface that goes blank, and every REST search in the app is built in this function.
-     */
-    it('caps the list at ten rather than letting the request fail', () => {
-      const tags = Array.from(
-        { length: 14 },
-        (_, index) => `55c95b2626f8482cb9739ea99dfde4${String(index).padStart(2, '0')}`
-      );
-      const path = buildSearchPath({ query: 'trump', tagIds: tags });
-
-      expect(new URL(`https://x${path}`).searchParams.get('tag_ids')!.split(',')).toHaveLength(MAX_SEARCH_FILTER_IDS);
-    });
-
-    // The type list fails the same way and so is capped the same way. `useSearch` passes whatever
-    // `filterByTypes` it was given, and a data-table filter can hold more than ten.
-    it('caps the type list at ten as well', () => {
-      const types = Array.from(
-        { length: 13 },
-        (_, index) => `96f859efa1ca4b229372c86ad58b6${String(index).padStart(3, '0')}`
-      );
-      const path = buildSearchPath({ query: 'trump', typeIds: types });
-
-      expect(new URL(`https://x${path}`).searchParams.get('type_ids')!.split(',')).toHaveLength(MAX_SEARCH_FILTER_IDS);
     });
 
     it('composes with the type filter, which the endpoint ANDs against it', () => {

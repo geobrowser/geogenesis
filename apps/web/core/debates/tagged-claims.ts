@@ -557,7 +557,15 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // While searching, the text lookup is part of the load: its ids are what the row request is
     // built from, so a caller reading "settled" before they land would show an empty list under a
     // query that is still being answered.
-    isLoading: enabled && (searching ? !search.settled || searchPages.firstPagePending : query.isLoading),
+    // A first load, not "a request is out". Editing a search mints a new key, and `keepPreviousData`
+    // holds the previous search's ids and rows through it — so reporting a load there put a skeleton
+    // over rows that were on screen and readable, which is the flash the placeholder exists to
+    // prevent. An error is not a load either: it releases this so the error state can be drawn.
+    isLoading:
+      enabled &&
+      (searching
+        ? (!search.settled && !search.isPlaceholderData && search.error === null) || searchPages.firstPagePending
+        : query.isLoading),
     error: enabled ? (searching ? (search.error ?? searchPages.error) : query.error) : null,
     // Paging follows whichever source is answering. A search's next page is another `/search`
     // offset, not a graph cursor — the cursor belongs to a query that is not running.

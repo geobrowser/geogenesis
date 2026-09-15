@@ -948,6 +948,11 @@ interface ResultsArgs {
    *
    * The to-entity, not the Tags property: the property id is the same for every tag, and asking
    * with it would match the entire tagged corpus.
+   *
+   * At most ten, as `typeIds` is: the endpoint answers `400` past that. Deliberately not capped
+   * here. Both lists are ORs, so slicing one would quietly return results for a narrower question
+   * than the caller asked — and the caller cannot tell, where a `400` is a failure it can see. A
+   * caller whose filter can grow past ten has to bound it where the values are chosen.
    */
   tagIds?: string[];
   limit?: number;
@@ -1123,14 +1128,6 @@ export type SearchResultsPage = {
   serverCount: number;
 };
 
-/**
- * How many `type_ids` / `tag_ids` values the endpoint accepts. Past this it answers `400`, so it is
- * a limit rather than a suggestion — and applied to both, because both fail the same way. Every
- * REST search in the app is built in this function, so a filter that grew an eleventh value
- * anywhere upstream would take a whole surface down instead of degrading.
- */
-export const MAX_SEARCH_FILTER_IDS = 10;
-
 export function buildSearchPath(args: ResultsArgs): string {
   const params = new URLSearchParams();
   // Every REST search in the app arrives here — the ten-odd `useSearch` surfaces through
@@ -1149,17 +1146,13 @@ export function buildSearchPath(args: ResultsArgs): string {
   }
 
   if (args.typeIds?.length) {
-    // REST endpoint expects UUIDs with hyphens, and caps this at ten exactly as it caps `tag_ids`
-    // — measured: an eleventh value is a `400`, not a truncated answer.
-    params.set('type_ids', args.typeIds.slice(0, MAX_SEARCH_FILTER_IDS).map(toUuid).join(','));
+    // REST endpoint expects UUIDs with hyphens
+    params.set('type_ids', args.typeIds.map(toUuid).join(','));
   }
 
   if (args.tagIds?.length) {
-    // REST endpoint expects UUIDs with hyphens, and answers `400` past ten values rather than
-    // truncating. Capped here rather than left to the caller for the same reason the query length
-    // is: every REST search in the app arrives at this function, so a filter that grew an eleventh
-    // tag upstream would take a whole surface down instead of degrading.
-    params.set('tag_ids', args.tagIds.slice(0, MAX_SEARCH_FILTER_IDS).map(toUuid).join(','));
+    // REST endpoint expects UUIDs with hyphens
+    params.set('tag_ids', args.tagIds.map(toUuid).join(','));
   }
 
   const scopesAdditionalSpaces = Boolean(args.additionalSpaceIds?.length) && !args.spaceId;

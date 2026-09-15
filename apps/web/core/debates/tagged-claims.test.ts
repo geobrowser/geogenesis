@@ -140,6 +140,14 @@ function renderClaims(filters: TaggedClaimFilters = NO_TAGGED_CLAIM_FILTERS, ena
   return renderHook(() => useTaggedClaims(TAG, filters, enabled), { wrapper });
 }
 
+/** The same list, re-renderable with a new set of filters — an edited search, for instance. */
+function renderEditableClaims(initial: TaggedClaimFilters) {
+  return renderHook(({ filters }: { filters: TaggedClaimFilters }) => useTaggedClaims(TAG, filters, true), {
+    wrapper,
+    initialProps: { filters: initial },
+  });
+}
+
 /** The variables the module actually sent, which is where the filter shape lives. */
 function sentVariables(call = 0) {
   return graphqlMock.mock.calls[call][0].variables as Record<string, any>;
@@ -545,6 +553,51 @@ describe('the filter it builds', () => {
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
   });
 
+  /**
+   * Editing a search mints a new key, and `placeholderData` holds the previous search's ids and
+   * rows through it — the whole point being that narrowing a list narrows it rather than blanking
+   * it. Reporting a load there put a skeleton over rows that were on screen and readable, which is
+   * the flash the placeholder exists to prevent.
+   */
+  it('does not blank the list while an edited search is in flight', async () => {
+    respondWithSearch([['a1']]);
+    respondWithPages([[node('a1', 'One')]]);
+    const { result, rerender } = renderEditableClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    // The next keystroke's lookup is still out.
+    searchMock.mockImplementation(() => Effect.never);
+    rerender({ filters: { ...NO_TAGGED_CLAIM_FILTERS, search: 'powers' } });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.claims).toHaveLength(1);
+  });
+
+  /**
+   * A page can dedupe to nothing — every row a repeat of one already seen, which the endpoint's
+   * per-space paging makes possible. Left in the list of pages it becomes a row request with no
+   * ids, which never resolves, and the rows are read in order until one is missing: every page
+   * behind the empty one was hidden for good.
+   */
+  it('lists the pages behind one that deduped to nothing', async () => {
+    // The middle page repeats the first page's only claim.
+    respondWithSearch([['a1'], ['a1'], ['a2']], 3);
+    respondWithPages([
+      [node('a1', 'One'), node('a2', 'Two')],
+      [node('a1', 'One'), node('a2', 'Two')],
+      [node('a1', 'One'), node('a2', 'Two')],
+    ]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    result.current.fetchNextPage();
+    await waitFor(() => expect(result.current.hasNextPage).toBe(true));
+    result.current.fetchNextPage();
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+    expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a1', 'a2']);
+  });
+
   it('asks for nothing at all when the search is only whitespace', async () => {
     respondWithPages([[node('a1', 'One')]]);
     const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: '   ' });
@@ -738,6 +791,27 @@ describe('the facet menus', () => {
     });
 
     await waitFor(() => expect(result.current.topics).toHaveLength(1));
+    expect(result.current.settled).toBe(false);
+  });
+
+  /**
+   * A failed lookup is not an answer. It leaves no ids, so a facet counted over them describes
+   * nothing — and both surfaces read `settled` as permission to reconcile the viewer's selection
+   * against the menu, so settling here would drop a valid selection for the duration of a search
+   * outage. The module already holds its facets over a failed *count* for this reason; a failed
+   * search is the same thing one step earlier.
+   */
+  it('does not call a facet settled when the search itself failed', async () => {
+    searchMock.mockImplementation(() => Effect.fail(new Error('search failed')));
+    respondWithGroups([{ id: TOPIC, count: 3 }]);
+    const { result } = renderHook(
+      () => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, search: 'power' }, true),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(result.current.settled).toBe(false));
+    // And held there rather than settling a moment later on the empty result.
+    await new Promise(resolve => setTimeout(resolve, 150));
     expect(result.current.settled).toBe(false);
   });
 

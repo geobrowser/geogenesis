@@ -38,15 +38,29 @@ export type TaggedClaimSearch = {
    */
   idPages: string[][];
   /**
-   * Whether `claimIds` is an answer yet.
+   * Whether `claimIds` is an answer about *this* search.
    *
    * Not the inverse of `isLoading`: a query that is pending but has not started fetching reports
    * neither, and a caller that read that as settled narrowed by an empty id list — asking the
    * server for the claims in `[]`, which answers nothing, a request before the real one.
    *
+   * A failure is not an answer either, which is the same distinction one step further on. A failed
+   * lookup leaves no ids, and a caller that settled on that would reconcile a viewer's topic
+   * selection against a menu counted over nothing and drop it — so a search outage would cost the
+   * selection rather than the list. Held unsettled, as this module holds its facets over a failed
+   * count for the same reason.
+   *
    * `true` when nothing is being searched for, because then there is nothing to wait for.
    */
   settled: boolean;
+  /**
+   * Whether the ids on hand belong to an earlier search while this one is in flight.
+   *
+   * Two states share "no answer yet" and want opposite treatment: nothing on screen, where a list
+   * should say it is loading, and the previous search's rows still drawn, where saying so replaces
+   * them with a skeleton — which is the flash `placeholderData` is there to prevent.
+   */
+  isPlaceholderData: boolean;
   isLoading: boolean;
   error: unknown;
   hasNextPage: boolean;
@@ -160,15 +174,24 @@ export function useTaggedClaimSearch({
     // can close one page and open the next, and arrive twice across them. Deduplicated across every
     // page rather than within one, or the second copy would be hydrated and drawn twice.
     const seen = new Set<string>();
-    return pages.map(page => {
-      const ids: string[] = [];
-      for (const result of page.results) {
-        if (seen.has(result.id)) continue;
-        seen.add(result.id);
-        ids.push(result.id);
-      }
-      return ids;
-    });
+    return (
+      pages
+        .map(page => {
+          const ids: string[] = [];
+          for (const result of page.results) {
+            if (seen.has(result.id)) continue;
+            seen.add(result.id);
+            ids.push(result.id);
+          }
+          return ids;
+        })
+        // A page can come out of that with nothing in it — every row a repeat of one already seen,
+        // which the per-space paging makes possible, or a page this layer filtered to nothing while
+        // `serverCount` still advanced. Left in, it becomes a row request with no ids to ask for,
+        // which never resolves, and the consumer reading these pages in order stops at it: every
+        // page behind an empty one was hidden for good.
+        .filter(ids => ids.length > 0)
+    );
   }, [searching, searchQuery.data?.pages]);
 
   const claimIds = React.useMemo(() => {
@@ -188,7 +211,8 @@ export function useTaggedClaimSearch({
   return {
     claimIds,
     idPages,
-    settled: !searching || searchQuery.isFetched,
+    settled: !searching || (searchQuery.isSuccess && !searchQuery.isPlaceholderData),
+    isPlaceholderData: searching && searchQuery.isPlaceholderData,
     // `enabled: false` leaves react-query pending, and a caller waiting on this would read that as
     // "still looking" and never show its empty state.
     isLoading: searching && searchQuery.isLoading,
