@@ -12,6 +12,8 @@ import { Text } from '~/design-system/text';
 import { CommentSection } from '~/partials/comments/comments-section';
 import { ExploreCommentsIcon } from '~/partials/explore/explore-comments-icon';
 
+import { ProposalSidePanelShell } from './proposal-side-panel';
+
 type ProposalCommentsValue = {
   proposalId: string;
   spaceId: string;
@@ -89,32 +91,27 @@ export function ProposalCommentsPanel() {
   if (!ctx || !ctx.isPanelOpen) return null;
 
   return (
-    <aside
-      className="sticky top-[52px] flex h-[calc(100vh-60px)] w-full max-w-[400px] shrink-0 flex-col self-start"
-      aria-label="Comments"
-    >
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-grey-02 bg-white">
-        <header className="flex shrink-0 items-center justify-between px-5 py-4">
-          <Text as="h2" variant="cardEntityTitle" color="text">
-            {ctx.count} {ctx.count === 1 ? 'comment' : 'comments'}
-          </Text>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={ctx.togglePanel}
-            className="text-grey-04 transition-colors hover:text-text"
-          >
-            <Close />
-          </button>
-        </header>
-        {/* The section, not `EntityCommentsPanel` — that component is the panel *and* its shell, and
+    <ProposalSidePanelShell label="Comments" scroll="inner">
+      <header className="flex shrink-0 items-center justify-between px-5 py-4">
+        <Text as="h2" variant="cardEntityTitle" color="text">
+          {ctx.count} {ctx.count === 1 ? 'comment' : 'comments'}
+        </Text>
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={ctx.togglePanel}
+          className="text-grey-04 transition-colors hover:text-text"
+        >
+          <Close />
+        </button>
+      </header>
+      {/* The section, not `EntityCommentsPanel` — that component is the panel *and* its shell, and
             its shell is a fixed-width column with its own left border. Dropped into this one it
             would fight the rounded card for width and draw a second border down the middle. The
             shell here is the bounties panel's, which is what this screen already uses. */}
-        <div className="no-scrollbar flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-5 pb-6">
-          <CommentSection entityId={ctx.proposalId} spaceId={ctx.spaceId} variant="panel" />
-        </div>
+      <div className="no-scrollbar flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-5 pb-6">
+        <CommentSection entityId={ctx.proposalId} spaceId={ctx.spaceId} variant="panel" />
       </div>
-    </aside>
+    </ProposalSidePanelShell>
   );
 }

@@ -31,9 +31,11 @@ export type ProposalCommentAttribution = {
  * compare across that boundary silently answers "not an editor" — which is indistinguishable from a
  * correct answer and would quietly unbadge every editor on the page.
  *
- * Everyone known is in the map, not only the people who have commented: the caller has the space's
- * roles and the proposal's votes, and does not know who will comment next. An author missing from it
- * is someone the space has no record of, which is the one case with nothing to say.
+ * The role lists are about the people who have commented — that is who the badges are for, and it is
+ * the question the access layer can ask without being capped by the size of the space. Votes come in
+ * whole, so the map also holds voters who have said nothing; those entries cost nothing and keep the
+ * revoked-editor case below honest. An author missing from the map is someone the space has no record
+ * of, which is the one case with nothing to say.
  */
 export function proposalCommentAttribution({
   votes,

@@ -95,28 +95,53 @@ export function getSpaceAccessById(spaceId: string, personalSpaceId: string, sig
   });
 }
 
+/**
+ * Which of these people hold `role` in the space, asked one person at a time.
+ *
+ * Server-filtered per person rather than read out of the space's participant lists, because those
+ * lists are capped: a space with more participants than the cap would answer "not an editor" for
+ * everyone past it, which is indistinguishable from a correct answer. Asking about the people we
+ * actually care about has no such ceiling, and scales with them rather than with the space.
+ */
+function getRoleSpaceIdsForSpace(
+  role: 'editor' | 'member',
+  spaceId: string,
+  participantSpaceIds: string[],
+  signal?: AbortController['signal']
+) {
+  const normalizedSpaceId = normalizeSpaceId(spaceId);
+  const normalizedIds = [...new Set(participantSpaceIds.map(normalizeSpaceId))];
+  const hasRole = role === 'editor' ? getIsEditorOfSpace : getIsMemberOfSpace;
+
+  return Effect.gen(function* () {
+    const checks = yield* Effect.forEach(
+      normalizedIds,
+      memberSpaceId =>
+        Effect.gen(function* () {
+          // A personal space holds every role in itself.
+          const holds =
+            memberSpaceId === normalizedSpaceId ? true : yield* hasRole(normalizedSpaceId, memberSpaceId, signal);
+          return { memberSpaceId, holds };
+        }),
+      { concurrency: 10 }
+    );
+
+    return new Set(checks.filter(check => check.holds).map(check => check.memberSpaceId));
+  });
+}
+
 export function getEditorSpaceIdsForSpace(
   spaceId: string,
   memberSpaceIds: string[],
   signal?: AbortController['signal']
 ) {
-  const normalizedSpaceId = normalizeSpaceId(spaceId);
-  const normalizedIds = [...new Set(memberSpaceIds.map(normalizeSpaceId))];
+  return getRoleSpaceIdsForSpace('editor', spaceId, memberSpaceIds, signal);
+}
 
-  return Effect.gen(function* () {
-    const editorChecks = yield* Effect.forEach(
-      normalizedIds,
-      memberSpaceId =>
-        Effect.gen(function* () {
-          const isEditor =
-            memberSpaceId === normalizedSpaceId
-              ? true
-              : yield* getIsEditorOfSpace(normalizedSpaceId, memberSpaceId, signal);
-          return { memberSpaceId, isEditor };
-        }),
-      { concurrency: 10 }
-    );
-
-    return new Set(editorChecks.filter(check => check.isEditor).map(check => check.memberSpaceId));
-  });
+export function getMemberSpaceIdsForSpace(
+  spaceId: string,
+  memberSpaceIds: string[],
+  signal?: AbortController['signal']
+) {
+  return getRoleSpaceIdsForSpace('member', spaceId, memberSpaceIds, signal);
 }
