@@ -182,7 +182,7 @@ export function useClaimResponseState({
     responseBlockedReason,
     // Both halves of the fallback below, not just the counts.
     //
-    // `viewer_response` falls back to `summary.viewerDirection`, which rides a *second* query —
+    // `viewer_response` falls back to `summary.indexedViewerDirection`, which rides a *second* query —
     // gated on the personal space, itself a smart-account read plus a round trip. It settles after
     // the counts do. Reading only `summary.isLoading` therefore called this resolved during the
     // window where the counts had landed and the viewer's side had not: a signed-in viewer who has

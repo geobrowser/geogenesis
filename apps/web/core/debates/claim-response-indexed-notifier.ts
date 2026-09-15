@@ -1,6 +1,6 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
+import { type Query, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -48,7 +48,7 @@ type NotifiableClaimResponse = Pick<
   'entityId' | 'position' | 'responseKind' | 'spaceId'
 >;
 type ClaimReport = {
-  /** The account and indexing query: one viewer, claim, space and response kind. */
+  /** One account, claim, space and response kind. */
   laneKey: string;
   notificationKey: string;
   response: NotifiableClaimResponse;
@@ -141,6 +141,8 @@ export function useClaimResponseIndexedNotifier(
   const activeAccountKey = React.useRef<string | null>(null);
   // The account and personal space the notifier last reported for.
   const confirmedIdentity = React.useRef<{ accountKey: string; personalSpaceId: string } | null>(null);
+  // When the notifier last stopped listening. Indexing states updated after that were missed.
+  const inactiveSince = React.useRef(0);
 
   React.useEffect(() => {
     const laneMap = lanes.current;
@@ -269,19 +271,19 @@ export function useClaimResponseIndexedNotifier(
       if (lane.accountKey === accountKey) drain(lane);
     }
 
-    const unsubscribe = queryClient.getQueryCache().subscribe(event => {
-      if (event.type !== 'updated' || event.action.type !== 'success') return;
-      // An indexing query names the personal space that wrote it. Another account's can still settle
-      // after a switch, and must not be reported under this one.
-      const [scope, writerSpaceId] = event.query.queryKey;
-      if (scope !== 'entity-response-indexing' || typeof writerSpaceId !== 'string') return;
-      if (!sameSpaceId(writerSpaceId, viewerSpaceId)) return;
-      const laneKey = `${accountKey}|${event.query.queryHash}`;
+    const handle = (query: Query) => {
+      const [scope, , entityId, spaceId, responseKind] = query.queryKey;
+      if (scope !== 'entity-response-indexing') return;
+      // Attributed by the write's own identity: the key's space slot is null for a write that started
+      // before the personal space loaded, and another account's write can still settle after a switch.
+      const writerSpaceId = (query.state.data as EntityResponseIndexingState | undefined)?.pending?.personalSpaceId;
+      if (!writerSpaceId || !sameSpaceId(writerSpaceId, viewerSpaceId)) return;
+      const laneKey = `${accountKey}|${entityId}|${spaceId}|${responseKind}`;
       const identity = { accountKey, getPrivyIdentityToken };
 
       // Still sent once the chain confirms: if the in-flight report named a position the write never
       // landed, this one carries the truth and geo-chat converges on it.
-      const indexed = claimResponseIndexedEvent(event.query.queryKey, event.query.state.data);
+      const indexed = claimResponseIndexedEvent(query.queryKey, query.state.data);
       if (indexed) {
         report({ laneKey, notificationKey: `${laneKey}:${indexed.runId}`, response: indexed, ...identity });
         return;
@@ -290,14 +292,27 @@ export function useClaimResponseIndexedNotifier(
       // GEO-2784: tell geo-chat the moment the write starts rather than when it indexes, so the
       // opposite side's Request debate appears at once. Keyed apart from the indexed report so both
       // are sent.
-      const pending = pendingClaimResponse(event.query.queryKey, event.query.state.data);
+      const pending = pendingClaimResponse(query.queryKey, query.state.data);
       if (!pending) return;
       report({ laneKey, notificationKey: `${laneKey}:pending:${pending.runId}`, response: pending, ...identity });
+    };
+
+    // States that changed while nothing was listening, oldest first.
+    const missed = queryClient
+      .getQueryCache()
+      .findAll({ queryKey: ['entity-response-indexing'] })
+      .filter(query => query.state.dataUpdatedAt > inactiveSince.current)
+      .sort((left, right) => left.state.dataUpdatedAt - right.state.dataUpdatedAt);
+    for (const query of missed) handle(query);
+
+    const unsubscribe = queryClient.getQueryCache().subscribe(event => {
+      if (event.type === 'updated' && event.action.type === 'success') handle(event.query);
     });
 
     return () => {
       unsubscribe();
       activeAccountKey.current = null;
+      inactiveSince.current = Date.now();
       // A report already sent keeps running, and a Retry-After wait keeps its timer. Either drains
       // once this account is active again.
     };

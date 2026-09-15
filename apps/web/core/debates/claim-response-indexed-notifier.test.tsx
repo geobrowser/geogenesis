@@ -454,6 +454,83 @@ describe('useClaimResponseIndexedNotifier', () => {
     expect(mocks.notify.mock.calls[0]?.[5]).toBe('account-2');
   });
 
+  it('reports a write made before the personal space loaded, once it loads', async () => {
+    mocks.personalSpaceId = null;
+    const { queryClient, wrapper } = createHarness();
+    const getPrivyIdentityToken = vi.fn();
+    const { rerender } = renderHook(() => useClaimResponseIndexedNotifier(true, getPrivyIdentityToken, 'account-1'), {
+      wrapper,
+    });
+
+    // The write used the cached identity while the reactive personal space was still null.
+    act(() => {
+      queryClient.setQueryData(['entity-response-indexing', null, 'claim-1', 'space-1', 'stance'], {
+        status: 'reconciling',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'positive',
+          personalSpaceId: 'profile-1',
+          responseKind: 'stance',
+          spaceId: 'space-1',
+        },
+        runId: 'run-before-space',
+      });
+    });
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(mocks.notify).not.toHaveBeenCalled();
+
+    mocks.personalSpaceId = 'profile-1';
+    rerender();
+    await waitFor(() =>
+      expect(mocks.notify).toHaveBeenCalledWith(
+        'space-1',
+        'claim-1',
+        'stance',
+        true,
+        getPrivyIdentityToken,
+        'account-1',
+        expect.any(AbortSignal)
+      )
+    );
+  });
+
+  it('does not report earlier writes again when an account switches back', async () => {
+    const { queryClient, wrapper } = createHarness();
+    const { rerender } = renderHook(({ accountKey }) => useClaimResponseIndexedNotifier(true, vi.fn(), accountKey), {
+      initialProps: { accountKey: 'account-1' },
+      wrapper,
+    });
+
+    act(() => {
+      queryClient.setQueryData(['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'], {
+        status: 'indexed',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'positive',
+          personalSpaceId: 'profile-1',
+          responseKind: 'stance',
+          spaceId: 'space-1',
+        },
+        runId: 'run-1',
+      });
+    });
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledOnce());
+
+    mocks.personalSpaceId = 'profile-2';
+    rerender({ accountKey: 'account-2' });
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 5));
+    });
+    mocks.personalSpaceId = 'profile-1';
+    rerender({ accountKey: 'account-1' });
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(mocks.notify).toHaveBeenCalledOnce();
+  });
+
   it('reports cleared responses and ignores curation indexing', async () => {
     const { queryClient, wrapper } = createHarness();
     renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });
