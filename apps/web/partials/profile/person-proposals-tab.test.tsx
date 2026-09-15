@@ -54,7 +54,7 @@ vi.mock('~/partials/governance/governance-proposal-row', () => ({
     mocks.rowProps.push(props);
     return (
       <div data-testid="governance-row">
-        {props.lead as React.ReactNode}
+        {props.bylineLead as React.ReactNode}
         <h3>{props.title as string}</h3>
       </div>
     );
@@ -133,12 +133,14 @@ describe('PersonProposalsTab', () => {
     expect(href).toContain(`returnSpaceId=${PROFILE_SPACE}`);
   });
 
-  it('names the space above the title, because the list spans all of them', () => {
+  it('names the space in the byline, and links to it', () => {
     setPage([proposal()]);
 
     renderTab();
 
-    expect(screen.getByText('Academia')).toBeInTheDocument();
+    // Its own link, above the row's full-bleed one, which would otherwise
+    // swallow the click and open the proposal instead.
+    expect(screen.getByRole('link', { name: 'Academia' })).toHaveAttribute('href', `/space/${ACADEMIA}`);
   });
 
   it('turns the tally into percentages over every vote cast, abstentions included', () => {

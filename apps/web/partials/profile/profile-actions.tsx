@@ -31,8 +31,11 @@ type Props = {
  * refuses to render when the viewer's own space is the one being viewed, and
  * the debate button is withheld here for the same reason.
  *
- * Left to right, cheapest to most committing: a vote is one click and
- * reversible, Debate is a live commitment, Verify is a claim you are staking.
+ * Edit profile leads, and the vote pair closes the row. The owner's own action
+ * on their own page is the primary one; judging yourself is not, and reading
+ * left to right it should not be the first thing offered. A visitor keeps the
+ * vote first and then escalates: reversible click, live commitment, staked
+ * claim.
  */
 export function ProfileActions({ spaceId, personEntityId }: Props) {
   const { personalSpaceId } = usePersonalSpaceId();
@@ -42,15 +45,15 @@ export function ProfileActions({ spaceId, personEntityId }: Props) {
 
   return (
     <div className="flex items-center gap-2">
-      <EntityVoteButtons entityId={personEntityId} spaceId={spaceId} />
-
       {isOwner ? (
         <>
           <SmallButton onClick={() => setIsEditOpen(true)}>Edit profile</SmallButton>
           <EditProfileDialog open={isEditOpen} onOpenChange={setIsEditOpen} />
+          <EntityVoteButtons entityId={personEntityId} spaceId={spaceId} />
         </>
       ) : (
         <>
+          <EntityVoteButtons entityId={personEntityId} spaceId={spaceId} />
           {/* Only when they are actually available to debate — the button hides
               itself otherwise, and the row closes up. */}
           <ProfileDebateButton spaceId={spaceId} />

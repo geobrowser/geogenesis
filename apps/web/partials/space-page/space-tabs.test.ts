@@ -35,16 +35,13 @@ describe('buildSpaceTabs', () => {
       isDebugDebatesPageEnabled: false,
     });
 
+    // No Governance — a personal space has none — and no Activity, which
+    // Proposals stands in for. The authored tabs go last, behind a rule.
     expect(tabs.find(tab => tab.label === 'Governance')).toBeUndefined();
-    expect(tabs.map(tab => tab.label)).toEqual([
-      'Overview',
-      'Facts',
-      'Sources',
-      'Debates',
-      'Positions',
-      'Proposals',
-      'Activity',
-    ]);
+    expect(tabs.find(tab => tab.label === 'Activity')).toBeUndefined();
+    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Debates', 'Positions', 'Proposals', 'Facts', 'Sources']);
+    expect(tabs.find(tab => tab.label === 'Facts')?.dividerBefore).toBe(true);
+    expect(tabs.find(tab => tab.label === 'Sources')?.dividerBefore).toBe(false);
   });
 
   it('keeps an authored Claims tab because the system tab is no longer shown', () => {
@@ -104,13 +101,12 @@ describe('buildSpaceTabs', () => {
 
     expect(tabs.map(tab => tab.label)).toEqual([
       'Overview',
-      'Facts',
-      'Sources',
       'Debug debates',
       'Debates',
       'Positions',
       'Proposals',
-      'Activity',
+      'Facts',
+      'Sources',
     ]);
   });
 
@@ -130,6 +126,9 @@ describe('buildSpaceTabs', () => {
       { label: 'Positions', href: `/space/${spaceId}/positions`, priority: 4 },
       { label: 'Proposals', href: `/space/${spaceId}/proposals`, priority: 4 },
     ]);
+    // Nothing separates them from Overview: the rule marks where the space's
+    // own tabs end, and with no authored tabs there is nothing to separate.
+    expect(person.some(tab => tab.dividerBefore)).toBe(false);
 
     const space = buildSpaceTabs({
       spaceId,
@@ -152,9 +151,11 @@ describe('buildSpaceTabs', () => {
     });
 
     expect(tabs.filter(tab => tab.label === 'Debates')).toEqual([
-      { label: 'Debates', href: `${overviewHref}?tabId=dynamic-debates`, priority: 1 },
+      { label: 'Debates', href: `${overviewHref}?tabId=dynamic-debates`, priority: 6, dividerBefore: true },
     ]);
-    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Debates', 'Positions', 'Proposals', 'Activity']);
+    // The authored one takes the system tab's place *and* its own, so it lands
+    // after the rule with the rest of what this person wrote.
+    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Positions', 'Proposals', 'Debates']);
   });
 
   it('keeps the system Debug debates route when an authored tab has the same label', () => {

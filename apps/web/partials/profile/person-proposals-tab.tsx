@@ -6,7 +6,7 @@ import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { type PersonProposal, usePersonProposals } from '~/core/profile/use-person-proposals';
 import type { Profile } from '~/core/types';
-import { getProposalName } from '~/core/utils/utils';
+import { NavUtils, getProposalName } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SpacePillAvatar } from '~/design-system/space-pill';
@@ -114,7 +114,9 @@ function ProposalRow({
   const total = proposal.yes + proposal.no + proposal.abstain;
 
   return (
-    <div className="relative">
+    // The same per-row rule the governance list draws, so the two lists read
+    // as one kind of thing.
+    <div className="relative border-b border-grey-01">
       {/*
        * `from` and `returnSpaceId` are what bring the reader back here rather
        * than stranding them in the governance tab of a space they were never
@@ -141,11 +143,16 @@ function ProposalRow({
         // A record is read, not acted on, and the chip's Execute button would be
         // a control nested inside this row's link.
         canExecute={false}
-        lead={
-          <div className="relative z-10 flex items-center gap-2">
+        bylineLead={
+          <Link
+            href={NavUtils.toSpace(proposal.spaceId)}
+            // Above the row's own full-bleed link, which would otherwise
+            // swallow the click and send them to the proposal.
+            className="relative z-10 flex min-w-0 items-center gap-2 transition-colors duration-75 hover:text-text"
+          >
             {label?.image ? <SpacePillAvatar value={label.image} /> : null}
-            <span className="text-breadcrumb text-grey-04">{spaceName}</span>
-          </div>
+            <span className="min-w-0 truncate">{spaceName}</span>
+          </Link>
         }
       />
     </div>

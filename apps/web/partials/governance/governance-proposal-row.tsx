@@ -27,8 +27,15 @@ type Props = {
   canExecute: boolean;
   /** Offers Execute in the status chip. Omit on a read-only surface. */
   executeIn?: { spaceId: string; proposalId: string };
-  /** Rendered before the title — the space chip on a cross-space list. */
-  lead?: React.ReactNode;
+  /**
+   * Rendered at the head of the byline, before the proposer — the space, on a
+   * list that spans more than one.
+   *
+   * In the byline rather than above the title because it is the same kind of
+   * fact as the ones already there: who, where, when, separated by the same
+   * dot. Above the title it read as a second heading.
+   */
+  bylineLead?: React.ReactNode;
   /** Rendered beside the title, e.g. the reopen menu. */
   titleAccessory?: React.ReactNode;
 };
@@ -54,7 +61,7 @@ export function GovernanceProposalRow({
   endTime,
   canExecute,
   executeIn,
-  lead,
+  bylineLead,
   titleAccessory,
 }: Props) {
   const name = profile.name ?? profile.address ?? profile.id;
@@ -71,12 +78,19 @@ export function GovernanceProposalRow({
   return (
     <div className="relative flex w-full flex-col gap-3 py-4">
       <div className="flex flex-col gap-2">
-        {lead}
         <div className="flex items-center justify-between gap-3">
           <h3 className="min-w-0 flex-1 text-smallTitle">{title}</h3>
           {titleAccessory}
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-breadcrumb text-grey-04">
+          {bylineLead && (
+            <>
+              {bylineLead}
+              <span aria-hidden className="shrink-0 select-none">
+                ·
+              </span>
+            </>
+          )}
           {profile.profileLink ? (
             <Link
               href={profile.profileLink}
