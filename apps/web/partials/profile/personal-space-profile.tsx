@@ -4,14 +4,15 @@ import * as React from 'react';
 
 import { usePersonDebates } from '~/core/debates/use-person-debates';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { useProfileFacts } from '~/core/hooks/use-profile-facts';
 import { useProfileHistory } from '~/core/hooks/use-profile-history';
 import { ID } from '~/core/id';
 import { collectSkills, currentRoles } from '~/core/profile/profile-summary';
 import { usePersonPositions } from '~/core/profile/use-person-positions';
 
 import { EditRecordDialog } from './edit-record-dialog';
+import { type ActivityKind, ProfileActivitySection } from './profile-activity-section';
 import { ProfileHeadline } from './profile-headline';
-import { ProfileRecentSection } from './profile-recent-section';
 import { ProfileRecordSection, ProfileSkillsSection } from './profile-record-sections';
 
 type Props = {
@@ -70,12 +71,11 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
       <ProfileSkillsSection skills={skills} isOwner={isOwner} spaceId={spaceId} />
 
       {/*
-       * What they have argued and taken a position on lately. Below the history
-       * because the history is what a profile is asked for first; above nothing,
-       * because each is a link into its own tab rather than the tab itself.
+       * What they have argued and taken a position on lately. Below the history,
+       * because the history is what a profile is asked for first — and a link
+       * into its own tab rather than the tab itself.
        */}
-      <RecentDebates spaceId={spaceId} />
-      <RecentClaims spaceId={spaceId} />
+      <ProfileActivity spaceId={spaceId} personEntityId={personEntityId} />
 
       <EditRecordDialog
         kind={editing}
@@ -87,34 +87,40 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
   );
 }
 
-function RecentDebates({ spaceId }: { spaceId: string }) {
-  const { rows, isLoading } = usePersonDebates(spaceId, true);
+/**
+ * The Activity card's two kinds.
+ *
+ * Both read from the same queries their tabs open with, so moving between them
+ * costs no request — and both counts come from the rail's own facts rather than
+ * from the page in hand, which is one page of twenty against a real 192.
+ */
+function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personEntityId: string }) {
+  const debates = usePersonDebates(spaceId, true);
+  const positions = usePersonPositions({ spaceId });
+  const { facts } = useProfileFacts({ spaceId, personEntityId });
 
-  return (
-    <ProfileRecentSection
-      title="Recent debates"
-      rows={rows}
-      isLoading={isLoading}
-      href={`/space/${spaceId}/debates`}
-      seeAllLabel="See all debates"
-    />
-  );
-}
+  const kinds: ActivityKind[] = [
+    {
+      key: 'debates',
+      label: 'Debates',
+      rows: debates.rows,
+      total: facts.debates,
+      isLoading: debates.isLoading,
+      href: `/space/${spaceId}/debates`,
+      seeAllLabel: 'See all debates',
+    },
+    {
+      key: 'claims',
+      label: 'Claims',
+      rows: positions.rows,
+      total: facts.positions,
+      isLoading: positions.isLoading,
+      href: `/space/${spaceId}/positions`,
+      seeAllLabel: 'See all claims',
+    },
+  ];
 
-function RecentClaims({ spaceId }: { spaceId: string }) {
-  // The first page is all this needs, and it is the same query the Positions tab
-  // opens with — so moving between them costs no request.
-  const { rows, isLoading } = usePersonPositions({ spaceId });
-
-  return (
-    <ProfileRecentSection
-      title="Recent claims"
-      rows={rows}
-      isLoading={isLoading}
-      href={`/space/${spaceId}/positions`}
-      seeAllLabel="See all claims"
-    />
-  );
+  return <ProfileActivitySection kinds={kinds} />;
 }
 
 /**

@@ -26,9 +26,11 @@ type SpaceTabsProps = {
 type BuiltSpaceTab = {
   label: string;
   href: string;
-  priority: 1 | 2 | 3 | 4 | 5 | 6;
+  priority: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   /** Draws a rule before this tab, separating the space's own tabs from authored ones. */
   dividerBefore?: boolean;
+  /** Only shown at the widths where the side rail is dropped. */
+  onlyWhenNarrow?: boolean;
 };
 
 type BuildSpaceTabsParams = {
@@ -126,6 +128,11 @@ export function buildSpaceTabs({
   // tab already beats the system one.
   if (isPerson) {
     tabs.push(...PERSON_TABS);
+
+    // Last, and only where the rail is not. Below 1024px `StickySideRail` drops
+    // itself rather than render something too narrow to read, and without this
+    // the spaces, links and counts are simply unreachable on a phone.
+    tabs.push({ label: 'About', href: `/space/${spaceId}/about`, priority: 7, onlyWhenNarrow: true });
   }
 
   if (!isPerson) tabs.push(ACTIVITY_TAB);
@@ -204,6 +211,7 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
       { label: 'Positions', href: `/space/${spaceId}/positions` },
       { label: 'Proposals', href: `/space/${spaceId}/proposals` }
     );
+    systemTabsAfter.push({ label: 'About', href: `/space/${spaceId}/about` });
   } else {
     systemTabsAfter.push({ label: 'Activity', href: `/space/${spaceId}/activity` });
   }

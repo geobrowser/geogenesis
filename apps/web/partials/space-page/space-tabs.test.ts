@@ -39,9 +39,21 @@ describe('buildSpaceTabs', () => {
     // Proposals stands in for. The authored tabs go last, behind a rule.
     expect(tabs.find(tab => tab.label === 'Governance')).toBeUndefined();
     expect(tabs.find(tab => tab.label === 'Activity')).toBeUndefined();
-    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Debates', 'Positions', 'Proposals', 'Facts', 'Sources']);
+    expect(tabs.map(tab => tab.label)).toEqual([
+      'Overview',
+      'Debates',
+      'Positions',
+      'Proposals',
+      'Facts',
+      'Sources',
+      'About',
+    ]);
     expect(tabs.find(tab => tab.label === 'Facts')?.dividerBefore).toBe(true);
     expect(tabs.find(tab => tab.label === 'Sources')?.dividerBefore).toBe(false);
+
+    // About reaches the rail's content, so it shows only where the rail has
+    // dropped itself — below 1024px.
+    expect(tabs.find(tab => tab.label === 'About')?.onlyWhenNarrow).toBe(true);
   });
 
   it('keeps an authored Claims tab because the system tab is no longer shown', () => {
@@ -107,6 +119,7 @@ describe('buildSpaceTabs', () => {
       'Proposals',
       'Facts',
       'Sources',
+      'About',
     ]);
   });
 
@@ -129,6 +142,7 @@ describe('buildSpaceTabs', () => {
     // Nothing separates them from Overview: the rule marks where the space's
     // own tabs end, and with no authored tabs there is nothing to separate.
     expect(person.some(tab => tab.dividerBefore)).toBe(false);
+    expect(person.map(tab => tab.label)).toEqual(['Overview', 'Debates', 'Positions', 'Proposals', 'About']);
 
     const space = buildSpaceTabs({
       spaceId,
@@ -155,7 +169,7 @@ describe('buildSpaceTabs', () => {
     ]);
     // The authored one takes the system tab's place *and* its own, so it lands
     // after the rule with the rest of what this person wrote.
-    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Positions', 'Proposals', 'Debates']);
+    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Positions', 'Proposals', 'Debates', 'About']);
   });
 
   it('keeps the system Debug debates route when an authored tab has the same label', () => {

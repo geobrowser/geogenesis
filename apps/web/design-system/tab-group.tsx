@@ -23,6 +23,14 @@ interface TabGroupProps {
     hidden?: boolean;
     /** Draws a rule before this tab, marking where one group of tabs ends and another begins. */
     dividerBefore?: boolean;
+    /**
+     * Only shown where the side rail is not.
+     *
+     * Breakpoints here are desktop-first (`lg` is max-width 1023px), and
+     * `StickySideRail` drops itself at exactly that width — so a tab reaching
+     * the rail's content appears precisely when the rail stops being there.
+     */
+    onlyWhenNarrow?: boolean;
   }>;
   className?: string;
 }
@@ -126,7 +134,13 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
           {tabs.map(t => (
             <React.Fragment key={t.href}>
               {t.dividerBefore && <span aria-hidden className="h-4 w-px shrink-0 bg-grey-02" />}
-              <Tab href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+              {t.onlyWhenNarrow ? (
+                <span className="hidden lg:contents">
+                  <Tab href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+                </span>
+              ) : (
+                <Tab href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+              )}
             </React.Fragment>
           ))}
         </div>

@@ -162,7 +162,11 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
     <Root open={kind !== null} onOpenChange={next => (next ? onOpenChange(true) : close())}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
-        <Content className="fixed inset-0 z-101 flex items-start justify-center overflow-y-auto focus:outline-hidden">
+        <Content // `px-4` so the card clears the screen edges on a phone, where
+          // `max-w-[560px]` is wider than the viewport and the dialog would
+          // otherwise run edge to edge.
+          className="fixed inset-0 z-101 flex items-start justify-center overflow-y-auto px-4 focus:outline-hidden"
+        >
           <div className="my-10 flex w-full max-w-[560px] flex-col rounded-lg border border-grey-02 bg-white shadow-dropdown">
             {sheet ? (
               sheet.kind === 'position' ? (
