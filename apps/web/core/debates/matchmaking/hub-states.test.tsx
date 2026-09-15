@@ -45,6 +45,36 @@ describe('a viewer geo-chat has not registered yet', () => {
   });
 
   /**
+   * And offers no button while the reads are still trying.
+   *
+   * `refetch()` joins an in-flight retry rather than starting a request, so during the wait the
+   * button would be a control that visibly does nothing — worse than no control, because a reader
+   * who presses it and sees nothing happen concludes the page is broken rather than busy. It
+   * appears once the retries are spent, which is when it can do something.
+   */
+  it('offers no retry while the reads are still trying', () => {
+    render(
+      <HubQueryState isLoading error={null} failureReason={refused} isEmpty={false} emptyMessage="" onRetry={vi.fn()}>
+        <div>rows</div>
+      </HubQueryState>
+    );
+
+    expect(screen.getByText('Setting up your account. Check back in a minute.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+
+  // And offers it once they are, which is the state that can act on a press.
+  it('offers one once they have given up', () => {
+    render(
+      <HubQueryState isLoading={false} error={refused} isEmpty={false} emptyMessage="" onRetry={vi.fn()}>
+        <div>rows</div>
+      </HubQueryState>
+    );
+
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  /**
    * And it is not this, for a caller that might be asking on behalf of nobody.
    *
    * The same 401 means "sign in" to a surface offering that action, and "we do not have you yet" to

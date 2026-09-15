@@ -126,6 +126,9 @@ export function HubQueryState({
    * on underneath.
    */
   const warmingUp = !signInAction && isAccountWarmingUpQuery({ error, failureReason });
+  // Settled, rather than still being waited out. `error` is only set once react-query has given up;
+  // a refusal that is still being retried reaches us through `failureReason` alone.
+  const retriesSpent = Boolean(error);
   const state = needsSignIn
     ? 'sign-in'
     : warmingUp
@@ -146,10 +149,16 @@ export function HubQueryState({
         </HubMessage>
       ) : state === 'warming-up' ? (
         // Deliberately not "Something went wrong", which is wrong about something going right, and
-        // not the sign-in prompt, which is wrong at somebody who just did. The reads behind this
-        // keep asking on their own — see `viewerReadRetryOptions` — so the button is a way to hurry
-        // it rather than the only way out.
-        <HubMessage action={onRetry ? <HubPillButton onClick={onRetry}>Try again</HubPillButton> : null}>
+        // not the sign-in prompt, which is wrong at somebody who just did.
+        //
+        // The button appears only once the retries are spent. While they are still running,
+        // `refetch()` joins the in-flight retry rather than starting a request, so the button would
+        // have been a control that visibly does nothing — worse than no control, because a reader
+        // who presses it and sees no change concludes the page is broken rather than busy. Until
+        // then the message is the whole state, and the reads are getting on with it.
+        <HubMessage
+          action={retriesSpent && onRetry ? <HubPillButton onClick={onRetry}>Try again</HubPillButton> : null}
+        >
           Setting up your account. Check back in a minute.
         </HubMessage>
       ) : state === 'error' ? (

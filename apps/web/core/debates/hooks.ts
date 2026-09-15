@@ -235,6 +235,22 @@ function withOnlineChoiceAvatars<T extends { online_choices: Array<{ participant
 /** How often a refused claim-rows lookup asks again while geo-chat registers the account. */
 const VIEWER_ANSWER_RECOVERY_POLL_MS = 10_000;
 
+/**
+ * And how many times, because a wait that never ends is not a wait.
+ *
+ * Registration finishes in a minute or two, so nine polls at ten seconds covers it — the same
+ * ninety seconds `WARMING_UP_RETRIES` gives the matchmaking reads, which is deliberate: they are
+ * waiting for the same event, and a viewer should not find one half of the hub still trying while
+ * the other gave up. Unbounded, an account that never registers left every failed batch asking
+ * every ten seconds for the life of the tab, once per space, each one a fresh session exchange.
+ *
+ * Counted off `errorUpdateCount`, which is react-query's own and accumulates. Emphatically not
+ * `fetchFailureCount`, which was the obvious choice and is wrong: that one counts retries *within*
+ * a fetch and resets when the next one starts, so with `retry: false` it never exceeds one and the
+ * bound never bites. The test for this caught exactly that — sixty polls where ten were expected.
+ */
+const VIEWER_ANSWER_RECOVERY_POLLS = 9;
+
 export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimIds: string[] }>) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
@@ -311,7 +327,9 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
        * of requests rather than a stream of them.
        */
       refetchInterval: (query: Query<DebateClaimsResponse, Error>) =>
-        query.state.status === 'error' && isAccountWarmingUp(query.state.error)
+        query.state.status === 'error' &&
+        isAccountWarmingUp(query.state.error) &&
+        query.state.errorUpdateCount <= VIEWER_ANSWER_RECOVERY_POLLS
           ? VIEWER_ANSWER_RECOVERY_POLL_MS
           : false,
       // Same reason `useClaimSpaceAllowlist` sets it: a tab nobody is looking at should not spend

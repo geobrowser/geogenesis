@@ -271,6 +271,36 @@ describe('useDebateClaimsBySpaces', () => {
   });
 
   /**
+   * And it stops. A wait that never ends is not a wait.
+   *
+   * Unbounded, an account that never registered left every failed batch asking every ten seconds
+   * for the life of the tab — once per space, each one a fresh session exchange. The matchmaking
+   * reads cap the same wait at about ninety seconds, and these are waiting for the same event, so a
+   * viewer should not find one half of the hub still trying while the other has given up.
+   */
+  it('gives up on the wait rather than polling for the life of the tab', async () => {
+    vi.useFakeTimers();
+    mocks.listDebateClaims.mockRejectedValue(
+      new GeoChatSessionError(new GeoChatRequestError('Unauthorized', null, 401))
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(() => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds: ['claim-1'] }]), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await vi.waitFor(() => expect(result.current.isError).toBe(true));
+
+    // Well past the window: nine polls at ten seconds, and then nothing.
+    await vi.advanceTimersByTimeAsync(600_000);
+
+    expect(mocks.listDebateClaims.mock.calls.length).toBeLessThanOrEqual(10);
+    vi.useRealTimers();
+  });
+
+  /**
    * A 403 in particular, which is the one that looks most like the case this polls for.
    *
    * Same shape as the registration refusal and the opposite fact: geo-chat saying this viewer may
