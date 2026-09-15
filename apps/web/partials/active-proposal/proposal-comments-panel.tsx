@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useCommentCount } from '~/core/hooks/use-comment-count';
+
 import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
 
@@ -13,7 +15,11 @@ import { ExploreCommentsIcon } from '~/partials/explore/explore-comments-icon';
 type ProposalCommentsValue = {
   proposalId: string;
   spaceId: string;
-  /** Counted on the server beside the proposal, so the pill can say how many before it is opened. */
+  /**
+   * Live once the list has been read, seeded by a server count so the pill can say how many before
+   * the panel is ever opened. Both numbers on this screen — the pill and the panel header — read
+   * this one field, so posting a comment moves them together.
+   */
   count: number;
   isPanelOpen: boolean;
   togglePanel: () => void;
@@ -46,10 +52,11 @@ export function ProposalCommentsProvider({
 }) {
   const [isPanelOpen, setIsPanelOpen] = React.useState(false);
   const togglePanel = React.useCallback(() => setIsPanelOpen(open => !open), []);
+  const liveCount = useCommentCount(proposalId, count);
 
   const value = React.useMemo<ProposalCommentsValue>(
-    () => ({ proposalId, spaceId, count, isPanelOpen, togglePanel }),
-    [proposalId, spaceId, count, isPanelOpen, togglePanel]
+    () => ({ proposalId, spaceId, count: liveCount, isPanelOpen, togglePanel }),
+    [proposalId, spaceId, liveCount, isPanelOpen, togglePanel]
   );
 
   return <ProposalCommentsContext.Provider value={value}>{children}</ProposalCommentsContext.Provider>;
