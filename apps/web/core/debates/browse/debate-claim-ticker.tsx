@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate, DebateClaim } from '~/core/debates/api';
 import {
@@ -27,7 +26,10 @@ import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
-import { Text } from '~/design-system/text';
+import { ChevronDown } from '~/design-system/icons/chevron-down';
+import { ChevronUp } from '~/design-system/icons/chevron-up';
+import { ThumbDown } from '~/design-system/icons/thumb-down';
+import { ThumbUp } from '~/design-system/icons/thumb-up';
 
 export type DebateTicker = {
   /**
@@ -205,13 +207,13 @@ export function DebateClaimTickerCard({
 
   return (
     <div
-      // The video behind is one big play/pause button; without this every pill press would also
-      // toggle playback.
+      // The video behind is one big play/pause button; without this every tap on a thumb would
+      // also toggle playback.
       onClick={event => event.stopPropagation()}
       style={{ opacity }}
-      className="pointer-events-auto w-full rounded-md bg-white/95 px-2.5 py-2 shadow-card backdrop-blur-[2px]"
+      className="pointer-events-auto flex max-w-[min(24rem,78%)] items-start gap-2 rounded bg-black/65 px-2 py-1 backdrop-blur-[2px]"
     >
-      <p className="text-footnote leading-snug text-text">{claim.text}</p>
+      <span className="text-[0.8125rem] leading-snug text-white">{claim.text}</span>
       <TickerClaimControls
         claimId={claim.id}
         spaceId={claim.spaceId}
@@ -244,7 +246,7 @@ export function DebateClaimTickerStack({
   if (cards.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute bottom-10 left-4 z-10 flex w-[min(20rem,62%)] flex-col gap-1.5">
+    <div className="flex w-full flex-col items-start gap-1">
       {cards.map(card => (
         <DebateClaimTickerCard
           key={card.window.claim.id}
@@ -291,7 +293,6 @@ function TickerClaimControls({
     isResponseKindResolved,
     isViewerResponseResolved,
     responseBlockedReason,
-    summary,
     claim,
     positions,
     readiness,
@@ -324,83 +325,82 @@ function TickerClaimControls({
   const copy = ENTITY_RESPONSE_COPY[responseKind];
 
   return (
-    <div className="mt-1.5">
-      <div className="flex items-center gap-1.5">
-        <CompactPill
-          label={copy.positiveAction}
-          selected={control.viewerPosition === true}
-          disabled={!control.canRespond}
-          title={control.actionTitle(true)}
-          tone="positive"
-          onClick={() => control.respond(true)}
-        />
-        <CompactPill
-          label={copy.negativeAction}
-          selected={control.viewerPosition === false}
-          disabled={!control.canRespond}
-          title={control.actionTitle(false)}
-          tone="negative"
-          onClick={() => control.respond(false)}
-        />
-      </div>
-      {control.responseError ? (
-        <div role="alert" className="mt-1.5">
-          <Text as="p" variant="footnote" color="red-01">
-            {control.responseError}
-          </Text>
-        </div>
-      ) : null}
-      {answered && !summary.isLoading ? (
-        <ClaimSummary
-          entityId={claimId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          summary={summary}
-          className="mt-2"
-        />
-      ) : null}
-    </div>
+    <span className="ml-auto flex shrink-0 items-center gap-0.5 self-center">
+      <ClaimIconButton
+        responseKind={responseKind}
+        position
+        label={copy.positiveAction}
+        selected={control.viewerPosition === true}
+        disabled={!control.canRespond}
+        title={control.actionTitle(true) || copy.positiveAction}
+        onClick={() => control.respond(true)}
+      />
+      <ClaimIconButton
+        responseKind={responseKind}
+        position={false}
+        label={copy.negativeAction}
+        selected={control.viewerPosition === false}
+        disabled={!control.canRespond}
+        title={control.actionTitle(false) || copy.negativeAction}
+        onClick={() => control.respond(false)}
+      />
+      {/* No crowd split and no error text on the line. Both would make it grow mid-playback, and
+          the line has to stay one line. The end-of-debate card is where the numbers live. */}
+    </span>
   );
 }
 
 /**
- * One side of the answer, sized for a card that sits beside a face rather than over it.
+ * One side of the answer, as an icon rather than a labelled pill.
  *
- * Deliberately plain: no responder avatars, no percentage. Those belong on a row the reader is
- * studying, and here they would be three more things moving in the corner of a playing video.
+ * A labelled button turns the line into a form. An icon keeps the line a line — the reader takes
+ * in what was said, and the affordance is there in the corner of their eye if they feel strongly
+ * about it. The label survives as the accessible name and the tooltip, so nothing is lost to
+ * anyone reading it aloud or hovering.
+ *
+ * Thumbs for a stance claim, chevrons for a factual one, which is the split the rest of the app
+ * already draws: agreeing with a position and verifying a fact are different acts, and a thumb on
+ * "the SEC sued Coinbase" reads as approval rather than confirmation.
  */
-function CompactPill({
+function ClaimIconButton({
+  responseKind,
+  position,
   label,
   selected,
   disabled,
   title,
-  tone,
   onClick,
 }: {
+  responseKind: 'stance' | 'veracity' | 'curation';
+  position: boolean;
   label: string;
   selected: boolean;
   disabled: boolean;
   title: string;
-  tone: 'positive' | 'negative';
   onClick: () => void;
 }) {
+  const Icon = responseKind === 'veracity' ? (position ? ChevronUp : ChevronDown) : position ? ThumbUp : ThumbDown;
+
   return (
     <button
       type="button"
-      title={title || undefined}
+      aria-label={label}
+      aria-pressed={selected}
+      title={title}
       disabled={disabled}
       onClick={onClick}
-      aria-pressed={selected}
       className={cx(
-        'flex-1 rounded-sm border px-2 py-1 text-footnote font-medium transition-colors disabled:cursor-default disabled:opacity-60',
+        'grid size-5 place-items-center rounded-sm transition-colors disabled:cursor-default',
+        // Recessive until it matters: dim on the line, bright on hover, and unmistakable once the
+        // reader has actually taken a side.
         selected
-          ? tone === 'positive'
-            ? 'border-green bg-successTertiary text-text'
-            : 'border-red-01 bg-errorTertiary text-text'
-          : 'border-grey-02 bg-white text-grey-04 hover:border-grey-03 hover:text-text'
+          ? position
+            ? 'bg-white/15 text-green'
+            : 'bg-white/15 text-red-01'
+          : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
       )}
     >
-      {label}
+      <Icon filled={selected} />
     </button>
   );
 }

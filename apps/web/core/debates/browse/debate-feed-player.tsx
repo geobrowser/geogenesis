@@ -189,8 +189,10 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         }
       />
 
+      {/* Dimmed behind, so the card reads as the moment the debate arrives at rather than a note
+          stuck over two frozen faces. */}
       {ready && playbackEnded && (
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-30 flex -translate-y-1/2 justify-center px-3">
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/55 px-3">
           <DebateScorecard ticker={ticker} onReplay={playFromStart} />
         </div>
       )}
@@ -334,22 +336,24 @@ function DebaterVideo({
 
       {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
 
-      {subtitle && (
-        <div className="absolute inset-x-0 bottom-14 z-10 flex justify-center px-4">
-          <span className="max-w-[70%] rounded-sm bg-black/78 px-1.5 py-1 text-center text-[1rem] leading-tight text-white">
-            {subtitle}
-          </span>
+      {/* Claims and the subtitle share one bottom-anchored column so they cannot land on top of
+          each other — they did, because both wanted the strip above the debater's name. The
+          subtitle stays pinned at the bottom of the column and the claims rise above it. */}
+      {(subtitle || claims.length > 0) && (
+        <div className="pointer-events-none absolute inset-x-4 bottom-11 z-10 flex flex-col items-start gap-1.5">
+          <DebateClaimTickerStack
+            cards={claims}
+            rowsByClaimId={ticker.rowsByClaimId}
+            entitiesByClaimId={ticker.entitiesByClaimId}
+            onAnswered={ticker.onAnswered}
+          />
+          {subtitle && (
+            <span className="max-w-[70%] self-center rounded-sm bg-black/78 px-1.5 py-1 text-center text-[1rem] leading-tight text-white">
+              {subtitle}
+            </span>
+          )}
         </div>
       )}
-
-      {/* Above the name, in this debater's own corner. The subtitle sits higher up, so the two
-          do not collide. */}
-      <DebateClaimTickerStack
-        cards={claims}
-        rowsByClaimId={ticker.rowsByClaimId}
-        entitiesByClaimId={ticker.entitiesByClaimId}
-        onAnswered={ticker.onAnswered}
-      />
 
       {/* Debater identity: avatar + name + position, opens their personal space in the side panel. */}
       <button
