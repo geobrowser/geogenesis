@@ -5,7 +5,7 @@ import * as React from 'react';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { GeoChatRequestError } from '../api';
+import { GeoChatRequestError, isAccountWarmingUp } from '../api';
 import { HubSwap } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 
@@ -46,9 +46,7 @@ export function isSignInRequired(error: unknown) {
  * somebody who just did, and "Something went wrong" is wrong about something that is going right and
  * is not finished.
  */
-export function isAccountWarmingUp(error: unknown) {
-  return error instanceof GeoChatRequestError && (error.status === 401 || error.status === 403);
-}
+export { isAccountWarmingUp };
 
 /**
  * Horizontally neutral: every tab already insets its content by 16px, so self-padding here would

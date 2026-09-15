@@ -197,6 +197,61 @@ describe('useDebateClaimsBySpaces', () => {
     expect(new Set(result.current.claims.map(claim => claim.claim_entity_id))).toEqual(new Set(ids));
   });
 
+  /**
+   * Reported: a viewer creates an account, and every pill in the hub is dead for the rest of the
+   * visit while the same claims in the main feed take positions perfectly well.
+   *
+   * geo-chat refuses viewer-relative reads until it has registered the account, so this lookup 401s
+   * — and with `retry: false` and nothing to trigger a refetch, the refusal was the last word. The
+   * card's `answersReady` is a "not yet" that is supposed to clear itself, and it had no way to.
+   */
+  it('asks again while geo-chat has not registered the account yet', async () => {
+    vi.useFakeTimers();
+    mocks.listDebateClaims
+      .mockRejectedValueOnce(new GeoChatRequestError('Unauthorized', null, 401))
+      .mockResolvedValue({ claims: [{ claim_entity_id: 'claim-1' }] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(() => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds: ['claim-1'] }]), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await vi.waitFor(() => expect(result.current.isError).toBe(true));
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    await vi.waitFor(() => expect(result.current.isError).toBe(false));
+    expect(result.current.claims).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
+  /**
+   * And only for that. A poll that ran on any failure would turn a real outage into a stream of
+   * requests against a server already in trouble — and would be asking a question that has been
+   * answered. This waits for one specific event.
+   */
+  it('lets a lookup that failed for any other reason stay failed', async () => {
+    vi.useFakeTimers();
+    mocks.listDebateClaims.mockRejectedValue(new GeoChatRequestError('Unavailable', 'service_unavailable', 503));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(() => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds: ['claim-1'] }]), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await vi.waitFor(() => expect(result.current.isError).toBe(true));
+    mocks.listDebateClaims.mockClear();
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(mocks.listDebateClaims).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it('keeps existing batches cached when a claim is inserted ahead of them', async () => {
     const ids = Array.from({ length: 101 }, (_, index) => `claim-${String(index).padStart(3, '0')}`);
     mocks.listDebateClaims.mockImplementation((_spaceId: string, claimIds: string[]) =>

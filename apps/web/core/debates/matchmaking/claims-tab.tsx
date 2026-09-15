@@ -661,13 +661,22 @@ export function ClaimsTab({
    * `taggedAnswersReady` and into `answersInFlight` below — this is the one place that had not
    * agreed with it.
    *
-   * Latched per list, because `isError` clears the moment a later page's batch goes out and comes
-   * back true when it fails in turn. Read live, the collapse would switch off and on with it and
-   * take the rows away again on each swing. A new list is a new question.
+   * Latched, because `isError` clears the moment a later page's batch goes out and comes back true
+   * when it fails in turn. Read live, the collapse would switch off and on with it and take the
+   * rows away again on each swing.
+   *
+   * Released again on a clean settle, which is not the same as reading it live: a lookup in flight
+   * leaves the latch where it is, so only an answer moves it. That matters because the refusal this
+   * is for ends — the rows query polls while it is being refused, so the answers do arrive a few
+   * seconds after geo-chat registers the account, and a latch that only ever closed would leave
+   * "Hide my positions" switched on and doing nothing for the rest of the visit. The one fold when
+   * they land is the correct list finally being drawn, not a screenful being taken back.
    */
   const answersFailed = graphSourced && authenticated && taggedRows.isError;
+  const answersArrived = graphSourced && authenticated && !taggedRows.isError && !taggedRows.isLoading;
   const answersUnavailableForRef = React.useRef<string | null>(null);
   if (answersFailed) answersUnavailableForRef.current = listKey;
+  else if (answersArrived) answersUnavailableForRef.current = null;
   const answersUnavailable = answersUnavailableForRef.current === listKey;
 
   const collapsesAnswered = !isLobby && filter !== 'mine' && hidesMyPositions && !answersUnavailable;

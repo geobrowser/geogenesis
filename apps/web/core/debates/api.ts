@@ -1639,6 +1639,20 @@ export class GeoChatRequestError extends Error {
   }
 }
 
+/**
+ * A refusal that means "not yet" rather than "not you".
+ *
+ * geo-chat does not know an account for a minute or two after it is created, and refuses every
+ * viewer-relative read until it does. Signed *out* produces the same status, so the two are told
+ * apart by who is asking rather than by the status — see the readers in `hub-states`.
+ *
+ * Lives beside the error it reads because both layers need it: the hub to say what is happening,
+ * and the query layer to know a failure is worth asking about again.
+ */
+export function isAccountWarmingUp(error: unknown) {
+  return error instanceof GeoChatRequestError && (error.status === 401 || error.status === 403);
+}
+
 const debatePhaseBoundaryRetryCodes = new Set([
   'rematch_not_ready',
   'recording_not_cancellable',
