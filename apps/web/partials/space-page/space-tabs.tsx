@@ -74,6 +74,20 @@ export function buildSpaceTabs({
     priority: 5,
   };
 
+  /**
+   * A person's record (GEO-2859).
+   *
+   * These are the person's, not the space's: debates they took a side in,
+   * claims they hold a position on, proposals they made anywhere. They sit in
+   * Governance's slot because that is the tab they stand in for — a personal
+   * space has no governance of its own.
+   */
+  const PERSON_TABS: BuiltSpaceTab[] = [
+    { label: 'Debates', href: `/space/${spaceId}/debates`, priority: 4 },
+    { label: 'Positions', href: `/space/${spaceId}/positions`, priority: 4 },
+    { label: 'Proposals', href: `/space/${spaceId}/proposals`, priority: 4 },
+  ];
+
   tabs.push(...ALL_SPACES_TABS);
 
   if (typeIds.includes(SystemIds.SPACE_TYPE)) {
@@ -90,6 +104,13 @@ export function buildSpaceTabs({
 
   if (typeIds.includes(SystemIds.SPACE_TYPE) && !typeIds.includes(SystemIds.PERSON_TYPE)) {
     tabs.push(...SOME_SPACES_TABS);
+  }
+
+  // Pushed after the dynamic tabs, so a space that authored its own "Debates"
+  // keeps it — the dedupe below is first-wins, the same way an authored Claims
+  // tab already beats the system one.
+  if (typeIds.includes(SystemIds.PERSON_TYPE)) {
+    tabs.push(...PERSON_TABS);
   }
 
   tabs.push(ACTIVITY_TAB);
@@ -157,6 +178,16 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
   }
 
   if (showCommunity) systemTabsAfter.push({ label: 'Governance', href: `/space/${spaceId}/governance` });
+
+  // The same three the read-only path builds, so a person's record does not
+  // disappear the moment they switch their own profile into edit mode.
+  if (typeIds.includes(SystemIds.PERSON_TYPE)) {
+    systemTabsAfter.push(
+      { label: 'Debates', href: `/space/${spaceId}/debates` },
+      { label: 'Positions', href: `/space/${spaceId}/positions` },
+      { label: 'Proposals', href: `/space/${spaceId}/proposals` }
+    );
+  }
 
   systemTabsAfter.push({ label: 'Activity', href: `/space/${spaceId}/activity` });
 

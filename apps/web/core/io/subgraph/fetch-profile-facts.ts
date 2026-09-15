@@ -1,7 +1,11 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
-import { DEBATE_OPPOSED_BY_PROPERTY, DEBATE_SUPPORTED_BY_PROPERTY } from '~/core/profile/history-ontology';
+import {
+  DEBATE_OPPOSED_BY_PROPERTY,
+  DEBATE_SUPPORTED_BY_PROPERTY,
+  DEBATE_TYPE,
+} from '~/core/profile/history-ontology';
 import {
   NO_FACTS,
   type ProfileFacts,
@@ -27,8 +31,8 @@ interface NetworkResult {
   editors: { nodes: SpaceNode[] } | null;
   proposals: { totalCount: number } | null;
   positions: { totalCount: number } | null;
-  supported: { totalCount: number } | null;
-  opposed: { totalCount: number } | null;
+  supported: { nodes: { fromEntity: { id: string } | null }[] } | null;
+  opposed: { nodes: { fromEntity: { id: string } | null }[] } | null;
   verifiedBy: { nodes: VerifierNode[] } | null;
   person: { createdAt: string | null } | null;
 }
@@ -45,6 +49,27 @@ interface NetworkResult {
  * space, and passing the entity id to any of them returns zero rather than an
  * error, which is the whole trap this file exists to close.
  */
+/**
+ * One side of a debate, pointed at this space.
+ *
+ * Nodes rather than a count, and typed to `Debate`, because neither shortcut
+ * survives the data. `totalCount` counts *relations*: this account carries 13
+ * rows across 10 debates, one of them written three times. And without the type
+ * filter the same query picks up side relations on things that are not debates
+ * at all — the rail would say 17 where the tab shows 10, which reads as a bug in
+ * one of them.
+ */
+function debateSide(typeId: string, sp: string) {
+  return `relationsConnection(
+    filter: {
+      typeId: { is: "${typeId}" }
+      toEntityId: { is: ${sp} }
+      fromEntity: { typeIds: { overlaps: ["${DEBATE_TYPE}"] } }
+    }
+    first: 200
+  ) { nodes { fromEntity { id } } }`;
+}
+
 function profileFactsQuery(spaceId: string, personEntityId: string | null) {
   const sp = JSON.stringify(spaceId);
   const person = personEntityId ? JSON.stringify(personEntityId) : null;
@@ -60,12 +85,8 @@ function profileFactsQuery(spaceId: string, personEntityId: string | null) {
     positions: userVotesConnection(
       filter: { userId: { is: ${sp} }, or: [{ voteKind: { is: 1 } }, { voteKind: { is: 2 } }] }
     ) { totalCount }
-    supported: relationsConnection(
-      filter: { typeId: { is: "${DEBATE_SUPPORTED_BY_PROPERTY}" }, toEntityId: { is: ${sp} } }
-    ) { totalCount }
-    opposed: relationsConnection(
-      filter: { typeId: { is: "${DEBATE_OPPOSED_BY_PROPERTY}" }, toEntityId: { is: ${sp} } }
-    ) { totalCount }
+    supported: ${debateSide(DEBATE_SUPPORTED_BY_PROPERTY, sp)}
+    opposed: ${debateSide(DEBATE_OPPOSED_BY_PROPERTY, sp)}
     verifiedBy: subspacesConnection(
       filter: { childSpaceId: { is: ${sp} }, type: { is: VERIFIED } }, first: 60
     ) {
@@ -133,9 +154,14 @@ export async function fetchProfileFacts(spaceId: string, personEntityId: string 
   return {
     proposals: data.proposals?.totalCount ?? 0,
     positions: data.positions?.totalCount ?? 0,
-    // Two relations, one number: a debate points at a participant with whichever
-    // side they argued, so the count is the two added rather than either alone.
-    debates: (data.supported?.totalCount ?? 0) + (data.opposed?.totalCount ?? 0),
+    // Distinct debates across both sides. Adding the two totals counts a debate
+    // twice where it names the same person on both — and counts duplicate writes
+    // as separate debates, which is how 10 becomes 13.
+    debates: new Set(
+      [...(data.supported?.nodes ?? []), ...(data.opposed?.nodes ?? [])]
+        .map(node => node.fromEntity?.id)
+        .filter((id): id is string => id !== undefined)
+    ).size,
     spaces: orderSpaces([...byId.values()]),
     verifiedBy,
     joinedAt: data.person?.createdAt ? Number(data.person.createdAt) : null,

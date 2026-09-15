@@ -58,6 +58,8 @@ export const SPACE_TAB_SEGMENTS = [
   'debug-debates',
   'governance',
   'import',
+  'positions',
+  'proposals',
   'questions',
 ] as const;
 
