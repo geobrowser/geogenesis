@@ -211,7 +211,7 @@ export function DebateClaimTickerCard({
       // also toggle playback.
       onClick={event => event.stopPropagation()}
       style={{ opacity }}
-      className="pointer-events-auto flex w-full items-start gap-2 rounded bg-black/65 px-2 py-1 backdrop-blur-[2px]"
+      className="pointer-events-auto flex w-full flex-col gap-0.5 rounded bg-black/65 px-2 py-1.5 backdrop-blur-[2px]"
     >
       <span className="text-[0.8125rem] leading-snug text-white">{claim.text}</span>
       <TickerClaimControls
@@ -331,7 +331,7 @@ function TickerClaimControls({
   const copy = ENTITY_RESPONSE_COPY[responseKind];
 
   return (
-    <span className="ml-auto flex shrink-0 items-center gap-0.5 self-center">
+    <span className="flex items-center gap-0.5">
       <ClaimIconButton
         responseKind={responseKind}
         position
@@ -350,8 +350,8 @@ function TickerClaimControls({
         title={control.actionTitle(false) || copy.negativeAction}
         onClick={() => control.respond(false)}
       />
-      {/* No crowd split and no error text on the line. Both would make it grow mid-playback, and
-          the line has to stay one line. The end-of-debate card is where the numbers live. */}
+      {/* No crowd split and no error text here. Both would make the card grow while the reader is
+          part-way through it; the end-of-debate card is where the numbers live. */}
     </span>
   );
 }
