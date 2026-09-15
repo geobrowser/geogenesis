@@ -33,6 +33,7 @@ import {
 import type { Entity } from '~/core/types';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 import { NavUtils } from '~/core/utils/utils';
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { CloseSidePanel } from '~/design-system/icons/close-side-panel';
@@ -51,6 +52,7 @@ import {
   editorContentVersionAtom,
   entitySidePanelHostElementAtom,
   entitySidePanelPersistEditorAtom,
+  slideUpOpenCountAtom,
 } from '~/atoms';
 
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];
@@ -349,6 +351,11 @@ export function EntitySidePanel() {
   const dragControls = useDragControls();
   const setSidePanelHostElement = useSetAtom(entitySidePanelHostElementAtom);
   const { isReviewOpen, bumpReviewVersion } = useDiff();
+  // `isReviewOpen` is the *edit* review sheet only, so on any other slide-up — the proposal review,
+  // for one — this panel was opening beneath it at z-200 and reading as not opening. Any sheet
+  // counts (GEO-2907).
+  const slideUpOpenCount = useAtomValue(slideUpOpenCountAtom);
+  const overSlideUp = isReviewOpen || slideUpOpenCount > 0;
   const { sidePanelTarget, closeSidePanel } = useEntitySidePanel();
   const [createPostFlow, setCreatePostFlow] = useAtom(createPostFlowAtom);
   const { setEditable } = useEditable();
@@ -506,7 +513,7 @@ export function EntitySidePanel() {
   if (isMobile) {
     return createPortal(
       <motion.div
-        className={cx('fixed inset-0', isReviewOpen ? 'z-[10001]' : 'z-[200]')}
+        className={cx('fixed inset-0', overSlideUp ? Z_LAYER_CLASS.entitySidePanelOverSlideUp : 'z-[200]')}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.15 }}
@@ -556,7 +563,7 @@ export function EntitySidePanel() {
       data-entity-side-panel
       className={cx(
         'rounded-l-2xl shadow-2xl fixed inset-y-0 right-0 flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden border-l border-grey-02 bg-white',
-        isReviewOpen ? 'z-[10001]' : 'z-[200]'
+        overSlideUp ? Z_LAYER_CLASS.entitySidePanelOverSlideUp : 'z-[200]'
       )}
     >
       {panelBody}

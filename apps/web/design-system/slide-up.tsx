@@ -4,12 +4,12 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { AnimatePresence, type AnimationDefinition, motion } from 'framer-motion';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { RemoveScroll } from 'react-remove-scroll';
 
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
-import { entitySidePanelHostElementAtom } from '~/atoms';
+import { commentsPanelHostElementAtom, entitySidePanelHostElementAtom, slideUpOpenCountAtom } from '~/atoms';
 
 type SlideUpProps = {
   isOpen: boolean;
@@ -27,10 +27,22 @@ export const SlideUp = ({
   onEnterAnimationComplete,
 }: SlideUpProps) => {
   const entitySidePanelHost = useAtomValue(entitySidePanelHostElementAtom);
+  const commentsPanelHost = useAtomValue(commentsPanelHostElementAtom);
+  // Every overlay that can be opened from inside a slide-up has to be exempt from its scroll lock,
+  // or it draws above the sheet and then refuses to scroll.
   const removeScrollShards = React.useMemo(
-    () => (entitySidePanelHost ? [entitySidePanelHost] : []),
-    [entitySidePanelHost]
+    () => [entitySidePanelHost, commentsPanelHost].filter((node): node is HTMLElement => node !== null),
+    [entitySidePanelHost, commentsPanelHost]
   );
+
+  // Published so those overlays know they have a sheet to clear. Counted, so two open sheets do not
+  // let the first one to close report that none are.
+  const setSlideUpOpenCount = useSetAtom(slideUpOpenCountAtom);
+  React.useEffect(() => {
+    if (!isOpen) return;
+    setSlideUpOpenCount(count => count + 1);
+    return () => setSlideUpOpenCount(count => Math.max(0, count - 1));
+  }, [isOpen, setSlideUpOpenCount]);
 
   React.useEffect(() => {
     if (!isOpen) return;
