@@ -3,13 +3,17 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useAtomValue, useSetAtom } from 'jotai';
 
 import { useComments } from '~/core/hooks/use-comments';
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
+
+import { commentsPanelHostElementAtom, slideUpOpenCountAtom } from '~/atoms';
 
 /**
  * "Comments" side panel for any entity. It hosts the same CommentSection entity
@@ -49,15 +53,29 @@ export function EntityCommentsPanel({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
+  // A slide-up — the proposal review sheet, the edit review — sits at z-10000, so a panel at 150
+  // opens *underneath* it and reads as not opening at all. Raised over one when there is one, which
+  // is the same move the entity side panel makes, and registered below as a scroll shard so it can
+  // actually be scrolled once it is up there.
+  const slideUpOpenCount = useAtomValue(slideUpOpenCountAtom);
+  const setPanelHostElement = useSetAtom(commentsPanelHostElementAtom);
+  const panelHostRef = React.useCallback(
+    (node: HTMLElement | null) => setPanelHostElement(node),
+    [setPanelHostElement]
+  );
+  React.useEffect(() => () => setPanelHostElement(null), [setPanelHostElement]);
+
   return (
     <aside
+      ref={panelHostRef}
       data-entity-comments-panel
       className={cx(
         'flex w-[360px] shrink-0 flex-col border-l border-divider bg-white',
         'md:fixed md:inset-x-0 md:top-auto md:bottom-0 md:z-[80] md:h-[85dvh] md:w-full md:rounded-t-[16px] md:border-t md:border-l-0',
         // Above the page but below the entity side panel (z-200), which can be
         // opened on top of it from a comment author's name.
-        presentation === 'overlay' && 'shadow-2xl fixed inset-y-0 right-0 z-[150] md:inset-y-auto'
+        presentation === 'overlay' && 'shadow-2xl fixed inset-y-0 right-0 md:inset-y-auto',
+        presentation === 'overlay' && (slideUpOpenCount > 0 ? Z_LAYER_CLASS.commentsPanelOverSlideUp : 'z-[150]')
       )}
     >
       <header className="flex items-center justify-between px-5 py-4">
