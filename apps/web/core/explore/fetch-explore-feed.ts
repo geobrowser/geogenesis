@@ -9,6 +9,7 @@ import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 
+import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-document';
 import { exploreBestConnectionDocument } from './explore-best-document';
 import {
   type ExploreCardEntity,
@@ -148,6 +149,53 @@ function decodeExploreBest(data: {
   entitiesRankedForFeedConnection?: EntitiesConnectionShape;
 }): ExploreEntitiesPageResponse {
   return decodeConnection(data.entitiesRankedForFeedConnection ?? null);
+}
+
+/**
+ * "Best", type-filtered by the server (GEO-2885).
+ *
+ * `fetchBestEntitiesPage` above cannot send `typeIds`, so Explore filters the returned rows
+ * instead — best-effort by yield. Measured on production, Best's 66-row window holds
+ * Claim 47 / Debate 15 / News story 3 / Bounty 1, so a News-story-only page yields 3 of the 22
+ * it wants. This asks the server for exactly the types wanted, which gaia #933 made viable by
+ * repointing the by-type function at an ordered index walk.
+ *
+ * `maxPerType` is CORRECTNESS, not tuning: it caps each type's candidate list before the global
+ * ordering, so anything below `offset + first` silently returns short. `offset + first` is the
+ * smallest provably exact value. It is computed here, from numbers this function owns, rather
+ * than defaulted in the document — see `exploreBestByTypeConnectionDocument`.
+ */
+async function fetchBestEntitiesByTypePage(args: {
+  spaceIds: string[];
+  time: ExploreTime;
+  limit: number;
+  offset: number;
+  typeIds: readonly string[];
+  requireDebateTagOnClaims?: boolean;
+}): Promise<ExploreEntitiesPageResponse> {
+  const t = timeThresholdSec(args.time);
+  return Effect.runPromise(
+    graphql({
+      query: exploreBestByTypeConnectionDocument,
+      decoder: (data: { entitiesRankedForFeedByTypeConnection?: EntitiesConnectionShape }) => {
+        const page = decodeConnection(data.entitiesRankedForFeedByTypeConnection ?? null);
+        // Offset pagination, so the next cursor is arithmetic rather than a server token.
+        // `decodeConnection` returns whatever `endCursor` the connection gave, which this
+        // document does not select; override it so nothing downstream reads a stale null.
+        return { ...page, endCursor: String(args.offset + page.entities.length) };
+      },
+      variables: {
+        first: args.limit,
+        offset: args.offset,
+        spaceIds: args.spaceIds,
+        typeIds: [...args.typeIds],
+        maxPerType: args.offset + args.limit,
+        createdAfter: t != null ? String(t) : undefined,
+        filter: args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
+        spaceIdsForLists: args.spaceIds,
+      },
+    })
+  );
 }
 
 function buildFeedFilter(args: {
@@ -406,35 +454,52 @@ export async function fetchExploreFeed(args: {
   const windowSize =
     args.sort === 'best' && (args.typeIds?.length ?? 0) !== 1 ? EXPLORE_DIVERSITY_WINDOW_SIZE : scanChunk;
 
+  // Best with a type selection goes to the server (GEO-2885); Best with none keeps the untyped
+  // walk, which is the right plan when there is no type argument and is what the by-type
+  // connection cannot serve — it matches nothing without `typeIds`.
+  const bestFiltersServerSide = args.sort === 'best' && (args.typeIds?.length ?? 0) > 0;
+
   const fetchWindow = (windowAfter: string | null) =>
-    args.sort === 'best'
-      ? fetchBestEntitiesPage({
+    bestFiltersServerSide
+      ? fetchBestEntitiesByTypePage({
           spaceIds: baseIds,
           time: args.time,
           limit: windowSize,
-          after: windowAfter,
+          // This path paginates by offset, and the window cursor's `after` slot carries it as
+          // a decimal string. Anything unparseable restarts at 0, matching the tolerance
+          // `decodeExploreWindowCursor` already documents.
+          offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
+          typeIds: args.typeIds ?? [],
           requireDebateTagOnClaims: args.requireDebateTagOnClaims,
         })
-      : args.sort === 'top'
-        ? fetchTopEntitiesPage({
+      : args.sort === 'best'
+        ? fetchBestEntitiesPage({
             spaceIds: baseIds,
             time: args.time,
             limit: windowSize,
             after: windowAfter,
-            typeIds: args.typeIds,
-            requireName: args.requireName,
             requireDebateTagOnClaims: args.requireDebateTagOnClaims,
           })
-        : fetchExploreEntitiesPage({
-            spaceIds: baseIds,
-            time: args.time,
-            limit: windowSize,
-            after: windowAfter,
-            orderBy: [EntitiesOrderBy.CreatedAtDesc],
-            typeIds: args.typeIds,
-            requireName: args.requireName,
-            requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-          });
+        : args.sort === 'top'
+          ? fetchTopEntitiesPage({
+              spaceIds: baseIds,
+              time: args.time,
+              limit: windowSize,
+              after: windowAfter,
+              typeIds: args.typeIds,
+              requireName: args.requireName,
+              requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+            })
+          : fetchExploreEntitiesPage({
+              spaceIds: baseIds,
+              time: args.time,
+              limit: windowSize,
+              after: windowAfter,
+              orderBy: [EntitiesOrderBy.CreatedAtDesc],
+              typeIds: args.typeIds,
+              requireName: args.requireName,
+              requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+            });
 
   const orderWindow = (entities: ExploreCardEntity[]): ExploreFeedRow[] => {
     const allRows = buildExploreFeedRows(entities, allowed, memberOrEditorSet);
@@ -444,6 +509,13 @@ export async function fetchExploreFeed(args: {
     // redundant: a card's types are the TYPES relations *in its display space*, while the server's
     // predicate is not space-scoped, so the two can disagree at the margin. Applying it only where
     // the server no longer does keeps exactly one source of truth per sort.
+    //
+    // Kept even when the server has already filtered (GEO-2885). It is not redundant there: the
+    // server predicate is not space-scoped, so it can return an entity whose TYPES relations put
+    // it in the selection in SOME space while the card renders a different display space. This
+    // pass is what keeps the rendered card and the selection agreeing, and it can only ever
+    // narrow — the yield problem it used to cause is gone because the server now supplies a full
+    // page of the right type rather than whatever happened to be in the window.
     const rows =
       args.sort === 'best' && (args.typeIds?.length ?? 0) > 0
         ? allRows.filter(row => entityMatchesExploreTypeIds(row, args.typeIds ?? []))

@@ -59,6 +59,9 @@ type StagedRows = {
   overwrittenRelations: Relation[];
 };
 
+/** Rows the modal's other sections contribute to the same edit. */
+type ExtraRows = { values: Value[]; relations: Relation[] };
+
 /** The local rows one save produced, kept so Retry re-sends them without re-uploading. */
 type StagedEdit = {
   values: Value[];
@@ -70,6 +73,8 @@ type StagedEdit = {
   rows: StagedRows;
   /** The draft these rows came from, so Retry can tell a re-send from a new edit. */
   draft: ProfileDraft;
+  /** And the work and education that went with it, for the same reason. */
+  extra: ExtraRows;
   /**
    * The account context these rows were staged against. This hook survives an
    * account change, so without it a Retry would re-send one person's rows into
@@ -254,18 +259,49 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
     [spaceId, storage]
   );
 
+  /**
+   * Local, unpublished rows that these ids are about to replace.
+   *
+   * Taken before the write, because after it there is nothing left to find. Only
+   * rows that are local and not yet published: a published row's undo is simply
+   * clearing the local change, and putting an old version back would resurrect
+   * finished work as pending.
+   */
+  const takeDisplaced = React.useCallback((rows: { values: Value[]; relations: Relation[] }) => {
+    const isReplaceable = (row: { isLocal?: boolean; hasBeenPublished?: boolean }) =>
+      row.isLocal === true && row.hasBeenPublished !== true;
+
+    const valueIds = new Set(rows.values.map(value => value.id));
+    const relationIds = new Set(rows.relations.map(relation => relation.id));
+
+    return {
+      values: getValues({ includeDeleted: true, selector: v => valueIds.has(v.id) && isReplaceable(v) }),
+      relations: getRelations({ includeDeleted: true, selector: r => relationIds.has(r.id) && isReplaceable(r) }),
+    };
+  }, []);
+
   const stage = React.useCallback(
-    async (draft: ProfileDraft, baseline: StagedEdit['baseline']): Promise<StagedEdit> => {
+    async (
+      draft: ProfileDraft,
+      baseline: StagedEdit['baseline'],
+      extra: ExtraRows = { values: [], relations: [] },
+      /** What those extra rows displaced, captured before they were written. */
+      displaced: ExtraRows = { values: [], relations: [] }
+    ): Promise<StagedEdit> => {
       // Row ids this modal wrote, tracked as it goes so a failed upload can undo
       // the writes that already landed. Scoping the collection below to these —
       // rather than to everything unpublished on the person entity — keeps an
       // unrelated pending edit from riding along on the publish, and from being
       // rolled back when this one is abandoned.
       const written = {
-        valueIds: new Set<string>(),
-        relationIds: new Set<string>(),
-        overwritten: [] as Value[],
-        overwrittenRelations: [] as Relation[],
+        valueIds: new Set<string>(extra.values.map(value => value.id)),
+        relationIds: new Set<string>(extra.relations.map(relation => relation.id)),
+        // Seeded with whatever the extra rows displaced. They are written to the
+        // store before this runs, so by now the rows they replaced are gone and
+        // `snapshot` below would find nothing — a rollback would then restore the
+        // synced baseline over somebody else's unpublished draft.
+        overwritten: [...displaced.values],
+        overwrittenRelations: [...displaced.relations],
       };
       // Freshly minted image entities are ours by definition, so their rows can be
       // swept by entity id without that risk.
@@ -458,6 +494,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
           overwrittenRelations: written.overwrittenRelations,
         },
         draft,
+        extra,
         baseline,
         owner: { entityId, spaceId },
       };
@@ -579,7 +616,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   }, [dispatch]);
 
   const publish = React.useCallback(
-    async (draft: ProfileDraft) => {
+    async (draft: ProfileDraft, extraRows?: { values: Value[]; relations: Relation[] }) => {
       if (!canEdit) return;
 
       // Retry re-sends the staged rows so the uploads inside only run once — but
@@ -599,7 +636,16 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         showedAvatar: Boolean(current.avatarUrl),
       };
 
-      if (previouslyStaged && !isSameDraft(previouslyStaged.draft, draft)) {
+      const extra = extraRows ?? { values: [], relations: [] };
+
+      // A retry re-sends what was staged, so "is this the same edit" has to cover
+      // the whole of it. It compared the four header fields alone, so work and
+      // education changed after a failure were written to the store here and then
+      // skipped: never published, and never tracked for rollback either.
+      if (
+        previouslyStaged &&
+        (!isSameDraft(previouslyStaged.draft, draft) || !isSameExtra(previouslyStaged.extra, extra))
+      ) {
         rollback(previouslyStaged.rows, previouslyStaged.owner.spaceId);
         stagedRef.current = null;
       }
@@ -609,6 +655,23 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       ownsPendingError.current = false;
 
       if (!stagedRef.current) {
+        // Rows from elsewhere in the modal — the work and education sections — go
+        // out in the same edit as the four header fields, because Save means all
+        // of it. Written into the store here so staging collects them like its
+        // own, and so a failure rolls them back with the rest.
+        //
+        // Only alongside a fresh staging. A retry of an unchanged edit re-sends
+        // rows already written, and `set` re-stamps `timestamp` on the way past —
+        // while the undo recorded above still holds the first attempt's. Rollback
+        // clears by that timestamp, to avoid deleting a draft another editor made
+        // at the same id since, so a rewritten row stopped looking like ours:
+        // Cancel after a second failure left the history edits in the store.
+        const displaced = takeDisplaced(extra);
+        extra.values.forEach(value => (value.isDeleted ? storage.values.delete(value) : storage.values.set(value)));
+        extra.relations.forEach(relation =>
+          relation.isDeleted ? storage.relations.delete(relation) : storage.relations.set(relation)
+        );
+
         // Staging uploads to IPFS before `makeProposal` touches the status bar, and
         // that upload can be long. Closing during it is meant to hand off to the
         // toast, so the toast has to already be saying something — otherwise the
@@ -623,7 +686,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         }
 
         try {
-          const stagedEdit = await stage(draft, baseline);
+          const stagedEdit = await stage(draft, baseline, extra, displaced);
 
           // The account can change while that upload runs. The effect that abandons
           // an outstanding edit cannot see this one — `stagedRef` was still null
@@ -722,6 +785,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       settleSuccess,
       spaceId,
       stage,
+      takeDisplaced,
     ]
   );
 
@@ -737,6 +801,23 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
     publish,
     reset,
   };
+}
+
+/**
+ * Whether two sets of extra rows are the same edit, by row identity.
+ *
+ * Ids are enough: a value's id is derived from entity, property and space, so a
+ * changed value keeps its id — but the staged rows are re-read from the store on
+ * retry, so what matters here is only whether the *set* changed. A row added,
+ * removed or retargeted changes it.
+ */
+function isSameExtra(a: ExtraRows | undefined, b: ExtraRows) {
+  if (!a) return b.values.length === 0 && b.relations.length === 0;
+
+  const same = (left: { id: string }[], right: { id: string }[]) =>
+    left.length === right.length && left.every((row, index) => row.id === right[index].id);
+
+  return same(a.values, b.values) && same(a.relations, b.relations);
 }
 
 function isSameDraft(a: ProfileDraft, b: ProfileDraft) {
