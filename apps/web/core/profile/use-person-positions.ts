@@ -6,19 +6,11 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { parse } from 'graphql';
 
-import {
-  type ExploreCardEntity,
-  type ExploreFeedRow,
-  buildExploreFeedRows,
-  decodeExploreCardEntity,
-} from '~/core/explore/explore-card-item';
-import { exploreCardNodeFields, exploreCardPropertyFragment } from '~/core/explore/explore-card-selection';
+import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
+import { fetchExploreRowsByIds } from '~/core/profile/explore-rows-by-ids';
 import { normId } from '~/core/utils/norm-id';
-import { validateSpaceId } from '~/core/utils/utils';
-
-const FRAGMENT = 'PersonPositionsFragment';
 
 /**
  * Which claims a person voted on, newest first.
@@ -30,7 +22,7 @@ const FRAGMENT = 'PersonPositionsFragment';
  * figure threefold on the reference account.
  *
  * Ids only. `UserVote` carries an `objectId` and no way to traverse to the thing
- * itself, so the claims are fetched in a second request — see below.
+ * itself, so the claims come from a second request — see `fetchExploreRowsByIds`.
  */
 const PERSON_VOTES_SOURCE = /* GraphQL */ `
   query PersonVotes($userId: UUID!, $first: Int, $after: Cursor) {
@@ -53,31 +45,7 @@ const PERSON_VOTES_SOURCE = /* GraphQL */ `
   }
 `;
 
-/**
- * The claims those votes were cast on.
- *
- * The per-entity selection is the explore feed's own, so these decode into
- * exactly the item an `ExploreFeedCard` renders — same title, description,
- * thumbnail, types, timestamp and comment count, resolved by the same code
- * rather than by an approximation of it.
- *
- * Unscoped to spaces: a person's positions span the whole graph, so there is no
- * space list to narrow by before the rows say which spaces they came from.
- */
-const POSITION_CLAIMS_SOURCE = /* GraphQL */ `
-  ${exploreCardPropertyFragment(FRAGMENT)}
-
-  query PositionClaims($ids: [UUID!]) {
-    entitiesConnection(filter: { id: { in: $ids } }, first: 100) {
-      nodes {
-        ${exploreCardNodeFields(FRAGMENT, { scopeListsToSpaces: false })}
-      }
-    }
-  }
-`;
-
 export const personVotesDocument = parse(PERSON_VOTES_SOURCE) as TypedDocumentNode<any, any>;
-export const positionClaimsDocument = parse(POSITION_CLAIMS_SOURCE) as TypedDocumentNode<any, any>;
 
 export type PersonPositionsPage = {
   /** Card rows, still missing what only a space lookup can answer. */
@@ -94,8 +62,6 @@ type VotesResponse = {
     nodes?: ({ objectId?: string | null } | null)[] | null;
   } | null;
 };
-
-type ClaimsResponse = { entitiesConnection?: { nodes?: unknown[] | null } | null };
 
 type VotePage = { ids: string[]; endCursor: string | null; hasNextPage: boolean };
 
@@ -121,17 +87,6 @@ function decodeVotes(response: VotesResponse): VotePage {
     endCursor: connection?.pageInfo?.endCursor ?? null,
     hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
   };
-}
-
-function decodeClaims(response: ClaimsResponse): ExploreCardEntity[] {
-  const entities: ExploreCardEntity[] = [];
-
-  for (const node of response.entitiesConnection?.nodes ?? []) {
-    const decoded = decodeExploreCardEntity(node);
-    if (decoded) entities.push(decoded);
-  }
-
-  return entities;
 }
 
 export function personPositionsQueryKey(spaceId: string, after: string | null) {
@@ -161,33 +116,8 @@ export function usePersonPositions({
         })
       );
 
-      if (votes.ids.length === 0) {
-        return { ...EMPTY_PAGE, endCursor: votes.endCursor, hasNextPage: votes.hasNextPage };
-      }
-
-      const entities = await Effect.runPromise(
-        graphql({
-          query: positionClaimsDocument,
-          decoder: decodeClaims,
-          variables: { ids: votes.ids.map(ID.uuidToHex) },
-          signal,
-        })
-      );
-
-      // Back into the order they were voted in. The entity query answers in its
-      // own order, and a record sorted by whatever the index returned is not
-      // sorted by anything the reader can see.
-      const byId = new Map(entities.map(entity => [normId(entity.id), entity]));
-      const ordered = votes.ids
-        .map(id => byId.get(normId(id)))
-        .filter((entity): entity is ExploreCardEntity => entity !== undefined);
-
-      const openableSpaceIds = new Set(ordered.flatMap(e => e.spaces.filter(validateSpaceId).map(normId)));
-
       return {
-        // No membership context, so the card renders with its Join button hidden
-        // rather than in a state this query cannot determine.
-        rows: buildExploreFeedRows(ordered, openableSpaceIds, new Set()),
+        rows: await fetchExploreRowsByIds(votes.ids, signal),
         endCursor: votes.endCursor,
         hasNextPage: votes.hasNextPage,
       };

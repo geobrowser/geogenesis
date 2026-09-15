@@ -51,39 +51,13 @@ export function DebatesBrowseFeed({
   spaceId,
   initialDebateId,
   fallback,
-  source,
 }: {
   spaceId: string;
   initialDebateId?: string;
   /** Rendered instead of the feed when {@link initialDebateId} can't be resolved in this space. */
   fallback?: React.ReactNode;
-  /**
-   * Debates to play, where the caller has its own list (GEO-2859).
-   *
-   * Omitted, the feed asks geo-chat for the space's debates, which is right for
-   * a DAO space and impossible for a personal one — geo-chat indexes DAO spaces
-   * only and answers `space_not_found` for the rest. A person's record supplies
-   * its own list, read from the graph and hydrated by debate id, and everything
-   * below here is unchanged.
-   */
-  source?: { debates: Debate[]; isLoading: boolean; isError: boolean };
 }) {
-  // Called unconditionally and then ignored, rather than conditionally: a hook
-  // that runs on some renders and not others is not a hook. `enabled` is what
-  // keeps the request off the wire when the caller brought its own debates.
-  const spaceDebatesQuery = useSpaceDebates(spaceId, source === undefined);
-  const debatesQuery = React.useMemo(
-    () =>
-      source === undefined
-        ? spaceDebatesQuery
-        : {
-            data: { debates: source.debates },
-            isLoading: source.isLoading,
-            isError: source.isError,
-            error: null as Error | null,
-          },
-    [source, spaceDebatesQuery]
-  );
+  const debatesQuery = useSpaceDebates(spaceId, true);
   const { space } = useSpace(spaceId);
 
   const listedDebates = React.useMemo(() => debatesQuery.data?.debates ?? [], [debatesQuery.data?.debates]);
@@ -125,15 +99,7 @@ export function DebatesBrowseFeed({
 
   // The same ranking the explore page's "Best" sort uses, so what plays after the debate you
   // opened is what that sort would have put in front of you.
-  //
-  // Not asked for a caller-supplied list. The ranking is computed per space, and
-  // a person's debates span many of them — scoring them against the space whose
-  // page you happen to be on would order them by a measure none of them share.
-  // Those fall through to recency, which is the tiebreak this already uses.
-  const { rankByDebateId, isLoading: bestOrderLoading } = useDebatesBestOrder(
-    spaceId,
-    source === undefined && candidateIds.length > 0
-  );
+  const { rankByDebateId, isLoading: bestOrderLoading } = useDebatesBestOrder(spaceId, candidateIds.length > 0);
 
   const debates = React.useMemo(() => {
     // Held back the way the media lookups hold it back — by having nothing to show yet rather than
@@ -159,26 +125,13 @@ export function DebatesBrowseFeed({
     return [anchor, ...sorted];
   }, [candidates, processedIds, initialDebateId, rankByDebateId, bestOrderLoading]);
 
-  // Topics live on the claim entity (not the debates API), so they are resolved
-  // separately and mapped claim entity id -> topic names.
-  //
-  // A sourced feed asks by claim id rather than by space. Its debates come from
-  // wherever this person argued, so scoping to the space in the route — their
-  // own personal space — would match none of the claims and drop every topic
-  // chip. A space's own feed keeps the space filter: the claims are all in it,
-  // and one query beats a growing id list.
-  const sourceClaimIds = React.useMemo(
-    () => (source === undefined ? null : [...new Set(candidates.map(debate => debate.claim.claim_entity_id))]),
-    [source, candidates]
-  );
+  // Topics live on the claim entity (not the debates API), so resolve them once
+  // for the space and map claim entity id -> topic names.
   const { entities: claims } = useQueryEntities({
-    where:
-      sourceClaimIds === null
-        ? { spaces: [{ equals: spaceId }], types: [{ id: { equals: CLAIM_TYPE_ID } }] }
-        : { id: { in: sourceClaimIds } },
-    // Nothing to ask for before the source has answered, and an empty `in` is
-    // not a question worth sending.
-    enabled: sourceClaimIds === null || sourceClaimIds.length > 0,
+    where: {
+      spaces: [{ equals: spaceId }],
+      types: [{ id: { equals: CLAIM_TYPE_ID } }],
+    },
     first: 50,
     placeholderData: keepPreviousData,
     includeUnpublishedLocal: true,

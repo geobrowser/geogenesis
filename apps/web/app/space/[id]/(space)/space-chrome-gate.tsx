@@ -9,19 +9,29 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 
 import { spaceSidebarHasContentAtom } from '~/atoms';
 
+const FULL_BLEED_ROUTE = /^(\/space\/[^/]+|\/root)\/debates(\/|$)/;
+
 /**
  * The debates surface is full-screen and edge-to-edge (TikTok-style feed): no
  * space header, metadata, or tabs. This gate hides that chrome on any
  * `/space/<id>/debates...` (or `/root/debates...`) route while keeping it everywhere else.
  *
- * Except on a person's profile (GEO-2859), where the same feed is a *tab* rather
- * than the whole surface. Stripping the chrome there removes the tab bar that got
- * you here and leaves no way back to the profile — so `keepChrome` holds it, and
- * the header keeps its own container while the feed below stays edge-to-edge.
+ * Except on a person's profile (GEO-2859), where Debates is a *tab* rather than
+ * the whole surface. Stripping the chrome there removes the tab bar that got you
+ * here and leaves no way back to the profile.
  */
 export function SpaceChromeGate({ children, keepChrome = false }: { children: React.ReactNode; keepChrome?: boolean }) {
   const pathname = usePathname();
-  if (!keepChrome && pathname && /^(\/space\/[^/]+|\/root)\/debates(\/|$)/.test(pathname)) return null;
+  const isFullBleedRoute = pathname != null && FULL_BLEED_ROUTE.test(pathname);
+
+  if (isFullBleedRoute && !keepChrome) return null;
+
+  // `Main` drops its own vertical padding on this route, for the feed that
+  // normally fills it. A profile keeping its chrome has to put the top of that
+  // padding back, or its cover image sits flush against the navbar on this one
+  // tab and nowhere else. The bottom half belongs to the page's own content.
+  if (isFullBleedRoute) return <div className="pt-8">{children}</div>;
+
   return <>{children}</>;
 }
 
@@ -47,7 +57,9 @@ type SpaceHeaderContentContainerProps = {
 
 export function SpaceHeaderContentContainer({ children, hasSidebar }: SpaceHeaderContentContainerProps) {
   return (
-    <EntityPageContentContainer variant={hasSidebar ? 'with-sidebar' : 'content'}>{children}</EntityPageContentContainer>
+    <EntityPageContentContainer variant={hasSidebar ? 'with-sidebar' : 'content'}>
+      {children}
+    </EntityPageContentContainer>
   );
 }
 
