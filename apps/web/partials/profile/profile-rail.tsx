@@ -243,10 +243,10 @@ function AboutSection({
           href={`/space/${spaceId}/proposals`}
         />
 
-        {/* In full. It was shortened for a rail row that had to fit on one
-            line, and this one wraps — a truncated address is one nobody can
-            copy, which is the only thing an address is for. */}
-        {address && <Fact label="Account" value={address} mono />}
+        {/* No Account row. The system fold below already carries the address,
+            in full and under its own name — saying it twice in one card, once
+            wrapped across three lines, gave the least interesting fact on the
+            profile the most room. */}
       </dl>
     </RailCard>
   );

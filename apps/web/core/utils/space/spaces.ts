@@ -1,5 +1,8 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import type { Space } from '~/core/io/dto/spaces';
 import { Entity } from '~/core/types';
+import { normId } from '~/core/utils/norm-id';
 
 import { getTopRankedSpaceId } from './space-ranking';
 
@@ -24,18 +27,22 @@ export const hasExternalTopic = (
 };
 
 /**
- * Whether a space's subject is an entity of its own, rather than the space.
+ * Whether this space is a person's, and has a person to render.
  *
- * What {@link hasExternalTopic} was reaching for, asked of the field that
- * actually carries the answer. A personal space with one is a person: 180 of
- * the 905 personal spaces, the rest having `topicId: null` and so no person
- * entity to render a profile from.
+ * **Asked of the entity, not of `topicId`.** `SpaceDto` builds `entity` from
+ * `topic ?? page`, and a great many personal spaces carry a fully-populated
+ * person on `page` with `topicId` still null — name, avatar, Person type and
+ * all. Keying on `topicId` sent every one of those to the generic space page:
+ * no rail, no history, and the raw properties table underneath.
+ *
+ * This is the same signal `buildSpaceTabs` branches on, which is the point.
+ * The tabs and the profile disagreeing is exactly the failure it caused —
+ * Debates, Positions and Proposals offered on a page that was not a profile.
  */
-export const hasTopicEntity = (
-  space: Pick<Space, 'topicId'> | null | undefined
-): space is Pick<Space, 'topicId'> & { topicId: string } => {
-  return Boolean(space?.topicId);
-};
+export function isPersonProfileSpace(space: Pick<Space, 'type' | 'entity'> | null | undefined): boolean {
+  if (space?.type !== 'PERSONAL') return false;
+  return (space.entity?.types ?? []).some(type => normId(type.id) === normId(SystemIds.PERSON_TYPE));
+}
 
 /** Entity at the root of a space's subtopic tree (homepage, or external topic). */
 export function getSpaceSubtopicRootEntityId(space: Pick<Space, 'topicId' | 'entity'>): string {

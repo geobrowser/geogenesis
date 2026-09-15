@@ -84,20 +84,19 @@ export default async function SpacePage(props0: Props) {
 
   const space = await cachedFetchSpace(spaceId);
 
-  // A personal space whose subject is a person entity gets the profile page.
-  //
-  // `hasTopicEntity`, not `hasExternalTopic`: the latter cannot return true for
-  // a space whose topic resolved, because `SpaceDto` builds `entity` from
-  // `topic ?? page` and the comparison is then always false. See the predicate's
-  // own doc comment, and `topic-predicates.test.ts`.
-  if (Spaces.hasTopicEntity(space) && space.type === 'PERSONAL') {
-    return <PersonalSpaceBody space={space} topicEntityId={space.topicId} tabId={tabId} />;
+  // A personal space with a person on it gets the profile page. The person is
+  // `space.entity` — `topic ?? page` — because plenty of these carry the person
+  // on `page` with `topicId` still null. See `isPersonProfileSpace`.
+  if (space && Spaces.isPersonProfileSpace(space)) {
+    return <PersonalSpaceBody space={space} topicEntityId={space.entity.id} tabId={tabId} />;
   }
 
-  // Left on the old predicate deliberately. A DAO whose topic is a subject
-  // rather than a someone renders single-column today because this branch never
-  // fires, and making it fire is a change to every such space — GEO-2913, not
-  // a side effect of the profile work.
+  // Left on `hasExternalTopic` deliberately, dead though it is: that predicate
+  // cannot return true for a space whose topic resolved — `SpaceDto` builds
+  // `entity` from `topic ?? page`, so the comparison is always false — which
+  // means this branch never fires for the DAO spaces it was written for. Waking
+  // it is a change to every one of them, not a side effect of the profile work.
+  // See `topic-predicates.test.ts`.
   if (Spaces.hasExternalTopic(space)) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }

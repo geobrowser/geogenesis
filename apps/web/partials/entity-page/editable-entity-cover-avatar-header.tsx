@@ -20,7 +20,7 @@ import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 
-import { ENTITY_PAGE_CONTENT_MAX_WIDTH, ENTITY_PAGE_COVER_MAX_WIDTH } from './entity-page-layout';
+import { ENTITY_PAGE_COVER_MAX_WIDTH } from './entity-page-layout';
 
 const COVER_IMAGE_HEIGHT = 320;
 const MOBILE_COVER_IMAGE_HEIGHT_CLASS = 'md:!h-[180px]';
@@ -130,8 +130,14 @@ export const EditableCoverAvatarHeader = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={TRANSITION}
-            className="absolute right-0 left-0 mx-auto flex justify-start"
-            style={{ bottom: -AVATAR_OVERFLOW, maxWidth: ENTITY_PAGE_CONTENT_MAX_WIDTH }}
+            // Aligned to this header's own left edge, which is where the name
+            // below it starts. Capped at `ENTITY_PAGE_CONTENT_MAX_WIDTH` and
+            // centred, it matched the name only while the header *was* content
+            // width — on a profile, which is the wider with-sidebar variant, the
+            // cap left the avatar indented by half the difference. A no-op
+            // everywhere the header is already content width.
+            className="absolute right-0 left-0 flex justify-start"
+            style={{ bottom: -AVATAR_OVERFLOW }}
           >
             <div className="flex h-20 w-20 items-center justify-center rounded-lg">
               <AvatarCoverInput

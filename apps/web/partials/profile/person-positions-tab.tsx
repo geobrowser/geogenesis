@@ -12,12 +12,13 @@ import { PersonRecordFeed } from './person-record-feed';
  * card render this untouched.
  */
 export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
-  const { rows, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = usePersonPositions({ spaceId });
+  const { rows, isLoading, isError, isFetchingNextPage, hasNextPage, fetchNextPage } = usePersonPositions({ spaceId });
 
   return (
     <PersonRecordFeed
       rows={rows}
       isLoading={isLoading}
+      isError={isError}
       isFetchingNextPage={isFetchingNextPage}
       hasNextPage={hasNextPage}
       fetchNextPage={fetchNextPage}

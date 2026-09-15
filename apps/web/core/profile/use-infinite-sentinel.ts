@@ -15,16 +15,26 @@ export function useInfiniteSentinel({
   hasNextPage,
   isFetchingNextPage,
   fetchNextPage,
+  isError = false,
 }: {
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   fetchNextPage: () => void;
+  /**
+   * Whether the last attempt failed.
+   *
+   * The margin below keeps the sentinel permanently in view, so the observer
+   * refires every time this effect re-runs. That is what makes the feed load
+   * ahead — and what turns one failing page into a loop that asks forever and
+   * never grows the list.
+   */
+  isError?: boolean;
 }) {
   const ref = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     const element = ref.current;
-    if (!element || !hasNextPage) return;
+    if (!element || !hasNextPage || isError) return;
 
     const observer = new IntersectionObserver(
       entries => {
@@ -35,7 +45,7 @@ export function useInfiniteSentinel({
 
     observer.observe(element);
     return () => observer.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+  }, [fetchNextPage, hasNextPage, isError, isFetchingNextPage]);
 
   return ref;
 }

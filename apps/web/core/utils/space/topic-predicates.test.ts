@@ -1,8 +1,10 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SpaceDecoder } from '~/core/io/decoders/space';
 
-import { hasExternalTopic, hasTopicEntity } from './spaces';
+import { hasExternalTopic, isPersonProfileSpace } from './spaces';
 
 /**
  * The two topic predicates, exercised through the decoder rather than a
@@ -70,17 +72,38 @@ describe('hasExternalTopic', () => {
   });
 });
 
-describe('hasTopicEntity', () => {
-  it('is true for a space whose subject is an entity of its own', () => {
-    expect(hasTopicEntity(decode({ topic: remoteEntity(TOPIC_ID, 'Preston Mantel') }))).toBe(true);
+describe('isPersonProfileSpace', () => {
+  const person = remoteEntity(TOPIC_ID, 'Preston Mantel');
+  person.types = [{ id: SystemIds.PERSON_TYPE, name: 'Person' }] as never;
+
+  it('is true for a person carried on the page, with no topic at all', () => {
+    // The case that broke every visitor's view of somebody else's profile:
+    // `topicId` is null on a great many personal spaces whose page entity is a
+    // fully-populated person. `SpaceDto` builds `entity` from `topic ?? page`,
+    // so the person is right there — just not where `topicId` looks.
+    const space = decode({ topicId: null, page: person });
+
+    expect(space?.topicId).toBeNull();
+    expect(space?.entity.name).toBe('Preston Mantel');
+    expect(isPersonProfileSpace(space)).toBe(true);
   });
 
-  it('is false for the 725 personal spaces with no person entity behind them', () => {
-    expect(hasTopicEntity(decode({ topicId: null }))).toBe(false);
+  it('is true for a person carried on the topic', () => {
+    expect(isPersonProfileSpace(decode({ topic: person }))).toBe(true);
+  });
+
+  it('is false for a personal space with nobody on it', () => {
+    expect(isPersonProfileSpace(decode({ topicId: null }))).toBe(false);
+  });
+
+  it('is false for a DAO space, whatever is on its entity', () => {
+    // A Person written into a DAO space is a page about someone, not their
+    // profile — the counts and the history all key on a personal space.
+    expect(isPersonProfileSpace(decode({ type: 'DAO', topic: person }))).toBe(false);
   });
 
   it('is false for nothing at all', () => {
-    expect(hasTopicEntity(null)).toBe(false);
-    expect(hasTopicEntity(undefined)).toBe(false);
+    expect(isPersonProfileSpace(null)).toBe(false);
+    expect(isPersonProfileSpace(undefined)).toBe(false);
   });
 });
