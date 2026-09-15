@@ -198,6 +198,43 @@ describe('useDebateClaimsBySpaces', () => {
   });
 
   /**
+   * Reported: the hub panel's pills all go dead once the space filter is widened.
+   *
+   * geo-chat refuses rows for a space the viewer has no access to, and that refusal never resolves.
+   * `isError` is about the whole fan-out, so callers reading it as "we do not know this viewer's
+   * side" took the entire panel down over one unreadable space — while the same claims in the main
+   * feed stayed pressable, because that surface resolves each claim from its own row.
+   */
+  it('names the spaces it cannot speak for rather than failing as a whole', async () => {
+    mocks.listDebateClaims.mockImplementation((spaceId: string, claimIds: string[]) =>
+      spaceId === 'space-closed'
+        ? Promise.reject(new GeoChatRequestError('Forbidden', null, 403))
+        : Promise.resolve({ claims: claimIds.map(claim_entity_id => ({ claim_entity_id })) })
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(
+      () =>
+        useDebateClaimsBySpaces([
+          { spaceId: 'space-open', claimIds: ['claim-1'] },
+          { spaceId: 'space-closed', claimIds: ['claim-2'] },
+        ]),
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      }
+    );
+
+    // The open space answered, and says so on its own rather than through the fan-out's verdict —
+    // which is `isError`, and stays true for the space that did not.
+    await waitFor(() => expect(result.current.unresolvedSpaceIds.has('space-open')).toBe(false));
+
+    expect(result.current.unresolvedSpaceIds.has('space-closed')).toBe(true);
+    expect(result.current.isError).toBe(true);
+  });
+
+  /**
    * Reported: a viewer creates an account, and every pill in the hub is dead for the rest of the
    * visit while the same claims in the main feed take positions perfectly well.
    *

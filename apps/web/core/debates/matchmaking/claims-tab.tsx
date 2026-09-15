@@ -502,6 +502,23 @@ export function ClaimsTab({
   // a press on the side they already hold republishes it instead of clearing it. Signed *out* is a
   // real answer: they have no side, and their press opens the sign-in prompt.
   //
+  //
+  // Per space rather than over the whole fan-out. The panel spans every space the viewer may read,
+  // and geo-chat refuses rows for one they have no access to — a refusal that never resolves. Read
+  // as one flag, that left every pill in the panel dead, in spaces that had answered as well as the
+  // one that had not, while the same claims in the main feed stayed pressable because that surface
+  // resolves each claim from its own row. A card asks about *its* claim, so that is what it gets.
+  const taggedAnswersReadyFor = React.useCallback(
+    (entry: MatchmakingClaim) =>
+      !graphSourced ||
+      (authenticated
+        ? Boolean(accountKey) && !taggedRows.unresolvedSpaceIds.has(entry.claim.space_id)
+        : true),
+    [accountKey, authenticated, graphSourced, taggedRows.unresolvedSpaceIds]
+  );
+
+  // The same question asked about the list as a whole, which is what the collapse needs: it folds
+  // rows against each other, so a partial answer is not one it can act on.
   const taggedAnswersReady =
     !graphSourced || (authenticated ? Boolean(accountKey) && !taggedRows.isLoading && !taggedRows.isError : true);
 
@@ -1083,8 +1100,8 @@ export function ClaimsTab({
                 readiness={entry}
                 activeDebate={entry.active_debate}
                 // The paged list is geo-chat's own, so every row carries its kind already; only the
-                // tagged list has to wait for one.
-                answersReady={taggedAnswersReady}
+                // tagged list has to wait for one — and only for the space this claim is in.
+                answersReady={taggedAnswersReadyFor(entry)}
                 onRequireSignIn={onRequireSignIn}
               />
             ))}

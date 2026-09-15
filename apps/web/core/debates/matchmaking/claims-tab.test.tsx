@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => ({
   claimEntityLookups: [] as string[][],
   /** A failed per-space geo-chat lookup — reported as a flag, as the real hook does. */
   taggedRowsError: false,
+  unreadableSpaceIds: [] as string[],
   /** The per-space lookup still in flight, which is where the viewer's own side comes from. */
   taggedRowsLoading: false,
   /** What the tab asked the server to narrow by, in order. */
@@ -283,11 +284,24 @@ vi.mock('../hooks', () => ({
           group.claimIds.some(id => norm(id) === norm(row.claim_entity_id))
       )
     );
+    // Which spaces this lookup cannot speak for, as the real hook reports: per space, so one
+    // unreadable space does not answer for the rest.
+    const unresolvedSpaceIds = new Set(
+      groups
+        .map(group => group.spaceId)
+        .filter(
+          spaceId =>
+            mocks.taggedRowsLoading ||
+            mocks.taggedRowsError ||
+            mocks.unreadableSpaceIds.some(unreadable => norm(unreadable) === norm(spaceId))
+        )
+    );
     // Answerless while loading, as react-query is on a cold key.
     return {
       claims: mocks.taggedRowsLoading ? [] : claims,
       isLoading: mocks.taggedRowsLoading,
-      isError: mocks.taggedRowsError,
+      isError: mocks.taggedRowsError || mocks.unreadableSpaceIds.length > 0,
+      unresolvedSpaceIds,
     };
   },
 }));
@@ -562,6 +576,7 @@ beforeEach(() => {
   mocks.authenticated = true;
   mocks.accountKey = 'account-1' as string | null;
   mocks.taggedRowsError = false;
+  mocks.unreadableSpaceIds = [];
   mocks.taggedRowsLoading = false;
   mocks.claimEntitiesError = null;
   mocks.taggedCatalogError = null;
@@ -1630,6 +1645,36 @@ describe('All claims reads the Debate tag', () => {
     const agree = await screen.findByRole('button', { name: /^Agree/ });
     expect(agree).toBeDisabled();
     expect(agree).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
+  });
+
+  /**
+   * Reported: widen the space filter and every pill in the panel goes dead, in spaces that answered
+   * as well as the one that did not — while the same claims in the main feed stay pressable.
+   *
+   * The panel spans every space the viewer may read, and geo-chat refuses rows for one they have no
+   * access to. That refusal never resolves, and read as a single flag over the whole fan-out it
+   * answered for every card on screen. The feed never had the bug because it resolves each claim
+   * from its own row; this now asks the same question the same way.
+   */
+  it('keeps a claim pressable when a different space is the unreadable one', async () => {
+    mocks.unreadableSpaceIds = [OTHER_SPACE_ID];
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'In a space that answered', SPACE_ID)];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'In a space that answered',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [],
+      },
+    ];
+    render(<ClaimsTab />);
+    await showAllClaims();
+    await screen.findByText('In a space that answered');
+
+    const agree = await screen.findByRole('button', { name: /^Agree/ });
+    expect(agree).toBeEnabled();
   });
 
   // The guard for the case above: a claim with no row at all still has to become answerable once

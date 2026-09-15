@@ -259,6 +259,10 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
       claims: results.flatMap(result => result.data?.claims ?? []),
       isLoading: results.some(result => result.isLoading),
       isError: results.some(result => result.isError),
+      // Per batch, so a caller can ask about one claim rather than about the whole fan-out — see
+      // `unresolvedSpaceIds` below. Positional: react-query preserves the order of `queries`, and
+      // `replaceEqualDeep` keeps this array's identity across renders that do not change it.
+      statuses: results.map(result => result.status),
     }),
     []
   );
@@ -271,7 +275,7 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
     [groups]
   );
 
-  return useQueries({
+  const rows = useQueries({
     queries: batches.map(group => ({
       ...debateQueryNetworkOptions,
       ...viewerAnswerRecoveryOptions,
@@ -288,6 +292,31 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
     })),
     combine,
   });
+
+  /**
+   * The spaces this lookup cannot yet speak for, which is the question a *card* has.
+   *
+   * `isError` and `isLoading` are about the fan-out: one batch of one space failing makes both of
+   * them say something about all of them. Callers were reading that as "we do not know this
+   * viewer's side", so a single unreadable space left every pill in the hub panel dead — including
+   * claims in spaces that had answered perfectly well. It showed up the moment the panel stopped
+   * being scoped to one space: geo-chat refuses rows for a space the viewer has no access to, that
+   * refusal never resolves, and it took the whole panel down with it while the same claims in the
+   * main feed stayed pressable, because that surface resolves each claim from its own row.
+   *
+   * A batch still pending counts as unresolved for the same reason it always did — `null` is the
+   * answer for "holds no position" and for "nobody has asked yet" alike, and a pill drawn unselected
+   * over the second republishes a side instead of clearing it.
+   */
+  const unresolvedSpaceIds = React.useMemo(() => {
+    const unresolved = new Set<string>();
+    batches.forEach((group, index) => {
+      if (rows.statuses[index] !== 'success') unresolved.add(group.spaceId);
+    });
+    return unresolved;
+  }, [batches, rows.statuses]);
+
+  return React.useMemo(() => ({ ...rows, unresolvedSpaceIds }), [rows, unresolvedSpaceIds]);
 }
 
 /**
