@@ -6,6 +6,9 @@ import cx from 'classnames';
 
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import type { Stance } from '~/core/profile/use-person-positions';
+import { normId } from '~/core/utils/norm-id';
+import { getImagePath } from '~/core/utils/utils';
 
 import { FallbackImage } from '~/design-system/fallback-image';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
@@ -21,6 +24,8 @@ export type ActivityKind = {
   key: string;
   label: string;
   rows: ExploreFeedRow[];
+  /** Which side this person took, by claim id. Claims only; debates have no stance. */
+  stanceByClaimId?: Record<string, Stance>;
   /**
    * How many there are in total.
    *
@@ -95,7 +100,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
         )}
       </header>
 
-      <ActivityGallery rows={selected.rows} />
+      <ActivityGallery rows={selected.rows} stanceByClaimId={selected.stanceByClaimId} />
 
       <Link
         href={selected.href}
@@ -108,7 +113,13 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   );
 }
 
-function ActivityGallery({ rows }: { rows: ExploreFeedRow[] }) {
+function ActivityGallery({
+  rows,
+  stanceByClaimId,
+}: {
+  rows: ExploreFeedRow[];
+  stanceByClaimId?: Record<string, Stance>;
+}) {
   const shown = React.useMemo(() => rows.slice(0, SHOWN), [rows]);
 
   // Looked up once for the gallery. These are routinely spaces the viewer has
@@ -117,13 +128,24 @@ function ActivityGallery({ rows }: { rows: ExploreFeedRow[] }) {
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
   return (
-    // `snap-x` so a flick lands on a tile rather than between two, and the
-    // padding is on the scroller so the first and last tiles clear the card's
-    // edges at either end of the scroll.
-    <div className="no-scrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto p-4">
+    // `snap-x` so a flick lands on a tile rather than between two.
+    //
+    // The gap at either end is a spacer element rather than padding on the
+    // scroller: a scroll container's trailing padding is dropped by every
+    // browser that matters, so `p-4` gave 16px on the left and nothing on the
+    // right. Spacers are honoured on both sides, and `scroll-px` keeps a snapped
+    // tile off the edge it lands against.
+    <div className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto py-4">
+      <span aria-hidden className="w-0 shrink-0 pl-4" />
       {shown.map(row => (
-        <ActivityTile key={`${row.entityId}-${row.spaceId}`} row={row} label={spaceLabel(labelsById, row.spaceId)} />
+        <ActivityTile
+          key={`${row.entityId}-${row.spaceId}`}
+          row={row}
+          label={spaceLabel(labelsById, row.spaceId)}
+          stance={stanceByClaimId?.[normId(row.entityId)]}
+        />
       ))}
+      <span aria-hidden className="w-0 shrink-0 pr-4" />
     </div>
   );
 }
@@ -136,26 +158,63 @@ function ActivityGallery({ rows }: { rows: ExploreFeedRow[] }) {
  * its width on a phone too: tiles that shrink to fit stop being scannable, and
  * the row already scrolls.
  */
-function ActivityTile({ row, label }: { row: ExploreFeedRow; label: SpaceLabel | undefined }) {
+function ActivityTile({
+  row,
+  label,
+  stance,
+}: {
+  row: ExploreFeedRow;
+  label: SpaceLabel | undefined;
+  stance: Stance | undefined;
+}) {
   const spaceName = label?.name ?? row.spaceId.slice(0, 8);
 
-  // A debate's own still, where it has one. Everything else falls back to the
-  // entity's image, and then to a plain panel — a placeholder repeated six times
-  // across one row is worse than nothing.
-  const thumbnail = row.debateVideoUrls[0] ?? row.imageUrl;
+  // A debate's video, and an image for everything else.
+  //
+  // These are two different things and were being drawn as one: a video URL fed
+  // to `FallbackImage` renders an `<img>` pointing at an mp4, which is the grey
+  // box every debate tile showed. The video is the debate's own first frame,
+  // which is the small version of the player this wants to be.
+  const videoUrl = row.debateVideoUrls[0];
 
   return (
     <article className="flex w-[232px] shrink-0 snap-start flex-col overflow-hidden rounded-lg border border-grey-02">
-      {thumbnail && (
+      {videoUrl ? (
+        <video
+          // Metadata only: this is a still, not playback, and six tiles that
+          // each pulled a whole video would cost more than the page under them.
+          preload="metadata"
+          muted
+          playsInline
+          disablePictureInPicture
+          tabIndex={-1}
+          aria-hidden
+          className="aspect-video w-full bg-grey-01 object-cover"
+          src={getImagePath(videoUrl)}
+        />
+      ) : row.imageUrl ? (
         <div className="relative aspect-video w-full overflow-hidden bg-grey-01">
-          <FallbackImage value={thumbnail} sizes="232px" className="object-cover" />
+          <FallbackImage value={row.imageUrl} sizes="232px" className="object-cover" />
         </div>
-      )}
+      ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-3">
         <div className="flex min-w-0 items-center gap-1.5 text-breadcrumb text-grey-04">
           {label?.image ? <SpacePillAvatar value={label.image} /> : null}
           <span className="min-w-0 truncate">{spaceName}</span>
+          {/* Which side they came down on — the thing you came to this profile
+              to find out, and the reason a claim tile is worth reading at all
+              when it is somebody else's. */}
+          {stance && (
+            <span
+              className={cx(
+                'ml-auto shrink-0 rounded-full border px-2 text-tag',
+                stance === 'agree' ? 'border-green text-green' : 'border-red-01 text-red-01'
+              )}
+            >
+              {stance === 'agree' ? 'Agree' : 'Disagree'}
+            </span>
+          )}
         </div>
 
         <ProfileEntityLink
