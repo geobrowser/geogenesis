@@ -323,6 +323,8 @@ export function DebateRecordingUploadCoordinator() {
           }
           return;
         }
+
+        if (!mountedRef.current) return;
         const nextAttemptAt = Date.now() + recordingUploadRetryDelay(upload.attemptCount);
         console.warn('[DebateRecordingUploadCoordinator] upload attempt failed:', {
           uploadId: upload.id,
