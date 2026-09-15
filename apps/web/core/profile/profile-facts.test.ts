@@ -81,4 +81,18 @@ describe('orderSpaces', () => {
 
     expect(input.map(s => s.name)).toEqual(['Society', 'AI']);
   });
+
+  // The reader has the browse sidebar open beside this list. Two orderings of
+  // the same 33 spaces read as a bug in one of them, so the rail uses the
+  // sidebar's own comparator rather than an approximation of it.
+  it('puts the curated spaces first, as the browse sidebar does', () => {
+    const crypto = space('Crypto', 'c9f267dcb0d270718c2a3c45a64afd32');
+    const ai = space('AI', '41e851610e13a19441c4d980f2f2ce6b');
+    const root = space('Root', 'a19c345ab9866679b001d7d2138d88a1');
+
+    // Alphabetically this would be AI, Academia, Crypto, Root.
+    const ordered = orderSpaces([space('Academia'), crypto, ai, root]);
+
+    expect(ordered.map(s => s.name)).toEqual(['Root', 'Crypto', 'AI', 'Academia']);
+  });
 });

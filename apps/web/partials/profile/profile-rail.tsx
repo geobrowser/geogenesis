@@ -6,17 +6,18 @@ import * as React from 'react';
 
 import Link from 'next/link';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useProfileFacts } from '~/core/hooks/use-profile-facts';
 import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-facts';
 import { type ProfileLink } from '~/core/profile/profile-links';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Avatar } from '~/design-system/avatar';
 import { LinkableChip } from '~/design-system/chip';
-import { SpacePillSectionHeading } from '~/design-system/space-pill';
+import { FallbackImage } from '~/design-system/fallback-image';
+import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
-import { type SideRailSection, SideRailSections } from '~/partials/entity-page/sticky-side-rail';
+import { StickySideRail } from '~/partials/entity-page/sticky-side-rail';
 
 type Props = {
   /** The personal space being viewed. */
@@ -45,32 +46,59 @@ type Props = {
 export function ProfileRail({ spaceId, personEntityId, types, links, systemEntityId, address, spaceType }: Props) {
   const { facts, isLoading } = useProfileFacts({ spaceId, personEntityId });
 
-  const sections: SideRailSection[] = [];
+  return (
+    <StickySideRail>
+      <div className="flex flex-col gap-4">
+        {facts.spaces.length > 0 && <SpacesSection spaces={facts.spaces} />}
+        {links.length > 0 && <LinksSection links={links} />}
+        <AboutSection
+          facts={facts}
+          isLoading={isLoading}
+          types={types}
+          spaceId={spaceId}
+          systemEntityId={systemEntityId}
+          address={address}
+          spaceType={spaceType}
+        />
+      </div>
+    </StickySideRail>
+  );
+}
 
-  if (facts.spaces.length > 0) {
-    sections.push({ key: 'spaces', node: <SpacesSection spaces={facts.spaces} /> });
-  }
-
-  if (links.length > 0) {
-    sections.push({ key: 'links', node: <LinksSection links={links} /> });
-  }
-
-  sections.push({
-    key: 'about',
-    node: (
-      <AboutSection
-        facts={facts}
-        isLoading={isLoading}
-        types={types}
-        spaceId={spaceId}
-        systemEntityId={systemEntityId}
-        address={address}
-        spaceType={spaceType}
-      />
-    ),
-  });
-
-  return <SideRailSections sections={sections} />;
+/**
+ * One card in the rail.
+ *
+ * Bordered cards rather than rule-separated sections: this rail holds three
+ * kinds of thing that have nothing to do with each other — a list of spaces, a
+ * set of handles, and a table of facts — and a rule between them says they are
+ * one document with three parts.
+ *
+ * `overflow-hidden` is what lets the system-data strip sit flush inside the
+ * bottom corners of the About card.
+ */
+function RailCard({
+  title,
+  action,
+  children,
+  footer,
+}: {
+  title: string;
+  /** The card's own control, right-aligned in its header. */
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  /** Rendered outside the padded body, flush to the card's edges. */
+  footer?: React.ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-lg border border-grey-02 bg-white">
+      <header className="flex items-center justify-between gap-2.5 border-b border-divider px-4 py-3">
+        <h3 className="text-metadataMedium text-text">{title}</h3>
+        {action}
+      </header>
+      <div className="px-4 py-3">{children}</div>
+      {footer}
+    </section>
+  );
 }
 
 function SpacesSection({ spaces }: { spaces: ReturnType<typeof useProfileFacts>['facts']['spaces'] }) {
@@ -78,8 +106,20 @@ function SpacesSection({ spaces }: { spaces: ReturnType<typeof useProfileFacts>[
   const shown = showAll ? spaces : spaces.slice(0, 6);
 
   return (
-    <section className="flex flex-col">
-      <SpacePillSectionHeading>Spaces</SpacePillSectionHeading>
+    <RailCard
+      title="Spaces"
+      action={
+        spaces.length > 6 ? (
+          <button
+            type="button"
+            onClick={() => setShowAll(value => !value)}
+            className="text-smallButton text-ctaPrimary hover:underline"
+          >
+            {showAll ? 'Show fewer' : `See all ${spaces.length}`}
+          </button>
+        ) : null
+      }
+    >
       <ul className="flex flex-col gap-1">
         {shown.map(space => (
           <li key={space.id}>
@@ -97,23 +137,13 @@ function SpacesSection({ spaces }: { spaces: ReturnType<typeof useProfileFacts>[
           </li>
         ))}
       </ul>
-      {spaces.length > 6 && (
-        <button
-          type="button"
-          onClick={() => setShowAll(value => !value)}
-          className="mt-2 self-start text-metadata text-ctaPrimary hover:underline"
-        >
-          {showAll ? 'Show fewer' : `See all ${spaces.length}`}
-        </button>
-      )}
-    </section>
+    </RailCard>
   );
 }
 
 function LinksSection({ links }: { links: ProfileLink[] }) {
   return (
-    <section className="flex flex-col">
-      <SpacePillSectionHeading>Links</SpacePillSectionHeading>
+    <RailCard title="Links">
       <ul className="flex flex-col gap-1">
         {links.map(link => (
           <li key={link.propertyId} className="flex items-center gap-2">
@@ -129,7 +159,7 @@ function LinksSection({ links }: { links: ProfileLink[] }) {
           </li>
         ))}
       </ul>
-    </section>
+    </RailCard>
   );
 }
 
@@ -154,9 +184,12 @@ function AboutSection({
   const elapsed = timeOnGeo(facts.joinedAt);
 
   return (
-    <section className="flex flex-col">
-      <SpacePillSectionHeading>About</SpacePillSectionHeading>
-
+    <RailCard
+      title="About"
+      footer={
+        <SystemRecord spaceId={spaceId} systemEntityId={systemEntityId} address={address} spaceType={spaceType} />
+      }
+    >
       {/*
        * What the account *is* first, then what it has done. Joined and Space
        * type never change and are read once; the three counts change constantly
@@ -210,9 +243,7 @@ function AboutSection({
 
         {address && <Fact label="Account" value={shortenAddress(address)} mono />}
       </dl>
-
-      <SystemRecord spaceId={spaceId} systemEntityId={systemEntityId} address={address} spaceType={spaceType} />
-    </section>
+    </RailCard>
   );
 }
 
@@ -298,11 +329,16 @@ function VerifiedBy({ verifiers }: { verifiers: Verifier[] }) {
                   href={NavUtils.toSpace(verifier.spaceId)}
                   className="flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-grey-01"
                 >
-                  {/* `Avatar` is `h-full w-full` when it has an image — it sizes
-                      to its box, and `size` only reaches the generated fallback.
-                      Unwrapped, a verifier with a logo filled the row. */}
-                  <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full bg-grey-01">
-                    <Avatar size={20} value={verifier.spaceId} avatarUrl={verifier.avatarUrl ?? undefined} />
+                  {/* A fixed box with a white ground under it: an avatar sizes
+                      to its box rather than to a prop, and a logo saved with a
+                      transparent background otherwise shows the row through
+                      its own face. */}
+                  <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full bg-white">
+                    <FallbackImage
+                      value={verifier.avatarUrl ?? PLACEHOLDER_SPACE_IMAGE}
+                      sizes="20px"
+                      className="object-cover"
+                    />
                   </span>
                   <span className="min-w-0 flex-1 truncate text-metadata text-text">
                     {verifier.name ?? (verifier.isPerson ? 'Untitled person' : 'Untitled space')}
@@ -337,11 +373,18 @@ function SystemRecord({
   spaceType: Props['spaceType'];
 }) {
   return (
-    <details className="mt-3 border-t border-dashed border-grey-02 pt-2">
-      <summary className="cursor-pointer list-none text-metadata text-grey-04 hover:text-text">
-        Space system data
+    // A grey strip flush to the card's bottom edge, with an arrow that turns as
+    // it opens. Grey because it is a different register from the rows above it:
+    // those are facts about a person, these are ids for whoever is debugging
+    // the page.
+    <details className="group border-t border-dashed border-grey-02 bg-grey-01 [&_summary::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-smallButton text-grey-04 hover:text-text">
+        <span>Space system data</span>
+        <span className="text-grey-04 transition-transform duration-150 group-open:rotate-90">
+          <RightArrowLongSmall />
+        </span>
       </summary>
-      <dl className="mt-2 flex flex-col gap-1">
+      <dl className="flex flex-col px-4 pb-3">
         <SystemRow label="Space id" value={spaceId} />
         <SystemRow label="Entity id" value={systemEntityId} />
         <SystemRow label="Type" value={spaceType} />
@@ -353,8 +396,8 @@ function SystemRecord({
 
 function SystemRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[6rem_minmax(0,1fr)] gap-2">
-      <dt className="text-tag text-grey-04">{label}</dt>
+    <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 border-b border-grey-02 py-1 last:border-b-0">
+      <dt className="text-smallButton text-grey-04">{label}</dt>
       <dd className="font-mono text-tag break-all text-text">{value}</dd>
     </div>
   );

@@ -1,3 +1,5 @@
+import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
+
 /**
  * The facts the profile rail states about an account (GEO-2859).
  *
@@ -107,15 +109,23 @@ export function formatJoined(joinedAt: number | null): string | null {
 }
 
 /**
- * Spaces ordered for the rail: named before unnamed, then alphabetically.
+ * Spaces ordered exactly as the browse sidebar orders them.
  *
- * Nine of the reference account's 33 have no name at all. A blank row in a list
- * of 33 reads as a loading failure, so they are labelled and sorted last rather
- * than dropped — they are real memberships.
+ * `sortSpaceListByRankNameId` is the shared comparator the sidebar and the
+ * governance space filter already use: the curated rank first, then unnamed
+ * last, then name, then id. Reused rather than approximated — a reader has the
+ * sidebar open beside this list, and two orderings of the same 33 spaces read
+ * as a bug in one of them.
+ *
+ * Nine of the reference account's 33 have no name at all. They are labelled and
+ * sorted last rather than dropped: they are real memberships.
  */
 export function orderSpaces(spaces: ProfileSpace[]): ProfileSpace[] {
-  return [...spaces].sort((a, b) => {
-    if ((a.name === null) !== (b.name === null)) return a.name === null ? 1 : -1;
-    return (a.name ?? '').localeCompare(b.name ?? '');
-  });
+  const sorted = sortSpaceListByRankNameId(
+    spaces.map(space => ({ ...space, name: space.name ?? '', unnamed: space.name === null }))
+  );
+
+  // Back to the shape the rail renders, which distinguishes "no name" from an
+  // empty one so it can label the row.
+  return sorted.map(({ unnamed, ...space }) => ({ ...space, name: unnamed ? null : space.name }));
 }
