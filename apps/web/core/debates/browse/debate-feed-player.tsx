@@ -17,11 +17,12 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
-import { ClaimScrubberMarkers, useDebateClaimTicker } from './debate-claim-ticker';
+import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateScorecard } from './debate-scorecard';
 import { Play, Speaker, SpeakerMuted } from './icons';
 import { WinnerVoteButton } from './winner-vote-button';
-import type { ClaimMarker } from '~/core/debates/claim-ticker';
+import type { ClaimMarker, StackedCard } from '~/core/debates/claim-ticker';
+import type { DebateTicker } from './debate-claim-ticker';
 
 type DebateFeedPlayerProps = {
   debate: Debate;
@@ -96,9 +97,9 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     }
   }, [active, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend, userPaused]);
 
-  // Claims, their timecodes and the viewer's answers, for the scrubber markers and the card at
-  // the end. Loaded alongside the recordings so neither waits on the other.
-  const ticker = useDebateClaimTicker(debate, active || preload);
+  // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
+  // it belongs to is spoken, rather than appearing a beat late on the first one.
+  const ticker = useDebateClaimTicker(debate, playheadSeconds * 1000, active || preload);
 
   const showControls = ready && (userPaused || (playbackEnded && !hasVoted));
   // End of an unvoted debate offers a replay; a user pause shows the paused glyph.
@@ -114,6 +115,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
         subtitle={activeSlot === 1 ? subtitle : null}
+        claims={playbackEnded ? [] : (ticker.stacks.get(1) ?? [])}
+        ticker={ticker}
         mutedByUser={mutedByUser}
         onPlaybackTick={onPlaybackTick}
         onToggle={togglePlayback}
@@ -151,6 +154,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
         subtitle={activeSlot === 2 ? subtitle : null}
+        claims={playbackEnded ? [] : (ticker.stacks.get(2) ?? [])}
+        ticker={ticker}
         mutedByUser={mutedByUser}
         onPlaybackTick={onPlaybackTick}
         onToggle={togglePlayback}
@@ -215,6 +220,8 @@ function DebaterVideo({
   audible,
   countdown,
   subtitle,
+  claims,
+  ticker,
   mutedByUser,
   onPlaybackTick,
   onToggle,
@@ -228,6 +235,9 @@ function DebaterVideo({
   audible: boolean;
   countdown: TurnState;
   subtitle: string | null;
+  /** The claims this debater is making right now, oldest first. */
+  claims: StackedCard[];
+  ticker: DebateTicker;
   mutedByUser: boolean;
   onPlaybackTick: () => void;
   onToggle: () => void;
@@ -237,6 +247,8 @@ function DebaterVideo({
 }) {
   const { openSidePanel } = useEntitySidePanel();
   const name = participant ? speakerLabel(participant) : 'Debater';
+  const identityRef = React.useRef<HTMLButtonElement | null>(null);
+  const claimWidth = useIdentityRowWidth(identityRef);
 
   // A personal space's own id resolves to its "system entity" (an ugly technical
   // record). The space's page entity is the real profile, so open that once it's
@@ -279,16 +291,32 @@ function DebaterVideo({
 
       {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
 
-      {subtitle && (
-        <div className="absolute inset-x-0 bottom-14 z-10 flex justify-center px-4">
-          <span className="max-w-[70%] rounded-sm bg-black/78 px-1.5 py-1 text-center text-[1rem] leading-tight text-white">
-            {subtitle}
-          </span>
+      {/* Claims and the subtitle share one bottom-anchored column so they cannot land on top of
+          each other — they did, because both wanted the strip above the debater's name. The
+          subtitle stays pinned at the bottom of the column and the claims rise above it. */}
+      {(subtitle || claims.length > 0) && (
+        <div className="pointer-events-none absolute inset-x-4 bottom-11 z-10 flex flex-col items-start gap-1.5">
+          {/* Capped at the width of the name row below, so a claim never runs out past the
+              debater's position chip. Measured rather than guessed: the row is as wide as the
+              name, and names vary. */}
+          <DebateClaimTickerStack
+            cards={claims}
+            maxWidth={claimWidth}
+            rowsByClaimId={ticker.rowsByClaimId}
+            entitiesByClaimId={ticker.entitiesByClaimId}
+            onAnswered={ticker.onAnswered}
+          />
+          {subtitle && (
+            <span className="max-w-[70%] self-center rounded-sm bg-black/78 px-1.5 py-1 text-center text-[1rem] leading-tight text-white">
+              {subtitle}
+            </span>
+          )}
         </div>
       )}
 
       {/* Debater identity: avatar + name + position, opens their personal space in the side panel. */}
       <button
+        ref={identityRef}
         type="button"
         onClick={openProfile}
         className="absolute bottom-3 left-4 z-10 flex items-center gap-2 text-left"
@@ -320,6 +348,31 @@ function DebaterVideo({
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}
     </div>
   );
+}
+
+/**
+ * The rendered width of the debater's name row, so the claim lines above it can stop where it
+ * stops.
+ *
+ * There is no CSS way to say "no wider than that sibling" when the sibling is absolutely
+ * positioned and its width comes from its own content. Returns null until measured, and on any
+ * renderer without `ResizeObserver`, in which case the lines fall back to their own max width.
+ */
+function useIdentityRowWidth(ref: React.RefObject<HTMLElement | null>): number | null {
+  const [width, setWidth] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    const element = ref.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) setWidth(entry.contentRect.width);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+
+  return width;
 }
 
 function CountdownBadge({ seconds, progress }: { seconds: number; progress: number }) {
