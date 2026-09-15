@@ -554,26 +554,7 @@ function RespondableControls({
    */
   hasFooter?: boolean;
   answersReady?: boolean;
-  /**
-   * Whether the indexed response may answer for the viewer's side while geo-chat cannot.
-   *
-   * For the minute or so after an account is created, geo-chat refuses every viewer-relative read
-   * until it has indexed it. The hub panel is geo-chat's surface, so for that whole minute it had
-   * nothing — every pill dead — while the same claims in the main feed took positions normally. The
-   * feed was never geo-chat-only: it resolves the side through `useClaimResponseState`, which falls
-   * back to the indexed read, and that is the entire difference between the two surfaces.
-   *
-   * A brand new account is also the case where the fallback is most obviously right: it holds no
-   * positions, so the indexed read's "no side" is the true answer rather than a stand-in for one.
-   *
-   * Only the *side* was ever outstanding here. The vocabulary arrives with the claim — the page
-   * carries its "Is factual" value — so the fallback completes the one missing fact rather than
-   * guessing at two.
-   *
-   * Still a wait, not a shortcut: the side counts as known once the indexed read has *settled*, and
-   * `null` before then is "not yet", not "no side". Drawing both pills unselected over that is what
-   * makes a press republish the side the viewer already holds instead of clearing it.
-   */
+  /** See {@link Props.answersMayComeFromIndex}. */
   answersMayComeFromIndex?: boolean;
   responseBlockedReason?: string | null;
   /** False while the card is still far enough below the fold that its reads are not worth making. */
@@ -617,32 +598,6 @@ function RespondableControls({
   );
 
   /**
-   * The viewer's own side, with the indexed read standing in where geo-chat has no answer.
-   *
-   * The half of GEO-2823 that was actually costing people their position. The optimistic snapshot
-   * is a *shared* store keyed on the claim, so whichever surface first sees geo-chat confirm the
-   * response retires the optimism for all of them — and a surface whose only source is geo-chat
-   * then falls back to an endpoint that has not caught up. Take a side in the hub panel and it
-   * vanished about ten seconds later while the explore card, which already had this fallback
-   * through `useClaimResponseState`, went on showing it.
-   *
-   * `indexedViewerDirection`, emphatically not `viewerDirection`. The latter folds the in-flight
-   * snapshot in, so substituting it here would make this an echo of the client's own write: the
-   * retire effect below compares geo-chat's copy against what it expected, and against an echo that
-   * comparison is trivially true. It would then bin the optimism the instant indexing reported
-   * done, before anything independent had confirmed it — which is the symptom this memo exists to
-   * remove, re-created one layer down.
-   *
-   * Held while that read is still in flight, because `null` is its answer for "no side" *and* for
-   * "not yet". Substituting on "not yet" draws both pills unselected for someone who holds one, and
-   * a press then republishes their side instead of clearing it. The hub tabs are where that bites:
-   * their `answersReady` waits on geo-chat's rows and knows nothing about this second source.
-   *
-   * `reconcileWithIndexedResponse={false}` opts a host out. The rematch picker does, because its
-   * sides are the graph's and geo-chat's silence there is not the same fact — see
-   * `viewerResponseUnknown` and GEO-2807.
-   */
-  /**
    * The last side the indexed read actually *settled* on, kept across its own refetches.
    *
    * Reported: take a position in the hub panel and your face appears, disappears a moment later, and
@@ -668,6 +623,32 @@ function RespondableControls({
   }
   const settledIndexed = settledIndexedRef.current?.key === claimKey ? settledIndexedRef.current : null;
 
+  /**
+   * The viewer's own side, with the indexed read standing in where geo-chat has no answer.
+   *
+   * The half of GEO-2823 that was actually costing people their position. The optimistic snapshot
+   * is a *shared* store keyed on the claim, so whichever surface first sees geo-chat confirm the
+   * response retires the optimism for all of them — and a surface whose only source is geo-chat
+   * then falls back to an endpoint that has not caught up. Take a side in the hub panel and it
+   * vanished about ten seconds later while the explore card, which already had this fallback
+   * through `useClaimResponseState`, went on showing it.
+   *
+   * `indexedViewerDirection`, emphatically not `viewerDirection`. The latter folds the in-flight
+   * snapshot in, so substituting it here would make this an echo of the client's own write: the
+   * retire effect below compares geo-chat's copy against what it expected, and against an echo that
+   * comparison is trivially true. It would then bin the optimism the instant indexing reported
+   * done, before anything independent had confirmed it — which is the symptom this memo exists to
+   * remove, re-created one layer down.
+   *
+   * Held while that read is still in flight, because `null` is its answer for "no side" *and* for
+   * "not yet". Substituting on "not yet" draws both pills unselected for someone who holds one, and
+   * a press then republishes their side instead of clearing it. The hub tabs are where that bites:
+   * their `answersReady` waits on geo-chat's rows and knows nothing about this second source.
+   *
+   * `reconcileWithIndexedResponse={false}` opts a host out. The rematch picker does, because its
+   * sides are the graph's and geo-chat's silence there is not the same fact — see
+   * `viewerResponseUnknown` and GEO-2807.
+   */
   const resolvedReadiness = React.useMemo(() => {
     if (!reconcileWithIndexedResponse || viewerResponseUnknown || readiness.viewer_response) return readiness;
     // Never settled for this claim, so there is nothing to stand in with — the wait the comment

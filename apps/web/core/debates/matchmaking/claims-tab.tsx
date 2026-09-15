@@ -511,9 +511,7 @@ export function ClaimsTab({
   const taggedAnswersReadyFor = React.useCallback(
     (entry: MatchmakingClaim) =>
       !graphSourced ||
-      (authenticated
-        ? Boolean(accountKey) && !taggedRows.unresolvedSpaceIds.has(entry.claim.space_id)
-        : true),
+      (authenticated ? Boolean(accountKey) && !taggedRows.unresolvedSpaceIds.has(entry.claim.space_id) : true),
     [accountKey, authenticated, graphSourced, taggedRows.unresolvedSpaceIds]
   );
 

@@ -1640,17 +1640,39 @@ export class GeoChatRequestError extends Error {
 }
 
 /**
- * A refusal that means "not yet" rather than "not you".
+ * geo-chat declining to serve a read at all.
  *
- * geo-chat does not know an account for a minute or two after it is created, and refuses every
+ * The mechanical fact, with no claim about why. It has exactly two readings and they are the same
+ * status: the viewer is not signed in, or geo-chat has not finished registering an account that is.
+ * Both are named below and in `hub-states`, and both defer to this so the statuses are stated once.
+ */
+export function isGeoChatRefusal(error: unknown) {
+  return error instanceof GeoChatRequestError && (error.status === 401 || error.status === 403);
+}
+
+/**
+ * That refusal read as "not yet" rather than "not you".
+ *
+ * geo-chat does not know an account for a minute or two after it is created and refuses every
  * viewer-relative read until it does. Signed *out* produces the same status, so the two are told
- * apart by who is asking rather than by the status — see the readers in `hub-states`.
+ * apart by who is asking rather than by the status — see `isSignInRequired`, the other reading.
  *
  * Lives beside the error it reads because both layers need it: the hub to say what is happening,
  * and the query layer to know a failure is worth asking about again.
  */
 export function isAccountWarmingUp(error: unknown) {
-  return error instanceof GeoChatRequestError && (error.status === 401 || error.status === 403);
+  return isGeoChatRefusal(error);
+}
+
+/**
+ * The same refusal behind an attempt react-query is still retrying, as well as a settled one.
+ *
+ * Both callers want the same thing and had each spelled it out, differently: one `||`-ing the two
+ * fields and one `??`-ing them, which are not the same answer when a settled error is present and
+ * is *not* a refusal. Asked once, here.
+ */
+export function isAccountWarmingUpQuery(query: { error?: unknown; failureReason?: unknown }) {
+  return isAccountWarmingUp(query.error) || isAccountWarmingUp(query.failureReason);
 }
 
 const debatePhaseBoundaryRetryCodes = new Set([

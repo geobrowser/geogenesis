@@ -22,6 +22,7 @@ import {
   blockDebateUser,
   createDebateRequest,
   dismissDebateRequest,
+  isAccountWarmingUp,
   listDebateBlocks,
   listDebatePeople,
   listDebateRequests,
@@ -118,7 +119,7 @@ const viewerReadRetryOptions = (accountKey: string | null) => ({
     // looks like — the hub asks for its anonymous lists without a token, and geo-chat is entitled to
     // say no — and `isSignInRequired` turns that into the sign-in prompt at once. Waiting a minute
     // first would be waiting for something that is not coming.
-    if (accountKey && error instanceof GeoChatRequestError && (error.status === 401 || error.status === 403)) {
+    if (accountKey && isAccountWarmingUp(error)) {
       return failureCount < WARMING_UP_RETRIES;
     }
     if (failureCount >= TRANSIENT_RETRIES) return false;

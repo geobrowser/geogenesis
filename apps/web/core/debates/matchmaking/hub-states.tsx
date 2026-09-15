@@ -5,7 +5,7 @@ import * as React from 'react';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { GeoChatRequestError, isAccountWarmingUp } from '../api';
+import { GeoChatRequestError, isAccountWarmingUpQuery, isGeoChatRefusal } from '../api';
 import { HubSwap } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 
@@ -27,26 +27,8 @@ export function isMatchmakingUnavailable(error: unknown) {
  * have got anyway instead of "Something went wrong."
  */
 export function isSignInRequired(error: unknown) {
-  return error instanceof GeoChatRequestError && (error.status === 401 || error.status === 403);
+  return isGeoChatRefusal(error);
 }
-
-/**
- * geo-chat refusing a viewer it has not finished registering.
- *
- * The same 401 the refusal above is, and a different thing entirely: this viewer *is* signed in —
- * Privy says so, and the session exchange is being made with their token. geo-chat simply does not
- * have them yet, which is true of every account for a minute or two after it is created.
- *
- * Told apart by who is asking rather than by the status, because the status cannot tell them apart:
- * a caller offering a sign-in action is asking on behalf of somebody who might not be signed in, and
- * one that is not has already established that they are. So this is the same predicate read from the
- * other side, and `HubQueryState` picks whichever of the two fits its caller.
- *
- * Worth a state of its own because both of the alternatives lie. "Sign in to see this" is wrong to
- * somebody who just did, and "Something went wrong" is wrong about something that is going right and
- * is not finished.
- */
-export { isAccountWarmingUp };
 
 /**
  * Horizontally neutral: every tab already insets its content by 16px, so self-padding here would
@@ -143,7 +125,7 @@ export function HubQueryState({
    * in hand is what is happening *now*, so this says so on the first refusal and the retries carry
    * on underneath.
    */
-  const warmingUp = !signInAction && (isAccountWarmingUp(error) || isAccountWarmingUp(failureReason));
+  const warmingUp = !signInAction && isAccountWarmingUpQuery({ error, failureReason });
   const state = needsSignIn
     ? 'sign-in'
     : warmingUp

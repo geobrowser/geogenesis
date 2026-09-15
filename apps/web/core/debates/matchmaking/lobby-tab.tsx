@@ -4,9 +4,9 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
+import { isAccountWarmingUpQuery } from '../api';
 import { ClaimsTab } from './claims-tab';
 import { useMatchmakingMatches } from './hooks';
-import { isAccountWarmingUp } from './hub-states';
 import { MatchesList } from './matches-list';
 import { MatchesOnlySwitch } from './matches-only-switch';
 import { type NarrowedListState, useNarrowedDefault } from './use-narrowed-default';
@@ -82,7 +82,7 @@ export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =>
    * spent from the same marker for the same reason: it is a courtesy on arrival, not a policy, so
    * coming back to Lobby afterwards gets the viewer the message and leaves them on it.
    */
-  const warmingUp = isAccountWarmingUp(matchesQuery.error ?? matchesQuery.failureReason);
+  const warmingUp = isAccountWarmingUpQuery(matchesQuery);
   React.useEffect(() => {
     if (!warmingUp || leftForExplore) return;
     showExplore();
