@@ -137,7 +137,8 @@ describe('DebateClaimTickerCard', () => {
 
     renderCard({ onAnswered });
 
-    expect(onAnswered).toHaveBeenCalledExactlyOnceWith('claim-1');
+    // Reports which way, not just that — the end card tallies the sides.
+    expect(onAnswered).toHaveBeenCalledExactlyOnceWith('claim-1', true);
   });
 
   it('does not report an answer for a claim the viewer has not taken a side on', () => {
