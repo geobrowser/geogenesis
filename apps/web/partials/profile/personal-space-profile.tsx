@@ -2,13 +2,16 @@
 
 import * as React from 'react';
 
+import { usePersonDebates } from '~/core/debates/use-person-debates';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useProfileHistory } from '~/core/hooks/use-profile-history';
 import { ID } from '~/core/id';
 import { collectSkills, currentRoles } from '~/core/profile/profile-summary';
+import { usePersonPositions } from '~/core/profile/use-person-positions';
 
 import { EditRecordDialog } from './edit-record-dialog';
 import { ProfileHeadline } from './profile-headline';
+import { ProfileRecentSection } from './profile-recent-section';
 import { ProfileRecordSection, ProfileSkillsSection } from './profile-record-sections';
 
 type Props = {
@@ -66,6 +69,14 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
       />
       <ProfileSkillsSection skills={skills} isOwner={isOwner} spaceId={spaceId} />
 
+      {/*
+       * What they have argued and taken a position on lately. Below the history
+       * because the history is what a profile is asked for first; above nothing,
+       * because each is a link into its own tab rather than the tab itself.
+       */}
+      <RecentDebates spaceId={spaceId} />
+      <RecentClaims spaceId={spaceId} />
+
       <EditRecordDialog
         kind={editing}
         onOpenChange={() => setEditing(null)}
@@ -73,6 +84,36 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
         spaceId={spaceId}
       />
     </div>
+  );
+}
+
+function RecentDebates({ spaceId }: { spaceId: string }) {
+  const { rows, isLoading } = usePersonDebates(spaceId, true);
+
+  return (
+    <ProfileRecentSection
+      title="Recent debates"
+      rows={rows}
+      isLoading={isLoading}
+      href={`/space/${spaceId}/debates`}
+      seeAllLabel="See all debates"
+    />
+  );
+}
+
+function RecentClaims({ spaceId }: { spaceId: string }) {
+  // The first page is all this needs, and it is the same query the Positions tab
+  // opens with — so moving between them costs no request.
+  const { rows, isLoading } = usePersonPositions({ spaceId });
+
+  return (
+    <ProfileRecentSection
+      title="Recent claims"
+      rows={rows}
+      isLoading={isLoading}
+      href={`/space/${spaceId}/positions`}
+      seeAllLabel="See all claims"
+    />
   );
 }
 

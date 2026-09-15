@@ -14,6 +14,8 @@ type EntityPageCoverProps = {
   avatarUrl: string | null;
   coverUrl: string | null;
   fitImage?: boolean;
+  /** Width of the text column below, so the avatar lines up with the name. */
+  contentMaxWidth?: number;
 };
 
 /**
@@ -67,11 +69,19 @@ export const EntityPageCover = ({
   avatarUrl: serverAvatarUrl,
   coverUrl: serverCoverUrl,
   fitImage = false,
+  contentMaxWidth,
 }: EntityPageCoverProps) => {
   const { id, spaceId } = useEntityStoreInstance();
 
   const avatarUrl = useImageUrl(id, spaceId, ContentIds.AVATAR_PROPERTY, serverAvatarUrl);
   const coverUrl = useImageUrl(id, spaceId, SystemIds.COVER_PROPERTY, serverCoverUrl);
 
-  return <EditableCoverAvatarHeader avatarUrl={avatarUrl} coverUrl={coverUrl} fitImage={fitImage} />;
+  return (
+    <EditableCoverAvatarHeader
+      avatarUrl={avatarUrl}
+      coverUrl={coverUrl}
+      fitImage={fitImage}
+      contentMaxWidth={contentMaxWidth}
+    />
+  );
 };

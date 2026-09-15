@@ -22,6 +22,7 @@ import { Spacer } from '~/design-system/spacer';
 import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-header';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
+import { ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH } from '~/partials/entity-page/entity-page-layout';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-profile-bio-starter-merge';
 import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
@@ -114,7 +115,16 @@ export default async function Layout(props0: LayoutProps) {
         initialCollectionItems={props.initialCollectionItems}
       >
         <SpaceChromeGate keepChrome={isProfile}>
-          <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
+          {/*
+           * A profile's text column is the wider with-sidebar variant — the rail
+           * is part of the page — so the avatar lines up against that rather
+           * than against the ordinary page width.
+           */}
+          <EntityPageCover
+            avatarUrl={props.avatarUrl}
+            coverUrl={props.coverUrl}
+            contentMaxWidth={isProfile ? ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH : undefined}
+          />
           <SpaceHeaderContentGate
             serverHasSidebar={hasSidebar}
             isExternalTopic={isExternalTopic}
@@ -130,11 +140,12 @@ export default async function Layout(props0: LayoutProps) {
               <EditableSpaceHeading
                 spaceId={spaceId}
                 entityId={props.id}
+                keepSpaceActions={isProfile}
                 nameAccessoryComponent={
-                  // The tick beside the name stays where it is for a space; on a
-                  // profile it moves into the action row, which is where every
-                  // other judgement about this person is made.
-                  props.space?.type === 'PERSONAL' && !isProfile ? <SpaceVerifyButton spaceId={spaceId} /> : null
+                  // Beside the name on every personal space, profile or not. It
+                  // is a statement about who this is rather than an action on
+                  // them, and it reads as one where it sits.
+                  props.space?.type === 'PERSONAL' ? <SpaceVerifyButton spaceId={spaceId} /> : null
                 }
                 actionsComponent={
                   isProfile ? (

@@ -209,12 +209,12 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    */
   const [published, setPublished] = React.useState<Published[]>([]);
 
-  const queryKey = profileHistoryQueryKey(entityId);
+  const queryKey = profileHistoryQueryKey(entityId, spaceId);
 
   const { data, dataUpdatedAt, isLoading, isError } = useQuery({
     queryKey,
     enabled: enabled && entityId !== '',
-    queryFn: () => fetchProfileHistory(entityId),
+    queryFn: () => fetchProfileHistory(entityId, spaceId),
     staleTime: 60_000,
     // Only while something is outstanding. Asking again on a timer is the only
     // way to learn the indexer has caught up; there is nothing to subscribe to.

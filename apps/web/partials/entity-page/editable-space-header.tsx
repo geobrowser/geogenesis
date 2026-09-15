@@ -71,6 +71,7 @@ export function EditableSpaceHeading({
   addSubspaceComponent,
   nameAccessoryComponent,
   actionsComponent,
+  keepSpaceActions = false,
 }: {
   spaceId: string;
   entityId: string;
@@ -79,13 +80,22 @@ export function EditableSpaceHeading({
   nameAccessoryComponent?: React.ReactNode;
   /** Rendered at the end of the name row, e.g. the profile "Debate" button. */
   actionsComponent?: React.ReactNode;
+  /** Keeps the history and overflow controls on routes below the space's own page. */
+  keepSpaceActions?: boolean;
 }) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
   const { space } = useSpace(spaceId);
 
   const path = usePathname();
-  const isSpacePage = path === NavUtils.toSpace(spaceId);
+  // History and the overflow menu are a space's own controls, so they show on
+  // the space's own page and not on an entity inside it.
+  //
+  // A profile keeps them on every one of its tabs (GEO-2859). Its header is
+  // rendered once above all of them rather than per page, so gating on the exact
+  // Overview path made them appear and vanish as the reader moved between tabs
+  // of the same profile — with nothing else in the row changing.
+  const isSpacePage = path === NavUtils.toSpace(spaceId) || keepSpaceActions;
 
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [overlayMode, dispatch] = React.useReducer(overlayReducer, 'closed');

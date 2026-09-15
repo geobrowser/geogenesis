@@ -20,7 +20,7 @@ import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 
-import { ENTITY_PAGE_COVER_MAX_WIDTH } from './entity-page-layout';
+import { ENTITY_PAGE_CONTENT_MAX_WIDTH, ENTITY_PAGE_COVER_MAX_WIDTH } from './entity-page-layout';
 
 const COVER_IMAGE_HEIGHT = 320;
 const MOBILE_COVER_IMAGE_HEIGHT_CLASS = 'md:!h-[180px]';
@@ -48,10 +48,17 @@ function computeLayout(hasCover: boolean, hasCoverImage: boolean, hasAvatar: boo
 
 export const EditableCoverAvatarHeader = ({
   avatarUrl,
+  contentMaxWidth = ENTITY_PAGE_CONTENT_MAX_WIDTH,
   coverUrl,
   fitImage = false,
 }: {
   avatarUrl: string | null;
+  /**
+   * How wide the text column under this header is, so the avatar can line up
+   * with it. Defaults to the ordinary page width; a surface that renders a rail
+   * — a profile — passes the wider with-sidebar width instead.
+   */
+  contentMaxWidth?: number;
   coverUrl: string | null;
   fitImage?: boolean;
 }) => {
@@ -130,14 +137,14 @@ export const EditableCoverAvatarHeader = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={TRANSITION}
-            // Aligned to this header's own left edge, which is where the name
-            // below it starts. Capped at `ENTITY_PAGE_CONTENT_MAX_WIDTH` and
-            // centred, it matched the name only while the header *was* content
-            // width — on a profile, which is the wider with-sidebar variant, the
-            // cap left the avatar indented by half the difference. A no-op
-            // everywhere the header is already content width.
-            className="absolute right-0 left-0 flex justify-start"
-            style={{ bottom: -AVATAR_OVERFLOW }}
+            // Centred in a box the width of the *text column*, so its left edge
+            // lands where the name below it starts. The cover is wider than the
+            // column at every width (1192 against 900 or 1142), so aligning to
+            // the cover instead puts the avatar 25–146px to the left of the
+            // name — which is why this takes the column's width rather than
+            // assuming one.
+            className="absolute right-0 left-0 mx-auto flex justify-start"
+            style={{ bottom: -AVATAR_OVERFLOW, maxWidth: contentMaxWidth }}
           >
             <div className="flex h-20 w-20 items-center justify-center rounded-lg">
               <AvatarCoverInput
