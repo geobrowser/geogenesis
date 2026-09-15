@@ -229,7 +229,21 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
   }
 
   return (
-    <Link className={tabGroupTabLinkStyles({ active, disabled })} href={href} prefetch>
+    <Link
+      className={tabGroupTabLinkStyles({ active, disabled })}
+      href={href}
+      prefetch
+      // The tab bar stays put when you change tabs. Next scrolls to the top on
+      // every navigation by default, which reads as the page throwing you back
+      // up for no reason — you have not left the page, you have changed a view
+      // inside it.
+      //
+      // It also took the underline with it: a shared-layout animation measures
+      // the marker before and after, and a scroll to top between those two
+      // measurements is a vertical delta it dutifully animates through — which
+      // is the underline flying up through the label rather than sliding across.
+      scroll={false}
+    >
       {label}
       {badge && <Badge>{badge}</Badge>}
       {active && (
