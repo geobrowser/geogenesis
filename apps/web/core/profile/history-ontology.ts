@@ -261,6 +261,22 @@ export const SCHOOL_TYPES = [UNIVERSITY_TYPE];
 /** What the avatar of a company or school is stored under. */
 export const AVATAR_PROPERTY = ContentIds.AVATAR_PROPERTY;
 
+/**
+ * How a debate names the two people arguing it (GEO-2859).
+ *
+ * Both point at the participant's **personal space**, not their person entity —
+ * querying by entity id returns zero rather than erroring, which is the kind of
+ * wrong that ships. Three properties in the graph are called "Supported by";
+ * this is the one debates use.
+ *
+ * There is also a `Participants` property meant for exactly this question, but
+ * it covers a fraction of debates, so the two sides are unioned instead. Both
+ * verified against the graph on 2026-09-15.
+ */
+export const DEBATE_SUPPORTED_BY_PROPERTY = 'd19fad5651364a7f8309daf5c7bf99dd';
+export const DEBATE_OPPOSED_BY_PROPERTY = 'c57de77c3eee4e7ba0d2258d18aab11c';
+export const DEBATE_TYPE = 'fd51f93520634617be397b672b23364c';
+
 export type EmploymentStatus = 'current' | 'former';
 export type EducationStatus = 'studying' | 'completed' | 'incomplete';
 
