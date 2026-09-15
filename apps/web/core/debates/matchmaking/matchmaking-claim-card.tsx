@@ -16,6 +16,7 @@ import {
   useEntityResponseIndexingSnapshot,
   useResetEntityResponseIndexingSnapshot,
 } from '~/core/hooks/use-entity-vote';
+import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -629,7 +630,9 @@ function RespondableControls({
   );
 
   /**
-   * The last side the indexed read actually *settled* on, kept across its own refetches.
+   * The last side the indexed read actually *settled* on, kept across its own refetches — through
+   * {@link useLastSettled}, which is this exact shape and arrived with GEO-2898 while this branch
+   * was in review. The reasoning below is why this card needs it; the hook is where it lives.
    *
    * Reported: take a position in the hub panel and your face appears, disappears a moment later, and
    * comes back once geo-chat catches up — which the explore card never does.
@@ -659,11 +662,15 @@ function RespondableControls({
    * it as one would enable the controls over it.
    */
   const claimKey = `${claim.space_id}:${claim.claim_entity_id}:${viewerKey ?? 'anon'}:${readiness.response_kind}`;
-  const settledIndexedRef = React.useRef<{ key: string; direction: 'positive' | 'negative' | null } | null>(null);
-  if (summaryEnabled && !summary.isViewerResponseLoading) {
-    settledIndexedRef.current = { key: claimKey, direction: summary.indexedViewerDirection ?? null };
-  }
-  const settledIndexed = settledIndexedRef.current?.key === claimKey ? settledIndexedRef.current : null;
+  const sideSettling = !summaryEnabled || summary.isViewerResponseLoading;
+  // `'none'` rather than `null` for "settled on no side", so the two facts `null` would otherwise
+  // carry stay apart: nothing held yet, against an answer of nobody. A string rather than an object
+  // because `resolvedReadiness` memoizes on it, and a fresh object each render would defeat that.
+  const settledDirection = useLastSettled<'positive' | 'negative' | 'none' | null>(
+    sideSettling ? null : (summary.indexedViewerDirection ?? 'none'),
+    sideSettling,
+    claimKey
+  );
 
   /**
    * The viewer's own side, with the indexed read standing in where geo-chat has no answer.
@@ -695,10 +702,13 @@ function RespondableControls({
     if (!reconcileWithIndexedResponse || viewerResponseUnknown || readiness.viewer_response) return readiness;
     // Never settled for this claim, so there is nothing to stand in with — the wait the comment
     // above describes, before it has anything to remember.
-    if (!settledIndexed) return readiness;
-    const indexed = viewerResponseFromDirection(settledIndexed.direction, readiness.response_kind);
+    if (settledDirection === null) return readiness;
+    const indexed = viewerResponseFromDirection(
+      settledDirection === 'none' ? null : settledDirection,
+      readiness.response_kind
+    );
     return indexed ? { ...readiness, viewer_response: indexed } : readiness;
-  }, [readiness, reconcileWithIndexedResponse, settledIndexed, viewerResponseUnknown]);
+  }, [readiness, reconcileWithIndexedResponse, settledDirection, viewerResponseUnknown]);
 
   /**
    * The side is known once *something* has answered for it — geo-chat, or the indexed read standing
@@ -706,7 +716,7 @@ function RespondableControls({
    * tells the gate the same thing, which otherwise goes on withholding a side the card now holds.
    */
   const sideKnown =
-    answersReady || (answersMayComeFromIndex && reconcileWithIndexedResponse && settledIndexed !== null);
+    answersReady || (answersMayComeFromIndex && reconcileWithIndexedResponse && settledDirection !== null);
 
   const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
     useClaimPositionControl({
