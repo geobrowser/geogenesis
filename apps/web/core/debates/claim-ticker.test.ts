@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ClaimTiming, TimedClaim } from './claim-timing';
-import { CLAIM_LINGER_MS, activeTickerClaim, claimMarkers, scoreDebate, tickerWindows } from './claim-ticker';
+import { CLAIM_LINGER_MS, cardOpacity, claimMarkers, scoreDebate, tickerStack, tickerWindows } from './claim-ticker';
 
 function timed(id: string, timing: ClaimTiming | null, text = `Claim ${id}`): TimedClaim {
   return { id, text, spaceId: 'space-1', blockId: 'block-1', publishedTiming: null, timing };
@@ -57,55 +57,74 @@ describe('tickerWindows', () => {
   });
 });
 
-describe('activeTickerClaim', () => {
+describe('tickerStack', () => {
   const windows = tickerWindows([
     timed('first', confident(10_000, 14_000)),
     timed('second', confident(18_000, 22_000)),
   ]);
 
+  const ids = (playheadMs: number, dismissed?: Set<string>) =>
+    tickerStack(windows, playheadMs, dismissed).map(card => card.window.claim.id);
+
   it('shows nothing before the first claim is said', () => {
-    expect(activeTickerClaim(windows, 5_000)).toBeNull();
+    expect(ids(5_000)).toEqual([]);
   });
 
   it('shows the claim being said', () => {
-    expect(activeTickerClaim(windows, 12_000)?.claim.id).toBe('first');
+    expect(ids(12_000)).toEqual(['first']);
   });
 
-  it('keeps it up through the linger, then hands over to the next claim', () => {
-    expect(activeTickerClaim(windows, 18_000 - 1)?.claim.id).toBe('first');
-    // The first claim's linger runs to 19s, but the second starts at 18s and takes over.
-    expect(activeTickerClaim(windows, 14_000 + CLAIM_LINGER_MS)?.claim.id).toBe('second');
+  // The newest is last, so rendered down a column it sits at the bottom, nearest the name, with
+  // the older one riding up above it.
+  it('stacks an overlapping claim under the one before it, newest last', () => {
+    expect(ids(18_500)).toEqual(['first', 'second']);
   });
 
-  it('lets a claim go once its linger expires with nothing after it', () => {
-    const lone = tickerWindows([timed('only', confident(10_000, 14_000))]);
-
-    expect(activeTickerClaim(lone, 14_000 + CLAIM_LINGER_MS - 1)?.claim.id).toBe('only');
-    expect(activeTickerClaim(lone, 14_000 + CLAIM_LINGER_MS)).toBeNull();
+  it('drops a claim once its window closes', () => {
+    expect(ids(14_000 + CLAIM_LINGER_MS)).toEqual(['second']);
   });
 
-  it('follows the debate when two claims overlap, rather than lagging on the older one', () => {
-    const overlapping = tickerWindows([
-      timed('earlier', confident(10_000, 20_000)),
-      timed('later', confident(14_000, 18_000)),
+  // Five claims inside ten seconds is an ordinary turn; the corner has to stay a corner.
+  it('keeps only the most recent few when a turn is busy', () => {
+    const busy = tickerWindows([
+      timed('a', confident(1_000, 2_000)),
+      timed('b', confident(1_500, 2_500)),
+      timed('c', confident(2_000, 3_000)),
+      timed('d', confident(2_500, 3_500)),
     ]);
 
-    expect(activeTickerClaim(overlapping, 12_000)?.claim.id).toBe('earlier');
-    expect(activeTickerClaim(overlapping, 15_000)?.claim.id).toBe('later');
+    expect(tickerStack(busy, 3_000, new Set(), 3).map(card => card.window.claim.id)).toEqual(['b', 'c', 'd']);
   });
 
-  // Seeking backwards over a claim you already answered should not ask again.
   it('does not re-ask a claim the viewer has answered or dismissed', () => {
-    expect(activeTickerClaim(windows, 12_000, new Set(['first']))).toBeNull();
+    expect(ids(12_000, new Set(['first']))).toEqual([]);
+  });
+});
+
+describe('cardOpacity', () => {
+  const [window] = tickerWindows([timed('a', confident(10_000, 14_000))]);
+
+  it('fades in rather than blinking into place', () => {
+    expect(cardOpacity(window, 10_000)).toBe(0);
+    expect(cardOpacity(window, 10_125)).toBeCloseTo(0.5);
+    expect(cardOpacity(window, 10_400)).toBe(1);
   });
 
-  it('falls through to another live claim when the top one is dismissed', () => {
-    const overlapping = tickerWindows([
-      timed('earlier', confident(10_000, 20_000)),
-      timed('later', confident(14_000, 18_000)),
-    ]);
+  it('holds at full strength through the middle', () => {
+    expect(cardOpacity(window, 12_000)).toBe(1);
+  });
 
-    expect(activeTickerClaim(overlapping, 15_000, new Set(['later']))?.claim.id).toBe('earlier');
+  it('fades out over the tail of its window', () => {
+    expect(cardOpacity(window, window.endMs - 750)).toBeCloseTo(0.5);
+    expect(cardOpacity(window, window.endMs - 1)).toBeLessThan(0.01);
+  });
+
+  // A scrub lands wherever it lands; the card has to be as visible as its moment says, not as
+  // visible as an animation that started when it mounted.
+  it('is driven by the playhead, so a scrub into the middle lands at full strength', () => {
+    expect(cardOpacity(window, 13_000)).toBe(1);
+    expect(cardOpacity(window, 9_000)).toBe(0);
+    expect(cardOpacity(window, 99_000)).toBe(0);
   });
 });
 

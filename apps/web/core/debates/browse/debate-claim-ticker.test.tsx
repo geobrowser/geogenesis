@@ -69,15 +69,7 @@ function window(overrides: Partial<TimedClaim> = {}): TickerWindow {
 
 function renderCard(props: Partial<React.ComponentProps<typeof DebateClaimTickerCard>> = {}) {
   return render(
-    <DebateClaimTickerCard
-      window={window()}
-      speaker="Preston Mantel"
-      row={null}
-      entity={null}
-      onAnswered={vi.fn()}
-      onDismiss={vi.fn()}
-      {...props}
-    />
+    <DebateClaimTickerCard window={window()} row={null} entity={null} onAnswered={vi.fn()} {...props} />
   );
 }
 
@@ -89,11 +81,24 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('DebateClaimTickerCard', () => {
-  it('names the debater and quotes the claim', () => {
+  it('quotes the claim', () => {
     renderCard();
 
-    expect(screen.getByText('Preston Mantel just said')).toBeInTheDocument();
     expect(screen.getByText(/Supreme Court is no longer providing/)).toBeInTheDocument();
+  });
+
+  // It sits in the debater's own corner, above their name, so repeating the name on the card is
+  // noise in the smallest space on the screen.
+  it('does not repeat the speaker, who is named directly below it', () => {
+    renderCard();
+
+    expect(screen.queryByText(/just said/)).not.toBeInTheDocument();
+  });
+
+  it('fades with its window rather than holding at full strength', () => {
+    const { container } = renderCard({ opacity: 0.4 });
+
+    expect(container.firstElementChild).toHaveStyle({ opacity: '0.4' });
   });
 
   // Showing the split first biases the answer, which makes the tally a measure of itself. It is
@@ -129,29 +134,13 @@ describe('DebateClaimTickerCard', () => {
     expect(onAnswered).not.toHaveBeenCalled();
   });
 
-  it('can be waved away without answering', () => {
-    const onDismiss = vi.fn();
-
-    renderCard({ onDismiss });
-    fireEvent.click(screen.getByLabelText('Dismiss claim'));
-
-    expect(onDismiss).toHaveBeenCalledExactlyOnceWith('claim-1');
-  });
-
   // The video behind the card is one large play/pause button.
   it('does not toggle playback when the card itself is clicked', () => {
     const onToggle = vi.fn();
 
     render(
       <button type="button" onClick={onToggle}>
-        <DebateClaimTickerCard
-          window={window()}
-          speaker="Preston Mantel"
-          row={null}
-          entity={null}
-          onAnswered={vi.fn()}
-          onDismiss={vi.fn()}
-        />
+        <DebateClaimTickerCard window={window()} row={null} entity={null} onAnswered={vi.fn()} />
       </button>
     );
     fireEvent.click(screen.getByText(/Supreme Court is no longer providing/));

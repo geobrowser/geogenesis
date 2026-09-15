@@ -21,7 +21,7 @@ import { DebateClaimTickerCard } from './debate-claim-ticker';
  * the same moment; a second copy here would be two controls publishing the same vote.
  */
 export function DebateScorecard({ ticker, onReplay }: { ticker: DebateTicker; onReplay: () => void }) {
-  const { claims, answered, rowsByClaimId, entitiesByClaimId, speakerByClaimId, onAnswered, onDismiss } = ticker;
+  const { claims, answered, rowsByClaimId, entitiesByClaimId, onAnswered } = ticker;
 
   const [skipped, setSkipped] = React.useState<ReadonlySet<string>>(() => new Set());
 
@@ -58,13 +58,23 @@ export function DebateScorecard({ ticker, onReplay }: { ticker: DebateTicker; on
             <DebateClaimTickerCard
               key={next.id}
               window={{ claim: next, startMs: 0, endMs: 0 }}
-              speaker={speakerByClaimId.get(next.id) ?? null}
               row={rowsByClaimId.get(next.id) ?? null}
               entity={entitiesByClaimId.get(next.id) ?? null}
               onAnswered={onAnswered}
-              onDismiss={skip}
             />
           </div>
+          {/* The live card has no dismiss — it fades on its own. Here nothing is going to take the
+              claim away, so passing on it has to be a thing the reader can say. */}
+          <button
+            type="button"
+            onClick={event => {
+              event.stopPropagation();
+              skip(next.id);
+            }}
+            className="mt-2 text-metadata text-grey-04 transition-colors hover:text-text"
+          >
+            Skip this one
+          </button>
         </>
       ) : (
         <Text as="p" variant="footnote" color="grey-04" className="mt-1">
