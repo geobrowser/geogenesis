@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import type { ExploreFeedItem, ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import type { Stance } from '~/core/profile/use-person-positions';
@@ -130,27 +131,99 @@ function ActivityGallery({
   const rowSpaceIds = React.useMemo(() => [...new Set(shown.map(row => row.spaceId))], [shown]);
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
+  const { scrollerRef, centredId } = useCentredCard(shown);
+
   return (
-    // `snap-x` so a flick lands on a card rather than between two.
-    //
-    // The gap at either end is a spacer element rather than padding on the
-    // scroller: a scroll container's trailing padding is dropped by every
-    // browser that matters, so `p-4` gave 16px on the left and nothing on the
-    // right. Spacers are honoured on both sides, and `scroll-px` keeps a snapped
-    // card off the edge it lands against.
-    <div className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 items-stretch gap-4 overflow-x-auto py-2">
-      <span aria-hidden className="w-0 shrink-0 pl-4" />
-      {shown.map(row => (
-        <GalleryCard
-          key={`${row.entityId}-${row.spaceId}`}
-          row={row}
-          label={spaceLabel(labelsById, row.spaceId)}
-          stance={stanceByClaimId?.[normId(row.entityId)]}
-        />
-      ))}
-      <span aria-hidden className="w-0 shrink-0 pr-4" />
-    </div>
+    // One at a time. A debate card decides for itself whether to play from how
+    // much of it is on screen, which is right in a stacked feed and wrong in a
+    // row — here several are fully visible at once and every one of them would
+    // start. The gate names the one nearest the middle.
+    <DebatePlaybackGate allowedId={centredId}>
+      {/*
+       * `snap-x` so a flick lands on a card rather than between two.
+       *
+       * The gap at either end is a spacer element rather than padding on the
+       * scroller: a scroll container's trailing padding is dropped by every
+       * browser that matters, so `p-4` gave 16px on the left and nothing on the
+       * right. Spacers are honoured on both sides, and `scroll-px` keeps a
+       * snapped card off the edge it lands against.
+       */}
+      <div
+        ref={scrollerRef}
+        className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 items-stretch gap-4 overflow-x-auto py-2"
+      >
+        <span aria-hidden className="w-0 shrink-0 pl-4" />
+        {shown.map(row => (
+          <GalleryCard
+            key={`${row.entityId}-${row.spaceId}`}
+            row={row}
+            label={spaceLabel(labelsById, row.spaceId)}
+            stance={stanceByClaimId?.[normId(row.entityId)]}
+          />
+        ))}
+        <span aria-hidden className="w-0 shrink-0 pr-4" />
+      </div>
+    </DebatePlaybackGate>
   );
+}
+
+/**
+ * Which card is nearest the middle of the row.
+ *
+ * Measured rather than derived from the scroll offset over a card width: the
+ * cards are `min(420px, 80vw)` and the spacers at either end are not cards at
+ * all, so arithmetic on a nominal width would drift. Read on scroll through a
+ * rAF, which is what keeps a flick from measuring on every frame it fires.
+ */
+function useCentredCard(rows: ExploreFeedRow[]) {
+  const scrollerRef = React.useRef<HTMLDivElement | null>(null);
+  const [centredIndex, setCentredIndex] = React.useState(0);
+
+  React.useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    let frame = 0;
+
+    const measure = () => {
+      frame = 0;
+      const cards = scroller.querySelectorAll('[data-activity-card]');
+      if (cards.length === 0) return;
+
+      const middle = scroller.scrollLeft + scroller.clientWidth / 2;
+      let bestIndex = 0;
+      let bestDistance = Infinity;
+
+      cards.forEach((card, index) => {
+        const element = card as HTMLElement;
+        const centre = element.offsetLeft + element.offsetWidth / 2;
+        const distance = Math.abs(centre - middle);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestIndex = index;
+        }
+      });
+
+      setCentredIndex(bestIndex);
+    };
+
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(measure);
+    };
+
+    measure();
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      scroller.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [rows]);
+
+  return { scrollerRef, centredId: rows[centredIndex]?.entityId ?? null };
 }
 
 /**
@@ -182,24 +255,26 @@ function GalleryCard({
   };
 
   return (
-    <div className="flex w-[min(420px,80vw)] shrink-0 snap-start flex-col rounded-lg border border-grey-02 px-4">
-      {/*
-       * Which side *this person* came down on — the thing you opened their
-       * profile to find out, and not something the card itself can say, since
-       * the card speaks for the viewer. Above it rather than inside it for the
-       * same reason.
-       */}
+    // The card as it draws itself, with nothing around it.
+    //
+    // It had a border and padding of its own here, which put a box inside a box
+    // and squeezed the card's own spacing — the "weird" of it. The only thing
+    // overridden is the rule the card draws under itself to separate it from
+    // the next one *down*: in a row there is nothing below it, so the rule is a
+    // stray line.
+    <div data-activity-card className="w-[min(420px,80vw)] shrink-0 snap-start [&>*]:border-b-0">
       {stance && (
-        <div className="-mb-2 pt-3">
-          <span
-            className={cx(
-              'inline-flex items-center rounded-full border px-2 py-px text-tag',
-              stance === 'agree' ? 'border-green text-green' : 'border-red-01 text-red-01'
-            )}
-          >
-            {stance === 'agree' ? 'Agreed' : 'Disagreed'}
-          </span>
-        </div>
+        // Which side *this person* came down on — the thing you opened their
+        // profile to find out, and not something the card can say, since the
+        // card speaks for the viewer.
+        <span
+          className={cx(
+            'mt-4 inline-flex items-center rounded-full border px-2 py-px text-tag',
+            stance === 'agree' ? 'border-green text-green' : 'border-red-01 text-red-01'
+          )}
+        >
+          {stance === 'agree' ? 'Agreed' : 'Disagreed'}
+        </span>
       )}
 
       {/* The Join button is hidden: this is a record being read, not a place to
