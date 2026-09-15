@@ -308,18 +308,6 @@
 @custom-variant claim-pills-wide (@container (width >= 272px));
 @custom-variant claim-card-narrow (@container (width < 520px));
 
-/* `debate-card-narrow` — the width under which the explore debate card moves its interaction bar
-   from a rail on the right of the videos to a row beneath them, which is the same move the
-   full-screen feed makes between its own breakpoints.
-
-   The media caps at 480px and the rail is 36px with a 12px gutter, so 528px is the width at which
-   both fit without the video giving anything up; below it every pixel the rail takes comes out of
-   the video, whose overlaid name, position chip and Winner pill are already competing for the
-   bottom edge. 540px leaves a little slack above that floor. Asked of the container and not the
-   window for the reason above: this card is drawn in the explore feed, in a side panel and in a
-   data block, at widths a viewport measurement says nothing about. */
-@custom-variant debate-card-narrow (@container (width < 540px));
-
 /* Lifts the debate and the indicator and settles them back, miming the direction the
    content travels when the viewer scrolls on to the next debate. */
 @keyframes debateScrollHint {

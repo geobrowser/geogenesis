@@ -135,12 +135,10 @@ export function DebateExploreFeedCard({
 
   const readyDebate = debate != null && watchable && processed ? debate : null;
 
-  // The interaction state lives here rather than beside either bar because the card draws the bar
-  // twice — a rail at card widths that fit one, a row beneath the videos at widths that don't —
-  // and only one is ever visible. Both must read the same open flags, and the dialogs they open
-  // must exist once: a `hidden` container still mounts its children, so a share dialog rendered
-  // inside the losing bar would portal itself on screen anyway. Same arrangement, same reason, as
-  // `DebateFeedItem` on the full-screen feed.
+  // The interaction state lives on the card rather than inside the bar: the bar is shared with the
+  // full-screen feed and stays presentational, so what a control opens — the claims overlay, the
+  // share dialog, the app's comments panel — is the card's to own and to render once. Same
+  // arrangement, same reason, as `DebateFeedItem` on the full-screen feed.
   const [claimsOpen, setClaimsOpen] = React.useState(false);
   const share = useDebateShareAction();
   const { commentsTarget, openComments } = useEntityCommentsPanel();
@@ -179,76 +177,64 @@ export function DebateExploreFeedCard({
   };
 
   return (
-    <article
-      ref={setContainer}
-      // `@container` so `debate-card-narrow:` below asks this card's own width. See the variant's
-      // note in `styles.css`: the same card is drawn in the feed, a side panel and a data block.
-      className="@container flex flex-col gap-2 border-b border-divider py-4 last:border-b-0"
-    >
-      <div className="flex items-stretch gap-3">
-        {/* Meta, title and media share one column capped at the width the designs (and the
-            full-screen feed) use — feed columns, especially data blocks, can be much wider and
-            full-bleed videos dwarf the card. Capping the whole column rather than the media alone
-            is what puts "Join a debate" on the videos' right edge instead of the card's, and it is
-            the arrangement full screen already has: header above the media, bar beside it. */}
-        <div className="flex w-full max-w-[480px] min-w-0 flex-col gap-2">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              {!hideSpaceLink ? (
-                <Link
-                  href={NavUtils.toSpace(item.spaceId)}
-                  className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
-                >
-                  <SpaceThumb image={item.spaceImage} name={item.spaceName} />
-                  <span className="min-w-0 truncate">{item.spaceName}</span>
-                </Link>
-              ) : null}
-              {!hideJoinButton && !item.isMemberOrEditor ? (
-                // The design puts the join CTA as a compact chip beside the space name, unlike the
-                // generic card's right-aligned button — the right side holds the debate CTA.
-                <ExploreJoinSpaceButton
-                  spaceId={item.spaceId}
-                  hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
-                  variant="pill"
-                  label="Join"
-                />
-              ) : null}
-              <span className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
-                Debate
-              </span>
-              <span className="text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">{timeAgo}</span>
-            </div>
-            {/* The same control the full-screen header carries, at the card's own type scale. It
-                replaced a "View all" link into this space's debates: the card is already a debate
-                you can watch, so the CTA worth the corner is the one that puts you in one rather
-                than one that lists more. */}
-            <JoinDebateButton className="!text-[14px]" />
+    <article ref={setContainer} className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
+      {/* Meta, title, media and the interaction bar share one column capped at the width the
+          designs (and the full-screen feed) use — feed columns, especially data blocks, can be
+          much wider and full-bleed videos dwarf the card. Capping the column rather than the media
+          alone is what lines "Join a debate" up with the videos' right edge instead of the card's,
+          and what keeps the bar beneath the videos the same width as them. */}
+      <div className="flex w-full max-w-[480px] min-w-0 flex-col gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            {!hideSpaceLink ? (
+              <Link
+                href={NavUtils.toSpace(item.spaceId)}
+                className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
+              >
+                <SpaceThumb image={item.spaceImage} name={item.spaceName} />
+                <span className="min-w-0 truncate">{item.spaceName}</span>
+              </Link>
+            ) : null}
+            {!hideJoinButton && !item.isMemberOrEditor ? (
+              // The design puts the join CTA as a compact chip beside the space name, unlike the
+              // generic card's right-aligned button — the right side holds the debate CTA.
+              <ExploreJoinSpaceButton
+                spaceId={item.spaceId}
+                hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
+                variant="pill"
+                label="Join"
+              />
+            ) : null}
+            <span className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
+              Debate
+            </span>
+            <span className="text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">{timeAgo}</span>
           </div>
-
-          <DebateCardTitle item={item} debate={readyDebate} opensSidePanel={titleOpensSidePanel} />
-
-          {readyDebate ? (
-            // `nearViewport` is the same 800px-margin gate the geo-chat lookups already use, so
-            // the recordings resolve while the card is still approaching rather than on arrival.
-            <DebateCardVideos debate={readyDebate} active={active} preload={nearViewport} />
-          ) : (
-            <DebateVideoSkeleton />
-          )}
-
-          {/* Too narrow for the rail: the same bar as a row beneath the videos, which is the move
-              the full-screen feed makes at its own narrow widths. Both orientations are always in
-              the DOM and the container query hides one — `display: none` takes it out of the tab
-              order and the accessibility tree with it, so only the visible one is ever reachable.
-              Wrapper controls display so it doesn't collide with the bar's own `flex`. */}
-          <div data-testid="debate-card-interaction-row" className="mt-1 hidden debate-card-narrow:block">
-            <DebateInteractionBar orientation="horizontal" {...interactionProps} />
-          </div>
+          {/* The same control the full-screen header carries, at the card's own type scale. It
+              replaced a "View all" link into this space's debates: the card is already a debate
+              you can watch, so the CTA worth the corner is the one that puts you in one rather
+              than one that lists more. */}
+          <JoinDebateButton className="!text-[14px]" />
         </div>
 
-        {/* A rail down the right of the videos, bottom-aligned, exactly as the full-screen feed
-            arranges it at the widths that fit one. */}
-        <div data-testid="debate-card-interaction-rail" className="flex flex-col justify-end debate-card-narrow:hidden">
-          <DebateInteractionBar orientation="vertical" {...interactionProps} />
+        <DebateCardTitle item={item} debate={readyDebate} opensSidePanel={titleOpensSidePanel} />
+
+        {readyDebate ? (
+          // `nearViewport` is the same 800px-margin gate the geo-chat lookups already use, so
+          // the recordings resolve while the card is still approaching rather than on arrival.
+          <DebateCardVideos debate={readyDebate} active={active} preload={nearViewport} />
+        ) : (
+          <DebateVideoSkeleton />
+        )}
+
+        {/* Beneath the videos, the same width as them. Full screen carries this bar in a rail down
+            the media's right at desktop widths and moves it here at narrow ones; a card is short
+            and wide where full screen is tall, so it takes the horizontal arrangement at every
+            width. Same component, same controls, same counts — only the axis differs, and that is
+            a difference full screen already makes with itself. Wrapper carries the margin so it
+            doesn't collide with the bar's own `flex`. */}
+        <div className="mt-1">
+          <DebateInteractionBar orientation="horizontal" {...interactionProps} />
         </div>
       </div>
 
