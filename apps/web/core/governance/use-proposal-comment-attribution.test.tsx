@@ -14,7 +14,7 @@ const EDITOR_SPACE_ID = '4cd9cca5530b69056aead853c8088e7e';
 const MEMBER_SPACE_ID = 'cc0bf85a27c217d75993bc785a15b198';
 const OTHER_EDITOR_SPACE_ID = 'b7e3a1d95c2f48e0a6d31f7c8b04e592';
 
-const fetchProposal = vi.fn();
+const fetchProposalVotes = vi.fn();
 
 // The app runs these under wagmi and jotai providers; here they are the two inputs being varied.
 let personalSpaceId: string | null = EDITOR_SPACE_ID;
@@ -29,7 +29,7 @@ vi.mock('~/partials/governance/optimistic-voted-atom', () => ({
 }));
 
 vi.mock('~/core/io/subgraph/fetch-proposal', () => ({
-  fetchProposal: (options: { id: string }) => fetchProposal(options),
+  fetchProposalVotes: (options: { id: string }) => fetchProposalVotes(options),
 }));
 
 let client: QueryClient;
@@ -40,8 +40,8 @@ function wrapper({ children }: { children: React.ReactNode }) {
 
 function proposal(spaceId = SPACE_ID) {
   return {
-    space: { id: spaceId },
-    proposalVotes: { nodes: [{ accountId: EDITOR_SPACE_ID, vote: 'REJECT' }] },
+    spaceId,
+    votes: [{ voterSpaceId: EDITOR_SPACE_ID, vote: 'REJECT' }],
   };
 }
 
@@ -64,14 +64,14 @@ function render(overrides: Partial<Parameters<typeof useProposalCommentAttributi
 
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  fetchProposal.mockReset();
+  fetchProposalVotes.mockReset();
   personalSpaceId = EDITOR_SPACE_ID;
   optimisticVote = undefined;
 });
 
 describe('useProposalCommentAttribution', () => {
   it('joins the passed editors, the fetched members and the votes', async () => {
-    fetchProposal.mockResolvedValue(proposal());
+    fetchProposalVotes.mockResolvedValue(proposal());
 
     const { result } = render();
 
@@ -80,21 +80,21 @@ describe('useProposalCommentAttribution', () => {
   });
 
   it('says nothing about an entity that is not a proposal', async () => {
-    fetchProposal.mockResolvedValue(null);
+    fetchProposalVotes.mockResolvedValue(null);
 
     const { result } = render();
 
-    await waitFor(() => expect(fetchProposal).toHaveBeenCalled());
+    await waitFor(() => expect(fetchProposalVotes).toHaveBeenCalled());
     expect(result.current.size).toBe(0);
   });
 
   it('asks nothing at all while there are no comments to badge', async () => {
-    fetchProposal.mockResolvedValue(proposal());
+    fetchProposalVotes.mockResolvedValue(proposal());
 
     const { result } = render({ enabled: false });
 
     await waitFor(() => expect(result.current.size).toBe(0));
-    expect(fetchProposal).not.toHaveBeenCalled();
+    expect(fetchProposalVotes).not.toHaveBeenCalled();
   });
 
   /**
@@ -104,7 +104,7 @@ describe('useProposalCommentAttribution', () => {
    * is worse than no badge. The vote survives, because it is the proposal's own record.
    */
   it('drops both roles when the proposal lives in a different space than the one being read', async () => {
-    fetchProposal.mockResolvedValue(proposal(OTHER_SPACE_ID));
+    fetchProposalVotes.mockResolvedValue(proposal(OTHER_SPACE_ID));
 
     const { result } = render();
 
@@ -121,7 +121,7 @@ describe('useProposalCommentAttribution', () => {
    * page correcting itself about a named person, which is what the badge exists to avoid.
    */
   it('draws nothing while a role lookup is still in flight', async () => {
-    fetchProposal.mockResolvedValue(proposal());
+    fetchProposalVotes.mockResolvedValue(proposal());
 
     const { result, rerender } = renderHook(
       (props: { isLoadingRoles: boolean }) =>
@@ -150,7 +150,7 @@ describe('useProposalCommentAttribution', () => {
    * reader is looking at their own comment when they cast it.
    */
   it('shows the vote the reader just cast, before it can be read back', async () => {
-    fetchProposal.mockResolvedValue(proposal());
+    fetchProposalVotes.mockResolvedValue(proposal());
     optimisticVote = 'ACCEPT';
 
     const { result } = render();
@@ -159,9 +159,9 @@ describe('useProposalCommentAttribution', () => {
   });
 
   it("leaves another editor's recorded vote alone when the reader votes", async () => {
-    fetchProposal.mockResolvedValue({
-      space: { id: SPACE_ID },
-      proposalVotes: { nodes: [{ accountId: OTHER_EDITOR_SPACE_ID, vote: 'REJECT' }] },
+    fetchProposalVotes.mockResolvedValue({
+      spaceId: SPACE_ID,
+      votes: [{ voterSpaceId: OTHER_EDITOR_SPACE_ID, vote: 'REJECT' }],
     });
     optimisticVote = 'ACCEPT';
 
@@ -178,7 +178,7 @@ describe('useProposalCommentAttribution', () => {
    * "Rejected" — stating something false rather than declining to state anything.
    */
   it('draws nothing when the role lookup failed, rather than reporting no roles', async () => {
-    fetchProposal.mockResolvedValue(proposal());
+    fetchProposalVotes.mockResolvedValue(proposal());
 
     const { result, rerender } = renderHook(
       (props: { isRolesError: boolean }) =>
