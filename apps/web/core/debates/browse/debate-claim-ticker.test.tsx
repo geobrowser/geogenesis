@@ -11,8 +11,8 @@ import { DebateClaimTickerCard } from './debate-claim-ticker';
 const CLAIM_SPACE = '52c7ae149838b6d47ce0f3b2a5974546';
 
 const mocks = vi.hoisted(() => ({
-  /** What the shared position control reports the viewer currently holds. */
-  viewerPosition: null as string | null,
+  /** What the shared position control reports the viewer currently holds — a side, not a string. */
+  viewerPosition: null as boolean | null,
   respond: vi.fn(),
 }));
 
@@ -101,24 +101,38 @@ describe('DebateClaimTickerCard', () => {
     expect(container.firstElementChild).toHaveStyle({ opacity: '0.4' });
   });
 
-  // Showing the split first biases the answer, which makes the tally a measure of itself. It is
-  // also the payoff for answering, so it has to be withheld to be worth anything.
-  it('withholds the crowd split until the viewer has taken a side', () => {
+  // The line has to stay a line. A split appearing under it mid-playback would resize the card
+  // while the reader is looking at it, and the numbers have a home on the end-of-debate card.
+  it('never grows a crowd split, answered or not', () => {
     renderCard();
+    expect(screen.queryByTestId('crowd-split')).not.toBeInTheDocument();
 
+    cleanup();
+    mocks.viewerPosition = true;
+    renderCard();
     expect(screen.queryByTestId('crowd-split')).not.toBeInTheDocument();
   });
 
-  it('reveals the crowd split once the viewer has answered', () => {
-    mocks.viewerPosition = 'positive';
+  // Small, recessive, and unlabelled on screen — so the accessible name is the only thing telling
+  // a screen reader which side is which.
+  it('offers both sides as icons that still name themselves', () => {
+    renderCard();
+
+    expect(screen.getByLabelText('Agree')).toBeInTheDocument();
+    expect(screen.getByLabelText('Disagree')).toBeInTheDocument();
+  });
+
+  it('shows which side the viewer took', () => {
+    mocks.viewerPosition = true;
 
     renderCard();
 
-    expect(screen.getByTestId('crowd-split')).toBeInTheDocument();
+    expect(screen.getByLabelText('Agree')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Disagree')).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('reports the answer up so the card is not asked again on a rewind', () => {
-    mocks.viewerPosition = 'positive';
+    mocks.viewerPosition = true;
     const onAnswered = vi.fn();
 
     renderCard({ onAnswered });
