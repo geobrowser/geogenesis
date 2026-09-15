@@ -33,30 +33,66 @@ export function tickerWindows(claims: TimedClaim[]): TickerWindow[] {
 }
 
 /**
- * The claim to show at this moment, or null.
+ * How many cards may be stacked over a debater at once, before the oldest is dropped.
  *
- * One card at a time, by design: two debaters talking over each other is the debate, but two cards
- * is a form. When windows overlap — the test debate has a pair eight seconds apart — the most
- * recently started wins, so the card always tracks what is being said now rather than lagging on
- * something that has moved on.
+ * Two, not three: the stack grows upward from just above the debater's name, and the subtitle sits
+ * a little higher on the same tile. Three cards reach into it, which is the crowding this layout
+ * exists to avoid.
+ */
+export const MAX_STACKED_CARDS = 2;
+
+/** Long enough to register as arriving rather than blinking into place. */
+const FADE_IN_MS = 250;
+/** The tail of a card's window, over which it fades out instead of vanishing. */
+const FADE_OUT_MS = 1_500;
+
+/**
+ * How visible a card is at this moment, in [0, 1].
+ *
+ * Driven by the playhead rather than a CSS animation, because the playhead is the source of truth
+ * and it can jump: a viewer who scrubs back into the middle of a claim should find the card at full
+ * strength, not mid-way through an animation that started when the element mounted.
+ */
+export function cardOpacity(window: TickerWindow, playheadMs: number): number {
+  if (playheadMs < window.startMs || playheadMs >= window.endMs) return 0;
+
+  const sinceStart = playheadMs - window.startMs;
+  if (sinceStart < FADE_IN_MS) return sinceStart / FADE_IN_MS;
+
+  const untilEnd = window.endMs - playheadMs;
+  if (untilEnd < FADE_OUT_MS) return untilEnd / FADE_OUT_MS;
+
+  return 1;
+}
+
+export type StackedCard = { window: TickerWindow; opacity: number };
+
+/**
+ * The claims to show over a debater right now, oldest first.
+ *
+ * Rendered in this order down a column, the newest card sits at the bottom, nearest the debater's
+ * name, and earlier ones ride up above it as they age out — the shape of a live chat rather than a
+ * dialog. Capped at {@link MAX_STACKED_CARDS}: a busy turn can put five claims inside ten seconds,
+ * and the point of the corner is that it leaves the face alone.
  *
  * `dismissed` carries the claims the viewer has answered or waved away. They are skipped rather
  * than redrawn, so seeking backwards does not re-ask a question already answered.
  */
-export function activeTickerClaim(
+export function tickerStack(
   windows: TickerWindow[],
   playheadMs: number,
-  dismissed: ReadonlySet<string> = new Set()
-): TickerWindow | null {
-  let active: TickerWindow | null = null;
-
-  for (const window of windows) {
-    if (dismissed.has(window.claim.id)) continue;
-    if (playheadMs < window.startMs || playheadMs >= window.endMs) continue;
-    if (active === null || window.startMs > active.startMs) active = window;
-  }
-
-  return active;
+  dismissed: ReadonlySet<string> = new Set(),
+  max: number = MAX_STACKED_CARDS
+): StackedCard[] {
+  return windows
+    .filter(
+      window =>
+        !dismissed.has(window.claim.id) && playheadMs >= window.startMs && playheadMs < window.endMs
+    )
+    .sort((a, b) => a.startMs - b.startMs)
+    // Drop the oldest when there are more than fit, so what is on screen is what was just said.
+    .slice(-max)
+    .map(window => ({ window, opacity: cardOpacity(window, playheadMs) }));
 }
 
 export type ClaimMarker = { id: string; text: string; atMs: number; fraction: number };
