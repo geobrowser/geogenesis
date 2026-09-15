@@ -5,11 +5,13 @@ import * as React from 'react';
 import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate, DebateClaim } from '~/core/debates/api';
+import { type ClaimTiming, formatTimecode } from '~/core/debates/claim-timing';
 import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { type TranscriptClaim, claimsForParticipant, unmatchedClaims } from '~/core/debates/transcript-claims';
+import { useClaimTimings } from '~/core/debates/use-claim-timings';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -41,6 +43,9 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
   const votes = useDebateVotes(debate);
   // Same query key as the feed's count badge, so opening the panel doesn't refetch.
   const { claims, isLoading, error } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
+  // When each claim was said. Published timecodes where they exist, matched against the transcript
+  // otherwise. Rows without an answer simply show no timecode.
+  const { timings } = useClaimTimings(debate.id, claims);
 
   // Every claim a debate publishes lands in the debate's own space, so one lookup covers the panel.
   const claimsSpaceId = React.useMemo(
@@ -159,6 +164,7 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
               }
               rowsByClaimId={rowsByClaimId}
               entitiesByClaimId={entitiesByClaimId}
+              timings={timings}
               isLoading={isOrdering}
               error={error}
             />
@@ -175,6 +181,7 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
               claims={orphaned}
               rowsByClaimId={rowsByClaimId}
               entitiesByClaimId={entitiesByClaimId}
+              timings={timings}
               isLoading={false}
               error={null}
             />
@@ -189,12 +196,14 @@ function ClaimList({
   claims,
   rowsByClaimId,
   entitiesByClaimId,
+  timings,
   isLoading,
   error,
 }: {
   claims: TranscriptClaim[];
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
+  timings: Map<string, ClaimTiming>;
   isLoading: boolean;
   error: Error | null;
 }) {
@@ -228,6 +237,7 @@ function ClaimList({
               claim={claim}
               row={rowsByClaimId.get(claim.id) ?? null}
               entity={entitiesByClaimId.get(claim.id) ?? null}
+              timing={timings.get(claim.id) ?? null}
             />
           </li>
         ))}
@@ -259,7 +269,17 @@ function ClaimList({
  * controls are space-scoped, so there is nothing correct to point either one at — better a dead row
  * than one that navigates somewhere wrong or publishes a response into the wrong space.
  */
-function ClaimRow({ claim, row, entity }: { claim: TranscriptClaim; row: DebateClaim | null; entity: Entity | null }) {
+function ClaimRow({
+  claim,
+  row,
+  entity,
+  timing,
+}: {
+  claim: TranscriptClaim;
+  row: DebateClaim | null;
+  entity: Entity | null;
+  timing: ClaimTiming | null;
+}) {
   if (claim.spaceId === null) {
     return (
       <Text as="p" variant="metadata" color="text">
@@ -275,8 +295,26 @@ function ClaimRow({ claim, row, entity }: { claim: TranscriptClaim; row: DebateC
           {claim.text}
         </Text>
       </Link>
+      <ClaimTimecode timing={timing} />
       <PanelClaimControls claimId={claim.id} spaceId={claim.spaceId} row={row} entity={entity} />
     </>
+  );
+}
+
+/**
+ * When this claim was said.
+ *
+ * Nothing is drawn for a claim whose moment is only known to the turn (`source: 'block'`, a ~30s
+ * window) or not at all. A timecode reads as "here it is", and pointing at a half-minute of video
+ * is a worse answer than staying quiet — the reader still has the claim text and the panel.
+ */
+function ClaimTimecode({ timing }: { timing: ClaimTiming | null }) {
+  if (!timing || timing.source === 'block') return null;
+
+  return (
+    <Text as="span" variant="footnote" color="grey-04" className="mt-1 block tabular-nums">
+      Said at {formatTimecode(timing.startMs)}
+    </Text>
   );
 }
 

@@ -26,6 +26,12 @@ const mocks = vi.hoisted(() => ({
   rowGroups: [] as Array<Array<{ spaceId: string; claimIds: string[] }>>,
   /** Whether each rendered row's controls asked for the account-level match, in render order. */
   positionControlOffersDebate: [] as boolean[],
+  /** What `useDebateTranscript` answers with, for the timecode on each row. */
+  transcript: { data: undefined, isSuccess: true, isError: false } as {
+    data?: { segments: unknown[] };
+    isSuccess: boolean;
+    isError: boolean;
+  },
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
@@ -129,6 +135,10 @@ vi.mock('~/core/debates/hooks', () => ({
     mocks.rowGroups.push(groups);
     return { claims: [], isLoading: false, isError: false };
   },
+  // Reached through `useClaimTimings`, which the panel calls to put a timecode on each row.
+  // `mocks.transcript` lets a test supply segments; by default there are none, which is the shape
+  // of every debate recorded before claim timecodes existed.
+  useDebateTranscript: () => mocks.transcript,
 }));
 
 vi.mock('~/design-system/prefetch-link', () => ({
@@ -140,13 +150,13 @@ vi.mock('~/design-system/avatar', () => ({ Avatar: () => <div data-testid="avata
 vi.mock('./winner-vote-button', () => ({ WinnerVoteButton: () => <button type="button">Winner?</button> }));
 
 function claim(id: string, text: string, overrides: Partial<TranscriptClaim> = {}): TranscriptClaim {
-  return { id, text, spaceId: CLAIM_SPACE, ...overrides };
+  return { id, text, spaceId: CLAIM_SPACE, blockId: 'block-1', publishedTiming: null, ...overrides };
 }
 
 function grouped(byAuthor: Record<string, TranscriptClaim[]>, unattributed: TranscriptClaim[] = []) {
   const byAuthorSpaceId = new Map(Object.entries(byAuthor));
   const all = [...byAuthorSpaceId.values()].flat().concat(unattributed);
-  return { all, byAuthorSpaceId, unattributed, totalCount: all.length };
+  return { all, byAuthorSpaceId, unattributed, blocks: [], totalCount: all.length };
 }
 
 function participant(spaceId: string, name: string, slot: 1 | 2): DebateParticipant {
@@ -222,6 +232,27 @@ describe('DebateClaimsPanel', () => {
 
     expect(mocks.positionControlOffersDebate).not.toHaveLength(0);
     expect(mocks.positionControlOffersDebate.every(offers => offers === false)).toBe(true);
+  });
+
+  it('shows when a claim was said once the debate carries timecodes', () => {
+    mocks.claims = grouped({
+      [PRESTON_SPACE]: [claim('claim-1', 'Sleep matters.', { publishedTiming: { startMs: 134_600, endMs: 143_140 } })],
+    });
+
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+
+    expect(within(cardFor('Preston Mantel')).getByText('Said at 2:15')).toBeInTheDocument();
+  });
+
+  // Every debate recorded before timecodes existed, which is nearly all of them. The row is the
+  // same row it always was; it just says nothing about when.
+  it('says nothing about timing for a debate that has none', () => {
+    mocks.claims = grouped({ [PRESTON_SPACE]: [claim('claim-1', 'Sleep matters.')] });
+
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+
+    expect(within(cardFor('Preston Mantel')).getByText('Sleep matters.')).toBeInTheDocument();
+    expect(screen.queryByText(/^Said at /)).not.toBeInTheDocument();
   });
 
   it('links each claim to its entity in the space the claim lives in', () => {
