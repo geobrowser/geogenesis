@@ -210,6 +210,68 @@ describe('useClaimResponseIndexedNotifier', () => {
     expect(mocks.notify.mock.calls[1]?.slice(0, 4)).toEqual(['space-1', 'claim-1', 'stance', true]);
   });
 
+  // When a newer write fails, `useEntityResponse` restores the earlier run, and geo-chat was last told
+  // the failed run's side.
+  it('reports a restored run that was replaced while it waited', async () => {
+    const releases: Array<() => void> = [];
+    mocks.notify.mockImplementation(() => new Promise<void>(resolve => releases.push(resolve)));
+    const { queryClient, wrapper } = createHarness();
+    renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });
+    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'] as const;
+    const state = (status: 'reconciling' | 'indexed', expectedResponse: 'positive' | 'negative', runId: string) => ({
+      status,
+      pending: {
+        entityId: 'claim-1',
+        expectedResponse,
+        personalSpaceId: 'profile-1',
+        responseKind: 'stance',
+        spaceId: 'space-1',
+      },
+      runId,
+    });
+
+    act(() => queryClient.setQueryData(queryKey, state('reconciling', 'positive', 'run-1')));
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(1));
+    act(() => queryClient.setQueryData(queryKey, state('indexed', 'positive', 'run-1')));
+    act(() => queryClient.setQueryData(queryKey, state('reconciling', 'negative', 'run-2')));
+
+    await act(async () => releases[0]?.());
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
+    expect(mocks.notify.mock.calls[1]?.[3]).toBe(false);
+    await act(async () => releases[1]?.());
+
+    // run-2's write fails and run-1's indexed state is restored.
+    act(() => queryClient.setQueryData(queryKey, state('indexed', 'positive', 'run-1')));
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(3));
+    expect(mocks.notify.mock.calls[2]?.[3]).toBe(true);
+  });
+
+  it('reports a restored run again after a newer run reached geo-chat', async () => {
+    const { queryClient, wrapper } = createHarness();
+    renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });
+    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'] as const;
+    const state = (status: 'reconciling' | 'indexed', expectedResponse: 'positive' | 'negative', runId: string) => ({
+      status,
+      pending: {
+        entityId: 'claim-1',
+        expectedResponse,
+        personalSpaceId: 'profile-1',
+        responseKind: 'stance',
+        spaceId: 'space-1',
+      },
+      runId,
+    });
+
+    act(() => queryClient.setQueryData(queryKey, state('indexed', 'positive', 'run-1')));
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(1));
+    act(() => queryClient.setQueryData(queryKey, state('reconciling', 'negative', 'run-2')));
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
+
+    act(() => queryClient.setQueryData(queryKey, state('indexed', 'positive', 'run-1')));
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(3));
+    expect(mocks.notify.mock.calls[2]?.[3]).toBe(true);
+  });
+
   it('reports cleared responses and ignores curation indexing', async () => {
     const { queryClient, wrapper } = createHarness();
     renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });

@@ -14,7 +14,6 @@ import {
 } from './api';
 import { refreshRematchClaimBatches, rematchClaimBatchesWithClaim } from './rematch-claims-query-key';
 
-const MAX_NOTIFIED_RUNS = 256;
 /** Wait after a 429 that carries no `Retry-After`. */
 const RATE_LIMITED_RETRY_MS = 5_000;
 /** Attempts after a 429 before a report is dropped. */
@@ -63,6 +62,8 @@ type ReportLane = {
   waiting: ClaimReport | null;
   retryTimer: ReturnType<typeof setTimeout> | null;
   rateLimitedRetries: number;
+  /** The last report accepted into this lane. A repeat of it is the same run firing again. */
+  lastKey: string | null;
 };
 
 export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: unknown) {
@@ -130,8 +131,6 @@ export function useClaimResponseIndexedNotifier(
   accountKey: string | null
 ) {
   const queryClient = useQueryClient();
-  const notifiedRuns = React.useRef(new Set<string>());
-  const notifiedRunOrder = React.useRef<string[]>([]);
   // Lanes outlive the effect, so a re-enabled notifier queues behind a report still in flight
   // instead of racing it.
   const lanes = React.useRef(new Map<string, ReportLane>());
@@ -155,11 +154,6 @@ export function useClaimResponseIndexedNotifier(
   React.useEffect(() => {
     if (!enabled || !accountKey) return;
     activeAccountKey.current = accountKey;
-
-    const forgetNotification = (notificationKey: string) => {
-      notifiedRuns.current.delete(notificationKey);
-      notifiedRunOrder.current = notifiedRunOrder.current.filter(key => key !== notificationKey);
-    };
 
     // The only refresh guaranteed to postdate the notification, so every surface reading geo-chat's
     // copy of the position — the rematch picker (GEO-2603) and the readiness sources (GEO-2814) —
@@ -214,8 +208,8 @@ export function useClaimResponseIndexedNotifier(
             return;
           }
           lane.rateLimitedRetries = 0;
-          // Not delivered, so a later event for the same submission may try again.
-          forgetNotification(report.notificationKey);
+          // Not delivered, so the same report may be sent again.
+          if (lane.lastKey === report.notificationKey) lane.lastKey = null;
         })
         .finally(() => {
           if (lane.inFlight === controller) lane.inFlight = null;
@@ -226,20 +220,22 @@ export function useClaimResponseIndexedNotifier(
     };
 
     const report = (next: ClaimReport) => {
-      if (notifiedRuns.current.has(next.notificationKey)) return;
-
-      notifiedRuns.current.add(next.notificationKey);
-      notifiedRunOrder.current.push(next.notificationKey);
-      if (notifiedRunOrder.current.length > MAX_NOTIFIED_RUNS) {
-        const expired = notifiedRunOrder.current.shift();
-        if (expired) notifiedRuns.current.delete(expired);
-      }
-
       let lane = lanes.current.get(next.laneKey);
       if (!lane) {
-        lane = { accountKey: next.accountKey, inFlight: null, waiting: null, retryTimer: null, rateLimitedRetries: 0 };
+        lane = {
+          accountKey: next.accountKey,
+          inFlight: null,
+          waiting: null,
+          retryTimer: null,
+          rateLimitedRetries: 0,
+          lastKey: null,
+        };
         lanes.current.set(next.laneKey, lane);
       }
+      // Any other report is sent, including an earlier run restored after a newer one failed:
+      // geo-chat was last told the newer run's side.
+      if (lane.lastKey === next.notificationKey) return;
+      lane.lastKey = next.notificationKey;
       if (lane.inFlight || lane.retryTimer) {
         lane.waiting = next;
         return;
