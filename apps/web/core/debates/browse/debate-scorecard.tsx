@@ -5,12 +5,11 @@ import * as React from 'react';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { type TimedClaim, formatTimecode } from '~/core/debates/claim-timing';
-import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 
-import { ClaimIconButton, type DebateTicker } from './debate-claim-ticker';
+import type { DebateTicker } from './debate-claim-ticker';
 
 /**
  * The ask, once the video has stopped.
@@ -137,8 +136,6 @@ function ScorecardClaim({
     }
   }, [control.viewerPosition, claim.id, onAnswered]);
 
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
-
   return (
     <div className="px-4 py-3.5">
       <div className="flex items-baseline justify-between gap-3">
@@ -159,30 +156,17 @@ function ScorecardClaim({
       </div>
       <p className="mt-1.5 text-metadataMedium leading-snug text-text">{claim.text}</p>
 
-      {/* The same control as the floating lines, so answering here and answering there look like
-          the same act rather than two different features. */}
-      <div className="mt-2.5 flex items-center gap-1">
-        <ClaimIconButton
+      {/* The claim card's own pills, not a lookalike. This is the same question the explore feed,
+          the hub and the claims panel ask, and there is room here for the full control — unlike the
+          floating lines, which are too narrow for it and use bare icons instead. */}
+      <div className="mt-3">
+        <PositionRow
+          positions={control.optimisticPositions}
           responseKind={responseKind}
-          position
-          size="md"
-          surface="card"
-          label={copy.positiveAction}
-          selected={control.viewerPosition === true}
+          viewerPosition={control.viewerPosition}
+          onRespond={control.respond}
           disabled={!control.canRespond}
-          title={control.actionTitle(true) || copy.positiveAction}
-          onClick={() => control.respond(true)}
-        />
-        <ClaimIconButton
-          responseKind={responseKind}
-          position={false}
-          size="md"
-          surface="card"
-          label={copy.negativeAction}
-          selected={control.viewerPosition === false}
-          disabled={!control.canRespond}
-          title={control.actionTitle(false) || copy.negativeAction}
-          onClick={() => control.respond(false)}
+          titleFor={control.actionTitle}
         />
       </div>
 
