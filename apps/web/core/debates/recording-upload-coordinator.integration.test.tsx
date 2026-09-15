@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   markUploaded: vi.fn(),
   observer: null as null | ((uploads: DebateRecordingUpload[]) => void),
   queue: [] as DebateRecordingUpload[],
+  queueEpoch: 0,
   resolveUser: vi.fn(),
   scheduleRetry: vi.fn(),
   thankingDebateId: null as string | null,
@@ -122,13 +123,17 @@ vi.mock('./api', async importOriginal => ({
 vi.mock('./recording-upload-queue', async importOriginal => ({
   ...(await importOriginal<typeof import('./recording-upload-queue')>()),
   deleteDebateRecordingUpload: async (id: string) => {
+    const epoch = mocks.queueEpoch;
     await mocks.deleteUpload(id);
+    if (epoch !== mocks.queueEpoch) return;
     mocks.queue = mocks.queue.filter(upload => upload.id !== id);
     mocks.observer?.(mocks.queue);
   },
   getDebateRecordingUpload: (id: string) => mocks.getUpload(id),
   markDebateRecordingUploaded: async (id: string, filename: string) => {
+    const epoch = mocks.queueEpoch;
     await mocks.markUploaded(id, filename);
+    if (epoch !== mocks.queueEpoch) return;
     mocks.queue = mocks.queue.map(upload =>
       upload.id === id
         ? {
@@ -152,7 +157,9 @@ vi.mock('./recording-upload-queue', async importOriginal => ({
     },
   }),
   scheduleDebateRecordingRetry: async (id: string, error: unknown, nextAttemptAt: number) => {
+    const epoch = mocks.queueEpoch;
     await mocks.scheduleRetry(id, error, nextAttemptAt);
+    if (epoch !== mocks.queueEpoch) return;
     mocks.queue = mocks.queue.map(upload =>
       upload.id === id
         ? {
@@ -169,6 +176,7 @@ vi.mock('./recording-upload-queue', async importOriginal => ({
 }));
 
 beforeEach(() => {
+  mocks.queueEpoch += 1;
   mocks.activityDebate = null;
   mocks.thankingDebateId = 'debate-1';
   mocks.cancelRecording.mockReset().mockResolvedValue(undefined);
@@ -209,6 +217,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  mocks.queueEpoch += 1;
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -586,7 +595,11 @@ describe('DebateRecordingUploadCoordinator', () => {
     render(<DebateRecordingUploadCoordinator />);
 
     await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalled());
-    expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/^Waiting to upload 1 debate/);
+    });
+    expect(screen.getByRole('status')).not.toHaveTextContent(/Uploading/);
   });
 
   // The harder half of the same idea: the banner's own recording is past its next attempt, so its
@@ -602,7 +615,10 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalled());
     // Eligible, but behind the card's debate — so waiting, not uploading.
-    expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/^Waiting to upload 1 debate/);
+    });
+    expect(screen.getByRole('status')).not.toHaveTextContent(/Uploading/);
   });
 
   // Switching the control off asks for the same confirmation the Cancel button opened. The ticket
