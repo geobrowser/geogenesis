@@ -1030,7 +1030,7 @@ export function ClaimsTab({
           />
         </aside>
       )}
-      <div className={workspace ? '@container/claims flex min-w-0 flex-1 flex-col' : 'contents'}>
+      <div className={workspace ? 'flex min-w-0 flex-1 flex-col' : 'contents'}>
         <HubStickyControls workspaceStickyOffset={workspace}>
           {/* Pinned above the filters, the way the matches list pins it. A request sent from here used
             to vanish the moment it was sent — the card that sent it looks exactly as it did before,
@@ -1176,15 +1176,7 @@ export function ClaimsTab({
             {/* One list, in the server's order. Splitting out the claims you'd already answered
             re-ranked the tab by something the Position filter in the dropdown already covers, and
             it moved a card between two sections the moment you took a side. */}
-            <HubCardList
-              className={
-                workspace
-                  ? // Reflows on the centre column's own width, so the rails collapsing gives the grid
-                    // its columns back without a second set of breakpoints.
-                    'grid grid-cols-1 gap-3 @[30rem]/claims:grid-cols-2 @[46rem]/claims:grid-cols-3'
-                  : undefined
-              }
-            >
+            <HubCardList>
               {visibleClaims.map(entry => (
                 <MatchmakingClaimCard
                   key={claimRowKey(entry)}
