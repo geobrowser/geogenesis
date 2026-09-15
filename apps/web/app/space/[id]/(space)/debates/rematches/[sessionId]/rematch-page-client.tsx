@@ -1681,6 +1681,21 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * happening.
    */
   const stoppedShortHere = stoppedShort && graphFiltered;
+
+  /**
+   * The list has rows and the switch is hiding all of them.
+   *
+   * The only empty state here that is true of a list *with rows in it*, which is why it has to come
+   * before the ones about filters and about the corpus. Without it, `recommended` told a viewer
+   * nothing was recommended for this pair when their recommendations were claims they had simply
+   * already answered — and under a filter it was worse than wrong, offering "Clear filters" for
+   * rows no filter was hiding.
+   *
+   * Not gated on `graphFiltered`, unlike the two paging states above it: the collapse runs on every
+   * Explore source, and those two are about a *catalogue* being paged rather than about rows being
+   * hidden.
+   */
+  const collapsedEverything = hidesAnswered && visibleClaims.length === 0 && narrowedClaims.length > 0;
   const searchingMessage = hidesAnswered ? 'Looking for claims you haven’t answered yet…' : 'Looking for more claims…';
   const stoppedShortMessage = hidesAnswered
     ? 'Nothing you haven’t already answered in the claims searched so far.'
@@ -2135,24 +2150,26 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               ? searchingMessage
               : stoppedShortHere
                 ? stoppedShortMessage
-                : hasFilters
-                  ? 'No claims match these filters.'
-                  : matchesOnlyHere
-                    ? `You and ${remoteName} haven’t taken opposite sides on anything yet.`
-                    : tab === 'opponent'
-                      ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
-                      : tab === 'related'
-                        ? // Reachable even though the tab only appears when neighbours were found: every
-                          // one of them can still be ruled out by this session — already debated, or in a
-                          // space that cannot carry a published debate.
-                          'No related claims are left to debate.'
-                        : source === 'recommended'
-                          ? `Nothing recommended for you and ${remoteName} yet.`
-                          : source === 'mine'
-                            ? 'You haven’t taken a position on any claims yet.'
-                            : source === 'featured'
-                              ? 'No featured claims are available to debate yet.'
-                              : 'No other eligible claims are available yet.'
+                : collapsedEverything
+                  ? 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
+                  : hasFilters
+                    ? 'No claims match these filters.'
+                    : matchesOnlyHere
+                      ? `You and ${remoteName} haven’t taken opposite sides on anything yet.`
+                      : tab === 'opponent'
+                        ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
+                        : tab === 'related'
+                          ? // Reachable even though the tab only appears when neighbours were found: every
+                            // one of them can still be ruled out by this session — already debated, or in a
+                            // space that cannot carry a published debate.
+                            'No related claims are left to debate.'
+                          : source === 'recommended'
+                            ? `Nothing recommended for you and ${remoteName} yet.`
+                            : source === 'mine'
+                              ? 'You haven’t taken a position on any claims yet.'
+                              : source === 'featured'
+                                ? 'No featured claims are available to debate yet.'
+                                : 'No other eligible claims are available yet.'
           }
           // Four dead ends, and each has a different way out. Ordered by how much the viewer has
           // to give up: clearing their filters, then dropping the toggle, then leaving the tab or
@@ -2162,28 +2179,30 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               ? undefined
               : stoppedShortHere
                 ? { label: 'Keep looking', onClick: keepLooking }
-                : hasFilters
-                  ? {
-                      label: 'Clear filters',
-                      onClick: () => {
-                        setSearch('');
-                        // The menu's own clear row, so this counts as choosing the unfiltered list and
-                        // the default cannot put its spaces back.
-                        onSpacesClear();
-                        setTopicIds([]);
-                      },
-                    }
-                  : matchesOnlyHere
-                    ? { label: 'Show all their positions', onClick: () => setMatchesOnly(false) }
-                    : tab === 'opponent'
-                      ? // GEO-2861. An opponent who has answered nothing is a dead end this tab cannot
-                        // resolve, and the catalogue next door is the whole of the way out of it.
-                        { label: 'Explore claims', onClick: () => setTab('explore') }
-                      : source === 'mine'
-                        ? // The same dead end one level down: a viewer who has answered nothing cannot
-                          // fill this list from here, and the whole corpus is one pick away.
-                          { label: 'Show all claims', onClick: () => setChosenSource('all') }
-                        : undefined
+                : collapsedEverything
+                  ? { label: 'Show my positions', onClick: () => setHideMyPositions(false) }
+                  : hasFilters
+                    ? {
+                        label: 'Clear filters',
+                        onClick: () => {
+                          setSearch('');
+                          // The menu's own clear row, so this counts as choosing the unfiltered list and
+                          // the default cannot put its spaces back.
+                          onSpacesClear();
+                          setTopicIds([]);
+                        },
+                      }
+                    : matchesOnlyHere
+                      ? { label: 'Show all their positions', onClick: () => setMatchesOnly(false) }
+                      : tab === 'opponent'
+                        ? // GEO-2861. An opponent who has answered nothing is a dead end this tab cannot
+                          // resolve, and the catalogue next door is the whole of the way out of it.
+                          { label: 'Explore claims', onClick: () => setTab('explore') }
+                        : source === 'mine'
+                          ? // The same dead end one level down: a viewer who has answered nothing cannot
+                            // fill this list from here, and the whole corpus is one pick away.
+                            { label: 'Show all claims', onClick: () => setChosenSource('all') }
+                          : undefined
           }
         >
           {showsSections ? (

@@ -21,6 +21,14 @@ export type ClaimSpaceScope = {
 export type ScopedClaims = {
   /** Pages that answer the scope in force, or none. Never the previous scope's. */
   pages: MatchmakingClaimsResponse[];
+  /**
+   * Rows the server has returned for the key in force — zero while the previous key's are held.
+   *
+   * Not `pages.length` summed: `pages` keeps the last answer through a filter change on purpose, so
+   * a caller measuring whether a page *landed* would read the previous question's total as this
+   * one's. `useTaggedClaims` masks its own count the same way, so the two paths agree.
+   */
+  fetched: number;
   /** The facets riding page one, on the same terms. */
   facets: MatchmakingFacets | undefined;
   /**
@@ -125,8 +133,26 @@ export function useScopedMatchmakingClaims(
   // browsable space.
   const countsPending = !unusable && (claimsQuery.isPlaceholderData || claimsQuery.isLoading);
 
+  /**
+   * Rows the server has returned for *this* key, which is not the same question as what is drawn.
+   *
+   * `pages` deliberately keeps the previous key's rows through a filter change — narrowing should
+   * narrow rather than blank and refill. A count cannot: a caller measuring whether a page *landed*
+   * would read the previous question's total as this one's, and the real first page then arrives
+   * smaller and is never evaluated. The tagged query masks its own count for the same reason; this
+   * is that rule on the index path, so the two agree.
+   */
+  const fetched = React.useMemo(
+    () =>
+      masked || claimsQuery.isPlaceholderData
+        ? 0
+        : (claimsQuery.data?.pages.reduce((total, page) => total + page.claims.length, 0) ?? 0),
+    [claimsQuery.data, claimsQuery.isPlaceholderData, masked]
+  );
+
   return {
     pages,
+    fetched,
     facets,
     facetsSettled,
     unusable,

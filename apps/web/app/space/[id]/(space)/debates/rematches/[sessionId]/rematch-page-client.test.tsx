@@ -4292,6 +4292,35 @@ describe('Hide my positions', () => {
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
   });
 
+  /**
+   * A list the switch emptied says so, rather than blaming the corpus.
+   *
+   * The only empty state here that is true of a list *with rows in it*. Without it, Explore told a
+   * viewer there were no other eligible claims when what had happened is that they had answered the
+   * ones there are — and under a filter it offered "Clear filters" for rows no filter was hiding.
+   */
+  it('says the viewer answered these rather than that there are none', async () => {
+    // Every tagged claim answered, so the catalogue has rows and the switch hides all of them.
+    mocks.claims = [sharedClaim(), browsedClaim(true)];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(await screen.findByText(/You’ve answered every claim here/)).toBeInTheDocument();
+    expect(screen.queryByText(/No other eligible claims/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Show my positions' })).toBeInTheDocument();
+  });
+
+  // And the way out actually works: the rows were there the whole time.
+  it('brings them back from that empty state', async () => {
+    mocks.claims = [sharedClaim(), browsedClaim(true)];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show my positions' }));
+
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+  });
+
   // It is that backlog by definition, so the switch could only ever empty it — a broken tab rather
   // than a filter. Not drawn rather than drawn and ignored, so the state cannot be set from a tab
   // where it does nothing.

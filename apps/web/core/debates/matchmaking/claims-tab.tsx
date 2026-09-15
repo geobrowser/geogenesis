@@ -597,7 +597,19 @@ export function ClaimsTab({
   // that bites: a corpus that had reached the cap handed its exhaustion to the corpus that replaced
   // it, which then arrived stopped.
   const keyedSpaceIds = graphSourced ? spaceIds : debouncedSpaceIds;
-  const listKey = `${debouncedSearch}|${keyedSpaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}|${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}|${hideMyPositions}`;
+  const listKey = `${debouncedSearch}|${keyedSpaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}|${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}`;
+
+  /**
+   * The same list, plus the switch — which the paging budget needs and the order must not have.
+   *
+   * Turning the switch off makes a barren page full retrospectively, so a budget that did not reset
+   * with it stayed capped over rows it had just revealed. The *order* is the opposite: it is held so
+   * the list does not rearrange under someone reading it, and the switch changes which rows show
+   * rather than which list this is. Keyed on it, pressing the switch threw the held order away and
+   * re-sorted every surviving row to the server's current ranking — moving the cards the viewer was
+   * looking at, which is the one thing `useStableListOrder` exists to prevent.
+   */
+  const pagingKey = `${listKey}|${hideMyPositions}`;
   const claims = useStableListOrder(graphSourced ? taggedEntries : serverClaims, claimRowKey, listKey);
 
   /**
@@ -792,12 +804,12 @@ export function ClaimsTab({
     // The server's own count, before the space and publishability gates run over it. A page they
     // empty entirely is the barren case this bound is for, and counting the gated rows would make
     // it look like no page had landed at all.
-    loaded: graphSourced ? taggedFetched : pages.reduce((total, page) => total + page.claims.length, 0),
+    loaded: graphSourced ? taggedFetched : claimsQuery.fetched,
     visible: visibleClaims.length,
     settling: answersInFlight,
     hasNextPage,
     fetchNextPage,
-    resetKey: listKey,
+    resetKey: pagingKey,
   });
 
   /**
@@ -1207,7 +1219,7 @@ export function SpaceTopicFilters({
   );
 
   return (
-    <div className="@container flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {leading}
       <HubMultiFilterMenu
         label={spaceMenuLabel}
