@@ -51,10 +51,9 @@ type DebateExploreFeedCardProps = {
  * same interaction bar, framed in the explore card chrome — meta row, title, and the media capped
  * to the card's width.
  *
- * Both renditions render `DebateFeedPlayer` and `DebateInteractionBar`, so everything inside the
- * debate itself — the videos, the debater identities and position chips, the winner share, the
- * vote pill and the counts — is one component in both places rather than two that look alike
- * (GEO-2912).
+ * Both renditions render `DebateFeedPlayer` and `DebateInteractionBar`, in the same arrangement —
+ * the claim over the videos, the bar as a rail down their right — so everything inside the debate
+ * itself is one component in both places rather than two that look alike (GEO-2912).
  */
 export function DebateExploreFeedCard({
   item,
@@ -133,15 +132,58 @@ export function DebateExploreFeedCard({
     mediaQuery.isError ||
     (mediaQuery.data != null && !processed);
 
+  const readyDebate = debate != null && watchable && processed ? debate : null;
+
+  // The interaction state lives here rather than beside either bar because the card draws the bar
+  // twice — a rail at card widths that fit one, a row beneath the videos at widths that don't —
+  // and only one is ever visible. Both must read the same open flags, and the dialogs they open
+  // must exist once: a `hidden` container still mounts its children, so a share dialog rendered
+  // inside the losing bar would portal itself on screen anyway. Same arrangement, same reason, as
+  // `DebateFeedItem` on the full-screen feed.
+  const [claimsOpen, setClaimsOpen] = React.useState(false);
+  const share = useDebateShareAction();
+  const { commentsTarget, openComments } = useEntityCommentsPanel();
+  // Null until the debate resolves, which the hook reads as "not enabled". Shares a cache entry
+  // with the Claims panel, so opening the panel doesn't refetch what this count already loaded.
+  const { claims } = useDebateTranscriptClaims(readyDebate?.id ?? null, readyDebate?.claim.space_id ?? null);
+
+  // Runs after every hook so the early return never skips one.
   if (notWatchable) {
     return <>{fallback}</>;
   }
 
-  const readyDebate = debate != null && watchable && processed ? debate : null;
   const timeAgo = formatExploreRelativeTime(item.createdAtSec);
 
+  /**
+   * Comments and counts differ from the full-screen feed only in where they come from and where
+   * they lead, never in how they look:
+   *  - Comments open the app's global panel, as they do from every other explore card, instead of
+   *    the feed's own side rail.
+   *  - The comment count is the one the explore feed already resolved for the card, so a page of
+   *    debates doesn't fetch a thread apiece to render a number.
+   *  - Claims and Share stand down until the debate resolves — votes and comments need no debate,
+   *    those two do — so the footer is present from the first paint and doesn't shift the card
+   *    under the reader when the geo-chat lookups land.
+   */
+  const interactionProps = {
+    entityId: item.entityId,
+    spaceId: item.spaceId,
+    commentCount: item.commentCount,
+    commentsPanelOpen: commentsTarget?.entityId === item.entityId,
+    onComment: () => openComments(item.entityId, item.spaceId),
+    claimsCount: claims.totalCount,
+    onClaims: readyDebate ? () => setClaimsOpen(true) : undefined,
+    onShare: readyDebate ? share.onOpen : undefined,
+    shareOpen: share.open,
+  };
+
   return (
-    <article ref={setContainer} className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
+    <article
+      ref={setContainer}
+      // `@container` so `debate-card-narrow:` below asks this card's own width. See the variant's
+      // note in `styles.css`: the same card is drawn in the feed, a side panel and a data block.
+      className="@container flex flex-col gap-2 border-b border-divider py-4 last:border-b-0"
+    >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {!hideSpaceLink ? (
@@ -176,95 +218,113 @@ export function DebateExploreFeedCard({
         </Link>
       </div>
 
-      <ExploreCardEntityLink item={item} opensSidePanel={titleOpensSidePanel}>
-        <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
-          {item.title}
-        </h2>
-      </ExploreCardEntityLink>
+      <DebateCardTitle item={item} debate={readyDebate} opensSidePanel={titleOpensSidePanel} />
 
-      {/* Cap the media at the width the designs (and the full-screen feed) use — feed columns,
-          especially data blocks, can be much wider and full-bleed videos dwarf the card. */}
-      <div className="w-full max-w-[480px]">
-        {readyDebate ? (
-          // `nearViewport` is the same 800px-margin gate the geo-chat lookups already use, so
-          // the recordings resolve while the card is still approaching rather than on arrival.
-          <DebateCardVideos debate={readyDebate} active={active} preload={nearViewport} />
-        ) : (
-          <DebateVideoSkeleton />
-        )}
+      <div className="flex items-stretch gap-3">
+        {/* Cap the media at the width the designs (and the full-screen feed) use — feed columns,
+            especially data blocks, can be much wider and full-bleed videos dwarf the card. */}
+        <div className="w-full max-w-[480px] min-w-0">
+          {readyDebate ? (
+            // `nearViewport` is the same 800px-margin gate the geo-chat lookups already use, so
+            // the recordings resolve while the card is still approaching rather than on arrival.
+            <DebateCardVideos debate={readyDebate} active={active} preload={nearViewport} />
+          ) : (
+            <DebateVideoSkeleton />
+          )}
+        </div>
+        {/* A rail down the right of the videos, bottom-aligned, exactly as the full-screen feed
+            arranges it at the widths that fit one. */}
+        <div data-testid="debate-card-interaction-rail" className="flex flex-col justify-end debate-card-narrow:hidden">
+          <DebateInteractionBar orientation="vertical" {...interactionProps} />
+        </div>
       </div>
 
-      <DebateCardActions item={item} debate={readyDebate} className="mt-1" />
+      {/* Too narrow for the rail: the same bar as a row beneath the videos, which is the move the
+          full-screen feed makes at its own narrow widths. Both are always in the DOM and the
+          container query hides one — `display: none` takes it out of the tab order and the
+          accessibility tree with it, so only the visible one is ever reachable. Wrapper controls
+          display so it doesn't collide with the bar's own `flex`. */}
+      <div data-testid="debate-card-interaction-row" className="mt-1 hidden debate-card-narrow:block">
+        <DebateInteractionBar orientation="horizontal" {...interactionProps} />
+      </div>
+
+      {readyDebate ? (
+        <>
+          <DebateShareDialog
+            open={share.open}
+            onOpenChange={share.onOpenChange}
+            debate={readyDebate}
+            spaceId={item.spaceId}
+            openerRef={share.openerRef}
+          />
+          {/* A right-hand overlay rather than the feed's side rail, since the explore feed has no
+              rail to put it in. The panel itself is the same component. */}
+          {claimsOpen ? (
+            <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
+              <DebateClaimsPanel debate={readyDebate} onClose={() => setClaimsOpen(false)} />
+            </div>
+          ) : null}
+        </>
+      ) : null}
     </article>
   );
 }
 
 /**
- * The card's footer: the same `DebateInteractionBar` the full-screen feed renders beside its
- * videos, in its horizontal orientation (GEO-2912). Sharing the bar rather than restyling a
- * second one is what keeps the vote pill, the score and the counts from drifting apart again.
+ * The card's title: the claim being debated, linked to the claim entity (GEO-2879).
  *
- * Three differences from the full-screen feed, all of them about where a control leads rather
- * than what it looks like:
- *  - Comments open the app's global panel, as they do from every other explore card, instead of
- *    the feed's own side rail.
- *  - The comment count is the one the explore feed already resolved for the card, so a page of
- *    debates doesn't fetch a thread apiece to render a number.
- *  - Claims open `DebateClaimsPanel` as a right-hand overlay, since the explore feed has no rail
- *    to put it in.
+ * The Debate entity's own name is `"<A> vs. <B> on <claim>"` — the claim with a preamble — so a
+ * card titled with it said the same thing as full screen, at twice the length and in a different
+ * voice. Until the geo-chat lookup lands there is no claim to show, and the entity name stands in
+ * rather than the title arriving a beat after the card.
  *
- * Rendered before the debate resolves, too — the videos are a skeleton at that point and a
- * footer that appears late would shift the card under the reader. Until then it carries the
- * votes and comments, which need no debate, and leaves out Claims and Share, which do.
+ * Reuses `ExploreCardEntityLink` rather than hand-rolling a second anchor: it carries the
+ * modifier-click rules that keep cmd-click opening a new tab (GEO-2701) and the
+ * `data-entity-side-panel-opener` marking that stops a panel switch from reading as an outside
+ * click. Its props are a structural identity — entity, space, types — so handing it the claim's is
+ * exactly what it asks for. Empty `types` on purpose: that component refuses the panel to debates,
+ * because a full-screen video experience is a poor fit for one (GEO-2794), and this is the claim,
+ * which a panel serves well. That is the whole reason GEO-2879 can have what GEO-2794 refused.
  */
-function DebateCardActions({
+function DebateCardTitle({
   item,
   debate,
-  className,
+  opensSidePanel,
 }: {
   item: ExploreFeedItem;
   debate: Debate | null;
-  className?: string;
+  opensSidePanel: boolean;
 }) {
-  const [claimsOpen, setClaimsOpen] = React.useState(false);
-  const share = useDebateShareAction();
-  const { commentsTarget, openComments } = useEntityCommentsPanel();
-  // Nulls until the debate resolves, which the hook reads as "not enabled" — the count it feeds
-  // isn't rendered until then either.
-  const { claims } = useDebateTranscriptClaims(debate?.id ?? null, debate?.claim.space_id ?? null);
+  const heading = (
+    <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
+      {debate ? debate.claim.claim : item.title}
+    </h2>
+  );
+
+  if (!debate) {
+    return (
+      <ExploreCardEntityLink item={item} opensSidePanel={opensSidePanel}>
+        {heading}
+      </ExploreCardEntityLink>
+    );
+  }
+
+  // The claim's own space, not the card's. They are the same space today — a debate is published
+  // to the space its claim lives in, which is why the transcript-claims lookup above scopes by
+  // this same field — but the claim is what the link resolves, so it answers for its own home.
+  //
+  // Both ids normalized: geo-chat hands these back as UUIDs where the graph, and every route and
+  // panel target in explore, spells them as plain hex.
+  const claimIdentity = {
+    entityId: ID.uuidToHex(debate.claim.claim_entity_id),
+    spaceId: ID.uuidToHex(debate.claim.space_id),
+    types: [],
+  };
 
   return (
-    <>
-      <DebateInteractionBar
-        orientation="horizontal"
-        className={className}
-        entityId={item.entityId}
-        spaceId={item.spaceId}
-        commentCount={item.commentCount}
-        commentsPanelOpen={commentsTarget?.entityId === item.entityId}
-        onComment={() => openComments(item.entityId, item.spaceId)}
-        claimsCount={claims.totalCount}
-        onClaims={debate ? () => setClaimsOpen(true) : undefined}
-        onShare={debate ? share.onOpen : undefined}
-        shareOpen={share.open}
-      />
-      {debate ? (
-        <>
-          <DebateShareDialog
-            open={share.open}
-            onOpenChange={share.onOpenChange}
-            debate={debate}
-            spaceId={item.spaceId}
-            openerRef={share.openerRef}
-          />
-          {claimsOpen ? (
-            <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
-              <DebateClaimsPanel debate={debate} onClose={() => setClaimsOpen(false)} />
-            </div>
-          ) : null}
-        </>
-      ) : null}
-    </>
+    <ExploreCardEntityLink item={claimIdentity} opensSidePanel={opensSidePanel}>
+      {heading}
+    </ExploreCardEntityLink>
   );
 }
 

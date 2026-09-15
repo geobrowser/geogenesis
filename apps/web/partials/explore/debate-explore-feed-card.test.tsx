@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -81,8 +81,16 @@ vi.mock('~/core/debates/browse/debate-claims-panel', () => ({
   ),
 }));
 
+// Forwards the anchor props it is given rather than only `href`: the title's click handling —
+// which is what decides between a panel and a navigation — arrives as `onClick`, and a mock that
+// drops it would let a broken title pass.
 vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  PrefetchLink: ({
+    children,
+    entityId: _entityId,
+    spaceId: _spaceId,
+    ...props
+  }: React.ComponentPropsWithoutRef<'a'> & { entityId?: string; spaceId?: string }) => <a {...props}>{children}</a>,
 }));
 
 vi.mock('~/design-system/fallback-image', () => ({
@@ -100,6 +108,13 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
 
 vi.mock('./explore-join-space-button', () => ({
   ExploreJoinSpaceButton: () => <button type="button" data-testid="join-button" />,
+}));
+
+// `ExploreCardEntityLink` renders for real — it carries the title's modifier-click and panel rules,
+// which is the behavior under test — so only its side-panel sink is stood in for.
+const openSidePanel = vi.fn();
+vi.mock('~/core/hooks/use-entity-side-panel', () => ({
+  useEntitySidePanel: () => ({ openSidePanel, closeSidePanel: vi.fn(), sidePanelTarget: null }),
 }));
 
 const item: ExploreFeedItem = {
@@ -128,7 +143,9 @@ function watchableDebate(): Debate {
     claim: {
       id: 'claim-summary-1',
       space_id: '52c7ae149838b6d47ce0f3b2a5974546',
-      claim_entity_id: 'claim-entity-1',
+      // Hyphenated on purpose: geo-chat returns UUIDs where the graph, and every explore route and
+      // panel target, spells ids as plain hex. The card has to normalize this.
+      claim_entity_id: '9b2a1f30-4d5c-4a8e-9f11-77c0a2b3d4e5',
       claim: 'Waking up early improves health and productivity',
       description: null,
     },
@@ -206,6 +223,48 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.queryByTestId('fallback')).toBeNull();
   });
 
+  /**
+   * GEO-2879. The Debate entity's name is `"<A> vs. <B> on <claim>"`; full screen titles the
+   * debate with the claim alone, and so does the card.
+   */
+  it('titles the card with the claim once the debate resolves', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+
+    expect(screen.getByRole('heading').textContent).toBe('Waking up early improves health and productivity');
+    expect(screen.queryByText('Fast fashion should be discouraged with higher taxation')).toBeNull();
+  });
+
+  it('points the title at the claim entity in the claim’s own space, with ids normalized', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+
+    // A real href on a real anchor, so cmd-click still opens the claim in a new tab (GEO-2701).
+    expect(screen.getByRole('link', { name: /Waking up early/ }).getAttribute('href')).toBe(
+      '/space/52c7ae149838b6d47ce0f3b2a5974546/9b2a1f304d5c4a8e9f1177c0a2b3d4e5'
+    );
+  });
+
+  it('opens the claim in the side panel on an unmodified click when Explore asks for it', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    render(<DebateExploreFeedCard item={item} titleOpensSidePanel fallback={<div />} />);
+
+    fireEvent.click(screen.getByRole('link', { name: /Waking up early/ }));
+    expect(openSidePanel).toHaveBeenCalledWith(
+      '9b2a1f304d5c4a8e9f1177c0a2b3d4e5',
+      '52c7ae149838b6d47ce0f3b2a5974546',
+      false
+    );
+  });
+
+  it('leaves the entity name as the title until the claim is known', () => {
+    renderCard();
+    expect(screen.getByRole('heading').textContent).toBe('Fast fashion should be discouraged with higher taxation');
+  });
+
   it('renders the fallback when the debate is not watchable', () => {
     mocks.debateQuery = { data: { ...watchableDebate(), status: 'cancelled' } as Debate, isError: false };
     renderCard();
@@ -268,29 +327,49 @@ describe('DebateExploreFeedCard', () => {
     expect(isActive()).toBe('false');
   });
 
+  /**
+   * Both orientations are always in the DOM and the container query hides one, so these scope to
+   * the rail — the arrangement the card shows wherever it has room, and the one that matches the
+   * full-screen feed. jsdom applies no CSS, so an unscoped query would match either.
+   */
+  const rail = () => within(screen.getByTestId('debate-card-interaction-rail'));
+  const row = () => within(screen.getByTestId('debate-card-interaction-row'));
+
   it("renders the same interaction bar the full-screen feed does, with the card's own counts", () => {
     mocks.debateQuery = { data: watchableDebate(), isError: false };
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
     renderCard();
 
-    // The bar's horizontal presentation, not the inline arrows the other explore cards use.
-    expect(screen.getByTestId('vote-buttons').getAttribute('data-presentation')).toBe('debate-horizontal');
+    // The bar's vertical presentation, as a rail beside the videos — not the inline arrows the
+    // other explore cards use.
+    expect(rail().getByTestId('vote-buttons').getAttribute('data-presentation')).toBe('debate-vertical');
 
     // Counts come from what the card already has: the feed's comment count and the shared
-    // transcript-claims query, rather than a thread fetch per card.
-    const comments = screen.getByRole('button', { name: 'Comments' });
-    expect(comments.textContent).toBe('3');
-    expect(screen.getByRole('button', { name: 'Claims' }).textContent).toBe('3');
+    // transcript-claims query, rather than a thread fetch per card. The vertical bar sets its
+    // count under the button rather than inside it, so the count lives on the wrapper.
+    const comments = rail().getByRole('button', { name: 'Comments' });
+    expect(comments.parentElement?.textContent).toBe('3');
+    expect(rail().getByRole('button', { name: 'Claims' }).parentElement?.textContent).toBe('3');
 
     // Marked as an opener so pressing it while the global comments panel is open switches the
     // panel to this debate instead of reading as an outside click that dismisses it.
     expect(comments.hasAttribute('data-entity-comments-opener')).toBe(true);
   });
 
+  /** Cards too narrow for a rail get the same bar as a row beneath the videos. */
+  it('carries a horizontal fallback of the same bar for narrow cards', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+
+    expect(row().getByTestId('vote-buttons').getAttribute('data-presentation')).toBe('debate-horizontal');
+    expect(row().getByRole('button', { name: 'Claims' }).textContent).toBe('3');
+  });
+
   it('keeps votes and comments while the debate is still loading', () => {
     renderCard();
-    expect(screen.getByTestId('vote-buttons')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Comments' })).toBeDefined();
+    expect(rail().getByTestId('vote-buttons')).toBeDefined();
+    expect(rail().getByRole('button', { name: 'Comments' })).toBeDefined();
   });
 
   it('shows Claims and Share actions once the debate is ready, opening the claims panel on demand', () => {
@@ -298,14 +377,27 @@ describe('DebateExploreFeedCard', () => {
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
     renderCard();
 
-    expect(screen.getByRole('button', { name: 'Share debate' })).toBeDefined();
+    expect(rail().getByRole('button', { name: 'Share debate' })).toBeDefined();
 
     expect(screen.queryByTestId('claims-panel')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+    fireEvent.click(rail().getByRole('button', { name: 'Claims' }));
     expect(screen.getByTestId('claims-panel')).toBeDefined();
 
     fireEvent.click(screen.getByText('Close'));
     expect(screen.queryByTestId('claims-panel')).toBeNull();
+  });
+
+  /**
+   * One set of dialogs for both orientations: a `hidden` wrapper still mounts its children, so a
+   * share dialog owned by the losing bar would portal itself on screen anyway.
+   */
+  it('opens one claims panel however many bars are mounted', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+
+    fireEvent.click(row().getByRole('button', { name: 'Claims' }));
+    expect(screen.getAllByTestId('claims-panel')).toHaveLength(1);
   });
 
   it('hides Claims and Share while the debate is still loading', () => {
