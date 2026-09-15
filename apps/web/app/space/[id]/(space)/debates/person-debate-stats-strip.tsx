@@ -26,11 +26,7 @@ export function PersonDebateStatsStrip({ stats, isWinRateLoading }: Props) {
     <div className="grid grid-cols-2 gap-3 @[520px]:grid-cols-4">
       <StatCell label="Claims" value={String(stats.claims)} />
       <StatCell label="Debates" value={String(stats.debates)} />
-      <StatCell
-        label="Won"
-        loading={isWinRateLoading}
-        value={stats.winRate ? `${stats.winRate.percent}%` : '—'}
-      />
+      <StatCell label="Won" loading={isWinRateLoading} value={stats.winRate ? `${stats.winRate.percent}%` : '—'} />
       <SpacesCell spaceIds={stats.spaceIds} />
     </div>
   );
@@ -39,15 +35,9 @@ export function PersonDebateStatsStrip({ stats, isWinRateLoading }: Props) {
 const cellClasses =
   'flex flex-col items-center justify-center gap-1 rounded-lg border border-grey-02 px-3 py-4 text-center';
 
-function StatCell({
-  label,
-  value,
-  loading = false,
-}: {
-  label: string;
-  value: string;
-  loading?: boolean;
-}) {
+const MAX_VISIBLE_SPACE_ICONS = 3;
+
+function StatCell({ label, value, loading = false }: { label: string; value: string; loading?: boolean }) {
   return (
     <div className={cellClasses}>
       {loading ? <Skeleton className="h-[1.375rem] w-12" /> : <p className="text-mediumTitle tabular-nums">{value}</p>}
@@ -72,18 +62,25 @@ function SpacesCell({ spaceIds }: { spaceIds: string[] }) {
       className="max-w-[280px]"
       trigger={
         <button type="button" className={cx(cellClasses, 'cursor-pointer transition-colors hover:border-grey-03')}>
-          <p className="text-mediumTitle tabular-nums">{spaceIds.length}</p>
-          <p className="text-metadata text-grey-04">Spaces</p>
-          <div className="flex -space-x-1.5">
-            {spaceIds.slice(0, 4).map(id => (
-              <SpaceIcon
-                key={id}
-                label={spaceLabel(labelsById, id)}
-                pending={!spaceLabel(labelsById, id) && isLoading}
-                bordered
-              />
-            ))}
+          <div className="flex items-center gap-2">
+            <p className="text-mediumTitle tabular-nums">{spaceIds.length}</p>
+            <div className="flex -space-x-1.5">
+              {spaceIds.slice(0, MAX_VISIBLE_SPACE_ICONS).map(id => (
+                <SpaceIcon
+                  key={id}
+                  label={spaceLabel(labelsById, id)}
+                  pending={!spaceLabel(labelsById, id) && isLoading}
+                  bordered
+                />
+              ))}
+              {spaceIds.length > MAX_VISIBLE_SPACE_ICONS ? (
+                <span className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-md bg-grey-01 px-1 text-[10px] font-medium text-grey-04 tabular-nums ring-2 ring-white">
+                  +{spaceIds.length - MAX_VISIBLE_SPACE_ICONS}
+                </span>
+              ) : null}
+            </div>
           </div>
+          <p className="text-metadata text-grey-04">Spaces</p>
         </button>
       }
     >
