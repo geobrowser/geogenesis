@@ -7,8 +7,6 @@ import cx from 'classnames';
 import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import type { ExploreFeedItem, ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import type { Stance } from '~/core/profile/use-person-positions';
-import { normId } from '~/core/utils/norm-id';
 
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -22,8 +20,6 @@ export type ActivityKind = {
   key: string;
   label: string;
   rows: ExploreFeedRow[];
-  /** Which side this person took, by claim id. Claims only; a debate has no stance. */
-  stanceByClaimId?: Record<string, Stance>;
   /**
    * How many there are in total.
    *
@@ -104,7 +100,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
         )}
       </header>
 
-      <ActivityGallery rows={selected.rows} stanceByClaimId={selected.stanceByClaimId} />
+      <ActivityGallery rows={selected.rows} />
 
       <Link
         href={selected.href}
@@ -117,13 +113,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   );
 }
 
-function ActivityGallery({
-  rows,
-  stanceByClaimId,
-}: {
-  rows: ExploreFeedRow[];
-  stanceByClaimId?: Record<string, Stance>;
-}) {
+function ActivityGallery({ rows }: { rows: ExploreFeedRow[] }) {
   const shown = React.useMemo(() => rows.slice(0, SHOWN), [rows]);
 
   // Looked up once for the gallery. These are routinely spaces the viewer has
@@ -154,12 +144,7 @@ function ActivityGallery({
       >
         <span aria-hidden className="w-0 shrink-0 pl-4" />
         {shown.map(row => (
-          <GalleryCard
-            key={`${row.entityId}-${row.spaceId}`}
-            row={row}
-            label={spaceLabel(labelsById, row.spaceId)}
-            stance={stanceByClaimId?.[normId(row.entityId)]}
-          />
+          <GalleryCard key={`${row.entityId}-${row.spaceId}`} row={row} label={spaceLabel(labelsById, row.spaceId)} />
         ))}
         <span aria-hidden className="w-0 shrink-0 pr-4" />
       </div>
@@ -237,15 +222,7 @@ function useCentredCard(rows: ExploreFeedRow[]) {
  * Narrow enough that the next card is visibly cut off, which is what says the
  * row scrolls without a control saying so.
  */
-function GalleryCard({
-  row,
-  label,
-  stance,
-}: {
-  row: ExploreFeedRow;
-  label: SpaceLabel | undefined;
-  stance: Stance | undefined;
-}) {
+function GalleryCard({ row, label }: { row: ExploreFeedRow; label: SpaceLabel | undefined }) {
   const item: ExploreFeedItem = {
     ...row,
     // The same last resort the feed uses for a space with no name.
@@ -255,28 +232,19 @@ function GalleryCard({
   };
 
   return (
-    // The card as it draws itself, with nothing around it.
+    // The card as it draws itself, with nothing around it and nothing above it.
     //
     // It had a border and padding of its own here, which put a box inside a box
-    // and squeezed the card's own spacing — the "weird" of it. The only thing
-    // overridden is the rule the card draws under itself to separate it from
-    // the next one *down*: in a row there is nothing below it, so the rule is a
-    // stray line.
+    // and squeezed the card's own spacing. A badge for whose profile this is
+    // went here too, and pushed every card that had one out of line with every
+    // card that did not, because it sat in the flow above the card's first row.
+    // Saying which side this person took belongs *inside* the card, as
+    // something it draws — GEO-2921.
+    //
+    // The one thing overridden is the rule the card draws underneath itself to
+    // separate it from the next card *down*. In a row there is nothing below
+    // it, so that rule is a line under nothing.
     <div data-activity-card className="w-[min(420px,80vw)] shrink-0 snap-start [&>*]:border-b-0">
-      {stance && (
-        // Which side *this person* came down on — the thing you opened their
-        // profile to find out, and not something the card can say, since the
-        // card speaks for the viewer.
-        <span
-          className={cx(
-            'mt-4 inline-flex items-center rounded-full border px-2 py-px text-tag',
-            stance === 'agree' ? 'border-green text-green' : 'border-red-01 text-red-01'
-          )}
-        >
-          {stance === 'agree' ? 'Agreed' : 'Disagreed'}
-        </span>
-      )}
-
       {/* The Join button is hidden: this is a record being read, not a place to
           be recruited into. Everything else the card draws — the player, the
           response buttons, the tally — is what this gallery is for. */}
