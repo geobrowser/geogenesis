@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => ({
   viewerSpaceId: 'personal-space',
   /** Whether each render of the card's summary read was enabled, in order. */
   summaryEnabled: [] as boolean[],
+  nearViewport: true,
 }));
 
 vi.mock('../hooks', () => ({
@@ -104,6 +105,12 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
     ),
   };
 });
+
+// Off-screen is the default state of most cards in a list, and the state where this card's reads
+// are deliberately not made. Controllable so a test can be in it.
+vi.mock('~/core/hooks/use-near-viewport', () => ({
+  useNearViewport: () => ({ ref: vi.fn(), nearViewport: mocks.nearViewport }),
+}));
 
 vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
   ClaimResponderAvatars: () => null,
@@ -232,6 +239,7 @@ beforeEach(() => {
   mocks.resetIndexing.mockReset();
   mocks.viewerSpaceId = 'personal-space';
   mocks.summaryEnabled = [];
+  mocks.nearViewport = true;
 });
 
 afterEach(cleanup);
@@ -475,6 +483,35 @@ describe('position avatar stack', () => {
         'title',
         ENTITY_RESPONSE_COPY.stance.removePositive
       );
+    });
+
+    /**
+     * A read nobody made is not an answer.
+     *
+     * `useClaimResponseSummary` reports `isViewerResponseLoading: false` and
+     * `indexedViewerDirection: null` while disabled — the exact shape of "asked, and they hold no
+     * side" — and every card below the fold starts disabled to keep a list of them off the network.
+     * Remembering that would mark the side known before anything had looked it up, and the pills
+     * would go live over a side nobody knew: press one and it republishes the position the viewer
+     * already holds instead of clearing it.
+     */
+    it('does not take a read it never made for an answer', () => {
+      mocks.nearViewport = false;
+
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ viewer_response: null })}
+          answersReady={false}
+          answersMayComeFromIndex
+        />
+      );
+
+      expect(mocks.summaryEnabled.every(enabled => enabled === false)).toBe(true);
+      const agree = screen.getByRole('button', { name: /^Agree/ });
+      expect(agree).toBeDisabled();
+      expect(agree).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
     });
 
     // And it does hand back, once geo-chat says the same thing.

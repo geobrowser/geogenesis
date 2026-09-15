@@ -1015,6 +1015,9 @@ export function ClaimsTab({
           // unpressable until its vocabulary and the viewer's own side have actually arrived. A
           // short list beats a blank one; a wrong publish beats neither, and is what those guard.
           error={graphSourced ? taggedError : claimsQuery.error}
+          // Only the index path has one: it is the viewer-relative read, and so the only one here a
+          // warming-up account can refuse. The tagged catalog is the graph's and answers anybody.
+          failureReason={graphSourced ? undefined : claimsQuery.failureReason}
           // Retries whatever failed, not just the catalog. The error above can come from either of
           // the two lookups behind the list, and neither is keyed on the catalog — so refetching
           // only that left the failed dependency untouched and the error state exactly where it

@@ -1657,11 +1657,19 @@ export function isGeoChatRefusal(error: unknown) {
  * viewer-relative read until it does. Signed *out* produces the same status, so the two are told
  * apart by who is asking rather than by the status — see `isSignInRequired`, the other reading.
  *
+ * 401 only, and not the 403 its sibling also accepts. The registration window answers 401; a 403 is
+ * geo-chat saying this viewer may not read *this*, which is a standing fact about a space they are
+ * not in rather than a wait. Reading both as "not yet" was worse than imprecise: callers act on it.
+ * The claim-rows lookup would have polled a forbidden space every ten seconds for the life of the
+ * tab, the matchmaking reads would have sat through a minute of retries before showing a refusal
+ * that was never going to change, and the hub would have told the viewer their account was being
+ * set up when it had been set up for months.
+ *
  * Lives beside the error it reads because both layers need it: the hub to say what is happening,
  * and the query layer to know a failure is worth asking about again.
  */
 export function isAccountWarmingUp(error: unknown) {
-  return isGeoChatRefusal(error);
+  return error instanceof GeoChatRequestError && error.status === 401;
 }
 
 /**

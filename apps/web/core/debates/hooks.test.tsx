@@ -265,6 +265,34 @@ describe('useDebateClaimsBySpaces', () => {
   });
 
   /**
+   * A 403 in particular, which is the one that looks most like the case this polls for.
+   *
+   * Same shape as the registration refusal and the opposite fact: geo-chat saying this viewer may
+   * not read *this space*, which is standing and will not change by being asked again. Polling it
+   * would have meant one request every ten seconds, per forbidden space, for the life of the tab —
+   * and the hub telling a months-old account that it was still being set up.
+   */
+  it('leaves a space the viewer may not read alone', async () => {
+    vi.useFakeTimers();
+    mocks.listDebateClaims.mockRejectedValue(new GeoChatRequestError('Forbidden', null, 403));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(() => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds: ['claim-1'] }]), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await vi.waitFor(() => expect(result.current.isError).toBe(true));
+    mocks.listDebateClaims.mockClear();
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(mocks.listDebateClaims).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  /**
    * And only for that. A poll that ran on any failure would turn a real outage into a stream of
    * requests against a server already in trouble — and would be asking a question that has been
    * answered. This waits for one specific event.

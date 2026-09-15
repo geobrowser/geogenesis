@@ -40,6 +40,7 @@ import type {
   DebateParticipantSummary,
   MatchmakingReadiness,
 } from '../api';
+import { useGeoChatAuth } from '../hooks';
 import { hubCardMotion } from './hub-motion';
 
 type Props = {
@@ -610,6 +611,12 @@ function RespondableControls({
   // side, which the counts do not depend on. That costs nothing: hosts that resolve the kind
   // through `useClaimResponseState` have already primed this exact key by then, so the extra beat
   // is a cache read, and on the hub's own tabs the rows carry their kind and it is never false.
+  // Who the remembered side below is *about*. Same key every viewer-relative query in this folder
+  // is scoped by, so the memory is scoped the way the reads it remembers already are.
+  const { accountKey: viewerKey } = useGeoChatAuth();
+  // Named, because the memory below has to know whether this read was *asked* — a disabled one
+  // reports "not loading, no side", which is the shape of a settled answer and none of the fact.
+  const summaryEnabled = readResponses && (answersReady || answersMayComeFromIndex);
   const summary = useClaimResponseSummary(
     claim.claim_entity_id,
     claim.space_id,
@@ -618,7 +625,7 @@ function RespondableControls({
     // this read is the thing being waited *for* rather than something waiting behind it. Gating it
     // on `answersReady` there would deadlock: that flag is false precisely because geo-chat has not
     // answered, and this is what answers instead.
-    readResponses && (answersReady || answersMayComeFromIndex)
+    summaryEnabled
   );
 
   /**
@@ -637,12 +644,19 @@ function RespondableControls({
    * and is kept, so clearing a position still clears it. Only the window where the answer is
    * *in flight* reuses the previous one, which is the window `null` means "not yet" in.
    *
-   * Keyed by claim because the card is recycled down a virtualized list, and a remembered side
-   * belongs to the claim it was read for and to no other.
+   * Only from a read that was actually asked. A disabled `useClaimResponseSummary` reports
+   * `isViewerResponseLoading: false` and `indexedViewerDirection: null` — the exact shape of "asked,
+   * and they hold no side" — and every card below the fold starts disabled on `readResponses`. Taken
+   * as an answer that would mark the side known before anything had looked it up, and the pills
+   * would go live over a side nobody knew, which is the one thing this whole path exists to prevent.
+   *
+   * Keyed by claim *and viewer*, because the card is recycled down a virtualized list and outlives a
+   * sign-in: a remembered side belongs to the claim it was read for and to the person it was read
+   * about. Without the second half, signing in on a mounted card inherits the anonymous read.
    */
-  const claimKey = `${claim.space_id}:${claim.claim_entity_id}`;
+  const claimKey = `${claim.space_id}:${claim.claim_entity_id}:${viewerKey ?? 'anon'}`;
   const settledIndexedRef = React.useRef<{ key: string; direction: 'positive' | 'negative' | null } | null>(null);
-  if (!summary.isViewerResponseLoading) {
+  if (summaryEnabled && !summary.isViewerResponseLoading) {
     settledIndexedRef.current = { key: claimKey, direction: summary.indexedViewerDirection ?? null };
   }
   const settledIndexed = settledIndexedRef.current?.key === claimKey ? settledIndexedRef.current : null;
