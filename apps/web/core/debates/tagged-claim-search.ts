@@ -53,14 +53,6 @@ export type TaggedClaimSearch = {
    * `true` when nothing is being searched for, because then there is nothing to wait for.
    */
   settled: boolean;
-  /**
-   * Whether the ids on hand belong to an earlier search while this one is in flight.
-   *
-   * Two states share "no answer yet" and want opposite treatment: nothing on screen, where a list
-   * should say it is loading, and the previous search's rows still drawn, where saying so replaces
-   * them with a skeleton — which is the flash `placeholderData` is there to prevent.
-   */
-  isPlaceholderData: boolean;
   isLoading: boolean;
   error: unknown;
   hasNextPage: boolean;
@@ -212,7 +204,6 @@ export function useTaggedClaimSearch({
     claimIds,
     idPages,
     settled: !searching || (searchQuery.isSuccess && !searchQuery.isPlaceholderData),
-    isPlaceholderData: searching && searchQuery.isPlaceholderData,
     // `enabled: false` leaves react-query pending, and a caller waiting on this would read that as
     // "still looking" and never show its empty state.
     isLoading: searching && searchQuery.isLoading,

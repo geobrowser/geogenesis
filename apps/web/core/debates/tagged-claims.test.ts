@@ -574,6 +574,36 @@ describe('the filter it builds', () => {
   });
 
   /**
+   * And not on the second round trip either, which is where the first version of this fix still
+   * flashed. Holding the rows while the *ids* are re-fetched is half of it: the new ids are then a
+   * new key for the row request, with nothing behind it, so the list blanked one hop later. Rows
+   * are what the viewer is reading, and they stay until the rows that replace them arrive.
+   */
+  it('does not blank the list while an edited search hydrates its new ids', async () => {
+    respondWithSearch([['a1']]);
+    respondWithPages([[node('a1', 'One')]]);
+    const { result, rerender } = renderEditableClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    // The edited search answers with a different claim, and its rows are still out.
+    respondWithSearch([['a2']]);
+    graphqlMock.mockImplementation(() => Effect.never);
+    rerender({ filters: { ...NO_TAGGED_CLAIM_FILTERS, search: 'powers' } });
+
+    // Waited until the new ids' row request is actually out, or there is nothing to hold across
+    // yet and the assertion passes for want of a second round trip rather than because of it.
+    await waitFor(() =>
+      expect(graphqlMock.mock.calls.some(call => JSON.stringify(call[0].variables?.filter ?? {}).includes('a2'))).toBe(
+        true
+      )
+    );
+
+    // The ids have landed; their rows have not. The previous rows are still on screen.
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.claims).toHaveLength(1);
+  });
+
+  /**
    * A page can dedupe to nothing — every row a repeat of one already seen, which the endpoint's
    * per-space paging makes possible. Left in the list of pages it becomes a row request with no
    * ids, which never resolves, and the rows are read in order until one is missing: every page

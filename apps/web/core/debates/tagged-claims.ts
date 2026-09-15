@@ -17,6 +17,7 @@ import { parse } from 'graphql';
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { ClaimPickerEntity } from '~/core/debates/claim-picker-page';
+import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 import { type RelationFacetCount, decodeRelationFacet, relationFacetDocument } from '~/core/io/relation-facet';
@@ -421,6 +422,8 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
   // A search's pages are the unit of paging while one is running — see `searchPages` below — so the
   // cursor query is idle then rather than paging a filter whose id set is still growing.
   const browsing = enabled && search.claimIds === null;
+  /** The mirror of `browsing`: a search is answering, so the cursor query is not. */
+  const searching = search.claimIds !== null;
 
   const query = useInfiniteQuery({
     queryKey: taggedClaimsQueryKey(tagId, filters, search.claimIds),
@@ -487,12 +490,16 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
           })
         ),
       staleTime: TAGGED_STALE_TIME,
+      // No `placeholderData` here, unlike every other query in this module. It is the right tool
+      // and it does not reach: `useQueries` rebuilds its observers from the array each render, so a
+      // per-entry placeholder has no previous entry to keep — measured, by writing the test first
+      // and watching the fix not take. The rows are held below instead.
       enabled: enabled && ids.length > 0,
     })),
     combine: combineSearchPages,
   });
 
-  const searchClaims = React.useMemo(() => {
+  const searchClaimsNow = React.useMemo(() => {
     if (search.claimIds === null) return NO_TAGGED_CLAIMS;
     const byRelevance = new Map(search.claimIds.map((id, index) => [id, index]));
     // Each page ordered by the endpoint's ranking rather than the graph's. That ordering is the
@@ -518,12 +525,34 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     searchRefetch();
   }, [cache, searchRefetch]);
 
+  /**
+   * Still settling if either hop is: the ids, or the rows those ids are drawn from.
+   *
+   * A failure is settled — there is an error state to draw, and holding rows behind it would say
+   * the list is still coming.
+   */
+  const searchRowsSettling =
+    searching &&
+    search.error === null &&
+    searchPages.error === null &&
+    (!search.settled || searchPages.firstPagePending);
+
+  /**
+   * The rows a viewer is reading stay until the rows that replace them arrive.
+   *
+   * Editing a search re-asks both hops, and each one blanking the list was a separate flash: the
+   * first was fixed by the search query's own placeholder, the second needed this, because a new id
+   * set is a new key for the row request with nothing behind it. Reset on the tag, which is the
+   * coarsest thing this hold can belong to — holding Featured's rows under All claims would be
+   * holding the wrong list, while holding a query's rows across the next keystroke is the point.
+   */
+  const searchClaims = useLastSettled(searchClaimsNow, searchRowsSettling, tagId);
+
   const browsedClaims = React.useMemo(
     () => query.data?.pages.flatMap(page => page.claims) ?? NO_TAGGED_CLAIMS,
     [query.data?.pages]
   );
   const claims = browsing ? browsedClaims : searchClaims;
-  const searching = search.claimIds !== null;
 
   /**
    * Rows the server has returned across every page held, decodable or not — see `fetched`.
@@ -561,11 +590,11 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // holds the previous search's ids and rows through it — so reporting a load there put a skeleton
     // over rows that were on screen and readable, which is the flash the placeholder exists to
     // prevent. An error is not a load either: it releases this so the error state can be drawn.
-    isLoading:
-      enabled &&
-      (searching
-        ? (!search.settled && !search.isPlaceholderData && search.error === null) || searchPages.firstPagePending
-        : query.isLoading),
+    // A first load, which is not the same as a request being out. Asked as "is anything settling
+    // with nothing to show", because that is the question a skeleton answers: a search being
+    // re-asked with the previous rows still held is not a list appearing, and drawing a skeleton
+    // over readable rows is the flash all of this exists to avoid.
+    isLoading: enabled && (searching ? searchRowsSettling && searchClaims.length === 0 : query.isLoading),
     error: enabled ? (searching ? (search.error ?? searchPages.error) : query.error) : null,
     // Paging follows whichever source is answering. A search's next page is another `/search`
     // offset, not a graph cursor — the cursor belongs to a query that is not running.
