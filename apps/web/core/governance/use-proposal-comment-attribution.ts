@@ -5,8 +5,12 @@ import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpaceMemberIds } from '~/core/hooks/use-space-editor-ids';
+import { proposalCommentVotesQueryKey } from '~/core/io/query-keys';
 import { fetchProposal } from '~/core/io/subgraph/fetch-proposal';
+
+import { useOptimisticVoteChoice } from '~/partials/governance/optimistic-voted-atom';
 
 import { type ProposalCommentAttribution, proposalCommentAttribution } from './proposal-comment-attribution';
 
@@ -35,6 +39,7 @@ export function useProposalCommentAttribution({
   spaceId,
   authorSpaceIds,
   editorSpaceIds,
+  isLoadingEditors,
   enabled,
 }: {
   entityId: string | null;
@@ -43,10 +48,12 @@ export function useProposalCommentAttribution({
   /** The personal spaces of everyone who has commented — who the badges are actually about. */
   authorSpaceIds: string[];
   editorSpaceIds: ReadonlySet<string>;
+  /** Whether that editor lookup is still in flight — see the hold below. */
+  isLoadingEditors: boolean;
   enabled: boolean;
 }): Map<string, ProposalCommentAttribution> {
   const { data: proposal } = useQuery({
-    queryKey: ['proposal-comment-votes', entityId ?? ''],
+    queryKey: proposalCommentVotesQueryKey(entityId ?? ''),
     enabled: enabled && Boolean(entityId),
     queryFn: async ({ signal }) => {
       const found = await fetchProposal({ id: entityId!, signal });
@@ -67,7 +74,13 @@ export function useProposalCommentAttribution({
   // Keyed on the proposal's own space, which is only known once the fetch above answers — so an
   // entity that is not a proposal asks nothing, and every other surface that renders comments pays
   // nothing for a lookup only this badge wants.
-  const { memberSpaceIds } = useSpaceMemberIds(proposal?.spaceId ?? '', authorSpaceIds);
+  const { memberSpaceIds, isLoading: isLoadingMembers } = useSpaceMemberIds(proposal?.spaceId ?? '', authorSpaceIds);
+
+  // The vote the reader just cast, before the chain and the indexer have caught up. `AcceptOrReject`
+  // invalidates the query above on success, but that is a round trip away; this is the same
+  // optimistic record the governance list uses to sink a card the moment it is voted on.
+  const optimisticVote = useOptimisticVoteChoice(entityId ?? '');
+  const { personalSpaceId } = usePersonalSpaceId();
 
   // The editor set was gathered against the caller's space. For a proposal entity that is the
   // proposal's own space, which is the premise this feature rests on — but if the two ever disagree,
@@ -78,10 +91,33 @@ export function useProposalCommentAttribution({
   return React.useMemo(() => {
     if (!proposal) return EMPTY_ATTRIBUTION;
 
+    // Nothing is drawn until both role lookups have answered. They resolve independently of the
+    // votes, so drawing early means a voter reads as a bare "Rejected" and then becomes "Editor ·
+    // Rejected" a beat later — the page correcting itself about a person, which is the failure this
+    // badge is supposed to avoid. An absent badge is honest; a half-built one is not.
+    if (isLoadingEditors || isLoadingMembers) return EMPTY_ATTRIBUTION;
+
+    const votes =
+      optimisticVote && personalSpaceId
+        ? [
+            ...proposal.votes.filter(v => normalizeSpaceId(v.voterSpaceId) !== normalizeSpaceId(personalSpaceId)),
+            { voterSpaceId: personalSpaceId, vote: optimisticVote },
+          ]
+        : proposal.votes;
+
     return proposalCommentAttribution({
-      votes: proposal.votes,
+      votes,
       editorSpaceIds: editorsMatchProposalSpace ? editorSpaceIds : [],
       memberSpaceIds,
     });
-  }, [proposal, editorsMatchProposalSpace, editorSpaceIds, memberSpaceIds]);
+  }, [
+    proposal,
+    editorsMatchProposalSpace,
+    editorSpaceIds,
+    memberSpaceIds,
+    isLoadingEditors,
+    isLoadingMembers,
+    optimisticVote,
+    personalSpaceId,
+  ]);
 }

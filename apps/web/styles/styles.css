@@ -69,8 +69,11 @@
   /* Z-index stack — see ~/core/z-layers.ts */
   --z-index-flow-bar: 1000;
   --z-index-slide-up: 10000;
-  --z-index-status-bar: 10001;
-  --z-index-toast: 10002;
+  /* Above the panels at 10001-10002 and the elevated popover at 10003: a publish status bar and a
+     toast have to be visible over whatever is open, and they cannot rely on coming later in the DOM
+     than a panel that is portalled to the body when it opens. */
+  --z-index-status-bar: 10004;
+  --z-index-toast: 10005;
 
   /* Breakpoints (max-width variants defined below) */
   --breakpoint-*: initial;

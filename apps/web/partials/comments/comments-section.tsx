@@ -269,7 +269,7 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
     setComposerExpanded(true);
   }, [smartAccount, pendingComposer, entityId, setPendingComposer]);
   const commentAuthorSpaceIds = React.useMemo(() => collectCommentAuthorSpaceIds(comments), [comments]);
-  const { editorSpaceIds } = useSpaceEditorIds(spaceId, commentAuthorSpaceIds);
+  const { editorSpaceIds, isLoading: isLoadingEditors } = useSpaceEditorIds(spaceId, commentAuthorSpaceIds);
   // Resolves to an empty map unless this entity is a Debate. Gated on there being comments
   // so entity pages without any don't pay for the lookup.
   const debateVotesByVoter = useDebateVotesByVoter(entityId, totalCount > 0);
@@ -280,6 +280,7 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
     spaceId,
     authorSpaceIds: commentAuthorSpaceIds,
     editorSpaceIds,
+    isLoadingEditors,
     enabled: totalCount > 0,
   });
 
