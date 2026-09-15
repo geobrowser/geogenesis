@@ -120,18 +120,3 @@ export function claimMarkers(claims: TimedClaim[], durationMs: number): ClaimMar
     })
     .sort((a, b) => a.atMs - b.atMs);
 }
-
-/** How the viewer's answers broke down, for the card at the end. */
-export type DebateScore = {
-  /** Claim ids the viewer answered, in the order they answered them. */
-  answered: string[];
-  /** Claims with a known moment that the viewer did not answer. */
-  unanswered: TimedClaim[];
-};
-
-export function scoreDebate(claims: TimedClaim[], answered: ReadonlySet<string>): DebateScore {
-  return {
-    answered: claims.filter(claim => answered.has(claim.id)).map(claim => claim.id),
-    unanswered: claims.filter(claim => !answered.has(claim.id)),
-  };
-}
