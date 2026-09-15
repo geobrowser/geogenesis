@@ -17,8 +17,11 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
+import { ClaimScrubberMarkers, useDebateClaimTicker } from './debate-claim-ticker';
+import { DebateScorecard } from './debate-scorecard';
 import { Play, Speaker, SpeakerMuted } from './icons';
 import { WinnerVoteButton } from './winner-vote-button';
+import type { ClaimMarker } from '~/core/debates/claim-ticker';
 
 type DebateFeedPlayerProps = {
   debate: Debate;
@@ -93,6 +96,10 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     }
   }, [active, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend, userPaused]);
 
+  // Claims, their timecodes and the viewer's answers, for the scrubber markers and the card at
+  // the end. Loaded alongside the recordings so neither waits on the other.
+  const ticker = useDebateClaimTicker(debate, active || preload);
+
   const showControls = ready && (userPaused || (playbackEnded && !hasVoted));
   // End of an unvoted debate offers a replay; a user pause shows the paused glyph.
   const showReplay = ready && playbackEnded && !hasVoted;
@@ -163,6 +170,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
               <FeedScrubber
                 currentTime={playheadSeconds}
                 duration={timelineSeconds}
+                markers={ticker.markers}
                 onSeek={seekBoth}
                 onScrubStart={beginScrub}
                 onScrubEnd={endScrub}
@@ -171,6 +179,14 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
           ) : null
         }
       />
+
+      {/* Dimmed behind, so the card reads as the moment the debate arrives at rather than a note
+          stuck over two frozen faces. */}
+      {ready && playbackEnded && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/55 px-3">
+          <DebateScorecard debate={debate} ticker={ticker} votes={votes} onReplay={playFromStart} />
+        </div>
+      )}
 
       {showPausedGlyph && (
         <button
@@ -355,12 +371,14 @@ const isScrubKey = (key: string) =>
 function FeedScrubber({
   currentTime,
   duration,
+  markers,
   onSeek,
   onScrubStart,
   onScrubEnd,
 }: {
   currentTime: number;
   duration: number;
+  markers: ClaimMarker[];
   onSeek: (seconds: number) => void;
   onScrubStart: () => void;
   onScrubEnd: () => void;
@@ -372,6 +390,9 @@ function FeedScrubber({
       <div className="relative h-(--track-height) w-full overflow-hidden rounded-full bg-white/40">
         <span className="absolute inset-y-0 left-0 rounded-full bg-white" style={{ width: `${progress}%` }} />
       </div>
+      {/* Above the track and below the range input, so a marker is clickable but a drag anywhere
+          along the bar still scrubs. */}
+      <ClaimScrubberMarkers markers={markers} onSeek={ms => onSeek(ms / 1000)} className="z-1" />
       <span
         className="pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.35)]"
         style={{ left: `calc(12px + ${progress}% * (100% - 24px) / 100%)` }}
