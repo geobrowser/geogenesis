@@ -8,6 +8,8 @@ import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useProfileFacts } from '~/core/hooks/use-profile-facts';
+import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
+import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-facts';
 import { type ProfileLink } from '~/core/profile/profile-links';
 import { NavUtils } from '~/core/utils/utils';
@@ -241,7 +243,10 @@ function AboutSection({
           href={`/space/${spaceId}/proposals`}
         />
 
-        {address && <Fact label="Account" value={shortenAddress(address)} mono />}
+        {/* In full. It was shortened for a rail row that had to fit on one
+            line, and this one wraps — a truncated address is one nobody can
+            copy, which is the only thing an address is for. */}
+        {address && <Fact label="Account" value={address} mono />}
       </dl>
     </RailCard>
   );
@@ -276,7 +281,9 @@ function Fact({
     );
   }
 
-  const text = <span className={mono ? 'font-mono text-tag text-text' : 'text-metadata text-text'}>{value}</span>;
+  const text = (
+    <span className={mono ? 'font-mono text-tag break-all text-text' : 'text-metadata text-text'}>{value}</span>
+  );
 
   return (
     <Row label={label}>
@@ -299,6 +306,18 @@ function Fact({
  */
 function VerifiedBy({ verifiers }: { verifiers: Verifier[] }) {
   const verifierSpaceIds = React.useMemo(() => verifiers.map(verifier => verifier.spaceId), [verifiers]);
+
+  // The same two lookups the stack above resolves its faces from, so the list
+  // and the stack cannot show different pictures for one verifier.
+  const { profilesBySpaceId } = useProfilesBySpaceIds(verifierSpaceIds);
+  const { spacesById } = useSpacesByIds(verifierSpaceIds);
+
+  const avatarFor = (spaceId: string) => {
+    const profileAvatar = profilesBySpaceId.get(spaceId)?.avatarUrl;
+    if (profileAvatar && profileAvatar !== PLACEHOLDER_SPACE_IMAGE) return profileAvatar;
+    const spaceImage = spacesById.get(spaceId)?.entity.image;
+    return spaceImage && spaceImage !== PLACEHOLDER_SPACE_IMAGE ? spaceImage : null;
+  };
 
   return (
     // A popover rather than a boolean and a positioned div: outside-click,
@@ -329,13 +348,14 @@ function VerifiedBy({ verifiers }: { verifiers: Verifier[] }) {
                   href={NavUtils.toSpace(verifier.spaceId)}
                   className="flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-grey-01"
                 >
-                  {/* A fixed box with a white ground under it: an avatar sizes
-                      to its box rather than to a prop, and a logo saved with a
-                      transparent background otherwise shows the row through
-                      its own face. */}
+                  {/* Resolved here rather than read off the verifier: the facts
+                      query never fetches these, so `avatarUrl` is null for
+                      everyone and the whole list drew placeholders under a stack
+                      of real faces. `RankingAggregatedSubmitterAvatars` above
+                      already primed these caches from the same space ids. */}
                   <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full bg-white">
                     <FallbackImage
-                      value={verifier.avatarUrl ?? PLACEHOLDER_SPACE_IMAGE}
+                      value={avatarFor(verifier.spaceId) ?? PLACEHOLDER_SPACE_IMAGE}
                       sizes="20px"
                       className="object-cover"
                     />
@@ -401,9 +421,4 @@ function SystemRow({ label, value }: { label: string; value: string }) {
       <dd className="font-mono text-tag break-all text-text">{value}</dd>
     </div>
   );
-}
-
-/** `0xab28…d3b9` — enough to recognise, short enough for a rail row. */
-function shortenAddress(address: string): string {
-  return address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address;
 }

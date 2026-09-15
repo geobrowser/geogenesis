@@ -105,8 +105,20 @@ function renderSheet(overrides: Partial<Parameters<typeof AddPositionSheet>[0]> 
 const pickCompany = () => userEvent.click(screen.getAllByRole('button', { name: /pick existing/ })[0]);
 const pickTitle = () => userEvent.click(screen.getAllByRole('button', { name: /pick existing/ })[0]);
 
+/**
+ * The start date, which every record needs before it can be saved.
+ *
+ * Required since GEO-2859: editing a published row is a removal and a fresh
+ * write, and the write emits no date row when it has none — so saving with the
+ * start blank deleted the date that was there.
+ */
+async function pickStart(month = '3', year = '2019') {
+  await userEvent.selectOptions(screen.getByLabelText('Start month'), month);
+  await userEvent.selectOptions(screen.getByLabelText('Start year'), year);
+}
+
 describe('AddPositionSheet', () => {
-  it('cannot save until both the company and the title are answered', async () => {
+  it('cannot save until the company, the title and the start date are answered', async () => {
     renderSheet();
 
     expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
@@ -115,7 +127,25 @@ describe('AddPositionSheet', () => {
     expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
 
     await pickTitle();
+    // Saving here used to be allowed, and on an edit it deleted the date the
+    // row already had — the write emits no date row when it has none.
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Pick a start month and year.');
+
+    await pickStart();
     expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
+  });
+
+  it('refuses a half-filled start date, which is what the month dropdown leaves behind', async () => {
+    renderSheet();
+
+    await pickCompany();
+    await pickTitle();
+    // A month with no year is not a date. The field reports nothing until both
+    // are chosen, and that nothing used to save.
+    await userEvent.selectOptions(screen.getByLabelText('Start month'), '3');
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
   });
 
   it('scopes each picker to the type it should search', () => {
@@ -131,8 +161,7 @@ describe('AddPositionSheet', () => {
 
     await pickCompany();
     await pickTitle();
-    await userEvent.selectOptions(screen.getByLabelText('Start month'), '3');
-    await userEvent.selectOptions(screen.getByLabelText('Start year'), '2019');
+    await pickStart();
     await userEvent.selectOptions(screen.getByLabelText('End month'), '1');
     await userEvent.selectOptions(screen.getByLabelText('End year'), '2021');
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
@@ -158,6 +187,7 @@ describe('AddPositionSheet', () => {
     await userEvent.selectOptions(screen.getByLabelText('End month'), '1');
     await userEvent.selectOptions(screen.getByLabelText('End year'), '2021');
     await userEvent.click(screen.getByRole('checkbox'));
+    await pickStart();
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     // The end date the picker was left showing is discarded rather than published
@@ -170,6 +200,7 @@ describe('AddPositionSheet', () => {
 
     await userEvent.click(screen.getAllByRole('button', { name: /create new/ })[0]);
     await pickTitle();
+    await pickStart();
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(props.onSave).toHaveBeenCalledWith(
@@ -185,6 +216,7 @@ describe('AddPositionSheet', () => {
     expect(screen.getByText(/Already on your profile/)).toBeInTheDocument();
 
     await pickTitle();
+    await pickStart();
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ existingStintId: 'stint-1' }));
@@ -247,6 +279,7 @@ describe('AddPositionSheet', () => {
       // The company's, which is the first of the two — the title has one too.
       await userEvent.click(screen.getAllByRole('button', { name: /^Change / })[0]!);
       await userEvent.click(screen.getAllByRole('button', { name: /pick existing/ })[0]);
+      await pickStart();
       await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
       expect(props.onSave).toHaveBeenCalledWith(
@@ -257,6 +290,8 @@ describe('AddPositionSheet', () => {
     it('hands back everything it was given when nothing is touched', async () => {
       const props = renderSheet({ initial });
 
+      // No start date picked: the row arrived with one, so Done is already
+      // available and touching the field would defeat the point of the test.
       await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
       expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining(initial));
@@ -272,6 +307,7 @@ describe('AddPositionSheet', () => {
       // The location picker is the next unanswered one.
       await userEvent.click(screen.getAllByRole('button', { name: /pick existing/ })[0]);
       await userEvent.selectOptions(screen.getByLabelText('Location type'), 'Remote');
+      await pickStart();
       await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
       expect(props.onSave).toHaveBeenCalledWith(
@@ -288,6 +324,7 @@ describe('AddPositionSheet', () => {
 
       await pickCompany();
       await pickTitle();
+      await pickStart();
       await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
       expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ location: null, locationType: null }));
@@ -325,6 +362,7 @@ describe('AddPositionSheet', () => {
       await pickCompany();
       await pickTitle();
       await userEvent.click(screen.getByRole('button', { name: '+ Debug software' }));
+      await pickStart();
       await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
       expect(props.onSave).toHaveBeenCalledWith(
@@ -474,6 +512,7 @@ describe('a company created in this modal', () => {
     });
 
     await userEvent.click(screen.getAllByRole('button', { name: /pick existing/ })[0]!);
+    await pickStart();
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ company: expect.objectContaining({ isNew: true }) }));
@@ -485,6 +524,7 @@ describe('a company created in this modal', () => {
     });
 
     await userEvent.click(screen.getAllByRole('button', { name: /pick existing/ })[0]!);
+    await pickStart();
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(onSave).toHaveBeenCalledWith(

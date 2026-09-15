@@ -5,7 +5,6 @@ import * as React from 'react';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useProfileHistory } from '~/core/hooks/use-profile-history';
 import { ID } from '~/core/id';
-import { type ProfileLink } from '~/core/profile/profile-links';
 import { collectSkills, currentRoles } from '~/core/profile/profile-summary';
 
 import { EditRecordDialog } from './edit-record-dialog';
@@ -17,7 +16,6 @@ type Props = {
   spaceId: string;
   /** The person entity. Presentation hangs off this. */
   personEntityId: string;
-  links: ProfileLink[];
 };
 
 /**

@@ -1,7 +1,12 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
-import { AVATAR_PROPERTY, EDUCATION_PROPERTY, EMPLOYMENT_PROPERTY } from '~/core/profile/history-ontology';
+import {
+  AVATAR_PROPERTY,
+  COVER_PROPERTY,
+  EDUCATION_PROPERTY,
+  EMPLOYMENT_PROPERTY,
+} from '~/core/profile/history-ontology';
 import {
   type EducationCard,
   type EmploymentCard,
@@ -61,11 +66,19 @@ const nested = `
 `;
 
 /**
- * The organisation's own avatar, two hops down: the Avatar relation points at an
- * image entity, and the URL is a value on that.
+ * The organisation's own picture, two hops down: the relation points at an image
+ * entity and the URL is a value on that.
+ *
+ * Avatar *or* cover. Plenty of companies in the graph have set only a banner,
+ * and a cover cropped into a 36px square is a far better answer than the grey
+ * placeholder — it is at least this organisation's own image. Avatar is asked
+ * for first so it wins where both exist; see `readAvatar`.
  */
 const orgAvatar = `
-  relationsList(filter: { typeId: { is: ${JSON.stringify(AVATAR_PROPERTY)} } }) {
+  avatar: relationsList(filter: { typeId: { is: ${JSON.stringify(AVATAR_PROPERTY)} } }) {
+    toEntity { valuesList { property { id } text } }
+  }
+  cover: relationsList(filter: { typeId: { is: ${JSON.stringify(COVER_PROPERTY)} } }) {
     toEntity { valuesList { property { id } text } }
   }
 `;

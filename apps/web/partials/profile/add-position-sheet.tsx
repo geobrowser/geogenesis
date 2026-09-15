@@ -117,7 +117,19 @@ export function AddPositionSheet({ spaceId, company, initial, onCancel, onSave }
   // A role still held has no end date whatever the picker shows, so the pair only
   // has to run forwards when it is actually going to be written.
   const isOrdered = isCurrent || isOrderedRange(start, end);
-  const canSave = pickedCompany !== null && title !== null && isOrdered;
+  /**
+   * A start date is required (GEO-2859).
+   *
+   * Editing a published row is a removal and a fresh write, and the write only
+   * emits a date row when it has one — so saving with the start blank did not
+   * leave the old date alone, it deleted it. A record whose dates silently
+   * vanish when you edit them is worse than one you cannot save.
+   *
+   * It also has nowhere to render: `formatDateRange` draws nothing at all
+   * without a start, so the row would come back with its whole date line gone.
+   */
+  const hasStart = start !== null;
+  const canSave = pickedCompany !== null && title !== null && isOrdered && hasStart;
 
   const save = () => {
     if (!pickedCompany || !title) return;
@@ -205,11 +217,15 @@ export function AddPositionSheet({ spaceId, company, initial, onCancel, onSave }
         </div>
         {/* Done is dead while this is true, and a dead button that says nothing
             is the worst version of a validation rule. */}
-        {!isOrdered && (
+        {!isOrdered ? (
           <span role="alert" className="text-metadata text-red-01">
             The end date is before the start date.
           </span>
-        )}
+        ) : !hasStart ? (
+          <span role="alert" className="text-metadata text-red-01">
+            Pick a start month and year.
+          </span>
+        ) : null}
       </div>
 
       {/* A place in the graph rather than a string, so the San Francisco on this

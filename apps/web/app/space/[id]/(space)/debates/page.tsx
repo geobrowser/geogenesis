@@ -2,7 +2,6 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
-import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { PersonDebatesTab } from '~/partials/profile/person-debates-tab';
 
 import { cachedFetchSpace } from '../../cached-fetch-space';
@@ -25,13 +24,12 @@ export default async function DebatesPage(props: Props) {
   // profile. Not the full-screen player: this is a record being read beside the
   // rest of a profile, and the player takes the page over.
   if (space?.type === 'PERSONAL') {
+    // The layout supplies the column and the rail; `pb-16` because `Main` drops
+    // its own padding on this route — see `SpaceChromeGate`, which puts the top
+    // half back above the header.
     return (
-      // `pb-16` because `Main` drops its own padding on this route — see
-      // `SpaceChromeGate`, which puts the top half back above the header.
       <div className="pb-16">
-        <EntityPageContentContainer>
-          <PersonDebatesTab spaceId={params.id} />
-        </EntityPageContentContainer>
+        <PersonDebatesTab spaceId={params.id} />
       </div>
     );
   }

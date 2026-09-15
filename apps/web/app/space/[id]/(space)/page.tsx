@@ -9,7 +9,6 @@ import { notFound } from 'next/navigation';
 import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { firstLine } from '~/core/opengraph';
-import { profileLinks } from '~/core/profile/profile-links';
 import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
@@ -29,7 +28,6 @@ import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-side
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
 import { PersonalSpaceProfile } from '~/partials/profile/personal-space-profile';
-import { ProfileRail } from '~/partials/profile/profile-rail';
 import { SpaceOverviewSidePanelContainer } from '~/partials/space-page/space-overview-side-panel-container';
 import { SubtopicGalleryServerContainer } from '~/partials/space-page/subtopic-gallery-server-container';
 
@@ -93,7 +91,7 @@ export default async function SpacePage(props0: Props) {
   // `topic ?? page` and the comparison is then always false. See the predicate's
   // own doc comment, and `topic-predicates.test.ts`.
   if (Spaces.hasTopicEntity(space) && space.type === 'PERSONAL') {
-    return <PersonalSpaceBody space={space} topicEntityId={space.topicId} />;
+    return <PersonalSpaceBody space={space} topicEntityId={space.topicId} tabId={tabId} />;
   }
 
   // Left on the old predicate deliberately. A DAO whose topic is a subject
@@ -150,81 +148,62 @@ export default async function SpacePage(props0: Props) {
 /**
  * A personal space, as a profile (GEO-2859).
  *
- * Two columns: identity down the main one, and a rail of facts about the
- * account that persists across every tab. The header above this — cover, name,
- * the action row — is assembled in the layout, which is why none of it is here.
+ * The main column only. The header above it and the rail beside it are both
+ * assembled in the layout, so they persist across every tab rather than
+ * appearing and vanishing with this page — see `profileRail` there.
  *
- * A person has two ids and both are needed. Presentation hangs off the topic
- * entity; every count in the rail keys on the space. They are different values,
- * and passing the entity id to a count query returns zero rather than erroring.
+ * The layout's providers already carry this entity: for a profile the space's
+ * own `entity` *is* the topic, so `RouteEditorProvider` up there is holding the
+ * person's blocks and tabs, and a second set here would be the same data twice.
  */
 async function PersonalSpaceBody({
   space,
   topicEntityId,
+  tabId,
 }: {
   space: NonNullable<Awaited<ReturnType<typeof cachedFetchSpace>>>;
   topicEntityId: string;
+  /** An authored tab, when one is open. Its content replaces the profile. */
+  tabId: string | undefined;
 }) {
   const spaceId = space.id;
-  const topic = await getTopicEntityData(spaceId, topicEntityId);
-  const result = await cachedFetchEntityPage(topicEntityId, spaceId);
-  const entity = result?.entity;
 
-  // Scoped to this space. The same entity carries values written by other
-  // spaces — four Scores and a second Description on the reference account —
-  // and this page renders what *this* space claims about the person.
-  const ownValues = (entity?.values ?? []).filter(value => value.spaceId === spaceId);
-  const links = profileLinks(ownValues.map(value => ({ property: { id: value.property.id }, value: value.value })));
-  const types = (entity?.types ?? []).map(type => ({ id: type.id, name: type.name ?? null }));
+  // An authored tab is a page this person wrote, not a view of their profile.
+  // Rendering Experience and Education underneath it said the tab was a section
+  // of the profile rather than a tab beside it.
+  if (tabId) {
+    return (
+      <React.Suspense fallback={null}>
+        <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+      </React.Suspense>
+    );
+  }
 
   return (
-    <EntityStoreProvider id={topicEntityId} spaceId={spaceId}>
-      <RouteEditorProvider
-        id={topicEntityId}
-        spaceId={spaceId}
-        initialBlocks={topic.blocks}
-        initialBlockRelations={topic.blockRelations}
-        initialTabs={topic.tabs}
-        initialCollectionItems={topic.initialCollectionItems}
-      >
-        <EntityPageSidebarLayout
-          sidebar={
-            <ProfileRail
-              spaceId={spaceId}
-              personEntityId={topicEntityId}
-              types={types}
-              links={links}
-              systemEntityId={space.entity.id}
-              address={space.address ?? null}
-              spaceType={space.type}
-            />
-          }
-        >
-          <PersonalSpaceProfile spaceId={spaceId} personEntityId={topicEntityId} links={links} />
+    <>
+      <PersonalSpaceProfile spaceId={spaceId} personEntityId={topicEntityId} />
 
-          <Spacer height={40} />
+      <Spacer height={40} />
 
-          <React.Suspense fallback={null}>
-            <Editor spaceId={spaceId} shouldHandleOwnSpacing />
-          </React.Suspense>
+      <React.Suspense fallback={null}>
+        <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+      </React.Suspense>
 
-          {/*
-           * No properties panel. Every property it would list is already on this
-           * page in a form a reader understands — the types in the rail, the
-           * links beside them, the history in its own sections — and the raw
-           * table underneath them says the same things again in the graph's
-           * vocabulary rather than a person's.
-           */}
-          <Spacer height={40} />
+      {/*
+       * No properties panel. Every property it would list is already on this
+       * page in a form a reader understands — the types in the rail, the links
+       * beside them, the history in its own sections — and the raw table
+       * underneath them says the same things again in the graph's vocabulary
+       * rather than a person's.
+       */}
+      <Spacer height={40} />
 
-          <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-            <React.Suspense fallback={<div />}>
-              <BacklinksServerContainer entityId={topicEntityId} />
-            </React.Suspense>
-          </TrackedErrorBoundary>
-        </EntityPageSidebarLayout>
-      </RouteEditorProvider>
-    </EntityStoreProvider>
+      <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+        <React.Suspense fallback={<div />}>
+          <BacklinksServerContainer entityId={topicEntityId} />
+        </React.Suspense>
+      </TrackedErrorBoundary>
+    </>
   );
 }
 

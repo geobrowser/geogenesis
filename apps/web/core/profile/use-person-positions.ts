@@ -1,7 +1,9 @@
 'use client';
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
+
+import * as React from 'react';
 
 import { Effect } from 'effect';
 import { parse } from 'graphql';
@@ -54,8 +56,6 @@ export type PersonPositionsPage = {
   hasNextPage: boolean;
 };
 
-const EMPTY_PAGE: PersonPositionsPage = { rows: [], endCursor: null, hasNextPage: false };
-
 type VotesResponse = {
   userVotesConnection?: {
     pageInfo?: { hasNextPage?: boolean | null; endCursor?: string | null } | null;
@@ -89,29 +89,29 @@ function decodeVotes(response: VotesResponse): VotePage {
   };
 }
 
-export function personPositionsQueryKey(spaceId: string, after: string | null) {
-  return ['person-positions', ID.uuidToHex(spaceId), after] as const;
+export function personPositionsQueryKey(spaceId: string) {
+  return ['person-positions', ID.uuidToHex(spaceId)] as const;
 }
 
 export function usePersonPositions({
   spaceId,
   first = 20,
-  after,
 }: {
   /** The personal space. A vote's `userId` is this, not the person entity. */
   spaceId: string;
   first?: number;
-  after?: string;
 }) {
-  const { data, isLoading, isPlaceholderData } = useQuery({
-    queryKey: personPositionsQueryKey(spaceId, after ?? null),
+  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteQuery({
+    queryKey: personPositionsQueryKey(spaceId),
     enabled: spaceId !== '',
-    queryFn: async ({ signal }) => {
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page: PersonPositionsPage) => (page.hasNextPage ? (page.endCursor ?? undefined) : undefined),
+    queryFn: async ({ pageParam, signal }): Promise<PersonPositionsPage> => {
       const votes = await Effect.runPromise(
         graphql({
           query: personVotesDocument,
           decoder: decodeVotes,
-          variables: { userId: ID.uuidToHex(spaceId), first, after },
+          variables: { userId: ID.uuidToHex(spaceId), first, after: pageParam },
           signal,
         })
       );
@@ -122,11 +122,10 @@ export function usePersonPositions({
         hasNextPage: votes.hasNextPage,
       };
     },
-    // Holds the page being read while the next loads, so stepping does not
-    // collapse the list under the reader.
-    placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
 
-  return { page: data ?? EMPTY_PAGE, isLoading, isPlaceholderData };
+  const rows = React.useMemo(() => (data?.pages ?? []).flatMap(page => page.rows), [data]);
+
+  return { rows, isLoading, isFetchingNextPage, hasNextPage: Boolean(hasNextPage), fetchNextPage };
 }

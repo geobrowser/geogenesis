@@ -82,7 +82,19 @@ export function AddEducationSheet({ spaceId, school, initial, onCancel, onSave }
   // Still studying writes no end date, so the pair only has to run forwards when
   // one is actually going to be written.
   const isOrdered = status === 'studying' || isOrderedRange(start, end);
-  const canSave = pickedSchool !== null && degree !== null && isOrdered;
+  /**
+   * A start date is required (GEO-2859).
+   *
+   * Editing a published row is a removal and a fresh write, and the write only
+   * emits a date row when it has one — so saving with the start blank did not
+   * leave the old date alone, it deleted it. A record whose dates silently
+   * vanish when you edit them is worse than one you cannot save.
+   *
+   * It also has nowhere to render: `formatDateRange` draws nothing at all
+   * without a start, so the row would come back with its whole date line gone.
+   */
+  const hasStart = start !== null;
+  const canSave = pickedSchool !== null && degree !== null && isOrdered && hasStart;
 
   const save = () => {
     if (!pickedSchool || !degree) return;
@@ -172,11 +184,15 @@ export function AddEducationSheet({ spaceId, school, initial, onCancel, onSave }
               a date that has not happened. It needs a status to hang off first. */}
           <MonthYearField label="End" value={end} onChange={setEnd} disabled={status === 'studying'} />
         </div>
-        {!isOrdered && (
+        {!isOrdered ? (
           <span role="alert" className="text-metadata text-red-01">
             The end date is before the start date.
           </span>
-        )}
+        ) : !hasStart ? (
+          <span role="alert" className="text-metadata text-red-01">
+            Pick a start month and year.
+          </span>
+        ) : null}
       </div>
 
       <LabelledField label="Grade">

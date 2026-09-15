@@ -1,6 +1,8 @@
 'use client';
 
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
+
+import * as React from 'react';
 
 import { Effect, Either } from 'effect';
 
@@ -123,8 +125,8 @@ function proposalActionsQuery(proposalIds: string[]) {
   }`;
 }
 
-export function personProposalsQueryKey(spaceId: string, after: string | null) {
-  return ['person-proposals', ID.uuidToHex(spaceId), after] as const;
+export function personProposalsQueryKey(spaceId: string) {
+  return ['person-proposals', ID.uuidToHex(spaceId)] as const;
 }
 
 async function fetchActionTypes(proposalIds: string[], signal?: AbortSignal): Promise<Map<string, ProposalType>> {
@@ -159,21 +161,21 @@ async function fetchActionTypes(proposalIds: string[], signal?: AbortSignal): Pr
 export function usePersonProposals({
   spaceId,
   first = 20,
-  after = null,
 }: {
   /** The personal space. `proposedBy` is this, not the person entity. */
   spaceId: string;
   first?: number;
-  after?: string | null;
 }) {
-  const { data, isLoading, isPlaceholderData } = useQuery({
-    queryKey: personProposalsQueryKey(spaceId, after),
+  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteQuery({
+    queryKey: personProposalsQueryKey(spaceId),
     enabled: spaceId !== '',
-    queryFn: async ({ signal }) => {
+    initialPageParam: null as string | null,
+    getNextPageParam: (page: PersonProposalsPage) => (page.hasNextPage ? page.endCursor : null),
+    queryFn: async ({ pageParam, signal }): Promise<PersonProposalsPage> => {
       const result = await Effect.runPromise(
         Effect.either(
           graphql<NetworkResult>({
-            query: personProposalsQuery(spaceId, first, after),
+            query: personProposalsQuery(spaceId, first, pageParam),
             endpoint: Environment.getConfig().api,
             signal,
           })
@@ -218,11 +220,10 @@ export function usePersonProposals({
         totalCount: connection?.totalCount ?? 0,
       };
     },
-    // Holds the page being read while the next loads, so stepping does not
-    // collapse the list under the reader.
-    placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
 
-  return { page: data ?? EMPTY_PAGE, isLoading, isPlaceholderData };
+  const proposals = React.useMemo(() => (data?.pages ?? []).flatMap(page => page.proposals), [data]);
+
+  return { proposals, isLoading, isFetchingNextPage, hasNextPage: Boolean(hasNextPage), fetchNextPage };
 }

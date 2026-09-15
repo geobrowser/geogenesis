@@ -261,6 +261,9 @@ export const SCHOOL_TYPES = [UNIVERSITY_TYPE];
 /** What the avatar of a company or school is stored under. */
 export const AVATAR_PROPERTY = ContentIds.AVATAR_PROPERTY;
 
+/** Its banner. Read as a fallback where an organisation has set no avatar. */
+export const COVER_PROPERTY = SystemIds.COVER_PROPERTY.replace(/-/g, '');
+
 /**
  * How a debate names the two people arguing it (GEO-2859).
  *

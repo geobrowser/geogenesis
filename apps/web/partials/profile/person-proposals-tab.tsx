@@ -4,11 +4,13 @@ import * as React from 'react';
 
 import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { useInfiniteSentinel } from '~/core/profile/use-infinite-sentinel';
 import { type PersonProposal, usePersonProposals } from '~/core/profile/use-person-proposals';
 import type { Profile } from '~/core/types';
 import { NavUtils, getProposalName } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Skeleton } from '~/design-system/skeleton';
 import { SpacePillAvatar } from '~/design-system/space-pill';
 
 import { GovernanceProposalRow } from '~/partials/governance/governance-proposal-row';
@@ -22,32 +24,26 @@ import { GovernanceProposalRow } from '~/partials/governance/governance-proposal
  * first thing that distinguishes one row from the next.
  */
 export function PersonProposalsTab({ spaceId, proposer }: { spaceId: string; proposer: Profile }) {
-  const [cursors, setCursors] = React.useState<(string | null)[]>([null]);
-  const after = cursors[cursors.length - 1];
-
-  const { page, isLoading, isPlaceholderData } = usePersonProposals({ spaceId, after });
+  const { proposals, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = usePersonProposals({ spaceId });
 
   // Looked up once for the page. These are routinely spaces the viewer has never
   // opened, which the browse sidebar cannot name.
-  const rowSpaceIds = React.useMemo(
-    () => [...new Set(page.proposals.map(proposal => proposal.spaceId))],
-    [page.proposals]
-  );
+  const rowSpaceIds = React.useMemo(() => [...new Set(proposals.map(proposal => proposal.spaceId))], [proposals]);
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
-  if (isLoading && page.proposals.length === 0) {
+  const sentinelRef = useInfiniteSentinel({ hasNextPage, isFetchingNextPage, fetchNextPage });
+
+  if (isLoading && proposals.length === 0) {
     return <p className="py-6 text-body text-grey-04">Loading proposals…</p>;
   }
 
-  if (page.proposals.length === 0) {
+  if (proposals.length === 0) {
     return <p className="py-6 text-body text-grey-04">No proposals yet</p>;
   }
 
-  const showPager = cursors.length > 1 || (page.hasNextPage && page.endCursor !== null);
-
   return (
     <div className="flex flex-col">
-      {page.proposals.map(proposal => (
+      {proposals.map(proposal => (
         <ProposalRow
           key={proposal.id}
           proposal={proposal}
@@ -57,24 +53,15 @@ export function PersonProposalsTab({ spaceId, proposer }: { spaceId: string; pro
         />
       ))}
 
-      {showPager && (
-        <div className="mt-4 flex items-center justify-between">
-          <button
-            type="button"
-            disabled={cursors.length === 1 || isPlaceholderData}
-            onClick={() => setCursors(previous => previous.slice(0, -1))}
-            className="text-metadata text-ctaPrimary disabled:text-grey-03"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            disabled={!page.hasNextPage || page.endCursor === null || isPlaceholderData}
-            onClick={() => page.endCursor && setCursors(previous => [...previous, page.endCursor])}
-            className="text-metadata text-ctaPrimary disabled:text-grey-03"
-          >
-            Next
-          </button>
+      {/* Well above the fold, so the next page is already in by the time the
+          reader reaches the end — 765 rows on the reference account. */}
+      <div ref={sentinelRef} className="h-4 w-full" aria-hidden />
+
+      {isFetchingNextPage && (
+        <div className="mt-4 space-y-4">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Skeleton key={index} className="h-20 w-full" />
+          ))}
         </div>
       )}
     </div>
