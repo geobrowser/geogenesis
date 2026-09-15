@@ -83,6 +83,22 @@ export function resolveEventTiming(values: Value[]): EventTiming | null {
 }
 
 /**
+ * The RRULE slot this event was published for, which is the key curator-backend identifies an
+ * occurrence by — `/community-call/participants/:space/:call/:occurrenceStart` and its neighbours
+ * all take it.
+ *
+ * Deliberately not `resolveEventTiming().startMs`. That reports when the call actually sat, which
+ * is the right answer for a reader and the wrong one for the backend: reschedule an occurrence and
+ * its `Meeting Time` moves while this stays pinned to the slot, which is the whole reason the
+ * property exists. Falling back to the resolved start covers the events published before it did.
+ */
+export function resolveOccurrenceKey(values: Value[]): number | null {
+  const original = parseInstant(readValue(values, EVENT_SCHEMA.OCCURRENCE_ORIGINAL_START_PROPERTY));
+  if (original !== null) return original;
+  return resolveEventTiming(values)?.startMs ?? null;
+}
+
+/**
  * How long a call with no published end is assumed to run, for the purpose of deciding whether it
  * is on right now. Only `Occurence original start` lands here.
  */
