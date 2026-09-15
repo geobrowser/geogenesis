@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { GeoChatRequestError } from '../api';
+import { GeoChatRequestError, GeoChatSessionError } from '../api';
 import { HubQueryState } from './hub-states';
 
 afterEach(cleanup);
@@ -18,7 +18,7 @@ afterEach(cleanup);
  * so the viewer watched a skeleton for the whole minute instead.
  */
 describe('a viewer geo-chat has not registered yet', () => {
-  const refused = new GeoChatRequestError('not yet', null, 401);
+  const refused = new GeoChatSessionError(new GeoChatRequestError('not yet', null, 401));
 
   it('says what is happening rather than that something broke', () => {
     render(

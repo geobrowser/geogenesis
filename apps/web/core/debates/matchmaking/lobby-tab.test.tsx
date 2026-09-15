@@ -6,7 +6,7 @@ import * as React from 'react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GeoChatRequestError } from '../api';
+import { GeoChatRequestError, GeoChatSessionError } from '../api';
 import { LobbyTab } from './lobby-tab';
 import { debatesHubMatchesOnlyAtom } from '~/atoms';
 
@@ -252,7 +252,7 @@ describe('LobbyTab', () => {
    * until the last attempt fails react-query calls that loading.
    */
   it('moves a viewer whose account is still being set up to Explore', () => {
-    mocks.matchesFailureReason = new GeoChatRequestError('not yet', null, 401);
+    mocks.matchesFailureReason = new GeoChatSessionError(new GeoChatRequestError('not yet', null, 401));
 
     const { onTabChange } = renderLobby();
 
@@ -269,7 +269,7 @@ describe('LobbyTab', () => {
    * settled `error`, which is a different path into the same decision and worth holding on its own.
    */
   it('keeps them on the matches list rather than the wider one', () => {
-    mocks.matchesFailureReason = new GeoChatRequestError('not yet', null, 401);
+    mocks.matchesFailureReason = new GeoChatSessionError(new GeoChatRequestError('not yet', null, 401));
     mocks.matchesFetching = true;
 
     renderLobby();
@@ -279,7 +279,7 @@ describe('LobbyTab', () => {
 
   // Once, like the other move: coming back gets them the message and leaves them on it.
   it('leaves them on Lobby if they come back to it', () => {
-    mocks.matchesFailureReason = new GeoChatRequestError('not yet', null, 401);
+    mocks.matchesFailureReason = new GeoChatSessionError(new GeoChatRequestError('not yet', null, 401));
     const store = createStore();
     renderLobby(store);
 

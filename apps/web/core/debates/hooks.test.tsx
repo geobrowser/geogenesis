@@ -8,7 +8,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setCachedIdentityToken } from '~/core/auth/identity-token';
 import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
 
-import { type Debate, type DebateActivity, type DebateRematchSession, GeoChatRequestError } from './api';
+import {
+  type Debate,
+  type DebateActivity,
+  type DebateRematchSession,
+  GeoChatRequestError,
+  GeoChatSessionError,
+} from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySpaceScopes } from './debate-gateway';
@@ -245,7 +251,7 @@ describe('useDebateClaimsBySpaces', () => {
   it('asks again while geo-chat has not registered the account yet', async () => {
     vi.useFakeTimers();
     mocks.listDebateClaims
-      .mockRejectedValueOnce(new GeoChatRequestError('Unauthorized', null, 401))
+      .mockRejectedValueOnce(new GeoChatSessionError(new GeoChatRequestError('Unauthorized', null, 401)))
       .mockResolvedValue({ claims: [{ claim_entity_id: 'claim-1' }] });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 

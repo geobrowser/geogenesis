@@ -514,6 +514,42 @@ describe('position avatar stack', () => {
       expect(agree).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
     });
 
+    /**
+     * And a remembered side belongs to the vocabulary it was read under.
+     *
+     * The summary query is keyed by response kind, so a claim that changes from stance to
+     * Verify/Dispute starts a fresh read — and a memory that ignored the kind would hand that read's
+     * question the previous one's answer while it was still out, treating an Agree as a Verify and
+     * enabling the controls over it.
+     */
+    it('does not carry a side across a change of vocabulary', () => {
+      mocks.summaryIndexedViewerDirection = 'negative';
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const card = (responseKind: 'stance' | 'veracity') => (
+        <QueryClientProvider client={queryClient}>
+          <MatchmakingClaimCard
+            claim={claim}
+            positions={twoSides()}
+            readiness={readiness({ viewer_response: null, response_kind: responseKind })}
+            answersReady={false}
+            answersMayComeFromIndex
+          />
+        </QueryClientProvider>
+      );
+      const view = render(card('stance'));
+      expect(screen.getByRole('button', { name: /^Disagree/ })).toBeEnabled();
+
+      // The kind changes, so its read starts again — and is in flight.
+      mocks.summaryViewerResponseLoading = true;
+      view.rerender(card('veracity'));
+
+      // The pills take their labels from the positions, so they read the same; what changes is that
+      // the card no longer claims to know the side.
+      const negative = screen.getByRole('button', { name: /^Disagree/ });
+      expect(negative).toBeDisabled();
+      expect(negative).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
+    });
+
     // And it does hand back, once geo-chat says the same thing.
     it('retires it when geo-chat answers with the side the viewer took', () => {
       mocks.indexing = {

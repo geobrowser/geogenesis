@@ -650,11 +650,15 @@ function RespondableControls({
    * as an answer that would mark the side known before anything had looked it up, and the pills
    * would go live over a side nobody knew, which is the one thing this whole path exists to prevent.
    *
-   * Keyed by claim *and viewer*, because the card is recycled down a virtualized list and outlives a
-   * sign-in: a remembered side belongs to the claim it was read for and to the person it was read
-   * about. Without the second half, signing in on a mounted card inherits the anonymous read.
+   * Keyed by everything the read it remembers is keyed by: the claim, the viewer, and the response
+   * kind. A remembered side belongs to the claim it was read for, to the person it was read about,
+   * and to the vocabulary it was read under. The card is recycled down a virtualized list, it
+   * outlives a sign-in, and a claim's kind can change under it — and each of those without its own
+   * segment hands the next read's question the previous one's answer. The kind is the subtle one:
+   * a stance response is not an answer about a claim that has become Verify/Dispute, and treating
+   * it as one would enable the controls over it.
    */
-  const claimKey = `${claim.space_id}:${claim.claim_entity_id}:${viewerKey ?? 'anon'}`;
+  const claimKey = `${claim.space_id}:${claim.claim_entity_id}:${viewerKey ?? 'anon'}:${readiness.response_kind}`;
   const settledIndexedRef = React.useRef<{ key: string; direction: 'positive' | 'negative' | null } | null>(null);
   if (summaryEnabled && !summary.isViewerResponseLoading) {
     settledIndexedRef.current = { key: claimKey, direction: summary.indexedViewerDirection ?? null };

@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type Debate, GeoChatRequestError } from '../api';
+import { type Debate, GeoChatRequestError, GeoChatSessionError } from '../api';
 import { clearEnteringDebate, useEnteringDebateId } from '../debate-entry-intent';
 import { useAcceptDebateRequest, useDebatePeople, useMatchmakingMatches } from './hooks';
 
@@ -147,7 +147,7 @@ describe('viewer-relative reads and a backend catching up', () => {
    */
   it('waits out a refusal aimed at a viewer it has an identity for', async () => {
     mocks.listMatchmakingMatches
-      .mockRejectedValueOnce(new GeoChatRequestError('not yet', null, 401))
+      .mockRejectedValueOnce(new GeoChatSessionError(new GeoChatRequestError('not yet', null, 401)))
       .mockResolvedValue({ matches: [] });
 
     const { result } = renderHook(() => useMatchmakingMatches(true), { wrapper: retryingWrapper });
@@ -158,9 +158,30 @@ describe('viewer-relative reads and a backend catching up', () => {
 
   // Through People, which is one of the two lists the hub asks for without a token — the matches
   // query is simply not made without an account, so it cannot show this either way.
+  /**
+   * A 401 off a *resource* is the other 401, and waiting is the wrong answer to it.
+   *
+   * `getGeoChatSession` hands back the stored session until it is close to expiry, so a session the
+   * server has stopped accepting is re-presented on every attempt and rejected every time.
+   * `debate-gateway` already knows this — it reads the same status as `reauthenticate` and resets
+   * the session. Retrying it nine times would spend ninety seconds re-offering rejected credentials
+   * and then tell the viewer their account was being set up.
+   */
+  it('does not wait out a session the server has stopped accepting', async () => {
+    mocks.accountKey = 'account-1';
+    mocks.listDebatePeople.mockRejectedValue(new GeoChatRequestError('Unauthorized', null, 401));
+
+    const { result } = renderHook(() => useDebatePeople(true), { wrapper: retryingWrapper });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    // The transient budget, not the warm-up one: asked once, then given up on.
+    expect(mocks.listDebatePeople).toHaveBeenCalledTimes(1);
+  });
+
   it('does not wait one out for a viewer it has no identity for', async () => {
     mocks.accountKey = null;
-    mocks.listDebatePeople.mockRejectedValue(new GeoChatRequestError('no', null, 401));
+    mocks.listDebatePeople.mockRejectedValue(new GeoChatSessionError(new GeoChatRequestError('no', null, 401)));
 
     const { result } = renderHook(() => useDebatePeople(true), { wrapper: retryingWrapper });
 

@@ -1640,6 +1640,30 @@ export class GeoChatRequestError extends Error {
 }
 
 /**
+ * A refusal from the session exchange itself, rather than from a resource.
+ *
+ * The two are the same status and opposite problems, and the rest of this codebase already knows
+ * it: `debate-gateway` reads a 401 off a *resource* as `reauthenticate` and calls
+ * {@link resetGeoChatSession}, because the stored session is handed back until it is close to
+ * expiry and a server that rejected those credentials will go on rejecting them. A 401 from
+ * `/auth/session` is the opposite — the credentials are fine and geo-chat does not have the account
+ * yet.
+ *
+ * Only the second is worth waiting out, so only the second is {@link isAccountWarmingUp}. Told apart
+ * by type rather than by status, because the status cannot tell them apart and the call site that
+ * has to decide is a query's `retry`, a long way from either endpoint.
+ *
+ * Extends rather than replaces, so every `instanceof GeoChatRequestError` that already exists keeps
+ * matching.
+ */
+export class GeoChatSessionError extends GeoChatRequestError {
+  constructor(error: GeoChatRequestError) {
+    super(error.message, error.code, error.status);
+    this.name = 'GeoChatSessionError';
+  }
+}
+
+/**
  * geo-chat declining to serve a read at all.
  *
  * The mechanical fact, with no claim about why. It has exactly two readings and they are the same
@@ -1665,11 +1689,15 @@ export function isGeoChatRefusal(error: unknown) {
  * that was never going to change, and the hub would have told the viewer their account was being
  * set up when it had been set up for months.
  *
+ * And from the session exchange only — see {@link GeoChatSessionError}. A 401 off a resource is a
+ * session the server has stopped accepting, which waiting cannot fix and which this would otherwise
+ * have spent nine retries on before telling the viewer their account was being set up.
+ *
  * Lives beside the error it reads because both layers need it: the hub to say what is happening,
  * and the query layer to know a failure is worth asking about again.
  */
 export function isAccountWarmingUp(error: unknown) {
-  return error instanceof GeoChatRequestError && error.status === 401;
+  return error instanceof GeoChatSessionError && error.status === 401;
 }
 
 /**
@@ -1840,7 +1868,7 @@ async function createGeoChatSession(privyToken: string): Promise<GeoChatSession>
   // of failure this is, and throwing it away made every one of them "Something went wrong". A 401
   // here is geo-chat saying it does not know this account *yet* — which it says to a viewer who has
   // only just signed up, for as long as it takes to register them.
-  if (!response.ok) throw await requestError(response);
+  if (!response.ok) throw new GeoChatSessionError(await requestError(response));
   return response.json() as Promise<GeoChatSession>;
 }
 
@@ -1851,7 +1879,7 @@ async function refreshGeoChatSession(refreshToken: string): Promise<GeoChatSessi
     body: JSON.stringify({ refresh_token: refreshToken }),
   });
 
-  if (!response.ok) throw await requestError(response);
+  if (!response.ok) throw new GeoChatSessionError(await requestError(response));
   return response.json() as Promise<GeoChatSession>;
 }
 
