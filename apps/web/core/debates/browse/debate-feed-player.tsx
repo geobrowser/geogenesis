@@ -247,6 +247,8 @@ function DebaterVideo({
 }) {
   const { openSidePanel } = useEntitySidePanel();
   const name = participant ? speakerLabel(participant) : 'Debater';
+  const identityRef = React.useRef<HTMLButtonElement | null>(null);
+  const claimWidth = useIdentityRowWidth(identityRef);
 
   // A personal space's own id resolves to its "system entity" (an ugly technical
   // record). The space's page entity is the real profile, so open that once it's
@@ -294,8 +296,12 @@ function DebaterVideo({
           subtitle stays pinned at the bottom of the column and the claims rise above it. */}
       {(subtitle || claims.length > 0) && (
         <div className="pointer-events-none absolute inset-x-4 bottom-11 z-10 flex flex-col items-start gap-1.5">
+          {/* Capped at the width of the name row below, so a claim never runs out past the
+              debater's position chip. Measured rather than guessed: the row is as wide as the
+              name, and names vary. */}
           <DebateClaimTickerStack
             cards={claims}
+            maxWidth={claimWidth}
             rowsByClaimId={ticker.rowsByClaimId}
             entitiesByClaimId={ticker.entitiesByClaimId}
             onAnswered={ticker.onAnswered}
@@ -310,6 +316,7 @@ function DebaterVideo({
 
       {/* Debater identity: avatar + name + position, opens their personal space in the side panel. */}
       <button
+        ref={identityRef}
         type="button"
         onClick={openProfile}
         className="absolute bottom-3 left-4 z-10 flex items-center gap-2 text-left"
@@ -341,6 +348,31 @@ function DebaterVideo({
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}
     </div>
   );
+}
+
+/**
+ * The rendered width of the debater's name row, so the claim lines above it can stop where it
+ * stops.
+ *
+ * There is no CSS way to say "no wider than that sibling" when the sibling is absolutely
+ * positioned and its width comes from its own content. Returns null until measured, and on any
+ * renderer without `ResizeObserver`, in which case the lines fall back to their own max width.
+ */
+function useIdentityRowWidth(ref: React.RefObject<HTMLElement | null>): number | null {
+  const [width, setWidth] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    const element = ref.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) setWidth(entry.contentRect.width);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+
+  return width;
 }
 
 function CountdownBadge({ seconds, progress }: { seconds: number; progress: number }) {
