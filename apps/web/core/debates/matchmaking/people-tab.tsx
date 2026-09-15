@@ -120,6 +120,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
         <HubQueryState
           isLoading={peopleQuery.isLoading}
           error={peopleQuery.error}
+          failureReason={peopleQuery.failureReason}
           isEmpty={people.length === 0}
           // Which of the two empty states this is turns on whether anyone is online *at all*, not
           // on whether the search box has something in it. With nobody available, a search is not

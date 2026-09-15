@@ -6,6 +6,7 @@ import * as React from 'react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GeoChatRequestError } from '../api';
 import { LobbyTab } from './lobby-tab';
 import { debatesHubMatchesOnlyAtom } from '~/atoms';
 
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   matchesLoading: false,
   matchesFetching: false,
   matchesError: null as unknown,
+  matchesFailureReason: null as unknown,
   /** Whether the wider list reports a corpus with nothing in it — the last rung of the ladder. */
   widerEmpty: false,
 }));
@@ -25,6 +27,7 @@ vi.mock('./hooks', () => ({
     isLoading: mocks.matchesLoading,
     isFetching: mocks.matchesLoading || mocks.matchesFetching,
     error: mocks.matchesError,
+    failureReason: mocks.matchesFailureReason,
   }),
 }));
 
@@ -75,6 +78,7 @@ beforeEach(() => {
   mocks.matchesLoading = false;
   mocks.matchesFetching = false;
   mocks.matchesError = null;
+  mocks.matchesFailureReason = null;
   mocks.widerEmpty = false;
 });
 
@@ -235,6 +239,36 @@ describe('LobbyTab', () => {
 
     expect(screen.getByTestId('matches-list')).toBeInTheDocument();
     expect(toggle()).toHaveAttribute('aria-checked', 'true');
+  });
+
+  /**
+   * An account geo-chat has not registered cannot answer this tab at all.
+   *
+   * Every list here is the viewer's own, so all of them are refused for the minute or two after a
+   * sign-up — and Lobby is where the hub opens. Explore is the corpus rather than the viewer, so it
+   * works throughout. Reported from a fresh account, which sat on a loading skeleton instead.
+   *
+   * Read from the failure *in flight*: those reads wait the refusal out over about a minute, and
+   * until the last attempt fails react-query calls that loading.
+   */
+  it('moves a viewer whose account is still being set up to Explore', () => {
+    mocks.matchesFailureReason = new GeoChatRequestError('not yet', null, 401);
+
+    const { onTabChange } = renderLobby();
+
+    expect(onTabChange).toHaveBeenCalledWith('explore');
+  });
+
+  // Once, like the other move: coming back gets them the message and leaves them on it.
+  it('leaves them on Lobby if they come back to it', () => {
+    mocks.matchesFailureReason = new GeoChatRequestError('not yet', null, 401);
+    const store = createStore();
+    renderLobby(store);
+
+    cleanup();
+    const returning = renderLobby(store);
+
+    expect(returning.onTabChange).not.toHaveBeenCalled();
   });
 
   // A viewer who turned the switch off and found an empty Lobby asked a question and got an answer.

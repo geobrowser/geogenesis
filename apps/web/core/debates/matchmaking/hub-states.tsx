@@ -109,6 +109,14 @@ type HubQueryStateProps = {
   onRetry?: () => void;
   /** Offered when the list is only reachable signed in. See {@link isSignInRequired}. */
   signInAction?: { label: string; message: string; onClick: () => void };
+  /**
+   * The failure behind an attempt still in flight — react-query's `failureReason`.
+   *
+   * For the states worth naming *before* the retries are exhausted. A refusal aimed at an account
+   * geo-chat has not registered is waited out over about a minute, and without this the viewer
+   * watches a skeleton for all of it.
+   */
+  failureReason?: unknown;
   children: React.ReactNode;
 };
 
@@ -122,12 +130,22 @@ export function HubQueryState({
   emptyAction,
   onRetry,
   signInAction,
+  failureReason,
   children,
 }: HubQueryStateProps) {
   const needsSignIn = Boolean(signInAction) && isSignInRequired(error);
-  // The same refusal, read for a caller that has already established the viewer is signed in — so
-  // it is geo-chat not knowing them yet rather than them needing to sign in. See the predicate.
-  const warmingUp = !signInAction && isAccountWarmingUp(error);
+  /**
+   * The same refusal, read for a caller that has already established the viewer is signed in — so
+   * it is geo-chat not knowing them yet rather than them needing to sign in. See the predicate.
+   *
+   * `failureReason` as well as `error`, and it is the one that matters: these reads wait a
+   * warming-up refusal out over about a minute, and until the last attempt fails react-query calls
+   * that loading. So a viewer who had just signed up watched a skeleton for the whole minute, told
+   * nothing, which reads worse than the error did — at least an error says something. The failure
+   * in hand is what is happening *now*, so this says so on the first refusal and the retries carry
+   * on underneath.
+   */
+  const warmingUp = !signInAction && (isAccountWarmingUp(error) || isAccountWarmingUp(failureReason));
   const state = needsSignIn
     ? 'sign-in'
     : warmingUp
@@ -152,7 +170,7 @@ export function HubQueryState({
         // keep asking on their own — see `viewerReadRetryOptions` — so the button is a way to hurry
         // it rather than the only way out.
         <HubMessage action={onRetry ? <HubPillButton onClick={onRetry}>Try again</HubPillButton> : null}>
-          Setting up your account. This takes a moment after you sign up.
+          Setting up your account. Check back in a minute.
         </HubMessage>
       ) : state === 'error' ? (
         <HubMessage
