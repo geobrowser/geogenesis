@@ -16,6 +16,7 @@ import {
   useEntityResponseIndexingSnapshot,
   useResetEntityResponseIndexingSnapshot,
 } from '~/core/hooks/use-entity-vote';
+import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -40,6 +41,7 @@ import type {
   DebateParticipantSummary,
   MatchmakingReadiness,
 } from '../api';
+import { useGeoChatAuth } from '../hooks';
 import { hubCardMotion } from './hub-motion';
 
 type Props = {
@@ -64,6 +66,27 @@ type Props = {
    * from geo-chat carrying both.
    */
   answersReady?: boolean;
+  /**
+   * Whether the indexed response may answer for the viewer's side while geo-chat cannot.
+   *
+   * For the minute or so after an account is created, geo-chat refuses every viewer-relative read
+   * until it has indexed it. The hub panel is geo-chat's surface, so for that whole minute it had
+   * nothing — every pill dead — while the same claims in the main feed took positions normally. The
+   * feed was never geo-chat-only: it resolves the side through `useClaimResponseState`, which falls
+   * back to the indexed read, and that is the entire difference between the two surfaces.
+   *
+   * A brand new account is also the case where the fallback is most obviously right: it holds no
+   * positions, so the indexed read's "no side" is the true answer rather than a stand-in for one.
+   *
+   * Only the *side* was ever outstanding here. The vocabulary arrives with the claim — the page
+   * carries its "Is factual" value — so the fallback completes the one missing fact rather than
+   * guessing at two.
+   *
+   * Still a wait, not a shortcut: the side counts as known once the indexed read has *settled*, and
+   * `null` before then is "not yet", not "no side". Drawing both pills unselected over that is what
+   * makes a press republish the side the viewer already holds instead of clearing it.
+   */
+  answersMayComeFromIndex?: boolean;
   /** Why responding is refused outright — an unpublished edit to the claim's own vocabulary. */
   responseBlockedReason?: string | null;
   /** Rendered under the summary, for hosts with something extra to say. */
@@ -144,6 +167,7 @@ export function MatchmakingClaimCard({
   readiness,
   activeDebate,
   answersReady,
+  answersMayComeFromIndex,
   responseBlockedReason,
   footer,
   onOpenClaim,
@@ -203,6 +227,7 @@ export function MatchmakingClaimCard({
           readiness={readiness}
           activeDebate={activeDebate}
           answersReady={answersReady}
+          answersMayComeFromIndex={answersMayComeFromIndex}
           responseBlockedReason={responseBlockedReason}
           readResponses={readResponses}
           onOpenClaim={onOpenClaim}
@@ -305,6 +330,7 @@ export function useClaimPositionControl({
   claim,
   positions,
   readiness,
+  serverReadiness = readiness,
   answersReady = true,
   responseBlockedReason = null,
   viewerIdentityPending,
@@ -315,6 +341,26 @@ export function useClaimPositionControl({
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
+  /**
+   * geo-chat's own answer about this viewer, or null while it has not given one.
+   *
+   * Only the retirement of an optimistic write reads this, and it has to: `readiness` may be the
+   * merged one, whose `viewer_response` falls back to the indexed read — the same distinction
+   * `useBackfillReadinessForHeldPosition` draws, for the same reason. Confirming a write against
+   * that is confirming it against the client's other guess rather than against the server.
+   *
+   * What it cost: take a position while geo-chat was still registering a new account, the indexer
+   * caught up first, the merged readiness "confirmed" the write and retired the optimism — and the
+   * viewer's own avatar dropped off the side until geo-chat finally answered and put it back.
+   *
+   * Null rather than a readiness with a null response, because geo-chat saying "no side" and geo-chat
+   * not having spoken are the same shape and opposite facts. Clearing a position is where that bites:
+   * the clear would confirm against silence and retire at once, and the indexed read — which has not
+   * caught up either — would then stand the viewer back up on the side they just left.
+   *
+   * Defaults to `readiness`, which is right for every host whose readiness *is* geo-chat's.
+   */
+  serverReadiness?: MatchmakingReadiness | null;
   /**
    * False while the claim's own state is still arriving.
    *
@@ -446,13 +492,16 @@ export function useClaimPositionControl({
   // neither side reports the response.
   React.useEffect(() => {
     if (responseIndexing.status !== 'indexed') return;
+    // Nothing to hand back to yet. The viewer's own write stands until the server it was made
+    // against says the same thing — see `serverReadiness`.
+    if (!serverReadiness) return;
     const expected = responseIndexing.pending.expectedResponse;
     const confirmed =
       expected === null
-        ? readiness.viewer_response === null
-        : readiness.viewer_response?.position === (expected === 'positive');
+        ? serverReadiness.viewer_response === null
+        : serverReadiness.viewer_response?.position === (expected === 'positive');
     if (confirmed) resetResponseIndexing(responseIndexing.runId);
-  }, [readiness.viewer_response, resetResponseIndexing, responseIndexing]);
+  }, [serverReadiness, resetResponseIndexing, responseIndexing]);
 
   const respond = (position: boolean) => {
     if (!isConnected) {
@@ -506,6 +555,7 @@ function RespondableControls({
   readiness,
   activeDebate,
   answersReady = true,
+  answersMayComeFromIndex = false,
   responseBlockedReason = null,
   readResponses = true,
   onOpenClaim,
@@ -530,6 +580,8 @@ function RespondableControls({
    */
   hasFooter?: boolean;
   answersReady?: boolean;
+  /** See {@link Props.answersMayComeFromIndex}. */
+  answersMayComeFromIndex?: boolean;
   responseBlockedReason?: string | null;
   /** False while the card is still far enough below the fold that its reads are not worth making. */
   readResponses?: boolean;
@@ -560,11 +612,64 @@ function RespondableControls({
   // side, which the counts do not depend on. That costs nothing: hosts that resolve the kind
   // through `useClaimResponseState` have already primed this exact key by then, so the extra beat
   // is a cache read, and on the hub's own tabs the rows carry their kind and it is never false.
+  // Who the remembered side below is *about*. Same key every viewer-relative query in this folder
+  // is scoped by, so the memory is scoped the way the reads it remembers already are.
+  const { accountKey: viewerKey } = useGeoChatAuth();
+  // Named, because the memory below has to know whether this read was *asked* — a disabled one
+  // reports "not loading, no side", which is the shape of a settled answer and none of the fact.
+  const summaryEnabled = readResponses && (answersReady || answersMayComeFromIndex);
   const summary = useClaimResponseSummary(
     claim.claim_entity_id,
     claim.space_id,
     readiness.response_kind,
-    readResponses && answersReady
+    // Or where the index is allowed to answer for the side, since then the kind is the page's and
+    // this read is the thing being waited *for* rather than something waiting behind it. Gating it
+    // on `answersReady` there would deadlock: that flag is false precisely because geo-chat has not
+    // answered, and this is what answers instead.
+    summaryEnabled
+  );
+
+  /**
+   * The last side the indexed read actually *settled* on, kept across its own refetches — through
+   * {@link useLastSettled}, which is this exact shape and arrived with GEO-2898 while this branch
+   * was in review. The reasoning below is why this card needs it; the hook is where it lives.
+   *
+   * Reported: take a position in the hub panel and your face appears, disappears a moment later, and
+   * comes back once geo-chat catches up — which the explore card never does.
+   *
+   * Reading the read live is what did it. `isViewerResponseLoading` goes true again on every
+   * refetch, and the substitution below was withdrawn whenever it did, so the viewer's side — and
+   * the avatar standing on it — blinked out and returned on a cadence nobody asked about. It shows
+   * up most on a fresh account because geo-chat, the other source, is refusing and cannot cover the
+   * gap.
+   *
+   * Settled, emphatically, not merely last-seen: a read that comes back with no side is an answer
+   * and is kept, so clearing a position still clears it. Only the window where the answer is
+   * *in flight* reuses the previous one, which is the window `null` means "not yet" in.
+   *
+   * Only from a read that was actually asked. A disabled `useClaimResponseSummary` reports
+   * `isViewerResponseLoading: false` and `indexedViewerDirection: null` — the exact shape of "asked,
+   * and they hold no side" — and every card below the fold starts disabled on `readResponses`. Taken
+   * as an answer that would mark the side known before anything had looked it up, and the pills
+   * would go live over a side nobody knew, which is the one thing this whole path exists to prevent.
+   *
+   * Keyed by everything the read it remembers is keyed by: the claim, the viewer, and the response
+   * kind. A remembered side belongs to the claim it was read for, to the person it was read about,
+   * and to the vocabulary it was read under. The card is recycled down a virtualized list, it
+   * outlives a sign-in, and a claim's kind can change under it — and each of those without its own
+   * segment hands the next read's question the previous one's answer. The kind is the subtle one:
+   * a stance response is not an answer about a claim that has become Verify/Dispute, and treating
+   * it as one would enable the controls over it.
+   */
+  const claimKey = `${claim.space_id}:${claim.claim_entity_id}:${viewerKey ?? 'anon'}:${readiness.response_kind}`;
+  const sideSettling = !summaryEnabled || summary.isViewerResponseLoading;
+  // `'none'` rather than `null` for "settled on no side", so the two facts `null` would otherwise
+  // carry stay apart: nothing held yet, against an answer of nobody. A string rather than an object
+  // because `resolvedReadiness` memoizes on it, and a fresh object each render would defeat that.
+  const settledDirection = useLastSettled<'positive' | 'negative' | 'none' | null>(
+    sideSettling ? null : (summary.indexedViewerDirection ?? 'none'),
+    sideSettling,
+    claimKey
   );
 
   /**
@@ -595,23 +700,33 @@ function RespondableControls({
    */
   const resolvedReadiness = React.useMemo(() => {
     if (!reconcileWithIndexedResponse || viewerResponseUnknown || readiness.viewer_response) return readiness;
-    if (summary.isViewerResponseLoading) return readiness;
-    const indexed = viewerResponseFromDirection(summary.indexedViewerDirection ?? null, readiness.response_kind);
+    // Never settled for this claim, so there is nothing to stand in with — the wait the comment
+    // above describes, before it has anything to remember.
+    if (settledDirection === null) return readiness;
+    const indexed = viewerResponseFromDirection(
+      settledDirection === 'none' ? null : settledDirection,
+      readiness.response_kind
+    );
     return indexed ? { ...readiness, viewer_response: indexed } : readiness;
-  }, [
-    readiness,
-    reconcileWithIndexedResponse,
-    summary.indexedViewerDirection,
-    summary.isViewerResponseLoading,
-    viewerResponseUnknown,
-  ]);
+  }, [readiness, reconcileWithIndexedResponse, settledDirection, viewerResponseUnknown]);
+
+  /**
+   * The side is known once *something* has answered for it — geo-chat, or the indexed read standing
+   * in where the host allows it. `resolvedReadiness` above has already done the standing in; this
+   * tells the gate the same thing, which otherwise goes on withholding a side the card now holds.
+   */
+  const sideKnown =
+    answersReady || (answersMayComeFromIndex && reconcileWithIndexedResponse && settledDirection !== null);
 
   const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
     useClaimPositionControl({
       claim,
       positions,
       readiness: resolvedReadiness,
-      answersReady,
+      // The unmerged one, and only once geo-chat has actually answered for this claim — which is
+      // exactly what `answersReady` reports, before the index is allowed to stand in for it.
+      serverReadiness: answersReady ? readiness : null,
+      answersReady: sideKnown,
       responseBlockedReason,
       viewerIdentityPending,
       viewerResponseUnknown,
@@ -637,7 +752,7 @@ function RespondableControls({
               activeDebate={activeDebate}
               // `undefined` until the reads have landed, so a card that cannot yet say which side
               // the viewer holds does not read as saying they hold none.
-              viewerPosition={answersReady ? viewerPosition : undefined}
+              viewerPosition={sideKnown ? viewerPosition : undefined}
             />
           ))
         }

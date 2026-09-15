@@ -120,6 +120,11 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
         <HubQueryState
           isLoading={peopleQuery.isLoading}
           error={peopleQuery.error}
+          failureReason={peopleQuery.failureReason}
+          // The other three lists have always had this, and the setup state needs it more than the
+          // error state did: these reads do not refetch on focus or reconnect, so once the warm-up
+          // retries run out this message is as far as the tab gets on its own.
+          onRetry={() => void peopleQuery.refetch()}
           isEmpty={people.length === 0}
           // Which of the two empty states this is turns on whether anyone is online *at all*, not
           // on whether the search box has something in it. With nobody available, a search is not

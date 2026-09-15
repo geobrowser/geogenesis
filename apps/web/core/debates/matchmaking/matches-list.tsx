@@ -265,6 +265,7 @@ export function MatchesList({
           // has — nothing above depends on `activity` then.
           isLoading={matchesQuery.isLoading || (filtered.length === 0 && activityQuery.isLoading)}
           error={matchesQuery.error}
+          failureReason={matchesQuery.failureReason}
           onRetry={() => void matchesQuery.refetch()}
           isEmpty={filtered.length === 0}
           // A match needs three things at once, and the old copy asserted which one was missing

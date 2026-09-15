@@ -62,6 +62,8 @@ export type ScopedClaims = {
   fetchNextPage: () => void;
   refetch: () => void;
   error: unknown;
+  /** The failure behind an attempt still in flight, for the states worth naming before the retries run out. */
+  failureReason: unknown;
 };
 
 /**
@@ -163,5 +165,10 @@ export function useScopedMatchmakingClaims(
     fetchNextPage: claimsQuery.fetchNextPage,
     refetch: claimsQuery.refetch,
     error: claimsQuery.error,
+    // The failure behind an attempt still in flight. Forwarded for the same reason the hub's other
+    // lists forward it: this read waits a warming-up refusal out over about ninety seconds, and
+    // react-query calls all of that loading — so without it the tab shows a skeleton for the whole
+    // window instead of saying the account is still being set up.
+    failureReason: claimsQuery.failureReason,
   };
 }

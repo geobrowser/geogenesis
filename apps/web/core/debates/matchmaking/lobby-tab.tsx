@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
+import { isAccountWarmingUpQuery } from '../api';
 import { ClaimsTab } from './claims-tab';
 import { useMatchmakingMatches } from './hooks';
 import { MatchesList } from './matches-list';
@@ -71,6 +72,21 @@ export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =>
     setLeftForExplore(true);
     onTabChange('explore');
   }, [onTabChange, setLeftForExplore]);
+
+  /**
+   * An account geo-chat has not registered yet cannot answer this tab at all.
+   *
+   * Every list here is the viewer's own, so all of them are refused for the minute or two after a
+   * sign-up — and Lobby is where the hub opens. Explore is the corpus rather than the viewer, so it
+   * works throughout. This is the same move the ladder above makes for a Lobby with nothing on it,
+   * spent from the same marker for the same reason: it is a courtesy on arrival, not a policy, so
+   * coming back to Lobby afterwards gets the viewer the message and leaves them on it.
+   */
+  const warmingUp = isAccountWarmingUpQuery(matchesQuery);
+  React.useEffect(() => {
+    if (!warmingUp || leftForExplore) return;
+    showExplore();
+  }, [leftForExplore, showExplore, warmingUp]);
 
   const toggle = (
     <MatchesOnlySwitch

@@ -116,6 +116,7 @@ export function RequestsTab() {
         <HubQueryState
           isLoading={requestsQuery.isLoading}
           error={requestsQuery.error}
+          failureReason={requestsQuery.failureReason}
           onRetry={() => void requestsQuery.refetch()}
           isEmpty={isEmpty}
           emptyMessage={

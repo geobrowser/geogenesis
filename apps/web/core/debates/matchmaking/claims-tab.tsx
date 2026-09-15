@@ -502,6 +502,21 @@ export function ClaimsTab({
   // a press on the side they already hold republishes it instead of clearing it. Signed *out* is a
   // real answer: they have no side, and their press opens the sign-in prompt.
   //
+  //
+  // Per space rather than over the whole fan-out. The panel spans every space the viewer may read,
+  // and geo-chat refuses rows for one they have no access to — a refusal that never resolves. Read
+  // as one flag, that left every pill in the panel dead, in spaces that had answered as well as the
+  // one that had not, while the same claims in the main feed stayed pressable because that surface
+  // resolves each claim from its own row. A card asks about *its* claim, so that is what it gets.
+  const taggedAnswersReadyFor = React.useCallback(
+    (entry: MatchmakingClaim) =>
+      !graphSourced ||
+      (authenticated ? Boolean(accountKey) && !taggedRows.unresolvedSpaceIds.has(entry.claim.space_id) : true),
+    [accountKey, authenticated, graphSourced, taggedRows.unresolvedSpaceIds]
+  );
+
+  // The same question asked about the list as a whole, which is what the collapse needs: it folds
+  // rows against each other, so a partial answer is not one it can act on.
   const taggedAnswersReady =
     !graphSourced || (authenticated ? Boolean(accountKey) && !taggedRows.isLoading && !taggedRows.isError : true);
 
@@ -653,7 +668,47 @@ export function ClaimsTab({
   // a viewer it has no account for — so the collapse is a no-op and the switch is a control that
   // cannot do anything. Both go, rather than leaving one drawn over the other's nothing.
   const hidesMyPositions = authenticated && hideMyPositions;
-  const collapsesAnswered = !isLobby && filter !== 'mine' && hidesMyPositions;
+
+  /**
+   * And not when the answers cannot be had at all, which is a different thing from not having them
+   * yet.
+   *
+   * A brand new account is the case this is for: geo-chat refuses every viewer-relative read until
+   * it has registered them, so the per-space rows 401 and `viewer_response` never arrives for any
+   * claim. The collapse then sits in `classifying` forever, and everything downstream of it follows
+   * — the tab holds its skeleton on `answersSettled`, `stillPaging` reads an empty list, bounded
+   * paging advances looking for rows the hold is what is keeping off screen, and the next page puts
+   * another lookup in flight to be held on in turn. The viewer watches it cycle: skeleton, a
+   * screenful of un-pressable cards, "looking for claims you haven't answered yet", skeleton again.
+   *
+   * It is the barren-corpus loop from GEO-2863 reached by a different road, and the bound is no
+   * help here — the pages are not barren, the rows are being held back.
+   *
+   * Turning the collapse off is not a fallback, it is the correct answer: a viewer whose account
+   * does not exist yet holds no positions, so there is nothing to hide, and a lookup that failed
+   * cannot be the reason a row disappears. The same reasoning is already written into
+   * `taggedAnswersReady` and into `answersInFlight` below — this is the one place that had not
+   * agreed with it.
+   *
+   * Latched, because `isError` clears the moment a later page's batch goes out and comes back true
+   * when it fails in turn. Read live, the collapse would switch off and on with it and take the
+   * rows away again on each swing.
+   *
+   * Released again on a clean settle, which is not the same as reading it live: a lookup in flight
+   * leaves the latch where it is, so only an answer moves it. That matters because the refusal this
+   * is for ends — the rows query polls while it is being refused, so the answers do arrive a few
+   * seconds after geo-chat registers the account, and a latch that only ever closed would leave
+   * "Hide my positions" switched on and doing nothing for the rest of the visit. The one fold when
+   * they land is the correct list finally being drawn, not a screenful being taken back.
+   */
+  const answersFailed = graphSourced && authenticated && taggedRows.isError;
+  const answersArrived = graphSourced && authenticated && !taggedRows.isError && !taggedRows.isLoading;
+  const answersUnavailableForRef = React.useRef<string | null>(null);
+  if (answersFailed) answersUnavailableForRef.current = listKey;
+  else if (answersArrived) answersUnavailableForRef.current = null;
+  const answersUnavailable = answersUnavailableForRef.current === listKey;
+
+  const collapsesAnswered = !isLobby && filter !== 'mine' && hidesMyPositions && !answersUnavailable;
   const answeredStateOf = React.useCallback(
     (entry: MatchmakingClaim): AnsweredState =>
       !taggedAnswersReady ? 'unknown' : entry.viewer_response !== null ? 'answered' : 'unanswered',
@@ -981,6 +1036,9 @@ export function ClaimsTab({
           // unpressable until its vocabulary and the viewer's own side have actually arrived. A
           // short list beats a blank one; a wrong publish beats neither, and is what those guard.
           error={graphSourced ? taggedError : claimsQuery.error}
+          // Only the index path has one: it is the viewer-relative read, and so the only one here a
+          // warming-up account can refuse. The tagged catalog is the graph's and answers anybody.
+          failureReason={graphSourced ? undefined : claimsQuery.failureReason}
           // Retries whatever failed, not just the catalog. The error above can come from either of
           // the two lookups behind the list, and neither is keyed on the catalog — so refetching
           // only that left the failed dependency untouched and the error state exactly where it
@@ -1064,8 +1122,12 @@ export function ClaimsTab({
                 readiness={entry}
                 activeDebate={entry.active_debate}
                 // The paged list is geo-chat's own, so every row carries its kind already; only the
-                // tagged list has to wait for one.
-                answersReady={taggedAnswersReady}
+                // tagged list has to wait for one — and only for the space this claim is in.
+                answersReady={taggedAnswersReadyFor(entry)}
+                // And where it cannot, the indexed read answers for the side, the same way the main
+                // feed's cards do. geo-chat refusing this viewer used to leave the whole panel
+                // unpressable while those cards went on working.
+                answersMayComeFromIndex
                 onRequireSignIn={onRequireSignIn}
               />
             ))}
