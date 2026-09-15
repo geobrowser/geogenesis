@@ -60,14 +60,7 @@ describe('buildSpaceTabs', () => {
       isDebugDebatesPageEnabled: false,
     });
 
-    expect(tabs.map(tab => tab.label)).toEqual([
-      'Overview',
-      'Facts',
-      'Sources',
-      'Debates',
-      'Governance',
-      'Activity',
-    ]);
+    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Debates', 'Governance', 'Activity']);
     expect(tabs.find(tab => tab.label === 'Debates')?.href).toBe(`${overviewHref}?tabId=dynamic-debates`);
   });
 

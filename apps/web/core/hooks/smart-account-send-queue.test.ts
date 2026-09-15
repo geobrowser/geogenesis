@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { QueuedSendTimeoutError, enqueueFor, withNonceRetry } from './smart-account-send-queue';
+import { QueuedSendTimeoutError, enqueueFor, withSubmissionRetry } from './smart-account-send-queue';
+
+const reportError = vi.hoisted(() => vi.fn());
+vi.mock('~/core/telemetry/logger', () => ({ reportError }));
 
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -19,6 +22,7 @@ const nextAddress = () => `0xeoa${addressCounter++}`;
 describe('smart-account send queue', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    reportError.mockClear();
   });
 
   afterEach(() => {
@@ -116,7 +120,7 @@ describe('smart-account send queue', () => {
     await expect(queued).resolves.toBe('ran');
   });
 
-  describe('withNonceRetry', () => {
+  describe('withSubmissionRetry', () => {
     // Mirrors the real shape: viem throws UserOperationExecutionError with an
     // InvalidAccountNonceError cause, exposed via BaseError's .walk(predicate).
     const nonceError = () => {
@@ -137,7 +141,7 @@ describe('smart-account send queue', () => {
         return 'ok';
       });
 
-      const result = withNonceRetry(task);
+      const result = withSubmissionRetry(task);
       await vi.advanceTimersByTimeAsync(500);
       await expect(result).resolves.toBe('ok');
       expect(task).toHaveBeenCalledTimes(2);
@@ -148,20 +152,77 @@ describe('smart-account send queue', () => {
         throw nonceError();
       });
 
-      const result = withNonceRetry(task);
+      const result = withSubmissionRetry(task);
       const assertion = expect(result).rejects.toThrow('Invalid Smart Account nonce');
-      await vi.advanceTimersByTimeAsync(2_000);
+      // 500 + 1000 + 2000 + 4000 of backoff across five attempts.
+      await vi.advanceTimersByTimeAsync(7_500);
       await assertion;
-      expect(task).toHaveBeenCalledTimes(3);
+      expect(task).toHaveBeenCalledTimes(5);
     });
 
-    it('does not retry errors unrelated to the nonce', async () => {
+    it('reports to telemetry only once the budget is exhausted', async () => {
+      const recovering = vi.fn(async () => {
+        if (recovering.mock.calls.length < 2) throw nonceError();
+        return 'ok';
+      });
+      const recovered = withSubmissionRetry(recovering);
+      await vi.advanceTimersByTimeAsync(500);
+      await expect(recovered).resolves.toBe('ok');
+      // A retry that succeeded is not an incident — reporting it would drown the signal.
+      expect(reportError).not.toHaveBeenCalled();
+
+      const failing = vi.fn(async () => {
+        throw nonceError();
+      });
+      const result = withSubmissionRetry(failing);
+      const assertion = expect(result).rejects.toThrow();
+      await vi.advanceTimersByTimeAsync(7_500);
+      await assertion;
+      expect(reportError).toHaveBeenCalledTimes(1);
+    });
+
+    // GEO-2810: this class reached two users as a raw dialog because the predicate
+    // matched only InvalidAccountNonceError.
+    it('retries an EntryPoint simulateValidation rejection', async () => {
+      const rejection = () => {
+        const err = new Error("User Operation rejected by EntryPoint's `simulateValidation`");
+        (err as unknown as { walk: (fn: (e: unknown) => boolean) => unknown }).walk = fn => {
+          const cause = new Error("User Operation rejected by EntryPoint's `simulateValidation`");
+          cause.name = 'UserOperationRejectedByEntryPointError';
+          return fn(cause) ? cause : undefined;
+        };
+        return err;
+      };
+
+      const task = vi.fn(async () => {
+        if (task.mock.calls.length < 2) throw rejection();
+        return 'ok';
+      });
+
+      const result = withSubmissionRetry(task);
+      await vi.advanceTimersByTimeAsync(500);
+      await expect(result).resolves.toBe('ok');
+      expect(task).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry errors outside the validation phase', async () => {
       const task = vi.fn(async () => {
         throw new Error('boom');
       });
 
-      await expect(withNonceRetry(task)).rejects.toThrow('boom');
+      await expect(withSubmissionRetry(task)).rejects.toThrow('boom');
       expect(task).toHaveBeenCalledTimes(1);
+    });
+
+    // The safety property the whole retry rests on: anything that can only happen after
+    // a hash exists must never re-run the send, or a retry duplicates an on-chain op.
+    it('does not retry a receipt-phase failure', async () => {
+      const receiptTimeout = vi.fn(async () => {
+        throw new Error('UserOperation 0xabc was submitted but its receipt did not arrive within 90s.');
+      });
+
+      await expect(withSubmissionRetry(receiptTimeout)).rejects.toThrow('receipt did not arrive');
+      expect(receiptTimeout).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -107,3 +107,19 @@ describe('formatRollingSubmissionLabel', () => {
     ).toBe('Vote again in -6 hrs');
   });
 });
+
+describe('what survives a roll-off (GEO-2871)', () => {
+  // Not a test of `ranking-rolling` itself but of the invariant it sits inside, and this is
+  // where a reader looking for roll-off behaviour will come.
+  //
+  // The indexer keeps only the newest ballot per (block, personal space) — `dedup_latest`.
+  // So a ballot rebuilt from an empty sheet permanently supersedes the fuller one it replaces.
+  // Re-ranking has to start from what the author last said, or the difference is lost.
+  it('still mints a fresh entity once the window has elapsed', () => {
+    // Unchanged, and load-bearing: the fresh entity is what carries a fresh `submitted_at`,
+    // without which the re-ranked list would stay decayed at its original date.
+    expect(shouldMintNewRankEntity({ isRolling: true, hasExistingBallot: true, isSubmissionLive: false })).toBe(true);
+    // ...and does not while it is live, so an edit stays an edit.
+    expect(shouldMintNewRankEntity({ isRolling: true, hasExistingBallot: true, isSubmissionLive: true })).toBe(false);
+  });
+});

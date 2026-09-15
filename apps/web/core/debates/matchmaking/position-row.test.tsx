@@ -78,9 +78,11 @@ describe('PositionRow', () => {
     expect([...pill.classList]).toContain('@container');
 
     // Widest goes first, narrowest last: badge, then the second face, then the first.
-    expect([...badge.classList]).toContain('@max-[148px]:hidden');
-    expect([...secondFace.classList]).toContain('@max-[124px]:hidden');
-    expect([...firstFace.classList]).toContain('@max-[108px]:hidden');
+    // Re-derived when the faces became a 16px picture in a 2px ring pitched 13px apart: a first
+    // face costs 20px of box and each one after it 13px. See `PositionAvatars` for the arithmetic.
+    expect([...badge.classList]).toContain('@max-[128px]:hidden');
+    expect([...secondFace.classList]).toContain('@max-[115px]:hidden');
+    expect([...firstFace.classList]).toContain('@max-[102px]:hidden');
 
     // The label carries no shed rule of its own — it is the thing all of the above protects.
     const label = screen.getByText('Agree');

@@ -7,25 +7,13 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
-import { ID } from '~/core/id';
 import { getRelationsByFromEntityId } from '~/core/io/queries';
 import { useRelation, useValues } from '~/core/sync/use-store';
-import { isDirectMediaUrl } from '~/core/utils/media-url';
+import { findMediaUrlValue, isDirectMediaUrl } from '~/core/utils/media-url';
 
-/**
- * The media URL among an image/video entity's values. An `ipfs://` value on any property wins
- * (legacy media blocks keep it unlabelled); an http(s) URL is read only from `Web URL`, since that
- * property is also a general canonical link and the callers do not check the target's entity type.
- */
-export function findMediaUrlValue(values: { value: unknown; property: { id: string } }[]): string | undefined {
-  const ipfsValue = values.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
-  if (typeof ipfsValue?.value === 'string') return ipfsValue.value;
-  const webUrlValue = values.find(
-    v =>
-      ID.equals(v.property.id, ContentIds.WEB_URL_PROPERTY) && typeof v.value === 'string' && isDirectMediaUrl(v.value)
-  );
-  return typeof webUrlValue?.value === 'string' ? webUrlValue.value : undefined;
-}
+// Re-exported from its old home: the readers that hold values straight off a
+// GraphQL response need it too, and they have no business pulling in the store.
+export { findMediaUrlValue };
 
 export function useImageUrlFromEntity(imageEntityId: string | undefined, spaceId: string): string | undefined {
   const imageValues = useValues({
@@ -47,6 +35,22 @@ export function useVideoUrlFromEntity(videoEntityId: string | undefined, spaceId
   return findMediaUrlValue(videoValues);
 }
 
+/**
+ * True when this entity's relation for `propertyId` survives only as a local
+ * deletion. The fetched fallback in the hooks below is cached for five minutes and
+ * outlives the relation disappearing, so without this a removed image keeps
+ * rendering from that cache — and comes back the next time a view reopens.
+ */
+function useIsLocallyRemoved(entityId: string | undefined, propertyId: string, spaceId: string, hasLive: boolean) {
+  const deleted = useRelation({
+    includeDeleted: true,
+    selector: r =>
+      r.fromEntity.id === entityId && r.type.id === propertyId && r.spaceId === spaceId && r.isDeleted === true,
+  });
+
+  return Boolean(deleted) && !hasLive;
+}
+
 export function useEntityAvatarUrl(entityId: string | undefined, spaceId: string): string | undefined {
   const [fetchedAvatarUrl, setFetchedAvatarUrl] = React.useState<string | undefined>(undefined);
   const cache = useQueryClient();
@@ -57,6 +61,7 @@ export function useEntityAvatarUrl(entityId: string | undefined, spaceId: string
 
   const storeAvatarEntityId = storeAvatarRelation?.toEntity.id;
   const storeImageUrl = useImageUrlFromEntity(storeAvatarEntityId, spaceId);
+  const isRemoved = useIsLocallyRemoved(entityId, ContentIds.AVATAR_PROPERTY, spaceId, Boolean(storeAvatarRelation));
 
   React.useEffect(() => {
     if (!entityId || storeImageUrl) {
@@ -92,6 +97,8 @@ export function useEntityAvatarUrl(entityId: string | undefined, spaceId: string
     fetchAvatar();
   }, [entityId, spaceId, storeImageUrl, cache]);
 
+  if (isRemoved) return undefined;
+
   return storeImageUrl ?? fetchedAvatarUrl;
 }
 
@@ -105,6 +112,7 @@ export function useEntityCoverUrl(entityId: string | undefined, spaceId: string)
 
   const storeCoverEntityId = storeCoverRelation?.toEntity.id;
   const storeImageUrl = useImageUrlFromEntity(storeCoverEntityId, spaceId);
+  const isRemoved = useIsLocallyRemoved(entityId, SystemIds.COVER_PROPERTY, spaceId, Boolean(storeCoverRelation));
 
   React.useEffect(() => {
     if (!entityId || storeImageUrl) {
@@ -139,6 +147,8 @@ export function useEntityCoverUrl(entityId: string | undefined, spaceId: string)
 
     fetchCover();
   }, [entityId, spaceId, storeImageUrl, cache]);
+
+  if (isRemoved) return undefined;
 
   return storeImageUrl ?? fetchedCoverUrl;
 }
@@ -191,6 +201,17 @@ export function useEntityMedia(
 
   const storeCoverEntityId = storeCoverRelation?.toEntity.id;
   const storeCoverUrl = useImageUrlFromEntity(storeCoverEntityId, spaceId);
+
+  // Same guard as the single-purpose hooks above. Without it here, the surfaces
+  // that use this one — ranking rows, block media — keep serving an image from the
+  // five-minute relation cache after it has been removed.
+  const isAvatarRemoved = useIsLocallyRemoved(
+    entityId,
+    ContentIds.AVATAR_PROPERTY,
+    spaceId,
+    Boolean(storeAvatarRelation)
+  );
+  const isCoverRemoved = useIsLocallyRemoved(entityId, SystemIds.COVER_PROPERTY, spaceId, Boolean(storeCoverRelation));
 
   React.useEffect(() => {
     if (!entityId || (storeAvatarUrl && storeCoverUrl)) {
@@ -256,8 +277,8 @@ export function useEntityMedia(
     };
   }, [entityId, spaceId, fetchKey, storeAvatarUrl, storeCoverUrl, cache]);
 
-  const avatarUrl = storeAvatarUrl ?? settled?.avatarUrl;
-  const coverUrl = storeCoverUrl ?? settled?.coverUrl;
+  const avatarUrl = isAvatarRemoved ? undefined : (storeAvatarUrl ?? settled?.avatarUrl);
+  const coverUrl = isCoverRemoved ? undefined : (storeCoverUrl ?? settled?.coverUrl);
 
   return {
     avatarUrl,

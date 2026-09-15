@@ -756,7 +756,7 @@ describe('planWriteTool: setDataBlockView / setDataBlockFilters', () => {
     expect(out).toMatchObject({ ok: true, intent: { kind: 'setDataBlockView', view: 'GALLERY' } });
   });
 
-  it('setDataBlockFilters normalizes RELATION columnIds', async () => {
+  it('setDataBlockFilters normalizes RELATION columnIds and per-property modes', async () => {
     findOne.mockResolvedValue(null);
     const out = (await planWriteTool(
       'setDataBlockFilters',
@@ -765,10 +765,70 @@ describe('planWriteTool: setDataBlockView / setDataBlockFilters', () => {
         parentEntityId: PARENT,
         spaceId: SPACE,
         filters: [{ columnId: SystemIds.TYPES_PROPERTY, valueType: 'RELATION', value: TARGET }],
+        modesByColumn: {
+          [SystemIds.TYPES_PROPERTY]: 'AND',
+          '33333333-3333-3333-3333-333333333333': 'OR',
+        },
       },
       ctx
-    )) as { ok: true; intent: { filters: Array<{ valueType: string; value: string }> } };
+    )) as {
+      ok: true;
+      intent: { filters: Array<{ valueType: string; value: string }>; modesByColumn: Record<string, string> };
+    };
     expect(out.intent.filters[0]).toMatchObject({ valueType: 'RELATION', value: TARGET });
+    expect(out.intent.modesByColumn).toEqual({ [PROPERTY]: 'OR' });
+  });
+
+  it('setDataBlockFilters migrates the legacy global OR mode for tool callers', async () => {
+    findOne.mockResolvedValue(null);
+    const out = (await planWriteTool(
+      'setDataBlockFilters',
+      {
+        blockId: BLOCK,
+        parentEntityId: PARENT,
+        spaceId: SPACE,
+        mode: 'OR',
+        filters: [{ columnId: SystemIds.TYPES_PROPERTY, valueType: 'RELATION', value: TARGET }],
+      },
+      ctx
+    )) as { ok: true; intent: { modesByColumn: Record<string, string> } };
+
+    expect(out.intent.modesByColumn).toEqual({ [SystemIds.TYPES_PROPERTY]: 'OR' });
+  });
+
+  it('setDataBlockFilters treats modesByColumn: null as absent instead of throwing', async () => {
+    findOne.mockResolvedValue(null);
+    const out = (await planWriteTool(
+      'setDataBlockFilters',
+      {
+        blockId: BLOCK,
+        parentEntityId: PARENT,
+        spaceId: SPACE,
+        filters: [{ columnId: SystemIds.TYPES_PROPERTY, valueType: 'RELATION', value: TARGET }],
+        modesByColumn: null,
+      },
+      ctx
+    )) as { ok: true; intent: { modesByColumn: Record<string, string> } };
+
+    expect(out.ok).toBe(true);
+    expect(out.intent.modesByColumn).toEqual({});
+  });
+
+  it('setDataBlockFilters rejects a non-object modesByColumn', async () => {
+    findOne.mockResolvedValue(null);
+    const out = await planWriteTool(
+      'setDataBlockFilters',
+      {
+        blockId: BLOCK,
+        parentEntityId: PARENT,
+        spaceId: SPACE,
+        filters: [{ columnId: SystemIds.TYPES_PROPERTY, valueType: 'RELATION', value: TARGET }],
+        modesByColumn: ['OR'],
+      },
+      ctx
+    );
+
+    expect(out).toMatchObject({ ok: false });
   });
 });
 

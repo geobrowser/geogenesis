@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import { Effect, Either } from 'effect';
 
 import { ensureSpaceMembership } from '~/core/access/request-space-membership';
+import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import {
@@ -47,11 +48,13 @@ import { readCachedPersonalSpace, readCachedSmartAccount } from './cached-write-
 
 interface UseEntityResponseArgs {
   entityId: string;
+  entityName?: string | null;
   spaceId: string;
   responseKind: ResponseKind | null;
 }
 
 export type PendingEntityResponseIndex = {
+  onIndexed?: () => void;
   entityId: string;
   expectedResponse: ActiveResponseDirection | null;
   personalSpaceId: string;
@@ -189,7 +192,7 @@ export function useResetEntityResponseIndexingSnapshot({ entityId, spaceId, resp
   );
 }
 
-export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntityResponseArgs) {
+export function useEntityResponse({ entityId, entityName, spaceId, responseKind }: UseEntityResponseArgs) {
   const queryClient = useQueryClient();
   const responseIndexingRegistry = getResponseIndexingRegistry(queryClient);
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
@@ -273,6 +276,8 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
         return;
       }
 
+      pending.onIndexed?.();
+
       try {
         if (pending.responseKind === 'curation') {
           await Promise.all([
@@ -316,6 +321,13 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
         return;
       }
       if (!isCurrentIndexingRun(runId)) return;
+
+      // The onboarding checklist reads two of its steps out of this table — an upvote is one step,
+      // a position on a claim is another — and it caches for a minute, so without this a reader who
+      // answers a claim while the card is on screen watches the step stay unticked until they
+      // navigate away and back. Not branched on kind: the card asks about both, and this is the one
+      // moment either becomes true (GEO-2800).
+      void queryClient.invalidateQueries({ queryKey: ['curator-onboarding-status'] });
 
       // The vote is indexed, so the server lists can finally see it. Refetch them
       // before dropping the optimistic override, or the row would blink out of the
@@ -454,6 +466,18 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
     onMutate: direction => {
       const previousState =
         queryClient.getQueryData<EntityResponseIndexingState>(indexingQueryKey) ?? IDLE_INDEXING_STATE;
+      const previousResponse = previousState.pending
+        ? previousState.pending.expectedResponse
+        : queryClient.getQueryData<ActiveResponseDirection | null>(
+            userEntityResponseQueryKey(
+              readRegisteredSpace().personalSpaceId,
+              entityId,
+              spaceId,
+              0,
+              responseKind ?? 'curation'
+            )
+          );
+      const operation = observeOperation('vote', 'entity', entityId);
       const { runId, runOrder } = createResponseIndexingRunId();
       const pending = pendingResponseIndex(direction);
       getResponseSubmissionRuns(responseIndexingRegistry, indexingKeyId).set(runId, {
@@ -469,9 +493,30 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
         pending,
         runId,
       });
-      return { previousState, runId, runOrder };
+      return { previousState, runId, runOrder, previousResponse, operation, entityName };
     },
     onSuccess: (submission, direction, context) => {
+      const previousDirection =
+        context?.previousResponse === 'positive' ? 'up' : context?.previousResponse === 'negative' ? 'down' : undefined;
+      const voteDirection = direction === 'positive' ? 'up' : direction === 'negative' ? 'down' : 'none';
+      const voteAction =
+        direction === 'clear' ? 'remove' : previousDirection && previousDirection !== voteDirection ? 'switch' : 'cast';
+      const outcomeProperties = {
+        vote_direction: voteDirection,
+        vote_kind: voteDirection,
+        mutation_kind: voteAction,
+        vote_action: voteAction,
+        previous_vote_direction: previousDirection,
+        response_kind: submission.pending.responseKind,
+        response_action: getResponseActionMethod(submission.pending.responseKind, direction),
+        entity_id: submission.pending.entityId,
+        target_name: context?.entityName || undefined,
+        space_id: submission.pending.spaceId,
+        object_type: 0,
+        user_operation_hash: submission.transaction,
+      };
+      context?.operation.outcome('vote_cast', 'submitted', outcomeProperties);
+      submission.pending.onIndexed = () => context?.operation.outcome('vote_cast', 'indexed', outcomeProperties);
       syncVotedLists(direction, submission.pending);
       // Taking a position on a claim (agree/disagree, verify/dispute) says the user wants to
       // take part in the space the claim is published in, so join them to it the same way
@@ -500,6 +545,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       }
     },
     onError: (_error, _direction, context) => {
+      context?.operation.failed(classifyOperationFailure(_error));
       if (!context) return;
       const runs = responseIndexingRegistry.submissionRuns.get(indexingKeyId);
       const failedRun = runs?.get(context.runId);

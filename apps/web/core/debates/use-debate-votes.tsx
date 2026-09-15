@@ -8,7 +8,9 @@ import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
+import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
+import { useGeoChatAuth } from '~/core/debates/hooks';
 import {
   NAME_PROPERTY_ID,
   TYPES_PROPERTY_ID,
@@ -19,12 +21,11 @@ import {
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { type DebateVoteRecord, tallyDebateVotes, voteSharePercentages } from '~/core/debates/vote-tally';
 import { TransactionWriteFailedError } from '~/core/errors';
-import { ID } from '~/core/id';
-import { useGeoChatAuth } from '~/core/debates/hooks';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { ID } from '~/core/id';
 import { checkEntityExists, getDebateVoteEntities } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { useReportError } from '~/core/state/status-bar-store';
 import type { Entity, Relation, Value } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
@@ -310,6 +311,15 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       ]);
 
       setVoteInFlight(debateEntityId, true);
+      const operation = observeOperation('vote', 'debate', debateEntityId);
+      const outcomeProperties: Record<string, unknown> = {
+        vote_kind: 'winner',
+        vote_direction: 'winner',
+        mutation_kind: previousVote ? 'switch' : 'cast',
+        vote_id: voteEntityId,
+        winner_id: participant.profile_space_id,
+        previous_winner_id: previousVote?.winnerSpaceEntityId ?? null,
+      };
 
       const publish = Effect.gen(function* () {
         const ops = yield* Publish.prepareLocalDataForPublishing(values, relations, personalSpaceId);
@@ -330,13 +340,12 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           retrySchedule(Duration.minutes(1))
         );
 
-        return yield* Effect.retry(
-          Effect.tryPromise({
-            try: () => smartAccount.sendUserOperation({ calls: [{ to: result.to, value: 0n, data: result.calldata }] }),
-            catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
-          }),
-          retrySchedule(Duration.seconds(10))
-        );
+        // The wallet retries known pre-submission failures. Repeating this whole
+        // call after an uncertain response could submit the vote twice.
+        return yield* Effect.tryPromise({
+          try: () => smartAccount.sendUserOperation({ calls: [{ to: result.to, value: 0n, data: result.calldata }] }),
+          catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
+        });
       });
 
       try {
@@ -353,6 +362,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           });
 
           const error = result.left;
+          operation.failed(classifyOperationFailure(error));
           if (error instanceof Error && error.message.includes('User rejected')) return;
 
           console.error('[useDebateVotes] Publish failed:', error);
@@ -361,6 +371,8 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           return;
         }
 
+        outcomeProperties.user_operation_hash = result.right;
+        operation.outcome('vote_cast', 'submitted', outcomeProperties);
         setToast(<span>Vote published!</span>);
       } finally {
         setVoteInFlight(debateEntityId, false);
@@ -381,17 +393,37 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
 
       void (async () => {
         await sleep(FIRST_POLL_MS);
+        // The loop ends two ways — the vote became readable, or the attempts ran out — and only one
+        // of them means anything is true yet.
+        let voteIsReadable = false;
         for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
           if (pollGeneration !== pollGenerationRef.current) return;
           try {
-            if (await isVoteIndexed()) break;
+            if (await isVoteIndexed()) {
+              voteIsReadable = true;
+              break;
+            }
           } catch (error) {
             console.error('[useDebateVotes] Poll for indexed vote failed:', error);
           }
           await sleep(POLL_INTERVAL_MS);
         }
         if (pollGeneration !== pollGenerationRef.current) return;
+        // Unconditional: on the timeout path this is what reconciles the optimistic row against
+        // whatever the indexer actually has.
         await queryClient.invalidateQueries({ queryKey: votesQueryKey(debateEntityId) });
+
+        // Choosing a winner is an onboarding step, and that card caches for a minute — long enough
+        // that returning to Explore straight after voting can still show it unticked (GEO-2800).
+        //
+        // Only on success, though. Refetching the checklist while the vote is still unreadable
+        // would answer `false` and mark that answer fresh for another minute, which is worse than
+        // never asking: left alone, the card would have refetched on its next mount and had a
+        // chance at the truth.
+        if (voteIsReadable) {
+          operation.outcome('vote_cast', 'indexed', outcomeProperties);
+          void queryClient.invalidateQueries({ queryKey: ['curator-onboarding-status'] });
+        }
       })();
     },
     [

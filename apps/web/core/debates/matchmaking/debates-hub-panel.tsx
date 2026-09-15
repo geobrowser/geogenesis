@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, type PanInfo, motion, useDragControls } from 'framer-motion';
+import { useAtom, useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
@@ -19,14 +20,15 @@ import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '
 import { ClaimsTab } from './claims-tab';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { HubSwap } from './hub-motion';
+import { hubClosesOnArrivalAt } from './hub-navigation';
 import { HubMessage } from './hub-states';
-import { MatchesTab } from './matches-tab';
+import { LobbyTab } from './lobby-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
 import { useUnexpiredRequests } from './use-request-countdown';
-import type { DebatesHubTab } from '~/atoms';
+import { type DebatesHubTab, debatesHubFiltersOwnerAtom, resetDebatesHubFiltersAtom } from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
@@ -38,30 +40,42 @@ const PANEL_SCROLL_SELECTOR = '[data-debates-hub-scroll]';
 // separately, by `DEFAULT_TAB` in use-debates-hub — it happens to agree with this order, but
 // reordering here does not move it.
 const TABS: { id: DebatesHubTab; label: string }[] = [
-  { id: 'claims', label: 'Claims' },
+  { id: 'lobby', label: 'Lobby' },
   { id: 'people', label: 'People' },
-  { id: 'matches', label: 'Matches' },
+  { id: 'explore', label: 'Explore' },
+  { id: 'positions', label: 'Positions' },
   { id: 'requests', label: 'Requests' },
 ];
 
 /**
- * GEO-2725. Matches and Requests are a particular person's, so signed out they have no possible
- * contents — not an empty list but a meaningless one. Claims and People describe the world rather
- * than the viewer, so both read fine anonymously and are what the hub offers before sign-in.
+ * GEO-2725. Lobby, Positions and Requests are a particular person's, so signed out they have no
+ * possible contents — not an empty list but a meaningless one. Both of Lobby's lists are viewer-relative:
+ * geo-chat scores `debate_now` on who is available to debate *you*, and a match is a claim you hold
+ * a side on. Explore and People describe the world rather than the viewer, so both read fine
+ * anonymously and are what the hub offers before sign-in (GEO-2861). Positions is the third of the
+ * viewer's own: it was a source inside Explore's picker and left that menu signed out for exactly
+ * this reason, so promoting it to a tab (GEO-2863) promotes the rule with it.
+ *
+ * In the order the anonymous row draws them, and it is read that way below rather than used to
+ * filter the signed-in order. Filtered, this list said what the row contained and `TABS` quietly
+ * decided how it was arranged: the row led with People while the panel opened on Explore, which is
+ * the one an anonymous visitor is actually here for and the one `visibleTab` falls back to.
  */
-const SIGNED_OUT_TABS: DebatesHubTab[] = ['claims', 'people'];
+const SIGNED_OUT_TABS: DebatesHubTab[] = ['explore', 'people'];
 
 function tabsFor(authenticated: boolean) {
-  return authenticated ? TABS : TABS.filter(tab => SIGNED_OUT_TABS.includes(tab.id));
+  if (authenticated) return TABS;
+
+  return SIGNED_OUT_TABS.flatMap(id => TABS.filter(tab => tab.id === id));
 }
 
 /**
- * Signing out with Matches or Requests open would otherwise leave the panel on a tab that is no
+ * Signing out with Lobby or Requests open would otherwise leave the panel on a tab that is no
  * longer in the row, showing a tab body with no tab selected.
  */
 function visibleTab(activeTab: DebatesHubTab, authenticated: boolean): DebatesHubTab {
   if (authenticated || SIGNED_OUT_TABS.includes(activeTab)) return activeTab;
-  return 'claims';
+  return 'explore';
 }
 
 function isInteractiveDragTarget(target: EventTarget | null): boolean {
@@ -94,9 +108,13 @@ export function DebatesHubPanel() {
   // effect, so by the time effects run the answer would depend on which of the two ran first.
   const requestedByLink = requestsModal(useSearchParams(), DEBATES_MODAL);
 
-  // Anything that navigates has taken the viewer somewhere they asked to go — accepting a request
-  // walks them into the debate room — and the panel would otherwise sit on top of it. Only on a
-  // change: closing on mount would shut the panel the moment it opened.
+  // The hub follows the viewer while they browse and stops at the door of a debate (GEO-2788),
+  // on the layout where it can — see the mobile branch below.
+  //
+  // It used to close on every navigation. That made the Claims tab a dead end — following a claim
+  // shut the list you were working through — so `hubClosesOnArrivalAt` names the two rooms it must
+  // not sit on top of instead, and everywhere else keeps it. Only on a change: closing on mount
+  // would shut the panel the moment it opened.
   React.useEffect(() => {
     if (lastPathnameRef.current === pathname) return;
     lastPathnameRef.current = pathname;
@@ -105,9 +123,20 @@ export function DebatesHubPanel() {
     // link just did. Decided from the render's params rather than from effect order, so the link
     // wins whether this effect runs before or after `DeepLinkHandler`'s — and whether or not the
     // hub was already open when the viewer followed it.
+    //
+    // Kept ahead of the route test rather than folded into it: a link that explicitly asks for the
+    // hub should win even where the route would otherwise close it, which is what makes
+    // `?modal=debates` a way to open the hub anywhere rather than a way to open it in most places.
     if (requestedByLink) return;
+    // Desktop only. The hub is a companion column there, so the destination is visible beside it —
+    // which is the whole premise of keeping it open. On mobile it is a full-screen `aria-modal`
+    // sheet over a backdrop, so persisting would navigate the page *behind* an opaque overlay:
+    // the viewer taps a claim, nothing appears to happen, and the page they landed on is hidden
+    // from assistive tech until they dismiss the sheet by hand. Closing is what makes the tap
+    // arrive somewhere.
+    if (!isMobile && !hubClosesOnArrivalAt(pathname)) return;
     close();
-  }, [close, pathname, requestedByLink]);
+  }, [close, isMobile, pathname, requestedByLink]);
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -230,7 +259,8 @@ type SurfaceProps = {
 };
 
 function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: SurfaceProps) {
-  const { authenticated, ready } = useGeoChatAuth();
+  const { authenticated, ready, accountKey } = useGeoChatAuth();
+  const filtersReconciled = useFilterOwner(accountKey, ready);
   const tabs = tabsFor(authenticated);
   const activeTab = visibleTab(requestedTab, authenticated);
   const { data: activity } = useDebateActivity(authenticated);
@@ -324,18 +354,39 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         data-debates-hub-scroll
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6"
       >
-        {!ready ? null : (
-          <HubSwap activeKey={activeTab}>
-            {activeTab === 'requests' ? (
-              <RequestsTab />
-            ) : activeTab === 'matches' ? (
-              <MatchesTab onTabChange={changeTab} />
-            ) : activeTab === 'claims' ? (
-              <ClaimsTab />
-            ) : (
-              <PeopleTab />
-            )}
-          </HubSwap>
+        {/* `filtersReconciled` joins the Privy gate rather than becoming a second one: the reset
+            below runs in a passive effect, so the render that first sees a new account still holds
+            the previous one's filter bar. Rendering the tabs then would show B the labels A had
+            picked and fire B's first query with A's space ids, an instant before the effect
+            corrects both. One render, but it is the wrong viewer's data. */}
+        {!ready || !filtersReconciled ? null : (
+          <>
+            <HubSwap activeKey={activeTab}>
+              {activeTab === 'requests' ? (
+                <RequestsTab />
+              ) : activeTab === 'lobby' ? (
+                <LobbyTab onTabChange={changeTab} />
+              ) : activeTab === 'explore' ? (
+                <ClaimsTab />
+              ) : activeTab === 'positions' ? (
+                <ClaimsTab variant="positions" />
+              ) : (
+                <PeopleTab onTabChange={changeTab} />
+              )}
+            </HubSwap>
+            {/* Explore's four serial round trips, started from whichever tab the viewer is on
+                instead of from the moment they ask for Explore — see `ClaimsTab`'s `warm`. The hub
+                opens on the Lobby and Explore is one press away, so the chain has the whole time
+                the viewer spends reading this tab to finish, and usually has.
+
+                Inside the readiness gate above for the reason that gate exists: warming with the
+                previous account's filter bar would fill the cache under the wrong viewer's query
+                keys, which is worse than not warming at all.
+
+                Dropped once Explore is the open tab, so the real one is the only instance holding
+                the selection atoms and geo-chat's space scopes. */}
+            {activeTab === 'explore' ? null : <ClaimsTab warm />}
+          </>
         )}
       </motion.div>
     </div>
@@ -383,4 +434,47 @@ function AvailabilityToggle() {
       </span>
     </button>
   );
+}
+
+/**
+ * Keeps the hub's filter bar attributed to the viewer who set it.
+ *
+ * The selections are session-scoped (GEO-2850), and a session outlives a sign-in — so "whose are
+ * these" has to be tracked rather than assumed. Three transitions, and they do not want the same
+ * answer:
+ *
+ * Signing in is the *same person* authenticating, not a new one. The Claims tab offers a sign-in
+ * prompt from inside its own empty state, so wiping the bar there would lose the picks a viewer
+ * made seconds earlier on the flow the tab itself invited — which is the complaint GEO-2850 exists
+ * to fix. Nothing is cleared, and nothing is re-armed either: an untouched session still has its
+ * seed, so the membership default GEO-2834 is about lands on its own once the account's spaces
+ * arrive. A session whose seed is spent is one where the viewer worked the menu, and forcing it
+ * back would overwrite what they did — including the deliberate clear that GEO-2789 says must
+ * never be second-guessed, which looks identical to an untouched filter from here.
+ *
+ * A different account is a different viewer, and inherits nothing.
+ *
+ * Signing *out* changes nothing here. `owner` keeps naming the last account seen, so the next
+ * sign-in is still compared against it — otherwise A could sign out, B sign in, and B be treated
+ * as a first sign-in and handed A's filters.
+ *
+ * Held until Privy has resolved, because `accountKey` is null before that and a null mid-resolve
+ * is not someone signing out.
+ */
+function useFilterOwner(accountKey: string | null, ready: boolean) {
+  const [owner, setOwner] = useAtom(debatesHubFiltersOwnerAtom);
+  const resetFilters = useSetAtom(resetDebatesHubFiltersAtom);
+
+  // Only a handover between two established accounts leaves anything on screen that is not this
+  // viewer's. Every other case — signed out, first sign-in, the same account — keeps the bar it
+  // already has by design, so there is nothing to wait for and the tabs render immediately.
+  const awaitingHandover = ready && accountKey !== null && owner !== null && owner !== accountKey;
+
+  React.useEffect(() => {
+    if (!ready || accountKey === null || owner === accountKey) return;
+    if (owner !== null) resetFilters();
+    setOwner(accountKey);
+  }, [accountKey, owner, ready, resetFilters, setOwner]);
+
+  return !awaitingHandover;
 }

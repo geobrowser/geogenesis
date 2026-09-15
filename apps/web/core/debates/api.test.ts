@@ -12,6 +12,7 @@ import {
   getDebateActivity,
   getGeoChatSession,
   getRematchLiveKitToken,
+  isAccountWarmingUp,
   joinDebateQueue,
   listDebateClaims,
   listDebatePeople,
@@ -506,6 +507,30 @@ describe('debate claim hydration authentication', () => {
   const claimRequests = (fetch: ReturnType<typeof vi.fn>) =>
     fetch.mock.calls.filter(([url]) => String(url).includes('/debate-claims'));
 
+  /**
+   * The coalescing above is what makes this necessary: callers that each capped themselves at fifty
+   * still add up past the cap once their ids are merged for a space, and geo-chat answers a longer
+   * list with `400 too_many_claim_ids` — "at most 50 claim IDs may be requested".
+   *
+   * That failure is worse than one request: `debateQueryNetworkOptions` sets `retry: false`, so the
+   * rejection is permanent for its key, and the hub's readiness gate reads `isError` across every
+   * batch — one over-long request left every response pill on the tab dead until a refetch.
+   *
+   * Fifty is the server's number, written out rather than read from the constant, so that the two
+   * cannot be wrong together the way they were.
+   */
+  it('splits a coalesced batch at the cap geo-chat actually enforces', async () => {
+    const fetch = stubFreshJson({ claims: [] });
+    const ids = Array.from({ length: 120 }, (_, index) => `claim-${index}`);
+
+    await Promise.all(ids.map(claimId => listDebateClaims('space-1', [claimId])));
+
+    const sent = claimRequests(fetch).map(([url]) => new URL(String(url)).searchParams.get('claim_ids')!.split(','));
+    expect(sent.every(chunk => chunk.length <= 50)).toBe(true);
+    // Every id still asked for, once.
+    expect(sent.flat().sort()).toEqual([...ids].sort());
+  });
+
   it('keeps a whole-space read out of the id batch', async () => {
     const fetch = stubFreshJson({ claims: [] });
 
@@ -682,6 +707,53 @@ describe('turn yields', () => {
         body: JSON.stringify({ ended_at_ms: 1_784_542_272_505 }),
       })
     );
+  });
+});
+
+describe('a refused session exchange', () => {
+  /**
+   * The seam every other test on this branch assumes and none of them touched.
+   *
+   * The retries, the poll and the hub's setup message all key off `isAccountWarmingUp`, and they
+   * were tested against a `GeoChatSessionError` built by hand. So unwrapping the throw in
+   * `createGeoChatSession` would have left all of them green while putting the original bug back:
+   * a real refusal would arrive as a plain `GeoChatRequestError`, classify as an ordinary failure,
+   * and the hub would go back to saying something went wrong. This asks the real endpoint.
+   */
+  it('is classified as an account geo-chat has not registered yet', async () => {
+    window.localStorage.clear();
+    resetGeoChatSession();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 'account_not_found', message: 'Unknown account' } }), {
+          status: 401,
+          statusText: 'Unauthorized',
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const error = await getGeoChatSession(vi.fn().mockResolvedValue('privy-token'), 'user-a').catch(
+      (thrown: unknown) => thrown
+    );
+
+    expect(isAccountWarmingUp(error)).toBe(true);
+    expect(error).toMatchObject({ name: 'GeoChatSessionError', status: 401, code: 'account_not_found' });
+  });
+
+  /**
+   * And the other 401, from the other side of the same seam. A resource refusing the stored session
+   * is a session the server has stopped accepting — `debate-gateway` resets it — and waiting that
+   * out re-offers rejected credentials for ninety seconds before saying the account is being set up.
+   */
+  it('is not what a resource refusing the stored session means', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 401, statusText: 'Unauthorized' })));
+
+    const error = await getDebateActivity(vi.fn(), 'user-a').catch((thrown: unknown) => thrown);
+
+    expect(error).toBeInstanceOf(GeoChatRequestError);
+    expect(isAccountWarmingUp(error)).toBe(false);
   });
 });
 

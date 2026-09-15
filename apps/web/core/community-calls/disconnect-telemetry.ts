@@ -106,6 +106,13 @@ export type CallTelemetryContext = {
   roomName: string;
   occurrenceStart: number;
   role: 'participant' | 'viewer';
+  /**
+   * This client's LiveKit identity. Without it the correlation this module exists to
+   * support cannot be done: five episodes in one room over ninety minutes read identically
+   * whether they are one person with bad wifi reconnecting five times or five people hit by
+   * one server event, and those call for opposite responses.
+   */
+  participantIdentity: string;
 };
 
 export type DisconnectEpisode = {
@@ -117,6 +124,13 @@ export type DisconnectEpisode = {
   reconnectingMs?: number;
   /** How far into the call the episode began — "did this happen at the start or the end". */
   msSinceJoin?: number;
+  /**
+   * Room size when the episode *opened*, not when it closed. By the time a disconnect
+   * resolves the room's participant list has already been torn down, so a count read then
+   * is always 1 and says nothing. Read at the start, it answers "was this person alone or
+   * was the room busy" — the denominator for any claim that a drop was widespread.
+   */
+  participantCount?: number;
 };
 
 /**
@@ -125,6 +139,11 @@ export type DisconnectEpisode = {
  * `roomName` is deliberately `extra` rather than a tag: it embeds the occurrence timestamp,
  * so as a tag it would be unbounded cardinality. `callId` is a tag because the set of calls
  * is small and "which call is dropping people" is the first question anyone asks.
+ *
+ * `participantIdentity` is a tag for the same reason, and it is the one that makes the rest
+ * useful: grouping a room's episodes by participant is what separates one flaky connection
+ * from a server event. Its cardinality is the number of people who attend calls, which is
+ * the same order as `callId` and far below `roomName`.
  */
 export function reportCallDisconnect(context: CallTelemetryContext, episode: DisconnectEpisode): void {
   // A voluntary leave is not a drop, and counting it as one would bury the real signal
@@ -145,12 +164,14 @@ export function reportCallDisconnect(context: CallTelemetryContext, episode: Dis
       role: context.role,
       callId: context.callId,
       spaceId: context.spaceId,
+      participantIdentity: context.participantIdentity,
     },
     extra: {
       roomName: context.roomName,
       occurrenceStart: context.occurrenceStart,
       reconnectingMs: episode.reconnectingMs,
       msSinceJoin: episode.msSinceJoin,
+      participantCount: episode.participantCount,
     },
   });
 }

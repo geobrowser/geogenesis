@@ -18,6 +18,7 @@ vi.mock('./claim-response-summary', async importOriginal => {
       isViewerResponseLoading: false,
       hasCounts: true,
       viewerDirection: null,
+      indexedViewerDirection: null,
       viewerSpaceId: null,
     }),
   };

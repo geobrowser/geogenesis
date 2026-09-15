@@ -11,6 +11,7 @@ import {
   clampSeconds,
   normalizeTurnDurationsMs,
   participantForSlot,
+  playBothWithMutedFallback,
   recordingWindowOffsetsSeconds,
   timelineSecondsFor,
   turnStateForTime,
@@ -26,6 +27,26 @@ type PlaybackUrls = {
 // state and they'd have to unmute every single video. Defaults to muted so the cold-start
 // autoplay isn't blocked by the browser's autoplay policy.
 const feedMutedAtom = atom(true);
+
+/**
+ * Drift thresholds for keeping the two recordings in step (GEO-2828).
+ *
+ * The old code had one threshold — 0.18s — and one response, a hard seek. On MediaRecorder WebM
+ * with no Cues a seek is a parse walk, so correcting ordinary drift that way cost more than the
+ * drift did and provoked the next correction: 105 seeks in a single 210s playback.
+ */
+/** Below this, the pair is in step and the rate is left alone. */
+const SYNC_NUDGE_DRIFT_SECONDS = 0.18;
+/** Above this the gap is too wide to close by rate alone, so it is worth one seek. */
+const SYNC_SEEK_DRIFT_SECONDS = 0.75;
+/** How far off 1 the nudge goes. 3% converges 0.18s inside ~6s and is inaudible. */
+const SYNC_NUDGE_RATE = 0.03;
+/** Floor between hard seeks, so a seek that itself causes drift cannot start a storm. */
+const MIN_SYNC_SEEK_INTERVAL_MS = 2_000;
+/** No forward progress for this long, while unpaused, counts as stalled rather than slow. */
+const STALL_AFTER_MS = 500;
+/** Progress smaller than this is float noise on `currentTime`, not playback. */
+const STALL_EPSILON_SECONDS = 0.001;
 
 /**
  * Drives the two synchronized debater recordings for a single debate: loads the
@@ -51,6 +72,29 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const slot1VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const slot2VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const pendingSeekSecondsRef = React.useRef<number | null>(null);
+  /** Slot 1's last forward progress, for telling "stalled" apart from "merely not paused". */
+  const primaryProgressRef = React.useRef<{ seconds: number; at: number } | null>(null);
+  const lastSyncSeekAtRef = React.useRef(0);
+  /**
+   * Which resume attempt is current.
+   *
+   * `resumeBoth` awaits up to ~600ms confirming both elements really started (playback-utils
+   * polls 4x75ms, and twice if it has to retry muted). A feed card can cross its activation
+   * threshold more than once inside that window. The hysteresis added to the explore card
+   * alongside this makes that rarer, but it cannot make it impossible — any scroll, tap or
+   * scrub landing mid-confirm produces the same overlap, so correctness belongs here.
+   *
+   * Without this guard an interrupted attempt still ran its post-await writes:
+   *   - `suspend()` pauses the elements, so the confirm poll sees `paused` and reports
+   *     'blocked'. The card then shows "Could not play both videos" for a failure that never
+   *     happened and stays frozen until the viewer taps it — GEO-2895's "videos will look
+   *     frozen / stop auto playing ... was able to get it to play after clicking".
+   *   - an attempt that resolved after a suspend set `playing` back to true while the
+   *     elements were paused, and the autoplay effect's `!playing` guard then refused to
+   *     retry, so the card stayed stuck.
+   *   - `setUserPaused(false)` could erase a pause the viewer made during the await.
+   */
+  const resumeGenerationRef = React.useRef(0);
   const getRecordingPlaybackUrlRef = React.useRef(recordingUrlMutation.mutateAsync);
 
   const turnDurations = React.useMemo(
@@ -97,24 +141,58 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     getRecordingPlaybackUrlRef.current = recordingUrlMutation.mutateAsync;
   }, [recordingUrlMutation.mutateAsync]);
 
+  // Which recordings `urls` currently holds signed URLs for, so re-entering a card does
+  // not re-request them (GEO-2895).
+  //
+  // `enabled` is the card's activation state, and it flips every time the card crosses the
+  // viewport threshold while scrolling — in the explore feed that is a single
+  // `intersectionRatio >= 0.6` with no hysteresis, so it can flip several times on one
+  // drag. This effect depends on `enabled` and used to open with
+  // `setUrls({slot1: null, slot2: null})`, so each flip discarded URLs that were still
+  // good and issued two fresh requests. `src` going null renders the "Loading…"
+  // placeholder, which is the flicker: a card the viewer had already watched blanking and
+  // reloading as they scrolled past it.
+  //
+  // `useRecordingUrl` is a mutation rather than a query, so nothing upstream caches this —
+  // every discarded URL is a real round trip.
+  const fetchedForRef = React.useRef<string | null>(null);
+
   React.useEffect(() => {
     if (!enabled) return;
-    let cancelled = false;
-    setUrls({ slot1: null, slot2: null });
-    setError(null);
+
     if (!slot1RecordingFilename || !slot2RecordingFilename) {
       setError('This debate needs both recordings before it can be watched.');
       return;
     }
+
+    const recordingsKey = `${debate.id}|${slot1RecordingFilename}|${slot2RecordingFilename}`;
+    // Already holding URLs for exactly these recordings — a re-activation, not a new debate.
+    if (fetchedForRef.current === recordingsKey) return;
+
+    let cancelled = false;
+    fetchedForRef.current = recordingsKey;
+    const releaseKey = () => {
+      if (fetchedForRef.current === recordingsKey) fetchedForRef.current = null;
+    };
+    setUrls({ slot1: null, slot2: null });
+    setError(null);
 
     Promise.all([
       getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot1RecordingFilename }),
       getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot2RecordingFilename }),
     ])
       .then(([slot1Result, slot2Result]) => {
-        if (!cancelled) setUrls({ slot1: slot1Result.url, slot2: slot2Result.url });
+        // Scrolled away mid-flight: nothing is committed, so release the key or the card
+        // would hold a claim on URLs it never received and never fetch again.
+        if (cancelled) {
+          releaseKey();
+          return;
+        }
+        setUrls({ slot1: slot1Result.url, slot2: slot2Result.url });
       })
       .catch(caught => {
+        // Same on failure, otherwise one error leaves the card permanently on "Loading…".
+        releaseKey();
         if (!cancelled) setError(caught instanceof Error ? caught.message : 'Could not load recordings.');
       });
 
@@ -140,6 +218,11 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       if (!primaryVideo || !secondaryVideo) return false;
       primaryVideo.currentTime = Math.max(0, playhead - offsets.slot1);
       secondaryVideo.currentTime = Math.max(0, playhead - offsets.slot2);
+      // A deliberate seek resets both the nudge and the stall watch: the pair is aligned by
+      // construction here, and slot 1's `currentTime` has just jumped, which is not progress.
+      secondaryVideo.playbackRate = 1;
+      primaryProgressRef.current = null;
+      lastSyncSeekAtRef.current = Date.now();
       return true;
     },
     [offsets.slot1, offsets.slot2]
@@ -160,15 +243,61 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
 
     // Lock slot 2 to slot 1, offset by the gap between when the two recordings started, so
     // neither debater's audio drifts ahead of the other.
+    //
+    // Two things make this harder than it looks, and getting either wrong is visible as a
+    // glitching video (GEO-2828).
+    //
+    // **A stalled slot 1 must not be a seek target.** `paused` stays false while a video
+    // starves for data, so "not paused" does not mean "advancing". When slot 1 stalled — it is
+    // the larger file, so it starves first — its `currentTime` froze, drift crossed the
+    // threshold, and slot 2 was dragged *back* to the frozen position, played forward a second,
+    // and was dragged back again. That is the reported "same 1 second over and over", and it
+    // sustains itself for as long as slot 1 is starved.
+    //
+    // **Small drift must not be corrected by seeking.** These are MediaRecorder WebM files with
+    // one cluster of unknown size and no Cues, so every seek is a parse walk rather than an
+    // index lookup — expensive enough to cause the drift that triggers the next one. Measured
+    // on a 210s debate before this change: 105 programmatic seeks, 103 of them on slot 2. Drift
+    // reaches the old 0.18s threshold in about two seconds of playback, so it could never
+    // settle. Nudging the rate absorbs ordinary drift without touching the demuxer; a seek is
+    // kept for a gap too large to close that way.
     const syncDelta = offsets.slot2 - offsets.slot1;
-    if (
-      primaryVideo &&
-      secondaryVideo &&
-      !primaryVideo.paused &&
-      !secondaryVideo.seeking &&
-      Math.abs(secondaryVideo.currentTime - (primaryVideo.currentTime - syncDelta)) > 0.18
-    ) {
-      secondaryVideo.currentTime = Math.max(0, primaryVideo.currentTime - syncDelta);
+    const now = Date.now();
+
+    if (primaryVideo) {
+      const progress = primaryProgressRef.current;
+      if (!progress || primaryVideo.currentTime > progress.seconds + STALL_EPSILON_SECONDS) {
+        primaryProgressRef.current = { seconds: primaryVideo.currentTime, at: now };
+      }
+    } else {
+      primaryProgressRef.current = null;
+    }
+
+    // `readyState` is the direct signal and the clock is the corroborating one: a video can sit
+    // at HAVE_ENOUGH_DATA and still not advance if the decoder is wedged.
+    const primaryStalled =
+      !primaryVideo ||
+      primaryVideo.readyState < HTMLMediaElement.HAVE_FUTURE_DATA ||
+      (primaryProgressRef.current !== null && now - primaryProgressRef.current.at > STALL_AFTER_MS);
+
+    if (primaryVideo && secondaryVideo && !primaryVideo.paused && !secondaryVideo.seeking && !primaryStalled) {
+      const drift = secondaryVideo.currentTime - (primaryVideo.currentTime - syncDelta);
+      const absDrift = Math.abs(drift);
+
+      if (absDrift > SYNC_SEEK_DRIFT_SECONDS && now - lastSyncSeekAtRef.current > MIN_SYNC_SEEK_INTERVAL_MS) {
+        secondaryVideo.currentTime = Math.max(0, primaryVideo.currentTime - syncDelta);
+        secondaryVideo.playbackRate = 1;
+        lastSyncSeekAtRef.current = now;
+      } else if (absDrift > SYNC_NUDGE_DRIFT_SECONDS) {
+        // Small enough that a rate change closes it within a few seconds, and far enough from 1
+        // to actually converge. Pitch shift at 3% is not audible.
+        secondaryVideo.playbackRate = drift > 0 ? 1 - SYNC_NUDGE_RATE : 1 + SYNC_NUDGE_RATE;
+      } else if (secondaryVideo.playbackRate !== 1) {
+        secondaryVideo.playbackRate = 1;
+      }
+    } else if (secondaryVideo && secondaryVideo.playbackRate !== 1) {
+      // Never leave a nudge running once the pair is no longer being kept in step.
+      secondaryVideo.playbackRate = 1;
     }
 
     // Keep both videos in the same play/pause state. If the browser pauses one
@@ -196,6 +325,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   }, [debate.first_participant_slot, offsets.slot1, offsets.slot2, seekVideosTo, timelineSeconds, turnDurations]);
 
   const pauseBoth = React.useCallback(() => {
+    // Supersede any resume still confirming, so it cannot un-pause the viewer.
+    resumeGenerationRef.current++;
     for (const video of videos()) video.pause();
     setPlaying(false);
     setUserPaused(true);
@@ -206,25 +337,35 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     const primaryVideo = slot1VideoRef.current;
     const secondaryVideo = slot2VideoRef.current;
     if (!primaryVideo || !secondaryVideo) return;
+    // Claim this attempt. Bumping on entry also supersedes an earlier resume that is still
+    // awaiting, so two overlapping activations cannot both write state.
+    const generation = ++resumeGenerationRef.current;
     setError(null);
     // Realign slot 2 to slot 1's position so a resume can't leave the recordings drifting.
     seekVideosTo(clampSeconds(primaryVideo.currentTime + offsets.slot1, timelineSeconds));
     // allSettled never rejects, so a failed play() (e.g. blocked by autoplay
     // policy) leaves the video paused rather than throwing — check both the
     // settled results and the paused state, and surface the error inline.
-    const results = await Promise.allSettled([primaryVideo.play(), secondaryVideo.play()]);
-    const ok = results.every(result => result.status === 'fulfilled') && !primaryVideo.paused && !secondaryVideo.paused;
-    if (ok) {
-      setPlaying(true);
-      setUserPaused(false);
-    } else {
+    const outcome = await playBothWithMutedFallback(primaryVideo, secondaryVideo);
+    // Superseded while we waited — something else owns these elements now. Every write below
+    // would describe a playback attempt that no longer exists, including the 'blocked' error,
+    // which at this point only means "someone paused us mid-confirm".
+    if (resumeGenerationRef.current !== generation) return;
+    if (outcome === 'blocked') {
       primaryVideo.pause();
       secondaryVideo.pause();
       setPlaying(false);
       setTurnState(null);
       setError('Could not play both videos. Try Play again.');
+      return;
     }
-  }, [offsets.slot1, seekVideosTo, timelineSeconds]);
+    // The browser only allowed it muted (GEO-2783) — record that so the unmute control is honest
+    // and later autoplays stop being blocked the same way. The viewer's next tap is a gesture and
+    // will be allowed.
+    if (outcome === 'playing-muted') setMutedByUser(true);
+    setPlaying(true);
+    setUserPaused(false);
+  }, [offsets.slot1, seekVideosTo, setMutedByUser, timelineSeconds]);
 
   const playFromStart = React.useCallback(async () => {
     const primaryVideo = slot1VideoRef.current;
@@ -272,6 +413,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   // Autoplay control for the feed: when a debate scrolls out of view we pause it
   // silently (without flipping userPaused, so it can auto-resume when back in view).
   const suspend = React.useCallback(() => {
+    // The card left the viewport; a resume still confirming is stale by definition.
+    resumeGenerationRef.current++;
     for (const video of videos()) video.pause();
     setPlaying(false);
     setTurnState(null);
@@ -287,6 +430,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // overwrite it with the now-paused `playing` value.
     if (isScrubbingRef.current) return;
     isScrubbingRef.current = true;
+    // The drag owns the playhead now; don't let a pending resume fight it.
+    resumeGenerationRef.current++;
     wasPlayingBeforeScrubRef.current = playing;
     setIsScrubbing(true);
     for (const video of videos()) video.pause();

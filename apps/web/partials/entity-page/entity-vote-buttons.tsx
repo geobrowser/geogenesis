@@ -11,7 +11,7 @@ import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 
-import { downvoted, trackPrivyAuth, upvoted, voteCast } from '~/core/analytics';
+import { trackPrivyAuth } from '~/core/analytics';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import {
@@ -48,6 +48,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
+import { VOTE_BUTTON_CLASS, VOTE_CHEVRON_SELECTED_CLASS } from '~/partials/entity-page/vote-button-styles';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
@@ -122,7 +123,7 @@ export function EntityVoteButtons({
     isResponseIndexingDelayed,
     isConnected,
     personalSpaceId,
-  } = useEntityResponse({ entityId, spaceId, responseKind });
+  } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
 
   const setName = useSetAtom(nameAtom);
@@ -235,25 +236,7 @@ export function EntityVoteButtons({
       queueResponse('positive');
       return;
     }
-    if (activeResponse === 'positive') {
-      submitResponse('clear', {
-        onSuccess: () => {
-          voteCast('none', voteProperties('remove', 'up'));
-        },
-      });
-    } else {
-      const previousResponse = activeResponse ?? null;
-      submitResponse('positive', {
-        onSuccess: () => {
-          upvoted(
-            voteProperties(
-              previousResponse === 'negative' ? 'switch' : 'cast',
-              previousResponse === 'negative' ? 'down' : undefined
-            )
-          );
-        },
-      });
-    }
+    submitResponse(activeResponse === 'positive' ? 'clear' : 'positive');
   }
 
   function handleNegativeResponse() {
@@ -261,35 +244,7 @@ export function EntityVoteButtons({
       queueResponse('negative');
       return;
     }
-    if (activeResponse === 'negative') {
-      submitResponse('clear', {
-        onSuccess: () => {
-          voteCast('none', voteProperties('remove', 'down'));
-        },
-      });
-    } else {
-      const previousResponse = activeResponse ?? null;
-      submitResponse('negative', {
-        onSuccess: () => {
-          downvoted(
-            voteProperties(
-              previousResponse === 'positive' ? 'switch' : 'cast',
-              previousResponse === 'positive' ? 'up' : undefined
-            )
-          );
-        },
-      });
-    }
-  }
-
-  function voteProperties(action: 'cast' | 'switch' | 'remove', previousDirection?: 'up' | 'down') {
-    return {
-      vote_action: action,
-      previous_vote_direction: previousDirection,
-      entity_id: entityId,
-      space_id: spaceId,
-      object_type: ENTITY_RESPONSE_OBJECT_TYPE,
-    };
+    submitResponse(activeResponse === 'negative' ? 'clear' : 'negative');
   }
 
   const scoreLabel = formatScore(displayScore);
@@ -337,15 +292,26 @@ export function EntityVoteButtons({
       return direction === 'up' ? <ThumbUp filled={active} /> : <ThumbDown filled={active} />;
     }
 
-    return <VoteArrow direction={direction} filled={active} color="grey-03" />;
+    // No `color`: the arrow takes `currentColor` from the button, which is where the grey now lives
+    // for every variant. Pinning it here meant this one icon answered for its own colour while the
+    // other two read the button's, which is how the three drifted apart.
+    return <VoteArrow direction={direction} filled={active} />;
   };
 
-  const claimResponseButtonColor = (active: boolean) => {
-    if (variant === 'chevrons') {
-      return active ? 'text-[#2A2B2E]' : 'text-grey-03 hover:text-grey-04';
-    }
-    return isClaimVariant && (active ? 'text-grey-04' : 'text-grey-03 hover:text-grey-04');
-  };
+  // Grey either way; the filled icon says which one you picked. The thumbs used to rest lighter
+  // and darken when picked, and curation got no class at all, pinning its arrows' colour on the
+  // icon instead — three spellings of a control that should look the same everywhere. See
+  // `vote-button-styles` for why the shade is `grey-04` rather than the lighter `grey-03`.
+  //
+  // Chevrons are the exception, unchanged: a chevron has no filled form to switch to, so colour is
+  // the only signal it has.
+  //
+  // One class or the other, never both. `cx` is `classnames`, which concatenates — it does not
+  // resolve conflicting Tailwind utilities the way `tailwind-merge` would, and this repo does not
+  // use that. Emitting `text-grey-03` alongside `text-[#2A2B2E]` leaves the winner to whichever
+  // rule Tailwind happens to emit second, which is not something this file gets to decide.
+  const responseButtonColor = (active: boolean) =>
+    variant === 'chevrons' && active ? VOTE_CHEVRON_SELECTED_CLASS : VOTE_BUTTON_CLASS;
 
   const claimResponderAvatars = isClaimVariant ? (
     <ClaimResponderAvatars
@@ -408,7 +374,7 @@ export function EntityVoteButtons({
         title={positiveTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          claimResponseButtonColor(positiveActive),
+          responseButtonColor(positiveActive),
           responseDisabled && 'cursor-default opacity-50'
         )}
       >
@@ -456,7 +422,7 @@ export function EntityVoteButtons({
         title={negativeTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          claimResponseButtonColor(negativeActive),
+          responseButtonColor(negativeActive),
           responseDisabled && 'cursor-default opacity-50'
         )}
       >
@@ -510,9 +476,12 @@ function DebateVotePill({
         disabled={disabled}
         title={positiveTitle}
         onClick={onPositive}
-        className="group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text disabled:cursor-default disabled:opacity-50 aria-pressed:text-ctaPrimary"
+        className={cx(
+          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
+          VOTE_BUTTON_CLASS
+        )}
       >
-        <VoteArrow direction="up" filled={positiveActive} color={positiveActive ? 'ctaPrimary' : undefined} />
+        <VoteArrow direction="up" filled={positiveActive} />
       </button>
       <span className="text-metadataMedium text-text tabular-nums">{score}</span>
       <button
@@ -522,9 +491,12 @@ function DebateVotePill({
         disabled={disabled}
         title={negativeTitle}
         onClick={onNegative}
-        className="group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text disabled:cursor-default disabled:opacity-50 aria-pressed:text-red-01"
+        className={cx(
+          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
+          VOTE_BUTTON_CLASS
+        )}
       >
-        <VoteArrow direction="down" filled={negativeActive} color={negativeActive ? 'red-01' : undefined} />
+        <VoteArrow direction="down" filled={negativeActive} />
       </button>
     </div>
   );

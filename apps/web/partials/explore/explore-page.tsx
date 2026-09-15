@@ -12,6 +12,8 @@ import { ExploreWelcomeBanner } from './explore-welcome-banner';
 
 type Props = {
   initialSpaceOptions: SpaceOption[];
+  /** Joined or pending — what the space filter opens on. */
+  memberSpaceIds: string[];
   featuredSpaces: FeaturedSpace[];
   featuredRankings: FeaturedRanking[];
   pendingMembershipSpaceIds: string[];
@@ -21,6 +23,7 @@ type Props = {
 
 export function ExplorePage({
   initialSpaceOptions,
+  memberSpaceIds,
   featuredSpaces,
   featuredRankings,
   pendingMembershipSpaceIds,
@@ -46,6 +49,7 @@ export function ExplorePage({
         <EntityFeed
           apiEndpoint="/api/explore/feed"
           initialSpaceOptions={initialSpaceOptions}
+          memberSpaceIds={memberSpaceIds}
           initialTime="month"
           initialSort="best"
           showSortFilter

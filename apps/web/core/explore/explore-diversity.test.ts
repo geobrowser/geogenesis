@@ -4,6 +4,7 @@ import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 
 import {
   EPISODE_TYPE_ID,
+  EXPLORE_ENTITY_TYPE_IDS,
   EXPLORE_PAGE_SIZE,
   NEWS_STORY_TYPE_ID,
   TWEET_TYPE_ID,
@@ -12,14 +13,12 @@ import {
   EXPLORE_DIVERSITY_MAX_RUN,
   EXPLORE_DIVERSITY_WINDOW_SIZE,
   applyDiversityCap,
+  applyPerSpaceQuota,
   exploreItemTypeKey,
+  largestWindowShare,
   longestTypeRun,
 } from './explore-diversity';
-import {
-  decodeExploreWindowCursor,
-  encodeExploreWindowCursor,
-  nextExploreWindowCursor,
-} from './explore-window-cursor';
+import { decodeExploreWindowCursor, encodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
 
 type Item = { id: string; types: { id: string }[] };
 
@@ -46,16 +45,29 @@ describe('exploreItemTypeKey', () => {
   it('is stable across relation order', () => {
     // `types` comes from relations, whose order is not meaningful. Two identical entities
     // must not land in different diversity buckets because the rows came back swapped.
-    expect(key(item('a', CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID))).toBe(
-      key(item('b', NEWS_STORY_TYPE_ID, CLAIM_TYPE_ID))
-    );
+    expect(key(item('a', CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID))).toBe(key(item('b', NEWS_STORY_TYPE_ID, CLAIM_TYPE_ID)));
   });
 
   it('classifies a multi-typed claim as its more specific type', () => {
-    // Claim is declared last in EXPLORE_ENTITY_TYPES, so it loses every tie. That is the
-    // useful direction: such an item can break a claim run instead of extending one.
+    // Claim classifies last, so it loses every tie. That is the useful direction: such an item can
+    // break a claim run instead of extending one.
+    //
+    // It used to lose ties by being declared last in EXPLORE_ENTITY_TYPES, which made this
+    // behaviour a side effect of menu order — GEO-2790 moved Claim to the top of the menu and
+    // inverted it. The priority is stated separately now, and the test below guards the split.
     expect(key(item('a', CLAIM_TYPE_ID, EPISODE_TYPE_ID))).not.toBe(key(item('b', CLAIM_TYPE_ID)));
     expect(key(item('a', CLAIM_TYPE_ID, EPISODE_TYPE_ID))).toBe(key(item('c', EPISODE_TYPE_ID)));
+  });
+
+  it('classifies independently of the order the menu lists types in', () => {
+    // The invariant that keeps the two apart. Claim leads the dropdown so the boxes a reader
+    // arrives with read first; it must still lose classification ties to a more specific type, or
+    // the diversity cap starts extending claim runs instead of breaking them — the exact failure
+    // this module exists to prevent.
+    expect(EXPLORE_ENTITY_TYPE_IDS.indexOf(CLAIM_TYPE_ID)).toBeLessThan(
+      EXPLORE_ENTITY_TYPE_IDS.indexOf(EPISODE_TYPE_ID)
+    );
+    expect(key(item('a', CLAIM_TYPE_ID, EPISODE_TYPE_ID))).toBe(key(item('b', EPISODE_TYPE_ID)));
   });
 
   it('is case- and hyphen-insensitive, matching the ids the feed actually returns', () => {
@@ -94,9 +106,7 @@ describe('applyDiversityCap', () => {
     expect(expectedBreaks).toBe(5);
     expect(news.length).toBeGreaterThanOrEqual(expectedBreaks);
     // The measured 100% is now at most 77%, which is the floor a run cap alone can reach.
-    expect(firstScreenAfter.length - news.length).toBeLessThanOrEqual(
-      EXPLORE_PAGE_SIZE - expectedBreaks
-    );
+    expect(firstScreenAfter.length - news.length).toBeLessThanOrEqual(EXPLORE_PAGE_SIZE - expectedBreaks);
   });
 
   it('caps runs across the whole window, not just the first page', () => {
@@ -287,5 +297,94 @@ describe('paging the reordered window end to end', () => {
 
     expect(cursor).toBeNull();
     expect(ids(served)).toEqual(ids(window));
+  });
+});
+
+describe('the per-space quota', () => {
+  const item = (spaceId: string, id: string) => ({ spaceId, entityId: id });
+  const spaceOf = (i: { spaceId: string }) => i.spaceId;
+
+  it('holds one space to the quota on the screen the reader sees, when supply allows', () => {
+    // Six spaces, as measured in the live 66-row window, with enough supply that a 22-slot
+    // page can be filled at 5 each. The dominant space arrives holding 20 of the first 22.
+    const rows = [
+      ...Array.from({ length: 20 }, (_, n) => item('rel', `rel${n}`)),
+      ...Array.from({ length: 8 }, (_, n) => item('crypto', `c${n}`)),
+      ...Array.from({ length: 6 }, (_, n) => item('world', `w${n}`)),
+      ...Array.from({ length: 5 }, (_, n) => item('ai', `a${n}`)),
+      ...Array.from({ length: 5 }, (_, n) => item('us', `u${n}`)),
+      ...Array.from({ length: 5 }, (_, n) => item('health', `h${n}`)),
+    ];
+    expect(largestWindowShare(rows.slice(0, 22), spaceOf, 22)).toBe(20);
+
+    const ordered = applyPerSpaceQuota(rows, spaceOf, 5, 22);
+    expect(largestWindowShare(ordered.slice(0, 22), spaceOf, 22)).toBeLessThanOrEqual(5);
+    expect(ordered).toHaveLength(rows.length);
+    expect(new Set(ordered.map(r => r.entityId))).toEqual(new Set(rows.map(r => r.entityId)));
+  });
+
+  it('fills the screen rather than honouring the quota, when supply will not stretch', () => {
+    // The live shape on 2026-09-10, and the reason the default is 5 and not 4: six spaces
+    // holding 38/14/6/4/3/1 of a 66-row window. At a quota of 4 the most a page can draw is
+    // sum(min(count, 4)) = 20, two short of the 22 it needs — so the quota *cannot* hold and
+    // the only question is whether the reader gets a short screen or a repeated space.
+    // They get the full screen.
+    const supply: Array<[string, number]> = [
+      ['rel', 38],
+      ['crypto', 14],
+      ['world', 6],
+      ['ai', 4],
+      ['us', 3],
+      ['health', 1],
+    ];
+    const rows = supply.flatMap(([space, n]) => Array.from({ length: n }, (_, i) => item(space, `${space}${i}`)));
+
+    const atFour = applyPerSpaceQuota(rows, spaceOf, 4, 22);
+    expect(atFour.slice(0, 22)).toHaveLength(22);
+    expect(largestWindowShare(atFour.slice(0, 22), spaceOf, 22)).toBeGreaterThan(4);
+
+    // At 5 it fits: sum(min(count, 5)) = 23 >= 22.
+    const atFive = applyPerSpaceQuota(rows, spaceOf, 5, 22);
+    expect(largestWindowShare(atFive.slice(0, 22), spaceOf, 22)).toBeLessThanOrEqual(5);
+  });
+
+  it('drops nothing when one space is all there is', () => {
+    // Every remaining item over quota: emit the best of them rather than stalling or
+    // truncating the feed. A single-space graph must still get a feed.
+    const rows = Array.from({ length: 9 }, (_, n) => item('only', `o${n}`));
+    const ordered = applyPerSpaceQuota(rows, spaceOf, 4, 20);
+    expect(ordered.map(r => r.entityId)).toEqual(rows.map(r => r.entityId));
+  });
+
+  it('leaves a already-diverse ranking in its ranked order', () => {
+    // The quota must be inert when it does not bind — "Best" still has to mean best.
+    const rows = [item('a', '1'), item('b', '2'), item('c', '3'), item('a', '4'), item('b', '5')];
+    expect(applyPerSpaceQuota(rows, spaceOf, 4, 20).map(r => r.entityId)).toEqual(['1', '2', '3', '4', '5']);
+  });
+
+  it('defers rather than reorders wholesale', () => {
+    // Relative order within a space is the ranking, and it must survive.
+    const rows = [...Array.from({ length: 6 }, (_, n) => item('rel', `rel${n}`)), item('other', 'x')];
+    const ordered = applyPerSpaceQuota(rows, spaceOf, 4, 20);
+    expect(ordered.filter(r => r.spaceId === 'rel').map(r => r.entityId)).toEqual([
+      'rel0',
+      'rel1',
+      'rel2',
+      'rel3',
+      'rel4',
+      'rel5',
+    ]);
+  });
+
+  it('is unaffected by the type cap being inert, which is today', () => {
+    // Every row one type, as measured: applyDiversityCap is a no-op and the space quota is
+    // the only thing doing any work. Composed in the order fetchExploreFeed uses.
+    const rows = Array.from({ length: 24 }, (_, n) => ({
+      ...item(n % 3 === 0 ? 'rel' : 'rel', `r${n}`),
+      types: [{ id: CLAIM_TYPE_ID }],
+    }));
+    const typed = applyDiversityCap(rows, exploreItemTypeKey);
+    expect(typed).toHaveLength(rows.length);
+    expect(applyPerSpaceQuota(typed, spaceOf, 4, 20)).toHaveLength(rows.length);
   });
 });

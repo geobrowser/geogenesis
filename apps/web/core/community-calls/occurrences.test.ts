@@ -70,6 +70,48 @@ describe('bucketOccurrences', () => {
     expect(upcoming.every(o => o.startMs > NOW)).toBe(true);
     expect(past.every(o => o.endMs < NOW)).toBe(true);
   });
+
+  // The regression this guards: every discovery surface buckets through this function, so
+  // filing a still-running call under `past` at its scheduled end made an overrunning
+  // meeting unfindable while it was happening — the rail and listings advertised next
+  // week's occurrence instead.
+  const SERIES = 'DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=TH';
+  const SCHEDULED_END = Date.UTC(2026, 2, 5, 18, 0);
+
+  it('keeps a call live past its scheduled end for as long as it can still be joined', () => {
+    const tenPastEnd = SCHEDULED_END + 10 * 60 * 1000;
+    const { live, past } = bucketOccurrences(getOccurrences(SERIES, tenPastEnd), tenPastEnd);
+
+    expect(live?.startMs).toBe(Date.UTC(2026, 2, 5, 17, 0));
+    expect(past.some(o => o.startMs === Date.UTC(2026, 2, 5, 17, 0))).toBe(false);
+  });
+
+  it('does not advertise the next occurrence while the current one is still running', () => {
+    const tenPastEnd = SCHEDULED_END + 10 * 60 * 1000;
+    const { live, upcoming } = bucketOccurrences(getOccurrences(SERIES, tenPastEnd), tenPastEnd);
+
+    // A weekly series: getting this wrong points people at a call seven days away.
+    expect(live).not.toBeNull();
+    expect(upcoming[0]?.startMs).toBe(Date.UTC(2026, 2, 12, 17, 0));
+  });
+
+  it('files the call under past once the join window has closed', () => {
+    const afterJoinWindow = SCHEDULED_END + 26 * 60 * 1000;
+    const { live, past } = bucketOccurrences(getOccurrences(SERIES, afterJoinWindow), afterJoinWindow);
+
+    expect(live).toBeNull();
+    expect(past[0]?.startMs).toBe(Date.UTC(2026, 2, 5, 17, 0));
+  });
+
+  it('does not call an occurrence live before it has started', () => {
+    // `isOccurrenceLive` admits people 15 minutes early; the badge must not claim the
+    // meeting is under way when it is not.
+    const fiveBeforeStart = Date.UTC(2026, 2, 5, 16, 55);
+    const { live, upcoming } = bucketOccurrences(getOccurrences(SERIES, fiveBeforeStart), fiveBeforeStart);
+
+    expect(live).toBeNull();
+    expect(upcoming[0]?.startMs).toBe(Date.UTC(2026, 2, 5, 17, 0));
+  });
 });
 
 // Anything acting on the occurrence a user actually joined must resolve it from the

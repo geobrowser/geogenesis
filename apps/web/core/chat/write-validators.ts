@@ -10,7 +10,7 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import * as Effect from 'effect/Effect';
 
-import type { Filter, FilterMode } from '~/core/blocks/data/filters';
+import type { Filter, FilterMode, ModesByColumn } from '~/core/blocks/data/filters';
 import { ID } from '~/core/id';
 import { getEntity, getProperty, getSpace } from '~/core/io/queries';
 import { E } from '~/core/sync/orm';
@@ -1043,6 +1043,8 @@ type SetDataBlockFiltersInput = {
   parentEntityId: string;
   spaceId: string;
   filters: FilterInput[];
+  modesByColumn?: ModesByColumn;
+  /** @deprecated Legacy global mode accepted for older tool callers. */
   mode?: FilterMode;
 };
 
@@ -1082,6 +1084,28 @@ async function planSetDataBlockFilters(input: SetDataBlockFiltersInput, ctx: Wri
     });
   }
 
+  const modesByColumn: ModesByColumn = {};
+  if (input.modesByColumn !== undefined && input.modesByColumn !== null) {
+    // Models routinely send null for optional object fields; treat it as
+    // absent rather than throwing in Object.entries, and reject non-objects.
+    if (typeof input.modesByColumn !== 'object' || Array.isArray(input.modesByColumn)) {
+      return invalid('modesByColumn must be an object mapping column ids to AND or OR');
+    }
+    for (const [columnId, mode] of Object.entries(input.modesByColumn)) {
+      if (!isEntityId(columnId)) return invalid(`modesByColumn key ${columnId} is not a valid id`);
+      if (mode !== 'AND' && mode !== 'OR') return invalid(`modesByColumn value ${mode} is not valid`);
+      // AND is the implicit default throughout the filter spec. Keep intents
+      // canonical by carrying only non-default OR overrides downstream.
+      if (mode === 'OR') modesByColumn[normalizeEntityId(columnId)] = mode;
+    }
+  } else if (input.mode === 'OR') {
+    // Backward compatibility for older tool callers that still send one
+    // global mode: preserve its previous within-each-property behavior.
+    for (const filter of filters) {
+      modesByColumn[filter.columnId] = 'OR';
+    }
+  }
+
   return {
     ok: true,
     intent: {
@@ -1089,7 +1113,7 @@ async function planSetDataBlockFilters(input: SetDataBlockFiltersInput, ctx: Wri
       blockId,
       spaceId,
       filters,
-      mode: input.mode ?? 'AND',
+      modesByColumn,
     },
   };
 }

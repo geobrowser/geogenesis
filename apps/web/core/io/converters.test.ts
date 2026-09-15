@@ -75,6 +75,29 @@ describe('convertWhereConditionToEntityFilter empty-name exclusion', () => {
     });
   });
 
+  it('flattens a pure-AND where into one and-array so spaceIds stays promotable', () => {
+    // Regression: the per-property where-builder emits { AND: [spaces, OR-group] }
+    // for legacy global-OR data blocks. Double-wrapping that as
+    // { and: [{ and: [...] }, { name }] } buries the spaceIds clause below the
+    // one-level peek in extractSingleSpaceIdFromFilter, the query loses its
+    // top-level space scoping, and the live API times out (verified against
+    // real data blocks on api-testnet, 2026-08-20).
+    const result = convertWhereConditionToEntityFilter({
+      AND: [
+        { spaces: [{ equals: 'space-1' }] },
+        { OR: [{ types: [{ id: { equals: 'type-a' } }] }, { types: [{ id: { equals: 'type-b' } }] }] },
+      ],
+    });
+
+    expect(result).toEqual({
+      and: [
+        { spaceIds: { overlaps: ['space-1'] } },
+        { or: [{ typeIds: { anyEqualTo: 'type-a' } }, { typeIds: { anyEqualTo: 'type-b' } }] },
+        { name: { isNull: false, isNot: '' } },
+      ],
+    });
+  });
+
   it('skips the empty-name exclusion when includeEmptyNames is true', () => {
     expect(convertWhereConditionToEntityFilter({}, { includeEmptyNames: true })).toEqual({});
 

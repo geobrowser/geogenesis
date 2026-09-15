@@ -54,6 +54,65 @@ describe('useClaimResponseIndexedNotifier', () => {
     expect(mocks.notify).toHaveBeenCalledOnce();
   });
 
+  // GEO-2784. The whole point of the change: geo-chat is told while the write is in flight, so the
+  // opposite side's "Request debate" appears at once instead of ~10s later (p50 9.9s for
+  // web.write.entity_response). Before this, the notification waited for `status: 'indexed'` and
+  // geo-chat 409'd anything unconfirmed.
+  it('notifies geo-chat while the write is still in flight, before it is indexed', async () => {
+    const { queryClient, wrapper } = createHarness();
+    const getPrivyIdentityToken = vi.fn();
+    renderHook(() => useClaimResponseIndexedNotifier(true, getPrivyIdentityToken, 'account-1'), { wrapper });
+    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'] as const;
+
+    act(() =>
+      queryClient.setQueryData(queryKey, {
+        status: 'pending',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'positive',
+          personalSpaceId: 'profile-1',
+          responseKind: 'stance',
+          spaceId: 'space-1',
+        },
+        runId: 'run-1',
+      })
+    );
+
+    await waitFor(() =>
+      expect(mocks.notify).toHaveBeenCalledWith(
+        'space-1',
+        'claim-1',
+        'stance',
+        true,
+        getPrivyIdentityToken,
+        'account-1',
+        expect.any(AbortSignal)
+      )
+    );
+  });
+
+  // The in-flight report is not a replacement for the confirmed one — that second call is the
+  // reconciliation, and geo-chat converges on it if the write never landed. Keyed separately so
+  // the dedupe does not swallow it.
+  it('still notifies again once the same response is indexed', async () => {
+    const { queryClient, wrapper } = createHarness();
+    renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });
+    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'] as const;
+    const pending = {
+      entityId: 'claim-1',
+      expectedResponse: 'positive',
+      personalSpaceId: 'profile-1',
+      responseKind: 'stance',
+      spaceId: 'space-1',
+    } as const;
+
+    act(() => queryClient.setQueryData(queryKey, { status: 'pending', pending, runId: 'run-1' }));
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledOnce());
+
+    act(() => queryClient.setQueryData(queryKey, { status: 'indexed', pending, runId: 'run-1' }));
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
+  });
+
   it('reports cleared responses and ignores curation indexing', async () => {
     const { queryClient, wrapper } = createHarness();
     renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });
@@ -95,7 +154,41 @@ describe('useClaimResponseIndexedNotifier', () => {
     );
   });
 
-  it('falls back to a silent local claim refresh when notification fails', async () => {
+  // GEO-2814. Every Request debate control reads geo-chat's copy of the position from one of three
+  // independently-keyed queries. Only the rematch picker was refreshed after the notification, so
+  // the rest converged whenever they happened to refetch next — Explore asks per card behind
+  // `nearViewport` and so refetched constantly, the hub asks once per tab and sat stale. That gap
+  // is the inconsistency, not the gate, which all of them already share.
+  it('refreshes every readiness source once geo-chat has been told', async () => {
+    const { queryClient, wrapper } = createHarness();
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });
+
+    act(() => {
+      queryClient.setQueryData(['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'], {
+        status: 'indexed',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'positive',
+          personalSpaceId: 'profile-1',
+          responseKind: 'stance',
+          spaceId: 'space-1',
+        },
+        runId: 'run-readiness',
+      });
+    });
+
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledOnce());
+    for (const queryKey of [
+      ['debates', 'claims', 'space-1'],
+      ['debates', 'account', 'account-1', 'matchmaking-claims'],
+      ['debates', 'account', 'account-1', 'matches'],
+    ]) {
+      await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({ queryKey }));
+    }
+  });
+
+  it('refreshes the readiness sources even when the notification fails', async () => {
     mocks.notify.mockRejectedValue(new Error('geo-chat unavailable'));
     const { queryClient, wrapper } = createHarness();
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
@@ -208,9 +301,9 @@ describe('useClaimResponseIndexedNotifier', () => {
     mocks.notify.mockResolvedValue(undefined);
     rerender({ enabled: true });
     await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
-    // The retry landed, so the picker is asked again — but the failure fallback still must not fire.
+    // The retry landed, so the picker and the readiness sources are asked again.
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalled());
-    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['debates', 'claims', 'space-1'] });
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debates', 'claims', 'space-1'] }));
   });
 
   it('does not replay an interrupted notification for another account', async () => {

@@ -23,6 +23,7 @@ import { Divider } from '~/design-system/divider';
 
 import { ReviewEditsTip, useReviewEditsTip } from '~/partials/hints/review-edits-tip';
 
+import { shouldHideFlowBar } from './flow-bar-visibility';
 import { entitySidePanelWantsEditAtom } from '~/atoms';
 
 export const FlowBar = () => {
@@ -30,7 +31,6 @@ export const FlowBar = () => {
   const [toast] = useToast();
   const { editable } = useEditable();
   const sidePanelWantsEdit = useAtomValue(entitySidePanelWantsEditAtom);
-  const isEditing = editable || sidePanelWantsEdit;
   const { isReviewOpen, setIsReviewOpen, bumpReviewVersion } = useDiff();
 
   const allValues = useValues({
@@ -58,7 +58,13 @@ export const FlowBar = () => {
 
   const spacesCount = pipe([...new Set([...values.map(t => t.spaceId), ...relations.map(r => r.spaceId)])], A.length);
 
-  const hideFlowbar = opsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
+  const hideFlowbar = shouldHideFlowBar({
+    opsCount,
+    editable,
+    sidePanelWantsEdit,
+    hasToast: Boolean(toast),
+    reviewState: statusBarState.reviewState,
+  });
   const flowBarVisible = !hideFlowbar;
   const { settled: flowBarEnterSettled, onEnterAnimationComplete: onFlowBarEnterAnimationComplete } =
     useEnterAnimationSettled(flowBarVisible);

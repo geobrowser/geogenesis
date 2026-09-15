@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   summaryKindCalls: [] as string[],
   positive: 0,
   negative: 0,
+  notifyClaimResponseIndexed: vi.fn(),
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -40,6 +41,22 @@ vi.mock('~/core/debates/hooks', () => ({
   useDebateClaims: (_spaceId: string, _ids: string[], enabled: boolean) => {
     mocks.rowEnabledCalls.push(enabled);
     return { data: mocks.row ? { claims: [mocks.row] } : { claims: [] }, isLoading: false, error: null };
+  },
+  // Signed in, so the readiness backfill actually runs. Mocked signed-out first, which made the
+  // card's call to it inert — deleting the call outright would have passed.
+  useGeoChatAuth: () => ({
+    ready: true,
+    authenticated: true,
+    accountKey: 'account-1',
+    getPrivyIdentityToken: async () => 'token',
+  }),
+}));
+
+vi.mock('~/core/debates/api', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/debates/api')>()),
+  notifyClaimResponseIndexed: (...args: unknown[]) => {
+    mocks.notifyClaimResponseIndexed(...args);
+    return Promise.resolve({});
   },
 }));
 
@@ -63,6 +80,16 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
 
 // The pills publish through the entity-response stack; this suite is about the card around them.
 // `disabled` is surfaced because the card is what decides it.
+vi.mock('~/core/claims/browse/claim-summary', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/claims/browse/claim-summary')>()),
+  // Only `ClaimSummary` is stubbed — `ClaimSides`, `ClaimSplitBar` and `ControversialTag` are the
+  // wide card's own and are asserted on below. The narrow card hands the phone this shared module,
+  // whose own suite covers what it draws; stubbing it here keeps this file about *layout* rather
+  // than dragging in a query client, and stops the share matching twice while both arrangements
+  // are mounted.
+  ClaimSummary: () => <div data-testid="inline-summary" />,
+}));
+
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   PositionRow: ({
     disabled,
@@ -91,6 +118,7 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     respond: vi.fn(),
     actionTitle: () => (answersReady ? '' : 'Loading this claim’s responses…'),
     responseError: null,
+    // Mirrors the hook: the request offer reads this to decide whether to make itself.
     canRespond: answersReady,
   }),
 }));
@@ -163,6 +191,7 @@ beforeEach(() => {
   mocks.summaryKindCalls = [];
   mocks.positive = 0;
   mocks.negative = 0;
+  mocks.notifyClaimResponseIndexed.mockClear();
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -283,19 +312,42 @@ describe('ClaimExploreFeedCard', () => {
     expect(document.querySelector('.border-l')).toBeNull();
   });
 
-  it('places the pills a row up when there is no verdict above them', () => {
-    // An implicit row of zero height still costs the `gap-y-4` either side of it, so leaving the
-    // pills in row 4 would silently double the space under the claim.
-    render(<ClaimExploreFeedCard item={item} />);
+  it('keeps the card as the root element, so its host and its siblings can reach it', () => {
+    // Two things depend on the root being an `<article>` that is a real sibling of the other cards,
+    // and a wrapper quietly broke both: `table-block-explore-items-dnd` sizes these through
+    // `[&>article]`, a direct-child rule; and `last:border-b-0` divides the feed, which needs
+    // `:last-child` to mean "last card" rather than "only child of my own wrapper".
+    const { container } = render(
+      <>
+        <ClaimExploreFeedCard item={item} />
+        <ClaimExploreFeedCard item={{ ...item, entityId: 'claim-2' }} />
+      </>
+    );
     scrollIntoRange();
-    expect(screen.getByTestId('pills').parentElement).not.toHaveClass('claim-card-narrow:row-start-4');
 
-    cleanup();
+    const cards = container.querySelectorAll(':scope > article');
+    expect(cards).toHaveLength(2);
+    // The first is not `:last-child`, so its divider survives; only the final card drops it.
+    expect(cards[0].matches(':last-child')).toBe(false);
+    expect(cards[1].matches(':last-child')).toBe(true);
+  });
+
+  it('puts the pills above the verdict on a phone, as the debates panel does', () => {
+    // What you can *do* to the claim comes before what everyone else did with it. The pills hold
+    // row 3 whether or not a verdict follows, so an unanswered claim gains no empty row — an
+    // implicit row of zero height still costs the `gap-y-4` either side of it.
     mocks.positive = 9;
     mocks.negative = 3;
     render(<ClaimExploreFeedCard item={item} />);
     scrollIntoRange();
-    expect(screen.getByTestId('pills').parentElement).toHaveClass('claim-card-narrow:row-start-4');
+
+    expect(screen.getByTestId('pills').parentElement).toHaveClass('row-start-3');
+    expect(screen.getByTestId('pills').parentElement).not.toHaveClass('claim-card-narrow:row-start-4');
+    // Grandparent, not parent: the summary sits inside the narrow-only wrapper, which sits inside
+    // the verdict column that carries the row.
+    expect(screen.getByTestId('inline-summary').parentElement?.parentElement).toHaveClass(
+      'claim-card-narrow:row-start-4'
+    );
   });
 
   it('separates the two zones with a rule at card width and with the stack in a narrow card', () => {
@@ -323,6 +375,47 @@ describe('ClaimExploreFeedCard', () => {
     // Count first and the verb lowercase, matching the share above it: "75% agree", "9 agree".
     expect(screen.getByText('9 agree')).toBeInTheDocument();
     expect(screen.getByText('3 disagree')).toBeInTheDocument();
+  });
+
+  /**
+   * GEO-2821's server-side half. Readiness is what puts a viewer in geo-chat's presence view, and a
+   * position taken before GEO-2740 has none — so the feed, which draws held positions by the
+   * screenful, cannot be the one surface that renders one without standing the viewer up on it.
+   */
+  it('tells geo-chat about a held position it has no readiness for', async () => {
+    mocks.row = {
+      claim_entity_id: CLAIM_ID,
+      space_id: 'space-1',
+      response_kind: 'stance',
+      viewer_response: { position: true, position_label: 'Agree' },
+      viewer_debate_ready: false,
+      readiness_disabled_reason: null,
+      online_choices: [],
+    } as unknown as DebateClaim;
+    render(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
+
+    await waitFor(() => expect(mocks.notifyClaimResponseIndexed).toHaveBeenCalledTimes(1));
+    expect(mocks.notifyClaimResponseIndexed.mock.calls[0]?.slice(0, 4)).toEqual(['space-1', CLAIM_ID, 'stance', true]);
+  });
+
+  // Only where geo-chat is the one silent about readiness. A row that already reports the viewer
+  // standing ready needs no repair, and sending one anyway is a write per card per feed.
+  it('says nothing when geo-chat already has the readiness', async () => {
+    mocks.row = {
+      claim_entity_id: CLAIM_ID,
+      space_id: 'space-1',
+      response_kind: 'stance',
+      viewer_response: { position: true, position_label: 'Agree' },
+      viewer_debate_ready: true,
+      readiness_disabled_reason: null,
+      online_choices: [],
+    } as unknown as DebateClaim;
+    render(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
+
+    await waitFor(() => expect(screen.getByTestId('pills')).toBeInTheDocument());
+    expect(mocks.notifyClaimResponseIndexed).not.toHaveBeenCalled();
   });
 
   it('flags a contested claim beside the space rather than in the verdict', () => {

@@ -169,7 +169,70 @@ describe('RequestsTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
 
-    expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1' });
+    expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1' }, expect.anything());
+  });
+
+  // One answer per card however fast the taps land: `isPending` only disables the button on the
+  // next render, so both taps of a double tap run against a still-enabled one, and the second
+  // answer 409s over the request the first already took.
+  it('answers once however fast the card is tapped', () => {
+    render(<RequestsTab />);
+
+    const dismiss = screen.getByRole('button', { name: 'Dismiss' });
+    fireEvent.click(dismiss);
+    fireEvent.click(dismiss);
+
+    expect(mocks.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  // Copilot caught this on PR #2359. The guard has to come back when an answer fails, or the card
+  // is answerable exactly once ever: react-query clears `isPending` so the buttons re-enable, but
+  // every press after that is swallowed and the request can only be answered by reloading.
+  it('lets the viewer answer again after a failed answer', () => {
+    mocks.dismiss.mockImplementation((_variables, options) => options?.onError?.(new Error('nope')));
+    render(<RequestsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    expect(mocks.dismiss).toHaveBeenCalledTimes(2);
+  });
+
+  // The two buttons share one guard, so a failed Accept has to free the card for Dismiss too.
+  it('frees the other action when an answer fails', () => {
+    mocks.accept.mockImplementation((_variables, options) => options?.onError?.(new Error('nope')));
+    render(<RequestsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    expect(mocks.accept).toHaveBeenCalledTimes(1);
+    expect(mocks.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  // Copilot raised this on PR #2359. "I don't want to debate this claim" is the same dismiss
+  // endpoint the buttons use, so an answer already taken would 409 behind it.
+  it('counts the overflow dismissal as the card answer', () => {
+    render(<RequestsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('button', { name: "I don't want to debate this claim" }));
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1', removeIntent: true }, expect.anything());
+    expect(mocks.accept).not.toHaveBeenCalled();
+  });
+
+  // Blocking writes the viewer's block list rather than answering the request, so it must not be
+  // gated: swallowing a safety action because an answer was already taken is the worse failure.
+  it('blocks even once the request has been answered', () => {
+    render(<RequestsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Block/ }));
+
+    expect(mocks.block).toHaveBeenCalledWith('user-them');
   });
 
   it('separates the request you sent from the ones you received', () => {

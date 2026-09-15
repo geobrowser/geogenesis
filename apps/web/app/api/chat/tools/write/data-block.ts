@@ -2,7 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { jsonSchema, tool } from 'ai';
 
-import type { FilterMode } from '~/core/blocks/data/filters';
+import type { FilterMode, ModesByColumn } from '~/core/blocks/data/filters';
 import type { DataBlockView } from '~/core/chat/edit-types';
 import type { FilterableValueType } from '~/core/value-types';
 
@@ -37,6 +37,8 @@ type SetDataBlockFiltersInput = {
   parentEntityId: string;
   spaceId: string;
   filters: FilterInput[];
+  modesByColumn?: ModesByColumn;
+  /** @deprecated Legacy global mode accepted for older tool callers. */
   mode?: FilterMode;
 };
 
@@ -48,7 +50,7 @@ Each filter is \`{ columnId, valueType, value }\`. Special columnIds:
 - Types filter: columnId = "${SystemIds.TYPES_PROPERTY}", valueType = "RELATION", value = a type entity id.
 Otherwise columnId is a property id.
 
-For RELATION-typed values, pass the target entity id (dashless hex or dashed UUID — the tool normalizes). \`mode\` is AND (default) or OR.`,
+For RELATION-typed values, pass the target entity id (dashless hex or dashed UUID — the tool normalizes). Different properties are always combined with AND. To combine multiple values within one property with OR, pass \`modesByColumn: { "<columnId>": "OR" }\`; omitted property modes default to AND.`,
   inputSchema: jsonSchema<SetDataBlockFiltersInput>({
     type: 'object',
     properties: {
@@ -56,6 +58,10 @@ For RELATION-typed values, pass the target entity id (dashless hex or dashed UUI
       parentEntityId: { type: 'string', pattern: ENTITY_ID_PATTERN },
       spaceId: { type: 'string', pattern: ENTITY_ID_PATTERN },
       mode: { type: 'string', enum: ['AND', 'OR'] },
+      modesByColumn: {
+        type: 'object',
+        additionalProperties: { type: 'string', enum: ['AND', 'OR'] },
+      },
       filters: {
         type: 'array',
         items: {

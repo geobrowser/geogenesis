@@ -8,6 +8,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { Effect } from 'effect';
 
+import { DATA_BLOCK_DROPDOWNS_PROPERTY_ID } from '~/core/blocks/data/block-ontology-ids';
 import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { getBatchEntities } from '~/core/io/queries';
 import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
@@ -1013,6 +1014,7 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
 
   const viewRelations = allRelations.filter(r => r.typeId === SystemIds.VIEW_PROPERTY);
   const columnRelations = allRelations.filter(r => r.typeId === SystemIds.SHOWN_COLUMNS);
+  const dropdownRelations = allRelations.filter(r => r.typeId === DATA_BLOCK_DROPDOWNS_PROPERTY_ID);
   const collectionItemRelations = allRelations.filter(r => r.typeId === SystemIds.COLLECTION_ITEM_RELATION_TYPE);
   const hasConfigChanges = allRelations.length > 0 || allConfigValues.length > 0;
 
@@ -1046,6 +1048,11 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
   );
   const isColumnsAdded = columnRelations.every(r => r.changeType === 'ADD') && columnRelations.length > 0;
   const isColumnsRemoved = columnRelations.every(r => r.changeType === 'REMOVE') && columnRelations.length > 0;
+  const hasDropdownsChange = dropdownRelations.some(
+    r => r.changeType === 'ADD' || r.changeType === 'REMOVE' || r.changeType === 'UPDATE'
+  );
+  const isDropdownsAdded = dropdownRelations.every(r => r.changeType === 'ADD') && dropdownRelations.length > 0;
+  const isDropdownsRemoved = dropdownRelations.every(r => r.changeType === 'REMOVE') && dropdownRelations.length > 0;
 
   const isNew = dataBlock.before === null && dataBlock.after !== null;
   const isDeleted = dataBlock.before !== null && dataBlock.after === null;
@@ -1145,6 +1152,39 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
             </div>
           )}
 
+          {hasDropdownsChange &&
+            !(isDropdownsAdded && side === 'before') &&
+            !(isDropdownsRemoved && side === 'after') && (
+              <Tooltip
+                trigger={
+                  <div
+                    className={cx(
+                      'inline-flex cursor-help items-center gap-1.5 rounded border border-grey-02 bg-grey-01 px-2 py-1',
+                      side === 'before' && 'ring-2 ring-deleted',
+                      side === 'after' && 'ring-2 ring-added'
+                    )}
+                  >
+                    <span className="text-metadata text-grey-04">
+                      {isDropdownsAdded
+                        ? 'Dropdowns added'
+                        : isDropdownsRemoved
+                          ? 'Dropdowns removed'
+                          : 'Dropdowns changed'}
+                    </span>
+                  </div>
+                }
+                label={
+                  <div className="max-w-[400px] text-left">
+                    <div className="text-xs break-all whitespace-pre-wrap">
+                      {formatDropdownsDisplay(dropdownRelations, side)}
+                    </div>
+                  </div>
+                }
+                position="top"
+                variant="light"
+              />
+            )}
+
           {viewInfo && (
             <div
               className={cx(
@@ -1173,6 +1213,17 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
     </div>
   );
 };
+
+/** The dropdown properties this side sees, one line each, with +/− markers for adds/removes. */
+function formatDropdownsDisplay(relations: RelationChange[], side: 'before' | 'after'): string {
+  const lines = relations.flatMap(r => {
+    const snapshot = side === 'before' ? r.before : r.after;
+    if (!snapshot) return [];
+    const marker = r.changeType === 'ADD' ? '+ ' : r.changeType === 'REMOVE' ? '− ' : '';
+    return [`${marker}${snapshot.toEntityName ?? snapshot.toEntityId}`];
+  });
+  return lines.length > 0 ? lines.join('\n') : 'None';
+}
 
 type CollectionItem = {
   entityId: string;

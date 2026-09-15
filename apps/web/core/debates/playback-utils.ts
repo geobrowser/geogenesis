@@ -104,3 +104,71 @@ export function orderedParticipants(debate: Debate) {
 export function speakerLabel(participant: Pick<DebateParticipant, 'display_name' | 'profile_space_id'>) {
   return participant.display_name || participant.profile_space_id;
 }
+
+/** The two elements this helper needs, so tests do not have to build a whole `HTMLVideoElement`. */
+export type PlayableVideo = Pick<HTMLVideoElement, 'muted' | 'paused'> & { play: () => Promise<void> };
+
+export type PlayBothOutcome = 'playing' | 'playing-muted' | 'blocked';
+
+/**
+ * Start both recordings, falling back to muted when the browser blocks unmuted autoplay
+ * (GEO-2783).
+ *
+ * `play()` is rejected — or resolves while leaving the element paused — when it is not driven by a
+ * user gesture and the video has audio. The debate feed calls this from an effect as a debate
+ * scrolls into view, and the viewer's mute preference is a session-wide atom, so once anything has
+ * been unmuted every later autoplay is blocked and the viewer sees "Could not play both videos"
+ * for doing nothing.
+ *
+ * A blocked unmuted play is a request the browser will honour muted, so it is asked again muted
+ * before giving up. `'playing-muted'` is reported rather than folded into `'playing'` because the
+ * caller has to record that audio is now off — otherwise the UI offers a "mute" control on a
+ * silent video and the next autoplay fails identically.
+ *
+ * Success is judged by whether both elements are actually running shortly afterwards, not by
+ * whether `play()` resolved. `play()` can resolve while the element is still transitioning out of
+ * `paused`, so checking `paused` on the very next microtask reports a block on a video that plays
+ * a moment later — which is why the feed showed "Could not play both videos" on essentially every
+ * scroll while the recordings played fine. A rejected `play()` needs no special case: a rejection
+ * leaves the element paused, so it fails the same check.
+ *
+ * The grace window is deliberately short. It only has to outlast the paused -> playing transition,
+ * and every millisecond of it delays the muted retry on a genuine block.
+ */
+const PLAY_CONFIRM_POLLS = 4;
+const PLAY_CONFIRM_INTERVAL_MS = 75;
+
+const defaultWait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+async function bothRunning(
+  primary: PlayableVideo,
+  secondary: PlayableVideo,
+  wait: (ms: number) => Promise<void>
+): Promise<boolean> {
+  for (let poll = 0; poll < PLAY_CONFIRM_POLLS; poll++) {
+    if (!primary.paused && !secondary.paused) return true;
+    await wait(PLAY_CONFIRM_INTERVAL_MS);
+  }
+  return !primary.paused && !secondary.paused;
+}
+
+export async function playBothWithMutedFallback(
+  primary: PlayableVideo,
+  secondary: PlayableVideo,
+  /** Injectable so tests do not wait on real timers. */
+  wait: (ms: number) => Promise<void> = defaultWait
+): Promise<PlayBothOutcome> {
+  const attempt = async () => {
+    await Promise.allSettled([primary.play(), secondary.play()]);
+    return bothRunning(primary, secondary, wait);
+  };
+
+  if (await attempt()) return 'playing';
+
+  // Nothing to retry if audio was already off — the block is not the autoplay policy.
+  if (primary.muted && secondary.muted) return 'blocked';
+
+  primary.muted = true;
+  secondary.muted = true;
+  return (await attempt()) ? 'playing-muted' : 'blocked';
+}

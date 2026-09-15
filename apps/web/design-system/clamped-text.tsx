@@ -29,10 +29,26 @@ type ClampedTextProps = {
   maxLines?: number;
   variant?: TypographyName;
   textClassName?: string;
+  /**
+   * What the toggle expands, for its accessible name — "description for
+   * Engineer", say, giving "Show more description for Engineer".
+   *
+   * Worth passing wherever more than one of these can be on screen at once. The
+   * visible word is always More or Less, so without it a page of clamped rows
+   * offers a list of identical buttons and no way to tell which opens what. It
+   * has to separate the rows *and* the fields: one row can clamp both its
+   * description and its skills.
+   */
+  label?: string;
 };
 
+// No type of its own: the toggle takes the variant of the text it belongs to, so
+// More sits on the last line at the same size and on the same baseline. It used
+// to hardcode `text-body` and `leading-none`, which was right only for a caller
+// passing `body` and left every other one with an oversized toggle sitting off
+// the line.
 const TOGGLE_CLASS =
-  'm-0 inline cursor-pointer border-0 bg-transparent p-0 text-body leading-none text-grey-04 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
+  'm-0 inline cursor-pointer border-0 bg-transparent p-0 text-grey-04 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
 
 const TOGGLE_GUTTER_CLASS = 'pr-11';
 
@@ -98,6 +114,7 @@ export function ClampedText({
   maxLines = 3,
   variant = 'body',
   textClassName = '',
+  label,
 }: ClampedTextProps) {
   assertSupportedMaxLines(maxLines);
 
@@ -144,7 +161,13 @@ export function ClampedText({
         {showToggle && expanded && (
           <>
             {' '}
-            <button type="button" onClick={() => setExpanded(false)} aria-expanded={true} className={TOGGLE_CLASS}>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              aria-expanded={true}
+              aria-label={label ? `Show less ${label}` : undefined}
+              className={cx(typeClassName, TOGGLE_CLASS)}
+            >
               Less
             </button>
           </>
@@ -159,7 +182,13 @@ export function ClampedText({
               : { height: '1lh', lineHeight: '1lh' }
           }
         >
-          <button type="button" onClick={() => setExpanded(true)} aria-expanded={false} className={TOGGLE_CLASS}>
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            aria-expanded={false}
+            aria-label={label ? `Show more ${label}` : undefined}
+            className={cx(typeClassName, TOGGLE_CLASS)}
+          >
             More
           </button>
         </span>

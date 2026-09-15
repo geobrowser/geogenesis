@@ -15,6 +15,18 @@ describe('useDebouncedSearch', () => {
     expect(result.current.pending).toBe(false);
   });
 
+  /**
+   * A component can mount onto a search that settled before it existed — Lobby's other list after
+   * the toggle, or the panel reopened on one. Debouncing that would render the list unfiltered and
+   * spend a request under a key nothing on screen was waiting for, for no keystroke at all.
+   */
+  it('starts on a search it is handed, with nothing pending', () => {
+    const { result } = renderHook(() => useDebouncedSearch('nuclear'));
+
+    expect(result.current.value).toBe('nuclear');
+    expect(result.current.pending).toBe(false);
+  });
+
   // The window the counts have to be covered for: the box says one thing, the request another.
   it('reports pending from the keystroke until the delay is up', () => {
     const { result, rerender } = renderHook(({ search }) => useDebouncedSearch(search), {

@@ -5,7 +5,7 @@
  */
 import { localToUtcMs, parseSchedule } from '~/core/utils/schedule';
 
-import { OCCURRENCE_MATCH_TOLERANCE_MS } from './constants';
+import { LIVE_WINDOW_AFTER_MS, OCCURRENCE_MATCH_TOLERANCE_MS } from './constants';
 import { Occurrence } from './types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -137,15 +137,29 @@ export type BucketedOccurrences = {
 /**
  * Bucket occurrences relative to `now`: the live one, future, and recent past.
  *
- * "Live" here is the scheduled window only (no before/after grace) — it drives the
- * "LIVE" badge on the listing, which should reflect the schedule, not joinability.
- * `isOccurrenceLive` (with its grace window) is a separate, deliberately more
- * lenient check used only to decide whether the join screen is offered.
+ * The live window runs from the scheduled start to {@link LIVE_WINDOW_AFTER_MS} past the
+ * scheduled end — asymmetric on purpose, and the asymmetry is the point:
+ *
+ * - **No pre-start grace.** `isOccurrenceLive` admits people 15 minutes early, but a call
+ *   that has not started is not live and must not claim to be. Early arrivals are still
+ *   offered the join screen; they just read as upcoming, which is what they are.
+ * - **Post-end grace, matching the join window.** This used to end at `endMs`, on the
+ *   reasoning that the badge should reflect the schedule rather than joinability. That
+ *   reasoning produced a real failure: every discovery surface buckets through this
+ *   function, so for the 25 minutes a call remains joinable past its scheduled end — while
+ *   people are still in it — the rail, the Community tab and the Explore digest all filed it
+ *   under past and advertised the *next* occurrence instead. On a weekly series that is next
+ *   week. Anyone arriving late to a meeting that ran over could not find the meeting that was
+ *   happening. A call still in progress is live; the schedule is what it was planned to be.
+ *
+ * `past` is the complement, so an occurrence is never both — it leaves the live bucket only
+ * once it can no longer be joined.
  */
 export function bucketOccurrences(occurrences: Occurrence[], now = Date.now()): BucketedOccurrences {
-  const live = occurrences.find(o => now >= o.startMs && now <= o.endMs) ?? null;
+  const liveUntil = (o: Occurrence) => o.endMs + LIVE_WINDOW_AFTER_MS;
+  const live = occurrences.find(o => now >= o.startMs && now <= liveUntil(o)) ?? null;
   const upcoming = occurrences.filter(o => o.startMs > now && o !== live).sort((a, b) => a.startMs - b.startMs);
-  const past = occurrences.filter(o => o.endMs < now && o !== live).sort((a, b) => b.startMs - a.startMs);
+  const past = occurrences.filter(o => liveUntil(o) < now && o !== live).sort((a, b) => b.startMs - a.startMs);
   return { live, upcoming, past };
 }
 

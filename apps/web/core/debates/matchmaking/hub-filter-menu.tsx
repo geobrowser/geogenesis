@@ -33,6 +33,12 @@ type Props<T extends string> = {
   showImages?: boolean;
   /** As {@link HubFilterOption.pending}, for the name in the trigger pill. */
   labelPending?: boolean;
+  /**
+   * What the skeleton in the trigger announces while `labelPending` holds. Defaults to the space
+   * menu's wording, which is what this component was built for; the Claims source menu waits on
+   * something else entirely and would otherwise tell a screen reader it was loading a space name.
+   */
+  labelPendingAnnouncement?: string;
 };
 
 /**
@@ -50,6 +56,7 @@ export function HubFilterMenu<T extends string>({
   onChange,
   showImages,
   labelPending,
+  labelPendingAnnouncement = 'Loading space name',
 }: Props<T>) {
   const [open, setOpen] = React.useState(false);
 
@@ -64,7 +71,7 @@ export function HubFilterMenu<T extends string>({
         <SmallButton icon={<ChevronDownSmall />} className="max-w-[160px]">
           {labelPending ? (
             // Sized to the pill's line box so the trigger doesn't resize when the name lands.
-            <Skeleton className="h-[1em] w-16" aria-label="Loading space name" />
+            <Skeleton className="h-[1em] w-16" aria-label={labelPendingAnnouncement} />
           ) : (
             <span className="truncate">{label}</span>
           )}
@@ -276,4 +283,17 @@ function pendingLabelWidth(value: string) {
   let hash = 0;
   for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
   return `${60 + (hash % 5) * 15}px`;
+}
+
+/**
+ * What a filter's trigger pill says, given how many options are ticked.
+ *
+ * One selection reads as its own name — the useful case, and the one the viewer is most often in —
+ * while several collapse to a count, because two names rarely fit and a truncated pair reads as one
+ * bad name. Lives beside the menu rather than with any one caller: it is the rule for that
+ * component's `label`, and the debates panel and Explore both have to say it the same way.
+ */
+export function pickerLabel(count: number, empty: string, single: () => string, many: (count: number) => string) {
+  if (count === 0) return empty;
+  return count === 1 ? single() : many(count);
 }

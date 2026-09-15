@@ -26,7 +26,6 @@ import {
   isPlaceholderRankingEntry,
 } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
-import { formatRollingSubmissionLabel } from '~/core/blocks/ranking/ranking-rolling';
 import { getScopeFromFilters } from '~/core/blocks/ranking/ranking-scope';
 import {
   buildAbsoluteRankingShareUrl,
@@ -135,7 +134,7 @@ export function useRankingBlockState({
 
   const canEdit = useCanUserEdit(spaceId);
 
-  const { filterState, resolvedFilterState, filterMode, setFilterState, setFilterMode } = useFilters(canEdit);
+  const { filterState, resolvedFilterState, modesByColumn, setFilterState, setGroupMode } = useFilters(canEdit);
   const { source, setSource } = useRankingScope({ filterState, setFilterState });
 
   const { startDate, endDate } = useRankingBlockDates({
@@ -852,9 +851,9 @@ export function useRankingBlockState({
     canEdit,
     filterState,
     resolvedFilterState,
-    filterMode,
+    modesByColumn,
     setFilterState,
-    setFilterMode,
+    setGroupMode,
     source,
     setSource,
     isFilterOpen,

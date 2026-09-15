@@ -42,8 +42,12 @@ type VoteTabHydration = {
 const EMPTY_VOTE_TAB_HYDRATION: VoteTabHydration = { entries: [], signatures: {} };
 
 export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) {
-  const { filterState, filterMode, spaceId } = useDataBlock();
-  const blockWhere = React.useMemo(() => filterStateToWhere(filterState, filterMode), [filterState, filterMode]);
+  const { filterState, modesByColumn, spaceId } = useDataBlock();
+  const blockWhere = React.useMemo(
+    // Space-scoped like the data block itself (GEO-2865).
+    () => filterStateToWhere(filterState, modesByColumn, spaceId),
+    [filterState, modesByColumn, spaceId]
+  );
 
   const enabled = direction !== null;
   const { ids, idPages, voteKindById, isLoading, hasNextPage, isFetchingNextPage, isError, refetch, fetchNextPage } =

@@ -4,6 +4,8 @@ import { createAtom } from '@xstate/store';
 import { Array as A } from 'effect';
 import { produce } from 'immer';
 
+import { BLOCK_CONFIG_RELATION_TYPE_IDS } from '~/core/blocks/data/shown-column-relations';
+
 import { columnPropertyIdFromRelation } from '../blocks/data/shown-column-relations';
 import {
   FORMAT_PROPERTY,
@@ -35,7 +37,7 @@ export function relationKey(r: Relation): string {
 function preferRelation(
   existing: Relation,
   candidate: Relation,
-  hasBlockConfig?: (relationEntityId: string) => boolean
+  configRelationCount?: (relationEntityId: string) => number
 ): Relation {
   if (candidate.isLocal && !existing.isLocal) return candidate;
   if (!candidate.isLocal && existing.isLocal) return existing;
@@ -50,11 +52,14 @@ function preferRelation(
   // always tie. Each duplicate has its own relation entity (`entityId`) — for
   // BLOCKS relations that entity holds the block's view/shown-columns config,
   // so prefer the duplicate other config data hangs off of.
-  if (hasBlockConfig) {
-    const existingHasConfig = hasBlockConfig(existing.entityId);
-    const candidateHasConfig = hasBlockConfig(candidate.entityId);
-    if (existingHasConfig !== candidateHasConfig) {
-      return existingHasConfig ? existing : candidate;
+  if (configRelationCount) {
+    // Compare by COUNT, not by has-any: an entity carrying only a Dropdowns
+    // relation must not outrank one holding the block's saved view/columns
+    // just because the id tie-break happens to favor it.
+    const existingCount = configRelationCount(existing.entityId);
+    const candidateCount = configRelationCount(candidate.entityId);
+    if (existingCount !== candidateCount) {
+      return existingCount > candidateCount ? existing : candidate;
     }
   }
 
@@ -64,12 +69,6 @@ function preferRelation(
   return candidate.id < existing.id ? candidate : existing;
 }
 
-const BLOCK_CONFIG_RELATION_TYPE_IDS: readonly string[] = [
-  SystemIds.VIEW_PROPERTY,
-  SystemIds.PROPERTIES,
-  SystemIds.SHOWN_COLUMNS,
-];
-
 export function dedupeRelationsByKey(relations: Relation[]): Relation[] {
   const byKey = new Map<string, Relation>();
   const deleted: Relation[] = [];
@@ -77,16 +76,16 @@ export function dedupeRelationsByKey(relations: Relation[]): Relation[] {
   // Lazily index which entities have data-block config relations hanging off
   // them, so same-key collisions can keep the duplicate whose relation entity
   // carries the block's saved view/columns. Built at most once per dedupe.
-  let configFromIds: Set<string> | null = null;
-  const hasBlockConfig = (relationEntityId: string): boolean => {
-    if (configFromIds === null) {
-      configFromIds = new Set(
-        relations
-          .filter(r => !r.isDeleted && BLOCK_CONFIG_RELATION_TYPE_IDS.includes(r.type.id))
-          .map(r => r.fromEntity.id)
-      );
+  let configCounts: Map<string, number> | null = null;
+  const configRelationCount = (relationEntityId: string): number => {
+    if (configCounts === null) {
+      configCounts = new Map();
+      for (const r of relations) {
+        if (r.isDeleted || !BLOCK_CONFIG_RELATION_TYPE_IDS.includes(r.type.id)) continue;
+        configCounts.set(r.fromEntity.id, (configCounts.get(r.fromEntity.id) ?? 0) + 1);
+      }
     }
-    return configFromIds.has(relationEntityId);
+    return configCounts.get(relationEntityId) ?? 0;
   };
 
   for (const relation of relations) {
@@ -99,7 +98,7 @@ export function dedupeRelationsByKey(relations: Relation[]): Relation[] {
     }
     const key = relationKey(relation);
     const existing = byKey.get(key);
-    byKey.set(key, existing ? preferRelation(existing, relation, hasBlockConfig) : relation);
+    byKey.set(key, existing ? preferRelation(existing, relation, configRelationCount) : relation);
   }
   return [...byKey.values(), ...deleted];
 }
@@ -458,8 +457,11 @@ export class GeoStore {
     // Get the base entity
     const entity = syncedEntities.get(id);
 
-    // Get triples including any pending optimistic updates
-    const values = this.getResolvedValues(id, options.includeDeleted);
+    // Get triples including any pending optimistic updates. Read with tombstones and narrow below,
+    // so the deletion guards further down can still see them — `values` has dropped the evidence by
+    // definition.
+    const allValues = this.getResolvedValues(id, true);
+    const values = options.includeDeleted ? allValues : allValues.filter(v => Boolean(v.isDeleted) === false);
 
     // Get relations including any pending optimistic updates
     const relations = this.getResolvedRelations(id, options.includeDeleted);
@@ -468,8 +470,26 @@ export class GeoStore {
       return undefined;
     }
 
-    const name = Entities.name(values);
-    const description = Entities.description(values);
+    // `options.spaceId` used to filter the values array below without touching the name and
+    // description derived from it, so a view pinned to a space still showed the top-ranked space's
+    // wording (GEO-2778). `nameInSpace` owns the rule and its fallback for every caller.
+    const spaceValues = options.spaceId ? values.filter(v => v.spaceId === options.spaceId) : values;
+    // Both aggregate fallbacks are gated on a tombstone, the same guard `E.merge` applies: the
+    // synced entity retains the server's pre-deletion value, so falling back onto a name or
+    // description the reader has just deleted puts it straight back on their screen.
+    const name =
+      Entities.nameInSpace(values, options.spaceId) ??
+      (Entities.hasDeletedValue(allValues, SystemIds.NAME_PROPERTY) ? null : (entity?.name ?? null));
+    // No fall-through to the synced entity's description when a space was named: that value is the
+    // server's cross-space resolution, and letting it through would put another space's prose in
+    // this one's mouth — exactly what `descriptionInSpace` declines to do.
+    // Resolved through the helper on both branches so an empty triple normalises to null rather than
+    // blocking the synced fallback with `''`, and the synced value applies only to an unscoped read.
+    const description =
+      Entities.descriptionInSpace(values, options.spaceId) ??
+      (options.spaceId || Entities.hasDeletedValue(allValues, SystemIds.DESCRIPTION_PROPERTY)
+        ? null
+        : (entity?.description ?? null));
     const types = readTypes(relations);
     const spaces = Entities.spaces(values, relations);
 
@@ -481,8 +501,8 @@ export class GeoStore {
             types,
             spaces,
             nameTripleSpaces: spaces,
-            name: name ?? entity.name,
-            description: description ?? entity.description,
+            name,
+            description,
           }
         : {
             id: id,
@@ -492,7 +512,7 @@ export class GeoStore {
             spaces,
             nameTripleSpaces: spaces,
           }),
-      values: values.filter(v => (options.spaceId ? v.spaceId === options.spaceId : true)),
+      values: spaceValues,
       relations: relations.filter(
         r => (includeDeleted || !r.isDeleted) && (options.spaceId ? r.spaceId === options.spaceId : true)
       ),

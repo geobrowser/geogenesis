@@ -314,6 +314,20 @@ export type DebateRematchClaim = {
    */
   viewer_debate_ready?: boolean;
   readiness_disabled_reason?: string | null;
+  /**
+   * The viewer's own position, as geo-chat holds it: the live knowledge-graph resolution when one
+   * ran, falling back to the readiness row when it did not.
+   *
+   * Prefer this over the viewer's entry in `participants`, which is graph-only. That resolve sits
+   * behind a timeout on geo-chat's side, and when it lapses every `participants` position comes
+   * back null — which reads as "no position held" and disables every Request button on the page.
+   * This field is the same precedence the per-space `debate-claims` list has always used.
+   *
+   * `undefined` means the backend predates the field, which is distinct from `null` meaning no
+   * position — hence the explicit `undefined` check at the reader rather than `??`.
+   */
+  viewer_position?: boolean | null;
+  viewer_position_label?: string | null;
 };
 
 export type DebateRematchClaimsResponse = {
@@ -500,6 +514,13 @@ export type MatchmakingClaimsQuery = {
    *
    * The session id rather than the ids themselves — that set is geo-chat's own, and the client
    * would be handing back a value it isn't the authority on.
+   *
+   * No sender since GEO-2771: the rematch picker's All source is the graph's Debate tag now, so it
+   * makes no index query to attach this to, and `excludedClaimIds` removes the same claims
+   * client-side across all four of its sources. Kept because it still describes a parameter
+   * `/matchmaking/claims` accepts, and this module is the client's model of that endpoint rather
+   * than a list of what happens to be called today. It should go when geo-chat drops it — the two
+   * halves belong in one change.
    */
   rematchSessionId?: string | null;
   filter?: MatchmakingClaimsFilter;
@@ -794,8 +815,23 @@ async function fetchDebateClaims(
  */
 const CLAIM_BATCH_WINDOW_MS = 10;
 
-/** Caps the query string. Fifty ids is roughly 1.7KB of URL; this leaves generous headroom. */
-const CLAIM_BATCH_LIMIT = 100;
+/**
+ * The most claim ids geo-chat will accept in one request, on any endpoint that takes a list of them.
+ *
+ * It answers a longer list with `400 too_many_claim_ids` — "at most 50 claim IDs may be requested" —
+ * and `debate-gateway` classifies that as deterministic, because no amount of reconnecting makes a
+ * request that is simply too big succeed. With `retry: false` on these queries, one such rejection
+ * is permanent for its key.
+ *
+ * This lived here as a URL-length cap of a hundred — "fifty ids is roughly 1.7KB of URL; this leaves
+ * generous headroom" — which was sizing for the wrong constraint. The query string was never what
+ * the server objected to.
+ *
+ * Exported so the callers that pre-chunk for their own reasons measure against the same number.
+ * Chunking below the cap is always safe; the only unsafe thing is a second opinion about what the
+ * cap is, which is what this had.
+ */
+export const GEO_CHAT_CLAIM_IDS_PER_REQUEST = 50;
 
 type ClaimBatchCaller = {
   claimIds: string[];
@@ -858,8 +894,11 @@ function flushClaimBatch(key: string, spaceId: string) {
 
   const ids = [...batch.ids];
   const chunks: string[][] = [];
-  for (let index = 0; index < ids.length; index += CLAIM_BATCH_LIMIT) {
-    chunks.push(ids.slice(index, index + CLAIM_BATCH_LIMIT));
+  // Re-chunked here rather than trusted from the callers: this coalesces every caller for a space
+  // inside the window above, so a batch can hold more ids than any one of them asked for — which is
+  // how lists that were each correctly capped still added up to a rejected request.
+  for (let index = 0; index < ids.length; index += GEO_CHAT_CLAIM_IDS_PER_REQUEST) {
+    chunks.push(ids.slice(index, index + GEO_CHAT_CLAIM_IDS_PER_REQUEST));
   }
 
   // Deliberately unsignalled. One row unmounting must not abort the request its siblings are
@@ -1324,7 +1363,10 @@ export async function listMatchmakingMatches(
 
 /*
  * There is no debate-intent endpoint. A position is an on-chain claim response, never something
- * the client sends — `joinDebateQueue` / `leaveDebateQueue` toggle readiness on top of it.
+ * the client sends, and since GEO-2740 readiness follows from holding one: geo-chat writes it from
+ * `notify_claim_response_indexed`. GEO-2813 removed the last readiness switch in the app, so
+ * nothing here calls `joinDebateQueue` / `leaveDebateQueue` any more. They stay as the binding for
+ * endpoints geo-chat still serves, not as something the UI is expected to drive.
  */
 
 export async function listDebateRequests(
@@ -1597,6 +1639,78 @@ export class GeoChatRequestError extends Error {
   }
 }
 
+/**
+ * A refusal from the session exchange itself, rather than from a resource.
+ *
+ * The two are the same status and opposite problems, and the rest of this codebase already knows
+ * it: `debate-gateway` reads a 401 off a *resource* as `reauthenticate` and calls
+ * {@link resetGeoChatSession}, because the stored session is handed back until it is close to
+ * expiry and a server that rejected those credentials will go on rejecting them. A 401 from
+ * `/auth/session` is the opposite — the credentials are fine and geo-chat does not have the account
+ * yet.
+ *
+ * Only the second is worth waiting out, so only the second is {@link isAccountWarmingUp}. Told apart
+ * by type rather than by status, because the status cannot tell them apart and the call site that
+ * has to decide is a query's `retry`, a long way from either endpoint.
+ *
+ * Extends rather than replaces, so every `instanceof GeoChatRequestError` that already exists keeps
+ * matching.
+ */
+export class GeoChatSessionError extends GeoChatRequestError {
+  constructor(error: GeoChatRequestError) {
+    super(error.message, error.code, error.status);
+    this.name = 'GeoChatSessionError';
+  }
+}
+
+/**
+ * geo-chat declining to serve a read at all.
+ *
+ * The mechanical fact, with no claim about why. It has exactly two readings and they are the same
+ * status: the viewer is not signed in, or geo-chat has not finished registering an account that is.
+ * Both are named below and in `hub-states`, and both defer to this so the statuses are stated once.
+ */
+export function isGeoChatRefusal(error: unknown) {
+  return error instanceof GeoChatRequestError && (error.status === 401 || error.status === 403);
+}
+
+/**
+ * That refusal read as "not yet" rather than "not you".
+ *
+ * geo-chat does not know an account for a minute or two after it is created and refuses every
+ * viewer-relative read until it does. Signed *out* produces the same status, so the two are told
+ * apart by who is asking rather than by the status — see `isSignInRequired`, the other reading.
+ *
+ * 401 only, and not the 403 its sibling also accepts. The registration window answers 401; a 403 is
+ * geo-chat saying this viewer may not read *this*, which is a standing fact about a space they are
+ * not in rather than a wait. Reading both as "not yet" was worse than imprecise: callers act on it.
+ * The claim-rows lookup would have polled a forbidden space every ten seconds for the life of the
+ * tab, the matchmaking reads would have sat through a minute of retries before showing a refusal
+ * that was never going to change, and the hub would have told the viewer their account was being
+ * set up when it had been set up for months.
+ *
+ * And from the session exchange only — see {@link GeoChatSessionError}. A 401 off a resource is a
+ * session the server has stopped accepting, which waiting cannot fix and which this would otherwise
+ * have spent nine retries on before telling the viewer their account was being set up.
+ *
+ * Lives beside the error it reads because both layers need it: the hub to say what is happening,
+ * and the query layer to know a failure is worth asking about again.
+ */
+export function isAccountWarmingUp(error: unknown) {
+  return error instanceof GeoChatSessionError && error.status === 401;
+}
+
+/**
+ * The same refusal behind an attempt react-query is still retrying, as well as a settled one.
+ *
+ * Both callers want the same thing and had each spelled it out, differently: one `||`-ing the two
+ * fields and one `??`-ing them, which are not the same answer when a settled error is present and
+ * is *not* a refusal. Asked once, here.
+ */
+export function isAccountWarmingUpQuery(query: { error?: unknown; failureReason?: unknown }) {
+  return isAccountWarmingUp(query.error) || isAccountWarmingUp(query.failureReason);
+}
+
 const debatePhaseBoundaryRetryCodes = new Set([
   'rematch_not_ready',
   'recording_not_cancellable',
@@ -1750,7 +1864,11 @@ async function createGeoChatSession(privyToken: string): Promise<GeoChatSession>
     headers: { Authorization: `Bearer ${privyToken}` },
   });
 
-  if (!response.ok) throw new Error(await errorMessage(response));
+  // `requestError`, not a bare `Error`: the status is the only thing that tells a caller what kind
+  // of failure this is, and throwing it away made every one of them "Something went wrong". A 401
+  // here is geo-chat saying it does not know this account *yet* — which it says to a viewer who has
+  // only just signed up, for as long as it takes to register them.
+  if (!response.ok) throw new GeoChatSessionError(await requestError(response));
   return response.json() as Promise<GeoChatSession>;
 }
 
@@ -1761,7 +1879,7 @@ async function refreshGeoChatSession(refreshToken: string): Promise<GeoChatSessi
     body: JSON.stringify({ refresh_token: refreshToken }),
   });
 
-  if (!response.ok) throw new Error(await errorMessage(response));
+  if (!response.ok) throw new GeoChatSessionError(await requestError(response));
   return response.json() as Promise<GeoChatSession>;
 }
 
@@ -1835,14 +1953,5 @@ function decodeGeoChatAccessToken(token: string | undefined): { user_id?: string
     return JSON.parse(window.atob(padded)) as { user_id?: string };
   } catch {
     return null;
-  }
-}
-
-async function errorMessage(response: Response) {
-  try {
-    const body = (await response.json()) as { error?: { message?: string } };
-    return body.error?.message || `${response.status} ${response.statusText}`;
-  } catch {
-    return `${response.status} ${response.statusText}`;
   }
 }
