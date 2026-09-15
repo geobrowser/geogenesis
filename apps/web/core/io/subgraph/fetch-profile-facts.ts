@@ -1,10 +1,7 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
-import {
-  DEBATE_OPPOSED_BY_PROPERTY,
-  DEBATE_SUPPORTED_BY_PROPERTY,
-} from '~/core/profile/history-ontology';
+import { DEBATE_OPPOSED_BY_PROPERTY, DEBATE_SUPPORTED_BY_PROPERTY } from '~/core/profile/history-ontology';
 import {
   NO_FACTS,
   type ProfileFacts,
@@ -82,10 +79,7 @@ export function profileFactsQueryKey(spaceId: string, personEntityId: string | n
   return ['profile-facts', spaceId, personEntityId] as const;
 }
 
-export async function fetchProfileFacts(
-  spaceId: string,
-  personEntityId: string | null
-): Promise<ProfileFacts> {
+export async function fetchProfileFacts(spaceId: string, personEntityId: string | null): Promise<ProfileFacts> {
   const result = await Effect.runPromise(
     Effect.either(
       graphql<NetworkResult>({
