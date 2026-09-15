@@ -4,8 +4,8 @@ import { Content, Description, Overlay, Portal, Root, Title } from '@radix-ui/re
 
 import * as React from 'react';
 
+import { useEditProfile } from '~/core/hooks/use-edit-profile';
 import { useProfileHistory } from '~/core/hooks/use-profile-history';
-import { usePublish } from '~/core/hooks/use-publish';
 import type { EducationEntry, EmploymentEntry, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
 import {
   type EducationDraft,
@@ -13,7 +13,6 @@ import {
   educationDraftFromEntry,
   positionDraftFromEntry,
 } from '~/core/profile/stage-history';
-import { useMutate } from '~/core/sync/use-mutate';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
@@ -30,6 +29,9 @@ type Props = {
   entityId: string;
   spaceId: string;
 };
+
+/** This dialog edits one section; the header fields are not its business. */
+const UNCHANGED = { kind: 'unchanged' } as const;
 
 type Organization = { id: string; name: string | null; stintId: string; isNew?: boolean };
 type Editing = { card: HistoryCard<HistoryEntry>; entry: HistoryEntry };
@@ -56,13 +58,24 @@ const COPY: Record<Kind, { title: string; description: string }> = {
  * `HistorySection` and the two sheets are the ones the edit modal already uses,
  * wired to the same `useProfileHistory` handlers. This is a second call site,
  * not a second implementation, which is what keeps the two from drifting.
+ *
+ * And it publishes through the modal's own `useEditProfile.publish`, which is
+ * the part that has to be shared rather than copied. Writing the staged rows
+ * and handing the same array to `makeProposal` publishes an addition correctly
+ * and an *edit* not at all: an edit is a removal plus a rewrite, and the
+ * tombstone the publish needs is the one `storage.relations.delete` puts in the
+ * store — not the row that was passed to it. `publish` writes the rows, then
+ * re-collects from the store and sends what it finds, which is why the modal
+ * has always saved edits and this dialog did not.
+ *
+ * The profile draft handed over is `current` unchanged, so nothing touches the
+ * name, description or images: this dialog edits one section and says so.
  */
 export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Props) {
-  const { storage } = useMutate();
-  const { makeProposal } = usePublish();
   const history = useProfileHistory({ entityId, spaceId, enabled: kind !== null });
+  const { canEdit, current, publish, status, errorMessage, reset } = useEditProfile({ isOpen: kind !== null });
 
-  const [isSaving, setIsSaving] = React.useState(false);
+  const isSaving = status === 'publishing';
   const [sheet, setSheet] = React.useState<
     | { kind: 'position'; company?: Organization; editing?: Editing }
     | { kind: 'education'; school?: Organization; editing?: Editing }
@@ -93,45 +106,55 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
   };
 
   const close = () => {
-    if (isSaving) return;
-    // Everything staged here is discarded, which is what Cancel has to mean —
-    // the rows live in a queue until Save publishes them.
-    history.discard();
-    setSheet(null);
+    // Dismissing during a publish never cancels it, and the staged rows stay put
+    // so a retry can re-send them — the same rule the Edit profile modal keeps.
+    if (!isSaving) {
+      reset();
+      history.discard();
+      setSheet(null);
+    }
     onOpenChange(false);
   };
 
-  const save = async () => {
+  const save = () => {
     if (!history.hasPendingChanges) {
       close();
       return;
     }
 
-    setIsSaving(true);
-    const rows = history.stagePending();
-
-    // Written into the store first so the publish layer collects them the way it
-    // collects everything else, and so a failure leaves them recoverable rather
-    // than lost between a form and a request.
-    rows.values.forEach(value => (value.isDeleted ? storage.values.delete(value) : storage.values.set(value)));
-    rows.relations.forEach(relation =>
-      relation.isDeleted ? storage.relations.delete(relation) : storage.relations.set(relation)
+    // Handed to the status bar rather than held on screen: the publish runs to
+    // tens of seconds and the bar carries all of it, the same way Save does in
+    // the Edit profile modal.
+    //
+    // No `settle()` here. The queue is cleared when the publish *lands* — see the
+    // effect below — because a failure has to leave the rows where they are so
+    // the dialog can come back with the work intact.
+    void publish(
+      { name: current.name, description: current.description, banner: UNCHANGED, avatar: UNCHANGED },
+      history.stagePending()
     );
 
-    await makeProposal({
-      values: rows.values,
-      relations: rows.relations,
-      spaceId,
-      name: 'Update profile',
-      onSuccess: () => {
-        history.settle();
-        setIsSaving(false);
-        setSheet(null);
-        onOpenChange(false);
-      },
-      onError: () => setIsSaving(false),
-    });
+    setSheet(null);
+    onOpenChange(false);
   };
+
+  /**
+   * A finished publish clears the queue, and a failed one reopens on it.
+   *
+   * Both outlive this dialog: `useEditProfile` is kept alive by the navbar so a
+   * publish the user walked away from still lands, and the answer then has
+   * nowhere else to go. The same pair the Edit profile modal keeps.
+   */
+  React.useEffect(() => {
+    if (status !== 'published') return;
+    reset();
+    history.settle();
+  }, [history, reset, status]);
+
+  React.useEffect(() => {
+    if (status !== 'error' || kind !== null) return;
+    onOpenChange(true);
+  }, [kind, onOpenChange, status]);
 
   const copy = kind ? COPY[kind] : COPY.employment;
 
@@ -203,13 +226,22 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
                   />
                 </div>
 
-                <footer className="flex items-center justify-end gap-2 border-t border-grey-02 px-5 py-4">
-                  <Button variant="secondary" onClick={close} disabled={isSaving}>
-                    Cancel
-                  </Button>
-                  <Button onClick={save} disabled={isSaving}>
-                    {isSaving ? 'Saving…' : 'Save'}
-                  </Button>
+                <footer className="flex items-center justify-between gap-3 border-t border-grey-02 px-5 py-4">
+                  <p className="text-metadata text-grey-04">
+                    {status === 'error' && errorMessage ? errorMessage : 'Saving publishes to your space.'}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button variant="secondary" onClick={close} disabled={isSaving}>
+                      Cancel
+                    </Button>
+                    {/* `canEdit` is false while the viewer's own space is still
+                        resolving, and publishing then returns without doing
+                        anything at all — a Save that reports nothing and writes
+                        nothing is the worst of both. */}
+                    <Button onClick={save} disabled={isSaving || !canEdit || !history.hasPendingChanges}>
+                      Save
+                    </Button>
+                  </div>
                 </footer>
               </>
             )}
