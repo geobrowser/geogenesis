@@ -83,8 +83,6 @@ export const VALID_ACTION_TYPES = [
   'SUBSPACE_TOPIC_REMOVED',
   'SET_TOPIC',
   'UNSET_TOPIC',
-  'TOPIC_DECLARED',
-  'TOPIC_REMOVED',
   'UNKNOWN',
   // Also accept PascalCase variants that the API uses
   'AddMember',
@@ -104,8 +102,6 @@ export const VALID_ACTION_TYPES = [
   'SubspaceTopicRemoved',
   'SetTopic',
   'UnsetTopic',
-  'TopicDeclared',
-  'TopicRemoved',
 ] as const;
 
 export type ValidActionType = (typeof VALID_ACTION_TYPES)[number];

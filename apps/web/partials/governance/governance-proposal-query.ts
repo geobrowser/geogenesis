@@ -37,8 +37,6 @@ const SETTINGS_ACTION_TYPES = [
   'UpdateVotingSettings',
   'SetTopic',
   'UnsetTopic',
-  'TopicDeclared',
-  'TopicRemoved',
   'SubspaceVerified',
   'SubspaceUnverified',
   'SubspaceRelated',

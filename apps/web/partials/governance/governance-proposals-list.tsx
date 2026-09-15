@@ -19,10 +19,7 @@ import {
   mapProposalStatus,
 } from '~/core/io/rest';
 import { defaultProfile, fetchProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph';
-import {
-  fetchProposalSubmittedTimes,
-  getSubmittedTime,
-} from '~/core/io/subgraph/fetch-proposal-submitted-times';
+import { fetchProposalSubmittedTimes, getSubmittedTime } from '~/core/io/subgraph/fetch-proposal-submitted-times';
 import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-granted-membership-requests';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
@@ -112,6 +109,11 @@ export async function GovernanceProposalsList({
 
   const { proposals, hasMore } = result;
 
+  const filterParams = new URLSearchParams();
+  if (category !== 'all') filterParams.set('proposalCategory', category);
+  if (status !== 'pending') filterParams.set('proposalStatus', status);
+  const filterSuffix = filterParams.toString();
+
   if (proposals.length === 0) {
     return {
       node: <p className="py-6 text-body text-grey-04">No proposals yet</p>,
@@ -155,7 +157,7 @@ export async function GovernanceProposalsList({
             <ProposalListItem key={p.id} proposalId={p.id} baseOrder={baseOrder} canSink={p.bucket !== 'completed'}>
               <div className="relative flex w-full flex-col gap-3 py-4">
                 <Link
-                  href={`/space/${spaceId}/governance?proposalId=${p.id}`}
+                  href={`/space/${spaceId}/governance?proposalId=${p.id}${filterSuffix ? `&${filterSuffix}` : ''}`}
                   className="absolute inset-0"
                   aria-label={proposalTitle}
                 />

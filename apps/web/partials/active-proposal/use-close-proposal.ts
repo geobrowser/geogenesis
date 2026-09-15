@@ -13,7 +13,10 @@ export function useCloseProposal(spaceId: string) {
       const returnSearch = searchParams.get('returnSearch');
       router.push(returnSearch && returnSearch.length > 0 ? `/home?${returnSearch}` : '/home');
     } else {
-      router.push(`/space/${spaceId}/governance`);
+      const params = new URLSearchParams(searchParams?.toString());
+      params.delete('proposalId');
+      const search = params.toString();
+      router.push(search ? `/space/${spaceId}/governance?${search}` : `/space/${spaceId}/governance`);
     }
   }, [router, spaceId, searchParams]);
 }
