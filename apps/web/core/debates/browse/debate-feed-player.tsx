@@ -192,7 +192,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
           stuck over two frozen faces. */}
       {ready && playbackEnded && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/55 px-3">
-          <DebateScorecard ticker={ticker} onReplay={playFromStart} />
+          <DebateScorecard debate={debate} ticker={ticker} votes={votes} onReplay={playFromStart} />
         </div>
       )}
 
