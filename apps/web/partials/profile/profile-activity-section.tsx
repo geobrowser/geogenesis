@@ -4,27 +4,24 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
+import type { ExploreFeedItem, ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import type { Stance } from '~/core/profile/use-person-positions';
 import { normId } from '~/core/utils/norm-id';
-import { getImagePath } from '~/core/utils/utils';
 
-import { FallbackImage } from '~/design-system/fallback-image';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { SpacePillAvatar } from '~/design-system/space-pill';
 
-import { ProfileEntityLink } from './profile-entity-link';
+import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
-/** How many tiles a gallery holds before the reader is sent to the tab. */
+/** How many cards a gallery holds before the reader is sent to the tab. */
 const SHOWN = 6;
 
 export type ActivityKind = {
   key: string;
   label: string;
   rows: ExploreFeedRow[];
-  /** Which side this person took, by claim id. Claims only; debates have no stance. */
+  /** Which side this person took, by claim id. Claims only; a debate has no stance. */
   stanceByClaimId?: Record<string, Stance>;
   /**
    * How many there are in total.
@@ -43,13 +40,17 @@ export type ActivityKind = {
  * What this person has been doing lately, on Overview (GEO-2859).
  *
  * One card with a toggle rather than a section per kind. Debates and claims are
- * the same question asked twice — what have they argued about — and two
- * stacked galleries said they were different kinds of thing while burying the
- * history above them under a screen of tiles.
+ * the same question asked twice — what have they argued about — and two stacked
+ * galleries said they were different kinds of thing while burying the history
+ * above them.
  *
- * Sideways rather than stacked because the full-width feed card is built to be
- * read one at a time. A tile says enough to decide whether to open it; the tab
- * behind "See all" is where the reading happens.
+ * The rows are the feed's own `ExploreFeedCard`, narrowed and laid sideways,
+ * rather than a bespoke tile. That is what makes a debate here actually
+ * playable and a claim here actually answerable: the card already holds the
+ * player, the response buttons, the tally, and the Verify/Dispute vocabulary a
+ * factual claim takes in place of Agree/Disagree. A tile reimplementing any of
+ * that would be a second, worse copy of all of it — the bespoke one drew a
+ * video inside an `<img>` and showed a grey box.
  */
 export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   const available = React.useMemo(() => kinds.filter(kind => kind.rows.length > 0), [kinds]);
@@ -66,7 +67,9 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
 
   return (
     <section className="flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white">
-      <header className="flex flex-col gap-3 border-b border-divider px-4 py-3">
+      {/* The toggles sit to the right of the heading, and wrap below it rather
+          than squeezing into it on a narrow screen. */}
+      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-divider px-4 py-3">
         <h3 className="text-metadataMedium text-text">Activity</h3>
 
         {/* Only when there is a choice to make. One pill on its own is a label
@@ -128,17 +131,17 @@ function ActivityGallery({
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
   return (
-    // `snap-x` so a flick lands on a tile rather than between two.
+    // `snap-x` so a flick lands on a card rather than between two.
     //
     // The gap at either end is a spacer element rather than padding on the
     // scroller: a scroll container's trailing padding is dropped by every
     // browser that matters, so `p-4` gave 16px on the left and nothing on the
     // right. Spacers are honoured on both sides, and `scroll-px` keeps a snapped
-    // tile off the edge it lands against.
-    <div className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto py-4">
+    // card off the edge it lands against.
+    <div className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 items-stretch gap-4 overflow-x-auto py-2">
       <span aria-hidden className="w-0 shrink-0 pl-4" />
       {shown.map(row => (
-        <ActivityTile
+        <GalleryCard
           key={`${row.entityId}-${row.spaceId}`}
           row={row}
           label={spaceLabel(labelsById, row.spaceId)}
@@ -151,14 +154,17 @@ function ActivityGallery({
 }
 
 /**
- * One tile.
+ * One card in the row.
  *
- * A fixed width, narrow enough that the next one is visibly cut off — which is
- * what tells the reader the row scrolls, without a control saying so. It holds
- * its width on a phone too: tiles that shrink to fit stop being scannable, and
- * the row already scrolls.
+ * `420px` on a wide screen, and never wider than the viewport allows on a
+ * phone. Under `520px` the claim card switches to its own narrow arrangement —
+ * `claim-card-narrow`, a container query — so this width is what puts it there,
+ * and the card lays itself out rather than being told how.
+ *
+ * Narrow enough that the next card is visibly cut off, which is what says the
+ * row scrolls without a control saying so.
  */
-function ActivityTile({
+function GalleryCard({
   row,
   label,
   stance,
@@ -167,64 +173,39 @@ function ActivityTile({
   label: SpaceLabel | undefined;
   stance: Stance | undefined;
 }) {
-  const spaceName = label?.name ?? row.spaceId.slice(0, 8);
-
-  // A debate's video, and an image for everything else.
-  //
-  // These are two different things and were being drawn as one: a video URL fed
-  // to `FallbackImage` renders an `<img>` pointing at an mp4, which is the grey
-  // box every debate tile showed. The video is the debate's own first frame,
-  // which is the small version of the player this wants to be.
-  const videoUrl = row.debateVideoUrls[0];
+  const item: ExploreFeedItem = {
+    ...row,
+    // The same last resort the feed uses for a space with no name.
+    spaceName: label?.name ?? row.spaceId.slice(0, 8),
+    spaceImage: label?.image ?? null,
+    hasPendingMembershipRequest: false,
+  };
 
   return (
-    <article className="flex w-[232px] shrink-0 snap-start flex-col overflow-hidden rounded-lg border border-grey-02">
-      {videoUrl ? (
-        <video
-          // Metadata only: this is a still, not playback, and six tiles that
-          // each pulled a whole video would cost more than the page under them.
-          preload="metadata"
-          muted
-          playsInline
-          disablePictureInPicture
-          tabIndex={-1}
-          aria-hidden
-          className="aspect-video w-full bg-grey-01 object-cover"
-          src={getImagePath(videoUrl)}
-        />
-      ) : row.imageUrl ? (
-        <div className="relative aspect-video w-full overflow-hidden bg-grey-01">
-          <FallbackImage value={row.imageUrl} sizes="232px" className="object-cover" />
+    <div className="flex w-[min(420px,80vw)] shrink-0 snap-start flex-col rounded-lg border border-grey-02 px-4">
+      {/*
+       * Which side *this person* came down on — the thing you opened their
+       * profile to find out, and not something the card itself can say, since
+       * the card speaks for the viewer. Above it rather than inside it for the
+       * same reason.
+       */}
+      {stance && (
+        <div className="-mb-2 pt-3">
+          <span
+            className={cx(
+              'inline-flex items-center rounded-full border px-2 py-px text-tag',
+              stance === 'agree' ? 'border-green text-green' : 'border-red-01 text-red-01'
+            )}
+          >
+            {stance === 'agree' ? 'Agreed' : 'Disagreed'}
+          </span>
         </div>
-      ) : null}
+      )}
 
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-3">
-        <div className="flex min-w-0 items-center gap-1.5 text-breadcrumb text-grey-04">
-          {label?.image ? <SpacePillAvatar value={label.image} /> : null}
-          <span className="min-w-0 truncate">{spaceName}</span>
-          {/* Which side they came down on — the thing you came to this profile
-              to find out, and the reason a claim tile is worth reading at all
-              when it is somebody else's. */}
-          {stance && (
-            <span
-              className={cx(
-                'ml-auto shrink-0 rounded-full border px-2 text-tag',
-                stance === 'agree' ? 'border-green text-green' : 'border-red-01 text-red-01'
-              )}
-            >
-              {stance === 'agree' ? 'Agree' : 'Disagree'}
-            </span>
-          )}
-        </div>
-
-        <ProfileEntityLink
-          entityId={row.entityId}
-          spaceId={row.spaceId}
-          className="line-clamp-3 text-metadataMedium text-text hover:underline"
-        >
-          {row.title}
-        </ProfileEntityLink>
-      </div>
-    </article>
+      {/* The Join button is hidden: this is a record being read, not a place to
+          be recruited into. Everything else the card draws — the player, the
+          response buttons, the tally — is what this gallery is for. */}
+      <ExploreFeedCard item={item} hideJoinButton titleOpensSidePanel />
+    </div>
   );
 }

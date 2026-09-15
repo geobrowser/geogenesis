@@ -1,11 +1,7 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
-import {
-  DEBATE_OPPOSED_BY_PROPERTY,
-  DEBATE_SUPPORTED_BY_PROPERTY,
-  DEBATE_TYPE,
-} from '~/core/profile/history-ontology';
+import { DEBATE_OPPOSED_BY_PROPERTY, DEBATE_SUPPORTED_BY_PROPERTY, DEBATE_TYPE } from '~/core/profile/history-ontology';
 
 import { graphql } from './graphql';
 
@@ -17,12 +13,14 @@ export type PersonDebate = {
   /** Where the debate lives, for the space filter. */
   spaceId: string | null;
   side: 'supported' | 'opposed';
+  /** Unix seconds, for ordering. Zero where the indexer stamped none. */
+  createdAt: number;
 };
 
 type RelationNode = {
   typeId: string;
   spaceId: string | null;
-  fromEntity: { id: string; name: string | null } | null;
+  fromEntity: { id: string; name: string | null; createdAt: string | null } | null;
 };
 
 interface NetworkResult {
@@ -53,7 +51,7 @@ function personDebatesQuery(spaceId: string, first: number) {
       }
       first: ${first}
     ) {
-      nodes { typeId spaceId fromEntity { id name } }
+      nodes { typeId spaceId fromEntity { id name createdAt } }
     }`;
 
   return `query {
@@ -91,7 +89,13 @@ export async function fetchPersonDebates(spaceId: string, first = 200): Promise<
       const debate = node.fromEntity;
       if (!debate || byDebate.has(debate.id)) continue;
 
-      byDebate.set(debate.id, { id: debate.id, name: debate.name, spaceId: node.spaceId, side });
+      byDebate.set(debate.id, {
+        id: debate.id,
+        name: debate.name,
+        spaceId: node.spaceId,
+        side,
+        createdAt: Number(debate.createdAt ?? 0),
+      });
     }
   };
 
@@ -100,5 +104,17 @@ export async function fetchPersonDebates(spaceId: string, first = 200): Promise<
   collect(result.right.supported?.nodes ?? [], 'supported');
   collect(result.right.opposed?.nodes ?? [], 'opposed');
 
-  return [...byDebate.values()];
+  // Newest first.
+  //
+  // The two collections are read in sequence, so without this the list was every
+  // debate they supported followed by every one they opposed — grouped by the
+  // side they happened to take, in whatever order the index answered in. That is
+  // not an order a reader can see, and it put a two-year-old debate above last
+  // week's.
+  //
+  // Sorted here rather than asked for: the relations carry no useful order of
+  // their own, the date wanted is the *debate's* rather than the relation's, and
+  // the whole list arrives in one request — the most active debater in the graph
+  // has eleven — so this is exact rather than a sort of the page in hand.
+  return [...byDebate.values()].sort((a, b) => b.createdAt - a.createdAt);
 }
