@@ -1102,6 +1102,10 @@ export function ClaimsTab({
                 // The paged list is geo-chat's own, so every row carries its kind already; only the
                 // tagged list has to wait for one — and only for the space this claim is in.
                 answersReady={taggedAnswersReadyFor(entry)}
+                // And where it cannot, the indexed read answers for the side, the same way the main
+                // feed's cards do. geo-chat refusing this viewer used to leave the whole panel
+                // unpressable while those cards went on working.
+                answersMayComeFromIndex
                 onRequireSignIn={onRequireSignIn}
               />
             ))}

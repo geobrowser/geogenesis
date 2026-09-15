@@ -690,6 +690,39 @@ describe('faces borrowed from the match', () => {
 });
 
 describe('MatchmakingClaimCard', () => {
+  /**
+   * Reported on a freshly created account: the hub panel's pills are dead for the minute geo-chat
+   * spends indexing it, while the same claims in the main feed take positions normally.
+   *
+   * The panel is geo-chat's surface, so a viewer it has not indexed yet had nothing — the side is
+   * what `answersReady` waits on, and geo-chat is refusing to supply it. The feed was never
+   * geo-chat-only: it resolves the side through the indexed read, and that is the whole difference
+   * between them.
+   *
+   * Only the side was ever missing. The vocabulary arrives with the claim, so the fallback completes
+   * one fact rather than guessing at two — and the pill it lights up is the side the viewer holds,
+   * not an empty one they would republish over.
+   */
+  it('takes the viewer’s side from the index when geo-chat will not answer', () => {
+    mocks.summaryIndexedViewerDirection = 'negative';
+
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={readiness({ viewer_response: null })}
+        answersReady={false}
+        answersMayComeFromIndex
+      />
+    );
+
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    expect(disagree).toBeEnabled();
+    // Held, not empty: pressing it clears the side rather than republishing it.
+    expect(disagree).toHaveAttribute('title', ENTITY_RESPONSE_COPY.stance.removeNegative);
+  });
+
+  // And without the opt-in it still waits, because for that host geo-chat's silence is the answer.
   it('says why a held pill cannot be pressed, rather than naming the side', () => {
     // `answersReady` false means one of the claim's two lookups has not answered — its vocabulary,
     // or the viewer's own side. Disabling alone is not enough: a pill that will not respond while

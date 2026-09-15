@@ -64,6 +64,27 @@ type Props = {
    * from geo-chat carrying both.
    */
   answersReady?: boolean;
+  /**
+   * Whether the indexed response may answer for the viewer's side while geo-chat cannot.
+   *
+   * For the minute or so after an account is created, geo-chat refuses every viewer-relative read
+   * until it has indexed it. The hub panel is geo-chat's surface, so for that whole minute it had
+   * nothing — every pill dead — while the same claims in the main feed took positions normally. The
+   * feed was never geo-chat-only: it resolves the side through `useClaimResponseState`, which falls
+   * back to the indexed read, and that is the entire difference between the two surfaces.
+   *
+   * A brand new account is also the case where the fallback is most obviously right: it holds no
+   * positions, so the indexed read's "no side" is the true answer rather than a stand-in for one.
+   *
+   * Only the *side* was ever outstanding here. The vocabulary arrives with the claim — the page
+   * carries its "Is factual" value — so the fallback completes the one missing fact rather than
+   * guessing at two.
+   *
+   * Still a wait, not a shortcut: the side counts as known once the indexed read has *settled*, and
+   * `null` before then is "not yet", not "no side". Drawing both pills unselected over that is what
+   * makes a press republish the side the viewer already holds instead of clearing it.
+   */
+  answersMayComeFromIndex?: boolean;
   /** Why responding is refused outright — an unpublished edit to the claim's own vocabulary. */
   responseBlockedReason?: string | null;
   /** Rendered under the summary, for hosts with something extra to say. */
@@ -144,6 +165,7 @@ export function MatchmakingClaimCard({
   readiness,
   activeDebate,
   answersReady,
+  answersMayComeFromIndex,
   responseBlockedReason,
   footer,
   onOpenClaim,
@@ -203,6 +225,7 @@ export function MatchmakingClaimCard({
           readiness={readiness}
           activeDebate={activeDebate}
           answersReady={answersReady}
+          answersMayComeFromIndex={answersMayComeFromIndex}
           responseBlockedReason={responseBlockedReason}
           readResponses={readResponses}
           onOpenClaim={onOpenClaim}
@@ -506,6 +529,7 @@ function RespondableControls({
   readiness,
   activeDebate,
   answersReady = true,
+  answersMayComeFromIndex = false,
   responseBlockedReason = null,
   readResponses = true,
   onOpenClaim,
@@ -530,6 +554,27 @@ function RespondableControls({
    */
   hasFooter?: boolean;
   answersReady?: boolean;
+  /**
+   * Whether the indexed response may answer for the viewer's side while geo-chat cannot.
+   *
+   * For the minute or so after an account is created, geo-chat refuses every viewer-relative read
+   * until it has indexed it. The hub panel is geo-chat's surface, so for that whole minute it had
+   * nothing — every pill dead — while the same claims in the main feed took positions normally. The
+   * feed was never geo-chat-only: it resolves the side through `useClaimResponseState`, which falls
+   * back to the indexed read, and that is the entire difference between the two surfaces.
+   *
+   * A brand new account is also the case where the fallback is most obviously right: it holds no
+   * positions, so the indexed read's "no side" is the true answer rather than a stand-in for one.
+   *
+   * Only the *side* was ever outstanding here. The vocabulary arrives with the claim — the page
+   * carries its "Is factual" value — so the fallback completes the one missing fact rather than
+   * guessing at two.
+   *
+   * Still a wait, not a shortcut: the side counts as known once the indexed read has *settled*, and
+   * `null` before then is "not yet", not "no side". Drawing both pills unselected over that is what
+   * makes a press republish the side the viewer already holds instead of clearing it.
+   */
+  answersMayComeFromIndex?: boolean;
   responseBlockedReason?: string | null;
   /** False while the card is still far enough below the fold that its reads are not worth making. */
   readResponses?: boolean;
@@ -564,7 +609,11 @@ function RespondableControls({
     claim.claim_entity_id,
     claim.space_id,
     readiness.response_kind,
-    readResponses && answersReady
+    // Or where the index is allowed to answer for the side, since then the kind is the page's and
+    // this read is the thing being waited *for* rather than something waiting behind it. Gating it
+    // on `answersReady` there would deadlock: that flag is false precisely because geo-chat has not
+    // answered, and this is what answers instead.
+    readResponses && (answersReady || answersMayComeFromIndex)
   );
 
   /**
@@ -606,12 +655,20 @@ function RespondableControls({
     viewerResponseUnknown,
   ]);
 
+  /**
+   * The side is known once *something* has answered for it — geo-chat, or the indexed read standing
+   * in where the host allows it. `resolvedReadiness` above has already done the standing in; this
+   * tells the gate the same thing, which otherwise goes on withholding a side the card now holds.
+   */
+  const sideKnown =
+    answersReady || (answersMayComeFromIndex && reconcileWithIndexedResponse && !summary.isViewerResponseLoading);
+
   const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
     useClaimPositionControl({
       claim,
       positions,
       readiness: resolvedReadiness,
-      answersReady,
+      answersReady: sideKnown,
       responseBlockedReason,
       viewerIdentityPending,
       viewerResponseUnknown,
@@ -637,7 +694,7 @@ function RespondableControls({
               activeDebate={activeDebate}
               // `undefined` until the reads have landed, so a card that cannot yet say which side
               // the viewer holds does not read as saying they hold none.
-              viewerPosition={answersReady ? viewerPosition : undefined}
+              viewerPosition={sideKnown ? viewerPosition : undefined}
             />
           ))
         }
