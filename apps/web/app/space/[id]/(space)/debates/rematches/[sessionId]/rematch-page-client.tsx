@@ -86,6 +86,7 @@ import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
+import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
@@ -102,28 +103,6 @@ import { RematchVoicePill } from './rematch-voice';
 import { rematchHideMyPositionsAtom, rematchMatchesOnlyAtom } from '~/atoms';
 
 const NO_PARTICIPANTS: DebateRematchParticipant[] = [];
-
-/**
- * `value` once it has settled, and the last settled value while it is settling again. Before the
- * first settle there is nothing to hold, and the (empty) unsettled value comes through — which is
- * what lets the first load show a loading state instead of an empty list.
- */
-function useLastSettled<T>(value: T, settling: boolean, resetKey: string): T {
-  const lastSettledRef = React.useRef<{ value: T } | null>(null);
-  const resetRef = React.useRef(resetKey);
-
-  // Holding across a change of key would be holding the wrong thing. The page keeps its instance
-  // when the route moves from one rematch to another — nothing keys it on the session — so without
-  // this the previous session's claims stay on screen while the new one loads, and the order they
-  // were in seeds the new session's.
-  if (resetRef.current !== resetKey) {
-    resetRef.current = resetKey;
-    lastSettledRef.current = null;
-  }
-
-  if (!settling) lastSettledRef.current = { value };
-  return settling && lastSettledRef.current ? lastSettledRef.current.value : value;
-}
 
 /**
  * `explore` was renamed from `claims` with GEO-2861, to match the hub's own browse tab. `related`
@@ -1836,9 +1815,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // already cached settles it instantly while the facet is still out, and the menu it hands over
     // in that gap is empty for the same reason an outage's is. Same rule as the two above, applied
     // to the one source whose menu does not come from its own rows.
-    const resolved = !topicsSettling && !tabIsLoading && !tabError && (!graphFiltered || taggedTopicFacet.settled);
+    //
+    // `complete` rather than `settled`: with a search running, the counts are over the ids fetched
+    // so far, and a topic whose claims are on a later page is missing from a menu that is otherwise
+    // perfectly good to look at. Reconciling against that drops a selection that was never invalid.
+    const resolved = !topicsSettling && !tabIsLoading && !tabError && (!graphFiltered || taggedTopicFacet.complete);
     setTopicIds(current => keepSelectableTopics(current, facetTopics, resolved));
-  }, [facetTopics, graphFiltered, tabError, tabIsLoading, taggedTopicFacet.settled, topicsSettling]);
+  }, [facetTopics, graphFiltered, tabError, tabIsLoading, taggedTopicFacet.complete, topicsSettling]);
 
   // The curated tab groups by block rather than listing flat, but narrows on the same filters.
   const showsSections = tab === 'explore' && source === 'recommended';
