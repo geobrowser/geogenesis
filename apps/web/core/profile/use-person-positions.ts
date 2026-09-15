@@ -45,6 +45,7 @@ const PERSON_VOTES_SOURCE = /* GraphQL */ `
       }
       nodes {
         objectId
+        voteType
         voteKind
         votedAt
       }
@@ -54,21 +55,45 @@ const PERSON_VOTES_SOURCE = /* GraphQL */ `
 
 export const personVotesDocument = parse(PERSON_VOTES_SOURCE) as TypedDocumentNode<any, any>;
 
+/** Which way somebody came down on a claim. */
+export type Stance = 'agree' | 'disagree';
+
 export type PersonPositionsPage = {
   /** Card rows, still missing what only a space lookup can answer. */
   rows: ExploreFeedRow[];
+  /** Which side this person took, by claim id. Absent where they only rated veracity. */
+  stanceByClaimId: Record<string, Stance>;
   /** Where the next page starts. Null once there is none. */
   nextOffset: number | null;
 };
 
+type VoteNode = { objectId?: string | null; voteType?: number | null; voteKind?: number | null };
+
 type VotesResponse = {
   userVotesConnection?: {
     pageInfo?: { hasNextPage?: boolean | null } | null;
-    nodes?: ({ objectId?: string | null } | null)[] | null;
+    nodes?: (VoteNode | null)[] | null;
   } | null;
 };
 
-type VotePage = { ids: string[]; hasNextPage: boolean; seen: number };
+type VotePage = {
+  ids: string[];
+  stanceByClaimId: Record<string, Stance>;
+  hasNextPage: boolean;
+  seen: number;
+};
+
+/**
+ * `voteType` 0 is agree and 1 is disagree; 2 is neither and carries no side.
+ *
+ * Measured on the reference account: 96 agree, 83 disagree, 4 of the third
+ * across 183 stance votes.
+ */
+function stanceOf(node: VoteNode): Stance | null {
+  if (node.voteType === 0) return 'agree';
+  if (node.voteType === 1) return 'disagree';
+  return null;
+}
 
 function decodeVotes(response: VotesResponse): VotePage {
   const connection = response.userVotesConnection;
@@ -79,17 +104,31 @@ function decodeVotes(response: VotesResponse): VotePage {
   // position, which is the most recent one.
   const seen = new Set<string>();
   const ids: string[] = [];
+  const stanceByClaimId: Record<string, Stance> = {};
   const nodes = connection?.nodes ?? [];
 
   for (const node of nodes) {
     const id = node?.objectId;
-    if (!id || seen.has(normId(id))) continue;
-    seen.add(normId(id));
+    if (!id) continue;
+    const key = normId(id);
+
+    // The side they took, from the stance vote. `voteKind` 2 is veracity — a
+    // judgement about whether the claim is *true*, which is a different question
+    // from whether they agree with it — so it never sets the badge. A claim they
+    // only rated for veracity carries no side, which is the honest answer.
+    if (node.voteKind === 1) {
+      const stance = stanceOf(node);
+      if (stance && !(key in stanceByClaimId)) stanceByClaimId[key] = stance;
+    }
+
+    if (seen.has(key)) continue;
+    seen.add(key);
     ids.push(id);
   }
 
   return {
     ids,
+    stanceByClaimId,
     hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
     // Votes read, not claims kept: the offset counts rows on the server, and
     // deduping stance against veracity here would otherwise walk the next page
@@ -97,6 +136,9 @@ function decodeVotes(response: VotesResponse): VotePage {
     seen: nodes.length,
   };
 }
+
+/** Exposed for tests: the decode is where `voteKind` and `voteType` get confused. */
+export const decodeVotesForTest = decodeVotes;
 
 export function personPositionsQueryKey(spaceId: string) {
   return ['person-positions', ID.uuidToHex(spaceId)] as const;
@@ -127,6 +169,7 @@ export function usePersonPositions({
 
       return {
         rows: await fetchExploreRowsByIds(votes.ids, signal),
+        stanceByClaimId: votes.stanceByClaimId,
         // A page that came back empty ends the list whatever `hasNextPage` says,
         // or the offset would stand still and the sentinel would ask forever.
         nextOffset: votes.hasNextPage && votes.seen > 0 ? pageParam + votes.seen : null,
@@ -138,5 +181,18 @@ export function usePersonPositions({
 
   const rows = React.useMemo(() => (data?.pages ?? []).flatMap(page => page.rows), [data]);
 
-  return { rows, isLoading, isError, isFetchingNextPage, hasNextPage: Boolean(hasNextPage), fetchNextPage };
+  const stanceByClaimId = React.useMemo(
+    () => Object.assign({}, ...(data?.pages ?? []).map(page => page.stanceByClaimId)) as Record<string, Stance>,
+    [data]
+  );
+
+  return {
+    rows,
+    stanceByClaimId,
+    isLoading,
+    isError,
+    isFetchingNextPage,
+    hasNextPage: Boolean(hasNextPage),
+    fetchNextPage,
+  };
 }
