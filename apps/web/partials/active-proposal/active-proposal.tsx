@@ -17,7 +17,6 @@ import {
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { GovernanceOutcomeDate, GovernanceOutcomeTime } from '~/partials/governance/governance-outcome-timestamp';
 import { ProposalPathLabel } from '~/partials/governance/proposal-path-label';
 
@@ -27,6 +26,7 @@ import { ActiveProposalSlideUp } from './active-proposal-slide-up';
 import { CloseProposalButton } from './close-proposal-button';
 import { ContentProposal } from './content-proposal';
 import { ProposalBountiesProvider, ProposalBountyHeadButton, ProposalBountyPanel } from './proposal-bounty-links';
+import { ProposalCommentsHeadButton, ProposalCommentsPanel, ProposalCommentsProvider } from './proposal-comments-panel';
 import { ProposalVoteRow } from './proposal-vote-row';
 import { SpaceTopicProposal } from './space-topic-proposal';
 import { SubspaceProposal } from './subspace-proposal';
@@ -107,8 +107,12 @@ async function ReviewProposal({ proposalId, spaceId }: Props) {
         </div>
 
         <div className="inline-flex shrink-0 items-center gap-2">
+          {/* The pills first, then one divider, then the decision. The divider used to be emitted
+              by the bounty button, which meant it only appeared on an edit proposal and would have
+              doubled once a second pill sat beside it. It belongs to the group, not to a member. */}
           {isAddEdit && <ProposalBountyHeadButton />}
-          <EntityCommentsButton entityId={proposal.id} spaceId={spaceId} count={commentCount} />
+          <ProposalCommentsHeadButton />
+          <span aria-hidden className="h-4 w-px shrink-0 self-center bg-grey-02" />
           <AcceptOrReject
             spaceId={spaceId}
             proposalId={proposal.id}
@@ -205,12 +209,21 @@ async function ReviewProposal({ proposalId, spaceId }: Props) {
           </div>
         </div>
         {isAddEdit && <ProposalBountyPanel />}
+        <ProposalCommentsPanel />
       </div>
     </>
   );
 
+  // Comments are on every proposal type — the screen in the designs is an editor request, which
+  // has no diff and no bounties — so this provider wraps whatever the bounty one does or doesn't.
+  const commentable = (
+    <ProposalCommentsProvider proposalId={proposal.id} spaceId={spaceId} count={commentCount}>
+      {body}
+    </ProposalCommentsProvider>
+  );
+
   if (!isAddEdit) {
-    return body;
+    return commentable;
   }
 
   return (
@@ -220,7 +233,7 @@ async function ReviewProposal({ proposalId, spaceId }: Props) {
       proposalName={proposal.name ?? proposalTitle}
       authorSpaceId={proposal.createdBy.spaceId}
     >
-      {body}
+      {commentable}
     </ProposalBountiesProvider>
   );
 }
