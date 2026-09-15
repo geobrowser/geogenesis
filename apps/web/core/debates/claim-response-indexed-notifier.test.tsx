@@ -350,27 +350,96 @@ describe('useClaimResponseIndexedNotifier', () => {
     expect(refresh({ queryKey: ['debates', 'claims', 'space-1'] } as never)).toBe(false);
   });
 
-  it('retries an interrupted notification when the same account is re-enabled', async () => {
-    let notificationSignal: AbortSignal | undefined;
+  it('keeps a sent report running through a disable and queues newer reports behind it', async () => {
+    const releases: Array<() => void> = [];
+    const signals: AbortSignal[] = [];
     mocks.notify.mockImplementation((...args: unknown[]) => {
-      notificationSignal = args.at(-1) as AbortSignal;
-      return new Promise((_, reject) => {
-        notificationSignal?.addEventListener(
-          'abort',
-          () => reject(new DOMException('The operation was aborted', 'AbortError')),
-          { once: true }
-        );
-      });
+      signals.push(args.at(-1) as AbortSignal);
+      return new Promise<void>(resolve => releases.push(resolve));
     });
     const { queryClient, wrapper } = createHarness();
-    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
     const getPrivyIdentityToken = vi.fn();
     const { rerender } = renderHook(
       ({ enabled }) => useClaimResponseIndexedNotifier(enabled, getPrivyIdentityToken, 'account-1'),
-      {
-        initialProps: { enabled: true },
-        wrapper,
-      }
+      { initialProps: { enabled: true }, wrapper }
+    );
+    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'] as const;
+    const pending = (expectedResponse: 'positive' | 'negative') => ({
+      entityId: 'claim-1',
+      expectedResponse,
+      personalSpaceId: 'profile-1',
+      responseKind: 'stance',
+      spaceId: 'space-1',
+    });
+
+    act(() =>
+      queryClient.setQueryData(queryKey, { status: 'reconciling', pending: pending('positive'), runId: 'run-1' })
+    );
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(1));
+
+    rerender({ enabled: false });
+    expect(signals[0]?.aborted).toBe(false);
+    rerender({ enabled: true });
+
+    act(() =>
+      queryClient.setQueryData(queryKey, { status: 'reconciling', pending: pending('negative'), runId: 'run-2' })
+    );
+    await Promise.resolve();
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+
+    await act(async () => releases[0]?.());
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
+    expect(mocks.notify.mock.calls[1]?.[3]).toBe(false);
+  });
+
+  it('never sends a queued report under another account', async () => {
+    const signals: AbortSignal[] = [];
+    mocks.notify.mockImplementation((...args: unknown[]) => {
+      signals.push(args.at(-1) as AbortSignal);
+      return new Promise<void>(() => {});
+    });
+    const { queryClient, wrapper } = createHarness();
+    const getPrivyIdentityToken = vi.fn();
+    const { rerender } = renderHook(
+      ({ accountKey }) => useClaimResponseIndexedNotifier(true, getPrivyIdentityToken, accountKey),
+      { initialProps: { accountKey: 'account-1' as string | null }, wrapper }
+    );
+    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'] as const;
+    const pending = (expectedResponse: 'positive' | 'negative', runId: string) => ({
+      status: 'reconciling',
+      pending: {
+        entityId: 'claim-1',
+        expectedResponse,
+        personalSpaceId: 'profile-1',
+        responseKind: 'stance',
+        spaceId: 'space-1',
+      },
+      runId,
+    });
+
+    act(() => queryClient.setQueryData(queryKey, pending('positive', 'run-1')));
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(1));
+    act(() => queryClient.setQueryData(queryKey, pending('negative', 'run-2')));
+
+    // The request in flight is cancelled before it can pick up the new account's session, and the
+    // report queued behind it is dropped rather than held for the old account's return.
+    rerender({ accountKey: 'account-2' });
+    await waitFor(() => expect(signals[0]?.aborted).toBe(true));
+    rerender({ accountKey: 'account-1' });
+    await Promise.resolve();
+    expect(mocks.notify).toHaveBeenCalledOnce();
+  });
+
+  it('cancels a report in flight when the viewer signs out', async () => {
+    const signals: AbortSignal[] = [];
+    mocks.notify.mockImplementation((...args: unknown[]) => {
+      signals.push(args.at(-1) as AbortSignal);
+      return new Promise<void>(() => {});
+    });
+    const { queryClient, wrapper } = createHarness();
+    const { rerender } = renderHook(
+      ({ accountKey }) => useClaimResponseIndexedNotifier(Boolean(accountKey), vi.fn(), accountKey),
+      { initialProps: { accountKey: 'account-1' as string | null }, wrapper }
     );
 
     act(() => {
@@ -383,62 +452,13 @@ describe('useClaimResponseIndexedNotifier', () => {
           responseKind: 'stance',
           spaceId: 'space-1',
         },
-        runId: 'run-cancelled',
+        runId: 'run-sign-out',
       });
     });
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledOnce());
 
-    await waitFor(() => expect(notificationSignal).toBeDefined());
-    rerender({ enabled: false });
-    await waitFor(() => expect(notificationSignal?.aborted).toBe(true));
-    // Neither the fallback nor the picker refresh belongs to a notification this hook cancelled
-    // itself: geo-chat was never told, so nothing it could answer with has changed, and the retry
-    // below is what will ask once it has been.
-    expect(invalidateQueries).not.toHaveBeenCalled();
-
-    mocks.notify.mockResolvedValue(undefined);
-    rerender({ enabled: true });
-    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
-    // The retry landed, so the picker and the readiness sources are asked again.
-    await waitFor(() => expect(invalidateQueries).toHaveBeenCalled());
-    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debates', 'claims', 'space-1'] }));
-  });
-
-  it('does not replay an interrupted notification for another account', async () => {
-    let notificationSignal: AbortSignal | undefined;
-    mocks.notify.mockImplementation((...args: unknown[]) => {
-      notificationSignal = args.at(-1) as AbortSignal;
-      return new Promise((_, reject) => {
-        notificationSignal?.addEventListener(
-          'abort',
-          () => reject(new DOMException('The operation was aborted', 'AbortError')),
-          { once: true }
-        );
-      });
-    });
-    const { queryClient, wrapper } = createHarness();
-    const { rerender } = renderHook(({ accountKey }) => useClaimResponseIndexedNotifier(true, vi.fn(), accountKey), {
-      initialProps: { accountKey: 'account-1' },
-      wrapper,
-    });
-
-    act(() => {
-      queryClient.setQueryData(['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'], {
-        status: 'indexed',
-        pending: {
-          entityId: 'claim-1',
-          expectedResponse: 'positive',
-          personalSpaceId: 'profile-1',
-          responseKind: 'stance',
-          spaceId: 'space-1',
-        },
-        runId: 'run-account-change',
-      });
-    });
-
-    await waitFor(() => expect(notificationSignal).toBeDefined());
-    rerender({ accountKey: 'account-2' });
-    await waitFor(() => expect(notificationSignal?.aborted).toBe(true));
-    expect(mocks.notify).toHaveBeenCalledOnce();
+    rerender({ accountKey: null });
+    await waitFor(() => expect(signals[0]?.aborted).toBe(true));
   });
 });
 

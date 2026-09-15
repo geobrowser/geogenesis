@@ -48,14 +48,17 @@ type NotifiableClaimResponse = Pick<
   'entityId' | 'position' | 'responseKind' | 'spaceId'
 >;
 type ClaimReport = {
-  /** The indexing query's hash: one viewer, claim, space and response kind. */
+  /** The account and indexing query: one viewer, claim, space and response kind. */
   laneKey: string;
   notificationKey: string;
   response: NotifiableClaimResponse;
+  /** The account the report was queued under. It is never sent while another account is active. */
+  accountKey: string;
+  getPrivyIdentityToken: GetPrivyIdentityToken;
 };
-type InterruptedNotification = ClaimReport & { accountKey: string };
 type ReportLane = {
-  inFlight: boolean;
+  accountKey: string;
+  inFlight: AbortController | null;
   /** The newest report that arrived while the lane was busy; it supersedes any older one. */
   waiting: ClaimReport | null;
   retryTimer: ReturnType<typeof setTimeout> | null;
@@ -129,59 +132,66 @@ export function useClaimResponseIndexedNotifier(
   const queryClient = useQueryClient();
   const notifiedRuns = React.useRef(new Set<string>());
   const notifiedRunOrder = React.useRef<string[]>([]);
-  const interruptedNotifications = React.useRef(new Map<string, InterruptedNotification>());
+  // Lanes outlive the effect, so a re-enabled notifier queues behind a report still in flight
+  // instead of racing it.
+  const lanes = React.useRef(new Map<string, ReportLane>());
+  const activeAccountKey = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    const laneMap = lanes.current;
+    return () => {
+      for (const lane of laneMap.values()) cancelLane(lane);
+      laneMap.clear();
+    };
+  }, []);
+
+  // Signed out: nothing queued may be sent, including under whoever signs in next.
+  React.useEffect(() => {
+    if (accountKey) return;
+    for (const lane of lanes.current.values()) cancelLane(lane);
+    lanes.current.clear();
+  }, [accountKey]);
 
   React.useEffect(() => {
     if (!enabled || !accountKey) return;
-
-    // Reports for one claim go out one at a time, so geo-chat, which keeps whichever arrives last,
-    // cannot apply an older switch after a newer one.
-    const lanes = new Map<string, ReportLane>();
-    const inFlight = new Map<AbortController, ClaimReport>();
+    activeAccountKey.current = accountKey;
 
     const forgetNotification = (notificationKey: string) => {
       notifiedRuns.current.delete(notificationKey);
       notifiedRunOrder.current = notifiedRunOrder.current.filter(key => key !== notificationKey);
     };
 
-    const laneFor = (laneKey: string) => {
-      let lane = lanes.get(laneKey);
-      if (!lane) {
-        lane = { inFlight: false, waiting: null, retryTimer: null, rateLimitedRetries: 0 };
-        lanes.set(laneKey, lane);
-      }
-      return lane;
-    };
-
     // The only refresh guaranteed to postdate the notification, so every surface reading geo-chat's
     // copy of the position — the rematch picker (GEO-2603) and the readiness sources (GEO-2814) —
     // is asked again here, whether or not the notification succeeded.
-    const refreshReadiness = (response: NotifiableClaimResponse) => {
-      void refreshRematchClaimBatches(queryClient, rematchClaimBatchesWithClaim(accountKey, response.entityId));
-      for (const queryKey of readinessQueryPrefixes(accountKey, response.spaceId)) {
+    const refreshReadiness = (sent: ClaimReport) => {
+      void refreshRematchClaimBatches(
+        queryClient,
+        rematchClaimBatchesWithClaim(sent.accountKey, sent.response.entityId)
+      );
+      for (const queryKey of readinessQueryPrefixes(sent.accountKey, sent.response.spaceId)) {
         void queryClient.invalidateQueries({ queryKey });
       }
     };
 
     const drain = (lane: ReportLane) => {
-      if (lane.inFlight || lane.retryTimer || !lane.waiting) return;
       const next = lane.waiting;
+      if (lane.inFlight || lane.retryTimer || !next || next.accountKey !== activeAccountKey.current) return;
       lane.waiting = null;
       send(lane, next);
     };
 
     const send = (lane: ReportLane, report: ClaimReport) => {
-      lane.inFlight = true;
       const controller = new AbortController();
-      inFlight.set(controller, report);
+      lane.inFlight = controller;
       const { response } = report;
       void notifyClaimResponseIndexed(
         response.spaceId,
         response.entityId,
         response.responseKind,
         response.position,
-        getPrivyIdentityToken,
-        accountKey,
+        report.getPrivyIdentityToken,
+        report.accountKey,
         controller.signal
       )
         .then(() => {
@@ -208,10 +218,9 @@ export function useClaimResponseIndexedNotifier(
           forgetNotification(report.notificationKey);
         })
         .finally(() => {
-          inFlight.delete(controller);
+          if (lane.inFlight === controller) lane.inFlight = null;
           if (controller.signal.aborted) return;
-          lane.inFlight = false;
-          refreshReadiness(response);
+          refreshReadiness(report);
           drain(lane);
         });
     };
@@ -226,7 +235,11 @@ export function useClaimResponseIndexedNotifier(
         if (expired) notifiedRuns.current.delete(expired);
       }
 
-      const lane = laneFor(next.laneKey);
+      let lane = lanes.current.get(next.laneKey);
+      if (!lane) {
+        lane = { accountKey: next.accountKey, inFlight: null, waiting: null, retryTimer: null, rateLimitedRetries: 0 };
+        lanes.current.set(next.laneKey, lane);
+      }
       if (lane.inFlight || lane.retryTimer) {
         lane.waiting = next;
         return;
@@ -234,15 +247,27 @@ export function useClaimResponseIndexedNotifier(
       send(lane, next);
     };
 
+    // Another account's reports can never be sent now. One still in flight is cancelled before it
+    // can pick up this account's session; this account's own lanes resume where they left off.
+    for (const [laneKey, lane] of lanes.current) {
+      if (lane.accountKey === accountKey) {
+        drain(lane);
+      } else {
+        cancelLane(lane);
+        lanes.current.delete(laneKey);
+      }
+    }
+
     const unsubscribe = queryClient.getQueryCache().subscribe(event => {
       if (event.type !== 'updated' || event.action.type !== 'success') return;
-      const laneKey = event.query.queryHash;
+      const laneKey = `${accountKey}|${event.query.queryHash}`;
+      const identity = { accountKey, getPrivyIdentityToken };
 
       // Still sent once the chain confirms: if the in-flight report named a position the write never
       // landed, this one carries the truth and geo-chat converges on it.
       const indexed = claimResponseIndexedEvent(event.query.queryKey, event.query.state.data);
       if (indexed) {
-        report({ laneKey, notificationKey: `${laneKey}:${indexed.runId}`, response: indexed });
+        report({ laneKey, notificationKey: `${laneKey}:${indexed.runId}`, response: indexed, ...identity });
         return;
       }
 
@@ -251,37 +276,28 @@ export function useClaimResponseIndexedNotifier(
       // are sent.
       const pending = pendingClaimResponse(event.query.queryKey, event.query.state.data);
       if (!pending) return;
-      report({ laneKey, notificationKey: `${laneKey}:pending:${pending.runId}`, response: pending });
+      report({ laneKey, notificationKey: `${laneKey}:pending:${pending.runId}`, response: pending, ...identity });
     });
-
-    for (const [notificationKey, interrupted] of interruptedNotifications.current) {
-      interruptedNotifications.current.delete(notificationKey);
-      if (interrupted.accountKey === accountKey) {
-        report(interrupted);
-      } else {
-        forgetNotification(notificationKey);
-      }
-    }
 
     return () => {
       unsubscribe();
-      // Each lane's newest unsent report is replayed if this account is re-enabled; a waiting
-      // report supersedes the one in flight.
-      const newest = new Map<string, ClaimReport>();
-      for (const inFlightReport of inFlight.values()) newest.set(inFlightReport.laneKey, inFlightReport);
-      for (const [laneKey, lane] of lanes) {
+      activeAccountKey.current = null;
+      // A report already sent keeps running. A pending retry waits for this account to be active
+      // again, when the next run drains it.
+      for (const lane of lanes.current.values()) {
         if (lane.retryTimer) clearTimeout(lane.retryTimer);
-        if (lane.waiting) newest.set(laneKey, lane.waiting);
+        lane.retryTimer = null;
       }
-      for (const interrupted of newest.values()) {
-        interruptedNotifications.current.set(interrupted.notificationKey, { ...interrupted, accountKey });
-        forgetNotification(interrupted.notificationKey);
-      }
-      for (const controller of inFlight.keys()) controller.abort();
-      inFlight.clear();
-      lanes.clear();
     };
   }, [accountKey, enabled, getPrivyIdentityToken, queryClient]);
+}
+
+function cancelLane(lane: ReportLane) {
+  lane.inFlight?.abort();
+  lane.inFlight = null;
+  if (lane.retryTimer) clearTimeout(lane.retryTimer);
+  lane.retryTimer = null;
+  lane.waiting = null;
 }
 
 function isAbortError(error: unknown) {
