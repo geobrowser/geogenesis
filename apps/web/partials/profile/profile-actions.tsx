@@ -5,7 +5,6 @@ import * as React from 'react';
 import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { ID } from '~/core/id';
-import { SpaceVerifyButton } from '~/core/space/space-verify-button';
 
 import { SmallButton } from '~/design-system/button';
 
@@ -26,10 +25,11 @@ type Props = {
  * person — vote on them, and reach share or copy id through the overflow. The
  * owner does that too, plus the one thing nobody else can do.
  *
- * **Verify and Debate are absent for the owner rather than disabled**, because
- * neither means anything pointed at yourself: `SpaceVerifyButton` already
- * refuses to render when the viewer's own space is the one being viewed, and
- * the debate button is withheld here for the same reason.
+ * **Debate is absent for the owner rather than disabled**, because it means
+ * nothing pointed at yourself.
+ *
+ * Verify is not here at all: it sits beside the name, where it reads as a
+ * statement about who this is rather than as one more thing to do to them.
  *
  * Edit profile leads, and the vote pair closes the row. The owner's own action
  * on their own page is the primary one; judging yourself is not, and reading
@@ -57,7 +57,6 @@ export function ProfileActions({ spaceId, personEntityId }: Props) {
           {/* Only when they are actually available to debate — the button hides
               itself otherwise, and the row closes up. */}
           <ProfileDebateButton spaceId={spaceId} />
-          <SpaceVerifyButton spaceId={spaceId} />
         </>
       )}
     </div>
