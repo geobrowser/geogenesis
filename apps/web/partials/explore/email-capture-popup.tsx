@@ -5,14 +5,13 @@ import { usePrivy } from '@geogenesis/auth';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { useAtom } from 'jotai';
 
+import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
-import { dismissedNoticesAtom } from '~/atoms';
 
 /**
  * Persisted alongside the other one-time notices, which is what makes "dismissed" mean dismissed
@@ -50,7 +49,7 @@ export function ExploreEmailCapturePopup() {
 
 function EmailCapturePopup() {
   const { user, isModalOpen } = usePrivy();
-  const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
+  const { dismissed, remember: rememberDismissed } = useDismissedNotice(EMAIL_CAPTURE_ID);
   const [scrolledEnough, setScrolledEnough] = React.useState(false);
   const [email, setEmail] = React.useState('');
   const [status, setStatus] = React.useState<Status>('idle');
@@ -59,7 +58,6 @@ function EmailCapturePopup() {
   // two are different acts: one remembers, one closes.
   const [closed, setClosed] = React.useState(false);
 
-  const dismissed = dismissedNotices.includes(EMAIL_CAPTURE_ID);
   // Signed in is never, not "not yet": the reader already has an account, and the list is for
   // people who do not.
   const eligible = !user && !dismissed;
@@ -78,11 +76,6 @@ function EmailCapturePopup() {
     window.addEventListener('scroll', check, { passive: true });
     return () => window.removeEventListener('scroll', check);
   }, [eligible, scrolledEnough]);
-
-  /** Records the dismissal so it does not come back next visit. Leaves this render alone. */
-  const rememberDismissed = React.useCallback(() => {
-    setDismissedNotices(previous => (previous.includes(EMAIL_CAPTURE_ID) ? previous : [...previous, EMAIL_CAPTURE_ID]));
-  }, [setDismissedNotices]);
 
   /** What the close button does: remember it, and take it off the screen now. */
   const close = React.useCallback(() => {

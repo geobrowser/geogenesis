@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
 
+import { getClientIp } from '../../client-ip';
 import { emailLimit, ipLimit } from '../rate-limit';
 
 /**
@@ -19,16 +20,6 @@ import { emailLimit, ipLimit } from '../rate-limit';
  * the form ours and the failure modes legible.
  */
 const MAILERLITE_SUBSCRIBERS_URL = 'https://connect.mailerlite.com/api/subscribers';
-
-function getClientIp(request: Request): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
-  const real = request.headers.get('x-real-ip');
-  if (real) return real;
-  // No identifiable caller is its own bucket rather than a shared one: a single missing header must
-  // not let every such request spend one another's budget.
-  return `noip:${crypto.randomUUID()}`;
-}
 
 function answer(result: NewsletterSubscribeResult, status: number) {
   return NextResponse.json({ result }, { status });
@@ -48,7 +39,20 @@ export async function POST(request: Request) {
 
   const normalizedEmail = email.trim().toLowerCase();
 
-  const [perEmail, perIp] = await Promise.all([emailLimit.limit(normalizedEmail), ipLimit.limit(getClientIp(request))]);
+  // Failing closed, as `app/api/chat` does. `Redis.fromEnv()` hands back a client whether or not
+  // Upstash is configured and only rejects once a command runs, so an unset or unreachable Redis
+  // surfaces here rather than at import. Letting it throw would answer from Next's own error path
+  // with no JSON body at all, and would quietly leave this endpoint -- an anonymous write into
+  // someone else's mailing list -- running with no limit of any kind.
+  let perEmail: Awaited<ReturnType<typeof emailLimit.limit>>;
+  let perIp: Awaited<ReturnType<typeof ipLimit.limit>>;
+  try {
+    [perEmail, perIp] = await Promise.all([emailLimit.limit(normalizedEmail), ipLimit.limit(getClientIp(request))]);
+  } catch (error) {
+    console.error('newsletter subscribe: rate limiter unavailable; failing closed', error);
+    return answer('failed', 503);
+  }
+
   if (!perEmail.success || !perIp.success) {
     return answer('rate-limited', 429);
   }
