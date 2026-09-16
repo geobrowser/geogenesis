@@ -1,5 +1,9 @@
-import { createStore } from 'jotai';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { cleanup, render, waitFor } from '@testing-library/react';
+
+import { createElement } from 'react';
+
+import { Provider, createStore } from 'jotai';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   defaultFeatureFlags,
@@ -7,6 +11,7 @@ import {
   featureFlagsStorageKey,
   normalizeFeatureFlags,
   setFeatureFlagValue,
+  useFeatureFlag,
 } from './feature-flags';
 
 describe('feature flags', () => {
@@ -66,5 +71,50 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       bountiesTab: true,
     });
+  });
+});
+
+/**
+ * The atom is `getOnInit: true`, so on the client it reads `localStorage` before React's first
+ * render while the server has none and always renders the default. Without a gate, a reader who
+ * has ever toggled a flag gets a server tree and a first client tree that disagree — a hydration
+ * mismatch thrown by the one reader for whom the flag was doing something.
+ */
+describe('useFeatureFlag hydration', () => {
+  afterEach(cleanup);
+
+  /**
+   * Renders with the atom *already holding* a non-default value, which is the browser condition
+   * this gate exists for: `getOnInit: true` means the store reads `localStorage` before React's
+   * first render, so the value is in hand by the time the tree is built. Seeding the store
+   * reproduces that; writing to `localStorage` here does not, because the atom is created at module
+   * import and has already read it by the time a test could set anything.
+   */
+  function renderProbeWithStoredFlag() {
+    const seen: boolean[] = [];
+    const store = createStore();
+    store.set(featureFlagsAtom, { ...defaultFeatureFlags, exploreSidePanel: true });
+
+    function Probe() {
+      seen.push(useFeatureFlag('exploreSidePanel'));
+      return null;
+    }
+
+    render(createElement(Provider, { store }, createElement(Probe)));
+    return seen;
+  }
+
+  it('renders the default first, so the first client tree matches the server', () => {
+    const seen = renderProbeWithStoredFlag();
+
+    expect(seen[0]).toBe(false);
+  });
+
+  it('then catches up to what is stored, or the flag would do nothing', async () => {
+    // The guard on the case above: returning the default forever would "fix" hydration by breaking
+    // the feature.
+    const seen = renderProbeWithStoredFlag();
+
+    await waitFor(() => expect(seen.at(-1)).toBe(true));
   });
 });

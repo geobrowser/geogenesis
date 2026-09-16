@@ -3,6 +3,8 @@
 import { useAtom, useAtomValue } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
+import { useHydrated } from '~/core/hooks/use-hydrated';
+
 export const featureFlagsStorageKey = 'geo:feature-flags';
 
 export const featureFlagDefinitions = [
@@ -81,15 +83,41 @@ export const featureFlagsAtom = atomWithStorage<FeatureFlags>(featureFlagsStorag
   getOnInit: true,
 });
 
+/**
+ * The default until the browser has hydrated, then whatever is stored.
+ *
+ * The atom is `getOnInit: true`, so on the client it reads `localStorage` during initialization —
+ * before React's first render. The server has no `localStorage` and always renders the default. A
+ * reader who has ever toggled a flag therefore gets a server tree and a first client tree that
+ * disagree, and React resolves that by discarding the server HTML for the subtree: a hydration
+ * mismatch, thrown by the one reader for whom the flag was doing something.
+ *
+ * Gated here rather than at each call site. None of the four consumers guarded, the gate is easy
+ * to forget precisely because the default state looks fine, and the cost of forgetting lands on
+ * whoever turned the flag on. `useHydrated` is what the rest of the app uses for this — see
+ * `use-access-control` and `use-user-is-editing`.
+ *
+ * The visible consequence is a flag's surface appearing one frame after mount rather than in the
+ * server HTML. For a per-browser developer toggle that is the right trade; the alternative is a
+ * mismatch.
+ */
 export function useFeatureFlag(id: FeatureFlagId) {
   const flags = useAtomValue(featureFlagsAtom);
-  return normalizeFeatureFlags(flags)[id];
+  const hydrated = useHydrated();
+  return hydrated ? normalizeFeatureFlags(flags)[id] : defaultFeatureFlags[id];
 }
 
 export function useDebugDebatesPageEnabled() {
   return useFeatureFlag('debugDebatesPage');
 }
 
+/**
+ * Read *and* write, for the flags dialog. Deliberately not hydration-gated like
+ * {@link useFeatureFlag}: the dialog's contents are inside a Radix `Root` that is closed until a
+ * keyboard shortcut or the hidden route opens it, both of which happen after mount — so there is no
+ * server render of these values to disagree with, and gating the read would only delay the
+ * checkboxes catching up to what they are about to write.
+ */
 export function useFeatureFlags() {
   const [flags, setFlags] = useAtom(featureFlagsAtom);
   const normalizedFlags = normalizeFeatureFlags(flags);
