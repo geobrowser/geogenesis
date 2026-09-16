@@ -57,6 +57,22 @@ describe('ExploreEmailCapturePopup', () => {
   });
 
   // The whole point of the ticket: a reader who already has an account is not who the list is for.
+  // Reported from the browser: the popup and the chat launcher share the bottom-right corner, and
+  // at `z-100` the assistant's button drew over the "Remind me" button and took the click. A
+  // stacking bug is invisible to every other test here, so this reads the number rather than
+  // trusting the comment beside it.
+  it('stacks above the chat launcher, which shares its corner', () => {
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    const zIndex = Number(popup()?.className.match(/(?:^|\s)z-(\d+)(?:\s|$)/)?.[1]);
+    // `partials/chat/chat-widget.tsx` pins the launcher at `z-1100`.
+    expect(zIndex).toBeGreaterThan(1100);
+    // And below the slide-up/status/toast layers, which start at 10000 in `styles.css` — a
+    // dismissible prompt must not outrank a toast.
+    expect(zIndex).toBeLessThan(10000);
+  });
+
   it('never appears for someone signed in, however far they scroll', () => {
     mocks.user = { id: 'someone' };
     render(<ExploreEmailCapturePopup />);

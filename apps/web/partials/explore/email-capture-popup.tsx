@@ -10,6 +10,7 @@ import { useAtom } from 'jotai';
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
 
 import { ClientOnly } from '~/design-system/client-only';
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { Text } from '~/design-system/text';
 
 import { dismissedNoticesAtom } from '~/atoms';
@@ -132,22 +133,30 @@ function EmailCapturePopup() {
     <div
       role="dialog"
       aria-label="Geo network launching soon"
-      className="fixed right-4 bottom-4 z-100 w-[350px] max-w-[calc(100vw-2rem)] overflow-clip rounded-xl border border-grey-02 bg-white shadow-dropdown"
+      // `z-1101` is one above the chat launcher's `z-1100` (`partials/chat/chat-widget.tsx`), which
+      // shares this corner: at `z-100` the assistant's button sat over the "Remind me" button and
+      // took the click. Deliberately no higher — the slide-up, status bar and toast layers start at
+      // 10000 and a dismissible prompt has no business outranking them.
+      className="fixed right-4 bottom-4 z-1101 w-[350px] max-w-[calc(100vw-2rem)] overflow-clip rounded-xl border border-grey-02 bg-white shadow-dropdown"
     >
       {/* The fanned ranking cards on their purple field, from the design (76342:20234).
-          A flat raster, and a stand-in rather than the finished asset: Figma's MCP screenshots a
-          *region* rather than an isolated node, so every export of this group also contains the
-          close control drawn on top of it. That is why the button below is a transparent hit target
-          over the drawn X instead of rendering its own icon, and why this wants a proper export
-          from design — without the X, and at 2x — before it ships. */}
+          A flat raster, like the welcome banner's artwork beside it. Exported through Figma's MCP,
+          which renders a node together with whatever overlaps its bounds — so the export arrived
+          with the close control drawn into it, and that 16px was patched out from elsewhere in the
+          same photo. Invisible at this size and covered by the real button below, but it is why
+          this wants a proper export from design, at 2x, before it ships. */}
       <img src="/explore-email-capture.png" alt="" className="block h-[145px] w-full object-cover select-none" />
 
+      {/* The welcome banner's close button, to the class: the two cards sit on the same page, and a
+          reader should not have to learn a second dismiss control for the second one. */}
       <button
         type="button"
         onClick={dismiss}
         aria-label="Dismiss"
-        className="absolute top-[15px] right-[19px] size-4 rounded-sm outline-offset-2"
-      />
+        className="absolute top-2.5 right-2.5 z-20 rounded-full border border-white/30 bg-black/40 p-1.5 text-white backdrop-blur-sm transition-colors duration-200 ease-in-out hover:bg-black/60"
+      >
+        <CloseSmall color="white" />
+      </button>
 
       <div className="px-5 pt-[18px] pb-5">
         {status === 'done' ? (
