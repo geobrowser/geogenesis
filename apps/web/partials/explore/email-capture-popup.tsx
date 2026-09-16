@@ -9,10 +9,7 @@ import { useAtom } from 'jotai';
 
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
 
-import { Button } from '~/design-system/button';
 import { ClientOnly } from '~/design-system/client-only';
-import { CloseSmall } from '~/design-system/icons/close-small';
-import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
 
 import { dismissedNoticesAtom } from '~/atoms';
@@ -134,79 +131,91 @@ function EmailCapturePopup() {
   return (
     <div
       role="dialog"
-      aria-label="Subscribe for updates"
-      className="fixed right-4 bottom-4 z-100 w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-grey-02 bg-white p-4 shadow-dropdown"
+      aria-label="Geo network launching soon"
+      className="fixed right-4 bottom-4 z-100 w-[350px] max-w-[calc(100vw-2rem)] overflow-clip rounded-xl border border-grey-02 bg-white shadow-dropdown"
     >
+      {/* The fanned ranking cards on their purple field, from the design (76342:20234).
+          A flat raster, and a stand-in rather than the finished asset: Figma's MCP screenshots a
+          *region* rather than an isolated node, so every export of this group also contains the
+          close control drawn on top of it. That is why the button below is a transparent hit target
+          over the drawn X instead of rendering its own icon, and why this wants a proper export
+          from design — without the X, and at 2x — before it ships. */}
+      <img src="/explore-email-capture.png" alt="" className="block h-[145px] w-full object-cover select-none" />
+
       <button
         type="button"
         onClick={dismiss}
         aria-label="Dismiss"
-        className="absolute top-3 right-3 text-grey-04 transition-colors hover:text-text"
-      >
-        <CloseSmall />
-      </button>
+        className="absolute top-[15px] right-[19px] size-4 rounded-sm outline-offset-2"
+      />
 
-      {status === 'done' ? (
-        <div className="pr-6">
-          <Text variant="bodySemibold">You are on the list.</Text>
-          <Text variant="footnote" color="grey-04" className="mt-1 block">
-            We will let you know what is worth arguing about.
-          </Text>
-        </div>
-      ) : (
-        // `noValidate`, and the field below is a text input rather than `type="email"`. Native
-        // constraint validation blocks the submit event outright for a malformed address, so the
-        // handler never runs and the reader gets a browser bubble instead of our message —
-        // different wording in every browser, unstyleable, and gone the moment they look away.
-        // `inputMode` and `autoComplete` keep the phone keyboard and the autofill that
-        // `type="email"` was there for.
-        <form onSubmit={submit} noValidate>
-          <div className="pr-6">
-            <Text variant="bodySemibold">Keep up with Geo</Text>
-            <Text variant="footnote" color="grey-04" className="mt-1 block">
-              Get the debates and claims worth your time, now and then.
+      <div className="px-5 pt-[18px] pb-5">
+        {status === 'done' ? (
+          <>
+            <Text variant="mediumTitle">You are on the list.</Text>
+            <Text variant="metadata" color="grey-04" className="mt-2 block">
+              We will be in touch about features, points, and the path to mainnet.
             </Text>
-          </div>
-          <div className="mt-3 flex flex-col gap-2">
-            <Input
-              type="text"
-              inputMode="email"
-              autoComplete="email"
-              value={email}
-              onChange={event => {
-                setEmail(event.currentTarget.value);
-                // Clearing on edit rather than on submit: the message is about what was typed, and
-                // leaving it under a field they are already fixing reads as a second complaint.
-                if (status !== 'idle' && status !== 'submitting') setStatus('idle');
-              }}
-              placeholder="you@example.com"
-              aria-label="Email address"
-              aria-invalid={status === 'invalid-email'}
-              disabled={status === 'submitting'}
-            />
-            {/* `type="submit"` explicitly: the design-system `Button` defaults to `type="button"`,
-                which is right for the buttons it is usually used for and silently does nothing
-                inside a form. The spread puts this after the default, so it wins. */}
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={status === 'submitting'}
-              className={cx('w-full justify-center')}
-            >
-              {status === 'submitting' ? 'Subscribing…' : 'Subscribe'}
-            </Button>
-          </div>
-          {errorMessage ? (
-            // `role="alert"` on the element rather than on `Text`, which takes no such prop —
-            // and it is what makes a failure reach someone who is not watching this corner.
-            <p role="alert" className="mt-2">
-              <Text variant="footnote" color="red-01">
-                {errorMessage}
-              </Text>
-            </p>
-          ) : null}
-        </form>
-      )}
+          </>
+        ) : (
+          // `noValidate`, and the field below is a text input rather than `type="email"`. Native
+          // constraint validation blocks the submit event outright for a malformed address, so the
+          // handler never runs and the reader gets a browser bubble instead of our message —
+          // different wording in every browser, unstyleable, and gone the moment they look away.
+          // `inputMode` and `autoComplete` keep the phone keyboard and the autofill that
+          // `type="email"` was there for.
+          <form onSubmit={submit} noValidate>
+            <Text variant="mediumTitle">Geo network launching soon!</Text>
+            <Text variant="metadata" color="grey-04" className="mt-2 block">
+              Get updates on features, points, and path to mainnet.
+            </Text>
+
+            {/* Side by side, as designed: both pills, the field taking the room the button leaves. */}
+            <div className="mt-4 flex items-center gap-1.5">
+              <input
+                type="text"
+                inputMode="email"
+                autoComplete="email"
+                value={email}
+                onChange={event => {
+                  setEmail(event.currentTarget.value);
+                  // Cleared on edit rather than on submit: the message is about what was typed, and
+                  // leaving it under a field they are already fixing reads as a second complaint.
+                  if (status !== 'idle' && status !== 'submitting') setStatus('idle');
+                }}
+                placeholder="nate@geobrowser.io"
+                aria-label="Email address"
+                aria-invalid={status === 'invalid-email'}
+                disabled={status === 'submitting'}
+                className={cx(
+                  'h-7 min-w-0 flex-1 rounded-full border bg-white px-3 text-metadata text-text outline-hidden transition-colors placeholder:text-grey-03 disabled:text-grey-03',
+                  status === 'invalid-email' ? 'border-red-01' : 'border-grey-02 focus:border-text'
+                )}
+              />
+              {/* Not the design-system `Button`: this one is a full pill at 28px on a dark fill,
+                  which none of its variants draw — and `Button` also defaults to `type="button"`,
+                  which inside a form is silently inert. */}
+              <button
+                type="submit"
+                disabled={status === 'submitting'}
+                className="h-7 shrink-0 rounded-full bg-[#151515] px-2.5 text-metadata text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              >
+                {status === 'submitting' ? 'Sending…' : 'Remind me'}
+              </button>
+            </div>
+
+            {errorMessage ? (
+              // `role="alert"` on the element rather than on `Text`, which takes no such prop —
+              // and it is what makes a failure reach someone who is not watching this corner.
+              <p role="alert" className="mt-2">
+                <Text variant="footnote" color="red-01">
+                  {errorMessage}
+                </Text>
+              </p>
+            ) : null}
+          </form>
+        )}
+      </div>
     </div>
   );
 }
