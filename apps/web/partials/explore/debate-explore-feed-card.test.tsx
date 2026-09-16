@@ -98,7 +98,9 @@ vi.mock('~/core/debates/browse/share-dialog', () => ({
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
   useDebateTranscriptClaims: () => ({
-    claims: { byAuthorSpaceId: new Map(), unattributed: [], totalCount: 3 },
+    // Deliberately not the item's `commentCount`: equal counts would let the comment and claims
+    // wirings be swapped without a test noticing.
+    claims: { byAuthorSpaceId: new Map(), unattributed: [], totalCount: 18 },
     isLoading: false,
     error: null,
   }),
@@ -169,16 +171,17 @@ const item: ExploreFeedItem = {
 
 function watchableDebate(): Debate {
   return {
-    id: 'fd51f935-2063-4617-8039-7b672b23364c',
+    // Plain hex, like every id geo-chat actually answers with — it takes either spelling on the
+    // way in and returns the unhyphenated form, so a dashed fixture would describe a response
+    // shape that does not exist and invite fixes for a mismatch that isn't there.
+    id: 'fd51f9352063461780397b672b23364c',
     status: 'complete',
     // The card reads `claim.space_id` to scope its transcript-claims lookup to the space the
     // debate was published to, so the fixture carries the claim the type has always required.
     claim: {
       id: 'claim-summary-1',
       space_id: '52c7ae149838b6d47ce0f3b2a5974546',
-      // Hyphenated on purpose: geo-chat returns UUIDs where the graph, and every explore route and
-      // panel target, spells ids as plain hex. The card has to normalize this.
-      claim_entity_id: '9b2a1f30-4d5c-4a8e-9f11-77c0a2b3d4e5',
+      claim_entity_id: '9b2a1f304d5c4a8e9f1177c0a2b3d4e5',
       claim: 'Waking up early improves health and productivity',
       description: null,
     },
@@ -429,7 +432,7 @@ describe('DebateExploreFeedCard', () => {
     // transcript-claims query, rather than a thread fetch per card.
     const comments = screen.getByRole('button', { name: 'Comments' });
     expect(comments.textContent).toBe('3');
-    expect(screen.getByRole('button', { name: 'Claims' }).textContent).toBe('3');
+    expect(screen.getByRole('button', { name: 'Claims' }).textContent).toBe('18');
 
     // Marked as an opener so pressing it while the global comments panel is open switches the
     // panel to this debate instead of reading as an outside click that dismisses it.

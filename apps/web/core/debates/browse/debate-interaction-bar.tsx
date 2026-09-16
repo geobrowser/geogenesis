@@ -57,6 +57,11 @@ export function DebateInteractionBar({
   shareOpen,
   className,
 }: InteractionBarProps) {
+  // Defined at all means comments open in the app's global panel rather than in one this bar's
+  // host owns, which is what makes this control one of that panel's openers. Named once so the two
+  // orientations below can't disagree about what the prop means.
+  const opensGlobalCommentsPanel = commentsPanelOpen !== undefined;
+
   if (orientation === 'vertical') {
     return (
       <div className={cx('flex w-9 flex-col items-center gap-3', className)}>
@@ -72,7 +77,7 @@ export function DebateInteractionBar({
           icon={<Comment />}
           ariaLabel="Comments"
           expanded={commentsPanelOpen}
-          commentsPanelOpener={commentsPanelOpen !== undefined}
+          commentsPanelOpener={opensGlobalCommentsPanel}
         />
         {onClaims && (
           <CircleAction label={String(claimsCount ?? 0)} onClick={onClaims} icon={<InfoSmall />} ariaLabel="Claims" />
@@ -104,7 +109,7 @@ export function DebateInteractionBar({
         label={String(commentCount)}
         ariaLabel="Comments"
         expanded={commentsPanelOpen}
-        commentsPanelOpener={commentsPanelOpen !== undefined}
+        commentsPanelOpener={opensGlobalCommentsPanel}
       />
       {onClaims && (
         <PillAction onClick={onClaims} icon={<InfoSmall />} label={String(claimsCount ?? 0)} ariaLabel="Claims" />

@@ -40,10 +40,11 @@ const DEACTIVATE_RATIO = 0.4;
  * `1.2042 × width + 171` tall, and fitting that under the viewport less the 44px app header gives
  * `width ≤ 0.83 × dvh − 178px` — which is where `calc(83dvh - 178px)` comes from.
  *
- * So the column grows with the viewport rather than sitting at a fixed 480px: 569px at a 900px
- * viewport, 651px at 1000px, capped at 560px so a tall display gets a wider card and not a
- * different design. The 320px floor gives up the promise below roughly a 600px viewport, where
- * honouring it would mean a video too small to read a face in.
+ * So the column tracks the viewport rather than sitting at a fixed 480px — 486px at an 800px
+ * viewport, 403px at 700px — up to the 560px cap, which the budget clears from about an 890px
+ * viewport and which is there so a tall display gets a wider card and not a different design.
+ * The 320px floor gives the promise up below roughly a 600px viewport, where honouring it would
+ * mean a video too small to read a face in.
  *
  * The same trick, and the same reason, as `--debate-feed-column-width` on the full-screen feed:
  * `dvh` there too, because the media has to fit the viewport it is being watched in.
@@ -339,8 +340,11 @@ function DebateCardTitle({
   // to the space its claim lives in, which is why the transcript-claims lookup above scopes by
   // this same field — but the claim is what the link resolves, so it answers for its own home.
   //
-  // Both ids normalized: geo-chat hands these back as UUIDs where the graph, and every route and
-  // panel target in explore, spells them as plain hex.
+  // Normalized because these ids cross a boundary, not because geo-chat gets them wrong: it
+  // returns plain hex today (it accepts either spelling on the way in and answers in hex), and
+  // `uuidToHex` is a no-op on that. What it guards is the hex-keyed side — routes, the sync store
+  // `PrefetchLink` prefetches from, and the side-panel target — which a dashed id would miss
+  // silently. Same guard, same reason, as `useDebateTranscriptClaims`.
   const claimIdentity = {
     entityId: ID.uuidToHex(debate.claim.claim_entity_id),
     spaceId: ID.uuidToHex(debate.claim.space_id),
@@ -356,10 +360,25 @@ function DebateCardTitle({
 
 // Separate component so useDebateVotes (which queries as soon as it mounts) only runs once the
 // debate is loaded and known to be watchable.
-function DebateCardVideos({ debate, active, preload }: { debate: Debate; active: boolean; preload: boolean }) {
+//
+// Memoized because the card above it subscribes to the global comments-panel atom — it has to, to
+// tell the bar whether the panel is open on this debate — so opening comments anywhere re-renders
+// every debate card in the feed. `debate` is a stable react-query object and the two flags are
+// booleans, so on a change that is only about the panel this skips the player and its playback
+// hooks entirely. (A re-render never interrupted playback — the <video> keeps its identity — but
+// there is no reason to re-run the whole subtree for a flag it does not read.)
+const DebateCardVideos = React.memo(function DebateCardVideos({
+  debate,
+  active,
+  preload,
+}: {
+  debate: Debate;
+  active: boolean;
+  preload: boolean;
+}) {
   const votes = useDebateVotes(debate);
   return <DebateFeedPlayer debate={debate} active={active} preload={preload} votes={votes} />;
-}
+});
 
 function DebateVideoSkeleton() {
   return (
