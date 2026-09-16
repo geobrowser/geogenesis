@@ -109,6 +109,7 @@ vi.mock('~/core/claims/browse/claim-response-summary', () => ({
     isViewerResponseLoading: false,
     hasCounts: true,
     viewerDirection: null,
+      indexedViewerDirection: null,
     viewerSpaceId: null,
   }),
 }));

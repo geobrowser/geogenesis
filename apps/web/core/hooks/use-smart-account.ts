@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useCookies } from 'react-cookie';
 
 import { Cookie, WALLET_ADDRESS } from '../cookie';
+import { ReceiptConfirmationTimeoutError } from '../errors';
 import { GEO_NETWORK } from '../sdk/geo-network';
 import { MAX_QUEUE_WAIT_MS, enqueueFor, withSubmissionRetry } from './smart-account-send-queue';
 
@@ -138,7 +139,7 @@ export function useSmartAccount() {
             }
             lastError = error;
             if (Date.now() - startedAt >= RECEIPT_DEADLINE_MS) {
-              throw new Error(
+              throw new ReceiptConfirmationTimeoutError(
                 `UserOperation ${hash} was submitted but its receipt did not arrive within ${
                   RECEIPT_DEADLINE_MS / 1000
                 }s. It may still land on-chain — do not resubmit blindly.`,

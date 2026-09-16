@@ -8,7 +8,6 @@ import type { DebateClaim } from '~/core/debates/api';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import { useRetireConfirmedResponseIndexing } from '~/core/debates/retire-confirmed-response-indexing';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -123,7 +122,8 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
               <MetaChip key={tag.id}>{tag.toEntity.name ?? tag.toEntity.id}</MetaChip>
             ))}
             {/* Among the chips that say what this is, which is what "contested" is — and the same
-                component the cards use, rather than a second span at a size the scale lacks. */}
+                component the cards use, so all three surfaces move together. Not a chip itself:
+                the flame and red are what make it findable among neutral ones. */}
             {summary.isControversial ? <ControversialTag /> : null}
           </div>
         </header>
@@ -199,10 +199,7 @@ function ClaimPositionSection({
     responseBlockedReason,
     onRequireSignIn: promptSignIn,
   });
-  // See claims-page-client: retiring the optimistic snapshot outlived the toggle that used to own
-  // it, because `claim-response-summary` on this page reads that snapshot for display.
-  useRetireConfirmedResponseIndexing({ debateClaim: row, entityId, spaceId });
-  useBackfillReadinessForHeldPosition({ debateClaim: row, entityId, spaceId });
+  useBackfillReadinessForHeldPosition({ readiness: row, entityId, spaceId });
 
   return (
     <section aria-label="Your position" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
@@ -235,6 +232,9 @@ function ClaimPositionSection({
         spaceId={spaceId}
         activeDebate={row?.active_debate}
         variant="block"
+        // The offer rests on the side set by the pills directly above it, so it moves when they do.
+        // `undefined` while the reads are out, so "not known yet" cannot read as "holds none".
+        viewerPosition={isResponseKindResolved && isViewerResponseResolved ? control.viewerPosition : undefined}
         className="mt-2"
       />
     </section>

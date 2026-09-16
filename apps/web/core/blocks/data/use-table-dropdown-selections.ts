@@ -3,9 +3,11 @@
 import * as React from 'react';
 
 import {
+  DropdownSelectionMode,
+  DropdownSelectionModes,
   DropdownSelections,
   dropdownSelectionsStorageKey,
-  parseStoredDropdownSelections,
+  parseStoredDropdownState,
 } from './table-dropdown-selections';
 
 /**
@@ -26,6 +28,7 @@ import {
  */
 type SelectionsEntry = {
   selections: DropdownSelections;
+  modes: DropdownSelectionModes;
   hydrated: boolean;
   listeners: Set<() => void>;
 };
@@ -35,7 +38,7 @@ const entries = new Map<string, SelectionsEntry>();
 function getEntry(storageKey: string): SelectionsEntry {
   let entry = entries.get(storageKey);
   if (!entry) {
-    entry = { selections: {}, hydrated: false, listeners: new Set() };
+    entry = { selections: {}, modes: {}, hydrated: false, listeners: new Set() };
     entries.set(storageKey, entry);
   }
   return entry;
@@ -51,28 +54,44 @@ function getHydratedEntry(storageKey: string): SelectionsEntry {
   const entry = getEntry(storageKey);
   if (!entry.hydrated && typeof window !== 'undefined') {
     try {
-      entry.selections = parseStoredDropdownSelections(window.localStorage.getItem(storageKey));
+      const stored = parseStoredDropdownState(window.localStorage.getItem(storageKey));
+      entry.selections = stored.selections;
+      entry.modes = stored.modes;
     } catch {
       entry.selections = {};
+      entry.modes = {};
     }
     entry.hydrated = true;
   }
   return entry;
 }
 
-function update(storageKey: string, updater: (current: DropdownSelections) => DropdownSelections) {
-  const entry = getHydratedEntry(storageKey);
-  entry.selections = updater(entry.selections);
+function persist(storageKey: string, entry: SelectionsEntry) {
   try {
-    if (Object.keys(entry.selections).length === 0) {
+    if (Object.keys(entry.selections).length === 0 && Object.keys(entry.modes).length === 0) {
       window.localStorage.removeItem(storageKey);
     } else {
-      window.localStorage.setItem(storageKey, JSON.stringify(entry.selections));
+      window.localStorage.setItem(storageKey, JSON.stringify({ selections: entry.selections, modes: entry.modes }));
     }
   } catch {
     // Storage can be unavailable (private windows); the in-memory view still works.
   }
   entry.listeners.forEach(listener => listener());
+}
+
+function update(storageKey: string, updater: (current: DropdownSelections) => DropdownSelections) {
+  const entry = getHydratedEntry(storageKey);
+  entry.selections = updater(entry.selections);
+  persist(storageKey, entry);
+}
+
+function updateMode(storageKey: string, columnId: string, mode: DropdownSelectionMode | null) {
+  const entry = getHydratedEntry(storageKey);
+  const next = { ...entry.modes };
+  if (mode === null) delete next[columnId];
+  else next[columnId] = mode;
+  entry.modes = next;
+  persist(storageKey, entry);
 }
 
 /** Test-only: drop all shared state so specs are isolated. */
@@ -98,6 +117,11 @@ export function useTableDropdownSelections(blocksRelationEntityId: string) {
     () => (storageKey ? getHydratedEntry(storageKey).selections : EMPTY_SELECTIONS),
     () => EMPTY_SELECTIONS
   );
+  const modes = React.useSyncExternalStore(
+    subscribe,
+    () => (storageKey ? getHydratedEntry(storageKey).modes : EMPTY_MODES),
+    () => EMPTY_MODES
+  );
   const hydrated = React.useSyncExternalStore(
     subscribe,
     () => (storageKey ? getHydratedEntry(storageKey).hydrated : false),
@@ -111,7 +135,15 @@ export function useTableDropdownSelections(blocksRelationEntityId: string) {
     [storageKey]
   );
 
-  return { selections, updateSelections, hydrated };
+  const setColumnMode = React.useCallback(
+    (columnId: string, mode: DropdownSelectionMode | null) => {
+      if (storageKey) updateMode(storageKey, columnId, mode);
+    },
+    [storageKey]
+  );
+
+  return { selections, modes, updateSelections, setColumnMode, hydrated };
 }
 
 const EMPTY_SELECTIONS: DropdownSelections = {};
+const EMPTY_MODES: DropdownSelectionModes = {};

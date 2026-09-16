@@ -105,8 +105,8 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
 }));
 
 vi.mock('./debate-feed-player', () => ({
-  DebateFeedPlayer: ({ debate, active }: { debate: Debate; active: boolean }) => (
-    <div data-testid={`player-${debate.id}`} data-active={active} />
+  DebateFeedPlayer: ({ debate, active, preload }: { debate: Debate; active: boolean; preload?: boolean }) => (
+    <div data-testid={`player-${debate.id}`} data-active={active} data-preload={preload ? 'true' : 'false'} />
   ),
 }));
 
@@ -127,7 +127,7 @@ vi.mock('./share-dialog', () => ({
 vi.mock('~/core/debates/matchmaking/use-debates-hub', () => ({
   useDebatesHub: () => ({
     isOpen: mocks.hubIsOpen,
-    activeTab: 'claims' as const,
+    activeTab: 'lobby' as const,
     open: mocks.hubOpen,
     close: mocks.hubClose,
     toggle: vi.fn(),
@@ -569,12 +569,12 @@ describe('DebatesBrowseFeed comments', () => {
 
   // "Join a debate" is no longer one of the feed's own panels: it opens the shared hub, which is
   // cross-space and carries the filters, counts and ranking the feed's panel never had.
-  it('opens the debates hub on the claims tab instead of a feed panel', () => {
+  it('opens the debates hub on Lobby instead of a feed panel', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
 
-    expect(mocks.hubOpen).toHaveBeenCalledWith('claims');
+    expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
     // The hub is a portal of its own, so nothing lands in the feed's in-flow panel slot.
     expect(screen.queryByText(/^Claims panel for/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Comments panel for/)).not.toBeInTheDocument();
@@ -616,7 +616,7 @@ describe('DebatesBrowseFeed comments', () => {
 
     act(() => mocks.privyOnComplete?.());
 
-    expect(mocks.hubOpen).toHaveBeenCalledWith('claims');
+    expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
   });
 
   it('does nothing until Privy has restored the session', () => {
@@ -651,7 +651,7 @@ describe('DebatesBrowseFeed comments', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
 
-    expect(mocks.hubOpen).toHaveBeenCalledWith('claims');
+    expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
     expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
   });
 
@@ -947,5 +947,54 @@ describe('DebatesBrowseFeed ordering', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
     expect(screen.queryByRole('heading', { name: 'Debates are useful' })).not.toBeInTheDocument();
+  });
+});
+
+// Each debate needs two signed recording URLs, and until they land the player shows a
+// "Loading…" placeholder instead of a <video>. Fetching them only once a card is active is
+// what makes arriving at a debate feel glitchy (GEO-2895) — so the NEXT one preloads.
+describe('DebatesBrowseFeed — preloading the next debate (GEO-2895)', () => {
+  beforeEach(() => {
+    mocks.debates = [
+      completedDebate('debate-1', 'First claim', '2026-07-02T00:01:10.000Z'),
+      completedDebate('debate-2', 'Second claim', '2026-07-02T00:02:10.000Z'),
+      completedDebate('debate-3', 'Third claim', '2026-07-02T00:03:10.000Z'),
+    ];
+  });
+
+  // Asserted relationally rather than by debate id: the feed renders in ranked order
+  // (useDebatesBestOrder), so which debate lands first is not this test's business.
+  function playersInRenderOrder() {
+    return screen.getAllByTestId(/^player-/).map(el => ({
+      id: el.getAttribute('data-testid'),
+      active: el.getAttribute('data-active') === 'true',
+      preload: el.getAttribute('data-preload') === 'true',
+    }));
+  }
+
+  it('preloads the debate immediately after the active one, and only that one', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    const players = playersInRenderOrder();
+    const activeIndex = players.findIndex(p => p.active);
+
+    expect(activeIndex).toBeGreaterThanOrEqual(0);
+    expect(players[activeIndex + 1]?.preload).toBe(true);
+
+    // Every other card loads nothing: not the active one (already loading because it is
+    // active), and not two ahead — a vertical one-at-a-time feed would otherwise fetch
+    // recordings most viewers never reach.
+    players.forEach((p, i) => {
+      if (i !== activeIndex + 1) expect(p.preload).toBe(false);
+    });
+  });
+
+  it('preloading never makes a card active — it loads without autoplaying off-screen', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    const players = playersInRenderOrder();
+
+    expect(players.filter(p => p.active)).toHaveLength(1);
+    for (const p of players) {
+      if (p.preload) expect(p.active).toBe(false);
+    }
   });
 });

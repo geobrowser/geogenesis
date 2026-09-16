@@ -22,7 +22,6 @@ import {
   getRowDisplayName,
   splitRankableEntityIds,
 } from '~/core/blocks/ranking/ranking-rankable-list';
-import { formatRollingSubmissionLabel } from '~/core/blocks/ranking/ranking-rolling';
 import { useRankingAccumulatedRows } from '~/core/blocks/ranking/use-ranking-accumulated-rows';
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
@@ -40,6 +39,7 @@ import { ID } from '~/core/id';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { SearchResult } from '~/core/types';
+import { useRankingOpportunity } from '~/core/use-ranking-opportunity';
 
 import { stepAtom } from '~/partials/onboarding/dialog';
 
@@ -123,6 +123,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const {
     submissions,
     mySubmission,
+    myLastSubmission,
     hasMySubmission,
     saveMySubmission,
     isSaving,
@@ -174,7 +175,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     allRankableEntityIds
   );
 
-  const [orderedIds, setOrderedIds] = React.useState<string[]>(mySubmission?.orderedEntityIds ?? []);
+  // Seeded from the author's last ballot, which survives roll-off, rather than from
+  // `mySubmission`, which is blanked by it. See `myLastSubmission` (GEO-2871).
+  const [orderedIds, setOrderedIds] = React.useState<string[]>(myLastSubmission?.orderedEntityIds ?? []);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [activeSwipeRowKey, setActiveSwipeRowKey] = React.useState<string | null>(null);
   const [entitySheetTarget, setEntitySheetTarget] = React.useState<{
@@ -244,10 +247,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const { entries: searchEntries } = useRankingEntryEntities(spaceId, isSearchActive ? searchEntityIds : []);
 
-  const mySubmissionIdsKey = (mySubmission?.orderedEntityIds ?? []).join('|');
+  const mySubmissionIdsKey = (myLastSubmission?.orderedEntityIds ?? []).join('|');
 
   React.useEffect(() => {
-    const next = mySubmission?.orderedEntityIds ?? [];
+    const next = myLastSubmission?.orderedEntityIds ?? [];
     setOrderedIds(prev => {
       if (prev.length === next.length && prev.every((id, index) => id === next[index])) {
         return prev;
@@ -467,6 +470,30 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     (Boolean(personalSpaceId) || isAccountSetupPending) &&
     !isSaving;
 
+  const rankingOpportunity = useRankingOpportunity(
+    entityId,
+    !submissionsOpen || !hasUnpublishedChanges || orderedIds.length === 0 || isSaving
+      ? 'ineligible'
+      : !personalSpaceId
+        ? 'authentication_required'
+        : canPublish
+          ? 'eligible'
+          : 'ineligible',
+    !submissionsOpen
+      ? 'closed'
+      : orderedIds.length === 0
+        ? 'empty'
+        : !hasUnpublishedChanges
+          ? 'unchanged'
+          : isSaving
+            ? 'saving'
+            : !personalSpaceId
+              ? 'sign_in'
+              : canPublish
+                ? 'ready'
+                : 'unavailable'
+  );
+
   const handlePublish = async () => {
     // `submissionsOpen` comes from the last render. Re-check against a fresh clock:
     if (!rankingSubmissionsOpen(getRankingPeriodState(startDate, endDate))) {
@@ -491,7 +518,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         label: 'your ranking',
         requires: 'personalSpace',
         run: () =>
-          saveMySubmission(slots).then(published => {
+          saveMySubmission(slots, rankingOpportunity.context).then(published => {
             if (!published) return;
             const ogVersion = buildRankingOgVersion({
               rankEntityId: published.rankEntityId,
@@ -519,7 +546,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       return;
     }
 
-    const published = await saveMySubmission(slots);
+    const published = await saveMySubmission(slots, rankingOpportunity.context);
     if (!published) return;
 
     const ogVersion = buildRankingOgVersion({
@@ -663,48 +690,50 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     <>
       <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName} />
       <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
-      <RankingComposeFullscreen coverNavbar={isMobile}>
-        {isMobile ? (
-          <>
-            <div className="shrink-0 bg-white px-4 py-2">
-              <RankingComposePinnedToolbar
-                isMobile={isMobile}
-                onBack={handleBack}
-                showPublishButton
-                canPublish={canPublish}
-                isSaving={isSaving}
-                onPublish={() => void handlePublish()}
-              />
-            </div>
+      <div ref={rankingOpportunity.root} className="contents">
+        <RankingComposeFullscreen coverNavbar={isMobile}>
+          {isMobile ? (
+            <>
+              <div className="shrink-0 bg-white px-4 py-2">
+                <RankingComposePinnedToolbar
+                  isMobile={isMobile}
+                  onBack={handleBack}
+                  showPublishButton
+                  canPublish={canPublish}
+                  isSaving={isSaving}
+                  onPublish={() => void handlePublish()}
+                />
+              </div>
 
-            <div
-              ref={mobilePageScrollRef}
-              data-ranking-compose-mobile-scroll=""
-              data-app-scroll-surface
-              className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4"
-            >
-              <div className="pt-2 pb-4">{titleMetadata}</div>
-              <div className="relative flex min-h-0 flex-col">{rankingLayout}</div>
-            </div>
-          </>
-        ) : (
-          <div className="mx-auto flex h-full min-h-0 w-full max-w-[1200px] flex-col overflow-hidden px-4">
-            <div className="shrink-0 py-2">
-              <RankingComposePinnedToolbar
-                isMobile={isMobile}
-                onBack={handleBack}
-                showPublishButton={false}
-                canPublish={canPublish}
-                isSaving={isSaving}
-                onPublish={() => void handlePublish()}
-              />
-              <div className="mt-3 pb-4">{titleMetadata}</div>
-            </div>
+              <div
+                ref={mobilePageScrollRef}
+                data-ranking-compose-mobile-scroll=""
+                data-app-scroll-surface
+                className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4"
+              >
+                <div className="pt-2 pb-4">{titleMetadata}</div>
+                <div className="relative flex min-h-0 flex-col">{rankingLayout}</div>
+              </div>
+            </>
+          ) : (
+            <div className="mx-auto flex h-full min-h-0 w-full max-w-[1200px] flex-col overflow-hidden px-4">
+              <div className="shrink-0 py-2">
+                <RankingComposePinnedToolbar
+                  isMobile={isMobile}
+                  onBack={handleBack}
+                  showPublishButton={false}
+                  canPublish={canPublish}
+                  isSaving={isSaving}
+                  onPublish={() => void handlePublish()}
+                />
+                <div className="mt-3 pb-4">{titleMetadata}</div>
+              </div>
 
-            <div className="relative min-h-0 flex-1">{rankingLayout}</div>
-          </div>
-        )}
-      </RankingComposeFullscreen>
+              <div className="relative min-h-0 flex-1">{rankingLayout}</div>
+            </div>
+          )}
+        </RankingComposeFullscreen>
+      </div>
     </>
   );
 }

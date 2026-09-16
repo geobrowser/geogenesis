@@ -6,6 +6,35 @@ import { ServerEnvironment } from './app/api/environment';
 
 const isDev = process.env.NODE_ENV === 'development';
 
+const marketingOrigin = 'https://geo-website-livid.vercel.app';
+// Only marketing-owned paths are forwarded. Genesis retains /_next, app APIs,
+// /root, /explore and /space, and legacy campaigns keep their existing hosts.
+const marketingPaths = [
+  '/',
+  '/terms',
+  '/api/subscribe',
+  '/_marketing/:path*',
+  '/opengraph-image.jpg',
+  '/twitter-image.jpg',
+  '/favicon.ico',
+  '/icon.png',
+  '/apple-icon.png',
+  '/browse/:path*',
+  '/collage/:path*',
+  '/community/:path*',
+  '/curators/:path*',
+  '/deck/:path*',
+  '/hero/:path*',
+  '/match/:path*',
+  '/panel/:path*',
+  '/platform2/:path*',
+  '/platform3/:path*',
+  '/rays/:path*',
+  '/social/:path*',
+  '/trust/:path*',
+  '/voice/:path*',
+];
+
 // Faster local dev. Opt in with ENABLE_TURBOPACK_OPTIMIZATIONS=1.
 // Flags defined on ExperimentalConfig:
 // https://github.com/vercel/next.js/blob/canary/packages/next/src/server/config-shared.ts
@@ -140,10 +169,10 @@ const nextConfig: NextConfig = {
     return {
       beforeFiles: [
         ...geoChatProxyRewrites,
-        {
-          source: '/',
-          destination: 'https://geo.framer.website/',
-        },
+        ...marketingPaths.map(source => ({
+          source,
+          destination: `${marketingOrigin}${source}`,
+        })),
         {
           source: '/early-access',
           destination: 'https://geobrowser-v2.vercel.app/early-access',

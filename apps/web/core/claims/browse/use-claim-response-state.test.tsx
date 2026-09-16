@@ -1,10 +1,13 @@
 import { renderHook } from '@testing-library/react';
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { DebateClaim } from '~/core/debates/api';
 import type { Entity } from '~/core/types';
 
 import { useClaimResponseState } from './use-claim-response-state';
+
+const mocks = vi.hoisted(() => ({ summary: {} as Record<string, unknown> }));
 
 // The response reads are a different hook with its own suite; this one is about what is derived
 // from the row and the entity.
@@ -18,9 +21,15 @@ vi.mock('./claim-response-summary', async importOriginal => {
       isViewerResponseLoading: false,
       hasCounts: true,
       viewerDirection: null,
+      indexedViewerDirection: null,
       viewerSpaceId: null,
+      ...mocks.summary,
     }),
   };
+});
+
+beforeEach(() => {
+  mocks.summary = {};
 });
 
 const CLAIM = 'claim-1';
@@ -31,8 +40,20 @@ function entityWith(values: unknown[] = [], relations: unknown[] = []): Entity {
   return { id: CLAIM, name: 'A claim', values, relations } as unknown as Entity;
 }
 
-function render(entity: Entity | null) {
-  return renderHook(() => useClaimResponseState({ claimId: CLAIM, spaceId: SPACE, row: null, entity })).result;
+function render(entity: Entity | null, row: DebateClaim | null = null) {
+  return renderHook(() => useClaimResponseState({ claimId: CLAIM, spaceId: SPACE, row, entity })).result;
+}
+
+function rowWith(viewerResponse: DebateClaim['viewer_response']): DebateClaim {
+  return {
+    claim_entity_id: CLAIM,
+    space_id: SPACE,
+    response_kind: 'stance',
+    viewer_response: viewerResponse,
+    viewer_debate_ready: false,
+    readiness_disabled_reason: null,
+    online_choices: [],
+  } as unknown as DebateClaim;
 }
 
 /**
@@ -87,5 +108,47 @@ describe('useClaimResponseState and an unpublished vocabulary edit', () => {
 
     expect(() => render(thin)).not.toThrow();
     expect(render(thin).current.responseBlockedReason).toBeNull();
+  });
+});
+
+// GEO-2824. The same rule the hub card applies, so the two cannot drift apart again.
+describe('useClaimResponseState and the viewer’s side', () => {
+  it('takes geo-chat’s answer where it has one', () => {
+    mocks.summary = { indexedViewerDirection: 'positive' };
+    const result = render(entityWith(), rowWith({ position: false, position_label: 'Disagree' }));
+
+    expect(result.current.readiness.viewer_response?.position).toBe(false);
+  });
+
+  it('falls back to the indexed read where geo-chat has none', () => {
+    mocks.summary = { indexedViewerDirection: 'positive' };
+    const result = render(entityWith(), rowWith(null));
+
+    expect(result.current.readiness.viewer_response?.position).toBe(true);
+  });
+
+  // `viewerDirection` includes the in-flight write, so using it would let the snapshot confirm itself.
+  it('never falls back to the viewer’s own in-flight write', () => {
+    mocks.summary = { viewerDirection: 'positive', indexedViewerDirection: null };
+    const result = render(entityWith(), rowWith(null));
+
+    expect(result.current.readiness.viewer_response).toBeNull();
+  });
+
+  // A row that names no side is not an answer yet: pressing a side the viewer already holds would
+  // publish it again instead of clearing it.
+  it('waits for the indexed read before calling a silent row resolved', () => {
+    mocks.summary = { isViewerResponseLoading: true };
+    expect(render(entityWith(), rowWith(null)).current.isViewerResponseResolved).toBe(false);
+    expect(
+      render(entityWith(), rowWith({ position: true, position_label: 'Agree' })).current.isViewerResponseResolved
+    ).toBe(true);
+  });
+
+  it('substitutes nothing while the indexed read is still in flight', () => {
+    mocks.summary = { isViewerResponseLoading: true, indexedViewerDirection: 'positive' };
+    const result = render(entityWith(), rowWith(null));
+
+    expect(result.current.readiness.viewer_response).toBeNull();
   });
 });

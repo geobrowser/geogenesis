@@ -21,7 +21,10 @@ import { validateSpaceId } from '~/core/utils/utils';
  * spend its first minutes looking at a page with none of the spaces it had just chosen. Worth
  * knowing here because this is the one consumer of the allowlist with no second gate behind it:
  * the debates surfaces narrow again by whether a debate can be published in a space, and this
- * does not, so the widening reaches a topic page whole.
+ * does not, so the widening reaches a topic page whole. Since GEO-2834 those requested spaces
+ * include ones only the local bridge knows about, ahead of any server row. This stays a query
+ * scope over public content, never an authorization check, so an id the server has not confirmed
+ * can widen what is shown but cannot grant access to anything.
  *
  * The route's space is added on top, so a topic opened inside a space always shows that space's
  * content even when it isn't curated. That is the half of this that a viewer would notice

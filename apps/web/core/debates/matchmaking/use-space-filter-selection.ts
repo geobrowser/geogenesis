@@ -17,10 +17,13 @@ import { keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets
  *
  * ## When the default applies
  *
- * At most once per mount, on the first render where the viewer's spaces are known and there is
- * something on the menu to draw from. Callers must therefore report loading through `pending`
- * honestly — including whether their *options* have finished arriving, not only their gates —
- * because the seed is spent the moment it fires and a half-built menu spends it badly.
+ * At most once while the marker is armed, on the first render where the viewer's spaces are known
+ * and there is something on the menu to draw from. For an uncontrolled caller that is once per
+ * mount; a caller passing `spent` can re-arm it without remounting, which is what an account
+ * changing under an open surface needs — see "How long once lasts" below. Callers must therefore
+ * report loading through `pending` honestly — including whether their *options* have finished
+ * arriving, not only their gates — because the seed is spent the moment it fires and a half-built
+ * menu spends it badly.
  *
  * Spent on a match rather than on an attempt, which covers two cases that look different and are
  * the same. A settled-empty menu has nothing to default *to*; a menu of spaces the viewer belongs
@@ -34,14 +37,26 @@ import { keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets
  * it could mean anything. Nothing can override a viewer who has acted — that is what the returned
  * marker is for — so late is the only risk, and never is the worse one.
  *
- * The selection is not persisted, which is what it already was: both surfaces started from an
- * empty selection on every mount and still do. So "first open" means this visit — a viewer who
- * narrows or widens the filter keeps that while the surface is up, and starts fresh next time.
+ * ## How long "once" lasts
  *
- * That also disposes of the case a persisted default would have to answer: a viewer who
- * deliberately unticks everything is asking for the unfiltered list, and nothing here later decides
- * they meant otherwise. The seed fires once and never again, even if their memberships change under
- * it.
+ * This hook does not own the selection, so it does not decide how long the answer survives — the
+ * caller does, through `spent`. There are two kinds of caller, and they want different lifetimes.
+ *
+ * A caller that omits `spent` keeps the original arrangement: the selection starts empty on every
+ * mount and the seed is spent once per mount, so "first open" means this visit and a viewer who
+ * narrows or widens the filter keeps that only while the surface is up. The rematch page and the
+ * explore feed are both this.
+ *
+ * A caller that passes `spent` holds the marker somewhere the mount cannot take with it, because
+ * its selection outlives the mount too — the debates hub since GEO-2850, where closing the panel no
+ * longer discards the filter bar. For those, "once" means once a session, and the marker has to
+ * travel with the selection or reopening the surface would seed straight over it.
+ *
+ * Either way the rule below is the same, and it is what both lifetimes exist to protect: a viewer
+ * who deliberately unticks everything is asking for the unfiltered list, and nothing here later
+ * decides they meant otherwise. That case is indistinguishable from an untouched filter by the
+ * selection alone — both are empty — which is exactly why the marker is what carries it and why a
+ * caller must never infer one from the other.
  *
  * ## Losing the right to seed
  *
@@ -84,7 +99,9 @@ export function useMemberSpaceDefault({
   memberSpaceIds,
   availableSpaceIds,
   pending,
+  spent,
   onSeed,
+  onSpend,
 }: {
   /** The spaces the viewer is a member or editor of. Null until it is known. */
   memberSpaceIds: ReadonlySet<string> | null;
@@ -92,15 +109,44 @@ export function useMemberSpaceDefault({
   availableSpaceIds: string[];
   /** Whether those options are still resolving. */
   pending: boolean;
+  /**
+   * Whether the seed has already been applied or forfeited, from a store that outlives this mount.
+   *
+   * Omitted is *not* the same as `false`. Undefined leaves the marker uncontrolled and spent per
+   * mount, which is the right lifetime whenever the selection dies with the mount too — the
+   * rematch page and the explore feed. A caller whose selection outlives its mount — the hub's
+   * tabs since GEO-2850 — passes it, and then owns the marker in both directions: `true` starts
+   * spent, so reopening the surface cannot re-seed a filter the viewer deliberately cleared, and
+   * flipping back to `false` re-arms a seed on a surface that never unmounted, which is what an
+   * account changing under an open panel needs.
+   */
+  spent?: boolean;
   /** Called at most once, and only with a non-empty selection. */
   onSeed: (spaceIds: string[]) => void;
+  /** Called when the seed is spent, either way, so a caller holding {@link spent} can record it. */
+  onSpend?: () => void;
 }): () => void {
-  const seededRef = React.useRef(false);
+  const seededRef = React.useRef(spent === true);
+  // The controlled value as this hook last saw it, so the effect below can tell a *transition* from
+  // a caller that simply sits at the same value.
+  const lastSpentRef = React.useRef(spent);
+  const onSpendRef = React.useRef(onSpend);
+  onSpendRef.current = onSpend;
   // Held in a ref so a caller passing an inline function doesn't re-arm the effect on every render.
   const onSeedRef = React.useRef(onSeed);
   onSeedRef.current = onSeed;
 
   React.useEffect(() => {
+    // Only a *transition* of the controlled marker moves the internal one, and only a controlled
+    // caller has one at all — `undefined` means the marker is this mount's alone.
+    //
+    // Reading `spent === false` on every run instead would break the at-most-once contract for a
+    // caller that legitimately stays at false: `onSpend` is optional, so a caller may never write
+    // the value back, and the next options or membership update would re-arm the marker and seed
+    // straight over a selection the viewer had since made.
+    const previousSpent = lastSpentRef.current;
+    lastSpentRef.current = spent;
+    if (spent !== undefined && spent !== previousSpent) seededRef.current = spent;
     if (seededRef.current || pending || memberSpaceIds === null) return;
     // An empty menu is not an answer about the viewer, settled or not — see the note above on why
     // this holds the seed rather than spending it.
@@ -120,14 +166,16 @@ export function useMemberSpaceDefault({
     if (seeded.length === 0) return;
 
     seededRef.current = true;
+    onSpendRef.current?.();
     onSeedRef.current(seeded);
-  }, [availableSpaceIds, memberSpaceIds, pending]);
+  }, [availableSpaceIds, memberSpaceIds, pending, spent]);
 
   // Marks the seed as spent without applying it. A ref rather than state: this must take effect
   // for the effect above on the very same tick the viewer acts, and re-rendering to record it
   // would leave a window where their pick is already made and the seed still armed.
   return React.useCallback(() => {
     seededRef.current = true;
+    onSpendRef.current?.();
   }, []);
 }
 
@@ -159,6 +207,8 @@ export function useSpaceFilterMenu({
   setSpaceIds,
   memberSpaceIds,
   pending,
+  seedSpent,
+  onSeedSpend,
 }: {
   /** What this surface is offering, already gated. */
   offeredSpaces: SpaceFacetOption[];
@@ -167,6 +217,10 @@ export function useSpaceFilterMenu({
   memberSpaceIds: ReadonlySet<string> | null;
   /** Whether those options are still resolving — see {@link useMemberSpaceDefault}. */
   pending: boolean;
+  /** Passed straight through as {@link useMemberSpaceDefault}'s `spent`. */
+  seedSpent?: boolean;
+  /** Passed straight through as {@link useMemberSpaceDefault}'s `onSpend`. */
+  onSeedSpend?: () => void;
 }): {
   /** Ordered, with the viewer's selection kept visible even where the count dropped it. */
   facetSpaces: SpaceFacetOption[];
@@ -185,6 +239,8 @@ export function useSpaceFilterMenu({
     memberSpaceIds,
     availableSpaceIds: offeredSpaceIds,
     pending,
+    spent: seedSpent,
+    onSpend: onSeedSpend,
     // A seed the selection already holds is not worth a render. A surface whose options are a
     // server prop applies the default in its own initial state — see `memberSpaceSelection` — and
     // the effect then arrives at the same answer a beat later.

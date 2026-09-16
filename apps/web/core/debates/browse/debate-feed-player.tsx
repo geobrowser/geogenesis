@@ -5,9 +5,11 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
+import { DebateTileChip, tileChipSurface } from '~/core/debates/debate-video-tile';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
+import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
 
@@ -21,12 +23,23 @@ import { WinnerVoteButton } from './winner-vote-button';
 type DebateFeedPlayerProps = {
   debate: Debate;
   active: boolean;
+  /**
+   * Load this debate's recordings without playing them — for the card the viewer is about to
+   * reach. Resolving the two signed URLs is a round trip each, and until they land
+   * `DebateFeedPlayer` renders the "Loading…" placeholder instead of a <video>, which is what
+   * makes arriving at a card feel glitchy (GEO-2895).
+   */
+  preload?: boolean;
   votes: DebateVotesResult;
 };
 
-export function DebateFeedPlayer({ debate, active, votes }: DebateFeedPlayerProps) {
+export function DebateFeedPlayer({ debate, active, preload = false, votes }: DebateFeedPlayerProps) {
   const { hasVoted } = votes;
-  const controller = useDebatePlayback(debate, active);
+  // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
+  // fetch and the transcript query — playback is driven by `active` in the effect below — so a
+  // preloading card fetches without autoplaying off-screen.
+  const controller = useDebatePlayback(debate, active || preload);
+  const measurement = usePlaybackAnalytics(debate, active, controller);
   const {
     slot1VideoRef,
     slot2VideoRef,
@@ -47,14 +60,26 @@ export function DebateFeedPlayer({ debate, active, votes }: DebateFeedPlayerProp
     activeSlot,
     subtitle,
     onPlaybackTick,
-    togglePlayback,
-    playFromStart,
+    togglePlayback: togglePlaybackRaw,
+    playFromStart: playFromStartRaw,
     resumeBoth,
     suspend,
-    seekBoth,
+    seekBoth: seekBothRaw,
     beginScrub,
     endScrub,
   } = controller;
+  const togglePlayback = () => {
+    measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
+    togglePlaybackRaw();
+  };
+  const playFromStart = () => {
+    measurement.control('replay');
+    void playFromStartRaw();
+  };
+  const seekBoth = (seconds: number) => {
+    measurement.control('seek');
+    seekBothRaw(seconds);
+  };
 
   // Autoplay the debate that's in view; pause the rest. Respect an explicit
   // user pause so scrolling back doesn't fight the viewer, and don't resume
@@ -74,7 +99,7 @@ export function DebateFeedPlayer({ debate, active, votes }: DebateFeedPlayerProp
   const showPausedGlyph = ready && userPaused && !playbackEnded;
 
   return (
-    <div className="group relative flex flex-col gap-2">
+    <div ref={measurement.elementRef} className="group relative flex flex-col gap-2">
       <DebaterVideo
         participant={slot1Participant}
         src={urls.slot1}
@@ -97,7 +122,10 @@ export function DebateFeedPlayer({ debate, active, votes }: DebateFeedPlayerProp
             // to hover-only.
             <ControlCircle
               ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
-              onClick={() => setMutedByUser(current => !current)}
+              onClick={() => {
+                measurement.control(mutedByUser ? 'unmute' : 'mute');
+                setMutedByUser(current => !current);
+              }}
               className={
                 mutedByUser
                   ? undefined
@@ -256,9 +284,9 @@ function DebaterVideo({
           {name}
         </span>
         {participant && (
-          <span className="inline-flex h-4 shrink-0 items-center rounded-full bg-white/60 px-1.5 text-[0.75rem] leading-none text-text">
+          <DebateTileChip className={cx('shrink-0 text-text', tileChipSurface)}>
             {participant.position_label}
-          </span>
+          </DebateTileChip>
         )}
       </button>
 

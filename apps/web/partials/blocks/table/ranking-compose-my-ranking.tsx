@@ -80,6 +80,7 @@ export function RankingComposeMyRanking({
             className={cx(RANKING_COMPOSE_PUBLISH_BUTTON_CLASS, 'justify-self-end')}
             disabled={!canPublish}
             onClick={onPublish}
+            data-analytics-feature="ranking-submit"
           >
             {isSaving ? 'Publishing…' : 'Publish ranking'}
           </Button>

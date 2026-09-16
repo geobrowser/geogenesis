@@ -19,7 +19,7 @@ export type DebateAcceptorConfig = {
 };
 
 /** Secrets UIs and shell exports often keep the wrapping quotes as part of the value. */
-function readEnv(name: string): string {
+export function readEnv(name: string): string {
   const value = process.env[name]?.trim() ?? '';
   const quoted = /^(['"])([\s\S]*)\1$/.exec(value);
   return quoted ? quoted[2].trim() : value;

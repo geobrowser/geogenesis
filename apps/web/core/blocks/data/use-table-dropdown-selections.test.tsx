@@ -36,7 +36,10 @@ describe('useTableDropdownSelections', () => {
     const { result } = renderHook(() => useTableDropdownSelections(REL_A));
 
     act(() => result.current.updateSelections(() => ({ [TOPICS]: ['t9'] })));
-    expect(JSON.parse(window.localStorage.getItem(key) ?? 'null')).toEqual({ [TOPICS]: ['t9'] });
+    expect(JSON.parse(window.localStorage.getItem(key) ?? 'null')).toEqual({
+      selections: { [TOPICS]: ['t9'] },
+      modes: {},
+    });
 
     act(() => result.current.updateSelections(() => ({})));
     expect(window.localStorage.getItem(key)).toBeNull();

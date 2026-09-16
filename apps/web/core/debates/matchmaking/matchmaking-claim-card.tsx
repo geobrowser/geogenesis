@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
+import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-position-summaries';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
@@ -15,6 +16,7 @@ import {
   useEntityResponseIndexingSnapshot,
   useResetEntityResponseIndexingSnapshot,
 } from '~/core/hooks/use-entity-vote';
+import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -28,6 +30,7 @@ import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
+import { OnlineDot } from '~/design-system/online-dot';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
@@ -38,6 +41,7 @@ import type {
   DebateParticipantSummary,
   MatchmakingReadiness,
 } from '../api';
+import { useGeoChatAuth } from '../hooks';
 import { hubCardMotion } from './hub-motion';
 
 type Props = {
@@ -62,6 +66,27 @@ type Props = {
    * from geo-chat carrying both.
    */
   answersReady?: boolean;
+  /**
+   * Whether the indexed response may answer for the viewer's side while geo-chat cannot.
+   *
+   * For the minute or so after an account is created, geo-chat refuses every viewer-relative read
+   * until it has indexed it. The hub panel is geo-chat's surface, so for that whole minute it had
+   * nothing — every pill dead — while the same claims in the main feed took positions normally. The
+   * feed was never geo-chat-only: it resolves the side through `useClaimResponseState`, which falls
+   * back to the indexed read, and that is the entire difference between the two surfaces.
+   *
+   * A brand new account is also the case where the fallback is most obviously right: it holds no
+   * positions, so the indexed read's "no side" is the true answer rather than a stand-in for one.
+   *
+   * Only the *side* was ever outstanding here. The vocabulary arrives with the claim — the page
+   * carries its "Is factual" value — so the fallback completes the one missing fact rather than
+   * guessing at two.
+   *
+   * Still a wait, not a shortcut: the side counts as known once the indexed read has *settled*, and
+   * `null` before then is "not yet", not "no side". Drawing both pills unselected over that is what
+   * makes a press republish the side the viewer already holds instead of clearing it.
+   */
+  answersMayComeFromIndex?: boolean;
   /** Why responding is refused outright — an unpublished edit to the claim's own vocabulary. */
   responseBlockedReason?: string | null;
   /** Rendered under the summary, for hosts with something extra to say. */
@@ -74,6 +99,16 @@ type Props = {
    * `Request debate` above it would be a different button wearing the same words.
    */
   hideEndSlot?: boolean;
+  /**
+   * Replaces the card's own offer with the host's.
+   *
+   * For the one host whose offer is not the card's: the rematch picker sends a session-scoped
+   * rematch request, its own mutation with its own gating. It used to draw that in a footer, which
+   * left the same action wearing two designs depending on which surface you were looking at
+   * (GEO-2825). It now passes the same control the card would have rendered, wired to its own
+   * mutation, and it lands in the same place.
+   */
+  endSlot?: React.ReactNode;
   /**
    * Replaces the claim's link to its entity page. The rematch picker opens the side panel instead:
    * following a link there would navigate out of the app shell and abandon the live session.
@@ -88,6 +123,12 @@ type Props = {
   viewerIdentityPending?: boolean;
   /** The host has no answer about the viewer's side, rather than an answer of "none" — see below. */
   viewerResponseUnknown?: boolean;
+  /**
+   * False where geo-chat's silence about the viewer's side must not be filled in from the indexed
+   * response (GEO-2823). Only the rematch picker sets it: its sides are the graph's, so an answer
+   * from a second source contradicts the pair it is comparing rather than completing it.
+   */
+  reconcileWithIndexedResponse?: boolean;
   /**
    * Sends a signed-out viewer to Privy instead of publishing. Set by hosts that render to signed-out
    * viewers — the hub's Claims tab and the claim page — and left unset when signing in is not a
@@ -126,13 +167,16 @@ export function MatchmakingClaimCard({
   readiness,
   activeDebate,
   answersReady,
+  answersMayComeFromIndex,
   responseBlockedReason,
   footer,
   onOpenClaim,
   viewerIdentityPending,
   viewerResponseUnknown,
+  reconcileWithIndexedResponse,
   onRequireSignIn,
   hideEndSlot,
+  endSlot,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
@@ -183,13 +227,17 @@ export function MatchmakingClaimCard({
           readiness={readiness}
           activeDebate={activeDebate}
           answersReady={answersReady}
+          answersMayComeFromIndex={answersMayComeFromIndex}
           responseBlockedReason={responseBlockedReason}
           readResponses={readResponses}
           onOpenClaim={onOpenClaim}
           viewerIdentityPending={viewerIdentityPending}
           viewerResponseUnknown={viewerResponseUnknown}
+          reconcileWithIndexedResponse={reconcileWithIndexedResponse}
           onRequireSignIn={onRequireSignIn}
           hideEndSlot={hideEndSlot}
+          endSlot={endSlot}
+          hasFooter={Boolean(footer)}
         />
       ) : (
         <UnresolvableControls
@@ -199,6 +247,7 @@ export function MatchmakingClaimCard({
           activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
           hideEndSlot={hideEndSlot}
+          endSlot={endSlot}
         />
       )}
 
@@ -281,6 +330,7 @@ export function useClaimPositionControl({
   claim,
   positions,
   readiness,
+  serverReadiness = readiness,
   answersReady = true,
   responseBlockedReason = null,
   viewerIdentityPending,
@@ -291,6 +341,26 @@ export function useClaimPositionControl({
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
+  /**
+   * geo-chat's own answer about this viewer, or null while it has not given one.
+   *
+   * Only the retirement of an optimistic write reads this, and it has to: `readiness` may be the
+   * merged one, whose `viewer_response` falls back to the indexed read — the same distinction
+   * `useBackfillReadinessForHeldPosition` draws, for the same reason. Confirming a write against
+   * that is confirming it against the client's other guess rather than against the server.
+   *
+   * What it cost: take a position while geo-chat was still registering a new account, the indexer
+   * caught up first, the merged readiness "confirmed" the write and retired the optimism — and the
+   * viewer's own avatar dropped off the side until geo-chat finally answered and put it back.
+   *
+   * Null rather than a readiness with a null response, because geo-chat saying "no side" and geo-chat
+   * not having spoken are the same shape and opposite facts. Clearing a position is where that bites:
+   * the clear would confirm against silence and retire at once, and the indexed read — which has not
+   * caught up either — would then stand the viewer back up on the side they just left.
+   *
+   * Defaults to `readiness`, which is right for every host whose readiness *is* geo-chat's.
+   */
+  serverReadiness?: MatchmakingReadiness | null;
   /**
    * False while the claim's own state is still arriving.
    *
@@ -422,13 +492,16 @@ export function useClaimPositionControl({
   // neither side reports the response.
   React.useEffect(() => {
     if (responseIndexing.status !== 'indexed') return;
+    // Nothing to hand back to yet. The viewer's own write stands until the server it was made
+    // against says the same thing — see `serverReadiness`.
+    if (!serverReadiness) return;
     const expected = responseIndexing.pending.expectedResponse;
     const confirmed =
       expected === null
-        ? readiness.viewer_response === null
-        : readiness.viewer_response?.position === (expected === 'positive');
+        ? serverReadiness.viewer_response === null
+        : serverReadiness.viewer_response?.position === (expected === 'positive');
     if (confirmed) resetResponseIndexing(responseIndexing.runId);
-  }, [readiness.viewer_response, resetResponseIndexing, responseIndexing]);
+  }, [serverReadiness, resetResponseIndexing, responseIndexing]);
 
   const respond = (position: boolean) => {
     if (!isConnected) {
@@ -482,44 +555,52 @@ function RespondableControls({
   readiness,
   activeDebate,
   answersReady = true,
+  answersMayComeFromIndex = false,
   responseBlockedReason = null,
   readResponses = true,
   onOpenClaim,
   viewerIdentityPending,
   viewerResponseUnknown,
+  reconcileWithIndexedResponse = true,
   onRequireSignIn,
   hideEndSlot,
+  endSlot,
+  hasFooter,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: Debate | boolean | null;
+  /**
+   * Whether the host renders anything after these controls.
+   *
+   * Only the footer band cares: it bleeds past the card's padding to sit on the base, which is only
+   * true when nothing follows it. The rematch picker's error alert does, and would land under a
+   * band that had already claimed the bottom edge.
+   */
+  hasFooter?: boolean;
   answersReady?: boolean;
+  /** See {@link Props.answersMayComeFromIndex}. */
+  answersMayComeFromIndex?: boolean;
   responseBlockedReason?: string | null;
   /** False while the card is still far enough below the fold that its reads are not worth making. */
   readResponses?: boolean;
   onOpenClaim?: () => void;
   viewerIdentityPending?: boolean;
   viewerResponseUnknown?: boolean;
+  /**
+   * False where geo-chat's silence about the viewer's side must not be filled in from the indexed
+   * response (GEO-2823). Only the rematch picker sets it: its sides are the graph's, so an answer
+   * from a second source contradicts the pair it is comparing rather than completing it.
+   */
+  reconcileWithIndexedResponse?: boolean;
   onRequireSignIn?: () => void;
   hideEndSlot?: boolean;
+  endSlot?: React.ReactNode;
 }) {
-  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
-    useClaimPositionControl({
-      claim,
-      positions,
-      readiness,
-      answersReady,
-      responseBlockedReason,
-      viewerIdentityPending,
-      viewerResponseUnknown,
-      onRequireSignIn,
-      // The faces the match implies belong with the offer the match makes. Where the slot is hidden
-      // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`.
-      offersDebate: !hideEndSlot,
-    });
-  // One read for the card. The header flags a contested claim and the footer reports the split, and
-  // deciding that twice is how the two would eventually disagree.
+  // One read for the card, and now the second half of what the card draws from. The header flags a
+  // contested claim, the footer reports the split, and — since GEO-2823 — the viewer's own response
+  // is reconciled against it too. Deciding any of that twice is how surfaces drift.
   //
   // Held on `answersReady` as well as proximity, because the response kind is part of both query
   // keys. Asking under the `stance` fallback does not merely waste a pair of requests on a factual
@@ -531,12 +612,112 @@ function RespondableControls({
   // side, which the counts do not depend on. That costs nothing: hosts that resolve the kind
   // through `useClaimResponseState` have already primed this exact key by then, so the extra beat
   // is a cache read, and on the hub's own tabs the rows carry their kind and it is never false.
+  // Who the remembered side below is *about*. Same key every viewer-relative query in this folder
+  // is scoped by, so the memory is scoped the way the reads it remembers already are.
+  const { accountKey: viewerKey } = useGeoChatAuth();
+  // Named, because the memory below has to know whether this read was *asked* — a disabled one
+  // reports "not loading, no side", which is the shape of a settled answer and none of the fact.
+  const summaryEnabled = readResponses && (answersReady || answersMayComeFromIndex);
   const summary = useClaimResponseSummary(
     claim.claim_entity_id,
     claim.space_id,
     readiness.response_kind,
-    readResponses && answersReady
+    // Or where the index is allowed to answer for the side, since then the kind is the page's and
+    // this read is the thing being waited *for* rather than something waiting behind it. Gating it
+    // on `answersReady` there would deadlock: that flag is false precisely because geo-chat has not
+    // answered, and this is what answers instead.
+    summaryEnabled
   );
+
+  /**
+   * The last side the indexed read actually *settled* on, kept across its own refetches — through
+   * {@link useLastSettled}, which is this exact shape and arrived with GEO-2898 while this branch
+   * was in review. The reasoning below is why this card needs it; the hook is where it lives.
+   *
+   * Reported: take a position in the hub panel and your face appears, disappears a moment later, and
+   * comes back once geo-chat catches up — which the explore card never does.
+   *
+   * Reading the read live is what did it. `isViewerResponseLoading` goes true again on every
+   * refetch, and the substitution below was withdrawn whenever it did, so the viewer's side — and
+   * the avatar standing on it — blinked out and returned on a cadence nobody asked about. It shows
+   * up most on a fresh account because geo-chat, the other source, is refusing and cannot cover the
+   * gap.
+   *
+   * Settled, emphatically, not merely last-seen: a read that comes back with no side is an answer
+   * and is kept, so clearing a position still clears it. Only the window where the answer is
+   * *in flight* reuses the previous one, which is the window `null` means "not yet" in.
+   *
+   * Only from a read that was actually asked. A disabled `useClaimResponseSummary` reports
+   * `isViewerResponseLoading: false` and `indexedViewerDirection: null` — the exact shape of "asked,
+   * and they hold no side" — and every card below the fold starts disabled on `readResponses`. Taken
+   * as an answer that would mark the side known before anything had looked it up, and the pills
+   * would go live over a side nobody knew, which is the one thing this whole path exists to prevent.
+   *
+   * Keyed by everything the read it remembers is keyed by: the claim, the viewer, and the response
+   * kind. A remembered side belongs to the claim it was read for, to the person it was read about,
+   * and to the vocabulary it was read under. The card is recycled down a virtualized list, it
+   * outlives a sign-in, and a claim's kind can change under it — and each of those without its own
+   * segment hands the next read's question the previous one's answer. The kind is the subtle one:
+   * a stance response is not an answer about a claim that has become Verify/Dispute, and treating
+   * it as one would enable the controls over it.
+   */
+  const claimKey = `${claim.space_id}:${claim.claim_entity_id}:${viewerKey ?? 'anon'}:${readiness.response_kind}`;
+  const sideSettling = !summaryEnabled || summary.isViewerResponseLoading;
+  // `'none'` rather than `null` for "settled on no side", so the two facts `null` would otherwise
+  // carry stay apart: nothing held yet, against an answer of nobody. A string rather than an object
+  // because `resolvedReadiness` memoizes on it, and a fresh object each render would defeat that.
+  const settledDirection = useLastSettled<'positive' | 'negative' | 'none' | null>(
+    sideSettling ? null : (summary.indexedViewerDirection ?? 'none'),
+    sideSettling,
+    claimKey
+  );
+
+  /**
+   * The viewer's own side, with the indexed read standing in where geo-chat has no answer (GEO-2823).
+   *
+   * The optimistic snapshot is shared across surfaces, so once any of them retires it, a surface
+   * reading geo-chat alone drops a side geo-chat has not caught up on. The rematch picker opts out:
+   * its sides are the graph's, and geo-chat's silence there is not the same fact (GEO-2807).
+   */
+  const resolvedReadiness = React.useMemo(() => {
+    if (!reconcileWithIndexedResponse || viewerResponseUnknown) return readiness;
+    // `settledDirection` is null until this claim has settled once, which is the read still loading.
+    const viewerResponse = viewerResponseWithIndexedFallback({
+      viewerResponse: readiness.viewer_response,
+      indexedDirection: settledDirection === 'none' ? null : settledDirection,
+      isIndexedLoading: settledDirection === null,
+      responseKind: readiness.response_kind,
+    });
+    return viewerResponse === (readiness.viewer_response ?? null)
+      ? readiness
+      : { ...readiness, viewer_response: viewerResponse };
+  }, [readiness, reconcileWithIndexedResponse, settledDirection, viewerResponseUnknown]);
+
+  /**
+   * The side is known once *something* has answered for it — geo-chat, or the indexed read standing
+   * in where the host allows it. `resolvedReadiness` above has already done the standing in; this
+   * tells the gate the same thing, which otherwise goes on withholding a side the card now holds.
+   */
+  const sideKnown =
+    answersReady || (answersMayComeFromIndex && reconcileWithIndexedResponse && settledDirection !== null);
+
+  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
+    useClaimPositionControl({
+      claim,
+      positions,
+      readiness: resolvedReadiness,
+      // The unmerged one, and only once geo-chat has actually answered for this claim — which is
+      // exactly what `answersReady` reports, before the index is allowed to stand in for it.
+      serverReadiness: answersReady ? readiness : null,
+      answersReady: sideKnown,
+      responseBlockedReason,
+      viewerIdentityPending,
+      viewerResponseUnknown,
+      onRequireSignIn,
+      // The faces the match implies belong with the offer the match makes. Where the slot is hidden
+      // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`.
+      offersDebate: !hideEndSlot,
+    });
 
   return (
     <>
@@ -546,9 +727,17 @@ function RespondableControls({
         onOpenClaim={onOpenClaim}
         isControversial={summary.isControversial}
         endSlot={
-          hideEndSlot ? null : (
-            <ClaimEndSlot claimId={claim.claim_entity_id} spaceId={claim.space_id} activeDebate={activeDebate} />
-          )
+          endSlot ??
+          (hideEndSlot ? null : (
+            <ClaimEndSlot
+              claimId={claim.claim_entity_id}
+              spaceId={claim.space_id}
+              activeDebate={activeDebate}
+              // `undefined` until the reads have landed, so a card that cannot yet say which side
+              // the viewer holds does not read as saying they hold none.
+              viewerPosition={sideKnown ? viewerPosition : undefined}
+            />
+          ))
         }
       />
       <PositionRow
@@ -573,12 +762,23 @@ function RespondableControls({
           answered yet" — a disabled hook reports a total of zero, and that is the absence of an
           answer rather than an answer of none. */}
       {!readResponses || summary.isLoading ? null : (
+        // The card's own footer band (Figma 76081-15715): grey, full-bleed to the card's edge, with
+        // the share, the split and the faces on one line. It was a rule and two stacked rows, which
+        // read as more card rather than as the card's base — and the split bar, at full width above
+        // its own reading, was the loudest thing on a card whose subject is the claim.
         <ClaimSummary
           entityId={claim.claim_entity_id}
           spaceId={claim.space_id}
           responseKind={readiness.response_kind}
           summary={summary}
-          className="mt-3 border-t border-divider pt-3"
+          layout="inline"
+          className={cx(
+            '-mx-3 mt-3 border-t border-divider bg-grey-01 px-3 py-2',
+            // Only reaches the card's base when nothing follows it. A host that passes a footer —
+            // the rematch picker's error alert — renders after this, and a band bled past the
+            // padding would sit under it.
+            !hasFooter && '-mb-3 rounded-b-[inherit]'
+          )}
         />
       )}
     </>
@@ -628,7 +828,16 @@ export function withViewerPosition({
   const listedOnAnotherSide = positions.some(
     side => side.position !== viewerPosition && side.participants.some(heldByViewer)
   );
-  if (viewerPosition === serverPosition && !listedOnAnotherSide) return positions;
+  // ...and they may lag behind it on the side the viewer actually holds, which is the half this
+  // used to miss (GEO-2821). Agreeing about the *position* was treated as nothing left to do, so
+  // the viewer's own face was left to geo-chat's presence view — and that view lists a viewer only
+  // where it has a readiness row for them, which pre-GEO-2740 positions do not have until
+  // something backfills one. Same viewer, same online status, face on the claims that had been
+  // repaired and no face on the rest. The client knows which side it holds; assert it.
+  const listedOnHeldSide =
+    viewerPosition === null ||
+    positions.some(side => side.position === viewerPosition && side.participants.some(heldByViewer));
+  if (viewerPosition === serverPosition && !listedOnAnotherSide && listedOnHeldSide) return positions;
 
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const viewer = {
@@ -662,6 +871,11 @@ export function withViewerPosition({
   const countsViewer = (side: DebateClaimPositionSummary) =>
     (serverPosition === side.position && !listedOnAnotherSide) || side.participants.some(heldByViewer);
 
+  // Both counts answered by `countsViewer`, deliberately — `participants` is a *capped* preview
+  // (see `DebateOnlineChoice`), so "absent from the list" does not mean "absent from the count".
+  // Asking the list about `present_count` guesses, and guesses wrong in both directions: it invents
+  // a person on a side whose preview simply ran out, and after a side switch it fails to take the
+  // viewer off the side they left while adding them to the new one — counting them twice.
   const withViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => {
     const missing = countsViewer(side) ? 0 : 1;
     return {
@@ -709,6 +923,7 @@ function UnresolvableControls({
   activeDebate,
   onOpenClaim,
   hideEndSlot,
+  endSlot,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -716,6 +931,7 @@ function UnresolvableControls({
   activeDebate?: Debate | boolean | null;
   onOpenClaim?: () => void;
   hideEndSlot?: boolean;
+  endSlot?: React.ReactNode;
 }) {
   return (
     <>
@@ -734,9 +950,20 @@ function UnresolvableControls({
              hardest to reach any other way: every card there is a match by definition, and the
              footer button that used to offer it is gone. Masking an action the server would accept
              is not the safe direction to be wrong in. */
-          hideEndSlot ? null : (
-            <ClaimEndSlot claimId={claim.claim_entity_id} spaceId={claim.space_id} activeDebate={activeDebate} />
-          )
+          endSlot ??
+          (hideEndSlot ? null : (
+            <ClaimEndSlot
+              claimId={claim.claim_entity_id}
+              spaceId={claim.space_id}
+              activeDebate={activeDebate}
+              // No response control here, so there is no optimistic side to read — geo-chat's is
+              // the only answer this card has about where the viewer stands, and where it is silent
+              // this card genuinely does not know. Not `?? null`: on the Matches tab this readiness
+              // *is* the match, and reading silence as "holds none" would contradict the match's own
+              // side and take the offer off the one tab where every card is a match by definition.
+              viewerPosition={readiness.viewer_response?.position}
+            />
+          ))
         }
       />
       <PositionRow
@@ -859,22 +1086,38 @@ function PositionButton({
 }) {
   // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
   // which sheds faces rather than letting the label truncate.
+  // Grey when held, a dashed outline when not (the Figma card). The side you picked used to be
+  // green or red, which made the pill argue the position as well as record it — and put white-ish
+  // text on two saturated fills that nothing else in the product uses this way. Which side is
+  // yours is said by the fill and the filled thumb; which side is *which* is said by the summary
+  // bar below, where the colours still mean something.
+  //
+  // `border` on both states, transparent when held, so picking a side cannot change the pill's
+  // width and shuffle the row.
+  //
+  // `divider` (#F0F0F0) and not `grey-01` (#F6F6F6): the card's footer band is the lighter of the
+  // two and these sit directly above it, so using one grey for both flattens the pill into the
+  // band. Figma names this colour "Secondary/Line dividers", which is the same name this token
+  // already has — the two systems agree, and the pill borrows it rather than inventing a shade.
   const className = cx(
-    '@container flex min-h-7 items-center justify-between gap-2 rounded-full px-3 text-button text-text',
-    selected ? (position ? 'bg-green' : 'bg-red-01') : 'bg-grey-01'
+    '@container flex min-h-7 items-center justify-center rounded-full border px-3 text-button text-text',
+    selected ? 'border-transparent bg-divider' : 'border-dashed border-grey-03 bg-white'
   );
+  // Icon, label and faces are one centred group at a single 6px gap, per the Figma card. They used
+  // to be two groups pushed to opposite ends by `justify-between`, which left the faces adrift at
+  // the far edge of a wide pill instead of reading as part of the label they belong to.
   const content = (
-    <>
-      <span className="flex min-w-0 items-center gap-1.5">
-        {/* Filled once it's the side you hold, so the pill reads as taken even in a screenshot. */}
-        <span className="shrink-0">{position ? <ThumbUp filled={selected} /> : <ThumbDown filled={selected} />}</span>
-        <span className="truncate">
-          {label}
-          {selected ? <span className="sr-only"> — your response</span> : null}
-        </span>
+    <span className="flex min-w-0 items-center gap-1.5">
+      {/* Filled once it's the side you hold, so the pill reads as taken even in a screenshot. */}
+      <span className="shrink-0">{position ? <ThumbUp filled={selected} /> : <ThumbDown filled={selected} />}</span>
+      <span className="truncate">
+        {label}
+        {selected ? <span className="sr-only"> — your response</span> : null}
       </span>
-      {summary && presentCount(summary) > 0 ? <PositionAvatars summary={summary} /> : null}
-    </>
+      {summary && presentCount(summary) > 0 ? (
+        <PositionAvatars summary={summary} ringClassName={selected ? 'border-divider' : 'border-white'} />
+      ) : null}
+    </span>
   );
 
   if (!onRespond) return <div className={className}>{content}</div>;
@@ -886,7 +1129,7 @@ function PositionButton({
       disabled={disabled}
       title={title}
       onClick={() => onRespond(position)}
-      className={cx(className, 'transition-colors disabled:opacity-60', !selected && !disabled && 'hover:bg-grey-01')}
+      className={cx(className, 'transition-colors disabled:opacity-60', !selected && !disabled && 'hover:border-text')}
     >
       {content}
     </button>
@@ -922,19 +1165,27 @@ export function presentCount(summary: Pick<DebateClaimPositionSummary, 'present_
 /**
  * Largest remainder the badge will print.
  *
- * The badge is `min-w-5` with `px-1`, so it sits at exactly 32px until its text outgrows that
- * floor — measured, that happens between "+99" (32px) and "+100" (34.9px). The shedding rules below
- * are written against a 32px badge, so an uncapped count would widen a `shrink-0` stack and start
+ * The badge is `min-w-4` with no padding — a circle the size of a face, 16px of content in a 2px
+ * ring — and 8px type keeps "+99" (about 14px) inside that floor. The shedding rules below are
+ * written against that fixed width, so an uncapped count would widen a `shrink-0` stack and start
  * taking width back off the label, which is the whole thing they exist to prevent. Capping here
- * rather than widening the rule keeps the badge a fixed size for every claim instead of sizing all
- * of them for a crowd that almost never turns up.
+ * rather than widening the rule keeps the badge one size for every claim instead of sizing all of
+ * them for a crowd that almost never turns up. `overflow-hidden` is the backstop if this cap is
+ * ever raised.
  *
  * Understating is safe: the stack is `aria-hidden`, decorative beside a count the row states
  * exactly, and a badge that reads "and at least this many more" is the convention anyway.
  */
 const MAX_OVERFLOW_SHOWN = 99;
 
-function PositionAvatars({ summary }: { summary: DebateClaimPositionSummary }) {
+function PositionAvatars({
+  summary,
+  ringClassName = 'border-white',
+}: {
+  summary: DebateClaimPositionSummary;
+  /** The pill's own background, so the dot's ring reads as a hole punched in it rather than a rim. */
+  ringClassName?: string;
+}) {
   const participants = summary.participants.slice(0, 2);
   const overflow = Math.max(0, presentCount(summary) - participants.length);
 
@@ -948,30 +1199,70 @@ function PositionAvatars({ summary }: { summary: DebateClaimPositionSummary }) {
   // These thresholds are against the pill's *content* box, which is what a container query measures
   // — 24px of `px-3` is already excluded, so they read 24px smaller than the pill widths they
   // correspond to. Inside that box sit the label group (a 12px icon, a 6px gap and 58px of
-  // "Disagree" = 76px) and the 8px gap before the stack. A face is 24px, a second adds 16px after
-  // the 8px overlap, and the badge adds another 24px: 108px holds one face, 124px holds two, 148px
-  // holds the lot. 108px is `claim-pills-wide` seen from inside a pill, which is where that
-  // threshold came from. The badge is 24px only because `MAX_OVERFLOW_SHOWN` keeps its text inside
-  // the `min-w-5` floor — without that cap it grows and the arithmetic here stops holding.
+  // "Disagree" = 76px) and the 6px gap before the stack. A face is a 16px picture in a 2px ring
+  // outside it — 20px of box — pitched 13px apart, so the first costs 20px and each one after it
+  // 13px, the badge likewise: 102px holds one face, 115px holds two, 128px holds the lot. These are
+  // deliberately a few pixels loose rather than exact, because erring toward shedding a face early
+  // is the safe direction — the failure they exist to prevent is the label truncating to "Dis...".
+  // The badge only fits that budget because `MAX_OVERFLOW_SHOWN` keeps its text inside the
+  // `min-w-4` floor; without that cap it grows and this stops holding.
+  //
+  // These were 108/124/148 against 24px faces and an 8px gap. Both changed together: the faces
+  // shrank to match the explore card's, and merging the pill's two groups into one centred run
+  // took the gap to 6px. Anything that moves a face size, a ring, an overlap or that gap moves
+  // these three numbers with it.
   //
   // The badge goes first and a face last, because the faces stay truthful as they are dropped: the
   // count is computed against the participants rendered, so hiding a face would leave a "+N" that
   // no longer adds up, while hiding the badge only stops advertising a remainder.
   return (
-    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-2">
+    // `-7px`, not Figma's `-3px`. Figma's stroke is drawn outside the node and does not lay out, so
+    // its faces are 16px apart less 3px = a 13px pitch. A CSS border *does* lay out, so a face here
+    // is 20px wide and needs -7px to land that same 13px pitch. Copying the -3px across was the bug:
+    // same number, box 4px wider, four pixels of overlap lost per face.
+    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-[7px]">
       {participants.map((participant, index) => (
         <span
           key={participant.user_id}
           className={cx(
-            'relative box-content block size-5 overflow-hidden rounded-full border-2 border-white',
-            index === 0 ? '@max-[108px]:hidden' : '@max-[124px]:hidden'
+            // The picture stays 16px and the ring sits outside it, which is what Figma draws: the
+            // ring's job is to cut the face behind, so it has to be *over* that face rather than
+            // inside its own. 11px of a 16px face shows before the next one's ring bites into it.
+            'relative box-content block size-4 rounded-full border-2',
+            // Figma leaves the ring off the leading face, which overlaps nothing. Transparent
+            // rather than absent, so every face keeps identical geometry: a ring that is not drawn
+            // must not also change the size of the thing it is not drawn on.
+            index === 0 ? 'border-transparent' : ringClassName,
+            index === 0 ? '@max-[102px]:hidden' : '@max-[115px]:hidden'
           )}
         >
-          <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
+          {/* Matches the picture, which `box-content` keeps at a full 16px whether or not the face
+              carries a ring — so every face is the same size and sits on one baseline. The clip is
+              here rather than on the wrapper so the dot can hang over the rim without being cut. */}
+          <span className="block size-4 overflow-hidden rounded-full">
+            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={16} />
+          </span>
+          {/* Everyone in this stack is present by construction — the sides are built from
+              `online_choices` — so the dot needs no condition. It rings in the pill's own colour
+              rather than white, which is the surface actually behind it here. */}
+          {/* Sized and placed from the 16px face: 4px of green in a 2px ring, sitting on the
+              picture's top-left corner with the ring bleeding outside it. Those numbers are
+              `OnlineDot`'s to derive now — the People tab needed the same proportions on a 32px
+              face and two hand-written copies had already drifted. */}
+          <OnlineDot faceSize={16} ringClassName={ringClassName} />
         </span>
       ))}
       {overflow > 0 && (
-        <span className="relative box-content flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[11px] leading-5 text-grey-04 tabular-nums @max-[148px]:hidden">
+        <span
+          className={cx(
+            // A circle the size of a face, which is what Figma draws and what the stack read as
+            // before: `px-1` made it a wide pill sitting beside two small circles. `min-w-4` with
+            // no padding keeps it round — "+99", the most `MAX_OVERFLOW_SHOWN` allows, is about
+            // 14px of 8px type and still fits inside the 16px floor.
+            'relative box-content flex h-4 min-w-4 items-center justify-center overflow-hidden rounded-full border-2 bg-grey-02 text-[8px] leading-4 text-grey-04 tabular-nums @max-[128px]:hidden',
+            ringClassName
+          )}
+        >
           +{Math.min(overflow, MAX_OVERFLOW_SHOWN)}
         </span>
       )}

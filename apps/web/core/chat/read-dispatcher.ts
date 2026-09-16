@@ -10,6 +10,7 @@ import * as Effect from 'effect/Effect';
 
 import { DEFAULT_ENTITY_SCHEMA } from '~/core/database/entities';
 import { selectSearchAdditionalSpaceIds } from '~/core/hooks/search-additional-space-ids';
+import { isSearchCancellation } from '~/core/hooks/search-cancellation';
 import { getEntity, getEntityNames, getResults, getSpace, getSpaces } from '~/core/io/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
@@ -502,7 +503,13 @@ export async function executeSearchGraph(input: SearchGraphInput, ctx: ReadCtx):
             ),
         })
         .catch(err => {
-          console.error('[chat/read-dispatcher] searchGraph remote failed', err);
+          // A cancellation is not a failure and should not be logged as one. The
+          // empty list stands either way — unlike the picker search this does not
+          // cache, so the fallback costs this one call rather than sticking — and
+          // the local matches below still answer.
+          if (!isSearchCancellation(err)) {
+            console.error('[chat/read-dispatcher] searchGraph remote failed', err);
+          }
           return [] as SearchResult[];
         }),
     ]);

@@ -3,7 +3,7 @@
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
-import { debateFormatById, defaultDebateFormatId } from './formats';
+import { debateFormatById, debateTurnRole, defaultDebateFormatId } from './formats';
 
 type FormatParticipant = {
   user_id: string;
@@ -60,10 +60,17 @@ export function DebateFormatDetails({
 
 function turnLabel(participant: FormatParticipant, currentUserId: string, turnIndex: number, turnCount: number) {
   const name = participant.user_id === currentUserId ? 'You' : speakerLabel(participant);
-  const roundIndex = Math.floor(turnIndex / 2);
-  if (roundIndex === 0) return `${name} ${name === 'You' ? 'make' : 'makes'} an argument`;
-  if (roundIndex === Math.floor((turnCount - 1) / 2)) return `${name} ${name === 'You' ? 'rebut' : 'rebuts'}`;
-  return `${name} ${name === 'You' ? 'respond' : 'responds'}`;
+  const you = name === 'You';
+  switch (debateTurnRole(turnIndex, turnCount)) {
+    case 'opening':
+      return `${name} ${you ? 'make' : 'makes'} an argument`;
+    case 'rebuttal':
+      return `${name} ${you ? 'rebut' : 'rebuts'}`;
+    case 'closing':
+      return `${name} ${you ? 'close' : 'closes'} to the audience`;
+    default:
+      return `${name} ${you ? 'respond' : 'responds'}`;
+  }
 }
 
 function formatTurnDuration(durationMs: number) {

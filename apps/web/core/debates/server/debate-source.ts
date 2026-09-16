@@ -21,6 +21,8 @@ import {
   mergeTranscriptSegmentsIntoTurns,
 } from '../debate-publish-draft';
 import { hasProcessedVideo } from '../playback-utils';
+import { applyClaimReusePolicy } from './claim-reuse';
+import { type DebateExtractedClaimsResponse, decodeExtractedClaims } from './extracted-claims';
 
 const debatePublishSettlementMs = 60_000;
 
@@ -247,7 +249,13 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
   // transcript ourselves (and publishing no claims) when claims aren't available yet.
   const extracted = await loadDebateClaims(debateId);
   const transcriptTurns = extracted?.transcriptTurns ?? (await loadTranscriptTurns(debateId, debate));
-  const claims = extracted?.claims ?? [];
+  // geo-chat decided an hour ago which claims duplicate a published one; the policy decides which
+  // of those references the draft may honour now (flag, and the entity still being a Claim in
+  // this space). Everything it drops is minted as before.
+  const claims = await applyClaimReusePolicy(extracted?.claims ?? [], debate.claim.space_id, {
+    debateId,
+    motionClaimEntityId: debate.claim.claim_entity_id,
+  });
 
   const participants: DebatePublishParticipant[] = debate.participants.map(p => ({
     spaceEntityId: p.profile_space_id,
@@ -397,17 +405,6 @@ async function buildDebateShareCard(
   }
 }
 
-type DebateExtractedClaimsTurn = {
-  turn_index: number;
-  participant_slot: number;
-  /** The turn speaker's Geo personal-space entity id (the Authors relation target). */
-  attributed_space_id: string;
-  speaker_name: string | null;
-  text: string;
-};
-type DebateExtractedClaimsClaim = { text: string; is_factual: boolean | null; turn_index: number };
-type DebateExtractedClaimsResponse = { turns: DebateExtractedClaimsTurn[]; claims: DebateExtractedClaimsClaim[] };
-
 /**
  * Load geo-chat's pre-computed, pre-attributed debate claims. geo-chat extracts them in its media
  * job (beside Whisper) and returns the canonical per-turn structure PLUS the claims keyed to it by
@@ -429,21 +426,7 @@ async function loadDebateClaims(
     return null;
   }
   if (!response || !Array.isArray(response.turns) || response.turns.length === 0) return null;
-
-  const transcriptTurns: DebatePublishTurn[] = [...response.turns]
-    .sort((a, b) => a.turn_index - b.turn_index)
-    .map(turn => ({
-      turnIndex: turn.turn_index,
-      speakerSpaceEntityId: turn.attributed_space_id,
-      speakerName: turn.speaker_name,
-      text: turn.text,
-    }));
-  const claims: DebateClaimInput[] = (response.claims ?? []).map(claim => ({
-    text: claim.text,
-    isFactual: claim.is_factual ?? null,
-    turnIndex: claim.turn_index,
-  }));
-  return { transcriptTurns, claims };
+  return decodeExtractedClaims(response);
 }
 
 async function loadTranscriptTurns(debateId: string, debate: Debate) {

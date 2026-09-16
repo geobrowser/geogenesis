@@ -312,12 +312,22 @@ export const relationEntityRelationsQuery = graphql(/* GraphQL */ `
 `);
 
 export const relationsByToEntityIdsQuery = graphql(/* GraphQL */ `
-  query RelationsByToEntityIds($toEntityIds: [UUID!]!, $typeId: UUID, $spaceId: UUID) {
-    relations(filter: { toEntityId: { in: $toEntityIds }, typeId: { is: $typeId }, spaceId: { is: $spaceId } }) {
-      id
-      toEntityId
-      spaceId
-      fromEntityId
+  query RelationsByToEntityIds($toEntityIds: [UUID!]!, $typeId: UUID, $spaceId: UUID, $first: Int, $after: Cursor) {
+    relationsConnection(
+      first: $first
+      after: $after
+      filter: { toEntityId: { in: $toEntityIds }, typeId: { is: $typeId }, spaceId: { is: $spaceId } }
+    ) {
+      nodes {
+        id
+        toEntityId
+        spaceId
+        fromEntityId
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
     }
   }
 `);

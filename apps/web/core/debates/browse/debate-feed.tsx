@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useSetAtom } from 'jotai';
 
+import { capture } from '~/core/analytics';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
 import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
@@ -154,6 +155,26 @@ export function DebatesBrowseFeed({
   // An anchored feed starts active on the anchor so the linked debate is the one
   // that autoplays, before any IntersectionObserver has fired.
   const [activeId, setActiveId] = React.useState<string | null>(initialDebateId ?? null);
+  const lastObservedDebate = React.useRef<string | null>(null);
+  const lastScrollIntent = React.useRef(-Infinity);
+  const activateVisibleDebate = (debateId: string) => {
+    setActiveId(debateId);
+    if (lastObservedDebate.current === debateId) return;
+    const previousDebateId = lastObservedDebate.current;
+    lastObservedDebate.current = debateId;
+    try {
+      capture('debate_navigation', {
+        measurement_version: 'growth-v2',
+        debate_id: debateId,
+        previous_debate_id: previousDebateId,
+        navigation_id: crypto.randomUUID(),
+        trigger: performance.now() - lastScrollIntent.current < 2000 ? 'manual' : 'unknown',
+        navigation_surface: 'debate_feed',
+      });
+    } catch {
+      /* Navigation must work without analytics. */
+    }
+  };
   // Which panel is open, not which debate it was opened from: the claims and
   // comments panels describe the debate you're watching, so they follow the feed
   // as you scroll rather than staying pinned to the one whose button you pressed.
@@ -165,7 +186,7 @@ export function DebatesBrowseFeed({
   // finish what they pressed rather than returning them to the feed to press it again.
   const openPrivySignIn = usePrivySignIn(() => {
     setOpenPanel(null);
-    debatesHub.open('claims');
+    debatesHub.open('lobby');
   });
   // Privy, not the smart account: `useSmartAccount` reports null while the account is restoring
   // and after an initialization failure as well as when nobody is signed in, and sending a
@@ -260,6 +281,10 @@ export function DebatesBrowseFeed({
     }
   }, [activeId, visibleDebates]);
 
+  // Which debate the viewer is on, so the one after it can preload its recordings.
+  // -1 when nothing is active yet, which preloads nothing rather than the first item.
+  const activeIndex = visibleDebates.findIndex(debate => debate.id === activeId);
+
   // Runs after all hooks so the early return never skips one.
   if (anchorMissing && fallback != null) {
     return <>{fallback}</>;
@@ -268,6 +293,16 @@ export function DebatesBrowseFeed({
   const feed = (
     <div
       ref={setScrollEl}
+      onWheel={() => {
+        lastScrollIntent.current = performance.now();
+      }}
+      onTouchMove={() => {
+        lastScrollIntent.current = performance.now();
+      }}
+      onKeyDown={event => {
+        if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', ' '].includes(event.key))
+          lastScrollIntent.current = performance.now();
+      }}
       className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
     >
       {visibleDebates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
@@ -280,10 +315,16 @@ export function DebatesBrowseFeed({
           spaceImage={space?.entity.image}
           topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
+          // Resolve the NEXT debate's recordings while the viewer is still on this one. Each
+          // debate needs two signed URLs, and until they land the player shows "Loading…"
+          // instead of a video, which is what makes arriving at a card feel glitchy
+          // (GEO-2895). Only one ahead — the feed is vertical and one-at-a-time, so a wider
+          // window would fetch recordings most viewers never reach.
+          preload={activeIndex >= 0 && index === activeIndex + 1}
           root={scrollEl}
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
-          onActivate={() => setActiveId(debate.id)}
+          onActivate={() => activateVisibleDebate(debate.id)}
           // Pressing a debate's own control makes it the active one rather than
           // waiting for the scroll observer: its bar is reachable from 0%
           // visibility but activation needs 60%, so mid-scroll the panel would
@@ -309,7 +350,7 @@ export function DebatesBrowseFeed({
             // The hub is its own portal, so the feed's panel state stays out of it. Closing the
             // in-flow panel first keeps the two from stacking over the same feed.
             setOpenPanel(null);
-            debatesHub.open('claims');
+            debatesHub.open('lobby');
           }}
           onOpenClaims={() => {
             setActiveId(debate.id);
@@ -356,6 +397,7 @@ function DebateFeedItem({
   spaceImage,
   topics,
   active,
+  preload,
   root,
   scrollHint,
   onActivate,
@@ -369,6 +411,7 @@ function DebateFeedItem({
   spaceImage?: string | null;
   topics: string[];
   active: boolean;
+  preload: boolean;
   root: HTMLElement | null;
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
@@ -446,7 +489,7 @@ function DebateFeedItem({
             />
           </div>
           <div className="mt-6 md:mt-7">
-            <DebateFeedPlayer debate={debate} active={active} votes={winnerVotes} />
+            <DebateFeedPlayer debate={debate} active={active} preload={preload} votes={winnerVotes} />
           </div>
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}

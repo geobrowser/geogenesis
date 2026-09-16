@@ -153,8 +153,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     // same WhereCondition reference even when their input identities change.
     const stableFilterState = JSON.parse(filterStateKey) as Filter[];
     const stableModesByColumn = JSON.parse(filterModesKey) as ModesByColumn;
-    return filterStateToWhere(stableFilterState, stableModesByColumn);
-  }, [filterStateKey, filterModesKey]);
+    // The block's own space scopes relation and backlink filters (GEO-2865): a table in one
+    // space must not list entities whose matching relation was written in another.
+    return filterStateToWhere(stableFilterState, stableModesByColumn, spaceId);
+  }, [filterStateKey, filterModesKey, spaceId]);
 
   /**
    * The query's own identity. Deliberately derived from `where` rather than `filterStateKey`:

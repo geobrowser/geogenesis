@@ -6,6 +6,8 @@ import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 
@@ -20,15 +22,29 @@ const mocks = vi.hoisted(() => ({
     runId: string | null;
   },
   spaceName: 'Crypto',
-  match: null as { id: string; positions?: DebateClaimPositionSummary[] } | null,
+  // `viewer_position` because a real match carries the side it was computed for the viewer on, and
+  // the end slot checks it: a match made while you held Agree must not draw an offer after you
+  // switch to Disagree. A mock without the field reports every match as matching every side.
+  match: null as { id: string; viewer_position: boolean; positions?: DebateClaimPositionSummary[] } | null,
   blockedReason: undefined as string | undefined,
   request: vi.fn(),
   summaryPositive: 0,
   summaryNegative: 0,
+  /**
+   * The viewer's own side from the *indexed* read, which the card falls back to (GEO-2823).
+   *
+   * Kept separate from `mocks.indexing` on purpose: the real `viewerDirection` folds the in-flight
+   * snapshot in, and that is exactly why the card reads `indexedViewerDirection` instead. Mirroring
+   * that here is what lets a test set one without implying the other.
+   */
+  summaryIndexedViewerDirection: null as 'positive' | 'negative' | null,
+  summaryViewerResponseLoading: false,
+  resetIndexing: vi.fn(),
   spaceId: '019fedae-72b6-7ab2-927a-df044d57c566',
   viewerSpaceId: 'personal-space',
   /** Whether each render of the card's summary read was enabled, in order. */
   summaryEnabled: [] as boolean[],
+  nearViewport: true,
 }));
 
 vi.mock('../hooks', () => ({
@@ -70,21 +86,31 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/claims/browse/claim-response-summary')>();
   return {
     ...actual,
-    useClaimResponseSummary: (
-      _entityId: string,
-      _spaceId: string,
-      _responseKind: string,
-      enabled = true
-    ) => (mocks.summaryEnabled.push(enabled), {
-      ...actual.summarizeClaimResponses(mocks.summaryPositive, mocks.summaryNegative),
-      isLoading: false,
-      isViewerResponseLoading: false,
-      hasCounts: true,
-      viewerDirection: null,
-      viewerSpaceId: null,
-    }),
+    useClaimResponseSummary: (_entityId: string, _spaceId: string, _responseKind: string, enabled = true) => (
+      mocks.summaryEnabled.push(enabled),
+      {
+        ...actual.summarizeClaimResponses(mocks.summaryPositive, mocks.summaryNegative),
+        isLoading: false,
+        isViewerResponseLoading: mocks.summaryViewerResponseLoading,
+        hasCounts: true,
+        // Mirrors the hook: `viewerDirection` is the in-flight snapshot where there is one, the
+        // indexed read otherwise. A mock that let the two drift is how the card's fallback ended up
+        // reading its own optimism back.
+        viewerDirection: mocks.indexing.pending
+          ? mocks.indexing.pending.expectedResponse
+          : mocks.summaryIndexedViewerDirection,
+        indexedViewerDirection: mocks.summaryIndexedViewerDirection,
+        viewerSpaceId: null,
+      }
+    ),
   };
 });
+
+// Off-screen is the default state of most cards in a list, and the state where this card's reads
+// are deliberately not made. Controllable so a test can be in it.
+vi.mock('~/core/hooks/use-near-viewport', () => ({
+  useNearViewport: () => ({ ref: vi.fn(), nearViewport: mocks.nearViewport }),
+}));
 
 vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
   ClaimResponderAvatars: () => null,
@@ -100,7 +126,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
     personalSpaceId: mocks.viewerSpaceId,
   }),
   useEntityResponseIndexingSnapshot: () => mocks.indexing,
-  useResetEntityResponseIndexingSnapshot: () => vi.fn(),
+  useResetEntityResponseIndexingSnapshot: () => mocks.resetIndexing,
 }));
 
 // useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
@@ -208,8 +234,12 @@ beforeEach(() => {
   mocks.request.mockReset();
   mocks.summaryPositive = 0;
   mocks.summaryNegative = 0;
+  mocks.summaryIndexedViewerDirection = null;
+  mocks.summaryViewerResponseLoading = false;
+  mocks.resetIndexing.mockReset();
   mocks.viewerSpaceId = 'personal-space';
   mocks.summaryEnabled = [];
+  mocks.nearViewport = true;
 });
 
 afterEach(cleanup);
@@ -242,6 +272,389 @@ describe('position avatar stack', () => {
     // No faces and no count: two offline holders are not "+2" people you could debate.
     expect(within(disagree).queryByText('+2')).toBeNull();
     expect(within(disagree).queryByText(/^\+/)).toBeNull();
+  });
+
+  /**
+   * The offer follows the match, and the match has to still be about the side the viewer is on.
+   *
+   * #2376 took the position gate back off this control: the request is validated against the same
+   * `debate_claim_readiness` rows the match is drawn from, so waiting on geo-chat echoing the
+   * position back bought nothing. What that leaves uncovered is the match itself going stale.
+   */
+  describe('the offer follows the match, on the side it was made for', () => {
+    const twoSides = () =>
+      withCounts([
+        { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('a')] },
+        { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('b')] },
+      ]);
+
+    it('offers the debate while the response is still indexing', () => {
+      mocks.match = { id: 'match-1', viewer_position: true };
+      // An answer still reconciling is what the card draws its optimistic side from.
+      mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+      renderCard(
+        <MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness({ viewer_response: null })} />
+      );
+
+      expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+    });
+
+    /**
+     * `/matchmaking/matches` is account-level, fetched once with `refetchOnWindowFocus` off, so it
+     * keeps describing the side the viewer held when it was fetched. Switch sides and the
+     * "opponent" it names is now on the *same* side — an offer geo-chat is right to refuse as
+     * nobody holding the opposite position being available, an error the reader cannot connect to
+     * the side they just changed. The match carries the side it was made on, so the card can see
+     * this without asking anything.
+     */
+    it('withdraws an offer made for the side the viewer has switched away from', () => {
+      mocks.match = { id: 'match-1', viewer_position: true };
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ viewer_response: { position: false, position_label: 'Disagree' } })}
+        />
+      );
+
+      expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    });
+
+    it('offers the debate again once the match is for the side the viewer now holds', () => {
+      mocks.match = { id: 'match-1', viewer_position: false };
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ viewer_response: { position: false, position_label: 'Disagree' } })}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+    });
+
+    // Clearing the side the offer rests on takes the offer with it, rather than leaving a button
+    // claiming a debate is available on a claim the reader has just stepped away from.
+    it('withdraws the offer when the viewer clears their position', () => {
+      mocks.match = { id: 'match-1', viewer_position: true };
+      // A clear in flight: `expectedResponse: null` is a removal, and the card holds no side.
+      mocks.indexing = { status: 'reconciling', pending: { expectedResponse: null }, runId: 'run-1' };
+      renderCard(<MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness()} />);
+
+      expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    });
+
+    // A match cannot be made for a viewer holding no side, so a match reported alongside one is the
+    // list being stale. `null` is an answer here — geo-chat's row says "no position" — and it
+    // contradicts a match made for Agree.
+    it('makes no offer on a claim the viewer has not answered', () => {
+      mocks.match = { id: 'match-1', viewer_position: true };
+      renderCard(
+        <MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness({ viewer_response: null })} />
+      );
+
+      expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    });
+
+    /**
+     * The other half of that, and the one worth being careful about: a card that has not yet
+     * resolved the viewer's side is not a card reporting they hold none. Withdrawing the offer on
+     * silence hides an action the server would accept, which is the direction #2376 reverted a
+     * different check for — so `answersReady: false` passes `undefined`, not `null`.
+     */
+    it('leaves the offer alone while the viewer’s side is still unresolved', () => {
+      mocks.match = { id: 'match-1', viewer_position: true };
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ viewer_response: null })}
+          answersReady={false}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * GEO-2823. One claim drawn on two surfaces has to say the same thing about the viewer.
+   *
+   * The hub's rows are `MatchmakingClaim`s and carry geo-chat's answer alone; the explore card
+   * holds a `DebateClaim` and falls back to the on-chain read through `useClaimResponseState`. That
+   * asymmetry is what made the two disagree — about the pills, the avatars and the offer at once —
+   * so the fallback moved into the card, where every host gets it.
+   */
+  describe('reconciles the viewer’s side against the chain', () => {
+    const twoSides = () =>
+      withCounts([
+        { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('a')] },
+        { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('b')] },
+      ]);
+
+    /**
+     * The reported one. The optimistic snapshot is shared across surfaces, so whichever of them
+     * first sees geo-chat confirm retires it for all of them — and the hub, whose only source is
+     * geo-chat, then fell back to an endpoint that had not caught up. Take a side there and it
+     * disappeared about ten seconds later while the explore card went on showing it.
+     */
+    it('keeps the viewer on their side when geo-chat has no answer yet', () => {
+      mocks.summaryIndexedViewerDirection = 'positive';
+      renderCard(
+        <MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness({ viewer_response: null })} />
+      );
+
+      // The side reads as held: pressing it clears rather than republishes.
+      const agree = screen.getByRole('button', { name: /^Agree/ });
+      expect(agree).toHaveAttribute('title', ENTITY_RESPONSE_COPY.stance.removePositive);
+    });
+
+    /**
+     * Reported: take a position in the panel and your face appears, vanishes a moment later, and comes
+     * back once geo-chat catches up — which the explore card never does.
+     *
+     * `isViewerResponseLoading` goes true again on every refetch of the indexed read, and the card
+     * withdrew the viewer's side whenever it did. So the side, and the avatar standing on it, blinked
+     * out and returned on a cadence nobody asked about. Worst on a fresh account, where geo-chat is
+     * refusing and cannot cover the gap.
+     */
+    it('keeps the viewer standing on their side while that read refetches', () => {
+      mocks.summaryIndexedViewerDirection = 'negative';
+      // Rendered through one client held across both passes: the point is a *re-render* of a card
+      // that is still mounted, and remounting it would reset exactly the memory under test.
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const card = () => (
+        <QueryClientProvider client={queryClient}>
+          <MatchmakingClaimCard
+            claim={claim}
+            positions={twoSides()}
+            readiness={readiness({ viewer_response: null })}
+            answersReady={false}
+            answersMayComeFromIndex
+          />
+        </QueryClientProvider>
+      );
+      const view = render(card());
+
+      const before = within(screen.getByRole('button', { name: /^Disagree/ })).getAllByTestId('avatar').length;
+
+      // The refetch: same answer still true, simply in flight again.
+      mocks.summaryViewerResponseLoading = true;
+      view.rerender(card());
+
+      const disagree = screen.getByRole('button', { name: /^Disagree/ });
+      expect(disagree).toHaveAttribute('title', ENTITY_RESPONSE_COPY.stance.removeNegative);
+      expect(within(disagree).getAllByTestId('avatar')).toHaveLength(before);
+    });
+
+    /**
+     * The other half of the avatar blinking off, and the one that survived the first fix.
+     *
+     * The optimistic write is retired once the server agrees with it — but the readiness the card
+     * hands the check is the *merged* one, whose `viewer_response` falls back to the indexed read.
+     * On a fresh account the indexer caught up while geo-chat was still registering, so the write
+     * was confirmed against the client's other guess, retired, and the viewer's own avatar dropped
+     * off the side until geo-chat finally answered and put it back.
+     *
+     * It waits for geo-chat now. Nothing else can confirm a write made against geo-chat.
+     */
+    it('holds the viewer’s own write until geo-chat itself confirms it', () => {
+      mocks.indexing = {
+        status: 'indexed',
+        pending: { expectedResponse: 'positive' },
+        runId: 'run-1',
+      };
+      // The indexer has caught up; geo-chat has not, which is what `answersReady: false` says.
+      mocks.summaryIndexedViewerDirection = 'positive';
+
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ viewer_response: null })}
+          answersReady={false}
+          answersMayComeFromIndex
+        />
+      );
+
+      expect(mocks.resetIndexing).not.toHaveBeenCalled();
+      // And the side is still drawn as held, which is the part the viewer sees.
+      expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute(
+        'title',
+        ENTITY_RESPONSE_COPY.stance.removePositive
+      );
+    });
+
+    /**
+     * A read nobody made is not an answer.
+     *
+     * `useClaimResponseSummary` reports `isViewerResponseLoading: false` and
+     * `indexedViewerDirection: null` while disabled — the exact shape of "asked, and they hold no
+     * side" — and every card below the fold starts disabled to keep a list of them off the network.
+     * Remembering that would mark the side known before anything had looked it up, and the pills
+     * would go live over a side nobody knew: press one and it republishes the position the viewer
+     * already holds instead of clearing it.
+     */
+    it('does not take a read it never made for an answer', () => {
+      mocks.nearViewport = false;
+
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ viewer_response: null })}
+          answersReady={false}
+          answersMayComeFromIndex
+        />
+      );
+
+      expect(mocks.summaryEnabled.every(enabled => enabled === false)).toBe(true);
+      const agree = screen.getByRole('button', { name: /^Agree/ });
+      expect(agree).toBeDisabled();
+      expect(agree).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
+    });
+
+    /**
+     * And a remembered side belongs to the vocabulary it was read under.
+     *
+     * The summary query is keyed by response kind, so a claim that changes from stance to
+     * Verify/Dispute starts a fresh read — and a memory that ignored the kind would hand that read's
+     * question the previous one's answer while it was still out, treating an Agree as a Verify and
+     * enabling the controls over it.
+     */
+    it('does not carry a side across a change of vocabulary', () => {
+      mocks.summaryIndexedViewerDirection = 'negative';
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const card = (responseKind: 'stance' | 'veracity') => (
+        <QueryClientProvider client={queryClient}>
+          <MatchmakingClaimCard
+            claim={claim}
+            positions={twoSides()}
+            readiness={readiness({ viewer_response: null, response_kind: responseKind })}
+            answersReady={false}
+            answersMayComeFromIndex
+          />
+        </QueryClientProvider>
+      );
+      const view = render(card('stance'));
+      expect(screen.getByRole('button', { name: /^Disagree/ })).toBeEnabled();
+
+      // The kind changes, so its read starts again — and is in flight.
+      mocks.summaryViewerResponseLoading = true;
+      view.rerender(card('veracity'));
+
+      // The pills take their labels from the positions, so they read the same; what changes is that
+      // the card no longer claims to know the side.
+      const negative = screen.getByRole('button', { name: /^Disagree/ });
+      expect(negative).toBeDisabled();
+      expect(negative).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
+    });
+
+    // And it does hand back, once geo-chat says the same thing.
+    it('retires it when geo-chat answers with the side the viewer took', () => {
+      mocks.indexing = {
+        status: 'indexed',
+        pending: { expectedResponse: 'positive' },
+        runId: 'run-1',
+      };
+
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ viewer_response: { position: true, position_label: 'Agree' } })}
+          answersReady
+          answersMayComeFromIndex
+        />
+      );
+
+      expect(mocks.resetIndexing).toHaveBeenCalledWith('run-1');
+    });
+
+    it('offers the debate on that side too, rather than waiting on geo-chat alone', () => {
+      mocks.match = { id: 'match-1', viewer_position: true };
+      mocks.summaryIndexedViewerDirection = 'positive';
+      renderCard(
+        <MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness({ viewer_response: null })} />
+      );
+
+      expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+    });
+
+    // geo-chat wins where it has an answer: it is the source the request is validated against, and
+    // the chain read is only standing in for a silence.
+    it('prefers geo-chat’s answer over the chain’s', () => {
+      mocks.summaryIndexedViewerDirection = 'positive';
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ viewer_response: { position: false, position_label: 'Disagree' } })}
+        />
+      );
+
+      const disagree = screen.getByRole('button', { name: /^Disagree/ });
+      expect(disagree).toHaveAttribute('title', ENTITY_RESPONSE_COPY.stance.removeNegative);
+    });
+
+    /**
+     * Except where the host says geo-chat has no row at all. That is the rematch picker, whose
+     * sides are the graph's — correcting them against an answer nobody gave takes the viewer off
+     * the side the graph says they hold (GEO-2807).
+     */
+    it('substitutes nothing where the host cannot say what geo-chat holds', () => {
+      mocks.summaryIndexedViewerDirection = 'positive';
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ viewer_response: null })}
+          viewerResponseUnknown
+        />
+      );
+
+      const agree = screen.getByRole('button', { name: /^Agree/ });
+      expect(agree).toHaveAttribute('title', ENTITY_RESPONSE_COPY.stance.positiveAction);
+    });
+  });
+
+  /**
+   * GEO-2825. A host whose offer is not the card's offer — the rematch picker — passes its own
+   * control into the end slot. Both branches have to honour it: an unresolvable claim falling back
+   * to the card's own `ClaimEndSlot` would quietly send `create_debate_request_as` instead of the
+   * session-scoped rematch request, which is the whole reason the override exists.
+   *
+   * `match` is set so the card's own slot would render if the override were ignored, which is what
+   * makes the second assertion mean anything.
+   */
+  describe('a host can replace the card’s offer with its own', () => {
+    const hostOffer = <button type="button">Host offer</button>;
+
+    it('on a resolvable claim', () => {
+      // Agreeing with the viewer's own side, so the offer is not withheld for contradicting it.
+      mocks.match = { id: 'match-1', viewer_position: true };
+      renderCard(
+        <MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} endSlot={hostOffer} />
+      );
+
+      expect(screen.getByRole('button', { name: 'Host offer' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    });
+
+    it('on an unresolvable claim, where the fallback would send the wrong mutation', () => {
+      mocks.match = { id: 'match-1', viewer_position: true };
+      renderCard(
+        <MatchmakingClaimCard
+          claim={{ ...claim, claim_entity_id: 'not-a-valid-entity-id' }}
+          positions={positions}
+          readiness={readiness()}
+          endSlot={hostOffer}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: 'Host offer' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    });
   });
 
   // The regression that caused the revert. Drawing the stack from `available_now_count` looked
@@ -313,6 +726,9 @@ describe('position avatar stack', () => {
     expect(within(disagree).queryByText(/^\+/)).toBeNull();
   });
 
+  // `viewer_response: null` throughout: a viewer who holds this side is added to it, faces and
+  // count together, which is a different rule with its own tests below. These are about the
+  // arithmetic on a side the viewer has nothing to do with.
   it('counts the overflow from available people, not from every holder', () => {
     renderCard(
       <MatchmakingClaimCard
@@ -326,7 +742,7 @@ describe('position avatar stack', () => {
           },
           { total_count: 3, available_now_count: 0, present_count: 0, participants: [] },
         ])}
-        readiness={readiness()}
+        readiness={readiness({ viewer_response: null })}
       />
     );
 
@@ -349,11 +765,43 @@ describe('position avatar stack', () => {
           },
           { total_count: 0, available_now_count: 0, present_count: 0, participants: [] },
         ])}
+        readiness={readiness({ viewer_response: null })}
+      />
+    );
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(within(agree).queryByText(/^\+/)).toBeNull();
+  });
+
+  /**
+   * GEO-2821. The faces come from geo-chat's presence view, which lists a viewer only where it has
+   * a readiness row for them — and a position taken before GEO-2740 has none until something
+   * backfills one. Agreeing with geo-chat about the position was read as nothing left to do, so on
+   * those claims the viewer's own face was simply absent, while a claim that had been repaired drew
+   * it. One online status, two answers, depending on the claim.
+   */
+  it('draws the viewer on the side they hold even when the presence list omits them', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={withCounts([
+          {
+            total_count: 5,
+            available_now_count: 2,
+            present_count: 2,
+            participants: [participant('one'), participant('two')],
+          },
+          { total_count: 1, available_now_count: 0, present_count: 0, participants: [] },
+        ])}
         readiness={readiness()}
       />
     );
 
     const agree = screen.getByRole('button', { name: /^Agree/ });
+    // Two faces is the stack's cap, and the viewer takes the first of them.
+    expect(within(agree).getAllByTestId('avatar')).toHaveLength(2);
+    // No badge: `serverPosition` names this side, so the count already includes the viewer and
+    // nothing is added. `participants` being capped means its silence is not evidence either way.
     expect(within(agree).queryByText(/^\+/)).toBeNull();
   });
 });
@@ -373,7 +821,7 @@ describe('faces borrowed from the match', () => {
   it('fills a side that has no faces of its own from the match', () => {
     // The guard for the test below: without this, hiding the merge would be indistinguishable from
     // the merge never having worked.
-    mocks.match = { id: 'match-1', positions: matchWithOpponent };
+    mocks.match = { id: 'match-1', viewer_position: true, positions: matchWithOpponent };
 
     renderCard(
       <MatchmakingClaimCard
@@ -394,7 +842,7 @@ describe('faces borrowed from the match', () => {
     // side deliberately — a rematch has nobody to send a request to — so filling that side from an
     // account-level match puts an unrelated online stranger inside a pill that means "your opponent
     // holds this side". `hideEndSlot` is the host saying it makes no offer at all.
-    mocks.match = { id: 'match-1', positions: matchWithOpponent };
+    mocks.match = { id: 'match-1', viewer_position: true, positions: matchWithOpponent };
 
     renderCard(
       <MatchmakingClaimCard
@@ -416,6 +864,39 @@ describe('faces borrowed from the match', () => {
 });
 
 describe('MatchmakingClaimCard', () => {
+  /**
+   * Reported on a freshly created account: the hub panel's pills are dead for the minute geo-chat
+   * spends indexing it, while the same claims in the main feed take positions normally.
+   *
+   * The panel is geo-chat's surface, so a viewer it has not indexed yet had nothing — the side is
+   * what `answersReady` waits on, and geo-chat is refusing to supply it. The feed was never
+   * geo-chat-only: it resolves the side through the indexed read, and that is the whole difference
+   * between them.
+   *
+   * Only the side was ever missing. The vocabulary arrives with the claim, so the fallback completes
+   * one fact rather than guessing at two — and the pill it lights up is the side the viewer holds,
+   * not an empty one they would republish over.
+   */
+  it('takes the viewer’s side from the index when geo-chat will not answer', () => {
+    mocks.summaryIndexedViewerDirection = 'negative';
+
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={readiness({ viewer_response: null })}
+        answersReady={false}
+        answersMayComeFromIndex
+      />
+    );
+
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    expect(disagree).toBeEnabled();
+    // Held, not empty: pressing it clears the side rather than republishing it.
+    expect(disagree).toHaveAttribute('title', ENTITY_RESPONSE_COPY.stance.removeNegative);
+  });
+
+  // And without the opt-in it still waits, because for that host geo-chat's silence is the answer.
   it('says why a held pill cannot be pressed, rather than naming the side', () => {
     // `answersReady` false means one of the claim's two lookups has not answered — its vocabulary,
     // or the viewer's own side. Disabling alone is not enough: a pill that will not respond while
@@ -450,7 +931,7 @@ describe('MatchmakingClaimCard', () => {
   });
 
   it('puts the offer in the header beside the space name, above the claim', () => {
-    mocks.match = { id: 'match-1' };
+    mocks.match = { id: 'match-1', viewer_position: true };
     renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
     const request = screen.getByRole('button', { name: 'Request debate' });
@@ -493,7 +974,7 @@ describe('MatchmakingClaimCard', () => {
   });
 
   it('says why the offer cannot be taken rather than dimming it silently', () => {
-    mocks.match = { id: 'match-1' };
+    mocks.match = { id: 'match-1', viewer_position: true };
     mocks.blockedReason = 'Withdraw your open request to send another.';
     renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
@@ -593,7 +1074,7 @@ describe('MatchmakingClaimCard', () => {
     // against the very ids geo-chat handed us, so nothing in the offer needs the graph. Gating the
     // slot on graph resolution took the action away from exactly the claims that are hardest to
     // reach any other way, and masked a request the server would have accepted.
-    mocks.match = { id: 'match-1' };
+    mocks.match = { id: 'match-1', viewer_position: true };
     const offGraph = { ...claim, claim_entity_id: 'not-a-graph-id' };
 
     renderCard(<MatchmakingClaimCard claim={offGraph} positions={positions} readiness={readiness()} />);

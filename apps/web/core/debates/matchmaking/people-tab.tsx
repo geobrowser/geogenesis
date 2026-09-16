@@ -7,6 +7,7 @@ import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { Input } from '~/design-system/input';
+import { OnlineDot } from '~/design-system/online-dot';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
@@ -17,6 +18,7 @@ import { speakerLabel } from '../playback-utils';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls } from './claims-tab';
+import { DebateHoursNote } from './debate-hours-note';
 import { useDebatePeople, useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
@@ -24,12 +26,13 @@ import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
 import { usePersonRecords } from './use-person-records';
 import { useUnexpiredRequests } from './use-request-countdown';
+import type { DebatesHubTab } from '~/atoms';
 
 /**
  * Everyone online and available right now. The Debate button sends the same claimless challenge as
  * `ProfileDebateButton` on a person's home space — `DebateCoordinator` owns the resulting dialog.
  */
-export function PeopleTab() {
+export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
   const { authenticated } = useGeoChatAuth();
   const promptSignIn = usePrivySignIn();
   // Undefined when signed in, so every path below keeps behaving exactly as it did.
@@ -52,6 +55,11 @@ export function PeopleTab() {
     if (!term) return allPeople;
     return allPeople.filter(person => speakerLabel(person).toLowerCase().includes(term));
   }, [allPeople, search]);
+
+  // Whether the viewer's own search is what emptied the list, as opposed to nobody being online.
+  // The two empty states, the debate-hours line and the "Clear search" action all hang off it, so
+  // they cannot disagree about which of the two this is.
+  const searchExcludedEveryone = Boolean(search.trim()) && allPeople.length > 0;
 
   // Keyed on everyone available rather than on the filtered list, so typing in the search box
   // re-slices a batch that is already cached instead of firing a request per keystroke.
@@ -112,11 +120,37 @@ export function PeopleTab() {
         <HubQueryState
           isLoading={peopleQuery.isLoading}
           error={peopleQuery.error}
+          failureReason={peopleQuery.failureReason}
+          // The other three lists have always had this, and the setup state needs it more than the
+          // error state did: these reads do not refetch on focus or reconnect, so once the warm-up
+          // retries run out this message is as far as the tab gets on its own.
+          onRetry={() => void peopleQuery.refetch()}
           isEmpty={people.length === 0}
+          // Which of the two empty states this is turns on whether anyone is online *at all*, not
+          // on whether the search box has something in it. With nobody available, a search is not
+          // what emptied the list — saying it was would blame a filter for the room being empty,
+          // and "Clear search" would be an action that changes nothing.
           emptyMessage={
-            search.trim() ? 'Nobody available matches that search.' : 'Nobody is available to debate right now.'
+            searchExcludedEveryone
+              ? 'Nobody available matches that search.'
+              : 'Nobody is available to debate right now.'
           }
-          emptyAction={search.trim() ? { label: 'Clear search', onClick: () => setSearch('') } : undefined}
+          // GEO-2840 scopes this to the nobody-online case, which is exactly the other side of that
+          // same question: a list the viewer emptied with their own search is a different problem,
+          // and debate hours does not answer it.
+          // The one tab that can show this to a signed-out viewer — People is readable anonymously
+          // (GEO-2725), but `useMatchmakingScope` gates the gateway on a session, so their list is
+          // static and no amount of waiting will fill it. They cannot be matched either. `live` is
+          // what keeps the copy from promising both.
+          emptyNote={searchExcludedEveryone ? undefined : <DebateHoursNote live={authenticated} />}
+          // Exactly one action, and which one follows the same question the message and the note do.
+          // A search the viewer can undo gets the undo; a room that is genuinely empty gets somewhere
+          // to go, because there is nothing to undo and waiting is the only other option (GEO-2840).
+          emptyAction={
+            searchExcludedEveryone
+              ? { label: 'Clear search', onClick: () => setSearch('') }
+              : { label: 'Explore claims', onClick: () => onTabChange('explore') }
+          }
           signInAction={
             onRequireSignIn
               ? { label: 'Sign in', message: 'Sign in to see who is available to debate.', onClick: onRequireSignIn }
@@ -176,8 +210,18 @@ function PersonRow({
     // three tracks centre on the row: hanging them from the top clustered everything up there and
     // left the join date trailing under an empty right-hand side.
     <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
-      <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
-        <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
+      {/* Everyone in this list is online by definition — the tab is "everyone online and available
+          right now" — so the dot needs no condition, and it ties the faces here to the ones inside
+          the claim pills, which mean the same thing. The clip sits on the inner span: on the
+          wrapper it would cut the half of the dot that hangs over the rim. */}
+      <div className="relative h-8 w-8 shrink-0">
+        <div className="h-8 w-8 overflow-hidden rounded-full">
+          <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
+        </div>
+        {/* The face here is 32px, twice the claim pills', so the dot is twice theirs: 8px of green
+            in a 4px ring. It carried the pills' 8px dot before, which on a face this size read as
+            a speck rather than a badge. */}
+        <OnlineDot faceSize={32} />
       </div>
       <div className="flex min-w-0 flex-col gap-0.5">
         {/* The name goes to their personal space, which is the profile page GEO-2611 settled on.

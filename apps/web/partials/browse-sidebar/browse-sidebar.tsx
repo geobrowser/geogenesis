@@ -9,6 +9,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { usePathname } from 'next/navigation';
 
 import { personalSpaceViewed } from '~/core/analytics';
+import { useBountiesEnabled } from '~/core/bounties/config';
 import { BROWSE_NAV_ICON } from '~/core/browse/browse-nav-icon-src';
 import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
@@ -132,8 +133,10 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
   const { isPending, topicId } = usePendingPersonalSpace();
   const pendingAvatar = useAtomValue(avatarAtom);
   const pathname = usePathname() ?? '';
+  const bountiesEnabled = useBountiesEnabled();
 
   const isExplore = pathname === '/explore' || pathname.startsWith('/explore/');
+  const isBounties = pathname === '/bounties' || pathname.startsWith('/bounties/');
   const isRoot = pathname === '/root';
   const isGovernance = pathname === '/home' || pathname.startsWith('/home/');
   // Optimistic: link to the navigable `pending:` page until the real spaceId lands.
@@ -188,6 +191,16 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
             isActive={isGovernance}
           />
           <span>Governance</span>
+        </Link>
+      ) : null}
+      {bountiesEnabled ? (
+        <Link href={NavUtils.toBounties()} prefetch className={isBounties ? navLinkActive : navLinkIdle}>
+          <BrowseNavIconSwap
+            idleSrc={BROWSE_NAV_ICON.bounties}
+            activeSrc={BROWSE_NAV_ICON.bountiesFilled}
+            isActive={isBounties}
+          />
+          <span>Bounties</span>
         </Link>
       ) : null}
       <Link href={NavUtils.toRoot()} className={isRoot ? navLinkActive : navLinkIdle}>

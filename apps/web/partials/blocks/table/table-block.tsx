@@ -1152,7 +1152,9 @@ const ConfiguredTableBlock = ({
               baseFilterState={browseDropdowns.baseFilterState}
               baseModesByColumn={browseDropdowns.baseModesByColumn}
               selections={browseDropdowns.selections}
+              selectionModes={browseDropdowns.selectionModes}
               updateSelections={browseDropdowns.updateSelections}
+              setColumnMode={browseDropdowns.setColumnMode}
               hydrated={browseDropdowns.hydrated}
               collectionItemIds={browseDropdowns.collectionItemIds}
               populationReady={browseDropdowns.populationReady}
@@ -1210,6 +1212,7 @@ const ConfiguredTableBlock = ({
                           supportsDropdowns ? (
                             <TableBlockDropdownsConfigTrigger
                               configs={browseDropdowns.configs}
+                              eligiblePropertyIds={browseDropdowns.dropdownEligibleIds}
                               properties={mergedBlockProperties}
                               toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
                             />

@@ -22,6 +22,24 @@ export function viewerResponseFromDirection(
 }
 
 /**
+ * geo-chat's side for the viewer, else the indexed read (not the in-flight write, which would confirm itself).
+ */
+export function viewerResponseWithIndexedFallback({
+  viewerResponse,
+  indexedDirection,
+  isIndexedLoading,
+  responseKind,
+}: {
+  viewerResponse: DebateResponseSummary | null | undefined;
+  indexedDirection: ActiveResponseDirection | null | undefined;
+  isIndexedLoading: boolean;
+  responseKind: 'stance' | 'veracity';
+}): DebateResponseSummary | null {
+  if (viewerResponse || isIndexedLoading) return viewerResponse ?? null;
+  return viewerResponseFromDirection(indexedDirection ?? null, responseKind);
+}
+
+/**
  * The two sides of a claim, in the shape the hub's position controls read.
  *
  * Counts come from on-chain responses rather than geo-chat's `total_count`, so the pills agree

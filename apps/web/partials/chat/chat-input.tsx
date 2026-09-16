@@ -61,6 +61,7 @@ export function ChatInput({
 
   return (
     <form
+      data-geo-analytics-label="Assistant message"
       onSubmit={event => {
         event.preventDefault();
         if (canSend) onSubmit();

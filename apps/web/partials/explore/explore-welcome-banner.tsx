@@ -71,9 +71,10 @@ function WelcomeBanner() {
               href to give it. `NavUtils.toDebatesPanel` is for links arriving from elsewhere; from a
               page the hub is already mounted on, opening it directly beats navigating to do it.
 
-              Claims named explicitly rather than leaning on the hook's default, matching "Join a
-              debate" in the debate feed: this is where the copy above sends the reader, and it
-              shouldn't follow the default if that default is ever retuned for the navbar badge.
+              Lobby named explicitly rather than leaning on the hook's default, matching "Join a
+              debate" in the debate feed: this is where the copy above sends the reader — "find your
+              first debate" is the question Lobby answers — and it shouldn't follow the default if
+              that default is ever retuned for the navbar badge.
 
               Styled as the inline prose link in the onboarding dialog, in white for the dark ground.
               `button` inherits font and letter-spacing from the base layer, so it reads as part of
@@ -90,7 +91,7 @@ function WelcomeBanner() {
           <button
             type="button"
             aria-expanded={isDebatesHubOpen}
-            onClick={() => openDebatesHub('claims')}
+            onClick={() => openDebatesHub('lobby')}
             className="text-white underline decoration-white underline-offset-2"
           >
             debate hub

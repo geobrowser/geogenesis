@@ -5,7 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 import { usePathname } from 'next/navigation';
 
-import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -17,15 +16,11 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
-import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
 import { Create } from '~/design-system/icons/create';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { Spacer } from '~/design-system/spacer';
-import { Text } from '~/design-system/text';
-import { Truncate } from '~/design-system/truncate';
 
 import { SpaceTopicDialog } from '~/partials/space-page/space-topic-dialog';
 import { SubspacesDialog } from '~/partials/space-page/subspaces-dialog';
@@ -37,6 +32,7 @@ import { HistoryEmpty } from '../history/history-empty';
 import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
+import { EntityPageTitle } from './entity-page-title';
 
 type OverlayMode = 'closed' | 'menu' | 'creatingVersion' | 'spaceRelationships' | 'spaceTopic' | 'subtopics';
 
@@ -138,40 +134,25 @@ export function EditableSpaceHeading({
   return (
     <>
       <div className="relative flex items-center justify-between">
-        {isEditing ? (
-          <div className="grow">
-            <PageStringField
-              variant="mainPage"
-              placeholder="Entity name..."
-              value={name ?? ''}
-              onChange={onNameChange}
-            />
-            {/* Manual spacing to match the <Text /> height and avoid layout shift */}
-            <Spacer height={3.5} />
-          </div>
-        ) : (
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <Truncate maxLines={3} shouldTruncate className="w-auto! min-w-0">
-                <Text as="h1" variant="mainPage">
-                  {name ?? ZERO_WIDTH_SPACE}
-                </Text>
-              </Truncate>
-              {nameAccessoryComponent ? (
-                <span className="mt-[9px] inline-flex shrink-0">{nameAccessoryComponent}</span>
-              ) : null}
-            </div>
-            <Spacer height={12} />
-          </div>
-        )}
+        <EntityPageTitle
+          value={name ?? ''}
+          isEditing={isEditing}
+          onChange={onNameChange}
+          accessory={nameAccessoryComponent}
+          className="min-w-0 grow"
+        />
         {(actionsComponent || isSpacePage) && (
           <div className="inline-flex items-center gap-4">
             {actionsComponent}
             {isSpacePage && (
               <>
                 {isEditing && (
+                  // NB: desktop-first breakpoints — `sm` is max-width 639px, so `sm:hidden` hides
+                  // this on phones and shows it everywhere else. Matches the entity row's link;
+                  // only the label is new.
                   <Link
                     href={NavUtils.toEntity(spaceId, ID.createEntityId())}
+                    aria-label="Create new entity"
                     className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
                   >
                     <Create />

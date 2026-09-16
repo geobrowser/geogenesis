@@ -21,6 +21,15 @@ const SPACE_RANK: Record<string, number> = {
 const UNRANKED = Number.MAX_SAFE_INTEGER;
 
 /**
+ * The canonical spaces, best-ranked first. This IS the product's current
+ * definition of "canonical" — schema eligibility and space precedence both
+ * read it; replace alongside SPACE_RANK when true ranking ships.
+ */
+export const RANKED_SPACE_IDS: readonly string[] = Object.entries(SPACE_RANK)
+  .sort(([, a], [, b]) => a - b)
+  .map(([id]) => id);
+
+/**
  * Same normalization as `uuidToHex`, inlined to keep this module import-free (see the note above
  * `ROOT_SPACE`). The keys of `SPACE_RANK` are undashed lowercase hex, and REST hands back the same
  * bytes either way (`core/io/rest/validation.ts`) — so without this a dashed or uppercase id looks
@@ -29,18 +38,6 @@ const UNRANKED = Number.MAX_SAFE_INTEGER;
 function normalizeSpaceId(spaceId: string): string {
   return spaceId.replace(/-/g, '').toLowerCase();
 }
-
-/**
- * The ranked spaces, best first.
- *
- * Ranking answers "which of these do I prefer?", which is only useful once the
- * candidates are in hand. Callers that have to *fetch* candidates need the list
- * itself — a search scoped to the current space alone never surfaces the
- * curated vocabulary these spaces hold, so there is nothing left to rank.
- */
-export const RANKED_SPACE_IDS: readonly string[] = Object.keys(SPACE_RANK).sort(
-  (a, b) => SPACE_RANK[a] - SPACE_RANK[b]
-);
 
 export function getSpaceRank(spaceId: string): number {
   return SPACE_RANK[normalizeSpaceId(spaceId)] ?? UNRANKED;

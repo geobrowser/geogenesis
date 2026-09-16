@@ -28,7 +28,15 @@ export type DebouncedSearch = {
  * Shared by both claim pickers, which had grown identical copies of this down to the constant.
  */
 export function useDebouncedSearch(search: string): DebouncedSearch {
-  const [value, setValue] = React.useState('');
+  // Seeded from what it is handed, the way `useDebouncedValue` behind `useDebouncedSelection` is.
+  //
+  // Starting at `''` was harmless while every caller held its search in `useState` and so always
+  // mounted empty. The hub's search is session state now (GEO-2861), and a component that mounts
+  // onto a search already in progress — Lobby's other list after the toggle, or the panel reopened
+  // — read `''` for a debounce: the list rendered unfiltered, and the request that went out under
+  // that empty key was one nothing on screen was waiting for. The debounce is for a viewer typing,
+  // not for a value that settled before this mount existed.
+  const [value, setValue] = React.useState(() => search.trim());
 
   React.useEffect(() => {
     const timeout = setTimeout(() => setValue(search.trim()), SEARCH_DEBOUNCE_MS);

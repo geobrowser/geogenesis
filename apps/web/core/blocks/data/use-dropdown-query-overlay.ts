@@ -1,13 +1,16 @@
 'use client';
 
 import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { ID } from '~/core/id';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Property } from '~/core/types';
+import { RANKED_SPACE_IDS } from '~/core/utils/space/space-ranking';
 
 import type { Filter, ModesByColumn } from './filters';
 import type { Source } from './source';
@@ -57,7 +60,13 @@ export function useDropdownQueryOverlay({
   extraPillProperties?: Property[];
 }) {
   const { blocksRelationEntityId, dropdowns: configs, toggleDropdownProperty } = useBlockDropdowns();
-  const { selections, updateSelections, hydrated } = useTableDropdownSelections(blocksRelationEntityId);
+  const {
+    selections,
+    modes: selectionModes,
+    updateSelections,
+    setColumnMode,
+    hydrated,
+  } = useTableDropdownSelections(blocksRelationEntityId);
 
   const supportsDropdowns = sourceSupportsDropdowns(source);
 
@@ -93,23 +102,65 @@ export function useDropdownQueryOverlay({
   // Collections derive their schema from the members (a collection has no
   // type predicate for the filter-driven derivation to read). Shared here so
   // the eye menu, the dropdown picker, and the overlay's gate all see it.
-  const collectionMemberProperties = useCollectionMemberSchema(collectionItemIds);
+  const { properties: collectionMemberProperties, typeIds: collectionMemberTypeIds } =
+    useCollectionMemberSchema(collectionItemIds);
+
+  // Dropdown ELIGIBILITY is scoped to the CANONICAL spaces (space-ranking's
+  // ranked set): any unranked space can graft same-named twin properties
+  // onto a shared type — observed live, an unnamed space attached a whole
+  // parallel vocabulary to the Topic and Claim types — and the graph-wide
+  // schema union (GEO-2202) dutifully surfaced it in every picker. Only a
+  // declaration made in a canonical space qualifies a property for a
+  // dropdown; query blocks take their types from the filter, collections
+  // from their members. The sort/filter/column menus keep the full union.
+  const typesInFilter = React.useMemo(
+    () => baseFilterState.filter(f => ID.equals(f.columnId, SystemIds.TYPES_PROPERTY)).map(f => f.value),
+    [baseFilterState]
+  );
+  const typesForEligibility = source.type === 'COLLECTION' ? collectionMemberTypeIds : typesInFilter;
+  const { data: canonicalSchema } = useQuery({
+    enabled: typesForEligibility.length > 0,
+    queryKey: ['data-block', 'dropdown-canonical-schema', [...typesForEligibility].sort()],
+    placeholderData: keepPreviousData,
+    queryFn: async () =>
+      // Schema relations read ONLY from the canonical spaces: the spaceId
+      // hint scopes the native fetch to the best-ranked space and the second
+      // argument adds each remaining canonical space; the all-spaces union
+      // stays off.
+      getSchemaFromTypeIds(
+        typesForEligibility.map(id => ({ id, spaceId: RANKED_SPACE_IDS[0] })),
+        [...RANKED_SPACE_IDS],
+        { includeAllTypeSpaces: false }
+      ),
+  });
+  /** Relation property ids declared canonically; null = unrestricted (no known types yet, or loading). */
+  const dropdownEligibleIds = React.useMemo(() => {
+    if (typesForEligibility.length === 0 || !canonicalSchema) return null;
+    return canonicalSchema.filter(property => property.dataType === 'RELATION').map(property => property.id);
+  }, [typesForEligibility, canonicalSchema]);
 
   const appliedColumnIds = React.useMemo(() => {
     const pillProperties = [...filterableProperties, ...(extraPillProperties ?? []), ...collectionMemberProperties];
     return configs
       .map(config => config.propertyId)
-      .filter(id => pillProperties.some(p => ID.equals(p.id, id) && p.dataType === 'RELATION'));
-  }, [configs, filterableProperties, extraPillProperties, collectionMemberProperties]);
+      .filter(id => pillProperties.some(p => ID.equals(p.id, id) && p.dataType === 'RELATION'))
+      .filter(id => dropdownEligibleIds === null || dropdownEligibleIds.some(e => ID.equals(e, id)));
+  }, [configs, filterableProperties, extraPillProperties, collectionMemberProperties, dropdownEligibleIds]);
 
   const isActive = !isEditing && supportsDropdowns && hydrated && appliedColumnIds.length > 0;
 
   const { filterState: queryFilterState, modesByColumn: queryModesByColumn } = React.useMemo(
     () =>
       isActive
-        ? applyDropdownSelectionsToFilters(baseFilterState, baseModesByColumn, selections, appliedColumnIds)
+        ? applyDropdownSelectionsToFilters(
+            baseFilterState,
+            baseModesByColumn,
+            selections,
+            appliedColumnIds,
+            selectionModes
+          )
         : { filterState: baseFilterState, modesByColumn: baseModesByColumn },
-    [isActive, baseFilterState, baseModesByColumn, selections, appliedColumnIds]
+    [isActive, baseFilterState, baseModesByColumn, selections, appliedColumnIds, selectionModes]
   );
 
   return {
@@ -120,13 +171,16 @@ export function useDropdownQueryOverlay({
       configs,
       toggleDropdownProperty,
       selections,
+      selectionModes,
       updateSelections,
+      setColumnMode,
       hydrated,
       appliedColumnIds,
       supportsDropdowns,
       collectionItemIds,
       populationReady,
       collectionMemberProperties,
+      dropdownEligibleIds,
     },
   };
 }

@@ -3,7 +3,9 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { TAG_PROPERTY_ID } from '~/core/constants';
+import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { ID } from '~/core/id';
 import { Publish } from '~/core/utils/publish';
 
@@ -322,6 +324,214 @@ describe('buildDebatePublishDraft', () => {
     expect(draft.values.some(v => v.entity.id === claimId && v.property.id === CLAIM_IS_FACTUAL_PROPERTY_ID)).toBe(
       false
     );
+  });
+
+  it('references an existing Claim instead of minting one when geo-chat matched it', () => {
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claims: [
+          {
+            text: 'The burden to obtain an ID for voting may be too high.',
+            isFactual: false,
+            turnIndex: 0,
+            existingClaimEntityId: EXISTING,
+          },
+          { text: 'A novel point.', isFactual: true, turnIndex: 1 },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+
+    // Nothing is written on the existing entity: no Name, no Types, no Is factual — an entity we did
+    // not create keeps its own facts even where this extraction disagrees.
+    expect(draft.values.some(v => v.entity.id === EXISTING)).toBe(false);
+    expect(draft.relations.some(r => r.fromEntity.id === EXISTING && r.type.id === TYPES_PROPERTY_ID)).toBe(false);
+    // Only the novel claim is minted.
+    expect(
+      draft.relations.filter(r => r.type.id === TYPES_PROPERTY_ID && r.toEntity.id === CLAIM_TYPE_ID)
+    ).toHaveLength(1);
+    // The speaker's block links to the existing claim, which gains this debate as a source.
+    expect(blockAuthoringClaim(draft, EXISTING)).toBe(YES_SPACE);
+    expect(
+      draft.relations.some(
+        r => r.type.id === SOURCES_PROPERTY_ID && r.fromEntity.id === EXISTING && r.toEntity.id === draft.debateEntityId
+      )
+    ).toBe(true);
+    // The novel claim is minted and attributed as before.
+    expect(blockAuthoringClaim(draft, claimIdByName(draft, 'A novel point.'))).toBe(NO_SPACE);
+  });
+
+  it('adds Topics relations on minted and reused claims, deduped per claim and topic', () => {
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+    const TOPIC = { id: '27b73193ecea48fdaa46fdee40c0b717', name: 'AI and mental health' };
+    const OTHER = { id: '3f2044d6609746cd964da85414f7ba63', name: 'Morning routine' };
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claims: [
+          { text: 'A novel point.', isFactual: true, turnIndex: 0, topics: [TOPIC, OTHER] },
+          // The same reused entity appears behind both debaters' restatements with the same
+          // topic: one relation, not two. (Topics the entity already carries on the graph were
+          // subtracted upstream by the reuse policy.)
+          {
+            text: 'A restated point.',
+            isFactual: null,
+            turnIndex: 0,
+            existingClaimEntityId: EXISTING,
+            topics: [TOPIC],
+          },
+          { text: 'Restated again.', isFactual: null, turnIndex: 1, existingClaimEntityId: EXISTING, topics: [TOPIC] },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+    const topicRelations = draft.relations.filter(r => r.type.id === TOPICS_PROPERTY_ID);
+    const mintedId = claimIdByName(draft, 'A novel point.');
+    expect(topicRelations.map(r => `${r.fromEntity.id}->${r.toEntity.id}`).sort()).toEqual(
+      [`${mintedId}->${TOPIC.id}`, `${mintedId}->${OTHER.id}`, `${EXISTING}->${TOPIC.id}`].sort()
+    );
+    expect(topicRelations.find(r => r.fromEntity.id === EXISTING)?.toEntity.name).toBe(TOPIC.name);
+  });
+
+  it('tags only contestable claims as Debate, minted or reused, once per entity', () => {
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claims: [
+          { text: 'A broad position.', isFactual: false, turnIndex: 0, isContestable: true },
+          // Narrowly verifiable: still published as a Claim, just not offered as a motion.
+          { text: 'A narrow fact.', isFactual: true, turnIndex: 0, isContestable: false },
+          // The same reused entity behind two restatements gets one tag, not two.
+          {
+            text: 'Restated once.',
+            isFactual: null,
+            turnIndex: 1,
+            existingClaimEntityId: EXISTING,
+            isContestable: true,
+          },
+          {
+            text: 'Restated twice.',
+            isFactual: null,
+            turnIndex: 1,
+            existingClaimEntityId: EXISTING,
+            isContestable: true,
+          },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+    const tags = draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID);
+    expect(tags.map(r => r.fromEntity.id).sort()).toEqual([claimIdByName(draft, 'A broad position.'), EXISTING].sort());
+    expect(tags.every(r => r.toEntity.id === DEBATE_TAG_ID)).toBe(true);
+    // The narrow claim is still published as a Claim, it just carries no Debate tag.
+    expect(claimIdByName(draft, 'A narrow fact.')).toBeTruthy();
+  });
+
+  it('tags one motion when a proposition is extracted twice and matched to nothing', () => {
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claims: [
+          // Both mint their own entity (long-standing behaviour), but a fresh id per
+          // claim means an id-keyed dedupe would never fire — two rival motions.
+          { text: 'AI chatbots are effective therapy.', isFactual: false, turnIndex: 0, isContestable: true },
+          { text: 'AI chatbots are effective therapy.', isFactual: false, turnIndex: 1, isContestable: true },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+    expect(draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID)).toHaveLength(1);
+  });
+
+  it('treats dashed and dashless forms of one topic as a single relation', () => {
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claims: [
+          {
+            text: 'Restated once.',
+            isFactual: null,
+            turnIndex: 0,
+            existingClaimEntityId: EXISTING,
+            topics: [{ id: '27b73193-ecea-48fd-aa46-fdee40c0b717', name: 'AI and mental health' }],
+          },
+          {
+            text: 'Restated twice.',
+            isFactual: null,
+            turnIndex: 1,
+            existingClaimEntityId: EXISTING,
+            topics: [{ id: '27b73193ecea48fdaa46fdee40c0b717', name: 'AI and mental health' }],
+          },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+    expect(draft.relations.filter(r => r.type.id === TOPICS_PROPERTY_ID)).toHaveLength(1);
+  });
+
+  it('writes each relation once when several claims resolve to the same existing entity', () => {
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claims: [
+          // Both debaters restate the same published point, and one restates it twice in a turn.
+          { text: 'Same point, yes side.', isFactual: null, turnIndex: 0, existingClaimEntityId: EXISTING },
+          { text: 'Same point again, yes side.', isFactual: null, turnIndex: 0, existingClaimEntityId: EXISTING },
+          { text: 'Same point, no side.', isFactual: null, turnIndex: 1, existingClaimEntityId: EXISTING },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+    const sources = draft.relations.filter(r => r.type.id === SOURCES_PROPERTY_ID && r.fromEntity.id === EXISTING);
+    expect(sources).toHaveLength(1);
+    expect(sources[0].toEntity.id).toBe(draft.debateEntityId);
+    const blockLinks = draft.relations.filter(
+      r => r.type.id === DEBATE_CLAIMS_PROPERTY_ID && r.toEntity.id === EXISTING
+    );
+    // One Claims edge per block, not per extracted claim.
+    expect(blockLinks).toHaveLength(2);
+    expect(new Set(blockLinks.map(r => r.fromEntity.id)).size).toBe(2);
+  });
+
+  it('mints a fresh Claim when the existing id is blank or null', () => {
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claims: [
+          { text: 'Blank reference', isFactual: null, turnIndex: 0, existingClaimEntityId: '   ' },
+          { text: 'Null reference', isFactual: null, turnIndex: 0, existingClaimEntityId: null },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+    expect(claimIdByName(draft, 'Blank reference')).toBeTruthy();
+    expect(claimIdByName(draft, 'Null reference')).toBeTruthy();
+    expect(
+      draft.relations.filter(r => r.type.id === TYPES_PROPERTY_ID && r.toEntity.id === CLAIM_TYPE_ID)
+    ).toHaveLength(2);
+  });
+
+  it('a reused claim survives the real publish pipeline as relations only', async () => {
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+    // Real entity ids: the op pipeline validates them, unlike the draft-only tests above. Ids are
+    // encoded as bytes in ops, so the two drafts are compared by op shape rather than by id.
+    const claim = { text: 'Reused claim', isFactual: true, turnIndex: 0 };
+    const minted = buildDebatePublishDraft(baseInput({ claims: [claim] }), { createEntityId: ID.createEntityId });
+    const reused = buildDebatePublishDraft(baseInput({ claims: [{ ...claim, existingClaimEntityId: EXISTING }] }), {
+      createEntityId: ID.createEntityId,
+    });
+    const mintedOps = await Effect.runPromise(
+      Publish.prepareLocalDataForPublishing(minted.values, minted.relations, SPACE)
+    );
+    const reusedOps = await Effect.runPromise(
+      Publish.prepareLocalDataForPublishing(reused.values, reused.relations, SPACE)
+    );
+    const relationOps = (ops: typeof mintedOps) => ops.filter(op => op.type === 'createRelation').length;
+    const otherOps = (ops: typeof mintedOps) => ops.filter(op => op.type !== 'createRelation').length;
+
+    expect(reusedOps.length).toBeGreaterThan(0);
+    // Reuse drops exactly the Types relation and every value op on the claim (Name, Is factual);
+    // the block→Claims and claim→Sources relations are still there.
+    expect(relationOps(reusedOps)).toBe(relationOps(mintedOps) - 1);
+    expect(otherOps(reusedOps)).toBeLessThan(otherOps(mintedOps));
   });
 
   it('mints no Claim entities when no claims are provided (backwards compatible)', () => {

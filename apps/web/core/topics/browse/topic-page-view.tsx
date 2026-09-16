@@ -118,15 +118,14 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
             </nav>
           )}
 
-          {/* The `mainPage` token, which is what a regular entity name is set in — size, line height,
-              weight and letter spacing all come from it rather than being restated here, so a topic
-              and any other entity read as the same kind of page.
+          {/* The `entityTitle` token — size, line height, weight and letter spacing all come from
+              it rather than being restated here. Same token the entity and space headers use, so a
+              topic title matches a regular entity title at every width (44/36/26 per GEO-2460).
 
-              Deliberately not container-scaled, for the same reason: the regular entity header
-              isn't either, so scaling this one down in the side panel would reintroduce exactly the
-              mismatch it is here to remove. `text-pretty` stays — it governs where the line breaks,
-              not how big it is. */}
-          <Text as="h1" variant="mainPage" color="text" className="block wrap-break-word text-pretty">
+              Deliberately not container-scaled: the regular entity header isn't either, so scaling
+              this one down in the side panel would reintroduce a mismatch. `text-pretty` stays — it
+              governs where the line breaks, not how big it is. */}
+          <Text as="h1" variant="entityTitle" color="text" className="block wrap-break-word text-pretty">
             {entity.name ?? entity.id}
           </Text>
 
