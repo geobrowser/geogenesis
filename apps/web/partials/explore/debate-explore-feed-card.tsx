@@ -30,6 +30,31 @@ import { SpaceThumb } from './space-thumb';
 const ACTIVATE_RATIO = 0.6;
 const DEACTIVATE_RATIO = 0.4;
 
+/**
+ * How wide the card's column — meta row, title, media and bar — is allowed to get.
+ *
+ * Width is what sets height here, so this is really a height budget. The two tiles are
+ * `aspect-480/289` with an 8px gap between them, so the media alone is `1.2042 × width + 8`, and
+ * the rest of the card measures a flat 163px: 32px of `py-4`, a 28px meta row, a two-line 46px
+ * title, a 32px bar with its margin, 24px of column gaps and the 1px rule. A card is therefore
+ * `1.2042 × width + 171` tall, and fitting that under the viewport less the 44px app header gives
+ * `width ≤ 0.83 × dvh − 178px` — which is where `calc(83dvh - 178px)` comes from.
+ *
+ * So the column grows with the viewport rather than sitting at a fixed 480px: 569px at a 900px
+ * viewport, 651px at 1000px, capped at 560px so a tall display gets a wider card and not a
+ * different design. The 320px floor gives up the promise below roughly a 600px viewport, where
+ * honouring it would mean a video too small to read a face in.
+ *
+ * The same trick, and the same reason, as `--debate-feed-column-width` on the full-screen feed:
+ * `dvh` there too, because the media has to fit the viewport it is being watched in.
+ *
+ * Keep the arithmetic and the layout together — a change to `py-4`, the title clamp, the bar or
+ * the media gap moves the 178px, and nothing else will notice.
+ */
+const DEBATE_CARD_COLUMN_STYLE = {
+  '--debate-card-column-width': 'clamp(320px, calc(83dvh - 178px), 560px)',
+} as React.CSSProperties;
+
 type DebateExploreFeedCardProps = {
   item: ExploreFeedItem;
   /** Hide the space thumbnail + space-name link in the meta row (same semantics as ExploreFeedCard). */
@@ -178,12 +203,16 @@ export function DebateExploreFeedCard({
 
   return (
     <article ref={setContainer} className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
-      {/* Meta, title, media and the interaction bar share one column capped at the width the
-          designs (and the full-screen feed) use — feed columns, especially data blocks, can be
-          much wider and full-bleed videos dwarf the card. Capping the column rather than the media
+      {/* Meta, title, media and the interaction bar share one column, capped so the whole card
+          fits the viewport it is watched in — see {@link DEBATE_CARD_COLUMN_STYLE}. A cap rather
+          than the full column width because feed columns, especially data blocks, can be much
+          wider and a full-bleed video dwarfs the card. Capping the column rather than the media
           alone is what lines "Join a debate" up with the videos' right edge instead of the card's,
           and what keeps the bar beneath the videos the same width as them. */}
-      <div className="flex w-full max-w-[480px] min-w-0 flex-col gap-2">
+      <div
+        className="flex w-full max-w-[var(--debate-card-column-width)] min-w-0 flex-col gap-2"
+        style={DEBATE_CARD_COLUMN_STYLE}
+      >
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             {!hideSpaceLink ? (
@@ -285,9 +314,16 @@ function DebateCardTitle({
   debate: Debate | null;
   opensSidePanel: boolean;
 }) {
+  const text = debate ? debate.claim.claim : item.title;
   const heading = (
-    <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
-      {debate ? debate.claim.claim : item.title}
+    // Two lines, as the full-screen header clamps the same claim to. Also what the card's height
+    // budget is calculated against (see `DEBATE_CARD_COLUMN_STYLE`): a third line is 23px the
+    // viewport was not promised. `title` so the whole claim is still readable when it is cut.
+    <h2
+      title={text}
+      className="mt-0! line-clamp-2 text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline"
+    >
+      {text}
     </h2>
   );
 
