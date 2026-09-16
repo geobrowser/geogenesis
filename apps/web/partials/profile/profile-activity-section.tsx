@@ -4,14 +4,18 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import type { ExploreFeedItem, ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { normId } from '~/core/utils/norm-id';
 
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
+
+import { GalleryClaimCard } from './gallery-claim-card';
 
 /** How many cards a gallery holds before the reader is sent to the tab. */
 const SHOWN = 6;
@@ -238,32 +242,38 @@ function GalleryCard({ row, label }: { row: ExploreFeedRow; label: SpaceLabel | 
     hasPendingMembershipRequest: false,
   };
 
+  // A claim gets the debates panel's own card, and everything else the feed's.
+  //
+  // Not one card for both: the explore card is built to be read one to a row at
+  // full width, and in a 420px column its padding and its separate tally block
+  // read as a card with something wrong with it. The lobby card is already the
+  // compact one, and a claim then looks the same wherever it is answered. A
+  // debate keeps the feed's card, which is the one that plays.
+  const isClaim = isClaimRow(row);
+
   return (
-    // The card as it draws itself, with nothing around it and nothing above it.
-    //
-    // It had a border and padding of its own here, which put a box inside a box
-    // and squeezed the card's own spacing. A badge for whose profile this is
-    // went here too, and pushed every card that had one out of line with every
-    // card that did not, because it sat in the flow above the card's first row.
-    // Saying which side this person took belongs *inside* the card, as
-    // something it draws — GEO-2921.
-    //
-    // The one thing overridden is the rule the card draws underneath itself to
-    // separate it from the next card *down*. In a row there is nothing below
-    // it, so that rule is a line under nothing.
     <div
       data-activity-card
-      // The same outline the debates lobby draws around a claim —
-      // `rounded-lg border border-grey-02 bg-white` in `matchmaking-claim-card`
-      // — so a claim looks the same in both places. Horizontal padding only:
-      // the card brings its own vertical rhythm, and adding to it is what made
-      // this look cramped the first time.
-      className="w-[min(420px,80vw)] shrink-0 snap-start rounded-lg border border-grey-02 bg-white px-3 [&>*]:border-b-0"
+      className={cx(
+        'w-[min(420px,80vw)] shrink-0 snap-start',
+        // The lobby card brings its own outline; the feed's card does not, and
+        // draws a rule underneath itself to separate it from the next card
+        // *down* — which in a row is a line under nothing.
+        !isClaim && 'rounded-lg border border-grey-02 bg-white px-3 [&>*]:border-b-0'
+      )}
     >
-      {/* The Join button is hidden: this is a record being read, not a place to
-          be recruited into. Everything else the card draws — the player, the
-          response buttons, the tally — is what this gallery is for. */}
-      <ExploreFeedCard item={item} hideJoinButton titleOpensSidePanel />
+      {isClaim ? (
+        <GalleryClaimCard row={row} />
+      ) : (
+        // The Join button is hidden: this is a record being read, not a place to
+        // be recruited into.
+        <ExploreFeedCard item={item} hideJoinButton titleOpensSidePanel />
+      )}
     </div>
   );
+}
+
+/** Whether this row is a claim, by the same type check the feed's dispatcher uses. */
+function isClaimRow(row: ExploreFeedRow) {
+  return row.types.some(type => normId(type.id) === normId(CLAIM_TYPE_ID));
 }
