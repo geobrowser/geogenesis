@@ -2,6 +2,8 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
+import { Spaces } from '~/core/utils/space';
+
 import { PersonPositionsTab } from '~/partials/profile/person-positions-tab';
 
 import { cachedFetchSpace } from '../../cached-fetch-space';
@@ -25,7 +27,10 @@ export default async function PositionsPage(props: Props) {
 
   const space = await cachedFetchSpace(params.id);
 
-  if (space?.type !== 'PERSONAL') {
+  // The layout gives this route its column and its rail, and it only does that
+  // for a profile — a personal space with nobody on it would render the tab
+  // into a stripped page. Same predicate, so the tab and the chrome agree.
+  if (!Spaces.isPersonProfileSpace(space)) {
     notFound();
   }
 

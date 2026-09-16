@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph';
 import type { Profile } from '~/core/types';
+import { Spaces } from '~/core/utils/space';
 
 import { PersonProposalsTab } from '~/partials/profile/person-proposals-tab';
 
@@ -29,7 +30,10 @@ export default async function ProposalsPage(props: Props) {
 
   const space = await cachedFetchSpace(params.id);
 
-  if (space?.type !== 'PERSONAL') {
+  // The layout gives this route its column and its rail, and it only does that
+  // for a profile — a personal space with nobody on it would render the tab
+  // into a stripped page. Same predicate, so the tab and the chrome agree.
+  if (!Spaces.isPersonProfileSpace(space)) {
     notFound();
   }
 

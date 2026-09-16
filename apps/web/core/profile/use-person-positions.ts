@@ -26,22 +26,23 @@ import { normId } from '~/core/utils/norm-id';
  * Ids only. `UserVote` carries an `objectId` and no way to traverse to the thing
  * itself, so the claims come from a second request — see `fetchExploreRowsByIds`.
  *
- * Paged by **offset, not cursor**. `after` on this connection answers 500 for
- * any cursor it just handed out, whatever the filter — so every page after the
- * first threw, react-query retried, and the infinite-scroll sentinel refired on
- * each attempt: a loop that loaded nothing. `offset` works and the ordering is
- * stable enough to page by it.
+ * Paged by **cursor, not offset**, which is what the rest of the repo does —
+ * see `fetchRelationsByToEntityIds`, which says why in one line. The server
+ * rejects any `offset` above 1000, so offset paging silently caps a person's
+ * record at 1000 vote rows and then errors on the page that would pass it.
+ * `after` has no such ceiling.
  */
 const PERSON_VOTES_SOURCE = /* GraphQL */ `
-  query PersonVotes($userId: UUID!, $first: Int, $offset: Int) {
+  query PersonVotes($userId: UUID!, $first: Int, $after: Cursor) {
     userVotesConnection(
       first: $first
-      offset: $offset
+      after: $after
       orderBy: VOTED_AT_DESC
       filter: { userId: { is: $userId }, or: [{ voteKind: { is: 1 } }, { voteKind: { is: 2 } }] }
     ) {
       pageInfo {
         hasNextPage
+        endCursor
       }
       nodes {
         objectId
@@ -63,15 +64,15 @@ export type PersonPositionsPage = {
   rows: ExploreFeedRow[];
   /** Which side this person took, by claim id. Absent where they only rated veracity. */
   stanceByClaimId: Record<string, Stance>;
-  /** Where the next page starts. Null once there is none. */
-  nextOffset: number | null;
+  /** The cursor the next page starts after. Null once there is none. */
+  nextCursor: string | null;
 };
 
 type VoteNode = { objectId?: string | null; voteType?: number | null; voteKind?: number | null };
 
 type VotesResponse = {
   userVotesConnection?: {
-    pageInfo?: { hasNextPage?: boolean | null } | null;
+    pageInfo?: { hasNextPage?: boolean | null; endCursor?: string | null } | null;
     nodes?: (VoteNode | null)[] | null;
   } | null;
 };
@@ -80,7 +81,7 @@ type VotePage = {
   ids: string[];
   stanceByClaimId: Record<string, Stance>;
   hasNextPage: boolean;
-  seen: number;
+  endCursor: string | null;
 };
 
 /**
@@ -130,10 +131,10 @@ function decodeVotes(response: VotesResponse): VotePage {
     ids,
     stanceByClaimId,
     hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
-    // Votes read, not claims kept: the offset counts rows on the server, and
-    // deduping stance against veracity here would otherwise walk the next page
-    // back over the ones this one already dropped.
-    seen: nodes.length,
+    // The server's own place-marker, so it counts vote rows rather than the
+    // claims left after deduping. Advancing by the kept count would walk the
+    // next page back over rows this one already collapsed.
+    endCursor: connection?.pageInfo?.endCursor ?? null,
   };
 }
 
@@ -191,14 +192,14 @@ export function usePersonPositions({
   const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage, isError } = useInfiniteQuery({
     queryKey: personPositionsQueryKey(spaceId),
     enabled: spaceId !== '',
-    initialPageParam: 0,
-    getNextPageParam: (page: PersonPositionsPage) => page.nextOffset,
+    initialPageParam: null as string | null,
+    getNextPageParam: (page: PersonPositionsPage) => page.nextCursor,
     queryFn: async ({ pageParam, signal }): Promise<PersonPositionsPage> => {
       const votes = await Effect.runPromise(
         graphql({
           query: personVotesDocument,
           decoder: decodeVotes,
-          variables: { userId: ID.uuidToHex(spaceId), first, offset: pageParam },
+          variables: { userId: ID.uuidToHex(spaceId), first, after: pageParam },
           signal,
         })
       );
@@ -206,9 +207,10 @@ export function usePersonPositions({
       return {
         rows: await fetchExploreRowsByIds(votes.ids, signal),
         stanceByClaimId: votes.stanceByClaimId,
-        // A page that came back empty ends the list whatever `hasNextPage` says,
-        // or the offset would stand still and the sentinel would ask forever.
-        nextOffset: votes.hasNextPage && votes.seen > 0 ? pageParam + votes.seen : null,
+        // A page with no cursor ends the list whatever `hasNextPage` says, or
+        // the same cursor would be asked for again and the sentinel would fire
+        // forever against an unmoving list.
+        nextCursor: votes.hasNextPage ? votes.endCursor : null,
       };
     },
     retry: 1,

@@ -58,15 +58,6 @@ describe('the stance on a claim', () => {
     // Newest first, so the first one seen wins.
     expect(page.stanceByClaimId).toEqual({ claim1: 'disagree' });
   });
-
-  it('counts votes read rather than claims kept', () => {
-    // The offset is a server-side row count. Subtracting the per-page dedupe
-    // from it would walk the next page back over rows this one already dropped.
-    const page = decode([vote({ voteKind: 1 }), vote({ voteKind: 2 })]);
-
-    expect(page.ids).toEqual(['claim-1']);
-    expect(page.seen).toBe(2);
-  });
 });
 
 /**
@@ -80,7 +71,7 @@ describe('mergePositionPages', () => {
   const page = (ids: string[], stances: Record<string, 'agree' | 'disagree'> = {}): PersonPositionsPage => ({
     rows: ids.map(id => ({ entityId: id, spaceId: 'space' }) as ExploreFeedRow),
     stanceByClaimId: stances,
-    nextOffset: null,
+    nextCursor: null,
   });
 
   it('renders a claim once when its two votes straddle a page boundary', () => {
@@ -108,5 +99,41 @@ describe('mergePositionPages', () => {
 
   it('has nothing to merge for nothing', () => {
     expect(mergePositionPages([])).toEqual({ rows: [], stanceByClaimId: {} });
+  });
+});
+
+/**
+ * The page marker is the server's cursor, not a running row count.
+ *
+ * `offset` is rejected above 1000 by the server, so paging by it capped a
+ * person's record at 1000 vote rows and then threw on the page that would have
+ * passed it. The cursor has no ceiling — and it has to be the *server's*, since
+ * a count kept here would count claims after deduping and walk the next page
+ * back over rows this one already collapsed.
+ */
+describe('paging', () => {
+  const pageOf = (hasNextPage: boolean, endCursor: string | null) =>
+    decodeVotesForTest({ userVotesConnection: { pageInfo: { hasNextPage, endCursor }, nodes: [vote()] } });
+
+  it('carries the cursor the server handed back', () => {
+    expect(pageOf(true, 'cursor-2').endCursor).toBe('cursor-2');
+  });
+
+  it('has no cursor to carry when the connection gives none', () => {
+    expect(pageOf(false, null).endCursor).toBeNull();
+  });
+
+  it('reports the cursor independently of how many claims survived deduping', () => {
+    // Two votes, one claim. A marker derived from the kept ids would say 1 and
+    // re-read the row this page already consumed.
+    const page = decodeVotesForTest({
+      userVotesConnection: {
+        pageInfo: { hasNextPage: true, endCursor: 'cursor-2' },
+        nodes: [vote({ objectId: 'a', voteKind: 1 }), vote({ objectId: 'a', voteKind: 2 })],
+      },
+    });
+
+    expect(page.ids).toEqual(['a']);
+    expect(page.endCursor).toBe('cursor-2');
   });
 });
