@@ -32,7 +32,7 @@ import { GovernanceOutcomeDate, GovernanceOutcomeTime } from './governance-outco
 import {
   type GovernanceProposalCategory,
   type GovernanceProposalStatusFilter,
-  fetchProposalsForSpaceByGovernanceFilters,
+  fetchProposalsPageForSpaceByGovernanceFilters,
 } from './governance-proposal-query';
 import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
 import { GovernanceRejectedProposalMenu } from './governance-rejected-proposal-menu';
@@ -46,8 +46,6 @@ const BUCKET_BASE_ORDER: Record<ProposalBucket, number> = {
   active: 10000,
   completed: 20000,
 };
-
-const PAGE_SIZE = 100;
 
 /**
  * Unvoted proposals first; voted ones sink to the bottom (same as governance home review).
@@ -77,7 +75,7 @@ function percentageFromCounts(count: number, total: number): number {
 
 interface Props {
   spaceId: string;
-  page: number;
+  cursor?: string;
   category?: GovernanceProposalCategory;
   status?: GovernanceProposalStatusFilter;
 }
@@ -85,11 +83,12 @@ interface Props {
 export type GovernanceProposalsListResult = {
   node: React.ReactNode;
   hasMore: boolean;
+  nextCursor: string | null;
 };
 
 export async function GovernanceProposalsList({
   spaceId,
-  page,
+  cursor,
   category = 'all',
   status = 'pending',
 }: Props): Promise<GovernanceProposalsListResult> {
@@ -98,8 +97,7 @@ export async function GovernanceProposalsList({
   const [result, space] = await Promise.all([
     fetchGovernanceProposals({
       spaceId,
-      first: PAGE_SIZE,
-      page,
+      cursor,
       memberSpaceId: profile?.spaceId,
       category,
       status,
@@ -107,7 +105,7 @@ export async function GovernanceProposalsList({
     cachedFetchSpace(spaceId),
   ]);
 
-  const { proposals, hasMore } = result;
+  const { proposals, hasMore, nextCursor } = result;
 
   const filterParams = new URLSearchParams();
   if (category !== 'all') filterParams.set('proposalCategory', category);
@@ -118,6 +116,7 @@ export async function GovernanceProposalsList({
     return {
       node: <p className="py-6 text-body text-grey-04">No proposals yet</p>,
       hasMore: false,
+      nextCursor: null,
     };
   }
 
@@ -242,13 +241,8 @@ export async function GovernanceProposalsList({
       </div>
     ),
     hasMore,
+    nextCursor,
   };
-}
-
-export interface FetchActiveProposalsOptions {
-  spaceId: string;
-  page?: number;
-  first?: number;
 }
 
 // ============================================================================
@@ -330,31 +324,31 @@ function getProposalBucket(apiStatus: ApiProposalListItem['status']): ProposalBu
 type FetchGovernanceProposalsResult = {
   proposals: GovernanceProposal[];
   hasMore: boolean;
+  nextCursor: string | null;
 };
 
 async function fetchGovernanceProposals({
   spaceId,
   memberSpaceId,
-  first = PAGE_SIZE,
-  page = 0,
+  cursor,
   category = 'all',
   status = 'pending',
 }: {
   spaceId: string;
-  first: number;
-  page: number;
+  cursor?: string;
   memberSpaceId: string | undefined;
   category?: GovernanceProposalCategory;
   status?: GovernanceProposalStatusFilter;
 }): Promise<FetchGovernanceProposalsResult> {
-  let combinedProposals = [
-    ...(await fetchProposalsForSpaceByGovernanceFilters({
-      spaceId,
-      memberSpaceId: memberSpaceId ?? '',
-      category,
-      status,
-    })),
-  ];
+  const { proposals: fetched, nextCursor } = await fetchProposalsPageForSpaceByGovernanceFilters({
+    spaceId,
+    memberSpaceId: memberSpaceId ?? '',
+    category,
+    status,
+    cursor,
+  });
+
+  let combinedProposals = [...fetched];
 
   // Requests whose target already belongs to the space stay PROPOSED/EXECUTABLE forever —
   // drop them from open (pending) buckets. Completed history stays intact.
@@ -362,9 +356,8 @@ async function fetchGovernanceProposals({
     combinedProposals = await filterGrantedMembershipRequests(combinedProposals);
   }
 
-  // Resolved before sorting/pagination, not just for the rendered page: submission time is
-  // the open-proposal sort tiebreaker and the DTO's createdAt, so it has to be known for
-  // every candidate rather than the slice that survives pagination.
+  // Submission time is the open-proposal sort tiebreaker and the DTO's createdAt, so it's
+  // resolved for every proposal on the page.
   const submittedTimes = await fetchProposalSubmittedTimes(combinedProposals.map(p => p.proposalId));
 
   if (status === 'pending') {
@@ -380,20 +373,15 @@ async function fetchGovernanceProposals({
     ];
   }
 
-  // Apply pagination
-  const startIndex = page * first;
-  const endIndex = startIndex + first;
-  const paginatedProposals = combinedProposals.slice(startIndex, endIndex);
-
-  // Check if there are more items beyond this page
-  const hasMore = combinedProposals.length > endIndex;
+  const pageCursor = status === 'pending' ? null : nextCursor;
+  const hasMore = pageCursor != null;
 
   // Fetch profiles for creators
-  const proposedByIds = paginatedProposals.map(p => p.proposedBy);
+  const proposedByIds = combinedProposals.map(p => p.proposedBy);
   const uniqueProposedByIds = [...new Set(proposedByIds)];
 
   // Fetch target profiles for membership proposals (extract targetId from actions)
-  const targetIds = paginatedProposals
+  const targetIds = combinedProposals
     .map(p => findMembershipAction(p.actions)?.targetId)
     .filter((id): id is string => !!id);
   const uniqueTargetIds = [...new Set(targetIds)];
@@ -407,7 +395,7 @@ async function fetchGovernanceProposals({
   const profilesBySpaceId = new Map(uniqueProposedByIds.map((id, i) => [id, profilesForProposals[i]]));
   const targetProfilesBySpaceId = new Map(uniqueTargetIds.map((id, i) => [id, profilesForTargets[i]]));
 
-  const proposals = paginatedProposals.map(p => {
+  const proposals = combinedProposals.map(p => {
     const maybeProfile = profilesBySpaceId.get(p.proposedBy);
     const targetId = findMembershipAction(p.actions)?.targetId;
     const maybeTargetProfile = targetId ? targetProfilesBySpaceId.get(targetId) : undefined;
@@ -420,5 +408,5 @@ async function fetchGovernanceProposals({
     );
   });
 
-  return { proposals, hasMore };
+  return { proposals, hasMore, nextCursor: pageCursor };
 }

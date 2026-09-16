@@ -93,20 +93,27 @@ export function parseGovernanceStatus(raw?: string): GovernanceProposalStatusFil
   return 'pending';
 }
 
-/** REST query used by governance home and space governance lists. */
-export async function fetchProposalsForSpaceByGovernanceFilters({
-  spaceId,
-  memberSpaceId,
-  proposalType,
-  category = 'all',
-  status = 'pending',
-}: {
+type GovernanceProposalFilterArgs = {
   spaceId: string;
   memberSpaceId: string;
   proposalType?: 'membership' | 'content';
   category?: GovernanceProposalCategory;
   status?: GovernanceProposalStatusFilter;
-}): Promise<readonly ApiProposalListItem[]> {
+};
+
+export type GovernanceProposalPage = {
+  proposals: readonly ApiProposalListItem[];
+  nextCursor: string | null;
+};
+
+export async function fetchProposalsPageForSpaceByGovernanceFilters({
+  spaceId,
+  memberSpaceId,
+  proposalType,
+  category = 'all',
+  status = 'pending',
+  cursor,
+}: GovernanceProposalFilterArgs & { cursor?: string }): Promise<GovernanceProposalPage> {
   const config = Environment.getConfig();
 
   const params = new URLSearchParams();
@@ -133,6 +140,10 @@ export async function fetchProposalsForSpaceByGovernanceFilters({
     params.set('voterId', memberSpaceId);
   }
 
+  if (cursor) {
+    params.set('cursor', cursor);
+  }
+
   const path = `/proposals/space/${encodePathSegment(spaceId)}/status?${params.toString()}`;
 
   const result = await Effect.runPromise(
@@ -146,15 +157,22 @@ export async function fetchProposalsForSpaceByGovernanceFilters({
 
   if (Either.isLeft(result)) {
     console.error(`Failed to fetch proposals for space ${spaceId}:`, result.left);
-    return [];
+    return { proposals: [], nextCursor: null };
   }
 
   const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
 
   if (Either.isLeft(decoded)) {
     console.error(`Failed to decode proposals for space ${spaceId}:`, decoded.left);
-    return [];
+    return { proposals: [], nextCursor: null };
   }
 
-  return decoded.right.proposals;
+  return { proposals: decoded.right.proposals, nextCursor: decoded.right.nextCursor };
+}
+
+export async function fetchProposalsForSpaceByGovernanceFilters(
+  args: GovernanceProposalFilterArgs
+): Promise<readonly ApiProposalListItem[]> {
+  const { proposals } = await fetchProposalsPageForSpaceByGovernanceFilters(args);
+  return proposals;
 }

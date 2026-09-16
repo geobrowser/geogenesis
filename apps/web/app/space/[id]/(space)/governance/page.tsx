@@ -214,7 +214,7 @@ async function InitialGovernanceProposals({
   category: GovernanceProposalCategory;
   status: GovernanceProposalStatusFilter;
 }) {
-  const { node, hasMore } = await GovernanceProposalsList({ spaceId, page: 0, category, status });
+  const { node, hasMore, nextCursor } = await GovernanceProposalsList({ spaceId, category, status });
 
   return (
     <>
@@ -223,7 +223,7 @@ async function InitialGovernanceProposals({
         <GovernanceProposalsListInfiniteScroll
           key={`${spaceId}:${category}:${status}`}
           spaceId={spaceId}
-          page={0}
+          initialCursor={nextCursor}
           initialHasMore={hasMore}
           category={category}
           status={status}
