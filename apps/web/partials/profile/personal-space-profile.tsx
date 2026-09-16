@@ -117,6 +117,7 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       key: 'claims',
       label: 'Claims',
       rows: positions.rows,
+      stanceByClaimId: positions.stanceByClaimId,
       total: facts.positions,
       isLoading: positions.isLoading,
       href: `/space/${spaceId}/positions`,

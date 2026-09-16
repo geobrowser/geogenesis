@@ -52,6 +52,8 @@ vi.mock('~/design-system/prefetch-link', () => ({
 // The real row is exercised by the governance tab; what matters here is that
 // this tab renders *that* row, with the values the record is responsible for.
 vi.mock('~/partials/governance/governance-proposal-row', () => ({
+  // The real one, because the percentages below are what this file asserts on.
+  percentageFromCounts: (count: number, total: number) => (total === 0 ? 0 : Math.floor((count / total) * 100)),
   GovernanceProposalRow: (props: Record<string, unknown>) => {
     mocks.rowProps.push(props);
     return (

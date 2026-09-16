@@ -9,6 +9,7 @@ import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-cla
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import type { Stance } from '~/core/profile/use-person-positions';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -29,7 +30,7 @@ import { Skeleton } from '~/design-system/skeleton';
  * and `readiness` all come out of `useClaimResponseState`. Only the body below
  * differs.
  */
-export function GalleryClaimCard({ row }: { row: ExploreFeedRow }) {
+export function GalleryClaimCard({ row, stance }: { row: ExploreFeedRow; stance?: Stance }) {
   // Gated on proximity, as the feed's card is: a gallery mounts six of these and
   // a horizontal row puts several off to the side, so the geo-chat and graph
   // reads wait until one is actually near. Sticky — once fetched, stay fetched.
@@ -72,6 +73,12 @@ export function GalleryClaimCard({ row }: { row: ExploreFeedRow }) {
           answersReady={isResponseKindResolved && isViewerResponseResolved}
           responseBlockedReason={responseBlockedReason}
           onRequireSignIn={promptSignIn}
+          // Which side *this person* took — the thing you opened their profile
+          // to find out, and not something the card says on its own, since its
+          // pills speak for the viewer. In the card's own footer rather than
+          // above it: a badge in the row's flow pushed every card carrying one
+          // out of line with every card that did not.
+          footer={stance ? <StanceNote stance={stance} /> : undefined}
         />
       ) : (
         // Held at the card's own height rather than collapsed, so the row does
@@ -79,5 +86,17 @@ export function GalleryClaimCard({ row }: { row: ExploreFeedRow }) {
         <Skeleton className="h-[164px] w-full rounded-lg" />
       )}
     </div>
+  );
+}
+
+/** Whose profile this is, and where they came down. */
+function StanceNote({ stance }: { stance: Stance }) {
+  return (
+    <p className="px-3 pb-3 text-breadcrumb text-grey-04">
+      They{' '}
+      <span className={stance === 'agree' ? 'text-green' : 'text-red-01'}>
+        {stance === 'agree' ? 'agreed' : 'disagreed'}
+      </span>
+    </p>
   );
 }

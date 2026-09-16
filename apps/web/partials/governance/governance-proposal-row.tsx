@@ -40,6 +40,12 @@ type Props = {
   titleAccessory?: React.ReactNode;
 };
 
+/** A share of the vote, floored. Nobody voting is 0 rather than a division by it. */
+export function percentageFromCounts(count: number, total: number): number {
+  if (total === 0) return 0;
+  return Math.floor((count / total) * 100);
+}
+
 /**
  * One proposal, as the governance tab draws it.
  *

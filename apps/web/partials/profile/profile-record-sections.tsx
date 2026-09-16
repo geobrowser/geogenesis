@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { formatDateRange, formatDuration, formatTotalDuration } from '~/core/profile/history-dates';
 import {
   type EducationCard,
@@ -18,9 +17,9 @@ import { visibleHistoryCards } from '~/core/profile/visible-history';
 
 import { SquareButton } from '~/design-system/button';
 import { ClampedText } from '~/design-system/clamped-text';
-import { FallbackImage } from '~/design-system/fallback-image';
 import { EditSmall } from '~/design-system/icons/edit-small';
 
+import { OrganizationImage } from './organization-image';
 import { ProfileEntityLink } from './profile-entity-link';
 
 type Kind = 'employment' | 'education';
@@ -160,17 +159,7 @@ function OrganizationBlock({
 
   return (
     <div className="flex min-w-0 gap-3">
-      {/*
-       * The box is the size, and Geo's placeholder is what a company with no
-       * logo gets. `Avatar` would draw a generated gradient beam instead — a
-       * different picture for every company, which reads as a logo somebody
-       * chose rather than as the absence of one. It also sizes to its box and
-       * not to its `size` prop, which is what let a real logo fill this column
-       * and push the dates out over the rail.
-       */}
-      <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded bg-grey-01">
-        <FallbackImage value={card.avatarUrl ?? PLACEHOLDER_SPACE_IMAGE} sizes="36px" className="object-cover" />
-      </span>
+      <OrganizationImage url={card.avatarUrl} size={36} />
 
       <div className="min-w-0 flex-1">
         <ProfileEntityLink

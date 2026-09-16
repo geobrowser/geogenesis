@@ -1,10 +1,8 @@
 'use client';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import type { CurrentRole } from '~/core/profile/profile-summary';
 
-import { FallbackImage } from '~/design-system/fallback-image';
-
+import { OrganizationImage } from './organization-image';
 import { ProfileEntityLink } from './profile-entity-link';
 
 type Props = {
@@ -53,9 +51,7 @@ export function ProfileHeadline({ roles, spaceId }: Props) {
            * than nudged onto the baseline inline, which is what left it sitting
            * low and crowding the word before it.
            */}
-          <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-sm bg-grey-01">
-            <FallbackImage value={role.avatarUrl ?? PLACEHOLDER_SPACE_IMAGE} sizes="20px" className="object-cover" />
-          </span>
+          <OrganizationImage url={role.avatarUrl} size={20} />
 
           <ProfileEntityLink
             entityId={role.organizationId}

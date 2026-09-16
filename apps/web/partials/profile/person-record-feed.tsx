@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 
-import type { ExploreFeedItem, ExploreFeedRow } from '~/core/explore/explore-card-item';
-import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-card-item';
+import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useInfiniteSentinel } from '~/core/profile/use-infinite-sentinel';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -48,7 +48,7 @@ export function PersonRecordFeed({
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
   const items = React.useMemo(
-    () => rows.map(row => toFeedItem(row, spaceLabel(labelsById, row.spaceId))),
+    () => rows.map(row => toExploreFeedItem(row, spaceLabel(labelsById, row.spaceId))),
     [labelsById, rows]
   );
 
@@ -104,22 +104,4 @@ export function PersonRecordFeed({
       )}
     </div>
   );
-}
-
-/**
- * A row plus its space's name and thumbnail.
- *
- * `hasPendingMembershipRequest` is false because the Join button it belongs to
- * is hidden here — the flag only ever changes that button's label.
- */
-function toFeedItem(row: ExploreFeedRow, label: SpaceLabel | undefined): ExploreFeedItem {
-  return {
-    ...row,
-    // The same last resort the feed uses for a space with no name: an id
-    // fragment, which at least differs between two spaces where a shared
-    // placeholder would not.
-    spaceName: label?.name ?? row.spaceId.slice(0, 8),
-    spaceImage: label?.image ?? null,
-    hasPendingMembershipRequest: false,
-  };
 }

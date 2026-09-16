@@ -6,8 +6,9 @@ import cx from 'classnames';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
-import type { ExploreFeedItem, ExploreFeedRow } from '~/core/explore/explore-card-item';
+import { type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import type { Stance } from '~/core/profile/use-person-positions';
 import { normId } from '~/core/utils/norm-id';
 
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
@@ -24,6 +25,8 @@ export type ActivityKind = {
   key: string;
   label: string;
   rows: ExploreFeedRow[];
+  /** Which side this person took, by claim id. Claims only; a debate has no stance. */
+  stanceByClaimId?: Record<string, Stance>;
   /**
    * How many there are in total.
    *
@@ -104,7 +107,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
         )}
       </header>
 
-      <ActivityGallery rows={selected.rows} />
+      <ActivityGallery rows={selected.rows} stanceByClaimId={selected.stanceByClaimId} />
 
       <Link
         href={selected.href}
@@ -117,7 +120,13 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   );
 }
 
-function ActivityGallery({ rows }: { rows: ExploreFeedRow[] }) {
+function ActivityGallery({
+  rows,
+  stanceByClaimId,
+}: {
+  rows: ExploreFeedRow[];
+  stanceByClaimId?: Record<string, Stance>;
+}) {
   const shown = React.useMemo(() => rows.slice(0, SHOWN), [rows]);
 
   // Looked up once for the gallery. These are routinely spaces the viewer has
@@ -148,7 +157,12 @@ function ActivityGallery({ rows }: { rows: ExploreFeedRow[] }) {
       >
         <span aria-hidden className="w-0 shrink-0 pl-4" />
         {shown.map(row => (
-          <GalleryCard key={`${row.entityId}-${row.spaceId}`} row={row} label={spaceLabel(labelsById, row.spaceId)} />
+          <GalleryCard
+            key={`${row.entityId}-${row.spaceId}`}
+            row={row}
+            label={spaceLabel(labelsById, row.spaceId)}
+            stance={stanceByClaimId?.[normId(row.entityId)]}
+          />
         ))}
         <span aria-hidden className="w-0 shrink-0 pr-4" />
       </div>
@@ -233,15 +247,15 @@ function useCentredCard(rows: ExploreFeedRow[]) {
  * Narrow enough that the next card is visibly cut off, which is what says the
  * row scrolls without a control saying so.
  */
-function GalleryCard({ row, label }: { row: ExploreFeedRow; label: SpaceLabel | undefined }) {
-  const item: ExploreFeedItem = {
-    ...row,
-    // The same last resort the feed uses for a space with no name.
-    spaceName: label?.name ?? row.spaceId.slice(0, 8),
-    spaceImage: label?.image ?? null,
-    hasPendingMembershipRequest: false,
-  };
-
+function GalleryCard({
+  row,
+  label,
+  stance,
+}: {
+  row: ExploreFeedRow;
+  label: SpaceLabel | undefined;
+  stance: Stance | undefined;
+}) {
   // A claim gets the debates panel's own card, and everything else the feed's.
   //
   // Not one card for both: the explore card is built to be read one to a row at
@@ -263,11 +277,11 @@ function GalleryCard({ row, label }: { row: ExploreFeedRow; label: SpaceLabel | 
       )}
     >
       {isClaim ? (
-        <GalleryClaimCard row={row} />
+        <GalleryClaimCard row={row} stance={stance} />
       ) : (
         // The Join button is hidden: this is a record being read, not a place to
         // be recruited into.
-        <ExploreFeedCard item={item} hideJoinButton titleOpensSidePanel />
+        <ExploreFeedCard item={toExploreFeedItem(row, label)} hideJoinButton titleOpensSidePanel />
       )}
     </div>
   );

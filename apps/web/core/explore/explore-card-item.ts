@@ -65,6 +65,27 @@ export type ExploreFeedItem = {
  */
 export type ExploreFeedRow = Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>;
 
+/**
+ * A row plus what only a space lookup can answer.
+ *
+ * The three surfaces that resolve spaces themselves — a topic's Coverage, and
+ * the two halves of a person's record — all need this, and all wrote it out
+ * separately. `hasPendingMembershipRequest` is false because the Join button it
+ * belongs to is hidden on every one of them, and the flag only ever changes
+ * that button's label.
+ */
+export function toExploreFeedItem(row: ExploreFeedRow, label: { name: string; image: string | null } | undefined) {
+  return {
+    ...row,
+    // The same last resort the feed uses when a space has no name yet: an id
+    // fragment, which at least differs between two spaces where a shared
+    // placeholder would not.
+    spaceName: label?.name ?? row.spaceId.slice(0, 8),
+    spaceImage: label?.image ?? null,
+    hasPendingMembershipRequest: false,
+  } satisfies ExploreFeedItem;
+}
+
 /** A decoded entity plus the two fields the card needs that aren't part of `Entity`. */
 export type ExploreCardEntity = Entity & { commentCount: number; createdAt?: string };
 

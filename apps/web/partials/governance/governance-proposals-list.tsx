@@ -33,7 +33,7 @@ import {
   type GovernanceProposalStatusFilter,
   fetchProposalsPageForSpaceByGovernanceFilters,
 } from './governance-proposal-query';
-import { GovernanceProposalRow } from './governance-proposal-row';
+import { GovernanceProposalRow, percentageFromCounts } from './governance-proposal-row';
 import { GovernanceRejectedProposalMenu } from './governance-rejected-proposal-menu';
 import { ProposalListItem } from './proposal-list-item';
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
@@ -64,11 +64,6 @@ function sortOpenProposalsUnvotedFirstByEndTimeAsc(
     submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
   });
   return [...items].sort((a, b) => compareOpenProposals(order(a), order(b), { unvotedFirst: true, endTime: 'asc' }));
-}
-
-function percentageFromCounts(count: number, total: number): number {
-  if (total === 0) return 0;
-  return Math.floor((count / total) * 100);
 }
 
 interface Props {

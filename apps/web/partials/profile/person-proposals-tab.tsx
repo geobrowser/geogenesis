@@ -13,7 +13,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { SpacePillAvatar } from '~/design-system/space-pill';
 
-import { GovernanceProposalRow } from '~/partials/governance/governance-proposal-row';
+import { GovernanceProposalRow, percentageFromCounts } from '~/partials/governance/governance-proposal-row';
 
 /**
  * Everything this person proposed, newest first (GEO-2859).
@@ -66,11 +66,6 @@ export function PersonProposalsTab({ spaceId, proposer }: { spaceId: string; pro
       )}
     </div>
   );
-}
-
-function percentageFromCounts(count: number, total: number): number {
-  if (total === 0) return 0;
-  return Math.floor((count / total) * 100);
 }
 
 function ProposalRow({
