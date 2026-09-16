@@ -175,14 +175,21 @@ function useCentredCard(rows: ExploreFeedRow[]) {
       const cards = scroller.querySelectorAll('[data-activity-card]');
       if (cards.length === 0) return;
 
-      const middle = scroller.scrollLeft + scroller.clientWidth / 2;
+      // Both sides read from `getBoundingClientRect`, so both are in the
+      // viewport's coordinates. `offsetLeft` against `scrollLeft` mixed two:
+      // offsets are measured to the nearest *positioned* ancestor, which this
+      // scroller is not, so every card's value carried a constant the scroll
+      // position knew nothing about — the comparison came out the same however
+      // far the row was scrolled, and the answer never moved off the first card.
+      const scrollerBox = scroller.getBoundingClientRect();
+      const middle = scrollerBox.left + scrollerBox.width / 2;
+
       let bestIndex = 0;
       let bestDistance = Infinity;
 
       cards.forEach((card, index) => {
-        const element = card as HTMLElement;
-        const centre = element.offsetLeft + element.offsetWidth / 2;
-        const distance = Math.abs(centre - middle);
+        const box = card.getBoundingClientRect();
+        const distance = Math.abs(box.left + box.width / 2 - middle);
         if (distance < bestDistance) {
           bestDistance = distance;
           bestIndex = index;
@@ -244,7 +251,15 @@ function GalleryCard({ row, label }: { row: ExploreFeedRow; label: SpaceLabel | 
     // The one thing overridden is the rule the card draws underneath itself to
     // separate it from the next card *down*. In a row there is nothing below
     // it, so that rule is a line under nothing.
-    <div data-activity-card className="w-[min(420px,80vw)] shrink-0 snap-start [&>*]:border-b-0">
+    <div
+      data-activity-card
+      // The same outline the debates lobby draws around a claim —
+      // `rounded-lg border border-grey-02 bg-white` in `matchmaking-claim-card`
+      // — so a claim looks the same in both places. Horizontal padding only:
+      // the card brings its own vertical rhythm, and adding to it is what made
+      // this look cramped the first time.
+      className="w-[min(420px,80vw)] shrink-0 snap-start rounded-lg border border-grey-02 bg-white px-3 [&>*]:border-b-0"
+    >
       {/* The Join button is hidden: this is a record being read, not a place to
           be recruited into. Everything else the card draws — the player, the
           response buttons, the tally — is what this gallery is for. */}
