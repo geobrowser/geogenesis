@@ -11,7 +11,6 @@ import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
-import { Text } from '~/design-system/text';
 
 import { dismissedNoticesAtom } from '~/atoms';
 
@@ -152,7 +151,7 @@ function EmailCapturePopup() {
           pale fringe along the edge — which is what made this look unclean next to the Figma frame.
           The border is gone and the top corners are filled with the field colour, so the container's
           `rounded-xl` is the only radius in play. Still wants a clean export from design, at 2x. */}
-      <img src="/explore-email-capture.png" alt="" className="block h-[145px] w-full object-cover select-none" />
+      <img src="/explore-email-capture.png" alt="" className="block h-[144px] w-full object-cover select-none" />
 
       {/* The welcome banner's close button, to the class: the two cards sit on the same page, and a
           reader should not have to learn a second dismiss control for the second one. */}
@@ -167,13 +166,21 @@ function EmailCapturePopup() {
         <CloseSmall color="white" />
       </button>
 
-      <div className="px-5 pt-[18px] pb-5">
+      {/* Spacing is the design's, measured off the frame rather than eyeballed (76342:20258 and
+          76342:20261). From the artwork's edge at 144.26: text block at y=164, 44 tall; form row at
+          y=233, 28 tall; card ends at 281. Sides are 20. Figma trims its text boxes to cap height,
+          which CSS only does with `text-box-trim` — not dependable across browsers yet. The leading
+          below is set to the design's own box heights instead, which gets the same rhythm and the
+          same total: 144 artwork + 20 + 17 heading + 8 + 19 subtext + 25 + 28 row + 20 = 281. */}
+      <div className="px-5 pt-5 pb-5">
         {status === 'done' ? (
           <>
-            <Text variant="mediumTitle">You are on the list.</Text>
-            <Text variant="metadata" color="grey-04" className="mt-2 block">
+            <p className="text-[28px] leading-[17px] font-medium tracking-[-0.84px] text-[#151515]">
+              You are on the list.
+            </p>
+            <p className="mt-[8px] text-[16px] leading-[19px] tracking-[-0.48px] text-[rgba(21,21,21,0.7)]">
               We will be in touch about features, points, and the path to mainnet.
-            </Text>
+            </p>
           </>
         ) : (
           // `noValidate`, and the field below is a text input rather than `type="email"`. Native
@@ -183,16 +190,19 @@ function EmailCapturePopup() {
           // `inputMode` and `autoComplete` keep the phone keyboard and the autofill that
           // `type="email"` was there for.
           <form onSubmit={submit} noValidate>
-            <Text variant="mediumTitle">Geo Network launching soon!</Text>
-            {/* One line, as designed. The card is a fixed 350 and this sentence is the widest
-                thing in it, so it sets the floor: at `metadata` (16px) it wraps onto a second line
-                and pushes the form down. `footnote` is the next step down the scale and fits. */}
-            <Text variant="footnote" color="grey-04" className="mt-2 block whitespace-nowrap">
+            <p className="text-[28px] leading-[17px] font-medium tracking-[-0.84px] text-[#151515]">
+              Geo Network launching soon!
+            </p>
+            {/* One line, as in the design. It fits because the app renders Calibre too — the same
+                face the frame is set in — at the design's own 16px and -0.48px tracking. The
+                `metadata` token is the same size but tracks at -0.25px, and over this sentence that
+                extra quarter-pixel per character is what pushed it onto a second line. */}
+            <p className="mt-[8px] text-[16px] leading-[19px] tracking-[-0.48px] text-[rgba(21,21,21,0.7)]">
               Get updates on features, points, and path to mainnet.
-            </Text>
+            </p>
 
-            {/* Side by side, as designed: both pills, the field taking the room the button leaves. */}
-            <div className="mt-4 flex items-center gap-1.5">
+            {/* 217 + 6 + 87 = 310, the design's row across a 350 card with 20 either side. */}
+            <div className="mt-[25px] flex h-7 items-center gap-[6px]">
               <input
                 type="text"
                 inputMode="email"
@@ -209,7 +219,7 @@ function EmailCapturePopup() {
                 aria-invalid={status === 'invalid-email'}
                 disabled={status === 'submitting'}
                 className={cx(
-                  'h-7 min-w-0 flex-1 rounded-full border bg-white px-3 text-metadata text-text outline-hidden transition-colors placeholder:text-grey-03 disabled:text-grey-03',
+                  'h-7 w-[217px] min-w-0 rounded-full border bg-white px-3 text-[17px] leading-[19px] text-text outline-hidden transition-colors placeholder:text-[#b6b6b6] disabled:text-grey-03',
                   status === 'invalid-email' ? 'border-red-01' : 'border-grey-02 focus:border-text'
                 )}
               />
@@ -219,7 +229,7 @@ function EmailCapturePopup() {
               <button
                 type="submit"
                 disabled={status === 'submitting'}
-                className="h-7 shrink-0 rounded-full bg-[#151515] px-2.5 text-metadata text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="h-7 w-[87px] shrink-0 rounded-full bg-[#151515] text-[16px] tracking-[-0.35px] text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {status === 'submitting' ? 'Subscribing…' : 'Subscribe'}
               </button>
@@ -228,10 +238,8 @@ function EmailCapturePopup() {
             {errorMessage ? (
               // `role="alert"` on the element rather than on `Text`, which takes no such prop —
               // and it is what makes a failure reach someone who is not watching this corner.
-              <p role="alert" className="mt-2">
-                <Text variant="footnote" color="red-01">
-                  {errorMessage}
-                </Text>
+              <p role="alert" className="mt-2 text-[14px] tracking-[-0.35px] text-red-01">
+                {errorMessage}
               </p>
             ) : null}
           </form>
