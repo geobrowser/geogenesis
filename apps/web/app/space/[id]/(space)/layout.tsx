@@ -209,6 +209,7 @@ export default async function Layout(props0: LayoutProps) {
                   initialTabRelations={props.tabRelations ?? []}
                   tabEntities={props.tabEntities}
                   typeIds={typeIds}
+                  isProfile={isProfile}
                 />
               </React.Suspense>
             </div>

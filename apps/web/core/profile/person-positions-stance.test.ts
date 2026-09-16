@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { decodeVotesForTest } from './use-person-positions';
+import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
+
+import { type PersonPositionsPage, decodeVotesForTest, mergePositionPages } from './use-person-positions';
 
 /**
  * Which side a person came down on, read off their votes (GEO-2859).
@@ -64,5 +66,47 @@ describe('the stance on a claim', () => {
 
     expect(page.ids).toEqual(['claim-1']);
     expect(page.seen).toBe(2);
+  });
+});
+
+/**
+ * Pages are merged, not concatenated.
+ *
+ * `decodeVotes` collapses a claim's two votes into one card among the rows it
+ * was handed — twenty of them. A claim whose stance and veracity votes fall
+ * either side of a page boundary escapes that entirely.
+ */
+describe('mergePositionPages', () => {
+  const page = (ids: string[], stances: Record<string, 'agree' | 'disagree'> = {}): PersonPositionsPage => ({
+    rows: ids.map(id => ({ entityId: id, spaceId: 'space' }) as ExploreFeedRow),
+    stanceByClaimId: stances,
+    nextOffset: null,
+  });
+
+  it('renders a claim once when its two votes straddle a page boundary', () => {
+    const merged = mergePositionPages([page(['a', 'b']), page(['b', 'c'])]);
+
+    expect(merged.rows.map(row => row.entityId)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('keeps the newest stance, which is the one seen first', () => {
+    // Pages arrive newest-first, so a later page holds older votes. Merging them
+    // over the top — which is what `Object.assign` did — let the older win.
+    const merged = mergePositionPages([page(['a'], { a: 'disagree' }), page(['a'], { a: 'agree' })]);
+
+    expect(merged.stanceByClaimId).toEqual({ a: 'disagree' });
+  });
+
+  it('matches rows however their ids are spelled', () => {
+    const merged = mergePositionPages([
+      page(['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']),
+      page(['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']),
+    ]);
+
+    expect(merged.rows).toHaveLength(1);
+  });
+
+  it('has nothing to merge for nothing', () => {
+    expect(mergePositionPages([])).toEqual({ rows: [], stanceByClaimId: {} });
   });
 });

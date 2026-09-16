@@ -77,9 +77,6 @@ type Props = {
  */
 export function ProfileRecordSection({ kind, cards, isOwner, onEdit, spaceId }: Props) {
   const [isExpanded, setIsExpanded] = React.useState(false);
-  const copy = COPY[kind];
-
-  if (cards.length === 0 && !isOwner) return null;
 
   // Counted in roles rather than employers, and a company is all-or-nothing —
   // see `visibleHistoryCards`.
@@ -87,7 +84,18 @@ export function ProfileRecordSection({ kind, cards, isOwner, onEdit, spaceId }: 
   // Kept even while expanded, because whether there is anything to expand *to*
   // is what decides if the control shows at all. Asking it of `shown` instead
   // made the control disappear the moment it was pressed, with no way back.
+  //
+  // Above the early return, and it has to stay there. A visitor renders first
+  // while the history is still loading — no cards — and again once it arrives,
+  // and a `useMemo` below the return would be called on the second render and
+  // not the first: "Rendered more hooks than during the previous render", on
+  // every profile that has any history at all.
   const collapsed = React.useMemo(() => visibleHistoryCards(cards), [cards]);
+
+  const copy = COPY[kind];
+
+  if (cards.length === 0 && !isOwner) return null;
+
   const shown = isExpanded ? cards : collapsed;
 
   return (
@@ -263,18 +271,16 @@ function EntryRow({ entry, isExpanded, spaceId }: { entry: HistoryEntry; isExpan
  * account, of which Purdue contributes two — and only because a field of study
  * counts as a skill.
  */
-export function ProfileSkillsSection({
-  skills,
-  isOwner,
-  spaceId,
-}: {
-  skills: NamedRef[];
-  isOwner: boolean;
-  spaceId: string;
-}) {
+export function ProfileSkillsSection({ skills, spaceId }: { skills: NamedRef[]; spaceId: string }) {
   const [showAll, setShowAll] = React.useState(false);
 
-  if (skills.length === 0 && !isOwner) return null;
+  // Hidden from the owner too, unlike Experience and Education.
+  //
+  // Those are authored, so an empty one is a thing to do and gets a pen. Skills
+  // are *derived* — they are collected off the roles and degrees above, and
+  // there is nothing to add here that is not added there. An empty section with
+  // a control that opened somebody else's editor would be a worse answer than
+  // no section.
   if (skills.length === 0) return null;
 
   const shown = showAll ? skills : skills.slice(0, SHOWN_SKILLS);

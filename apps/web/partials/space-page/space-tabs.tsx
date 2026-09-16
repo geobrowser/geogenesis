@@ -21,6 +21,8 @@ type SpaceTabsProps = {
   initialTabRelations: Relation[];
   tabEntities: TabEntity[];
   typeIds: string[];
+  /** Whether this space renders the person profile — see `buildSpaceTabs`. */
+  isProfile: boolean;
 };
 
 type BuiltSpaceTab = {
@@ -33,12 +35,26 @@ type BuiltSpaceTab = {
   onlyWhenNarrow?: boolean;
 };
 
+/** The record routes on a profile. Reachable only by their own tab — see the dedupe below. */
+const PERSON_TAB_LABELS = ['Debates', 'Positions', 'Proposals', 'About'] as const;
+
 type BuildSpaceTabsParams = {
   spaceId: string;
   overviewHref: string;
   dynamicTabs: Array<{ label: string; href: string }>;
   typeIds: string[];
   isDebugDebatesPageEnabled: boolean;
+  /**
+   * Whether this space renders the person profile (GEO-2859).
+   *
+   * Passed in rather than inferred from `PERSON_TYPE`, because the two are not
+   * the same question. `isPersonProfileSpace` wants a `PERSONAL` space *and* a
+   * person on it; a Person entity written into a DAO space satisfies the type
+   * check and nothing else — and would have been handed Positions, Proposals
+   * and About links whose route guards answer 404, while losing Governance and
+   * Activity it should still have.
+   */
+  isProfile: boolean;
 };
 
 export function buildSpaceTabs({
@@ -47,6 +63,7 @@ export function buildSpaceTabs({
   dynamicTabs,
   typeIds,
   isDebugDebatesPageEnabled,
+  isProfile,
 }: BuildSpaceTabsParams): BuiltSpaceTab[] {
   const tabs: BuiltSpaceTab[] = [];
 
@@ -87,7 +104,7 @@ export function buildSpaceTabs({
    * personal space has no governance of its own, and Proposals is the same log
    * Activity was showing, with the vote and the outcome on it.
    */
-  const isPerson = typeIds.includes(SystemIds.PERSON_TYPE);
+  const isPerson = isProfile;
 
   const PERSON_TABS: BuiltSpaceTab[] = [
     { label: 'Debates', href: `/space/${spaceId}/debates`, priority: 4 },
@@ -99,7 +116,18 @@ export function buildSpaceTabs({
 
   if (typeIds.includes(SystemIds.SPACE_TYPE)) {
     if (dynamicTabs.length > 0) {
-      const reservedLabels = new Set([...(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label] : [])]);
+      // Labels an authored tab cannot take, because the route behind each is
+      // reachable no other way.
+      //
+      // Wider than it was. An authored "Claims" or "Debates" tab beating the
+      // system one is fine on a space — those system tabs are not rendered
+      // there at all. On a profile the four below *are* the record, and About
+      // is the only path to the rail's facts below 1024px, where the rail drops
+      // itself. Shadowing one does not replace it; it makes it unreachable.
+      const reservedLabels = new Set([
+        ...(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label] : []),
+        ...(isPerson ? PERSON_TAB_LABELS : []),
+      ]);
       const visibleDynamicTabs =
         reservedLabels.size > 0 ? dynamicTabs.filter(tab => !reservedLabels.has(tab.label)) : dynamicTabs;
 
@@ -123,9 +151,8 @@ export function buildSpaceTabs({
     tabs.push(...SOME_SPACES_TABS);
   }
 
-  // Pushed after the dynamic tabs, so a person who authored their own "Debates"
-  // keeps it — the dedupe below is first-wins, the same way an authored Claims
-  // tab already beats the system one.
+  // The dedupe below is first-wins, so these would lose to an authored tab of
+  // the same name — which is why those names are reserved above.
   if (isPerson) {
     tabs.push(...PERSON_TABS);
 
@@ -148,7 +175,7 @@ export function buildSpaceTabs({
   return [...seen.values()].sort((a, b) => a.priority - b.priority);
 }
 
-export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities, typeIds }: SpaceTabsProps) {
+export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities, typeIds, isProfile }: SpaceTabsProps) {
   const { editable } = useEditable();
   const isDebugDebatesPageEnabled = useDebugDebatesPageEnabled();
 
@@ -187,7 +214,7 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
 
   // Our Community tab renders for non-person spaces, always as the 2nd tab (after
   // Overview) — and in addition to any custom "Community" tab the space authored.
-  const isPersonSpace = typeIds.includes(SystemIds.PERSON_TYPE);
+  const isPersonSpace = isProfile;
   const showCommunity = typeIds.includes(SystemIds.SPACE_TYPE) && !isPersonSpace;
   // System tabs bracket the custom (dynamic) tabs: Overview + our Community lead,
   // Governance + Activity trail.
@@ -248,6 +275,7 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
     dynamicTabs,
     typeIds,
     isDebugDebatesPageEnabled,
+    isProfile,
   });
 
   // Overview, then our Community tab, then everything else.

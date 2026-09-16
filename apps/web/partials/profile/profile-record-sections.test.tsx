@@ -147,7 +147,7 @@ describe('ProfileSkillsSection', () => {
   const many = Array.from({ length: 10 }, (_, i) => ({ id: `skill-${i}`, name: `Skill ${i}` }));
 
   it('keeps the show-more control inside the chip container', () => {
-    const { container } = render(<ProfileSkillsSection skills={many} isOwner={false} spaceId={SPACE} />);
+    const { container } = render(<ProfileSkillsSection skills={many} spaceId={SPACE} />);
 
     const toggle = screen.getByRole('button', { name: '+2 more' });
     const chipContainer = container.querySelector('ul');
@@ -159,7 +159,7 @@ describe('ProfileSkillsSection', () => {
   });
 
   it('shows every skill once expanded, and offers its way back', () => {
-    render(<ProfileSkillsSection skills={many} isOwner={false} spaceId={SPACE} />);
+    render(<ProfileSkillsSection skills={many} spaceId={SPACE} />);
 
     fireEvent.click(screen.getByRole('button', { name: '+2 more' }));
 
@@ -168,15 +168,16 @@ describe('ProfileSkillsSection', () => {
   });
 
   it('opens each skill', () => {
-    render(
-      <ProfileSkillsSection skills={[{ id: 'skill-finance', name: 'Finance' }]} isOwner={false} spaceId={SPACE} />
-    );
+    render(<ProfileSkillsSection skills={[{ id: 'skill-finance', name: 'Finance' }]} spaceId={SPACE} />);
 
     expect(mocks.links).toContainEqual({ entityId: 'skill-finance', spaceId: SPACE });
   });
 
-  it('renders nothing when there are no skills', () => {
-    const { container } = render(<ProfileSkillsSection skills={[]} isOwner spaceId={SPACE} />);
+  it('renders nothing when there are no skills, for the owner too', () => {
+    // Unlike Experience and Education. Those are authored, so an empty one is a
+    // thing to do; skills are derived off the roles above, and there is nothing
+    // to add here that is not added there.
+    const { container } = render(<ProfileSkillsSection skills={[]} spaceId={SPACE} />);
 
     expect(container).toBeEmptyDOMElement();
   });

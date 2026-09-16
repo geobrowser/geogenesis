@@ -140,6 +140,42 @@ function decodeVotes(response: VotesResponse): VotePage {
 /** Exposed for tests: the decode is where `voteKind` and `voteType` get confused. */
 export const decodeVotesForTest = decodeVotes;
 
+/**
+ * Every page as one list.
+ *
+ * Deduped *across* pages, not only within one. `decodeVotes` collapses a claim's
+ * stance and veracity votes into one card among the twenty rows it was handed,
+ * so a claim whose two votes fall either side of a page boundary escaped it
+ * entirely — rendered twice, with two React keys the same.
+ *
+ * First seen wins, for the rows and for the stance. Pages arrive newest-first,
+ * so a later page holds older votes; merging their stances over the top — which
+ * is what `Object.assign` did — let the older vote decide the badge.
+ */
+export function mergePositionPages(pages: readonly PersonPositionsPage[]): {
+  rows: ExploreFeedRow[];
+  stanceByClaimId: Record<string, Stance>;
+} {
+  const seen = new Set<string>();
+  const rows: ExploreFeedRow[] = [];
+  const stanceByClaimId: Record<string, Stance> = {};
+
+  for (const page of pages) {
+    for (const [id, stance] of Object.entries(page.stanceByClaimId)) {
+      if (!(id in stanceByClaimId)) stanceByClaimId[id] = stance;
+    }
+
+    for (const row of page.rows) {
+      const key = normId(row.entityId);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push(row);
+    }
+  }
+
+  return { rows, stanceByClaimId };
+}
+
 export function personPositionsQueryKey(spaceId: string) {
   return ['person-positions', ID.uuidToHex(spaceId)] as const;
 }
@@ -179,12 +215,7 @@ export function usePersonPositions({
     staleTime: 30_000,
   });
 
-  const rows = React.useMemo(() => (data?.pages ?? []).flatMap(page => page.rows), [data]);
-
-  const stanceByClaimId = React.useMemo(
-    () => Object.assign({}, ...(data?.pages ?? []).map(page => page.stanceByClaimId)) as Record<string, Stance>,
-    [data]
-  );
+  const { rows, stanceByClaimId } = React.useMemo(() => mergePositionPages(data?.pages ?? []), [data]);
 
   return {
     rows,

@@ -66,7 +66,19 @@ function decode(response: Response): ExploreCardEntity[] {
  *
  * Ids the graph has nothing for are dropped rather than rendered empty.
  */
-export async function fetchExploreRowsByIds(ids: string[], signal?: AbortSignal): Promise<ExploreFeedRow[]> {
+export async function fetchExploreRowsByIds(
+  ids: string[],
+  signal?: AbortSignal,
+  /**
+   * The space each id should be read in, where the caller knows.
+   *
+   * A debate's side relation names the space the debate lives in, and without
+   * that `pickDisplaySpaceId` takes the first of the entity's own spaces that
+   * is allowed — so a debate carried in more than one resolved its label, its
+   * claims and its link against whichever happened to come first.
+   */
+  preferredSpaceById?: Map<string, string>
+): Promise<ExploreFeedRow[]> {
   if (ids.length === 0) return [];
 
   const entities = await Effect.runPromise(
@@ -83,9 +95,19 @@ export async function fetchExploreRowsByIds(ids: string[], signal?: AbortSignal)
     .map(id => byId.get(normId(id)))
     .filter((entity): entity is ExploreCardEntity => entity !== undefined);
 
-  const openableSpaceIds = new Set(ordered.flatMap(e => e.spaces.filter(validateSpaceId).map(normId)));
+  // Built one at a time so each can be given its own allowed set: the caller's
+  // space where it named one, and otherwise every space the entity is in.
+  // `buildExploreFeedRows` takes a single set for the whole batch, which cannot
+  // express "this one belongs to that space".
+  //
+  // No membership context either way, so the cards render with their Join
+  // button hidden rather than in a state this query cannot determine.
+  return ordered.flatMap(entity => {
+    const preferred = preferredSpaceById?.get(normId(entity.id));
+    const allowed = preferred
+      ? new Set([normId(preferred)])
+      : new Set(entity.spaces.filter(validateSpaceId).map(normId));
 
-  // No membership context, so the cards render with their Join button hidden
-  // rather than in a state this query cannot determine.
-  return buildExploreFeedRows(ordered, openableSpaceIds, new Set());
+    return buildExploreFeedRows([entity], allowed, new Set());
+  });
 }

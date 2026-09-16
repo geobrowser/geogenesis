@@ -1,11 +1,7 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
-import {
-  DEBATE_OPPOSED_BY_PROPERTY,
-  DEBATE_SUPPORTED_BY_PROPERTY,
-  DEBATE_TYPE,
-} from '~/core/profile/history-ontology';
+import { DEBATE_OPPOSED_BY_PROPERTY, DEBATE_SUPPORTED_BY_PROPERTY, DEBATE_TYPE } from '~/core/profile/history-ontology';
 import {
   NO_FACTS,
   type ProfileFacts,
@@ -13,6 +9,7 @@ import {
   type Verifier,
   orderSpaces,
 } from '~/core/profile/profile-facts';
+import { normId } from '~/core/utils/norm-id';
 
 import { graphql } from './graphql';
 
@@ -30,7 +27,7 @@ interface NetworkResult {
   members: { nodes: SpaceNode[] } | null;
   editors: { nodes: SpaceNode[] } | null;
   proposals: { totalCount: number } | null;
-  positions: { totalCount: number } | null;
+  positions: { nodes: { objectId: string | null }[] } | null;
   supported: { nodes: { fromEntity: { id: string } | null }[] } | null;
   opposed: { nodes: { fromEntity: { id: string } | null }[] } | null;
   verifiedBy: { nodes: VerifierNode[] } | null;
@@ -49,6 +46,20 @@ interface NetworkResult {
  * space, and passing the entity id to any of them returns zero rather than an
  * error, which is the whole trap this file exists to close.
  */
+/**
+ * How many vote rows the Positions count reads before it stops.
+ *
+ * `totalCount` cannot answer this. It counts *rows*, and the Positions tab
+ * collapses a claim's stance and veracity votes into one card — so somebody who
+ * did both saw a rail count larger than the list it links to. The ids have to be
+ * read and counted distinct, the same way the debate sides below are.
+ *
+ * 500 against 192 on the reference account. A person past the cap under-reports
+ * rather than over-reports, which is the better way round for a figure that
+ * stands next to a list.
+ */
+const POSITIONS_SCAN = 500;
+
 /**
  * One side of a debate, pointed at this space.
  *
@@ -70,6 +81,18 @@ function debateSide(typeId: string, sp: string) {
   ) { nodes { fromEntity { id } } }`;
 }
 
+/** Distinct non-null values, which is what every count on this rail means. */
+function distinctCount<T>(nodes: T[], key: (node: T) => string | null | undefined): number {
+  const seen = new Set<string>();
+
+  for (const node of nodes) {
+    const id = key(node);
+    if (id) seen.add(normId(id));
+  }
+
+  return seen.size;
+}
+
 function profileFactsQuery(spaceId: string, personEntityId: string | null) {
   const sp = JSON.stringify(spaceId);
   const person = personEntityId ? JSON.stringify(personEntityId) : null;
@@ -84,7 +107,8 @@ function profileFactsQuery(spaceId: string, personEntityId: string | null) {
     proposals: proposalsConnection(filter: { proposedBy: { is: ${sp} } }) { totalCount }
     positions: userVotesConnection(
       filter: { userId: { is: ${sp} }, or: [{ voteKind: { is: 1 } }, { voteKind: { is: 2 } }] }
-    ) { totalCount }
+      first: ${POSITIONS_SCAN}
+    ) { nodes { objectId } }
     supported: ${debateSide(DEBATE_SUPPORTED_BY_PROPERTY, sp)}
     opposed: ${debateSide(DEBATE_OPPOSED_BY_PROPERTY, sp)}
     verifiedBy: subspacesConnection(
@@ -153,15 +177,14 @@ export async function fetchProfileFacts(spaceId: string, personEntityId: string 
 
   return {
     proposals: data.proposals?.totalCount ?? 0,
-    positions: data.positions?.totalCount ?? 0,
+    positions: distinctCount(data.positions?.nodes ?? [], node => node.objectId),
     // Distinct debates across both sides. Adding the two totals counts a debate
     // twice where it names the same person on both — and counts duplicate writes
     // as separate debates, which is how 10 becomes 13.
-    debates: new Set(
-      [...(data.supported?.nodes ?? []), ...(data.opposed?.nodes ?? [])]
-        .map(node => node.fromEntity?.id)
-        .filter((id): id is string => id !== undefined)
-    ).size,
+    debates: distinctCount(
+      [...(data.supported?.nodes ?? []), ...(data.opposed?.nodes ?? [])],
+      node => node.fromEntity?.id
+    ),
     spaces: orderSpaces([...byId.values()]),
     verifiedBy,
     joinedAt: data.person?.createdAt ? Number(data.person.createdAt) : null,

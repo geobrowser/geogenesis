@@ -18,6 +18,7 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE],
+      isProfile: false,
       isDebugDebatesPageEnabled: false,
     });
 
@@ -32,6 +33,7 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
+      isProfile: true,
       isDebugDebatesPageEnabled: false,
     });
 
@@ -62,6 +64,7 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs: [...dynamicTabs, { label: 'Claims', href: `${overviewHref}?tabId=dynamic-claims` }],
       typeIds: [SystemIds.SPACE_TYPE],
+      isProfile: false,
       isDebugDebatesPageEnabled: false,
     });
 
@@ -75,6 +78,7 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs: [...dynamicTabs, { label: 'Debates', href: `${overviewHref}?tabId=dynamic-debates` }],
       typeIds: [SystemIds.SPACE_TYPE],
+      isProfile: false,
       isDebugDebatesPageEnabled: false,
     });
 
@@ -88,6 +92,7 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE],
+      isProfile: false,
       isDebugDebatesPageEnabled: true,
     });
 
@@ -108,6 +113,7 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
+      isProfile: true,
       isDebugDebatesPageEnabled: true,
     });
 
@@ -129,6 +135,7 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs: [],
       typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
+      isProfile: true,
       isDebugDebatesPageEnabled: false,
     });
 
@@ -149,27 +156,66 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs: [],
       typeIds: [SystemIds.SPACE_TYPE],
+      isProfile: false,
       isDebugDebatesPageEnabled: false,
     });
 
     expect(space.map(tab => tab.label)).toEqual(['Overview', 'Governance', 'Activity']);
   });
 
-  it("lets a person's authored Debates tab win over the system one", () => {
+  it("keeps a person's record routes from being shadowed by an authored tab", () => {
+    const tabs = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs: [
+        { label: 'Debates', href: `${overviewHref}?tabId=dynamic-debates` },
+        { label: 'About', href: `${overviewHref}?tabId=dynamic-about` },
+      ],
+      typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
+      isProfile: true,
+      isDebugDebatesPageEnabled: false,
+    });
+
+    // The dedupe is first-wins, so an authored tab of the same name would take
+    // the route's place — and on a profile these four *are* the record, with
+    // About the only path to the rail's facts below 1024px, where the rail drops
+    // itself. Shadowing one does not replace it, it makes it unreachable.
+    expect(tabs.filter(tab => tab.label === 'Debates')).toEqual([
+      { label: 'Debates', href: `/space/${spaceId}/debates`, priority: 4 },
+    ]);
+    expect(tabs.find(tab => tab.label === 'About')?.href).toBe(`/space/${spaceId}/about`);
+    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Debates', 'Positions', 'Proposals', 'About']);
+  });
+
+  it('leaves an ordinary space free to author any of those names', () => {
+    // The reservation is a profile's. A space renders none of those system tabs,
+    // so a "Debates" tab there is the space's own and nothing is displaced.
     const tabs = buildSpaceTabs({
       spaceId,
       overviewHref,
       dynamicTabs: [{ label: 'Debates', href: `${overviewHref}?tabId=dynamic-debates` }],
-      typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
+      typeIds: [SystemIds.SPACE_TYPE],
+      isProfile: false,
       isDebugDebatesPageEnabled: false,
     });
 
-    expect(tabs.filter(tab => tab.label === 'Debates')).toEqual([
-      { label: 'Debates', href: `${overviewHref}?tabId=dynamic-debates`, priority: 6, dividerBefore: true },
-    ]);
-    // The authored one takes the system tab's place *and* its own, so it lands
-    // after the rule with the rest of what this person wrote.
-    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Positions', 'Proposals', 'Debates', 'About']);
+    expect(tabs.find(tab => tab.label === 'Debates')?.href).toBe(`${overviewHref}?tabId=dynamic-debates`);
+  });
+
+  it('gives a Person written into a DAO space the DAO tabs', () => {
+    // `isProfile` is the space's classification, not the entity's type. A Person
+    // page inside a DAO used to be handed Positions, Proposals and About links
+    // whose route guards answer 404, and lost Governance and Activity with it.
+    const tabs = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs: [],
+      typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
+      isProfile: false,
+      isDebugDebatesPageEnabled: false,
+    });
+
+    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Governance', 'Activity']);
   });
 
   it('keeps the system Debug debates route when an authored tab has the same label', () => {
@@ -178,6 +224,7 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs: [...dynamicTabs, { label: 'Debug debates', href: `${overviewHref}?tabId=debug-debates` }],
       typeIds: [SystemIds.SPACE_TYPE],
+      isProfile: false,
       isDebugDebatesPageEnabled: true,
     });
 

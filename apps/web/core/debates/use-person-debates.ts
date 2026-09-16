@@ -29,10 +29,19 @@ export function usePersonDebates(spaceId: string, enabled: boolean) {
     queryFn: async ({ signal }) => {
       const listed = await fetchPersonDebates(spaceId);
 
+      // The relation says which space each debate lives in, and that is the one
+      // its card should read — see `fetchExploreRowsByIds`.
+      const spaceByDebateId = new Map(
+        listed
+          .filter((debate): debate is typeof debate & { spaceId: string } => debate.spaceId !== null)
+          .map(debate => [ID.uuidToHex(debate.id), debate.spaceId])
+      );
+
       return {
         rows: await fetchExploreRowsByIds(
           listed.map(debate => debate.id),
-          signal
+          signal,
+          spaceByDebateId
         ),
         // Which side this person argued, by debate. Kept even though no card
         // renders it yet: it comes off the relation and nothing downstream can

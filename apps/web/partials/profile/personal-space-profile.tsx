@@ -34,7 +34,17 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
   const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
 
   const history = useProfileHistory({ entityId: personEntityId, spaceId });
+  // Held rather than cleared on close, so a failed publish can reopen on the
+  // section it was editing. `EditRecordDialog` calls `onOpenChange(true)` when a
+  // publish fails — the staged rows survive and the dialog is the only place to
+  // retry them — and a handler that ignored the boolean made that call a no-op.
   const [editing, setEditing] = React.useState<'employment' | 'education' | null>(null);
+  const lastEdited = React.useRef<'employment' | 'education'>('employment');
+
+  const openEditor = (kind: 'employment' | 'education') => {
+    lastEdited.current = kind;
+    setEditing(kind);
+  };
 
   const skills = React.useMemo(
     () => collectSkills(history.employment, history.education),
@@ -69,21 +79,21 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
         kind="employment"
         cards={history.employment}
         isOwner={isOwner}
-        onEdit={() => setEditing('employment')}
+        onEdit={() => openEditor('employment')}
         spaceId={spaceId}
       />
       <ProfileRecordSection
         kind="education"
         cards={history.education}
         isOwner={isOwner}
-        onEdit={() => setEditing('education')}
+        onEdit={() => openEditor('education')}
         spaceId={spaceId}
       />
-      <ProfileSkillsSection skills={skills} isOwner={isOwner} spaceId={spaceId} />
+      <ProfileSkillsSection skills={skills} spaceId={spaceId} />
 
       <EditRecordDialog
         kind={editing}
-        onOpenChange={() => setEditing(null)}
+        onOpenChange={open => setEditing(open ? lastEdited.current : null)}
         entityId={personEntityId}
         spaceId={spaceId}
       />
