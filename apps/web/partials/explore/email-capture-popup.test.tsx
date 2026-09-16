@@ -128,6 +128,23 @@ describe('ExploreEmailCapturePopup', () => {
     expect(popup()).toBeNull();
   });
 
+  // Reported from the browser: after subscribing, the X did nothing. Subscribing records the
+  // dismissal so the popup does not return next visit, and the close button used to call that same
+  // function — which by then was a no-op, because the id was already stored. So nothing changed and
+  // the card stayed up with no way to shift it.
+  it('closes from the success state, where the dismissal is already recorded', async () => {
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'preston@geobrowser.io' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+    expect(await screen.findByText('You are on the list.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    expect(popup()).toBeNull();
+  });
+
   it('says what went wrong without sending an address it can see is not one', async () => {
     render(<ExploreEmailCapturePopup />);
     scrollPastTrigger();

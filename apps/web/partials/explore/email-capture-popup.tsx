@@ -54,6 +54,10 @@ function EmailCapturePopup() {
   const [scrolledEnough, setScrolledEnough] = React.useState(false);
   const [email, setEmail] = React.useState('');
   const [status, setStatus] = React.useState<Status>('idle');
+  // Separate from the persisted notice below. Subscribing *records* the dismissal so the popup does
+  // not return next visit, but it must not close the card out from under the confirmation — so the
+  // two are different acts: one remembers, one closes.
+  const [closed, setClosed] = React.useState(false);
 
   const dismissed = dismissedNotices.includes(EMAIL_CAPTURE_ID);
   // Signed in is never, not "not yet": the reader already has an account, and the list is for
@@ -75,9 +79,16 @@ function EmailCapturePopup() {
     return () => window.removeEventListener('scroll', check);
   }, [eligible, scrolledEnough]);
 
-  const dismiss = React.useCallback(() => {
+  /** Records the dismissal so it does not come back next visit. Leaves this render alone. */
+  const rememberDismissed = React.useCallback(() => {
     setDismissedNotices(previous => (previous.includes(EMAIL_CAPTURE_ID) ? previous : [...previous, EMAIL_CAPTURE_ID]));
   }, [setDismissedNotices]);
+
+  /** What the close button does: remember it, and take it off the screen now. */
+  const close = React.useCallback(() => {
+    rememberDismissed();
+    setClosed(true);
+  }, [rememberDismissed]);
 
   const submit = React.useCallback(
     async (event: React.FormEvent) => {
@@ -97,9 +108,10 @@ function EmailCapturePopup() {
         const body = (await response.json()) as { result?: NewsletterSubscribeResult };
         if (body.result === 'subscribed') {
           setStatus('done');
-          // Dismissed on success too, so the reader who signed up is not asked again on the next
-          // visit. The list is the point; having joined it is the strongest reason not to ask.
-          dismiss();
+          // Recorded, not closed. Having joined is the strongest reason not to ask again next
+          // visit, but the confirmation still has to be readable — and still has to be closable,
+          // which it was not while this called the same function the close button does.
+          rememberDismissed();
           return;
         }
         setStatus(body.result ?? 'failed');
@@ -107,7 +119,7 @@ function EmailCapturePopup() {
         setStatus('failed');
       }
     },
-    [dismiss, email]
+    [email, rememberDismissed]
   );
 
   // Privy's own modal is a sign-in the reader has actively started. Stacking a second ask on top of
@@ -117,7 +129,7 @@ function EmailCapturePopup() {
   // the dismissal — which is what stops it returning next visit — and without this exception that
   // same write would make the popup ineligible and unmount it on the spot, so the reader would
   // never see the confirmation for the thing they just did.
-  if ((!eligible && status !== 'done') || !scrolledEnough || isModalOpen) return null;
+  if (closed || (!eligible && status !== 'done') || !scrolledEnough || isModalOpen) return null;
 
   const errorMessage =
     status === 'invalid-email'
@@ -157,7 +169,7 @@ function EmailCapturePopup() {
           reader should not have to learn a second dismiss control for the second one. */}
       <button
         type="button"
-        onClick={dismiss}
+        onClick={close}
         aria-label="Dismiss"
         // `top`/`right` put the 24px chip's centre on (322, 23) — where the artwork's own glyph
         // sits — so it is covered rather than doubled. The rest is the banner's button verbatim.
@@ -171,8 +183,8 @@ function EmailCapturePopup() {
           y=233, 28 tall; card ends at 281. Sides are 20. Figma trims its text boxes to cap height,
           which CSS only does with `text-box-trim` — not dependable across browsers yet. The leading
           below is set to the design's own box heights instead, which gets the same rhythm and the
-          same total: 144 artwork + 20 + 17 heading + 8 + 19 subtext + 25 + 28 row + 20 = 281. */}
-      <div className="px-5 pt-5 pb-5">
+          same total: 144 artwork + 20 + 17 heading + 8 + 19 subtext + 20 + 28 row + 25 = 281. */}
+      <div className="px-5 pt-5 pb-[25px]">
         {status === 'done' ? (
           <>
             <p className="text-[28px] leading-[17px] font-medium tracking-[-0.84px] text-[#151515]">
@@ -201,8 +213,10 @@ function EmailCapturePopup() {
               Get updates on features, points, and path to mainnet.
             </p>
 
-            {/* 217 + 6 + 87 = 310, the design's row across a 350 card with 20 either side. */}
-            <div className="mt-[25px] flex h-7 items-center gap-[6px]">
+            {/* 20 below the subtext, which the design moved up to (row y went 233 -> 228 against a
+                text block ending at 208). 217 + 6 + 87 = 310, across a 350 card with 20 either
+                side. */}
+            <div className="mt-5 flex h-7 items-center gap-[6px]">
               <input
                 type="text"
                 inputMode="email"
@@ -229,7 +243,7 @@ function EmailCapturePopup() {
               <button
                 type="submit"
                 disabled={status === 'submitting'}
-                className="h-7 w-[87px] shrink-0 rounded-full bg-[#151515] text-[16px] tracking-[-0.35px] text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="inline-flex h-7 w-[87px] shrink-0 items-center justify-center rounded-full bg-[#151515] text-[16px] leading-none tracking-[-0.35px] whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {status === 'submitting' ? 'Subscribing…' : 'Subscribe'}
               </button>
