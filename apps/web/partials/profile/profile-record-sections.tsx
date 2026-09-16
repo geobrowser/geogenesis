@@ -14,6 +14,7 @@ import {
   type NamedRef,
   isOngoing,
 } from '~/core/profile/normalize-history';
+import { visibleHistoryCards } from '~/core/profile/visible-history';
 
 import { SquareButton } from '~/design-system/button';
 import { ClampedText } from '~/design-system/clamped-text';
@@ -38,15 +39,6 @@ const COPY: Record<Kind, { title: string; empty: string; add: string; edit: stri
     edit: 'Edit education',
   },
 };
-
-/**
- * How many employers a card shows before offering the rest.
- *
- * Two. At `metadata` 16px with `smallTitle` org names and clamped descriptions,
- * three ran past the fold and pushed the whole rail below them — the figure was
- * three only while the specimen was drawn at a size the product does not use.
- */
-const SHOWN = 2;
 
 /** How many skills the section shows before offering the rest. */
 const SHOWN_SKILLS = 8;
@@ -90,7 +82,14 @@ export function ProfileRecordSection({ kind, cards, isOwner, onEdit, spaceId }: 
 
   if (cards.length === 0 && !isOwner) return null;
 
-  const shown = isExpanded ? cards : cards.slice(0, SHOWN);
+  // Counted in roles rather than employers, and a company is all-or-nothing —
+  // see `visibleHistoryCards`.
+  //
+  // Kept even while expanded, because whether there is anything to expand *to*
+  // is what decides if the control shows at all. Asking it of `shown` instead
+  // made the control disappear the moment it was pressed, with no way back.
+  const collapsed = React.useMemo(() => visibleHistoryCards(cards), [cards]);
+  const shown = isExpanded ? cards : collapsed;
 
   return (
     <section className="flex flex-col">
@@ -127,7 +126,7 @@ export function ProfileRecordSection({ kind, cards, isOwner, onEdit, spaceId }: 
         </ul>
       )}
 
-      {cards.length > SHOWN && (
+      {collapsed.length < cards.length && (
         <button
           type="button"
           onClick={() => setIsExpanded(value => !value)}

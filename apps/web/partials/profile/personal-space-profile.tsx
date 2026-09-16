@@ -54,6 +54,17 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
+      {/*
+       * Activity first.
+       *
+       * The history is what a profile is *for*, but it is also the part that
+       * changes least — and the question somebody arrives with is usually what
+       * this person has been arguing about lately, which is the answer that goes
+       * stale. It is one card tall either way, so leading with it costs the
+       * history nothing.
+       */}
+      <ProfileActivity spaceId={spaceId} personEntityId={personEntityId} />
+
       <ProfileRecordSection
         kind="employment"
         cards={history.employment}
@@ -69,13 +80,6 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
         spaceId={spaceId}
       />
       <ProfileSkillsSection skills={skills} isOwner={isOwner} spaceId={spaceId} />
-
-      {/*
-       * What they have argued and taken a position on lately. Below the history,
-       * because the history is what a profile is asked for first — and a link
-       * into its own tab rather than the tab itself.
-       */}
-      <ProfileActivity spaceId={spaceId} personEntityId={personEntityId} />
 
       <EditRecordDialog
         kind={editing}
