@@ -16,7 +16,6 @@ import type {
   CuratorLeaderboardResult,
   CuratorLeaderboardRow,
 } from './curator-leaderboard-types';
-import { CURATOR_LEADERBOARD_MAX_ROWS } from './curator-leaderboard-types';
 
 const RANKING_BLOCK_LIMIT = 100;
 const RELATION_PAGE_SIZE = 500;
@@ -399,12 +398,11 @@ function buildRows(
       } satisfies CuratorLeaderboardRow))
     : null;
 
-  const topRows = ranked.slice(0, CURATOR_LEADERBOARD_MAX_ROWS);
-  const currentUserInTop = currentUserRow ? topRows.some(row => row.isCurrentUser) : true;
+  const currentUserOnBoard = currentUserRow ? ranked.some(row => row.isCurrentUser) : true;
 
   return {
-    rows: topRows,
-    currentUserRow: currentUserRow && !currentUserInTop ? currentUserRow : null,
+    rows: ranked,
+    currentUserRow: currentUserRow && !currentUserOnBoard ? currentUserRow : null,
   };
 }
 

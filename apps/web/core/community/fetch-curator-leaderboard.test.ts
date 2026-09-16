@@ -122,6 +122,23 @@ describe('fetchCuratorLeaderboard exclusions', () => {
     expect(mocks.profileSpaceIds.flat()).not.toContain(EXCLUDED);
   });
 
+  it('returns the whole ranked board, not a top slice of it', async () => {
+    const curators = Array.from(
+      { length: 9 },
+      (_, index) => `019fedae72b67ab2927adf044d57c${(600 + index).toString(16)}`
+    );
+
+    mocks.rankingRelations = curators.flatMap((curator, index) =>
+      Array.from({ length: 9 - index }, (_, n) => ranking(curator, n))
+    );
+
+    const result = await fetchCuratorLeaderboard({ spaceId: SPACE, period: 'all' });
+
+    expect(result.rows).toHaveLength(curators.length);
+    expect(result.metrics.activeCurators).toBe(curators.length);
+    expect(result.rows.map(row => row.rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
   // Otherwise the board appends the viewer their own row when they miss the cut — which would show
   // an excluded curator the thing they are excluded from, and with zeroed counts at that.
   it('shows an excluded curator no row of their own', async () => {

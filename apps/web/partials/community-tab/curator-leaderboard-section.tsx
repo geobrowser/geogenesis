@@ -13,7 +13,7 @@ import type {
   CuratorLeaderboardRow,
 } from '~/core/community/curator-leaderboard-types';
 import {
-  CURATOR_LEADERBOARD_MAX_ROWS,
+  CURATOR_LEADERBOARD_PAGE_SIZE,
   CURATOR_LEADERBOARD_PERIOD_OPTIONS,
 } from '~/core/community/curator-leaderboard-types';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -124,18 +124,18 @@ function LeaderboardTableRow({ row, showTopBorder = false }: { row: CuratorLeade
 
 function LeaderboardTable({
   rows,
-  currentUserRow,
+  viewerRow,
   isLoading,
 }: {
   rows: CuratorLeaderboardRow[];
-  currentUserRow: CuratorLeaderboardRow | null;
+  viewerRow: CuratorLeaderboardRow | null;
   isLoading: boolean;
 }) {
   if (isLoading) {
     return (
       <div className="overflow-hidden rounded-lg border border-grey-02">
         <div className="space-y-3 bg-white p-4">
-          {Array.from({ length: 5 }).map((_, index) => (
+          {Array.from({ length: CURATOR_LEADERBOARD_PAGE_SIZE }).map((_, index) => (
             <Skeleton key={index} className="h-10 w-full rounded" />
           ))}
         </div>
@@ -143,9 +143,7 @@ function LeaderboardTable({
     );
   }
 
-  const showCurrentUserRow = currentUserRow && !rows.some(row => row.curatorSpaceId === currentUserRow.curatorSpaceId);
-
-  const isTruncated = rows.length >= CURATOR_LEADERBOARD_MAX_ROWS;
+  const showViewerRow = viewerRow && !rows.some(row => row.curatorSpaceId === viewerRow.curatorSpaceId);
 
   return (
     <div className="overflow-hidden rounded-lg border border-grey-02">
@@ -178,9 +176,50 @@ function LeaderboardTable({
           ) : (
             rows.map(row => <LeaderboardTableRow key={row.curatorSpaceId} row={row} />)
           )}
-          {showCurrentUserRow ? <LeaderboardTableRow row={currentUserRow} showTopBorder={isTruncated} /> : null}
+          {showViewerRow ? <LeaderboardTableRow row={viewerRow} showTopBorder={rows.length > 0} /> : null}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/**
+ * Page controls, drawn only when there is more than one page.
+ */
+function LeaderboardPager({
+  page,
+  pageCount,
+  onChange,
+}: {
+  page: number;
+  pageCount: number;
+  onChange: (page: number) => void;
+}) {
+  if (pageCount <= 1) return null;
+
+  return (
+    <div className="flex items-center justify-end gap-3">
+      <span className="text-[16px] leading-[20px] text-grey-04 tabular-nums">
+        Page {page + 1} of {pageCount}
+      </span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onChange(page - 1)}
+          disabled={page === 0}
+          className={cx(FILTER_PILL_CLASS, page === 0 && 'pointer-events-none opacity-50')}
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(page + 1)}
+          disabled={page >= pageCount - 1}
+          className={cx(FILTER_PILL_CLASS, page >= pageCount - 1 && 'pointer-events-none opacity-50')}
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 }
@@ -203,8 +242,14 @@ function IncompleteCountsNotice() {
 }
 
 export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
-  const [period, setPeriod] = React.useState<CuratorLeaderboardPeriod>(initialData?.period ?? DEFAULT_PERIOD);
+  const [period, setPeriodState] = React.useState<CuratorLeaderboardPeriod>(initialData?.period ?? DEFAULT_PERIOD);
+  const [page, setPage] = React.useState(0);
   const { personalSpaceId } = usePersonalSpaceId();
+
+  const setPeriod = React.useCallback((next: CuratorLeaderboardPeriod) => {
+    setPeriodState(next);
+    setPage(0);
+  }, []);
 
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['curator-leaderboard', spaceId, period, personalSpaceId],
@@ -223,9 +268,23 @@ export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
 
   const metrics = data?.metrics ?? EMPTY_METRICS;
   const rows = data?.rows ?? [];
-  const currentUserRow = data?.currentUserRow ?? null;
   const truncated = data?.truncated ?? false;
   const isLoading = isPending;
+
+  const pageCount = Math.max(1, Math.ceil(rows.length / CURATOR_LEADERBOARD_PAGE_SIZE));
+  // Clamped for rendering rather than reset: a refetch that shortens the board should leave the
+  // viewer on its last page, not throw them back to the first for a change they did not make.
+  //
+  // The stored page is deliberately left alone, so a board that shrinks and grows again returns
+  // them to where they were. That is the trade — it restores their place across a transient dip, at
+  // the cost of moving them forward if the board regrows while they are reading the clamped page.
+  const safePage = Math.min(page, pageCount - 1);
+  // The viewer's row wherever it falls, or the one the fetch synthesised for a viewer with no
+  const pageRows = rows.slice(safePage * CURATOR_LEADERBOARD_PAGE_SIZE, (safePage + 1) * CURATOR_LEADERBOARD_PAGE_SIZE);
+
+  // The viewer's row wherever it falls on the board, or the one the fetch synthesised for a viewer
+  // with no activity in this window, who is on no page at all.
+  const viewerRow = rows.find(row => row.isCurrentUser) ?? data?.currentUserRow ?? null;
 
   return (
     <section className="flex flex-col gap-4">
@@ -245,7 +304,9 @@ export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
         <>
           <LeaderboardMetrics metrics={metrics} isLoading={isLoading} />
 
-          <LeaderboardTable rows={rows} currentUserRow={currentUserRow} isLoading={isLoading} />
+          <LeaderboardTable rows={pageRows} viewerRow={viewerRow} isLoading={isLoading} />
+
+          <LeaderboardPager page={safePage} pageCount={pageCount} onChange={setPage} />
 
           {truncated && !isLoading ? <IncompleteCountsNotice /> : null}
         </>
