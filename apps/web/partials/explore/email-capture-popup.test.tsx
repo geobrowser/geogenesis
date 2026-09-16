@@ -1,18 +1,25 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { getDefaultStore } from 'jotai';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { isChatOpenAtom } from '~/core/state/chat-store';
 
 import { ExploreEmailCapturePopup } from './email-capture-popup';
 
+const store = getDefaultStore();
+
 const mocks = vi.hoisted(() => ({
-  user: null as unknown,
+  ready: true,
+  authenticated: false,
   isModalOpen: false,
   fetch: vi.fn(),
 }));
 
 vi.mock('@geogenesis/auth', () => ({
-  usePrivy: () => ({ user: mocks.user, isModalOpen: mocks.isModalOpen }),
+  usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: mocks.isModalOpen }),
 }));
 
 // `ClientOnly` renders nothing until mounted, which is right in a browser and only noise here.
@@ -30,8 +37,10 @@ function scrollPastTrigger() {
 
 beforeEach(() => {
   window.localStorage.clear();
-  mocks.user = null;
+  mocks.ready = true;
+  mocks.authenticated = false;
   mocks.isModalOpen = false;
+  store.set(isChatOpenAtom, false);
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ json: async () => ({ result: 'subscribed' }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -74,7 +83,7 @@ describe('ExploreEmailCapturePopup', () => {
   });
 
   it('never appears for someone signed in, however far they scroll', () => {
-    mocks.user = { id: 'someone' };
+    mocks.authenticated = true;
     render(<ExploreEmailCapturePopup />);
 
     scrollPastTrigger();
@@ -145,6 +154,77 @@ describe('ExploreEmailCapturePopup', () => {
     render(<Reloaded />);
 
     expect(popup()).toBeNull();
+  });
+
+  // Privy reports `authenticated: false` while it is still restoring a session from storage, so
+  // without the `ready` gate a signed-in reader is indistinguishable from an anonymous one for as
+  // long as that takes — and on a restored scroll position the popup renders immediately, so they
+  // are shown a signup card and can start typing into it before it vanishes under them.
+  it('waits for Privy to finish restoring before deciding anyone is logged out', () => {
+    mocks.ready = false;
+
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    expect(popup()).toBeNull();
+  });
+
+  it('does not appear at all for a session that restores into a signed-in reader', () => {
+    mocks.ready = false;
+    const view = render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    // Privy resolves: the reader was signed in the whole time.
+    mocks.ready = true;
+    mocks.authenticated = true;
+    view.rerender(<ExploreEmailCapturePopup />);
+
+    expect(popup()).toBeNull();
+  });
+
+  it('appears once Privy resolves to nobody', () => {
+    mocks.ready = false;
+    const view = render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+    expect(popup()).toBeNull();
+
+    mocks.ready = true;
+    view.rerender(<ExploreEmailCapturePopup />);
+
+    expect(popup()).toBeInTheDocument();
+  });
+
+  // The chat panel is not merely another surface: it is this corner at this stacking order
+  // (`chat-panel.tsx` is `z-1100` at the same `fixed right-4 bottom-…`), so one above it covers the
+  // panel's own controls and takes their clicks rather than sitting beside them.
+  it('waits while the chat panel is open, then returns', () => {
+    store.set(isChatOpenAtom, true);
+    const view = render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    expect(popup()).toBeNull();
+
+    act(() => store.set(isChatOpenAtom, false));
+    view.rerender(<ExploreEmailCapturePopup />);
+
+    expect(popup()).toBeInTheDocument();
+  });
+
+  // The rate-limit windows are 10 minutes and an hour, so naming a shorter wait invites a retry
+  // that is certain to be refused the same way.
+  it('does not promise a retry window the limiter will not honour', async () => {
+    mocks.fetch.mockResolvedValue({ json: async () => ({ result: 'rate-limited' }) });
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reader@example.com' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+    });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toBeInTheDocument();
+    expect(alert.textContent).not.toMatch(/\bminute\b|\bsecond\b|\bmoment\b/i);
   });
 
   // Privy's modal is a sign-in the reader actively started; stacking on it is the worse

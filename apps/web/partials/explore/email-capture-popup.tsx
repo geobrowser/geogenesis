@@ -5,9 +5,11 @@ import { usePrivy } from '@geogenesis/auth';
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useAtomValue } from 'jotai';
 
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
+import { isChatOpenAtom } from '~/core/state/chat-store';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -48,7 +50,8 @@ export function ExploreEmailCapturePopup() {
 }
 
 function EmailCapturePopup() {
-  const { user, isModalOpen } = usePrivy();
+  const { ready, authenticated, isModalOpen } = usePrivy();
+  const isChatOpen = useAtomValue(isChatOpenAtom);
   const { dismissed, remember: rememberDismissed } = useDismissedNotice(EMAIL_CAPTURE_ID);
   const [scrolledEnough, setScrolledEnough] = React.useState(false);
   const [email, setEmail] = React.useState('');
@@ -60,7 +63,13 @@ function EmailCapturePopup() {
 
   // Signed in is never, not "not yet": the reader already has an account, and the list is for
   // people who do not.
-  const eligible = !user && !dismissed;
+  //
+  // `ready` is what makes that true rather than nearly true. Privy reports `authenticated: false`
+  // while it is still restoring a session from storage, so without it a signed-in reader returning
+  // to a restored scroll position is briefly indistinguishable from an anonymous one — long enough
+  // to be shown a signup card and to start typing into it before it vanishes under them.
+  // `core/auth/use-sign-in-deep-link.ts` gates on `ready` for the same reason.
+  const eligible = ready && !authenticated && !dismissed;
 
   React.useEffect(() => {
     if (!eligible || scrolledEnough) return;
@@ -118,17 +127,23 @@ function EmailCapturePopup() {
   // Privy's own modal is a sign-in the reader has actively started. Stacking a second ask on top of
   // it would be the worse of the two interruptions, so this waits rather than competing — and
   // returns on its own once they close it, since `isModalOpen` is reactive.
+  // The open chat panel is the same judgement and the sharper case: it is not merely another
+  // surface but *this* corner at *this* stacking order (`partials/chat/chat-panel.tsx` is `z-1100`
+  // at the same `fixed right-4 bottom-…`), so sitting one above it does not sit beside it — it
+  // covers the panel's own controls and takes their clicks. Whoever opened the panel is reading it;
+  // this waits for them to close it.
   // `status === 'done'` keeps it on screen after a successful subscribe. Subscribing also records
   // the dismissal — which is what stops it returning next visit — and without this exception that
   // same write would make the popup ineligible and unmount it on the spot, so the reader would
   // never see the confirmation for the thing they just did.
-  if (closed || (!eligible && status !== 'done') || !scrolledEnough || isModalOpen) return null;
+  if (closed || !ready || (!eligible && status !== 'done') || !scrolledEnough || isModalOpen || isChatOpen)
+    return null;
 
   const errorMessage =
     status === 'invalid-email'
       ? 'That does not look like an email address.'
       : status === 'rate-limited'
-        ? 'Too many tries just now. Give it a minute.'
+        ? 'Too many tries from here. Please try again later.'
         : status === 'failed'
           ? 'Something went wrong. Try again in a moment.'
           : null;

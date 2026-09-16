@@ -23,11 +23,11 @@ describe('getClientIp', () => {
   // perfectly usable Redis key — so the eleven chat copies bucket every caller sending a malformed
   // header into one shared limit, which is a rate-limit bypass for the rest and a denial of service
   // for anyone genuinely behind it.
-  it('does not bucket callers together under an empty key when the header is malformed', () => {
+  it('does not fall back to an empty key when the header is malformed', () => {
     for (const malformed of ['', '   ', ',', ' , ']) {
-      const bucket = getClientIp(withHeaders({ 'x-forwarded-for': malformed }));
-      expect(bucket).not.toBe('');
-      expect(bucket.startsWith('noip:')).toBe(true);
+      // `''` is a perfectly usable Redis key, so an unguarded `split(',')[0].trim()` buckets every
+      // caller sending a malformed header into one limit it never names.
+      expect(getClientIp(withHeaders({ 'x-forwarded-for': malformed }))).toBe('noip:shared');
     }
   });
 
@@ -35,13 +35,15 @@ describe('getClientIp', () => {
     expect(getClientIp(withHeaders({ 'x-forwarded-for': ' , ', 'x-real-ip': '203.0.113.9' }))).toBe('203.0.113.9');
   });
 
-  // Off a proxy there is nothing to identify the caller by, and one shared bucket would let a
-  // single caller spend everyone else's budget. A key of their own is the safer default.
-  it('gives an unidentifiable caller a bucket of their own rather than a shared one', () => {
+  // The bug the eleven chat copies have, which this file had too until review caught it. A fresh
+  // UUID per call is not "a bucket per unidentified caller" — it is a bucket per *request*, and a
+  // counter that restarts at zero every time never reaches its limit. Anyone able to suppress both
+  // headers would have no rate limit at all on a public endpoint that writes into a mailing list.
+  it('gives every unidentified request the same bucket, so the limit can actually accumulate', () => {
     const first = getClientIp(withHeaders({}));
     const second = getClientIp(withHeaders({}));
 
-    expect(first.startsWith('noip:')).toBe(true);
-    expect(first).not.toBe(second);
+    expect(first).toBe(second);
+    expect(first).toBe('noip:shared');
   });
 });
