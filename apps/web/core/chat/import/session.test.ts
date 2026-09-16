@@ -95,9 +95,9 @@ describe('ImportSessions', () => {
     id: 'abc',
     fileName: 'projects.csv',
     fileSizeBytes: 1024,
-    table: table(['Name'], [['Ethereum']]),
+    sheets: [{ name: 'projects', table: table(['Name'], [['Ethereum']]), raggedRows: 0, skippedLeadingRows: 0 }],
+    skippedSheets: [],
     spaceId: 'c9f267dcb0d270718c2a3c45a64afd32',
-    raggedRows: 0,
   };
 
   it('round-trips a session', async () => {

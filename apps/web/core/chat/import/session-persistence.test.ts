@@ -42,13 +42,15 @@ vi.mock('~/core/database/indexeddb', () => ({
 
 const { ImportSessions, SESSION_TTL_MS } = await import('./session');
 
+const table = (headers: string[], rowData: string[][]) => ({ headers, rows: rowData, rowCount: rowData.length });
+
 const session = {
   id: 'abc',
   fileName: 'projects.csv',
   fileSizeBytes: 120,
-  table: { headers: ['Name'], rows: [['Ethereum']], rowCount: 1 },
+  sheets: [{ name: 'projects', table: table(['Name'], [['Ethereum']]), raggedRows: 0, skippedLeadingRows: 0 }],
+  skippedSheets: [],
   spaceId: 'c9f267dcb0d270718c2a3c45a64afd32',
-  raggedRows: 0,
 };
 
 const mapping = {
@@ -58,6 +60,12 @@ const mapping = {
   columns: [],
   summary: 's',
 } as ImportMapping;
+
+const stored = (mappedForSpaceId: string | null = null) => ({
+  mappings: { projects: mapping },
+  mappedForSpaceId,
+  excludedSheets: [],
+});
 
 // `clearMemory()` is the reload: the tab's Map goes, the store stays.
 beforeEach(() => {
@@ -81,17 +89,17 @@ describe('surviving a reload', () => {
     ImportSessions.clearMemory();
 
     const restored = await ImportSessions.get('abc');
-    expect(restored?.table.rows).toEqual([['Ethereum']]);
+    expect(restored?.sheets[0].table.rows).toEqual([['Ethereum']]);
   });
 
-  it('restores the mapping alongside the session', async () => {
+  it('restores the mappings alongside the session', async () => {
     // Both halves or neither. A session without its mapping still dead-ends on
     // `no_mapping_yet`, which is the same wall from the user's side.
     ImportSessions.set(session);
-    await ImportSessions.setMapping('abc', mapping);
+    await ImportSessions.setMapping('abc', stored());
     ImportSessions.clearMemory();
 
-    expect((await ImportSessions.getMapping('abc'))?.mapping).toMatchObject({ typeName: 'Project' });
+    expect((await ImportSessions.getMapping('abc'))?.mappings.projects).toMatchObject({ typeName: 'Project' });
   });
 
   it('restores which space the mapping was built for', async () => {
@@ -99,17 +107,50 @@ describe('surviving a reload', () => {
     // still matches where the user is standing, and a Root-built mapping would
     // apply cleanly into a space it was never computed against.
     ImportSessions.set(session);
-    await ImportSessions.setMapping('abc', mapping, session.spaceId);
+    await ImportSessions.setMapping('abc', stored(session.spaceId));
     ImportSessions.clearMemory();
 
-    expect(await ImportSessions.getMapping('abc')).toMatchObject({ spaceId: session.spaceId });
+    expect(await ImportSessions.getMapping('abc')).toMatchObject({ mappedForSpaceId: session.spaceId });
+  });
+
+  it('restores which tabs the user excluded', async () => {
+    // "Skip the Topics tab" has to survive a reload as much as the mapping
+    // does, or the import after the refresh quietly brings the tab back.
+    ImportSessions.set(session);
+    await ImportSessions.setMapping('abc', { ...stored(session.spaceId), excludedSheets: ['Topics'] });
+    ImportSessions.clearMemory();
+
+    expect((await ImportSessions.getMapping('abc'))?.excludedSheets).toEqual(['Topics']);
   });
 
   it('reports a null space for a mapping stored before the space was tracked', async () => {
     ImportSessions.set(session);
-    await ImportSessions.setMapping('abc', mapping);
+    await ImportSessions.setMapping('abc', stored());
 
-    expect((await ImportSessions.getMapping('abc'))?.spaceId).toBeNull();
+    expect((await ImportSessions.getMapping('abc'))?.mappedForSpaceId).toBeNull();
+  });
+
+  it('reads a row written before a session held several tabs', async () => {
+    // Attached under the old code, applied under the new: the one table and
+    // its mapping come back as a single tab named after the sheet.
+    rows.set('old', {
+      id: 'old',
+      fileName: 'projects.xlsx',
+      fileSizeBytes: 120,
+      table: table(['Name'], [['Ethereum']]),
+      sheetName: 'Projects',
+      raggedRows: 1,
+      spaceId: session.spaceId,
+      createdAt: Date.now(),
+      mapping,
+      mappedForSpaceId: session.spaceId,
+    });
+
+    const restored = await ImportSessions.get('old');
+    expect(restored?.sheets).toEqual([
+      { name: 'Projects', table: table(['Name'], [['Ethereum']]), raggedRows: 1, skippedLeadingRows: 0 },
+    ]);
+    expect((await ImportSessions.getMapping('old'))?.mappings.Projects).toMatchObject({ typeName: 'Project' });
   });
 
   it('has no mapping before one is proposed', async () => {
@@ -167,9 +208,7 @@ describe('surviving a reload', () => {
 // fingerprint is what connects them.
 // ---------------------------------------------------------------------------
 
-const { fingerprintTable } = await import('./session');
-
-const table = (headers: string[], rowData: string[][]) => ({ headers, rows: rowData, rowCount: rowData.length });
+const { fingerprintTable, fingerprintSheets } = await import('./session');
 
 describe('fingerprintTable', () => {
   it('gives the same file the same fingerprint', () => {
@@ -198,6 +237,18 @@ describe('fingerprintTable', () => {
   });
 });
 
+describe('fingerprintSheets', () => {
+  const sheet = (name: string, headers: string[], rowData: string[][]) => ({ name, table: table(headers, rowData) });
+
+  it('covers every tab, so a workbook with one changed tab is a different file', () => {
+    const a = [sheet('Publishers', ['Name'], [['Reuters']]), sheet('Countries', ['Name'], [['UK']])];
+    const b = [sheet('Publishers', ['Name'], [['Reuters']]), sheet('Countries', ['Name'], [['France']])];
+
+    expect(fingerprintSheets(a)).toBe(fingerprintSheets([...a]));
+    expect(fingerprintSheets(a)).not.toBe(fingerprintSheets(b));
+  });
+});
+
 describe('finding an earlier staging of the same file', () => {
   const marker = {
     at: 1_700_000_000_000,
@@ -214,23 +265,23 @@ describe('finding an earlier staging of the same file', () => {
     const reupload = { ...session, id: 'def' };
     ImportSessions.set(reupload);
 
-    const found = await ImportSessions.stagedMatches(fingerprintTable(reupload.table), session.spaceId, 'def');
+    const found = await ImportSessions.stagedMatches(fingerprintSheets(reupload.sheets), session.spaceId);
     expect(found.map(s => s.id)).toEqual(['abc']);
   });
 
-  it('never matches the session doing the asking', async () => {
+  it('matches the same session so retries cannot duplicate pending edits', async () => {
     ImportSessions.set(session);
     await ImportSessions.markStaged(session.id, marker);
 
-    const found = await ImportSessions.stagedMatches(fingerprintTable(session.table), session.spaceId, 'abc');
-    expect(found).toEqual([]);
+    const found = await ImportSessions.stagedMatches(fingerprintSheets(session.sheets), session.spaceId);
+    expect(found.map(session => session.id)).toEqual(['abc']);
   });
 
   it('ignores a staging into a different space', async () => {
     ImportSessions.set(session);
     await ImportSessions.markStaged(session.id, { ...marker, spaceId: 'f'.repeat(32) });
 
-    const found = await ImportSessions.stagedMatches(fingerprintTable(session.table), session.spaceId, 'def');
+    const found = await ImportSessions.stagedMatches(fingerprintSheets(session.sheets), session.spaceId);
     expect(found).toEqual([]);
   });
 
@@ -238,7 +289,7 @@ describe('finding an earlier staging of the same file', () => {
     // Proposing a mapping and walking away is not a duplicate of anything.
     ImportSessions.set(session);
 
-    const found = await ImportSessions.stagedMatches(fingerprintTable(session.table), session.spaceId, 'def');
+    const found = await ImportSessions.stagedMatches(fingerprintSheets(session.sheets), session.spaceId);
     expect(found).toEqual([]);
   });
 
@@ -246,8 +297,12 @@ describe('finding an earlier staging of the same file', () => {
     ImportSessions.set(session);
     await ImportSessions.markStaged(session.id, marker);
 
-    const edited = { ...session, id: 'def', table: table(['Name'], [['Ethereum'], ['Solana']]) };
-    const found = await ImportSessions.stagedMatches(fingerprintTable(edited.table), session.spaceId, 'def');
+    const edited = {
+      ...session,
+      id: 'def',
+      sheets: [{ ...session.sheets[0], table: table(['Name'], [['Ethereum'], ['Solana']]) }],
+    };
+    const found = await ImportSessions.stagedMatches(fingerprintSheets(edited.sheets), session.spaceId);
     expect(found).toEqual([]);
   });
 
@@ -256,7 +311,7 @@ describe('finding an earlier staging of the same file', () => {
     await ImportSessions.markStaged(session.id, marker);
     ImportSessions.clearMemory();
 
-    const found = await ImportSessions.stagedMatches(fingerprintTable(session.table), session.spaceId, 'def');
+    const found = await ImportSessions.stagedMatches(fingerprintSheets(session.sheets), session.spaceId);
     expect(found[0]?.staged?.probe).toEqual({ valueId: 'v1', entityId: 'e1' });
   });
 });

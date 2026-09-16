@@ -35,8 +35,13 @@ function claimEntity(factualValue?: string): ResolveEntity {
   return {
     relations: [
       {
-        type: { id: SystemIds.TYPES_PROPERTY },
-        toEntity: { id: CLAIM_TYPE_ID },
+        id: 'claim-type-relation',
+        entityId: 'claim-type-relation-entity',
+        spaceId: SPACE_ID,
+        renderableType: 'RELATION',
+        fromEntity: { id: 'claim-entity', name: 'Claim' },
+        type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
+        toEntity: { id: CLAIM_TYPE_ID, name: 'Claim', value: CLAIM_TYPE_ID },
         isDeleted: false,
       },
     ],
@@ -46,12 +51,14 @@ function claimEntity(factualValue?: string): ResolveEntity {
         : [
             {
               spaceId: SPACE_ID,
-              property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID },
+              id: 'factual-value',
+              entity: { id: 'claim-entity', name: 'Claim' },
+              property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID, name: 'Factual', dataType: 'BOOLEAN' },
               value: factualValue,
               isDeleted: false,
             },
           ],
-  } as ResolveEntity;
+  };
 }
 
 describe('entity response semantics', () => {
@@ -92,23 +99,8 @@ describe('entity response semantics', () => {
   });
 
   it('ignores factual values from other spaces when resolving kind', () => {
-    const entity = {
-      relations: [
-        {
-          type: { id: SystemIds.TYPES_PROPERTY },
-          toEntity: { id: CLAIM_TYPE_ID },
-          isDeleted: false,
-        },
-      ],
-      values: [
-        {
-          spaceId: OTHER_SPACE_ID,
-          property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID },
-          value: '1',
-          isDeleted: false,
-        },
-      ],
-    } as ResolveEntity;
+    const entity = claimEntity('1');
+    entity.values[0].spaceId = OTHER_SPACE_ID;
 
     expect(resolveEntityResponseKind(entity, SPACE_ID)).toBe('stance');
   });

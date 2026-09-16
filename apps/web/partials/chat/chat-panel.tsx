@@ -283,6 +283,7 @@ export function ChatPanel({
         onSubmit={onSend}
         onStop={onStop}
         isBusy={isBusy || isCompacting}
+        isParsing={attachment?.status === 'parsing'}
         placeholder={hasMessages ? 'Ask anything...' : 'What are you trying to do?'}
         contextFraction={contextFraction}
         onCompact={onCompact}

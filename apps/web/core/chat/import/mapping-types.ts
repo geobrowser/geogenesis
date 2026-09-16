@@ -19,6 +19,17 @@ export type MappingColumnInput = {
   filled: number;
 };
 
+export type LocalImportOntology = {
+  types: { id: string; name: string | null }[];
+  properties: {
+    id: string;
+    name: string | null;
+    dataType: string;
+    renderableTypeStrict?: string | null;
+    relationValueTypes: { id: string; name: string | null }[];
+  }[];
+};
+
 export type ImportMapInput = {
   spaceId: string;
   fileName: string;
@@ -43,6 +54,9 @@ export type ImportMapInput = {
    * "does not exist".
    */
   searchSpaceIds?: string[];
+  localOntology?: LocalImportOntology;
+  previousMapping?: ImportMapping;
+  workbookSheets?: { name: string; nameSamples: string[] }[];
 };
 
 /** A column that becomes a plain value on the entity. */
@@ -61,20 +75,12 @@ export type MappedRelationColumn = {
   propertyId: string;
   propertyName: string;
   /**
-   * What the far end of this relation should be — the model's reading of the
-   * column, used only as a fallback.
-   *
-   * The whole reason this feature helps: the property API returns
-   * `relationValueTypes: []`, which makes the resolver's type filter a no-op
-   * and drops it back to ranking candidates by popularity — how a `Founders`
-   * column ends up pointing at a Project called "Elon Musk".
-   *
-   * Apply re-hydrates from the live ontology and prefers whatever that returns;
-   * these ids are consulted only when it returns nothing. So an empty array is
-   * the normal, healthy case — it means the ontology answered and the model was
-   * told to stay out of it.
+   * Target types from the property's ontology, or validated model choices when
+   * the property has none. Apply re-hydrates the live ontology and prefers it
+   * if its declared types have changed since preview.
    */
   relationTypeIds: string[];
+  relationTypeNames?: string[];
   /**
    * How many names a cell in this column holds.
    *
@@ -104,6 +110,7 @@ export type SkippedColumn = {
    * blocking error rather than a silent drop.
    */
   hadCandidates?: boolean;
+  suggestedProperty?: { name: string; dataType: string; relationTypeName?: string };
 };
 
 export type MappedColumn = MappedValueColumn | MappedRelationColumn | SkippedColumn;
@@ -119,9 +126,15 @@ export type ImportMapping = {
 };
 
 export type ImportMapError =
-  'not_signed_in' | 'rate_limited' | 'timed_out' | 'invalid_input' | 'no_types_in_space' | 'mapping_failed';
+  | 'not_signed_in'
+  | 'rate_limited'
+  | 'timed_out'
+  | 'invalid_input'
+  | 'no_types_in_space'
+  | 'mapping_failed'
+  | 'ontology_change_required';
 
-export type ImportMapOutput = ImportMapping | { error: ImportMapError };
+export type ImportMapOutput = ImportMapping | { error: ImportMapError; message?: string };
 
 export function isMappingError(output: ImportMapOutput): output is { error: ImportMapError } {
   return 'error' in output;

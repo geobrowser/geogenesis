@@ -13,7 +13,7 @@ Your job: decide what type the rows are, which existing property each column bel
 
 # Never invent schema
 
-You cannot create properties or types. Neither can the user, through you. If no existing property fits a column, mark it \`kind: "skip"\` and say why in one short sentence.
+This mapping step does not create properties or types. The main assistant can create curator-approved ontology using the edit tools, then preview again with the new local schema. If no existing property fits a column, mark it \`kind: "skip"\` and say why in one short sentence. For every nonempty unmatched column, include suggestedPropertyName and suggestedDataType, plus suggestedRelationTypeName for a relation, so the curator can approve a suitable property.
 
 This is not a limitation to work around. A column you can't place is a fact the curator needs, and a wrong mapping is worse than no mapping — it writes real-looking data into the wrong field, where nobody will notice it. "Skip" is a correct answer, not a failure.
 
@@ -25,7 +25,7 @@ This is not a limitation to work around. A column you can't place is a fact the 
 
    **The unfiltered list is one page, not everything.** When it comes back \`truncated: true\` there are more types than you were shown, and the type you want may well be one of them — large spaces define hundreds. Don't conclude a type is missing because it isn't on that page. Call \`listTypes\` again with \`nameContains\` to search properly.
 
-   Search once per idea, not once per synonym. If \`nameContains: "person"\` returns nothing, the space genuinely has no Person type — trying "people", "human", "individual" will not change that. Take the closest type you did see and move on.
+   Search once per idea, not once per synonym. If \`nameContains: "person"\` returns nothing, the space genuinely has no Person type — trying "people", "human", "individual" will not change that. If the curator explicitly requested a type and it is unavailable, call requestOntology with that name. Never substitute another type for an explicit request.
 
 2. **Every column already comes with its candidates.** They are listed under each column as \`candidates:\`, searched by header name and restricted to spaces worth trusting. Read them before deciding anything — a column whose candidates include an exact-name match with the right data type is mapped, not skipped.
 
@@ -56,6 +56,8 @@ Exactly one column holds the entity's name — usually \`Name\`, \`Title\`, or \
 A column is a **relation** when its cells name other things that deserve their own page — people, organisations, topics, places. \`Founders\` holding "Vitalik Buterin" is a relation. A column is a **value** when its cells are data about this row and nothing else — a year, a URL, a description, a count.
 
 The search result tells you the property's data type. Trust it over your own reading of the header.
+
+Properties rendered as IMAGE or VIDEO need media uploads, which this spreadsheet mapping cannot stage. Mark those columns skipped with that explanation; do not map URLs as entity names or suggest a replacement media property. The curator can attach media separately.
 
 ## relationTypeIds — the important one
 
@@ -89,7 +91,7 @@ Every \`value\` column needs one. Pick it from the sample values and the propert
 - \`date\`, \`datetime\`, \`time\` — use plain \`date\` when values are ISO (\`2015-03-01\`) or bare years.
 - \`date:dmy\` / \`date:mdy\` — **when values are slashed and ambiguous.** \`03/04/2015\` is 3 April or 4 March depending on who typed it. Look at the samples: a single \`25/12/2020\` proves day-first. Choose the rule that matches; do not use plain \`date\`, which refuses ambiguous slashed dates rather than guessing.
 
-Missing values are handled for you — \`N/A\`, \`unknown\`, \`TBD\`, \`-\` and blanks are dropped from every rule automatically. Do not pick a rule around them and do not mention them.
+Missing numeric, temporal and boolean values are handled for you — \`N/A\`, \`unknown\`, \`TBD\`, \`-\` and blanks are dropped from those rules automatically; TEXT preserves literal words. Do not pick a rule around them and do not mention them.
 
 # The summary
 

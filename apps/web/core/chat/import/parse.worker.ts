@@ -10,55 +10,40 @@
  */
 import readXlsxFile from 'read-excel-file/web-worker';
 
-import { isSpreadsheet, normalizeExtension, parseDelimitedText, parseSheetRows, pickDefaultSheet } from './parse';
-import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB, type ParseResult, type SheetInfo } from './types';
+import {
+  fileBaseName,
+  isSpreadsheet,
+  normalizeExtension,
+  parseDelimitedText,
+  parseWorkbook,
+  unsupportedTypeError,
+} from './parse';
+import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB, type ParseResult } from './types';
 
 export type ParseRequest = {
   file: File;
-  /** Force a sheet by name. Used when the user switches sheets after the first parse. */
-  sheetName?: string;
   /** Force a delimiter, overriding the sniff. */
   delimiter?: string;
 };
 
-async function readSpreadsheet(file: File, sheetName?: string): Promise<ParseResult> {
-  // The whole workbook, so we can report every sheet even when only one is
-  // parsed — the user can't pick a sheet they were never shown.
+async function readSpreadsheet(file: File): Promise<ParseResult> {
   const workbook = await readXlsxFile(file);
-
-  const sheets: SheetInfo[] = workbook.map(s => ({
-    name: s.sheet,
-    rowCount: Math.max(0, s.data.length - 1),
-  }));
-
-  if (sheets.length === 0) {
-    return { ok: false, code: 'empty_file', message: 'That workbook has no sheets.' };
-  }
-
-  let index: number;
-  if (sheetName) {
-    index = sheets.findIndex(s => s.name === sheetName);
-    if (index === -1) {
-      return { ok: false, code: 'sheet_not_found', message: `That workbook has no sheet called "${sheetName}".` };
-    }
-  } else {
-    index = pickDefaultSheet(sheets);
-  }
-
-  // Read from the workbook we already have. `readXlsxFile` types cells the same
-  // way `readSheet` would, so re-reading by name would decompress and re-parse
-  // a file that can be 10mb for no gain.
-  const result = parseSheetRows(workbook[index].data as unknown[][]);
-  if (!result.ok) return result;
-
-  return {
-    ...result,
-    sheetName: sheets[index].name,
-    ...(sheets.length > 1 ? { sheets } : {}),
-  };
+  return parseWorkbook(workbook.map(sheet => ({ name: sheet.sheet, data: sheet.data as unknown[][] })));
 }
 
-export async function parseFile({ file, sheetName, delimiter }: ParseRequest): Promise<ParseResult> {
+/** Excel's Unicode Text exports use UTF-16; File.text() always assumes UTF-8. */
+export function decodeDelimitedFile(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder('utf-16le').decode(bytes);
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder('utf-16be').decode(bytes);
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder('windows-1252').decode(bytes);
+  }
+}
+
+export async function parseFile({ file, delimiter }: ParseRequest): Promise<ParseResult> {
   if (file.size > MAX_FILE_SIZE_BYTES) {
     return { ok: false, code: 'too_large', message: `That file is over ${MAX_FILE_SIZE_MB}mb.` };
   }
@@ -68,22 +53,16 @@ export async function parseFile({ file, sheetName, delimiter }: ParseRequest): P
   const extension = normalizeExtension(rawExtension);
 
   if (!extension) {
-    return {
-      ok: false,
-      code: 'unsupported_type',
-      message: rawExtension
-        ? `\`.${rawExtension}\` files aren't supported — upload a CSV or Excel file.`
-        : 'That file has no extension — upload a CSV or Excel file.',
-    };
+    return unsupportedTypeError(rawExtension);
   }
 
   try {
     if (isSpreadsheet(extension)) {
-      return await readSpreadsheet(file, sheetName);
+      return await readSpreadsheet(file);
     }
     // `.tsv` states its delimiter in its name; anything else gets sniffed.
     const forced = delimiter ?? (extension === 'tsv' ? '\t' : undefined);
-    return parseDelimitedText(await file.text(), forced);
+    return parseDelimitedText(decodeDelimitedFile(await file.arrayBuffer()), forced, fileBaseName(file.name));
   } catch (error) {
     return {
       ok: false,

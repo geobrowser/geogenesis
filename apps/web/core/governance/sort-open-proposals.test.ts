@@ -8,7 +8,7 @@ function row(over: Partial<OpenProposalOrder> = {}): OpenProposalOrder {
   return { hasViewerVote: false, endTime: 0, submittedAt: 0, ...over };
 }
 
-function sorted(rows: OpenProposalOrder[], options = OPEN) {
+function sorted(rows: OpenProposalOrder[], options: Parameters<typeof compareOpenProposals>[2] = OPEN) {
   return [...rows].sort((a, b) => compareOpenProposals(a, b, options));
 }
 

@@ -18,19 +18,23 @@
  * import already persists here (`values`, `relations`), so persisting its
  * input keeps the two halves consistent rather than introducing something new.
  *
- * The proposed mapping is stored alongside the table for the same reason: an
+ * The proposed mappings are stored alongside the tables for the same reason: an
  * apply needs both, so restoring one without the other would still dead-end.
  */
 import { db } from '~/core/database/indexeddb';
 
 import type { ImportMapping } from './mapping-types';
-import type { ParsedTable, SheetInfo } from './types';
+import type { ParsedSheet, ParsedTable, SkippedSheet } from './types';
+
+export type ImportSheet = ParsedSheet;
 
 export type ImportSession = {
   id: string;
   fileName: string;
   fileSizeBytes: number;
-  table: ParsedTable;
+  /** One per tab that holds a table; a delimited file has exactly one. */
+  sheets: ImportSheet[];
+  skippedSheets: SkippedSheet[];
   /**
    * The space the file was uploaded from — provenance, and the fallback target
    * when the chat is open outside a space. Not where the import must land: it
@@ -39,9 +43,6 @@ export type ImportSession = {
    */
   spaceId: string;
   delimiter?: string;
-  sheetName?: string;
-  sheets?: SheetInfo[];
-  raggedRows: number;
 };
 
 /** Where a staged import's edits can be found again, to see whether they are still pending. */
@@ -49,23 +50,19 @@ export type StagedMarker = {
   at: number;
   spaceId: string;
   entityCount: number;
-  /**
-   * One value written by this import.
-   *
-   * Enough to answer "are these edits still sitting in the review panel?" —
-   * publishing clears the local store, so if this value is still there the
-   * import has not gone out yet. Cheaper and more honest than tracking every
-   * id: one probe cannot go half-stale.
-   */
+  /** Legacy sessions carry one probe; new sessions track all value and relation ids. */
   probe: { valueId: string; entityId: string } | null;
+  values?: { valueId: string; entityId: string }[];
+  relations?: { relationId: string; entityId: string }[];
 };
 
-/** What actually goes on disk: the session, plus the mapping and an age for sweeping. */
-export type StoredImportSession = ImportSession & {
-  createdAt: number;
-  mapping?: ImportMapping;
+/** The proposed mapping for each tab, keyed by tab name. */
+export type SheetMappings = Record<string, ImportMapping>;
+
+export type StoredMapping = {
+  mappings: SheetMappings;
   /**
-   * The space the stored mapping was computed against.
+   * The space the mappings were computed against.
    *
    * Not the same as `spaceId`, and the difference is the point. A mapping is
    * built from one space's ontology — `typeSourceSpaces` lists that space
@@ -75,21 +72,54 @@ export type StoredImportSession = ImportSession & {
    * succeed and quietly link columns to the wrong properties, which is worse
    * than refusing.
    */
+  mappedForSpaceId: string | null;
+  /** Tabs the user asked to leave out of the import. */
+  excludedSheets: string[];
+};
+
+/** What actually goes on disk: the session, plus the mappings and an age for sweeping. */
+export type StoredImportSession = ImportSession & {
+  createdAt: number;
+  mappings?: SheetMappings;
   mappedForSpaceId?: string;
+  excludedSheets?: string[];
   /**
    * Identifies the *file*, not the upload.
    *
    * Attaching the same spreadsheet twice makes two sessions with two ids, and
    * nothing connected them — so a second import of a file already staged and
-   * unpublished quietly wrote everything again. Derived from the content, so a
-   * renamed file still matches and an edited one correctly does not.
+   * unpublished quietly wrote everything again. Derived from the tab names
+   * and content, so edited data gets a different fingerprint.
    */
   fingerprint?: string;
   staged?: StagedMarker;
 };
 
+/** Rows written before a session held several tabs. Read once, then rewritten in the current shape. */
+type LegacyStoredImportSession = Omit<StoredImportSession, 'sheets' | 'skippedSheets'> & {
+  sheets?: ImportSheet[];
+  skippedSheets?: SkippedSheet[];
+  table?: ParsedTable;
+  sheetName?: string;
+  raggedRows?: number;
+  mapping?: ImportMapping;
+};
+
+function fromStored(raw: LegacyStoredImportSession): StoredImportSession {
+  if (raw.sheets) return { ...raw, sheets: raw.sheets, skippedSheets: raw.skippedSheets ?? [] };
+
+  const { table, sheetName, raggedRows, mapping, ...rest } = raw;
+  const name = sheetName ?? raw.fileName;
+  return {
+    ...rest,
+    sheets: table ? [{ name, table, raggedRows: raggedRows ?? 0, skippedLeadingRows: 0 }] : [],
+    skippedSheets: [],
+    ...(mapping ? { mappings: { [name]: mapping } } : {}),
+  };
+}
+
 /**
- * A cheap content hash of the parsed table.
+ * A cheap content hash of one table.
  *
  * FNV-1a over headers and cells, folded in a fixed order. Not cryptographic and
  * does not need to be: the cost of a collision is one incorrect "you already
@@ -113,6 +143,11 @@ export function fingerprintTable(table: ParsedTable): string {
   for (const row of table.rows) for (const cell of row) feed(cell ?? '');
 
   return `${(hash >>> 0).toString(16)}-${table.headers.length}-${table.rows.length}`;
+}
+
+/** The whole file: every tab's name and content, in order. */
+export function fingerprintSheets(sheets: ReadonlyArray<{ name: string; table: ParsedTable }>): string {
+  return sheets.map(sheet => `${sheet.name}=${fingerprintTable(sheet.table)}`).join('|');
 }
 
 const sessions = new Map<string, StoredImportSession>();
@@ -175,7 +210,7 @@ export const ImportSessions = {
     const stored: StoredImportSession = {
       ...session,
       createdAt: Date.now(),
-      fingerprint: fingerprintTable(session.table),
+      fingerprint: fingerprintSheets(session.sheets),
     };
     sessions.set(session.id, stored);
     // Fire-and-forget: the tab already has what it needs in memory, and
@@ -192,15 +227,17 @@ export const ImportSessions = {
    */
   async get(id: string): Promise<ImportSession | null> {
     const cached = sessions.get(id);
-    if (cached) return cached;
+    if (cached && Date.now() - cached.createdAt <= SESSION_TTL_MS) return cached;
+    if (cached) sessions.delete(id);
 
     try {
-      const stored = await db.importSessions.get(id);
-      if (!stored) return null;
-      if (Date.now() - stored.createdAt > SESSION_TTL_MS) {
+      const raw = (await db.importSessions.get(id)) as LegacyStoredImportSession | undefined;
+      if (!raw) return null;
+      if (Date.now() - raw.createdAt > SESSION_TTL_MS) {
         await db.importSessions.delete(id);
         return null;
       }
+      const stored = fromStored(raw);
       sessions.set(id, stored);
       return stored;
     } catch (err) {
@@ -209,26 +246,35 @@ export const ImportSessions = {
     }
   },
 
-  /** The mapping proposed for this import, and the space whose ontology produced it. */
-  async getMapping(id: string): Promise<{ mapping: ImportMapping; spaceId: string | null } | null> {
+  /** The mappings proposed for this import, and the space whose ontology produced them. */
+  async getMapping(id: string): Promise<StoredMapping | null> {
     const session = (await ImportSessions.get(id)) as StoredImportSession | null;
-    if (!session?.mapping) return null;
-    return { mapping: session.mapping, spaceId: session.mappedForSpaceId ?? null };
+    if (!session?.mappings || Object.keys(session.mappings).length === 0) return null;
+    return {
+      mappings: session.mappings,
+      mappedForSpaceId: session.mappedForSpaceId ?? null,
+      excludedSheets: session.excludedSheets ?? [],
+    };
   },
 
   /**
-   * Store the mapping against its session, so an apply after a reload still has
-   * both halves — and the space it was built for, so an apply from a different
-   * space can be caught instead of silently honoured.
+   * Store the mappings against their session, so an apply after a reload still
+   * has both halves — and the space they were built for, so an apply from a
+   * different space can be caught instead of silently honoured.
    */
-  async setMapping(id: string, mapping: ImportMapping, mappedForSpaceId?: string): Promise<void> {
+  async setMapping(id: string, mapping: StoredMapping): Promise<void> {
+    const patch = {
+      mappings: mapping.mappings,
+      mappedForSpaceId: mapping.mappedForSpaceId ?? undefined,
+      excludedSheets: mapping.excludedSheets,
+    };
     const cached = sessions.get(id);
-    if (cached) sessions.set(id, { ...cached, mapping, mappedForSpaceId });
+    if (cached) sessions.set(id, { ...cached, ...patch });
 
     try {
       const stored = cached ?? (await db.importSessions.get(id));
       if (!stored) return;
-      await db.importSessions.put({ ...stored, mapping, mappedForSpaceId });
+      await db.importSessions.put({ ...stored, ...patch });
     } catch (err) {
       ignore(err);
     }
@@ -254,16 +300,21 @@ export const ImportSessions = {
    * Whether their edits are still *pending* is not answerable here — that lives
    * in the sync store — so this returns the markers and lets the caller probe.
    */
-  async stagedMatches(fingerprint: string, spaceId: string, exceptId: string): Promise<StoredImportSession[]> {
+  async stagedMatches(fingerprint: string, spaceId: string): Promise<StoredImportSession[]> {
     if (!fingerprint) return [];
-
+    const matches = new Map<string, StoredImportSession>();
     try {
-      const matches = await db.importSessions.where('fingerprint').equals(fingerprint).toArray();
-      return matches.filter(s => s.id !== exceptId && s.staged != null && s.staged.spaceId === spaceId);
+      for (const stored of await db.importSessions.where('fingerprint').equals(fingerprint).toArray()) {
+        matches.set(stored.id, stored);
+      }
     } catch (err) {
       ignore(err);
-      return [];
     }
+    // Memory contains the latest commit marker even if IndexedDB is unavailable.
+    for (const stored of sessions.values()) if (stored.fingerprint === fingerprint) matches.set(stored.id, stored);
+    return [...matches.values()].filter(
+      s => s.staged?.spaceId === spaceId && Date.now() - s.createdAt <= SESSION_TTL_MS
+    );
   },
 
   clear(id: string): void {

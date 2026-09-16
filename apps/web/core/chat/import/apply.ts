@@ -1,23 +1,9 @@
 'use client';
 
 /**
- * Turning an approved mapping into staged edits.
- *
- * This is the bridge, not a new engine. Resolution, plan-building and image
- * upload already exist in `partials/import/` and are good — batched at 200
- * names, four concurrent, abort-guarded, with a five-level tiebreak. What they
- * never had was a caller that could tell them what a column *means*.
- *
- * So this module does three things the standalone importer could not:
- *
- * 1. Coerces every value column before the engine sees it, so nothing reaches
- *    `parseInt(val, 10) || 0` in a shape that would silently become `0`.
- * 2. Fills in `relationValueTypes` where the ontology leaves them empty — the
- *    gap that makes the resolver's type filter a no-op and lets a well-linked
- *    Project win a `Founders` column.
- * 3. Writes through `storage.*.set` rather than `makeBulkProposal`, so the
- *    result lands in the review panel as staged edits the user publishes
- *    themselves.
+ * Validate and prepare an entire workbook before staging any edits. Row identities
+ * are shared by name and type across sheets; existing import resolvers and plan
+ * builders still own graph matching and edit generation.
  */
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
@@ -28,7 +14,9 @@ import { storage } from '~/core/sync/use-mutate';
 import type { Property, Relation, Value } from '~/core/types';
 
 import {
+  type RelationPropertyMeta,
   type RelationSplitRules,
+  type ResolvedEntity,
   buildImportPlan,
   collectRelationCells,
   hydrateRelationValueTypes,
@@ -37,7 +25,7 @@ import { resolveRelationEntities, resolveRowsByNameAndType } from '~/partials/im
 
 import { type ColumnCoercionReport, coerce } from './coerce';
 import type { ImportMapping, MappedRelationColumn, MappedValueColumn } from './mapping-types';
-import type { ImportSession } from './session';
+import { validateMappingProperties } from './mapping-validation';
 import type { ParsedTable } from './types';
 
 export type ApplyProgress = {
@@ -56,8 +44,9 @@ export type ColumnOutcome = {
 export type ApplyResult =
   | {
       ok: true;
-      /** Entities that will be created or updated. */
+      /** Distinct primary row entities created or updated by this import. */
       entityCount: number;
+      linkedEntityCount: number;
       /** Values + relations written to the local store. */
       editCount: number;
       /** Rows dropped because their name matched several entities and none could be preferred. */
@@ -72,21 +61,71 @@ export type ApplyResult =
        * are still pending. Null only if the import staged nothing at all.
        */
       probe: { valueId: string; entityId: string } | null;
+      /** Every row's entity, so a later tab of the same file can link to it by name. */
+      rows: KnownEntity[];
+      /** Newly staged relation edges to row entities in another workbook tab. */
+      crossSheetLinks: number;
     }
-  | { ok: false; error: 'aborted' | 'no_name_column' | 'apply_failed' };
+  | {
+      ok: false;
+      error: 'aborted' | 'no_name_column' | 'apply_failed' | 'invalid_mapping' | 'invalid_values';
+      message?: string;
+    };
 
 /** Matches the shape the resolution functions expect without importing their private type. */
 type Guard = { isCurrent: () => boolean };
 
+export type KnownEntity = { id: string; name: string; typeIds?: string[] };
+export type KnownEntities = ReadonlyMap<string, KnownEntity | KnownEntity[]>;
+
 /**
- * Rewrite the table with every value column converted.
+ * Link relation cells to rows of tabs already imported from the same file.
  *
- * Cells that can't be converted — and cells that said "N/A" — become the empty
- * string, which is exactly how the existing engine already represents "nothing
- * here": `buildGeneratedRows` does `if (!raw) continue`. So "write no value at
- * all" falls out of the engine's own behaviour rather than needing a new branch
- * in it, and there is no path by which a placeholder becomes a `0`.
+ * A workbook with a Countries tab and a Publishers tab whose Country column
+ * names those countries means the rows, not whatever the graph search would
+ * turn up — and for a name the graph has never seen, the search would mint a
+ * second entity. Seeded before resolution, and taken out of the resolver's
+ * work, so each name is answered exactly once.
  */
+export function preResolveKnown(
+  relationProperties: RelationPropertyMeta[],
+  known: KnownEntities
+): { seeded: Map<string, ResolvedEntity>; links: number } {
+  const seeded = new Map<string, ResolvedEntity>();
+  let links = 0;
+  if (known.size === 0) return { seeded, links };
+
+  for (const relationProperty of relationProperties) {
+    for (const value of [...relationProperty.uniqueCellValues]) {
+      const entry = known.get(value.trim().toLowerCase());
+      if (!entry) continue;
+      const matches = (Array.isArray(entry) ? entry : [entry]).filter(
+        entity =>
+          relationProperty.typeIds.length === 0 || entity.typeIds?.some(type => relationProperty.typeIds.includes(type))
+      );
+      const distinct = [...new Map(matches.map(entity => [entity.id, entity])).values()];
+      if (distinct.length === 0) continue;
+      if (distinct.length > 1) {
+        seeded.set(`${relationProperty.propertyId}::${value}`, { status: 'ambiguous' });
+        relationProperty.uniqueCellValues.delete(value);
+        continue;
+      }
+      const match = distinct[0];
+      seeded.set(`${relationProperty.propertyId}::${value}`, { id: match.id, name: match.name, status: 'found' });
+      relationProperty.uniqueCellValues.delete(value);
+      links++;
+    }
+  }
+
+  return { seeded, links };
+}
+
+/** Whether the mapping names a column the table actually has. */
+export function hasNameColumn(table: ParsedTable, mapping: ImportMapping): boolean {
+  return Number.isInteger(mapping.nameColumn) && mapping.nameColumn >= 0 && mapping.nameColumn < table.headers.length;
+}
+
+/** Convert value columns and report invalid cells; preparation rejects them before staging. */
 export function coerceTable(
   table: ParsedTable,
   mapping: ImportMapping
@@ -225,140 +264,286 @@ export type ApplyDeps = {
   getStoreProperty: (propertyId: string) => Property | null;
 };
 
-export async function applyImportToStore(params: {
-  session: ImportSession;
-  mapping: ImportMapping;
+type ImportInput = { table: ParsedTable; mapping: ImportMapping };
+type RowResolution = Awaited<ReturnType<typeof resolveRowsByNameAndType>>;
+type ApplySuccess = Extract<ApplyResult, { ok: true }>;
+type ApplyFailure = Extract<ApplyResult, { ok: false }>;
+export type PreparedWorkbook =
+  | { ok: true; values: Value[]; relations: Relation[]; results: ApplySuccess[] }
+  | (ApplyFailure & { sheetIndex?: number });
+
+/** Resolve every row before any links or writes, including forward references and cycles. */
+export async function prepareWorkbook(params: {
+  sheets: ImportInput[];
   spaceId: string;
   guard: Guard;
   deps: ApplyDeps;
+  knownEntities?: KnownEntities;
   onProgress?: (progress: ApplyProgress) => void;
-}): Promise<ApplyResult> {
-  const { session, mapping, spaceId, guard, deps, onProgress } = params;
+}): Promise<PreparedWorkbook> {
+  const { sheets, spaceId, guard, deps, onProgress } = params;
   const report = (stage: ApplyProgress['stage'], message: string) => onProgress?.({ stage, message });
-
-  // A name column is the one thing an import cannot do without: it is what
-  // rows are matched on and what every created entity is called. Everything
-  // else being skipped is still a valid import — N entities of one type, named.
-  const mapped = mapping.columns.filter(c => c.kind !== 'skip');
-  if (!session.table.headers[mapping.nameColumn]) return { ok: false, error: 'no_name_column' };
-
   try {
-    report('preparing', 'Reading the space ontology…');
-    const propertyIds = [...new Set(mapped.map(c => c.propertyId))];
+    for (let i = 0; i < sheets.length; i++) {
+      if (!hasNameColumn(sheets[i].table, sheets[i].mapping)) {
+        return { ok: false, error: 'no_name_column', sheetIndex: i };
+      }
+    }
+    if (!guard.isCurrent()) return { ok: false, error: 'aborted' };
+    report('preparing', 'Checking the mapped properties…');
+    const propertyIds = [
+      ...new Set(sheets.flatMap(s => s.mapping.columns.flatMap(c => (c.kind === 'skip' ? [] : [c.propertyId])))),
+    ];
     const extraProperties = await loadProperties(propertyIds);
+    // Local schema edits (including changed data types) are authoritative.
+    for (const id of propertyIds) {
+      const local = deps.getStoreProperty(id);
+      if (local)
+        extraProperties[id] = {
+          ...extraProperties[id],
+          ...local,
+          relationValueTypes: local.relationValueTypes?.length
+            ? local.relationValueTypes
+            : (extraProperties[id]?.relationValueTypes ?? []),
+        };
+    }
+    const propertyLookup = { schema: [] as Property[], extraProperties, getProperty: deps.getStoreProperty };
+    for (let i = 0; i < sheets.length; i++) {
+      const { table, mapping } = sheets[i];
+      const indices = new Set<number>();
+      if (
+        mapping.columns.some(
+          c =>
+            !Number.isInteger(c.index) ||
+            c.index < 0 ||
+            c.index >= table.headers.length ||
+            c.index === mapping.nameColumn ||
+            indices.has(c.index) ||
+            !indices.add(c.index)
+        )
+      ) {
+        return {
+          ok: false,
+          error: 'invalid_mapping',
+          sheetIndex: i,
+          message: 'The mapping has invalid or duplicate columns. Preview it again.',
+        };
+      }
+      const message = validateMappingProperties(mapping, id => extraProperties[id]);
+      if (message) return { ok: false, error: 'invalid_mapping', message, sheetIndex: i };
+    }
     if (!guard.isCurrent()) return { ok: false, error: 'aborted' };
 
-    const propertyLookup = {
-      schema: [] as Property[],
-      extraProperties,
-      getProperty: deps.getStoreProperty,
-    };
-
-    report('converting', 'Converting values…');
-    const { rows: dataRows, reports } = coerceTable(session.table, mapping);
-    await yieldToMain();
-    if (!guard.isCurrent()) return { ok: false, error: 'aborted' };
-
-    const columnMapping = buildColumnMapping(mapping);
-    const splitRules = buildSplitRules(mapping);
-
-    report('linking', 'Matching linked entities…');
-    const relationProperties = collectRelationCells({ columnMapping, dataRows, propertyLookup, splitRules });
-    // The fix: give the resolver the types it has always accepted and never
-    // been given. Without this its filter is skipped and it ranks by
-    // popularity instead.
-    fillMissingRelationTypes(relationProperties, mapping);
-
-    const relationResolution = await resolveRelationEntities({ relationProperties, guard });
-    if (relationResolution.aborted || !guard.isCurrent()) return { ok: false, error: 'aborted' };
-
-    report('matching', 'Matching rows to existing entities…');
-    const selectedType = { id: mapping.typeId, name: mapping.typeName };
-    const rowResolution = await resolveRowsByNameAndType({
-      dataRows,
-      nameColIdx: mapping.nameColumn,
-      selectedType,
-      typesColumnIndex: undefined,
-      resolvedTypes: new Map(),
+    report('matching', 'Matching rows across the workbook…');
+    const flatRows = sheets.flatMap(({ table, mapping }) =>
+      table.rows.map(row => [row[mapping.nameColumn] ?? '', mapping.typeId])
+    );
+    const resolution = await resolveRowsByNameAndType({
+      dataRows: flatRows,
+      nameColIdx: 0,
+      selectedType: null,
+      typesColumnIndex: 1,
+      resolvedTypes: new Map(sheets.map(s => [s.mapping.typeId, { id: s.mapping.typeId, name: s.mapping.typeName }])),
       guard,
     });
-    if (rowResolution.aborted || !guard.isCurrent()) return { ok: false, error: 'aborted' };
-
-    report('building', 'Building the edits…');
-    const plan = buildImportPlan({
-      dataRows,
-      columnMapping,
-      nameColIdx: mapping.nameColumn,
-      selectedType,
-      typesColumnIndex: undefined,
-      resolvedEntities: relationResolution.resolvedEntities,
-      resolvedTypes: new Map(),
-      resolvedRows: rowResolution.resolvedRows,
-      spaceId,
-      propertyLookup,
-      getExistingRelations: deps.getResolvedRelations,
-      splitRules,
-    });
-    if (!guard.isCurrent()) return { ok: false, error: 'aborted' };
-
-    report('staging', `Staging ${plan.values.length + plan.relations.length} edits…`);
-    await writeToStore(plan.values, plan.relations, guard);
-    if (!guard.isCurrent()) return { ok: false, error: 'aborted' };
-
-    const columns: ColumnOutcome[] = [];
-    for (const [index, columnReport] of reports) {
-      const column = mapping.columns.find(c => c.index === index);
-      columns.push({
-        index,
-        header: session.table.headers[index] ?? `Column ${index + 1}`,
-        propertyName: column && column.kind !== 'skip' ? column.propertyName : '',
-        report: columnReport,
-      });
+    if (resolution.aborted || !guard.isCurrent()) return { ok: false, error: 'aborted' };
+    const known = new Map<string, KnownEntity[]>();
+    for (const [name, entry] of params.knownEntities ?? [])
+      known.set(name, Array.isArray(entry) ? [...entry] : [entry]);
+    for (const [index, row] of resolution.resolvedRows) {
+      const key = row.name.trim().toLowerCase();
+      const entries = known.get(key) ?? [];
+      const typeId = flatRows[index][1];
+      const matches = [...new Map(entries.filter(e => e.typeIds?.includes(typeId)).map(e => [e.id, e])).values()];
+      if (matches.length > 1)
+        return {
+          ok: false,
+          error: 'invalid_values',
+          message: `Several pending entities named ${row.name} have the same type. Resolve those duplicates before importing.`,
+        };
+      const existing = matches[0];
+      if (existing) resolution.resolvedRows.set(index, { entityId: existing.id, name: row.name });
+      else entries.push({ id: row.entityId, name: row.name, typeIds: [typeId] });
+      known.set(key, entries);
     }
 
-    const firstValue = plan.values[0];
-
-    return {
-      ok: true,
-      entityCount: rowResolution.resolvedRows.size,
-      editCount: plan.values.length + plan.relations.length,
-      ambiguousRows: rowResolution.unresolvedRowCount,
-      unresolvedRelations: relationResolution.unresolvedCount,
-      columns,
-      typeName: mapping.typeName,
-      probe: firstValue ? { valueId: firstValue.id, entityId: firstValue.entity.id } : null,
-    };
+    const values = new Map<string, Value>();
+    const relations = new Map<string, Relation>();
+    const results: ApplySuccess[] = [];
+    let offset = 0;
+    for (let i = 0; i < sheets.length; i++) {
+      const { table, mapping } = sheets[i];
+      report('converting', 'Checking column values…');
+      const { rows: dataRows, reports } = coerceTable(table, mapping);
+      const invalid = [...reports].filter(([, r]) => r.unconvertible > 0);
+      if (invalid.length)
+        return {
+          ok: false,
+          error: 'invalid_values',
+          sheetIndex: i,
+          message:
+            invalid
+              .map(
+                ([index, r]) =>
+                  `${table.headers[index]}: ${r.unconvertible} values cannot be converted (examples: ${r.examples.join(', ')}).`
+              )
+              .join(' ') + ' Correct these cells or change the mapping before importing.',
+        };
+      await yieldToMain();
+      if (!guard.isCurrent()) return { ok: false, error: 'aborted' };
+      const columnMapping = buildColumnMapping(mapping);
+      const splitRules = buildSplitRules(mapping);
+      const relationProperties = collectRelationCells({ columnMapping, dataRows, propertyLookup, splitRules });
+      fillMissingRelationTypes(relationProperties, mapping);
+      // The plan's within-sheet cross-reference must use the same type constraints as resolution.
+      for (const relation of relationProperties) {
+        extraProperties[relation.propertyId] = {
+          ...extraProperties[relation.propertyId],
+          relationValueTypes: relation.typeIds.map(id => ({ id, name: null })),
+        };
+      }
+      const { seeded } = preResolveKnown(relationProperties, known);
+      report('linking', 'Matching linked entities…');
+      const linked = await resolveRelationEntities({ relationProperties, guard });
+      if (linked.aborted || !guard.isCurrent()) return { ok: false, error: 'aborted' };
+      for (const [key, entity] of seeded) linked.resolvedEntities.set(key, entity);
+      const resolvedRows: RowResolution['resolvedRows'] = new Map();
+      const otherSheetRows = new Set(
+        [...resolution.resolvedRows]
+          .filter(([index]) => index < offset || index >= offset + dataRows.length)
+          .map(([, row]) => row.entityId)
+      );
+      for (let row = 0; row < dataRows.length; row++) {
+        const match = resolution.resolvedRows.get(offset + row);
+        if (match) resolvedRows.set(row, match);
+      }
+      offset += dataRows.length;
+      report('building', 'Preparing the workbook edits…');
+      const plan = buildImportPlan({
+        dataRows,
+        columnMapping,
+        nameColIdx: mapping.nameColumn,
+        selectedType: { id: mapping.typeId, name: mapping.typeName },
+        typesColumnIndex: undefined,
+        resolvedEntities: linked.resolvedEntities,
+        resolvedTypes: new Map(),
+        resolvedRows,
+        spaceId,
+        propertyLookup,
+        getExistingRelations: id => [
+          ...deps.getResolvedRelations(id).filter(relation => relation.spaceId === spaceId && !relation.isDeleted),
+          ...[...relations.values()].filter(r => r.fromEntity.id === id),
+        ],
+        splitRules,
+      });
+      for (const entity of plan.resolvedEntitiesSnapshot.values()) {
+        if (entity.status !== 'created' || !entity.typeId) continue;
+        const key = entity.name.trim().toLowerCase();
+        const entries = known.get(key) ?? [];
+        if (!entries.some(entry => entry.id === entity.id))
+          entries.push({ id: entity.id, name: entity.name, typeIds: [entity.typeId] });
+        known.set(key, entries);
+      }
+      let edits = 0;
+      let crossSheetLinks = 0;
+      const sheetRowIds = new Set([...resolvedRows.values()].map(row => row.entityId));
+      const relationPropertyIds = new Set(
+        mapping.columns.flatMap(column => (column.kind === 'relation' ? [column.propertyId] : []))
+      );
+      for (const value of plan.values) {
+        const previous = values.get(value.id);
+        if (
+          previous &&
+          previous.value !== value.value &&
+          !(value.property.id === SystemIds.NAME_PROPERTY && previous.value.toLowerCase() === value.value.toLowerCase())
+        ) {
+          return {
+            ok: false,
+            error: 'invalid_values',
+            sheetIndex: i,
+            message: `Rows for ${value.entity.name ?? value.entity.id} contain conflicting values for ${value.property.name ?? value.property.id}. Give distinct entities distinct names, or combine the rows before importing.`,
+          };
+        }
+        if (!previous) {
+          values.set(value.id, value);
+          edits++;
+        }
+      }
+      for (const relation of plan.relations) {
+        const key = `${relation.spaceId}:${relation.fromEntity.id}:${relation.type.id}:${relation.toEntity.id}`;
+        if (!relations.has(key)) {
+          relations.set(key, relation);
+          edits++;
+          if (
+            sheetRowIds.has(relation.fromEntity.id) &&
+            relationPropertyIds.has(relation.type.id) &&
+            otherSheetRows.has(relation.toEntity.id)
+          )
+            crossSheetLinks++;
+        }
+      }
+      const columns = [...reports].map(([index, columnReport]) => {
+        const column = mapping.columns.find(c => c.index === index);
+        return {
+          index,
+          header: table.headers[index],
+          propertyName: column && column.kind !== 'skip' ? column.propertyName : '',
+          report: columnReport,
+        };
+      });
+      const rows = [...resolvedRows.values()].map(row => ({
+        id: row.entityId,
+        name: row.name,
+        typeIds: [mapping.typeId],
+      }));
+      const first = plan.values[0];
+      results.push({
+        ok: true,
+        entityCount: new Set(rows.map(row => row.id)).size,
+        linkedEntityCount: new Set(
+          plan.values
+            .filter(
+              value => value.property.id === SystemIds.NAME_PROPERTY && !rows.some(row => row.id === value.entity.id)
+            )
+            .map(value => value.entity.id)
+        ).size,
+        editCount: edits,
+        ambiguousRows: dataRows.length - resolvedRows.size,
+        unresolvedRelations: linked.unresolvedCount + [...seeded.values()].filter(e => e.status === 'ambiguous').length,
+        columns,
+        typeName: mapping.typeName,
+        probe: first ? { valueId: first.id, entityId: first.entity.id } : null,
+        rows,
+        crossSheetLinks,
+      });
+    }
+    if (!guard.isCurrent()) return { ok: false, error: 'aborted' };
+    return { ok: true, values: [...values.values()], relations: [...relations.values()], results };
   } catch (err) {
-    console.error('[chat/import-apply] failed', err);
+    console.error('[chat/import-apply] preparation failed', err);
     return { ok: false, error: 'apply_failed' };
   }
 }
 
-/** How many edits to write before handing the thread back to the browser. */
-const STAGE_CHUNK = 250;
+/** No awaits during commit: cancellation or a failed later sheet cannot leave a partial workbook. */
+export function commitWorkbook(plan: Extract<PreparedWorkbook, { ok: true }>, guard: Guard): boolean {
+  if (!guard.isCurrent()) return false;
+  storage.values.setMany(plan.values);
+  storage.relations.setMany(plan.relations);
+  return true;
+}
 
-/**
- * Write the plan into the local store in chunks.
- *
- * A large import is tens of thousands of `set` calls, each notifying
- * subscribers. Writing them in one synchronous run locks the tab for the
- * duration; chunking keeps the progress indicator moving and the stop button
- * live.
- */
-async function writeToStore(values: Value[], relations: Relation[], guard: Guard): Promise<void> {
-  for (let i = 0; i < values.length; i++) {
-    storage.values.set(values[i]);
-    if ((i + 1) % STAGE_CHUNK === 0) {
-      await yieldToMain();
-      if (!guard.isCurrent()) return;
-    }
-  }
-
-  for (let i = 0; i < relations.length; i++) {
-    storage.relations.set(relations[i]);
-    if ((i + 1) % STAGE_CHUNK === 0) {
-      await yieldToMain();
-      if (!guard.isCurrent()) return;
-    }
-  }
+export async function applyImportToStore(params: {
+  table: ParsedTable;
+  mapping: ImportMapping;
+  spaceId: string;
+  guard: Guard;
+  deps: ApplyDeps;
+  knownEntities?: KnownEntities;
+  onProgress?: (progress: ApplyProgress) => void;
+}): Promise<ApplyResult> {
+  const plan = await prepareWorkbook({ ...params, sheets: [{ table: params.table, mapping: params.mapping }] });
+  if (!plan.ok) return plan;
+  if (!commitWorkbook(plan, params.guard)) return { ok: false, error: 'aborted' };
+  return plan.results[0];
 }

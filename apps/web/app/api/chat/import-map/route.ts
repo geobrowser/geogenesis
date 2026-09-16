@@ -15,10 +15,15 @@ import { cookies } from 'next/headers';
 import { coerce, isCoercionRule, isPlaceholder } from '~/core/chat/import/coerce';
 import type { ImportMapInput, ImportMapping, MappedColumn, MappingColumnInput } from '~/core/chat/import/mapping-types';
 import { isRelationSplitRule } from '~/core/chat/import/mapping-types';
+import {
+  coercionMatchesDataType,
+  summarizeMapping,
+  unsupportedMediaMessage,
+} from '~/core/chat/import/mapping-validation';
 import { ROOT_SPACE } from '~/core/constants';
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { getAllEntities, getProperties, getResults } from '~/core/io/queries';
-import type { Property } from '~/core/types';
+import { getAllEntities, getEntity, getProperties, getResults } from '~/core/io/queries';
+import type { Entity, Property } from '~/core/types';
 import { isTrustedSpace, rankBySpace, trustedSpaceSet } from '~/core/utils/space/search-trust';
 import { RANKED_SPACE_IDS } from '~/core/utils/space/space-ranking';
 
@@ -148,7 +153,14 @@ export function validateInput(body: unknown): ImportMapInput | null {
   for (const entry of raw.columns) {
     if (!entry || typeof entry !== 'object') return null;
     const column = entry as Record<string, unknown>;
-    if (typeof column.index !== 'number' || !Number.isInteger(column.index) || column.index < 0) return null;
+    if (
+      typeof column.index !== 'number' ||
+      !Number.isInteger(column.index) ||
+      column.index < 0 ||
+      column.index >= MAX_COLUMNS ||
+      columns.some(c => c.index === column.index)
+    )
+      return null;
 
     columns.push({
       index: column.index,
@@ -174,12 +186,94 @@ export function validateInput(body: unknown): ImportMapInput | null {
         .slice(0, MAX_SEARCH_SPACES)
     : [];
 
+  const local = raw.localOntology as Record<string, unknown> | undefined;
+  const readNamed = (value: unknown): { id: string; name: string | null } | null => {
+    if (!value || typeof value !== 'object') return null;
+    const item = value as Record<string, unknown>;
+    const id = normalizeId(item.id);
+    return id ? { id, name: typeof item.name === 'string' ? item.name.slice(0, 200) : null } : null;
+  };
+  const types = Array.isArray(local?.types)
+    ? local.types.slice(0, 100).flatMap(v => {
+        const named = readNamed(v);
+        return named ? [named] : [];
+      })
+    : [];
+  const dataTypes = new Set([
+    'TEXT',
+    'INTEGER',
+    'FLOAT',
+    'DECIMAL',
+    'BOOLEAN',
+    'DATE',
+    'DATETIME',
+    'TIME',
+    'POINT',
+    'RELATION',
+    'BYTES',
+    'SCHEDULE',
+    'EMBEDDING',
+  ]);
+  const properties = Array.isArray(local?.properties)
+    ? local.properties.slice(0, 100).flatMap(value => {
+        const named = readNamed(value);
+        if (!named || typeof value.dataType !== 'string' || !dataTypes.has(value.dataType)) return [];
+        const relationValueTypes = Array.isArray(value.relationValueTypes)
+          ? value.relationValueTypes.slice(0, 20).flatMap((v: unknown) => {
+              const named = readNamed(v);
+              return named ? [named] : [];
+            })
+          : [];
+        return [
+          {
+            ...named,
+            dataType: value.dataType,
+            relationValueTypes,
+            ...(typeof value.renderableTypeStrict === 'string'
+              ? { renderableTypeStrict: value.renderableTypeStrict.slice(0, 40) }
+              : {}),
+          },
+        ];
+      })
+    : [];
+  // Previous mapping is context, never permission to invent properties; buildMapping validates all resulting ids.
+  const previous = raw.previousMapping as ImportMapping | undefined;
+  const previousMapping =
+    previous &&
+    JSON.stringify(previous).length <= 30_000 &&
+    normalizeId(previous.typeId) &&
+    Array.isArray(previous.columns) &&
+    previous.columns.length <= MAX_COLUMNS &&
+    typeof previous.typeName === 'string' &&
+    Number.isInteger(previous.nameColumn)
+      ? previous
+      : undefined;
+
   return {
     spaceId,
     fileName,
     rowCount,
     columns,
     ...(hint ? { hint } : {}),
+    ...(types.length || properties.length ? { localOntology: { types, properties } } : {}),
+    ...(previousMapping ? { previousMapping } : {}),
+    ...(Array.isArray(raw.workbookSheets)
+      ? {
+          workbookSheets: raw.workbookSheets.slice(0, 20).flatMap(value =>
+            value && typeof value.name === 'string' && Array.isArray(value.nameSamples)
+              ? [
+                  {
+                    name: value.name.slice(0, 200),
+                    nameSamples: value.nameSamples
+                      .filter((name: unknown): name is string => typeof name === 'string')
+                      .slice(0, 5)
+                      .map((name: string) => name.slice(0, 120)),
+                  },
+                ]
+              : []
+          ),
+        }
+      : {}),
     ...(searchSpaceIds.length > 0 ? { searchSpaceIds } : {}),
   };
 }
@@ -210,8 +304,23 @@ export function renderColumns(input: ImportMapInput, candidates?: ColumnCandidat
     `Rows: ${input.rowCount}`,
     `Space: ${input.spaceId}`,
     '',
+    ...(input.workbookSheets
+      ? [
+          'Workbook sheet names and example row names; relation cells may refer to these rows. Choose compatible types across sheets:',
+          JSON.stringify(input.workbookSheets),
+        ]
+      : []),
     'Columns:',
     ...lines,
+    ...(input.localOntology
+      ? ['Pending local ontology (available for this import):', JSON.stringify(input.localOntology)]
+      : []),
+    ...(input.previousMapping
+      ? [
+          'Previous preview. Preserve its type, name column, split rules and mappings unless the curator explicitly requests a change:',
+          JSON.stringify(input.previousMapping),
+        ]
+      : []),
     // Last, and framed as an instruction, because it is the only reason this
     // call differs from the one before it. A correction placed above the column
     // list reads as background; placed here it reads as the task.
@@ -231,9 +340,53 @@ type PropertyCandidate = {
   name: string | null;
   description: string | null;
   dataType: string;
+  renderableTypeStrict?: string | null;
   /** Null means the ontology does not declare them and the model must supply relationTypeIds. */
   relationValueTypes: Array<{ id: string; name: string | null }> | null;
 };
+
+/** Revalidate a previous preview's ontology even when it sits beyond the browse page. */
+export async function previousMappingOntology(
+  mapping: ImportMapping | undefined,
+  allowedSpaces: ReadonlySet<string>,
+  readers: {
+    entity: (id: string) => Promise<Entity | null>;
+    properties: (ids: string[]) => Promise<Property[]>;
+  }
+): Promise<{ types: TypeCandidate[]; properties: Property[] }> {
+  const typeId = normalizeId(mapping?.typeId);
+  if (!mapping || !typeId) return { types: [], properties: [] };
+  const propertyIds = dedupe(
+    mapping.columns.flatMap(column => {
+      const id =
+        column && typeof column === 'object' && column.kind !== 'skip' && 'propertyId' in column
+          ? normalizeId(column.propertyId)
+          : null;
+      return id ? [id] : [];
+    })
+  );
+  const [entity, properties] = await Promise.all([
+    readers.entity(typeId).catch(() => null),
+    propertyIds.length ? readers.properties(propertyIds).catch(() => []) : [],
+  ]);
+  const isType =
+    entity?.types.some(type => type.id === SystemIds.SCHEMA_TYPE) &&
+    entity.spaces.some(spaceId => isTrustedSpace(spaceId, allowedSpaces));
+  return { types: isType && entity ? [{ id: typeId, name: entity.name }] : [], properties };
+}
+
+/** Common export labels are weak literal ontology searches ("Bio" also matches biology). */
+export function columnSearchTerms(header: string): string[] {
+  const aliases: Record<string, string[]> = {
+    bio: ['biography', 'description'],
+    biography: ['description'],
+    summary: ['description'],
+    url: ['web url', 'website'],
+    homepage: ['website'],
+  };
+  const trimmed = header.trim();
+  return trimmed ? [trimmed, ...(aliases[trimmed.toLowerCase()] ?? [])] : [];
+}
 
 async function hydrateIfRelation(property: Property): Promise<Property> {
   if (property.dataType !== 'RELATION') return property;
@@ -314,6 +467,7 @@ async function searchProperties(queries: string[], spaceId: string, searchSpaces
       name: resolved.name,
       description: null,
       dataType: resolved.dataType,
+      renderableTypeStrict: resolved.renderableTypeStrict,
       // Null rather than [] so "the ontology is silent" is visibly different
       // from "the ontology says none" — the prompt keys off exactly this.
       relationValueTypes: resolved.dataType === 'RELATION' ? (types.length > 0 ? types : null) : null,
@@ -515,7 +669,13 @@ export function buildMapping(
   submission: SubmitMappingInput,
   input: ImportMapInput,
   knownTypeIds: ReadonlySet<string>,
-  candidates?: ColumnCandidates
+  candidates?: ColumnCandidates,
+  knownProperties: ReadonlyMap<
+    string,
+    Pick<PropertyCandidate, 'id' | 'name' | 'dataType'> &
+      Partial<Pick<PropertyCandidate, 'relationValueTypes' | 'renderableTypeStrict'>>
+  > = new Map([...(candidates?.values() ?? [])].flat().map(property => [property.id, property])),
+  knownTypeNames?: ReadonlyMap<string, string | null>
 ): ImportMapping | { error: 'mapping_failed' } {
   const typeId = normalizeId(submission.typeId);
   if (!typeId || !knownTypeIds.has(typeId)) return { error: 'mapping_failed' };
@@ -526,6 +686,7 @@ export function buildMapping(
   const byIndex = new Map(input.columns.map(c => [c.index, c]));
   const seen = new Set<number>();
   const columns: MappedColumn[] = [];
+  const valuePropertyIds = new Set<string>();
 
   const skip = (index: number, reason: string): MappedColumn => {
     // Only a column with data is worth a second opinion. An empty one may well
@@ -560,12 +721,52 @@ export function buildMapping(
     }
 
     if (raw.kind === 'skip' || !propertyId) {
-      columns.push(skip(raw.index, raw.reason?.slice(0, 200) || 'No matching property.'));
+      const skipped = skip(raw.index, raw.reason?.slice(0, 200) || 'No matching property.');
+      if (
+        skipped.kind === 'skip' &&
+        raw.suggestedPropertyName &&
+        raw.suggestedDataType &&
+        ['TEXT', 'INTEGER', 'FLOAT', 'DECIMAL', 'BOOLEAN', 'DATE', 'DATETIME', 'TIME', 'RELATION'].includes(
+          raw.suggestedDataType
+        )
+      ) {
+        skipped.suggestedProperty = {
+          name: raw.suggestedPropertyName.slice(0, 120),
+          dataType: raw.suggestedDataType,
+          ...(raw.suggestedRelationTypeName ? { relationTypeName: raw.suggestedRelationTypeName.slice(0, 120) } : {}),
+        };
+      }
+      columns.push(skipped);
+      continue;
+    }
+
+    const property = knownProperties.get(propertyId);
+    if (!property) {
+      columns.push(
+        skip(
+          raw.index,
+          'This property was not found in the ontology. Choose an existing property or request a new one.'
+        )
+      );
+      continue;
+    }
+
+    const mediaError = unsupportedMediaMessage(property.renderableTypeStrict);
+    if (mediaError) {
+      columns.push(skip(raw.index, mediaError));
       continue;
     }
 
     if (raw.kind === 'relation') {
-      const relationTypeIds = (raw.relationTypeIds ?? [])
+      if (property.dataType !== 'RELATION') {
+        columns.push(skip(raw.index, `${property.name ?? 'This property'} is not a relation property.`));
+        continue;
+      }
+      const relationTypeIds = (
+        property.relationValueTypes?.length
+          ? property.relationValueTypes.map(type => type.id)
+          : (raw.relationTypeIds ?? [])
+      )
         .map(normalizeId)
         .filter((id): id is string => id !== null && knownTypeIds.has(id));
 
@@ -573,8 +774,11 @@ export function buildMapping(
         index: raw.index,
         kind: 'relation',
         propertyId,
-        propertyName: raw.propertyName?.slice(0, 200) || 'Relation',
+        propertyName: property.name ?? 'Relation',
         relationTypeIds,
+        relationTypeNames: relationTypeIds.map(
+          id => knownTypeNames?.get(id) ?? property.relationValueTypes?.find(type => type.id === id)?.name ?? id
+        ),
         // An unrecognised rule falls back to the default rather than failing the
         // column: `list` is what this code did before the rule existed.
         split: isRelationSplitRule(raw.split) ? raw.split : 'list',
@@ -582,8 +786,15 @@ export function buildMapping(
       continue;
     }
 
-    if (!isCoercionRule(raw.coercion)) {
+    if (!isCoercionRule(raw.coercion) || !coercionMatchesDataType(raw.coercion, property.dataType)) {
       columns.push(skip(raw.index, 'Could not tell how to convert this column safely.'));
+      continue;
+    }
+
+    if (valuePropertyIds.has(propertyId)) {
+      columns.push(
+        skip(raw.index, `Another column already writes ${property.name ?? 'this property'}. Choose one source column.`)
+      );
       continue;
     }
 
@@ -599,9 +810,10 @@ export function buildMapping(
       index: raw.index,
       kind: 'value',
       propertyId,
-      propertyName: raw.propertyName?.slice(0, 200) || 'Property',
+      propertyName: property.name ?? 'Property',
       coercion: raw.coercion,
     });
+    valuePropertyIds.add(propertyId);
   }
 
   // Anything the model forgot is skipped rather than silently absent, so the
@@ -612,13 +824,14 @@ export function buildMapping(
   }
 
   columns.sort((a, b) => a.index - b.index);
+  const typeName = knownTypeNames?.get(typeId) ?? submission.typeName?.slice(0, 200) ?? 'Type';
 
   return {
     typeId,
-    typeName: submission.typeName?.slice(0, 200) || 'Type',
+    typeName,
     nameColumn: submission.nameColumn,
     columns,
-    summary: submission.summary?.slice(0, 600) || 'Mapped the file onto this space.',
+    summary: summarizeMapping({ typeName, columns }, byIndex.get(submission.nameColumn)?.header ?? 'Name'),
   };
 }
 
@@ -672,6 +885,10 @@ export async function POST(req: Request) {
   const browseSpaces = dedupe([input.spaceId, ROOT_SPACE]);
   const searchSpaces = typeSourceSpaces(input.spaceId, input.searchSpaceIds);
   const allowedSpaces = trustedSpaceSet(searchSpaces);
+  const previousOntology = await previousMappingOntology(input.previousMapping, allowedSpaces, {
+    entity: id => Effect.runPromise(getEntity(id, undefined, signal)),
+    properties: async ids => (await Effect.runPromise(getProperties(ids, signal))) ?? [],
+  });
   let spaceTypes: Array<{ id: string; name: string | null }> = [];
   let moreTypesExist = false;
   try {
@@ -691,6 +908,7 @@ export async function POST(req: Request) {
     return jsonError(502, 'Could not read the space ontology.');
   }
 
+  spaceTypes = dedupeById([...(input.localOntology?.types ?? []), ...previousOntology.types, ...spaceTypes]);
   if (spaceTypes.length === 0) {
     return new Response(JSON.stringify({ error: 'no_types_in_space' }), {
       status: 200,
@@ -706,6 +924,38 @@ export async function POST(req: Request) {
    * `buildMapping` rejects the very answer the search was for.
    */
   const knownTypeIds = new Set(spaceTypes.map(t => t.id));
+  const knownTypeNames = new Map(spaceTypes.map(t => [t.id, t.name]));
+  const localProperties: PropertyCandidate[] = (input.localOntology?.properties ?? []).map(property => ({
+    ...property,
+    description: null,
+  }));
+  const knownProperties = new Map<string, PropertyCandidate>();
+  const registerProperties = <T extends { results: PropertyCandidate[] }>(matches: T[]): T[] => {
+    for (const match of matches) {
+      for (const property of match.results) {
+        knownProperties.set(property.id, localProperties.find(local => local.id === property.id) ?? property);
+        for (const type of property.relationValueTypes ?? []) {
+          knownTypeIds.add(type.id);
+          knownTypeNames.set(type.id, type.name);
+        }
+      }
+    }
+    return matches;
+  };
+  registerProperties([{ results: localProperties }]);
+  registerProperties([
+    {
+      results: previousOntology.properties.map(property => ({
+        id: property.id,
+        name: property.name,
+        dataType: property.dataType,
+        renderableTypeStrict: property.renderableTypeStrict,
+        description: null,
+        relationValueTypes: property.relationValueTypes?.length ? property.relationValueTypes : null,
+      })),
+    },
+  ]);
+  let ontologyRequest: string | null = null;
   let submission: SubmitMappingInput | null = null;
   /**
    * Set once the submission has cleared its checks, or once the model has had
@@ -755,7 +1005,16 @@ export async function POST(req: Request) {
       // A type is only nameable once it has been seen. Searching is how types
       // past the first page get seen, so registering here is what lets
       // `buildMapping` accept the answer the search was for.
-      for (const type of result.types) knownTypeIds.add(type.id);
+      result.types = dedupeById([
+        ...(input.localOntology?.types ?? []).filter(
+          t => !nameContains || (t.name ?? '').toLowerCase().includes(nameContains.toLowerCase())
+        ),
+        ...result.types,
+      ]);
+      for (const type of result.types) {
+        knownTypeIds.add(type.id);
+        knownTypeNames.set(type.id, type.name);
+      }
       return result;
     },
   });
@@ -765,8 +1024,32 @@ export async function POST(req: Request) {
       'Search this space and its neighbours for existing properties by name. Send every header you still need in one call. Returns each property with its dataType, and — for relations — the entity types it is declared to point at, or null when the ontology does not say.',
     inputSchema: jsonSchema<SearchPropertiesInput>(SEARCH_PROPERTIES_SCHEMA),
     execute: async ({ queries }: SearchPropertiesInput) => ({
-      matches: await searchProperties(queries, input.spaceId, searchSpaces),
+      matches: registerProperties(
+        (await searchProperties(queries, input.spaceId, searchSpaces)).map(match => ({
+          ...match,
+          results: dedupeById([
+            ...localProperties.filter(p => (p.name ?? '').toLowerCase().includes(match.query.toLowerCase())),
+            ...match.results,
+          ]),
+        }))
+      ),
     }),
+  });
+
+  const requestOntology = tool({
+    description:
+      'Use when the curator explicitly requested a row type that searches cannot find. Request its creation; never silently substitute a different type.',
+    inputSchema: jsonSchema<{ typeName: string }>({
+      type: 'object',
+      properties: { typeName: { type: 'string', minLength: 1, maxLength: 120 } },
+      required: ['typeName'],
+      additionalProperties: false,
+    }),
+    execute: async ({ typeName }: { typeName: string }) => {
+      ontologyRequest = `The requested type ${typeName} was not found. Propose creating it, then preview the mapping again after the curator approves.`;
+      accepted = true;
+      return { requested: true };
+    },
   });
 
   const submitMapping = tool({
@@ -830,11 +1113,14 @@ export async function POST(req: Request) {
   const candidates: ColumnCandidates = new Map();
   const tSearch = Date.now();
   try {
-    const headers = input.columns.map(c => c.header).filter(Boolean);
-    const matches = await searchProperties(headers, input.spaceId, searchSpaces);
+    const headers = [...new Set(input.columns.flatMap(c => columnSearchTerms(c.header)))];
+    const matches = registerProperties(await searchProperties(headers, input.spaceId, searchSpaces));
     const byQuery = new Map(matches.map(m => [m.query.trim().toLowerCase(), m.results]));
     for (const column of input.columns) {
-      const found = byQuery.get(column.header.trim().toLowerCase()) ?? [];
+      const found = dedupeById([
+        ...localProperties.filter(p => (p.name ?? '').toLowerCase() === column.header.trim().toLowerCase()),
+        ...columnSearchTerms(column.header).flatMap(term => byQuery.get(term.toLowerCase()) ?? []),
+      ]);
       candidates.set(
         column.index,
         found.map(p => ({ name: p.name, dataType: p.dataType, id: p.id }))
@@ -872,7 +1158,7 @@ export async function POST(req: Request) {
         },
         { role: 'user', content: renderColumns(input, candidates) },
       ],
-      tools: { listTypes, searchProperties: searchPropertiesTool, submitMapping, reconsiderColumns },
+      tools: { listTypes, searchProperties: searchPropertiesTool, submitMapping, reconsiderColumns, requestOntology },
       toolChoice: 'auto',
       // The mapping is the answer, so the run is over the moment it lands.
       // Without this the model spends a whole extra round trip — measured at
@@ -892,6 +1178,7 @@ export async function POST(req: Request) {
       console.error(`[chat/import-map] ${trace.length} steps: ${trace.join(' → ')}`);
     }
 
+    if (ontologyRequest) return Response.json({ error: 'ontology_change_required', message: ontologyRequest });
     if (!submission) {
       console.error('[chat/import-map] finished without submitting a mapping');
       return new Response(JSON.stringify({ error: 'mapping_failed' }), {
@@ -900,7 +1187,14 @@ export async function POST(req: Request) {
       });
     }
 
-    const mapping = buildMapping(mergeRevisions(submission, revised), input, knownTypeIds, candidates);
+    const mapping = buildMapping(
+      mergeRevisions(submission, revised),
+      input,
+      knownTypeIds,
+      candidates,
+      knownProperties,
+      knownTypeNames
+    );
     return new Response(JSON.stringify(mapping), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },

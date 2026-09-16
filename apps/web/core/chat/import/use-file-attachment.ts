@@ -24,18 +24,41 @@ import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB, type ParseResult } from './types
  * spreadsheet to a string on the UI thread janks the whole tab, and a
  * spreadsheet has no text form to read anyway.
  */
-function parseInWorker(file: File): Promise<ParseResult> {
+function parseInWorker(file: File, signal: AbortSignal): Promise<ParseResult> {
   return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException('Cancelled', 'AbortError'));
+      return;
+    }
     const worker = new Worker(new URL('./parse.worker.ts', import.meta.url), { type: 'module' });
-    worker.onmessage = (event: MessageEvent<ParseResult>) => {
-      resolve(event.data);
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', abort);
       worker.terminate();
+    };
+    const abort = () => {
+      cleanup();
+      reject(new DOMException('Cancelled', 'AbortError'));
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('Reading this file took too long. Try splitting it into smaller files.'));
+    }, 60_000);
+    signal.addEventListener('abort', abort, { once: true });
+    worker.onmessage = (event: MessageEvent<ParseResult>) => {
+      cleanup();
+      resolve(event.data);
     };
     worker.onerror = error => {
-      reject(new Error(error.message ?? 'Worker error'));
-      worker.terminate();
+      cleanup();
+      reject(new Error(error.message || 'Could not read this file.'));
     };
-    worker.postMessage({ file });
+    try {
+      worker.postMessage({ file });
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
   });
 }
 
@@ -43,9 +66,18 @@ export function useFileAttachment(currentSpaceId: string | null) {
   const [attachment, setAttachment] = React.useState<AttachmentState | null>(null);
   // Bumped per attach so a slow parse can't overwrite a newer file's result.
   const generationRef = React.useRef(0);
+  const parseController = React.useRef<AbortController | null>(null);
+  React.useEffect(
+    () => () => {
+      generationRef.current++;
+      parseController.current?.abort();
+    },
+    []
+  );
 
   /** The user removed the file. Drop the parsed rows too — nothing will read them. */
   const remove = React.useCallback(() => {
+    parseController.current?.abort();
     setAttachment(current => {
       if (current?.status === 'ready') ImportSessions.clear(current.session.id);
       if (current?.status === 'image') {
@@ -66,6 +98,8 @@ export function useFileAttachment(currentSpaceId: string | null) {
    * same file and inviting a second import of it.
    */
   const dismiss = React.useCallback(() => {
+    generationRef.current++;
+    parseController.current?.abort();
     setAttachment(current => {
       // The chip goes; the file stays, because `setEntityImage` may not run
       // until the assistant has asked which entity it belongs to. Only the
@@ -77,6 +111,7 @@ export function useFileAttachment(currentSpaceId: string | null) {
 
   const attach = React.useCallback(
     async (file: File) => {
+      remove();
       if (!currentSpaceId) {
         setAttachment({
           status: 'error',
@@ -125,10 +160,17 @@ export function useFileAttachment(currentSpaceId: string | null) {
 
       let result: ParseResult;
       try {
-        result = await parseInWorker(file);
+        const controller = new AbortController();
+        parseController.current = controller;
+        result = await parseInWorker(file, controller.signal);
       } catch (err) {
+        if (generation !== generationRef.current) return;
         console.error('[chat/import] parse failed', err);
-        result = { ok: false, code: 'parse_failed', message: `Could not read that file (max ${MAX_FILE_SIZE_MB}mb).` };
+        result = {
+          ok: false,
+          code: 'parse_failed',
+          message: err instanceof Error ? err.message : 'Could not read that file.',
+        };
       }
 
       // A newer file was picked while this one was parsing.
@@ -143,22 +185,20 @@ export function useFileAttachment(currentSpaceId: string | null) {
         id: crypto.randomUUID(),
         fileName: file.name,
         fileSizeBytes: file.size,
-        table: result.table,
+        sheets: result.sheets,
+        skippedSheets: result.skippedSheets,
         // Where the file came from, not where it must go. The import maps
         // against and stages into whichever space the user is in when they run
         // it, so this is only the fallback for a chat opened outside a space —
         // pinning to it stranded files attached somewhere unwritable.
         spaceId: currentSpaceId,
         delimiter: result.delimiter,
-        sheetName: result.sheetName,
-        sheets: result.sheets,
-        raggedRows: result.raggedRows,
       };
 
       ImportSessions.set(session);
       setAttachment({ status: 'ready', session });
     },
-    [currentSpaceId]
+    [currentSpaceId, remove]
   );
 
   /**
@@ -186,9 +226,14 @@ export function useFileAttachment(currentSpaceId: string | null) {
       attachment: {
         importId: session.id,
         fileName: session.fileName,
-        rowCount: session.table.rowCount,
-        headers: session.table.headers,
-        ...(session.sheetName ? { sheetName: session.sheetName } : {}),
+        sheets: session.sheets.map(sheet => ({
+          name: sheet.name,
+          rowCount: sheet.table.rowCount,
+          headers: sheet.table.headers,
+        })),
+        ...(session.skippedSheets.length > 0
+          ? { skippedSheets: session.skippedSheets.map(sheet => ({ name: sheet.name, reason: sheet.reason })) }
+          : {}),
       },
     };
   }, [attachment]);

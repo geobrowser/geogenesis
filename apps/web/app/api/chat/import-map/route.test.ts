@@ -1,6 +1,9 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ImportMapInput } from '~/core/chat/import/mapping-types';
+import type { Entity, Property } from '~/core/types';
 
 import type { SubmitMappingInput } from './schema';
 
@@ -14,8 +17,16 @@ vi.mock('~/core/environment/environment', () => ({
   getConfig: () => ({ chainId: '1', rpc: 'https://rpc.example', api: 'https://api.example/graphql' }),
 }));
 
-const { buildMapping, dedupeById, lookupTypes, renderColumns, typeSourceSpaces, validateInput } =
-  await import('./route');
+const {
+  buildMapping,
+  columnSearchTerms,
+  dedupeById,
+  lookupTypes,
+  previousMappingOntology,
+  renderColumns,
+  typeSourceSpaces,
+  validateInput,
+} = await import('./route');
 
 const ROOT_SPACE_ID = 'a19c345ab9866679b001d7d2138d88a1';
 const CRYPTO_SPACE = 'c9f267dcb0d270718c2a3c45a64afd32';
@@ -28,7 +39,13 @@ const PROJECT_TYPE = 'a'.repeat(32);
 const PERSON_TYPE = 'b'.repeat(32);
 const WEBSITE_PROP = 'c'.repeat(32);
 const FOUNDERS_PROP = 'd'.repeat(32);
+const FOUNDED_PROP = 'e'.repeat(32);
 const KNOWN_TYPES = new Set([PROJECT_TYPE, PERSON_TYPE]);
+const KNOWN_PROPERTIES = new Map([
+  [WEBSITE_PROP, { id: WEBSITE_PROP, name: 'Website', dataType: 'TEXT' }],
+  [FOUNDERS_PROP, { id: FOUNDERS_PROP, name: 'Founders', dataType: 'RELATION' }],
+  [FOUNDED_PROP, { id: FOUNDED_PROP, name: 'Founded', dataType: 'INTEGER' }],
+]);
 
 function input(overrides: Partial<ImportMapInput> = {}): ImportMapInput {
   return {
@@ -65,7 +82,7 @@ function submission(overrides: Partial<SubmitMappingInput> = {}): SubmitMappingI
 }
 
 function build(sub: SubmitMappingInput, inp = input()) {
-  return buildMapping(sub, inp, KNOWN_TYPES);
+  return buildMapping(sub, inp, KNOWN_TYPES, undefined, KNOWN_PROPERTIES);
 }
 
 function mapping(sub: SubmitMappingInput, inp = input()) {
@@ -666,7 +683,7 @@ describe('buildMapping against the column evidence', () => {
     const result = mapping(
       submission({
         columns: [
-          { index: 1, kind: 'value', propertyId: WEBSITE_PROP, propertyName: 'Founded', coercion: 'integer:year' },
+          { index: 1, kind: 'value', propertyId: FOUNDED_PROP, propertyName: 'Founded', coercion: 'integer:year' },
         ],
       }),
       founded
@@ -739,5 +756,126 @@ describe('buildMapping and the relation split rule', () => {
 
   it('falls back to list rather than failing the column on a bad rule', () => {
     expect(relationWith('semicolons-only')).toMatchObject({ split: 'list' });
+  });
+});
+
+describe('ontology validation at the mapping boundary', () => {
+  it('restores a previously selected type beyond the first page before a column correction', async () => {
+    const previous = mapping(submission());
+    const entity: Entity = {
+      id: PROJECT_TYPE,
+      name: 'Project',
+      description: null,
+      spaces: [SPACE],
+      types: [{ id: SystemIds.SCHEMA_TYPE, name: 'Type' }],
+      values: [],
+      relations: [],
+    };
+    const property: Property = { id: WEBSITE_PROP, name: 'Website', dataType: 'TEXT' };
+    const restored = await previousMappingOntology(previous, new Set([SPACE]), {
+      entity: async () => entity,
+      properties: async () => [property],
+    });
+    const corrected = buildMapping(
+      submission({
+        columns: [{ index: 1, kind: 'value', propertyId: WEBSITE_PROP, propertyName: 'Website', coercion: 'text' }],
+      }),
+      input(),
+      new Set(restored.types.map(type => type.id)),
+      undefined,
+      new Map(restored.properties.map(p => [p.id, p]))
+    );
+    expect(corrected).not.toHaveProperty('error');
+    expect(corrected).toMatchObject({
+      typeId: PROJECT_TYPE,
+      columns: expect.arrayContaining([expect.objectContaining({ index: 1, kind: 'value', propertyId: WEBSITE_PROP })]),
+    });
+    const invalid = await previousMappingOntology(previous, new Set([SPACE]), {
+      entity: async () => ({ ...entity, types: [] }),
+      properties: async () => [],
+    });
+    expect(invalid.types).toEqual([]);
+  });
+
+  it('searches useful meanings for Bio without losing the original header', () => {
+    expect(columnSearchTerms('Bio')).toEqual(['Bio', 'biography', 'description']);
+    expect(columnSearchTerms('Registry code')).toEqual(['Registry code']);
+  });
+
+  it.each(['IMAGE', 'VIDEO'])(
+    'reports unsupported %s columns instead of promising a media import',
+    renderableTypeStrict => {
+      const result = buildMapping(
+        submission({ summary: 'All media will be uploaded.' }),
+        input(),
+        KNOWN_TYPES,
+        undefined,
+        new Map<string, { id: string; name: string; dataType: string; renderableTypeStrict?: string }>([
+          ...KNOWN_PROPERTIES,
+          [FOUNDERS_PROP, { id: FOUNDERS_PROP, name: 'Media', dataType: 'RELATION', renderableTypeStrict }],
+        ])
+      );
+      expect(result).not.toHaveProperty('error');
+      if ('error' in result) return;
+      expect(result.columns.find(column => column.index === 2)).toMatchObject({
+        kind: 'skip',
+        reason: expect.stringContaining('does not support'),
+      });
+      expect(result.summary).toContain('1 skipped');
+      expect(result.summary).not.toContain('will be uploaded');
+    }
+  );
+
+  it('does not accept an unseen property id', () => {
+    const result = mapping(
+      submission({
+        columns: [{ index: 1, kind: 'value', propertyId: 'f'.repeat(32), propertyName: 'Invented', coercion: 'text' }],
+      })
+    );
+    expect(result.columns[0]).toMatchObject({ kind: 'skip', reason: expect.stringContaining('not found') });
+  });
+  it('uses the real property name and rejects incompatible value coercions', () => {
+    const result = mapping(
+      submission({
+        columns: [
+          { index: 1, kind: 'value', propertyId: WEBSITE_PROP, propertyName: 'Forged name', coercion: 'text' },
+          { index: 2, kind: 'value', propertyId: FOUNDED_PROP, propertyName: 'Founded', coercion: 'text' },
+        ],
+      })
+    );
+    expect(result.columns[0]).toMatchObject({ kind: 'value', propertyName: 'Website' });
+    expect(result.columns[1]).toMatchObject({ kind: 'skip' });
+  });
+  it('does not treat a value property as a relation', () => {
+    const result = mapping(
+      submission({
+        columns: [
+          { index: 1, kind: 'relation', propertyId: WEBSITE_PROP, propertyName: 'Website', relationTypeIds: [] },
+        ],
+      })
+    );
+    expect(result.columns[0]).toMatchObject({ kind: 'skip' });
+  });
+  it('rejects duplicate source column indices', () => {
+    expect(validateInput({ ...input(), columns: [input().columns[0], input().columns[0]] })).toBeNull();
+  });
+  it('carries a suggested ontology change without turning it into a mapped property', () => {
+    const result = mapping(
+      submission({
+        columns: [
+          {
+            index: 1,
+            kind: 'skip',
+            reason: 'No equivalent property',
+            suggestedPropertyName: 'Registry code',
+            suggestedDataType: 'TEXT',
+          },
+        ],
+      })
+    );
+    expect(result.columns[0]).toMatchObject({
+      kind: 'skip',
+      suggestedProperty: { name: 'Registry code', dataType: 'TEXT' },
+    });
   });
 });

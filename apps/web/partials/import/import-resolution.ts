@@ -410,6 +410,7 @@ export async function resolveRelationEntities(params: {
 
     if (!guard.isCurrent()) return { aborted: true, resolvedEntities, unresolvedCount };
 
+    const createdByName = new Map<string, Extract<ResolvedEntity, { status: 'found' | 'created' }>>();
     for (const entry of group.entries) {
       const norm = entry.cellValue.trim().toLowerCase();
       const match = resolved.get(norm);
@@ -418,13 +419,15 @@ export async function resolveRelationEntities(params: {
         const reason = match?.reason ?? 'ambiguous';
         if (reason === 'none') {
           const firstTypeId = group.typeIds[0];
-          resolvedEntities.set(entry.cacheKey, {
+          const created = createdByName.get(norm) ?? {
             id: ID.createEntityId(),
             name: entry.cellValue,
-            status: 'created',
+            status: 'created' as const,
             typeId: firstTypeId,
             typeName: firstTypeId ? (typeNameById.get(firstTypeId) ?? null) : undefined,
-          });
+          };
+          createdByName.set(norm, created);
+          resolvedEntities.set(entry.cacheKey, created);
         } else {
           unresolvedCount += 1;
           resolvedEntities.set(entry.cacheKey, { status: 'ambiguous' });

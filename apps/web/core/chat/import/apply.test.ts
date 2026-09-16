@@ -2,7 +2,14 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { describe, expect, it } from 'vitest';
 
-import { buildColumnMapping, buildSplitRules, coerceTable, fillMissingRelationTypes } from './apply';
+import {
+  buildColumnMapping,
+  buildSplitRules,
+  coerceTable,
+  fillMissingRelationTypes,
+  hasNameColumn,
+  preResolveKnown,
+} from './apply';
 import type { ImportMapping } from './mapping-types';
 import type { ParsedTable } from './types';
 
@@ -202,6 +209,57 @@ describe('fillMissingRelationTypes', () => {
     const { filled } = fillMissingRelationTypes(relationProperties, mapping());
 
     expect(filled).toBe(0);
+  });
+});
+
+describe('hasNameColumn', () => {
+  it('accepts a name column whose header cell is empty', () => {
+    // Armando's workbook: the title row had been taken as the header, so the
+    // publisher-name column's header was "". The old check read that as "no
+    // name column" and the import died as a "technical snag".
+    expect(hasNameColumn(table(['', ''], [['x', 'y']]), mapping({ nameColumn: 1 }))).toBe(true);
+  });
+
+  it('rejects an index the table does not have', () => {
+    expect(hasNameColumn(table(['Name'], [['x']]), mapping({ nameColumn: 3 }))).toBe(false);
+    expect(hasNameColumn(table(['Name'], [['x']]), mapping({ nameColumn: -1 }))).toBe(false);
+  });
+});
+
+describe('preResolveKnown', () => {
+  const property = (values: string[]) => ({
+    propertyId: FOUNDERS,
+    property: { id: FOUNDERS, name: 'Founders', dataType: 'RELATION' } as never,
+    typeIds: [] as string[],
+    uniqueCellValues: new Set(values),
+  });
+
+  it('links a cell to a row of an earlier tab and takes it away from the resolver', () => {
+    const relationProperties = [property(['Vitalik Buterin', 'Gavin Wood'])];
+    const known = new Map([['vitalik buterin', { id: 'e1', name: 'Vitalik Buterin' }]]);
+
+    const { seeded, links } = preResolveKnown(relationProperties, known);
+
+    expect(links).toBe(1);
+    expect(seeded.get(`${FOUNDERS}::Vitalik Buterin`)).toEqual({ id: 'e1', name: 'Vitalik Buterin', status: 'found' });
+    expect([...relationProperties[0].uniqueCellValues]).toEqual(['Gavin Wood']);
+  });
+
+  it('matches regardless of case and surrounding spaces', () => {
+    const relationProperties = [property(['  VITALIK BUTERIN '])];
+    const known = new Map([['vitalik buterin', { id: 'e1', name: 'Vitalik Buterin' }]]);
+
+    expect(preResolveKnown(relationProperties, known).links).toBe(1);
+  });
+
+  it('does nothing when no earlier tab produced entities', () => {
+    const relationProperties = [property(['Vitalik Buterin'])];
+
+    const { seeded, links } = preResolveKnown(relationProperties, new Map());
+
+    expect(links).toBe(0);
+    expect(seeded.size).toBe(0);
+    expect(relationProperties[0].uniqueCellValues.size).toBe(1);
   });
 });
 

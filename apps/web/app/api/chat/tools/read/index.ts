@@ -1,3 +1,4 @@
+import { countEntities } from './count-entities';
 import { geoQuery } from './geo-query';
 import { getEntityTool } from './get-entity';
 import { getSpaceTypes } from './get-space-types';
@@ -9,6 +10,7 @@ import { searchImages } from './search-images';
 import { webFetch } from './web-fetch';
 
 export const readTools = {
+  countEntities,
   searchGraph,
   getEntity: getEntityTool,
   listSpaces,

@@ -2,8 +2,6 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 
 import {
   type ModelMessage,
-  type StreamTextTransform,
-  type TextStreamPart,
   type ToolSet,
   type UIMessage,
   type UIMessageChunk,
@@ -22,25 +20,22 @@ import { EDIT_TOOL_NAMES } from '~/core/chat/edit-types';
 import { CONTEXT_USAGE_DATA_TYPE, type ContextUsageData, ENTITY_ID_REGEX, MAX_PATH_CHARS } from '~/core/chat/limits';
 import { WALLET_ADDRESS } from '~/core/cookie';
 
-import { attachmentInLastUserMessage, renderAttachmentNote } from './attachment-note';
+import { activeAttachment, renderAttachmentNote } from './attachment-note';
 import {
-  CLOSER_SYSTEM_PROMPT,
   type ChatClientContext,
   DEFAULT_GUEST_SYSTEM_PROMPT,
   DEFAULT_MEMBER_SYSTEM_PROMPT,
   INGESTION_SYSTEM_PROMPT,
-  OPENER_SYSTEM_PROMPT,
   type PreloadedEntityForPrompt,
   renderCurrentContextSection,
   renderPreloadedEntitySection,
 } from './chat-system-prompt';
 import { type CostStage, formatTurnCost } from './cost';
 import { buildFollowUpCapabilityNote } from './follow-up-capabilities';
-import { CLOSER_MODEL, FOLLOW_UPS_MODEL, MAIN_MODEL, OPENER_MODEL } from './models';
+import { FOLLOW_UPS_MODEL, MAIN_MODEL } from './models';
 import { anonLimit, ipCeilingLimit, loggedInLimit } from './rate-limit';
 import { requestedItemCount } from './requested-item-count';
 import { sanitizeModelMessages } from './sanitize-model-messages';
-import { scopeToolTrafficToCurrentTurn } from './scope-tool-traffic';
 import {
   appendNoteToLastUserMessage,
   previousSpaceInConversation,
@@ -58,24 +53,10 @@ const anthropic = createAnthropic({
 const MAX_OUTPUT_TOKENS = 8_000;
 // High because rate limits + context window are the real ceiling; this just
 // stops a runaway loop.
-const MAX_TOOL_STEPS = 100;
+const MAX_TOOL_STEPS = 20;
 
 const EXECUTOR_EMPTY_RETRY =
-  'You produced no tool call and no text, so this turn currently has nothing in it and the closer would have to invent a reply. Answer the request now: call the tools it needs, or — if it genuinely needs none — write the answer as text.';
-
-// A turn the executor answered in text rather than tools ends on an assistant
-// message, which Anthropic reads as a prefilled reply to continue — the closer
-// sees a finished answer and returns nothing. This turns that analysis back into
-// material to write from.
-const CLOSER_FROM_ANALYSIS =
-  'The analysis above is internal — the user has not seen it, and no tool ran this turn. Write the user-facing reply from it now, in your own voice, following your output rules.';
-
-function endsWithAssistantText(messages: ModelMessage[]): boolean {
-  const last = messages[messages.length - 1];
-  if (last?.role !== 'assistant') return false;
-  if (typeof last.content === 'string') return last.content.trim().length > 0;
-  return Array.isArray(last.content) && last.content.some(part => part.type === 'text' && part.text.trim().length > 0);
-}
+  'You produced no tool call and no text, so this turn currently has nothing in it and the user would have no answer. Answer the request now: call the tools it needs, or — if it genuinely needs none — write the answer as text.';
 
 // Best-effort, dev-only aggregation of per-stage cost across a resubmit chain.
 // Module-local, so in serverless deploys chain requests can land on different
@@ -234,13 +215,8 @@ function failedLimiterReset(probes: LimitProbe[]): number {
   return max;
 }
 
-// Hide the executor's text from the user without hiding it from the closer.
-// This runs on the UI stream, NOT as an `experimental_transform`: a transform
-// there also empties `response.messages`, and on a turn the executor answers in
-// text rather than tools that leaves the closer with no material at all — it
-// then invents an answer, which is how "there is no voting feature in Geo" and
-// "what is the space ID for Crypto?" reached users. The opener and closer still
-// own every visible word.
+// Buffer tool-step prose in the UI stream while preserving the full model
+// transcript. The same executor emits the final answer after tools complete.
 function stripTextChunks(stream: ReadableStream<UIMessageChunk>): ReadableStream<UIMessageChunk> {
   return stream.pipeThrough(
     new TransformStream<UIMessageChunk, UIMessageChunk>({
@@ -256,70 +232,6 @@ function stripTextChunks(stream: ReadableStream<UIMessageChunk>): ReadableStream
       },
     })
   );
-}
-
-// The Haiku opener occasionally wraps its reasoning in <thinking>…</thinking>
-// before the one-line ack, which would otherwise stream straight to the client.
-// Strip those spans from the text stream. Tags can straddle delta boundaries, so
-// we hold back any trailing run that could be the start of a tag and re-check it
-// once more text arrives.
-function stripThinkingTags<TOOLS extends ToolSet>(): StreamTextTransform<TOOLS> {
-  const OPEN = '<thinking>';
-  const CLOSE = '</thinking>';
-  // Longest suffix of `s` that is a (proper) prefix of `tag`.
-  const partialSuffixLen = (s: string, tag: string): number => {
-    for (let n = Math.min(s.length, tag.length - 1); n > 0; n--) {
-      if (tag.startsWith(s.slice(s.length - n))) return n;
-    }
-    return 0;
-  };
-  return () => {
-    let pending = '';
-    let hidden = false;
-    let lastId: string | undefined;
-    return new TransformStream<TextStreamPart<TOOLS>, TextStreamPart<TOOLS>>({
-      transform(chunk, controller) {
-        if (chunk.type !== 'text-delta') {
-          controller.enqueue(chunk);
-          return;
-        }
-        lastId = chunk.id;
-        pending += chunk.text;
-        let visible = '';
-        for (;;) {
-          if (!hidden) {
-            const i = pending.indexOf(OPEN);
-            if (i !== -1) {
-              visible += pending.slice(0, i);
-              pending = pending.slice(i + OPEN.length);
-              hidden = true;
-              continue;
-            }
-            const keep = partialSuffixLen(pending, OPEN);
-            visible += pending.slice(0, pending.length - keep);
-            pending = pending.slice(pending.length - keep);
-            break;
-          }
-          const j = pending.indexOf(CLOSE);
-          if (j !== -1) {
-            pending = pending.slice(j + CLOSE.length);
-            hidden = false;
-            continue;
-          }
-          // Drop hidden text, but retain a trailing partial closing tag.
-          pending = pending.slice(pending.length - partialSuffixLen(pending, CLOSE));
-          break;
-        }
-        if (visible.length > 0) controller.enqueue({ ...chunk, text: visible });
-      },
-      flush(controller) {
-        // Leftover text outside a thinking block is real output.
-        if (!hidden && pending.length > 0 && lastId !== undefined) {
-          controller.enqueue({ type: 'text-delta', id: lastId, text: pending } as TextStreamPart<TOOLS>);
-        }
-      },
-    });
-  };
 }
 
 const EDIT_TOOL_NAME_SET = new Set<string>(EDIT_TOOL_NAMES);
@@ -343,33 +255,11 @@ const CLIENT_READ_TOOL_NAMES = new Set<string>([
   'applyImport',
   // Signs an on-chain membership proposal with the user's smart account, so it
   // runs in the browser too — and the turn must wait for its outcome, or the
-  // closer would report a request that hasn't landed.
+  // answer would otherwise report a request that hasn't landed.
   'joinSpace',
 ]);
 
-// The closer's reply budget. A backstop, not a length control: the model is
-// never shown this number, so it cannot shorten to fit — at 400 a multi-part
-// question ("assess this space's quality, relevance, timeliness…") was cut
-// mid-word, often mid-`geo://` citation, which renders as broken markdown.
-// Concision is the prompt's job; this only decides where a runaway stops.
-// Raising it costs nothing on ordinary turns — they generate what the prompt
-// asks for regardless — and only spends tokens where a reply was being
-// truncated. The 5-item list cap still applies: a pill costs roughly
-// TOKENS_PER_LISTED_ITEM, two 32-char hex ids tokenizing badly, and room for a
-// longer list is still bought per-turn against a count the user actually named.
-const CLOSER_BASE_OUTPUT_TOKENS = 1_200;
-const TOKENS_PER_LISTED_ITEM = 50;
-// Ceiling on a named count, whatever was asked for. Beyond this the reply stops
-// being a list and becomes a data dump: 25 items is already ~1,650 tokens and
-// 12-15s of streaming, and the read tools cap out at 50 rows (`geoQuery`) and
-// 10 (`searchGraph`), so a larger ask cannot be satisfied anyway. Over-asking is
-// reported to the user rather than silently trimmed — see the closer's turn note.
 const MAX_LISTED_ITEMS = 25;
-
-function closerMaxOutputTokens(listedCount: number | null): number {
-  if (listedCount === null) return CLOSER_BASE_OUTPUT_TOKENS;
-  return CLOSER_BASE_OUTPUT_TOKENS + listedCount * TOKENS_PER_LISTED_ITEM;
-}
 
 // Edit/client tools resolve via resubmit, so the assistant turn that triggers
 // 'edit' framing isn't always the one that emitted the call. Walk every
@@ -530,11 +420,15 @@ export async function POST(req: Request) {
     spaceNotes.length > 0 ? appendNoteToLastUserMessage(sanitized, spaceNotes.join('\n\n')) : sanitized;
 
   // Same mechanism, same reason: metadata is dropped by
-  // `convertToModelMessages`, so a file the user attached is announced here.
-  // Latest user message only — an older attachment has already been handled.
-  const attachment = attachmentInLastUserMessage(uiMessages);
+  // `convertToModelMessages`, so a file the user attached is announced here —
+  // on every turn until a tool has used it, since the conversation about a
+  // file outlives the message it arrived on.
+  const attachment = activeAttachment(uiMessages);
   const converted = attachment
-    ? appendNoteToLastUserMessage(withSpaceNote, renderAttachmentNote(attachment))
+    ? appendNoteToLastUserMessage(
+        withSpaceNote,
+        renderAttachmentNote(attachment.attachment, attachment.fromEarlierTurn)
+      )
     : withSpaceNote;
 
   if (droppedToolCallIds.length > 0) {
@@ -633,10 +527,8 @@ export async function POST(req: Request) {
     );
   }
 
-  // Read from the user's own words, not from what the tools returned: a list of
-  // 200 rows is still best summarised, but "give me 15" is an instruction the
-  // closer's 5-item cap would otherwise overrule. Survives resubmits because
-  // the triggering user message stays last until the turn ends.
+  // An explicit requested count overrides the default concise list. The last
+  // user message preserves it across client-tool continuations.
   const lastUserMessage = [...uiMessages].reverse().find(m => m.role === 'user');
   const requestedCount = requestedItemCount(
     (lastUserMessage?.parts ?? [])
@@ -645,6 +537,9 @@ export async function POST(req: Request) {
       .join(' ')
   );
   const listedCount = requestedCount === null ? null : Math.min(requestedCount, MAX_LISTED_ITEMS);
+  if (listedCount !== null && messages[0].role === 'system') {
+    messages[0].content += `\nThe user requested ${requestedCount} items. Return up to ${listedCount} actual results, each with its citation. If fewer are available, state the returned count and whether the results are complete. Never invent missing results or totals.`;
+  }
   if (verbose) {
     const summary = converted.map((m, idx) => {
       let blocks: unknown;
@@ -663,9 +558,7 @@ export async function POST(req: Request) {
     debugLog('converted-messages', summary);
   }
 
-  // Three-stage pipeline: Haiku opener → Sonnet executor (text-suppressed) →
-  // Haiku closer. Closer is skipped on `skip` / `client-pending` so the SDK can
-  // resubmit after a client dispatcher resolves pending tools.
+  // Client tools resolve in the browser; continuation requests keep the same answer owner.
   //
   // The SDK wraps tool-result blocks in a `user`-role message on continuation
   // requests, so a naive last-role check misfires. A trailing user message
@@ -688,7 +581,7 @@ export async function POST(req: Request) {
   const stream = createUIMessageStream({
     // Reuse the assistant message id on continuation requests so the SDK
     // merges new parts into the same UIMessage instead of rendering a fresh
-    // one per resubmit (which duplicates the opener text).
+    // one per resubmit.
     originalMessages: uiMessages,
     execute: async ({ writer }) => {
       const chainKey = wallet ?? ip;
@@ -721,38 +614,7 @@ export async function POST(req: Request) {
         chainCosts.delete(chainKey);
       };
 
-      // Stage A: opener (Haiku). One-sentence ack; skipped on continuation.
-      if (isFirstRequestOfTurn) {
-        const openerResult = streamText({
-          model: anthropic(OPENER_MODEL),
-          // The opener writes the first line the user reads, off the raw
-          // conversation. Without the current context its only clue to "this
-          // space" is whatever was discussed earlier, so it would announce
-          // "Scanning the Crypto space" to someone standing in the AI space —
-          // the executor and closer then answered correctly, leaving the user
-          // with a reply that contradicted its own opening line.
-          system: [OPENER_SYSTEM_PROMPT, contextSection].filter(Boolean).join('\n\n'),
-          messages: converted,
-          maxOutputTokens: 80,
-          experimental_transform: stripThinkingTags(),
-          abortSignal: req.signal,
-          onError: err => {
-            if (!isAbortError(err)) console.error('[chat:srv] opener stream error', err);
-          },
-        });
-        writer.merge(
-          openerResult.toUIMessageStream({
-            sendReasoning: false,
-            sendFinish: false,
-          })
-        );
-        // Drain before starting the executor so the executor's tool parts
-        // don't interleave with the opener's text-end chunk.
-        await openerResult.response;
-        await recordCost('opener', OPENER_MODEL, openerResult);
-      }
-
-      // Stage B: executor (Sonnet). Track the peak per-step input token count —
+      // Track the executor’s peak per-step input token count —
       // the last steps carry the full transcript + tool results, so the peak is
       // the closest read on how full the context window is this turn.
       let peakExecInputTokens = 0;
@@ -803,14 +665,14 @@ export async function POST(req: Request) {
         stripTextChunks(
           execResult.toUIMessageStream({
             sendReasoning: false,
-            // Opener already emitted message-start; don't duplicate it.
-            sendStart: !isFirstRequestOfTurn,
+            sendStart: true,
             sendFinish: false,
           })
         )
       );
 
       let execMessages = (await execResult.response).messages;
+      let answerText = await execResult.text;
       await recordCost('executor', MAIN_MODEL, execResult);
 
       if (execMessages.length === 0) {
@@ -820,15 +682,11 @@ export async function POST(req: Request) {
           stripTextChunks(retryResult.toUIMessageStream({ sendReasoning: false, sendStart: false, sendFinish: false }))
         );
         execMessages = (await retryResult.response).messages;
+        answerText = await retryResult.text;
         await recordCost('executor', MAIN_MODEL, retryResult);
       }
 
-      // Twice in a row with nothing to show means the executor never ran — an
-      // API error swallowed by `onError`, not a turn with a quiet answer. The
-      // closer would be handed an empty transcript and write *about* that
-      // ("I don't have tool results from this turn to write a reply from"),
-      // which is an internal condition, not something to say to a user. Say
-      // what actually happened instead, and stop.
+      // An empty retry is a failed model call, not evidence for an answer.
       if (execMessages.length === 0) {
         console.error('[chat:srv] executor produced nothing twice — ending turn with a failure notice');
         const noticeId = 'executor-empty';
@@ -876,69 +734,36 @@ export async function POST(req: Request) {
         return;
       }
 
-      // Stage C: closer (Haiku). Writes the user-facing summary from the
-      // executor's tool calls + results.
-      //
-      // Every turn gets a reply, including a nav-only one. Suppressing the
-      // closer on `skip` assumed navigating is its own feedback, which holds
-      // when the user asked to go somewhere and breaks badly when the executor
-      // chose to navigate in response to something else ("complete my profile"
-      // → navigate → silence). A one-sentence Haiku ack costs a fraction of a
-      // cent and removes the possibility of a turn that answers nothing.
-      const scopedForCloser = scopeToolTrafficToCurrentTurn([...converted, ...execMessages]);
-      const closerInput: ModelMessage[] = endsWithAssistantText(scopedForCloser)
-        ? [...scopedForCloser, { role: 'user', content: CLOSER_FROM_ANALYSIS }]
-        : scopedForCloser;
-
-      const closerResult = streamText({
-        model: anthropic(CLOSER_MODEL),
-        // Same Current context the executor gets. The closer writes the visible
-        // reply, so it is the model that has to know what "this space" means —
-        // without it, it cannot scope an answer to where the user is standing.
-        system: [
-          CLOSER_SYSTEM_PROMPT,
-          contextSection,
-          turnKind === 'skip'
-            ? "# This turn\nThe only thing that happened was navigation. Say where you took the user, in one sentence, and stop. Do not describe the destination's contents — you haven't read them."
-            : null,
-          requestedCount === null || listedCount === null
-            ? null
-            : `# This turn\nThe user asked for ${requestedCount} items, so the 5-item list cap does NOT apply — list up to ${listedCount}, each cited as a \`geo://\` pill, and you have been given the output budget for it.${
-                requestedCount > listedCount
-                  ? ` They asked for more than can be shown, so open with "Showing ${listedCount} of the ${requestedCount} you asked for" (or the same point in your own words) — never present ${listedCount} as though it were all of them.`
-                  : ''
-              } If the tool results contain fewer than that, list every one you have and say plainly how many there are; do not pad the list and do not close with "…and N more" when nothing remains.`,
-        ]
-          .filter(Boolean)
-          .join('\n\n'),
-        messages: closerInput,
-        maxOutputTokens: closerMaxOutputTokens(listedCount),
-        abortSignal: req.signal,
-        onError: err => {
-          if (!isAbortError(err)) console.error('[chat:srv] closer stream error', err);
-        },
-      });
-      writer.merge(
-        closerResult.toUIMessageStream({
-          sendReasoning: false,
-          sendStart: false,
-          sendFinish: false,
-        })
-      );
-
-      const closerMessages = (await closerResult.response).messages;
-      await recordCost('closer', CLOSER_MODEL, closerResult);
-
-      if (debug && (await closerResult.finishReason) === 'length') {
-        console.warn(`[chat:srv] closer hit its ${closerMaxOutputTokens(listedCount)}-token cap — reply was truncated`);
+      // The model that read the context and ran the tools owns the answer.
+      // Buffer until client tools finish so a plan cannot be mistaken for success.
+      if (answerText.trim()) {
+        writer.write({ type: 'text-start', id: 'answer' });
+        writer.write({ type: 'text-delta', id: 'answer', delta: answerText });
+        writer.write({ type: 'text-end', id: 'answer' });
+      } else {
+        const answer = streamText({
+          model: anthropic(MAIN_MODEL),
+          messages: [
+            ...messages,
+            ...execMessages,
+            {
+              role: 'user',
+              content:
+                'The tool work above has finished. Write the final answer now, using its actual outcomes. If work failed or remains incomplete, say exactly what remains. Do not claim an edit without a successful result.',
+            },
+          ],
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          abortSignal: req.signal,
+        });
+        writer.merge(answer.toUIMessageStream({ sendReasoning: false, sendStart: false, sendFinish: false }));
+        answerText = await answer.text;
+        await recordCost('answer', MAIN_MODEL, answer);
       }
 
       // Stage D: follow-ups (Haiku, forced tool).
       const followUpInstruction = [
         buildFollowUpCapabilityNote(executorTools),
-        turnKind === 'edit'
-          ? "You just edited the graph on the user's behalf. Call suggestFollowUps with 1–3 short options for further edits they're likely to want next — more fields to fill, related blocks to add, filters to tune, or removing what you just added. Don't suggest navigation, \"learn more\", or open questions."
-          : 'Now call suggestFollowUps with 1–3 short clickable next-step options relevant to your answer above.',
+        'Call suggestFollowUps with 1–3 short next-step options grounded in the final answer and actual tool results. A tool call is only an attempt. Never imply edits were staged if a write returned an error or was never called. Do not suggest publishing or reviewing edits after a mapping preview. Preserve the user’s exclusions and confirmation requirements. If a request failed, suggest only a relevant recovery step.',
       ].join('\n\n');
 
       const followUpResult = streamText({
@@ -946,7 +771,7 @@ export async function POST(req: Request) {
         messages: [
           ...messages,
           ...execMessages,
-          ...closerMessages,
+          { role: 'assistant', content: answerText },
           {
             role: 'user',
             content: followUpInstruction,

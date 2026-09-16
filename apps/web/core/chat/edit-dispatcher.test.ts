@@ -422,7 +422,12 @@ describe('setEntityImage', () => {
   });
 
   it('returns apply_failed when storage.images.createAndLink rejects', async () => {
-    findOne.mockResolvedValueOnce(makeEntity({ id: IMAGE_ENTITY, relations: [] }));
+    const oldRelation = makeRelation({
+      fromEntity: { id: IMAGE_ENTITY, name: 'Movie' },
+      type: { id: IMAGE_PROPERTY, name: 'Cover' },
+      spaceId: 'space1',
+    });
+    findOne.mockResolvedValueOnce(makeEntity({ id: IMAGE_ENTITY, relations: [oldRelation] }));
     mockProxyFetch(
       async () =>
         ({
@@ -449,6 +454,7 @@ describe('setEntityImage', () => {
 
     expect(result).toMatchObject({ ok: false, error: 'apply_failed' });
     expect((result as { message: string }).message).toContain('image upload failed');
+    expect(storage.relations.delete).not.toHaveBeenCalled();
   });
 });
 

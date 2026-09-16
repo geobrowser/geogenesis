@@ -4,20 +4,51 @@ import {
   buildTable,
   cellToString,
   extensionOf,
+  fileBaseName,
+  findHeaderRow,
   isSpreadsheet,
+  looksLikeNotes,
   normalizeExtension,
   parseDelimitedText,
   parseSheetRows,
-  pickDefaultSheet,
+  parseWorkbook,
   sniffDelimiter,
 } from './parse';
 
 function ok(result: ReturnType<typeof parseDelimitedText>) {
   if (!result.ok) throw new Error(`expected success, got ${result.code}: ${result.message}`);
-  return result;
+  return { ...result, table: result.sheets[0].table, raggedRows: result.sheets[0].raggedRows };
 }
 
+// The shape Armando's workbook has: a title, a subtitle and a line of
+// instructions in column A, a blank line, then the real header.
+const TITLED_SHEET: unknown[][] = [
+  ['US POLITICS — EXISTING GEO — CONNECT', null, null, null],
+  ['29 Publishers • operational list', null, null, null],
+  ['Engineering: connect the existing Geo Publisher entity', null, null, null],
+  [null, null, null, null],
+  ['Priority', 'Publisher', 'Country', 'Publisher URL'],
+  ['P1', 'The New York Times', 'United States', 'https://www.nytimes.com/'],
+  ['P1', 'Fox News', 'United States', 'https://www.foxnews.com/'],
+];
+
 describe('sniffDelimiter', () => {
+  it('finds the table delimiter below an export title', () => {
+    const result = ok(parseDelimitedText('Company export\nName;Website\nAcme;https://example.com'));
+    expect(result.delimiter).toBe(';');
+    expect(result.table).toEqual({
+      headers: ['Name', 'Website'],
+      rows: [['Acme', 'https://example.com']],
+      rowCount: 1,
+    });
+  });
+
+  it('recognizes quoted headers after a UTF-8 BOM', () => {
+    expect(ok(parseDelimitedText('\uFEFF"Name";"Website"\n"Acme";"https://example.com"')).table.headers).toEqual([
+      'Name',
+      'Website',
+    ]);
+  });
   it('finds the comma in an ordinary CSV', () => {
     expect(sniffDelimiter('Name,URL\nEthereum,https://ethereum.org')).toBe(',');
   });
@@ -87,7 +118,64 @@ describe('cellToString', () => {
   });
 });
 
+describe('findHeaderRow', () => {
+  it('takes row 1 when it is as wide as the data', () => {
+    expect(
+      findHeaderRow([
+        ['Name', 'URL'],
+        ['Ethereum', 'https://ethereum.org'],
+      ])
+    ).toBe(0);
+  });
+
+  it('skips title lines that sit alone in column A', () => {
+    // Taking row 1 blindly made the title the only header, left every other
+    // column unnamed, and pushed the real header into the data — which is how
+    // a 29-publisher sheet became "32 rows" and the name column had no header.
+    expect(findHeaderRow(TITLED_SHEET)).toBe(4);
+  });
+
+  it('takes the first filled row of a one-column file', () => {
+    expect(findHeaderRow([[null], ['Topic'], ['AI'], ['Crypto']])).toBe(1);
+  });
+
+  it('falls back to row 1 for an empty sheet', () => {
+    expect(findHeaderRow([])).toBe(0);
+    expect(findHeaderRow([[null, null]])).toBe(0);
+  });
+});
+
+describe('looksLikeNotes', () => {
+  it('calls a column of sentences notes', () => {
+    expect(
+      looksLikeNotes({
+        headers: ['Task: publish the publishers from the World affairs tab into Geo'],
+        rows: [['Only rows with a homepage should be published, the rest are drafts.']],
+        rowCount: 1,
+      })
+    ).toBe(true);
+  });
+
+  it('keeps a column of short names', () => {
+    // A Topics tab with nothing but topic names is data, not a readme.
+    expect(looksLikeNotes({ headers: ['Topic'], rows: [['AI'], ['Crypto'], ['Health']], rowCount: 3 })).toBe(false);
+  });
+
+  it('never calls a multi-column table notes', () => {
+    expect(looksLikeNotes({ headers: ['Name', 'Notes'], rows: [['A', 'x'.repeat(200)]], rowCount: 1 })).toBe(false);
+  });
+});
+
 describe('buildTable', () => {
+  it('reads the header from below the title lines and counts what it skipped', () => {
+    const { table, skippedLeadingRows } = buildTable(TITLED_SHEET);
+
+    expect(table.headers).toEqual(['Priority', 'Publisher', 'Country', 'Publisher URL']);
+    expect(table.rowCount).toBe(2);
+    expect(table.rows[0][1]).toBe('The New York Times');
+    expect(skippedLeadingRows).toBe(3);
+  });
+
   it('takes the first row as headers and the rest as data', () => {
     const { table } = buildTable([
       ['Name', 'URL'],
@@ -112,13 +200,14 @@ describe('buildTable', () => {
     expect(raggedRows).toBe(1);
   });
 
-  it('truncates a long row and counts it as ragged', () => {
+  it('preserves cells beyond the header as additional columns and reports the ragged row', () => {
     const { table, raggedRows } = buildTable([
       ['Name', 'URL'],
       ['Ethereum', 'https://ethereum.org', 'extra'],
     ]);
 
-    expect(table.rows[0]).toEqual(['Ethereum', 'https://ethereum.org']);
+    expect(table.headers).toEqual(['Name', 'URL', 'Column 3']);
+    expect(table.rows[0]).toEqual(['Ethereum', 'https://ethereum.org', 'extra']);
     expect(raggedRows).toBe(1);
   });
 
@@ -201,6 +290,20 @@ describe('parseDelimitedText', () => {
   it('rejects a headers-only file rather than importing nothing', () => {
     expect(parseDelimitedText('Name,URL')).toMatchObject({ ok: false, code: 'no_data_rows' });
   });
+
+  it('names the one table after the file', () => {
+    const result = parseDelimitedText('Name,URL\nEthereum,https://ethereum.org', undefined, 'projects');
+
+    expect(result.ok && result.sheets.map(s => s.name)).toEqual(['projects']);
+  });
+});
+
+describe('fileBaseName', () => {
+  it('drops the extension and nothing else', () => {
+    expect(fileBaseName('publishers.csv')).toBe('publishers');
+    expect(fileBaseName('my.data.2026.xlsx')).toBe('my.data.2026');
+    expect(fileBaseName('noextension')).toBe('noextension');
+  });
 });
 
 describe('parseSheetRows', () => {
@@ -220,34 +323,84 @@ describe('parseSheetRows', () => {
   });
 });
 
-describe('pickDefaultSheet', () => {
-  it('skips a cover sheet that has no data rows', () => {
-    // Workbooks routinely open on an instructions or title tab. Taking sheet 0
-    // blindly parses that and reports "no data rows" on a file that has plenty.
-    const index = pickDefaultSheet([
-      { name: 'Instructions', rowCount: 0 },
-      { name: 'Projects', rowCount: 340 },
+describe('parseWorkbook', () => {
+  const publishers: unknown[][] = [
+    ['Publisher', 'Country'],
+    ['Reuters', 'United Kingdom'],
+  ];
+  const countries: unknown[][] = [
+    ['Country', 'Region'],
+    ['United Kingdom', 'Europe'],
+  ];
+
+  it('keeps every tab that holds a table, in workbook order', () => {
+    // The old picker took the first tab with data and stopped, so "import the
+    // world affairs tab" could only ever get the first tab.
+    const result = parseWorkbook([
+      { name: 'Publishers', data: publishers },
+      { name: 'Countries', data: countries },
     ]);
 
-    expect(index).toBe(1);
+    expect(result.ok && result.sheets.map(s => s.name)).toEqual(['Publishers', 'Countries']);
+    expect(result.ok && result.sheets[1].table.rows).toEqual([['United Kingdom', 'Europe']]);
   });
 
-  it('takes the first sheet when every sheet is empty', () => {
-    expect(
-      pickDefaultSheet([
-        { name: 'A', rowCount: 0 },
-        { name: 'B', rowCount: 0 },
-      ])
-    ).toBe(0);
+  it('leaves out an instructions tab and says so', () => {
+    const result = parseWorkbook([
+      {
+        name: 'Instructions',
+        data: [
+          ['Task: publish the publishers from the World affairs tab into Geo'],
+          ['Only rows with a homepage should be published.'],
+        ],
+      },
+      { name: 'Publishers', data: publishers },
+    ]);
+
+    expect(result.ok && result.sheets.map(s => s.name)).toEqual(['Publishers']);
+    expect(result.ok && result.skippedSheets).toEqual([{ name: 'Instructions', reason: 'notes' }]);
   });
 
-  it('takes the first sheet when it has data', () => {
+  it('leaves out an empty tab and a header-only tab with their reasons', () => {
+    const result = parseWorkbook([
+      { name: 'Empty', data: [] },
+      { name: 'Template', data: [['Name', 'URL']] },
+      { name: 'Publishers', data: publishers },
+    ]);
+
+    expect(result.ok && result.skippedSheets).toEqual([
+      { name: 'Empty', reason: 'empty' },
+      { name: 'Template', reason: 'no_data_rows' },
+    ]);
+  });
+
+  it('reads each tab from below its own title lines', () => {
+    const result = parseWorkbook([
+      { name: 'US Politics', data: TITLED_SHEET },
+      { name: 'World Affairs', data: TITLED_SHEET },
+    ]);
+
+    expect(result.ok && result.sheets.every(s => s.table.headers[1] === 'Publisher')).toBe(true);
+    expect(result.ok && result.sheets.every(s => s.skippedLeadingRows === 3)).toBe(true);
+  });
+
+  it('keeps a one-column tab of names when it is the only tab', () => {
+    const result = parseWorkbook([{ name: 'Topics', data: [['Topic'], ['AI'], ['Crypto']] }]);
+
+    expect(result.ok && result.sheets).toHaveLength(1);
+  });
+
+  it('fails when no tab holds a table', () => {
     expect(
-      pickDefaultSheet([
-        { name: 'Projects', rowCount: 5 },
-        { name: 'Notes', rowCount: 2 },
+      parseWorkbook([
+        { name: 'A', data: [] },
+        { name: 'B', data: [['Name']] },
       ])
-    ).toBe(0);
+    ).toMatchObject({
+      ok: false,
+      code: 'no_data_rows',
+    });
+    expect(parseWorkbook([])).toMatchObject({ ok: false, code: 'empty_file' });
   });
 });
 
@@ -263,14 +416,14 @@ describe('extension handling', () => {
     expect(normalizeExtension('csv')).toBe('csv');
     expect(normalizeExtension('tsv')).toBe('tsv');
     expect(normalizeExtension('xlsx')).toBe('xlsx');
-    expect(normalizeExtension('xls')).toBe('xls');
+    expect(normalizeExtension('xls')).toBeNull();
     expect(normalizeExtension('json')).toBeNull();
     expect(normalizeExtension('numbers')).toBeNull();
   });
 
   it('knows which types are binary', () => {
     expect(isSpreadsheet('xlsx')).toBe(true);
-    expect(isSpreadsheet('xls')).toBe(true);
+    expect(isSpreadsheet('xls')).toBe(false);
     expect(isSpreadsheet('csv')).toBe(false);
   });
 });

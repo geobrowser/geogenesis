@@ -13,6 +13,7 @@ type Props = {
   onChange: (value: string) => void;
   onSubmit: () => void;
   isBusy?: boolean;
+  isParsing?: boolean;
   onStop?: () => void;
   placeholder?: string;
   /**
@@ -26,13 +27,14 @@ type Props = {
   onAttachFile?: (file: File) => void;
 };
 
-const ACCEPTED_FILES = `.csv,.tsv,.xlsx,.xls,${ACCEPTED_IMAGE_EXTENSIONS}`;
+const ACCEPTED_FILES = `.csv,.tsv,.xlsx,${ACCEPTED_IMAGE_EXTENSIONS}`;
 
 export function ChatInput({
   value,
   onChange,
   onSubmit,
   isBusy,
+  isParsing,
   onStop,
   placeholder = 'Ask anything...',
   contextFraction,
@@ -41,7 +43,7 @@ export function ChatInput({
 }: Props) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
-  const canSend = !isBusy && value.trim().length > 0;
+  const canSend = !isBusy && !isParsing && value.trim().length > 0;
   const showStop = isBusy && Boolean(onStop);
 
   React.useEffect(() => {

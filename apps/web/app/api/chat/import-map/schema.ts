@@ -109,6 +109,20 @@ export const SUBMIT_MAPPING_SCHEMA: JSONSchema7 = {
             enum: [...RELATION_SPLIT_RULES],
             description: SPLIT_DESCRIPTION,
           },
+          suggestedPropertyName: {
+            type: 'string',
+            maxLength: 120,
+            description: 'For an unmatched nonempty column, propose the name of a new property for curator approval.',
+          },
+          suggestedDataType: {
+            type: 'string',
+            enum: ['TEXT', 'INTEGER', 'FLOAT', 'DECIMAL', 'BOOLEAN', 'DATE', 'DATETIME', 'TIME', 'RELATION'],
+          },
+          suggestedRelationTypeName: {
+            type: 'string',
+            maxLength: 120,
+            description: 'For a proposed relation property, the type its targets should have.',
+          },
           reason: {
             type: 'string',
             minLength: 1,
@@ -159,6 +173,20 @@ export const RECONSIDER_COLUMNS_SCHEMA: JSONSchema7 = {
           coercion: { type: 'string', enum: [...COERCION_RULES] },
           relationTypeIds: { type: 'array', items: { type: 'string', pattern: ENTITY_ID } },
           split: { type: 'string', enum: [...RELATION_SPLIT_RULES], description: SPLIT_DESCRIPTION },
+          suggestedPropertyName: {
+            type: 'string',
+            maxLength: 120,
+            description: 'For an unmatched nonempty column, propose the name of a new property for curator approval.',
+          },
+          suggestedDataType: {
+            type: 'string',
+            enum: ['TEXT', 'INTEGER', 'FLOAT', 'DECIMAL', 'BOOLEAN', 'DATE', 'DATETIME', 'TIME', 'RELATION'],
+          },
+          suggestedRelationTypeName: {
+            type: 'string',
+            maxLength: 120,
+            description: 'For a proposed relation property, the type its targets should have.',
+          },
           reason: { type: 'string', minLength: 1, maxLength: 200 },
         },
         required: ['index', 'kind'],
@@ -187,6 +215,9 @@ export type SubmittedColumn = {
   relationTypeIds?: string[];
   split?: string;
   reason?: string;
+  suggestedPropertyName?: string;
+  suggestedDataType?: string;
+  suggestedRelationTypeName?: string;
 };
 
 export type SubmitMappingInput = {

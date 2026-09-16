@@ -15,29 +15,41 @@ export type ParsedTable = {
   rowCount: number;
 };
 
-export type SheetInfo = {
+/**
+ * One table out of a file. A workbook yields one per data tab; a delimited
+ * file yields exactly one, named after the file.
+ */
+export type ParsedSheet = {
   name: string;
-  rowCount: number;
-};
-
-export type ParseErrorCode =
-  'unsupported_type' | 'too_large' | 'empty_file' | 'no_data_rows' | 'no_columns' | 'sheet_not_found' | 'parse_failed';
-
-export type ParseSuccess = {
-  ok: true;
   table: ParsedTable;
-  /** Which delimiter was detected. CSV only — useful when a sniff goes wrong. */
-  delimiter?: string;
-  /** Every sheet in the workbook. XLSX only, and only when there is more than one. */
-  sheets?: SheetInfo[];
-  /** The sheet actually parsed. XLSX only. */
-  sheetName?: string;
   /**
    * Rows whose cell count didn't match the header count. They are padded or
-   * truncated to fit; this is how many were touched, so the caller can say so
+   * extended with unnamed columns; this is how many were touched, so the caller can say so
    * rather than silently reshaping the user's file.
    */
   raggedRows: number;
+  /** Title and note lines found above the header row and left out. */
+  skippedLeadingRows: number;
+};
+
+export type SkippedSheetReason = 'empty' | 'no_data_rows' | 'notes';
+
+/** A tab that was read and left out, with the reason the user is told. */
+export type SkippedSheet = {
+  name: string;
+  reason: SkippedSheetReason;
+};
+
+export type ParseErrorCode =
+  'unsupported_type' | 'too_large' | 'empty_file' | 'no_data_rows' | 'no_columns' | 'parse_failed';
+
+export type ParseSuccess = {
+  ok: true;
+  /** Every tab with a table in it, in workbook order. Never empty. */
+  sheets: ParsedSheet[];
+  skippedSheets: SkippedSheet[];
+  /** Which delimiter was detected. CSV only — useful when a sniff goes wrong. */
+  delimiter?: string;
 };
 
 export type ParseFailure = {
@@ -52,6 +64,6 @@ export type ParseResult = ParseSuccess | ParseFailure;
 export const MAX_FILE_SIZE_MB = 10;
 export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
-export type SupportedExtension = 'csv' | 'tsv' | 'xlsx' | 'xls';
+export type SupportedExtension = 'csv' | 'tsv' | 'xlsx';
 
-export const SUPPORTED_EXTENSIONS: readonly SupportedExtension[] = ['csv', 'tsv', 'xlsx', 'xls'];
+export const SUPPORTED_EXTENSIONS: readonly SupportedExtension[] = ['csv', 'tsv', 'xlsx'];

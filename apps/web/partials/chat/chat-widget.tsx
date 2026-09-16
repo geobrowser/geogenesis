@@ -13,21 +13,22 @@ import { createPortal } from 'react-dom';
 import { capture } from '~/core/analytics';
 import { applyInjectOpsToStore } from '~/core/chat/apply-inject-ops';
 import { hasPendingClientToolCall, shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
+import { compactedMessages } from '~/core/chat/compaction-state';
 import { useEditDispatcher } from '~/core/chat/edit-dispatcher';
-import type { InjectType } from '~/core/chat/inject-types';
-import {
-  COMPACT_AT_INPUT_TOKENS,
-  OFFER_COMPACT_AT_INPUT_TOKENS,
-  CONTEXT_USAGE_DATA_TYPE,
-  type ContextUsageData,
-  ENTITY_ID_REGEX,
-} from '~/core/chat/limits';
-import type { NavigateOutput, OpenReviewPanelOutput } from '~/core/chat/nav-types';
-import { type PreloadedEntity, usePreloadedEntity } from '~/core/chat/preload';
 import { useGeoQueryDispatcher } from '~/core/chat/geo-query-dispatcher';
 import { useImportDispatcher } from '~/core/chat/import-dispatcher';
 import { useFileAttachment } from '~/core/chat/import/use-file-attachment';
+import type { InjectType } from '~/core/chat/inject-types';
 import { useJoinSpaceDispatcher } from '~/core/chat/join-space-dispatcher';
+import {
+  COMPACT_AT_INPUT_TOKENS,
+  CONTEXT_USAGE_DATA_TYPE,
+  type ContextUsageData,
+  ENTITY_ID_REGEX,
+  OFFER_COMPACT_AT_INPUT_TOKENS,
+} from '~/core/chat/limits';
+import type { NavigateOutput, OpenReviewPanelOutput } from '~/core/chat/nav-types';
+import { type PreloadedEntity, usePreloadedEntity } from '~/core/chat/preload';
 import { useReadDispatcher } from '~/core/chat/read-dispatcher';
 import { useResearchDispatcher } from '~/core/chat/research-dispatcher';
 import { useSearchImagesDispatcher } from '~/core/chat/search-images-dispatcher';
@@ -102,7 +103,6 @@ function collectResolvedToolCallIds(messages: UIMessage[], toolType: string): st
   }
   return ids;
 }
-
 
 function firstUserMessageText(messages: UIMessage[]): string {
   for (const message of messages) {
@@ -697,48 +697,51 @@ export function ChatWidget() {
   // upgrades the title in place when the Haiku request returns. If the chat
   // was popped (e.g., the user switched into it again) before the title
   // resolves, the upgrade is a no-op.
-  const archiveCurrentChat = React.useCallback((options: { interrupted?: boolean } = {}): void => {
-    // `stopAndScrub` runs immediately before this on the interrupted paths, but
-    // its `setMessages` hasn't committed yet — `messagesRef` still holds the
-    // pre-stop array. So scrub and mark here too, against the same snapshot we
-    // are about to write. Scrubbing is identity on a settled chat, and without
-    // it an archived unsettled tool call also breaks title generation
-    // (AI_MissingToolResultsError) as well as losing the mark.
-    const scrubbed = scrubUnsettledToolParts(messagesRef.current);
-    const snapshot = options.interrupted ? markLastTurnInterrupted(scrubbed) : scrubbed;
-    if (snapshot.length === 0) return;
-    const id = currentChatIdRef.current ?? crypto.randomUUID();
-    currentChatIdRef.current = id;
+  const archiveCurrentChat = React.useCallback(
+    (options: { interrupted?: boolean } = {}): void => {
+      // `stopAndScrub` runs immediately before this on the interrupted paths, but
+      // its `setMessages` hasn't committed yet — `messagesRef` still holds the
+      // pre-stop array. So scrub and mark here too, against the same snapshot we
+      // are about to write. Scrubbing is identity on a settled chat, and without
+      // it an archived unsettled tool call also breaks title generation
+      // (AI_MissingToolResultsError) as well as losing the mark.
+      const scrubbed = scrubUnsettledToolParts(messagesRef.current);
+      const snapshot = options.interrupted ? markLastTurnInterrupted(scrubbed) : scrubbed;
+      if (snapshot.length === 0) return;
+      const id = currentChatIdRef.current ?? crypto.randomUUID();
+      currentChatIdRef.current = id;
 
-    const existingTitle = persistedCurrentRef.current?.title?.trim() ?? '';
-    const initialTitle = existingTitle || fallbackTitleFromMessages(snapshot);
+      const existingTitle = persistedCurrentRef.current?.title?.trim() ?? '';
+      const initialTitle = existingTitle || fallbackTitleFromMessages(snapshot);
 
-    const archived: PersistedChat = {
-      id,
-      title: initialTitle,
-      messages: snapshot,
-      updatedAt: Date.now(),
-    };
+      const archived: PersistedChat = {
+        id,
+        title: initialTitle,
+        messages: snapshot,
+        updatedAt: Date.now(),
+      };
 
-    updateChatHistorySafely(setHistory, prev => {
-      const filtered = prev.filter(entry => entry.id !== archived.id);
-      return [archived, ...filtered].slice(0, HISTORY_CAP);
-    });
-
-    if (existingTitle) return;
-
-    void generateChatTitle(snapshot).then(generated => {
-      const trimmed = generated.trim();
-      if (!trimmed || trimmed === initialTitle) return;
       updateChatHistorySafely(setHistory, prev => {
-        const idx = prev.findIndex(entry => entry.id === id);
-        if (idx === -1) return prev;
-        const updated = [...prev];
-        updated[idx] = { ...updated[idx], title: trimmed };
-        return updated;
+        const filtered = prev.filter(entry => entry.id !== archived.id);
+        return [archived, ...filtered].slice(0, HISTORY_CAP);
       });
-    });
-  }, [setHistory]);
+
+      if (existingTitle) return;
+
+      void generateChatTitle(snapshot).then(generated => {
+        const trimmed = generated.trim();
+        if (!trimmed || trimmed === initialTitle) return;
+        updateChatHistorySafely(setHistory, prev => {
+          const idx = prev.findIndex(entry => entry.id === id);
+          if (idx === -1) return prev;
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], title: trimmed };
+          return updated;
+        });
+      });
+    },
+    [setHistory]
+  );
 
   // Reset both the dedup ref sets and the in-flight chat id. Called whenever
   // we swap to a different chat (new chat, switch chat) so the next chat
@@ -757,8 +760,8 @@ export function ChatWidget() {
     failedCompactAtTokensRef.current = null;
   }, []);
 
-
   const handleNewChat = React.useCallback(() => {
+    removeAttachment();
     const wasBusy = isBusy;
     if (wasBusy) stopAndScrub();
     archiveCurrentChat({ interrupted: wasBusy });
@@ -776,6 +779,7 @@ export function ChatWidget() {
     conversationIdRef.current = createTrackingId('conversation');
   }, [
     isBusy,
+    removeAttachment,
     stopAndScrub,
     archiveCurrentChat,
     resetForChatSwap,
@@ -793,7 +797,8 @@ export function ChatWidget() {
   // nav/review-panel actions they implied have already happened.
   const [isCompacting, setIsCompacting] = React.useState(false);
   const runCompact = React.useCallback(async () => {
-    if (isCompacting) return;
+    if (isCompacting || isBusy) return;
+    const compactingConversation = conversationIdRef.current;
     const attemptedAtTokens = contextTokens;
     const giveUp = () => {
       failedCompactAtTokensRef.current = attemptedAtTokens;
@@ -813,30 +818,13 @@ export function ChatWidget() {
         return;
       }
       const body = (await res.json()) as { summary?: unknown };
+      if (conversationIdRef.current !== compactingConversation) return;
       if (typeof body.summary !== 'string' || body.summary.trim().length === 0) {
         giveUp();
         reportError('Compaction failed.');
         return;
       }
-      const newId = () =>
-        typeof crypto !== 'undefined' && 'randomUUID' in crypto
-          ? crypto.randomUUID()
-          : `msg-${Date.now()}-${Math.random()}`;
-      // The model needs a user turn to anchor the summary to, but the user never
-      // asked for one — so say what actually happened instead of putting words
-      // in their mouth, and point at where the full chat went.
-      const compacted: UIMessage[] = [
-        {
-          id: newId(),
-          role: 'user',
-          parts: [{ type: 'text', text: COMPACTION_NOTICE }],
-        },
-        {
-          id: newId(),
-          role: 'assistant',
-          parts: [{ type: 'text', text: body.summary.trim() }],
-        },
-      ];
+      const compacted = compactedMessages(messages, body.summary.trim(), COMPACTION_NOTICE);
       // Archive the full pre-compaction chat into history, then start a fresh
       // chat seeded with the compacted summary. The old transcript stays
       // reachable from "Previous chats" so users can revisit it.
@@ -862,6 +850,7 @@ export function ChatWidget() {
     }
   }, [
     isCompacting,
+    isBusy,
     contextTokens,
     messages,
     setMessages,
@@ -876,8 +865,7 @@ export function ChatWidget() {
 
   // Offer the manual summarize action once the chat is long enough for it to be
   // worth something, and only while there is nothing running to interrupt.
-  const canCompact =
-    !isBusy && !isCompacting && messages.length > 0 && contextTokens >= OFFER_COMPACT_AT_INPUT_TOKENS;
+  const canCompact = !isBusy && !isCompacting && messages.length > 0 && contextTokens >= OFFER_COMPACT_AT_INPUT_TOKENS;
 
   // The meter appears on the same reading that makes the action available, but
   // stays put while a turn runs — a control that vanishes the moment you send a
@@ -907,6 +895,7 @@ export function ChatWidget() {
     (id: string) => {
       const target = history.find(entry => entry.id === id);
       if (!target) return;
+      removeAttachment();
       // Scrub on the way out as well as in: the chat being archived may hold a
       // write we just interrupted, and a pinned part would re-run the next time
       // someone opens it. Bare `stop()` left those behind.
@@ -933,6 +922,7 @@ export function ChatWidget() {
     },
     [
       isBusy,
+      removeAttachment,
       stopAndScrub,
       history,
       archiveCurrentChat,
@@ -1182,7 +1172,7 @@ export function ChatWidget() {
 
   const handleSend = () => {
     const text = input.trim();
-    if (!text || isBusy || isCompacting) return;
+    if (!text || isBusy || isCompacting || attachment?.status === 'parsing') return;
     stoppedRef.current = false;
     trackAssistantMessage(text, 'typed');
     sendMessage({ text, metadata: sentFrom() });
@@ -1194,10 +1184,11 @@ export function ChatWidget() {
   };
 
   const handleSuggestion = (text: string, source: AssistantSuggestionSource) => {
-    if (isBusy || isCompacting) return;
+    if (isBusy || isCompacting || attachment?.status === 'parsing') return;
     stoppedRef.current = false;
     trackAssistantMessage(text, 'option_click', source);
     sendMessage({ text, metadata: sentFrom() });
+    dismissAttachment();
   };
 
   if (!portalTarget) {

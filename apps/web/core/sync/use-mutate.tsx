@@ -118,6 +118,7 @@ export interface Mutator {
   values: {
     get: (id: string, entityId: string) => Value | null;
     set: (value: OmitStrict<Value, 'id'> & { id?: string }) => void;
+    setMany: (values: Value[]) => void;
     update: GeoProduceFn<Value>;
     delete: (value: Value) => void;
     deleteMany: (values: Value[]) => void;
@@ -125,6 +126,7 @@ export interface Mutator {
   relations: {
     get: (id: string, entityId: string) => Relation | null;
     set: (relation: Relation) => void;
+    setMany: (relations: Relation[]) => void;
     update: GeoProduceFn<Relation>;
     delete: (relation: Relation) => void;
     deleteMany: (relations: Relation[]) => void;
@@ -137,6 +139,7 @@ export interface Mutator {
         relationPropertyId: string;
         relationPropertyName: string | null;
         spaceId: string;
+        signal?: AbortSignal;
       } & ({ file: File } | { url: string })
     ) => Promise<{ imageId: string; relationId: string }>;
     createOnly: (params: { file: File; spaceId: string }) => Promise<{ imageId: string }>;
@@ -166,6 +169,7 @@ function createMutator(store: GeoStore): Mutator {
       'file' in params ? { blob: params.file } : { url: params.url }
     );
 
+    params.signal?.throwIfAborted();
     for (const op of createImageOps) {
       if (op.type === 'createRelation') {
         store.setRelation({
@@ -455,6 +459,7 @@ function createMutator(store: GeoStore): Mutator {
       },
     },
     values: {
+      setMany: values => store.setValues(values),
       get: (id, entityId) => store.getValue(id, entityId),
       set: newValue => {
         const id = ID.createValueId({
@@ -482,6 +487,7 @@ function createMutator(store: GeoStore): Mutator {
       },
     },
     relations: {
+      setMany: relations => store.setRelations(relations),
       get: (id, entityId) => store.getRelation(id, entityId),
       set: newRelation => {
         store.setRelation(newRelation);

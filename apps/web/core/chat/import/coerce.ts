@@ -100,7 +100,7 @@ export function isPlaceholder(raw: string): boolean {
  * in German, and the same file can't tell you which — so the separators are
  * resolved positionally rather than by locale.
  */
-export function parseNumericString(raw: string): number | null {
+function normalizeNumericString(raw: string): string | null {
   let text = raw.trim();
   if (text === '') return null;
 
@@ -146,10 +146,14 @@ export function parseNumericString(raw: string): number | null {
 
   if (!/^\d*\.?\d+(?:[eE][+-]?\d+)?$/.test(text)) return null;
 
-  const value = Number(text);
-  if (!Number.isFinite(value)) return null;
+  return negative ? `-${text}` : text;
+}
 
-  return negative ? -value : value;
+export function parseNumericString(raw: string): number | null {
+  const text = normalizeNumericString(raw);
+  if (text === null) return null;
+  const value = Number(text);
+  return Number.isFinite(value) ? value : null;
 }
 
 /**
@@ -157,20 +161,31 @@ export function parseNumericString(raw: string): number | null {
  * exponent — `String(1.5e21)` is `"1.5e+21"`, which `parseInt` reads as `1`.
  */
 function toIntegerString(value: number): string | null {
-  const rounded = Math.round(value);
-  if (!Number.isSafeInteger(rounded)) return null;
-  return String(rounded);
+  if (!Number.isSafeInteger(value)) return null;
+  return String(value);
 }
 
-function toDecimalString(value: number): string | null {
-  if (!Number.isFinite(value)) return null;
-  // `toFixed(20)` then trim keeps small magnitudes out of exponent notation,
-  // which `parseDecimalString` would choke on when it calls `BigInt()`.
-  if (Math.abs(value) >= 1e21 || (value !== 0 && Math.abs(value) < 1e-6)) {
-    const fixed = value.toFixed(20).replace(/0+$/, '').replace(/\.$/, '');
-    return fixed === '' ? null : fixed;
-  }
-  return String(value);
+/** Expand decimal exponents with strings so precise values never pass through Number. */
+function toDecimalString(raw: string): string | null {
+  const normalized = normalizeNumericString(raw);
+  if (normalized === null) return null;
+  const match = normalized.match(/^(-?)(\d*)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/);
+  if (!match) return null;
+  const [, sign, whole, fraction = '', exponent = '0'] = match;
+  const shift = Number(exponent);
+  if (!Number.isSafeInteger(shift) || Math.abs(shift) > 100) return null;
+  const digits = whole + fraction;
+  const point = whole.length + shift;
+  const expanded =
+    point <= 0
+      ? '0.' + '0'.repeat(-point) + digits
+      : point >= digits.length
+        ? digits + '0'.repeat(point - digits.length)
+        : digits.slice(0, point) + '.' + digits.slice(point);
+  const [integer, decimal = ''] = expanded.split('.');
+  const value =
+    (integer.replace(/^0+(?=\d)/, '') || '0') + (decimal.replace(/0+$/, '') ? '.' + decimal.replace(/0+$/, '') : '');
+  return value === '0' ? value : sign + value;
 }
 
 const YEAR = /\b(1\d{3}|20\d{2}|21\d{2})\b/;
@@ -277,6 +292,7 @@ function coerceTime(raw: string): CoercionResult {
   const seconds = match[3] ? Number(match[3]) : 0;
   const meridiem = match[4]?.toLowerCase();
 
+  if (meridiem && (hours < 1 || hours > 12)) return SKIP_UNCONVERTIBLE;
   if (meridiem === 'pm' && hours < 12) hours += 12;
   if (meridiem === 'am' && hours === 12) hours = 0;
 
@@ -293,14 +309,12 @@ function coerceTime(raw: string): CoercionResult {
  * property reads as "unknown", where `0` reads as a measurement.
  */
 export function coerce(rule: CoercionRule, raw: string): CoercionResult {
+  if (rule === 'text') return raw.trim() ? { ok: true, value: raw.trim() } : SKIP_PLACEHOLDER;
   if (isPlaceholder(raw)) return SKIP_PLACEHOLDER;
 
   const text = raw.trim();
 
   switch (rule) {
-    case 'text':
-      return { ok: true, value: text };
-
     case 'integer': {
       const number = parseNumericString(text);
       if (number === null) return SKIP_UNCONVERTIBLE;
@@ -319,11 +333,12 @@ export function coerce(rule: CoercionRule, raw: string): CoercionResult {
       return SKIP_UNCONVERTIBLE;
     }
 
-    case 'float':
-    case 'decimal': {
+    case 'float': {
       const number = parseNumericString(text);
-      if (number === null) return SKIP_UNCONVERTIBLE;
-      const value = toDecimalString(number);
+      return number === null ? SKIP_UNCONVERTIBLE : { ok: true, value: String(number) };
+    }
+    case 'decimal': {
+      const value = toDecimalString(text);
       return value === null ? SKIP_UNCONVERTIBLE : { ok: true, value };
     }
 

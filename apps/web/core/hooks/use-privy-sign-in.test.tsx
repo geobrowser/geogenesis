@@ -102,7 +102,7 @@ describe('usePrivySignIn', () => {
   it('keeps the attribution from the press, not from whatever the page says later', () => {
     const { result, rerender } = renderHook(
       (props: { analytics?: Record<string, unknown> }) => usePrivySignIn(undefined, props),
-      { initialProps: { analytics: { link_source: 'marketing' } } }
+      { initialProps: { analytics: { link_source: 'marketing' } } as { analytics?: Record<string, unknown> } }
     );
 
     act(() => result.current());

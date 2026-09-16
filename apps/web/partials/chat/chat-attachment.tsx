@@ -35,6 +35,9 @@ export function ChatAttachment({ attachment, onRemove }: Props) {
     return (
       <div className="mx-3 mt-3 flex items-center gap-2 rounded-lg bg-grey-01 px-3 py-2">
         <span className="truncate text-metadata text-grey-04">Reading {attachment.fileName}…</span>
+        <button type="button" onClick={onRemove} aria-label="Cancel reading file" className="shrink-0 text-grey-03">
+          Cancel
+        </button>
       </div>
     );
   }
@@ -67,7 +70,6 @@ export function ChatAttachment({ attachment, onRemove }: Props) {
     return (
       <div className="mx-3 mt-3 flex items-center justify-between gap-2 rounded-lg bg-grey-01 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          {/* eslint-disable-next-line @next/next/no-img-element -- object URL for a local file, not a remote asset */}
           <img src={previewUrl} alt="" className="size-8 shrink-0 rounded-sm object-cover" />
           <div className="min-w-0">
             <p className="truncate text-metadata font-medium text-text">{image.fileName}</p>
@@ -89,22 +91,37 @@ export function ChatAttachment({ attachment, onRemove }: Props) {
   }
 
   const { session } = attachment;
-  const columns = session.table.headers.length;
-  const details = [
-    `${session.table.rowCount.toLocaleString('en-US')} ${session.table.rowCount === 1 ? 'row' : 'rows'}`,
-    `${columns} ${columns === 1 ? 'column' : 'columns'}`,
-    session.sheetName ? `sheet “${session.sheetName}”` : null,
-    formatSize(session.fileSizeBytes),
-  ].filter(Boolean);
+  const { sheets, skippedSheets } = session;
+  const totalRows = sheets.reduce((sum, sheet) => sum + sheet.table.rowCount, 0);
+  const raggedRows = sheets.reduce((sum, sheet) => sum + sheet.raggedRows, 0);
+  const columns = sheets[0]?.table.headers.length ?? 0;
+  const rowsLabel = `${totalRows.toLocaleString('en-US')} ${totalRows === 1 ? 'row' : 'rows'}`;
+  const details =
+    sheets.length > 1
+      ? [`${sheets.length} tabs`, rowsLabel, formatSize(session.fileSizeBytes)]
+      : [rowsLabel, `${columns} ${columns === 1 ? 'column' : 'columns'}`, formatSize(session.fileSizeBytes)];
+  const tabLine =
+    sheets.length > 1
+      ? [
+          ...sheets.slice(0, 4).map(sheet => `${sheet.name} ${sheet.table.rowCount.toLocaleString('en-US')}`),
+          ...(sheets.length > 4 ? [`+${sheets.length - 4} more`] : []),
+        ].join(' · ')
+      : null;
+  const skippedLine =
+    skippedSheets.length > 0
+      ? `Left out: ${skippedSheets.map(sheet => `“${sheet.name}” (${sheet.reason === 'notes' ? 'notes' : 'no data'})`).join(', ')}`
+      : null;
 
   return (
     <div className="mx-3 mt-3 flex items-center justify-between gap-2 rounded-lg bg-grey-01 px-3 py-2">
       <div className="min-w-0">
         <p className="truncate text-metadata font-medium text-text">{session.fileName}</p>
         <p className="truncate text-metadata text-grey-04">{details.join(' · ')}</p>
-        {session.raggedRows > 0 ? (
+        {tabLine ? <p className="truncate text-metadata text-grey-04">{tabLine}</p> : null}
+        {skippedLine ? <p className="truncate text-metadata text-grey-04">{skippedLine}</p> : null}
+        {raggedRows > 0 ? (
           <p className="truncate text-metadata text-grey-04">
-            {session.raggedRows} {session.raggedRows === 1 ? 'row was' : 'rows were'} padded to fit the header
+            {raggedRows} {raggedRows === 1 ? 'row was' : 'rows were'} padded to fit the header
           </p>
         ) : null}
       </div>

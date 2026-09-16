@@ -152,9 +152,9 @@ describe('integer', () => {
     expect(value('integer', '2015.0')).toBe('2015');
   });
 
-  it('rounds rather than truncating', () => {
-    expect(value('integer', '2015.7')).toBe('2016');
-    expect(value('integer', '2015.2')).toBe('2015');
+  it('refuses fractional values instead of silently rounding', () => {
+    expect(value('integer', '2015.7')).toBeNull();
+    expect(value('integer', '2015.2')).toBeNull();
   });
 
   it('keeps zero, which is a real value', () => {
@@ -281,9 +281,9 @@ describe('text', () => {
     expect(value('text', '  Ethereum  ')).toBe('Ethereum');
   });
 
-  it('still drops placeholders — "N/A" is not a description', () => {
-    expect(value('text', 'N/A')).toBeNull();
-    expect(value('text', 'unknown')).toBeNull();
+  it('preserves literal text even when it resembles a numeric placeholder', () => {
+    expect(value('text', 'N/A')).toBe('N/A');
+    expect(value('text', 'unknown')).toBe('unknown');
   });
 
   it('keeps text that merely contains a placeholder word', () => {
@@ -349,4 +349,14 @@ describe('coerceColumn', () => {
     expect(values).toHaveLength(3);
     expect(values[2]).toBe('3');
   });
+});
+
+// Precision and units must survive importing, before publishing is considered.
+it('preserves decimals beyond binary floating point precision', () => {
+  expect(value('decimal', '12345678901234567890.123456789')).toBe('12345678901234567890.123456789');
+  expect(value('decimal', '1.234567890123456789e-8')).toBe('0.00000001234567890123456789');
+});
+it('refuses invalid 12-hour times', () => {
+  expect(value('time', '13:30 pm')).toBeNull();
+  expect(value('time', '0:30 am')).toBeNull();
 });
