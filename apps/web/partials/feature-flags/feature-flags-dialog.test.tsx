@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { featureFlagsStorageKey } from '~/core/state/feature-flags';
+import { featureFlagDefinitions, featureFlagsStorageKey } from '~/core/state/feature-flags';
 
 import { FeatureFlagsDialog } from './feature-flags-dialog';
 
@@ -43,28 +43,26 @@ describe('FeatureFlagsDialog', () => {
     const featureFlagButtons = screen
       .getAllByRole('button')
       .filter(button => button.getAttribute('aria-label') !== 'Close feature flags');
-    expect(featureFlagButtons.map(button => button.getAttribute('aria-label'))).toEqual([
-      'Debate debugging',
-      'Debate format selector',
-      'Debates debug tab per space',
-      'Explore side panel',
-      'Bounties',
-    ]);
+    // Derived rather than listed: what this pins is that the dialog offers *every* flag in the
+    // registry and nothing else, which is the property that breaks when one is added. A hand-copied
+    // list only re-states the registry, and goes stale the first time someone adds a flag.
+    expect(featureFlagButtons.map(button => button.getAttribute('aria-label'))).toEqual(
+      featureFlagDefinitions.map(definition => definition.label)
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Debate debugging' }));
     fireEvent.click(screen.getByRole('button', { name: 'Debate format selector' }));
     fireEvent.click(screen.getByRole('button', { name: 'Debates debug tab per space' }));
 
     await waitFor(() => {
-      expect(window.localStorage.getItem(featureFlagsStorageKey)).toBe(
-        JSON.stringify({
-          debugDebatesPage: true,
-          debateDebugging: true,
-          debateFormatSelector: true,
-          exploreSidePanel: false,
-          bountiesTab: true,
-        })
-      );
+      // Values, not key order — see the note in `feature-flags.test.ts`.
+      expect(JSON.parse(window.localStorage.getItem(featureFlagsStorageKey) ?? 'null')).toEqual({
+        debugDebatesPage: true,
+        debateDebugging: true,
+        debateFormatSelector: true,
+        exploreSidePanel: false,
+        bountiesTab: true,
+      });
     });
   });
 

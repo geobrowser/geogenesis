@@ -56,14 +56,15 @@ describe('feature flags', () => {
     expect(store.get(featureFlagsAtom).debugDebatesPage).toBe(true);
     expect(store.get(featureFlagsAtom).debateDebugging).toBe(true);
     expect(store.get(featureFlagsAtom).debateFormatSelector).toBe(true);
-    expect(window.localStorage.getItem(featureFlagsStorageKey)).toBe(
-      JSON.stringify({
-        debugDebatesPage: true,
-        debateDebugging: true,
-        debateFormatSelector: true,
-        exploreSidePanel: false,
-        bountiesTab: true,
-      })
-    );
+    // Parsed, not string-compared: what is stored is the values, and the key order they happen to
+    // serialize in is incidental — it follows the definition list, and pinning it here would fail
+    // on a reordering that changes nothing a reader could notice.
+    expect(JSON.parse(window.localStorage.getItem(featureFlagsStorageKey) ?? 'null')).toEqual({
+      debugDebatesPage: true,
+      debateDebugging: true,
+      debateFormatSelector: true,
+      exploreSidePanel: false,
+      bountiesTab: true,
+    });
   });
 });
