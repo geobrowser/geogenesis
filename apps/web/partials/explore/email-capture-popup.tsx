@@ -140,11 +140,18 @@ function EmailCapturePopup() {
       className="fixed right-4 bottom-4 z-1101 w-[350px] max-w-[calc(100vw-2rem)] overflow-clip rounded-xl border border-grey-02 bg-white shadow-dropdown"
     >
       {/* The fanned ranking cards on their purple field, from the design (76342:20234).
-          A flat raster, like the welcome banner's artwork beside it. Exported through Figma's MCP,
-          which renders a node together with whatever overlaps its bounds — so the export arrived
-          with the close control drawn into it, and that 16px was patched out from elsewhere in the
-          same photo. Invisible at this size and covered by the real button below, but it is why
-          this wants a proper export from design, at 2x, before it ships. */}
+          A flat raster, like the welcome banner's artwork beside it. Figma's MCP renders a node
+          together with whatever overlaps its bounds, and `contentsOnly` does not change that here,
+          so the export arrived with the close glyph drawn into it. Painting it out left a worse
+          mark than it removed — the glyph straddles the purple field and a photo card, so nothing
+          cloned or blurred from nearby matched both. The real chip below is positioned over it
+          instead and hides it completely.
+
+          The raster is full-bleed on purpose. Figma exported the card's own 12px rounding and its
+          1px #dbdbdb border baked in, and a second rounding inside the container's own read as a
+          pale fringe along the edge — which is what made this look unclean next to the Figma frame.
+          The border is gone and the top corners are filled with the field colour, so the container's
+          `rounded-xl` is the only radius in play. Still wants a clean export from design, at 2x. */}
       <img src="/explore-email-capture.png" alt="" className="block h-[145px] w-full object-cover select-none" />
 
       {/* The welcome banner's close button, to the class: the two cards sit on the same page, and a
@@ -153,7 +160,9 @@ function EmailCapturePopup() {
         type="button"
         onClick={dismiss}
         aria-label="Dismiss"
-        className="absolute top-2.5 right-2.5 z-20 rounded-full border border-white/30 bg-black/40 p-1.5 text-white backdrop-blur-sm transition-colors duration-200 ease-in-out hover:bg-black/60"
+        // `top`/`right` put the 24px chip's centre on (322, 23) — where the artwork's own glyph
+        // sits — so it is covered rather than doubled. The rest is the banner's button verbatim.
+        className="absolute top-[11px] right-4 z-20 rounded-full border border-white/30 bg-black/40 p-1.5 text-white backdrop-blur-sm transition-colors duration-200 ease-in-out hover:bg-black/60"
       >
         <CloseSmall color="white" />
       </button>
@@ -174,8 +183,11 @@ function EmailCapturePopup() {
           // `inputMode` and `autoComplete` keep the phone keyboard and the autofill that
           // `type="email"` was there for.
           <form onSubmit={submit} noValidate>
-            <Text variant="mediumTitle">Geo network launching soon!</Text>
-            <Text variant="metadata" color="grey-04" className="mt-2 block">
+            <Text variant="mediumTitle">Geo Network launching soon!</Text>
+            {/* One line, as designed. The card is a fixed 350 and this sentence is the widest
+                thing in it, so it sets the floor: at `metadata` (16px) it wraps onto a second line
+                and pushes the form down. `footnote` is the next step down the scale and fits. */}
+            <Text variant="footnote" color="grey-04" className="mt-2 block whitespace-nowrap">
               Get updates on features, points, and path to mainnet.
             </Text>
 
@@ -192,7 +204,7 @@ function EmailCapturePopup() {
                   // leaving it under a field they are already fixing reads as a second complaint.
                   if (status !== 'idle' && status !== 'submitting') setStatus('idle');
                 }}
-                placeholder="nate@geobrowser.io"
+                placeholder="Email..."
                 aria-label="Email address"
                 aria-invalid={status === 'invalid-email'}
                 disabled={status === 'submitting'}
@@ -209,7 +221,7 @@ function EmailCapturePopup() {
                 disabled={status === 'submitting'}
                 className="h-7 shrink-0 rounded-full bg-[#151515] px-2.5 text-metadata text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               >
-                {status === 'submitting' ? 'Sending…' : 'Remind me'}
+                {status === 'submitting' ? 'Subscribing…' : 'Subscribe'}
               </button>
             </div>
 

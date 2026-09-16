@@ -117,7 +117,7 @@ describe('ExploreEmailCapturePopup', () => {
     scrollPastTrigger();
 
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'preston@geobrowser.io' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Remind me' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
 
     expect(await screen.findByText('You are on the list.')).toBeInTheDocument();
 
@@ -133,7 +133,7 @@ describe('ExploreEmailCapturePopup', () => {
     scrollPastTrigger();
 
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'preston' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Remind me' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('does not look like an email address');
     expect(mocks.fetch).not.toHaveBeenCalled();
@@ -147,7 +147,7 @@ describe('ExploreEmailCapturePopup', () => {
     scrollPastTrigger();
 
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'preston@geobrowser.io' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Remind me' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Too many tries'));
     expect(screen.queryByText('You are on the list.')).toBeNull();
@@ -159,7 +159,7 @@ describe('ExploreEmailCapturePopup', () => {
     scrollPastTrigger();
 
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'preston@geobrowser.io' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Remind me' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong'));
   });
