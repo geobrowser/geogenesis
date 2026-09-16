@@ -47,6 +47,7 @@ describe('FeatureFlagsDialog', () => {
       'Debate debugging',
       'Debate format selector',
       'Debates debug tab per space',
+      'Explore side panel',
       'Bounties',
     ]);
 
@@ -60,6 +61,7 @@ describe('FeatureFlagsDialog', () => {
           debugDebatesPage: true,
           debateDebugging: true,
           debateFormatSelector: true,
+          exploreSidePanel: false,
           bountiesTab: true,
         })
       );

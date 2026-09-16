@@ -22,6 +22,12 @@ export const featureFlagDefinitions = [
     description: 'Enable per-space debate processing diagnostics.',
   },
   {
+    id: 'exploreSidePanel',
+    label: 'Explore side panel',
+    description:
+      'Bring back the right side panel on Explore — featured spaces and rankings, community calls, and the onboarding checklist. Off by default (GEO-2914).',
+  },
+  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
@@ -39,6 +45,9 @@ export const defaultFeatureFlags: FeatureFlags = {
   debugDebatesPage: false,
   debateDebugging: false,
   debateFormatSelector: false,
+  // GEO-2914 hid the panel rather than deleting it, so this is off for everyone and the surface it
+  // gates is still built, still fetched for, and one checkbox away from coming back.
+  exploreSidePanel: false,
   bountiesTab: true,
 };
 
@@ -47,6 +56,7 @@ export function normalizeFeatureFlags(flags: StoredFeatureFlags | null | undefin
     debugDebatesPage: flags?.debugDebatesPage ?? defaultFeatureFlags.debugDebatesPage,
     debateDebugging: flags?.debateDebugging ?? defaultFeatureFlags.debateDebugging,
     debateFormatSelector: flags?.debateFormatSelector ?? defaultFeatureFlags.debateFormatSelector,
+    exploreSidePanel: flags?.exploreSidePanel ?? defaultFeatureFlags.exploreSidePanel,
     bountiesTab: flags?.bountiesTab ?? defaultFeatureFlags.bountiesTab,
   };
 }
