@@ -8,6 +8,7 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { EntityFeed, type SpaceOption } from '~/partials/feed/entity-feed';
 
+import { ExploreEmailCapturePopup } from './email-capture-popup';
 import { ExploreSidePanel } from './explore-side-panel';
 import { ExploreWelcomeBanner } from './explore-welcome-banner';
 
@@ -71,6 +72,8 @@ export function ExplorePage({
           feedTopSpacingClassName=""
         />
       </main>
+      {/* Fixed-position, so it sits outside the column rather than in the feed's flow. */}
+      <ExploreEmailCapturePopup />
     </EntityPageSidebarLayout>
   );
 }
