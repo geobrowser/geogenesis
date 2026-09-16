@@ -20,12 +20,15 @@ type Params = {
  * the counts are seven aggregate queries the reader should not wait for twice.
  */
 export function useProfileFacts({ spaceId, personEntityId, enabled = true }: Params) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: profileFactsQueryKey(spaceId, personEntityId),
     enabled: enabled && spaceId !== '',
     queryFn: () => fetchProfileFacts(spaceId, personEntityId),
     staleTime: 60_000,
   });
 
-  return { facts: data ?? NO_FACTS, isLoading };
+  // `NO_FACTS` still stands in for the shape while the request is out or after
+  // it failed — the lists in it are empty, and empty lists already hide their
+  // own rows. The counts cannot do that, which is what `isError` is for.
+  return { facts: data ?? NO_FACTS, isLoading, isError };
 }

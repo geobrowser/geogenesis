@@ -166,7 +166,7 @@ export function usePersonProposals({
   spaceId: string;
   first?: number;
 }) {
-  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteQuery({
+  const { data, isLoading, isError, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteQuery({
     queryKey: personProposalsQueryKey(spaceId),
     enabled: spaceId !== '',
     initialPageParam: null as string | null,
@@ -225,5 +225,5 @@ export function usePersonProposals({
 
   const proposals = React.useMemo(() => (data?.pages ?? []).flatMap(page => page.proposals), [data]);
 
-  return { proposals, isLoading, isFetchingNextPage, hasNextPage: Boolean(hasNextPage), fetchNextPage };
+  return { proposals, isLoading, isError, isFetchingNextPage, hasNextPage: Boolean(hasNextPage), fetchNextPage };
 }

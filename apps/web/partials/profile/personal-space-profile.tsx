@@ -111,7 +111,7 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
 function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personEntityId: string }) {
   const debates = usePersonDebates(spaceId, true);
   const positions = usePersonPositions({ spaceId });
-  const { facts } = useProfileFacts({ spaceId, personEntityId });
+  const { facts, isLoading: isLoadingFacts } = useProfileFacts({ spaceId, personEntityId });
 
   const kinds: ActivityKind[] = [
     {
@@ -119,7 +119,9 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       label: 'Debates',
       rows: debates.rows,
       total: facts.debates,
-      isLoading: debates.isLoading,
+      // The count and the rows are separate requests. Without the facts half,
+      // rows that arrived first rendered under a confident 0.
+      isLoading: debates.isLoading || isLoadingFacts,
       href: `/space/${spaceId}/debates`,
       seeAllLabel: 'See all debates',
     },
@@ -129,7 +131,7 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       rows: positions.rows,
       stanceByClaimId: positions.stanceByClaimId,
       total: facts.positions,
-      isLoading: positions.isLoading,
+      isLoading: positions.isLoading || isLoadingFacts,
       href: `/space/${spaceId}/positions`,
       seeAllLabel: 'See all claims',
     },

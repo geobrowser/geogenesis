@@ -13,6 +13,7 @@ import { PersonProposalsTab } from './person-proposals-tab';
 const mocks = vi.hoisted(() => ({
   proposals: [] as PersonProposal[],
   isLoading: false,
+  isError: false,
   /** Every space id set the label lookup was asked for, in render order. */
   labelCalls: [] as string[][],
   /** Every props object the shared governance row was rendered with. */
@@ -23,6 +24,7 @@ vi.mock('~/core/profile/use-person-proposals', () => ({
   usePersonProposals: () => ({
     proposals: mocks.proposals,
     isLoading: mocks.isLoading,
+    isError: mocks.isError,
     isFetchingNextPage: false,
     hasNextPage: false,
     fetchNextPage: () => {},
@@ -108,6 +110,7 @@ describe('PersonProposalsTab', () => {
   beforeEach(() => {
     mocks.proposals = [];
     mocks.isLoading = false;
+    mocks.isError = false;
     mocks.labelCalls = [];
     mocks.rowProps = [];
   });
@@ -211,6 +214,27 @@ describe('PersonProposalsTab', () => {
     renderTab();
 
     expect(screen.getByText('cccccccc')).toBeInTheDocument();
+  });
+
+  // A request that failed and a person who has never proposed anything are
+  // different facts, and the empty line states the second one either way.
+  it('says it could not load rather than that there is nothing', () => {
+    mocks.isError = true;
+
+    renderTab();
+
+    expect(screen.getByText('Couldn’t load proposals.')).toBeInTheDocument();
+    expect(screen.queryByText('No proposals yet')).not.toBeInTheDocument();
+  });
+
+  it('keeps the rows it did get when a later page fails', () => {
+    setPage([proposal()]);
+    mocks.isError = true;
+
+    renderTab();
+
+    expect(screen.getByTestId('governance-row')).toBeInTheDocument();
+    expect(screen.queryByText('Couldn’t load proposals.')).not.toBeInTheDocument();
   });
 
   it('shows the empty state the governance tab shows', () => {

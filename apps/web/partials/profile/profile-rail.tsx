@@ -70,7 +70,7 @@ export function ProfileRailSections({
   address,
   spaceType,
 }: ProfileRailProps) {
-  const { facts, isLoading } = useProfileFacts({ spaceId, personEntityId });
+  const { facts, isLoading, isError } = useProfileFacts({ spaceId, personEntityId });
 
   return (
     <div className="flex flex-col gap-4">
@@ -79,6 +79,7 @@ export function ProfileRailSections({
       <AboutSection
         facts={facts}
         isLoading={isLoading}
+        isError={isError}
         types={types}
         spaceId={spaceId}
         systemEntityId={systemEntityId}
@@ -190,6 +191,7 @@ function LinksSection({ links }: { links: ProfileLink[] }) {
 function AboutSection({
   facts,
   isLoading,
+  isError,
   types,
   spaceId,
   systemEntityId,
@@ -198,6 +200,8 @@ function AboutSection({
 }: {
   facts: ReturnType<typeof useProfileFacts>['facts'];
   isLoading: boolean;
+  /** The counts could not be read. Distinct from all three being zero. */
+  isError: boolean;
   types: ProfileRailProps['types'];
   spaceId: string;
   systemEntityId: string;
@@ -251,16 +255,19 @@ function AboutSection({
             question a number like this raises. */}
         <Fact
           label="Debates"
+          isUnavailable={isError}
           value={isLoading ? null : facts.debates.toLocaleString()}
           href={`/space/${spaceId}/debates`}
         />
         <Fact
           label="Positions"
+          isUnavailable={isError}
           value={isLoading ? null : facts.positions.toLocaleString()}
           href={`/space/${spaceId}/positions`}
         />
         <Fact
           label="Proposals"
+          isUnavailable={isError}
           value={isLoading ? null : facts.proposals.toLocaleString()}
           href={`/space/${spaceId}/proposals`}
         />
@@ -288,13 +295,30 @@ function Fact({
   value,
   mono,
   href,
+  isUnavailable = false,
 }: {
   label: string;
   value: string | null;
   mono?: boolean;
   /** Where the value goes when it stands for a list. */
   href?: string;
+  /**
+   * The answer could not be read. A dash rather than a number, and no link:
+   * "0 debates" is a statement about a person, and the reader has no way to
+   * tell it apart from a request that failed.
+   */
+  isUnavailable?: boolean;
 }) {
+  if (isUnavailable) {
+    return (
+      <Row label={label}>
+        <span className="text-metadata text-grey-03" title="Couldn’t be loaded">
+          —
+        </span>
+      </Row>
+    );
+  }
+
   if (value === null) {
     return (
       <Row label={label}>

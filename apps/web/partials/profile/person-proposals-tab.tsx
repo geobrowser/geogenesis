@@ -24,17 +24,27 @@ import { GovernanceProposalRow, percentageFromCounts } from '~/partials/governan
  * first thing that distinguishes one row from the next.
  */
 export function PersonProposalsTab({ spaceId, proposer }: { spaceId: string; proposer: Profile }) {
-  const { proposals, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = usePersonProposals({ spaceId });
+  const { proposals, isLoading, isError, isFetchingNextPage, hasNextPage, fetchNextPage } = usePersonProposals({
+    spaceId,
+  });
 
   // Looked up once for the page. These are routinely spaces the viewer has never
   // opened, which the browse sidebar cannot name.
   const rowSpaceIds = React.useMemo(() => [...new Set(proposals.map(proposal => proposal.spaceId))], [proposals]);
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
-  const sentinelRef = useInfiniteSentinel({ hasNextPage, isFetchingNextPage, fetchNextPage });
+  // `isError` included, or a page that failed leaves the sentinel on screen to
+  // ask for it again on every intersection.
+  const sentinelRef = useInfiniteSentinel({ hasNextPage, isFetchingNextPage, isError, fetchNextPage });
 
   if (isLoading && proposals.length === 0) {
     return <p className="py-6 text-body text-grey-04">Loading proposals…</p>;
+  }
+
+  // Before the empty line: a request that failed is not the fact that this
+  // person has never proposed anything.
+  if (isError && proposals.length === 0) {
+    return <p className="py-6 text-body text-grey-04">Couldn’t load proposals.</p>;
   }
 
   if (proposals.length === 0) {

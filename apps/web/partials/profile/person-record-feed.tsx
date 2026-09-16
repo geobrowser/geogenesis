@@ -31,16 +31,24 @@ export function PersonRecordFeed({
   fetchNextPage,
   loadingLabel,
   emptyLabel,
+  errorLabel,
 }: {
   rows: ExploreFeedRow[];
   isLoading: boolean;
-  /** Stops the sentinel asking again for a page that just failed. */
+  /**
+   * A request that failed, which is not the same fact as a person with nothing
+   * to show. It stops the sentinel asking again for the page that just failed,
+   * and — the part that was missing — it stops the empty label being printed
+   * over the top of it.
+   */
   isError?: boolean;
   isFetchingNextPage?: boolean;
   hasNextPage?: boolean;
   fetchNextPage?: () => void;
   loadingLabel: string;
   emptyLabel: string;
+  /** Said instead of `emptyLabel` when the list could not be read at all. */
+  errorLabel: string;
 }) {
   // Looked up once for the page. These are routinely spaces the viewer has never
   // opened, which the browse sidebar cannot name.
@@ -62,6 +70,13 @@ export function PersonRecordFeed({
 
   if (isLoading && rows.length === 0) {
     return <p className="py-6 text-metadata text-grey-04">{loadingLabel}</p>;
+  }
+
+  // Before the empty label, and only when nothing arrived: a later page that
+  // failed leaves the rows that did arrive on screen, where the sentinel has
+  // already stopped asking for more.
+  if (isError && rows.length === 0) {
+    return <p className="py-6 text-metadata text-grey-04">{errorLabel}</p>;
   }
 
   if (rows.length === 0) {

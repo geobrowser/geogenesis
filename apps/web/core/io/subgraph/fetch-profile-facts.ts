@@ -2,13 +2,7 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { DEBATE_OPPOSED_BY_PROPERTY, DEBATE_SUPPORTED_BY_PROPERTY, DEBATE_TYPE } from '~/core/profile/history-ontology';
-import {
-  NO_FACTS,
-  type ProfileFacts,
-  type ProfileSpace,
-  type Verifier,
-  orderSpaces,
-} from '~/core/profile/profile-facts';
+import { type ProfileFacts, type ProfileSpace, type Verifier, orderSpaces } from '~/core/profile/profile-facts';
 import { normId } from '~/core/utils/norm-id';
 
 import { graphql } from './graphql';
@@ -196,11 +190,12 @@ export async function fetchProfileFacts(spaceId: string, personEntityId: string 
   );
 
   if (Either.isLeft(result)) {
-    // Answered with nothing rather than thrown. Unlike the history sections,
-    // none of this is editable — a count the reader never sees is a worse page,
-    // not a wrong write. The rail hides the rows it has no answer for.
+    // Thrown, so the caller can tell "we could not read this" from "this person
+    // has done nothing". Answering `NO_FACTS` here made the rail state a
+    // confident 0 against all three counts — the one reading it cannot know it
+    // is looking at a failed request, and 0 debates is a claim about a person.
     console.error(`[profile-facts] failed to fetch facts for ${spaceId}:`, result.left);
-    return NO_FACTS;
+    throw result.left;
   }
 
   const data = result.right;

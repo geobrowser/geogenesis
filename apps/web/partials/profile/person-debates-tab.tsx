@@ -19,19 +19,17 @@ import { PersonRecordFeed } from './person-record-feed';
 export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
   const { rows, isLoading, isError } = usePersonDebates(spaceId, true);
 
-  if (isError) {
-    return <p className="py-6 text-metadata text-grey-04">Couldn’t load debates.</p>;
-  }
-
   return (
     <PersonRecordFeed
       rows={rows}
       isLoading={isLoading}
+      isError={isError}
       loadingLabel="Loading debates…"
       // Said here rather than by the browse feed, which offers "Start one from
       // the Claims tab" — right for a space with no debates in it, wrong for a
       // person who has never been in one.
       emptyLabel="No debates yet."
+      errorLabel="Couldn’t load debates."
     />
   );
 }

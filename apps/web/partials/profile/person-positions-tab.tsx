@@ -24,6 +24,7 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
       fetchNextPage={fetchNextPage}
       loadingLabel="Loading positions…"
       emptyLabel="No positions on claims yet."
+      errorLabel="Couldn’t load positions."
     />
   );
 }
