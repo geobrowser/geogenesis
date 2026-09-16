@@ -12,11 +12,6 @@ type SpaceNode = {
   space: { topic: { name: string | null } | null } | null;
 };
 
-type PositionsPage = {
-  pageInfo: { hasNextPage: boolean | null; endCursor: string | null } | null;
-  nodes: { objectId: string | null }[];
-};
-
 type VerifierNode = {
   parentSpaceId: string;
   parentSpace: { type: string; topic: { name: string | null } | null } | null;
@@ -26,7 +21,7 @@ interface NetworkResult {
   members: { nodes: SpaceNode[] } | null;
   editors: { nodes: SpaceNode[] } | null;
   proposals: { totalCount: number } | null;
-  positions: PositionsPage | null;
+  positions: { totalCount: number } | null;
   supported: { nodes: { fromEntity: { id: string } | null }[] } | null;
   opposed: { nodes: { fromEntity: { id: string } | null }[] } | null;
   verifiedBy: { nodes: VerifierNode[] } | null;
@@ -34,41 +29,12 @@ interface NetworkResult {
 }
 
 /**
- * Everything the rail states, in one request.
+ * The vote kinds that mean "a position on a claim".
  *
- * Seven counts that have no aggregate between them — there is no per-person
- * summary in the API, so the choice is one round trip with seven aliases or
- * seven round trips. The page streams the header first either way; this only
- * decides how long the rail takes to arrive after it.
- *
- * `personEntityId` is here for the join date alone. Everything else keys on the
- * space, and passing the entity id to any of them returns zero rather than an
- * error, which is the whole trap this file exists to close.
+ * 1 is a stance and 2 is veracity. The table holds other kinds, and counting it
+ * unfiltered overstates the figure roughly threefold.
  */
-/**
- * How many vote rows the Positions count reads per request.
- *
- * `totalCount` cannot answer this. It counts *rows*, and the Positions tab
- * collapses a claim's stance and veracity votes into one card — so somebody who
- * did both saw a rail count larger than the list it links to. The ids have to be
- * read and counted distinct, the same way the debate sides below are.
- *
- * The first page rides along with the rest of the rail, so the usual profile
- * still costs one round trip: 194 rows on the heaviest account on testnet, and
- * 3,207 across everyone. Only somebody past a full page costs a second.
- */
-const POSITIONS_PAGE_SIZE = 500;
-
-/**
- * A ceiling on the follow-up requests, not on the count.
- *
- * Paging is by cursor rather than offset because the server rejects any offset
- * above 1000 — the same reason `fetchRelationsByToEntityIds` gives. A cursor has
- * no ceiling of its own, so this one is here to bound a server-rendered page
- * against a pathological record, not because the data needs it: 20 pages is
- * 10,000 vote rows, fifty times the busiest account that exists.
- */
-const POSITIONS_MAX_PAGES = 20;
+const POSITION_KINDS = '[1, 2]';
 
 /**
  * One side of a debate, pointed at this space.
@@ -103,15 +69,17 @@ function distinctCount<T>(nodes: T[], key: (node: T) => string | null | undefine
   return seen.size;
 }
 
-/** One page of this person's stance and veracity votes, ids only. */
-function positionsPage(sp: string, after: string | null) {
-  return `userVotesConnection(
-    filter: { userId: { is: ${sp} }, or: [{ voteKind: { is: 1 } }, { voteKind: { is: 2 } }] }
-    first: ${POSITIONS_PAGE_SIZE}
-    ${after ? `after: ${JSON.stringify(after)}` : ''}
-  ) { pageInfo { hasNextPage endCursor } nodes { objectId } }`;
-}
-
+/**
+ * Everything the rail states, in one request.
+ *
+ * No per-person summary exists in the API, so the choice is one round trip with
+ * seven aliases or seven round trips. The page streams the header first either
+ * way; this only decides how long the rail takes to arrive after it.
+ *
+ * `personEntityId` is here for the join date alone. Everything else keys on the
+ * space, and passing the entity id to any of them returns zero rather than an
+ * error, which is the whole trap this file exists to close.
+ */
 function profileFactsQuery(spaceId: string, personEntityId: string | null) {
   const sp = JSON.stringify(spaceId);
   const person = personEntityId ? JSON.stringify(personEntityId) : null;
@@ -124,7 +92,7 @@ function profileFactsQuery(spaceId: string, personEntityId: string | null) {
       nodes { spaceId space { topic { name } } }
     }
     proposals: proposalsConnection(filter: { proposedBy: { is: ${sp} } }) { totalCount }
-    positions: ${positionsPage(sp, null)}
+    positions: entitiesConnection(votedBy: ${sp}, votedByKinds: ${POSITION_KINDS}) { totalCount }
     supported: ${debateSide(DEBATE_SUPPORTED_BY_PROPERTY, sp)}
     opposed: ${debateSide(DEBATE_OPPOSED_BY_PROPERTY, sp)}
     verifiedBy: subspacesConnection(
@@ -134,45 +102,6 @@ function profileFactsQuery(spaceId: string, personEntityId: string | null) {
     }
     ${person ? `person: entity(id: ${person}) { createdAt }` : ''}
   }`;
-}
-
-/**
- * Every remaining vote row, once the first page came back full.
- *
- * Failure is answered with what it has rather than thrown, matching the rest of
- * this file: a count that is low because the fourth page timed out is a better
- * rail than no rail.
- */
-async function fetchRemainingPositions(spaceId: string, first: PositionsPage): Promise<{ objectId: string | null }[]> {
-  const sp = JSON.stringify(spaceId);
-  const nodes = [...first.nodes];
-  let after = first.pageInfo?.endCursor ?? null;
-  let hasNextPage = first.pageInfo?.hasNextPage ?? false;
-
-  for (let page = 1; page < POSITIONS_MAX_PAGES && hasNextPage && after; page++) {
-    const result = await Effect.runPromise(
-      Effect.either(
-        graphql<{ positions: PositionsPage | null }>({
-          query: `query { positions: ${positionsPage(sp, after)} }`,
-          endpoint: Environment.getConfig().api,
-        })
-      )
-    );
-
-    if (Either.isLeft(result)) {
-      console.error(`[profile-facts] positions page ${page} failed for ${spaceId}:`, result.left);
-      break;
-    }
-
-    const next = result.right.positions;
-    if (!next) break;
-
-    nodes.push(...next.nodes);
-    after = next.pageInfo?.endCursor ?? null;
-    hasNextPage = next.pageInfo?.hasNextPage ?? false;
-  }
-
-  return nodes;
 }
 
 export function profileFactsQueryKey(spaceId: string, personEntityId: string | null) {
@@ -222,10 +151,6 @@ export async function fetchProfileFacts(spaceId: string, personEntityId: string 
     });
   }
 
-  // Only costs a request if the first page came back full, which no account on
-  // testnet does — the busiest holds 194 rows against a page of 500.
-  const positionNodes = data.positions ? await fetchRemainingPositions(spaceId, data.positions) : [];
-
   const verifiedBy: Verifier[] = (data.verifiedBy?.nodes ?? []).map(node => ({
     spaceId: node.parentSpaceId,
     name: node.parentSpace?.topic?.name ?? null,
@@ -237,7 +162,11 @@ export async function fetchProfileFacts(spaceId: string, personEntityId: string 
 
   return {
     proposals: data.proposals?.totalCount ?? 0,
-    positions: distinctCount(positionNodes, node => node.objectId),
+    // Claims, not vote rows. `votedBy` counts entities, so the stance and
+    // veracity votes somebody cast on the same claim are one row here — which
+    // is what the tab shows, and what `userVotesConnection.totalCount` could
+    // never say. Verified against both: 194 vote rows, 190 claims.
+    positions: data.positions?.totalCount ?? 0,
     // Distinct debates across both sides. Adding the two totals counts a debate
     // twice where it names the same person on both — and counts duplicate writes
     // as separate debates, which is how 10 becomes 13.

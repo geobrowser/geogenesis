@@ -31,6 +31,11 @@ import { normId } from '~/core/utils/norm-id';
  * rejects any `offset` above 1000, so offset paging silently caps a person's
  * record at 1000 vote rows and then errors on the page that would pass it.
  * `after` has no such ceiling.
+ *
+ * It was offset for a while, and the reason is worth keeping: `after` really
+ * did answer 500 for the cursor this connection had just issued (GEO-2916).
+ * `user_votes` had no primary key, so its cursors encoded a bare row offset —
+ * gaia #937 gave the table one, and the cursors have worked since.
  */
 const PERSON_VOTES_SOURCE = /* GraphQL */ `
   query PersonVotes($userId: UUID!, $first: Int, $after: Cursor) {
