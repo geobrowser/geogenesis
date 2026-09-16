@@ -82,17 +82,67 @@ describe('ExploreEmailCapturePopup', () => {
     expect(popup()).toBeNull();
   });
 
-  // A popup that returns on the next load is worse than no popup.
-  it('stays dismissed across a remount', () => {
-    const view = render(<ExploreEmailCapturePopup />);
+  // A popup that returns on the next load is worse than no popup, and a remount does not prove it
+  // does not: `dismissedNoticesAtom` lives at module scope, so an unmount/remount pair holds the
+  // dismissal in memory whether or not it ever reached storage. These go through a real reload —
+  // `resetModules` throws away the module graph and with it jotai's store, leaving localStorage as
+  // the only thing that crosses — and check the write itself, since that is the half that has to
+  // survive. The id is the storage contract; spelled out rather than imported so that renaming the
+  // constant cannot quietly strand every reader who has already dismissed this.
+  async function reload() {
+    cleanup();
+    vi.resetModules();
+    return (await import('./email-capture-popup')).ExploreEmailCapturePopup;
+  }
+
+  it('writes the dismissal to storage and stays away on the next load', async () => {
+    render(<ExploreEmailCapturePopup />);
     scrollPastTrigger();
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(popup()).toBeNull();
+    expect(window.localStorage.getItem('dismissedNotices')).toContain('exploreEmailCapture');
 
-    view.unmount();
+    const Reloaded = await reload();
+    render(<Reloaded />);
+    scrollPastTrigger();
+
+    expect(popup()).toBeNull();
+  });
+
+  // Subscribing has to stick for the same reason, by a different route: it records the dismissal
+  // without anyone pressing Dismiss, so nothing above covers it. Asking someone to subscribe again
+  // on the next visit is the worst version of this popup.
+  it('writes the dismissal when someone subscribes, and stays away on the next load', async () => {
     render(<ExploreEmailCapturePopup />);
     scrollPastTrigger();
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reader@example.com' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+    });
+    expect(window.localStorage.getItem('dismissedNotices')).toContain('exploreEmailCapture');
+
+    const Reloaded = await reload();
+    render(<Reloaded />);
+    scrollPastTrigger();
+
+    expect(popup()).toBeNull();
+  });
+
+  // The one case where a stale read would actually show through. Storage is read on mount rather
+  // than at atom creation, and the scroll gate is also checked on mount, so a reader returning to
+  // a restored scroll position past the trigger is the one arrival where "dismissed" could still
+  // be `[]` on the frame the gate opens. It resolves in the same commit today; this is here to say
+  // so if that ever stops being true.
+  it('stays away on a reload that restores a scroll position past the trigger', async () => {
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    const Reloaded = await reload();
+    window.scrollY = window.innerHeight * 5;
+    render(<Reloaded />);
 
     expect(popup()).toBeNull();
   });
