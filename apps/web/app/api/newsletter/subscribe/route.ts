@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
+import { timeoutSignal } from '~/core/timeout-signal';
 
 import { getClientIp } from '../../client-ip';
 import { emailLimit, ipLimit } from '../rate-limit';
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
         authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({ email: normalizedEmail }),
-      signal: AbortSignal.timeout(MAILERLITE_TIMEOUT_MS),
+      signal: timeoutSignal(MAILERLITE_TIMEOUT_MS),
     });
 
     // 201 is a new subscriber and 200 is one MailerLite already had. Both are "you are on the list"
@@ -111,7 +112,7 @@ export async function POST(request: Request) {
     console.error(`newsletter subscribe: MailerLite responded ${response.status}`);
     return answer('failed', 502);
   } catch (error) {
-    // `AbortSignal.timeout` rejects with a TimeoutError, which lands here alongside DNS and
+    // The timeout rejects with a TimeoutError, which lands here alongside DNS and
     // connection failures. All of them are the same thing to the reader: it did not work, try later.
     console.error('newsletter subscribe: request to MailerLite failed', error);
     return answer('failed', 502);

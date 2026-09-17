@@ -9,6 +9,7 @@ import { useAtomValue } from 'jotai';
 
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
+import { timeoutSignal } from '~/core/timeout-signal';
 import { isChatOpenAtom } from '~/core/state/chat-store';
 
 import { ClientOnly } from '~/design-system/client-only';
@@ -114,7 +115,7 @@ function EmailCapturePopup() {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ email }),
-          signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
+          signal: timeoutSignal(SUBMIT_TIMEOUT_MS),
         });
         const body = (await response.json()) as { result?: NewsletterSubscribeResult };
         if (body.result === 'subscribed') {
