@@ -41,6 +41,7 @@ export const NavUtils = {
   // A bounty is a regular entity; its detail page is the entity page.
   toBounty: (spaceId: string, bountyId: string) => `/space/${spaceId}/${bountyId}`,
   toCommunity: (spaceId: string) => `${NavUtils.toSpace(spaceId)}/community`,
+  toCommunityLeaderboard: (spaceId: string) => `${NavUtils.toCommunity(spaceId)}/leaderboard`,
   toProposal: (spaceId: string, proposalId: string, from?: string, governanceHomeReturnSearch?: string) => {
     const params = new URLSearchParams();
     params.set('proposalId', proposalId);

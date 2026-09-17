@@ -1,6 +1,5 @@
 'use client';
 
-import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -21,9 +20,6 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { NavUtils, PagesPaginationPlaceholder, getPaginationPages } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { IconButton, SquareButton } from '~/design-system/button';
-import { Close } from '~/design-system/icons/close';
-import { Fullscreen } from '~/design-system/icons/full-screen';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
@@ -36,6 +32,7 @@ import { FILTER_PILL_CLASS, SingleSelectPill } from './community-filter-pill';
 type Props = {
   spaceId: string;
   initialData?: CuratorLeaderboardResult;
+  expanded?: boolean;
 };
 
 const DEFAULT_PERIOD: CuratorLeaderboardPeriod = 'week';
@@ -252,68 +249,9 @@ function IncompleteCountsNotice() {
   return <p className="text-[16px] leading-[20px] text-grey-04">Some activity was not included in these counts.</p>;
 }
 
-function LeaderboardFullScreen({
-  open,
-  onOpenChange,
-  period,
-  onPeriodChange,
-  rows,
-  viewerRow,
-  truncated,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  period: CuratorLeaderboardPeriod;
-  onPeriodChange: (period: CuratorLeaderboardPeriod) => void;
-  rows: CuratorLeaderboardRow[];
-  viewerRow: CuratorLeaderboardRow | null;
-  truncated: boolean;
-}) {
-  return (
-    <Root open={open} onOpenChange={onOpenChange}>
-      <Portal>
-        <Overlay className="fixed inset-0 z-100 bg-text/20" />
-
-        <Content className="fixed inset-0 z-1000 flex items-start justify-center p-4 focus:outline-hidden sm:p-8">
-          <div className="flex max-h-full w-full max-w-[1200px] flex-col gap-4 overflow-hidden rounded-lg bg-white p-6">
-            <div className="flex shrink-0 items-center justify-between gap-4">
-              <Title asChild>
-                <h2 className={cx('text-[24px] leading-[29px] font-semibold tracking-[-0.75px]', INK)}>
-                  Curator leaderboard
-                </h2>
-              </Title>
-
-              <div className="flex items-center gap-3">
-                <SingleSelectPill
-                  value={period}
-                  options={CURATOR_LEADERBOARD_PERIOD_OPTIONS}
-                  onChange={onPeriodChange}
-                  contentClassName="max-w-[180px]"
-                />
-                <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} aria-label="Close full screen" />
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <LeaderboardTable rows={rows} viewerRow={viewerRow} isLoading={false} />
-            </div>
-
-            {truncated ? (
-              <div className="shrink-0">
-                <IncompleteCountsNotice />
-              </div>
-            ) : null}
-          </div>
-        </Content>
-      </Portal>
-    </Root>
-  );
-}
-
-export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
+export function CuratorLeaderboardSection({ spaceId, initialData, expanded = false }: Props) {
   const [period, setPeriodState] = React.useState<CuratorLeaderboardPeriod>(initialData?.period ?? DEFAULT_PERIOD);
   const [page, setPage] = React.useState(0);
-  const [fullScreen, setFullScreen] = React.useState(false);
   const { personalSpaceId } = usePersonalSpaceId();
 
   const setPeriod = React.useCallback((next: CuratorLeaderboardPeriod) => {
@@ -367,13 +305,10 @@ export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
             onChange={setPeriod}
             contentClassName="max-w-[180px]"
           />
-          {rows.length > 0 ? (
-            <IconButton
-              onClick={() => setFullScreen(true)}
-              icon={<Fullscreen color="grey-04" />}
-              color="grey-04"
-              aria-label="View leaderboard full screen"
-            />
+          {!expanded && rows.length > 0 ? (
+            <Link href={NavUtils.toCommunityLeaderboard(spaceId)} className={FILTER_PILL_CLASS}>
+              View all
+            </Link>
           ) : null}
         </div>
       </div>
@@ -384,21 +319,11 @@ export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
         <>
           <LeaderboardMetrics metrics={metrics} isLoading={isLoading} />
 
-          <LeaderboardTable rows={pageRows} viewerRow={viewerRow} isLoading={isLoading} />
+          <LeaderboardTable rows={expanded ? rows : pageRows} viewerRow={viewerRow} isLoading={isLoading} />
 
-          <LeaderboardPager page={safePage} pageCount={pageCount} onChange={setPage} />
+          {expanded ? null : <LeaderboardPager page={safePage} pageCount={pageCount} onChange={setPage} />}
 
           {truncated && !isLoading ? <IncompleteCountsNotice /> : null}
-
-          <LeaderboardFullScreen
-            open={fullScreen}
-            onOpenChange={setFullScreen}
-            period={period}
-            onPeriodChange={setPeriod}
-            rows={rows}
-            viewerRow={viewerRow}
-            truncated={truncated}
-          />
         </>
       )}
     </section>

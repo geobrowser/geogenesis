@@ -52,12 +52,12 @@ function row(overrides: Partial<CuratorLeaderboardResult['rows'][number]> = {}) 
   };
 }
 
-function renderSection(initialData: CuratorLeaderboardResult) {
+function renderSection(initialData: CuratorLeaderboardResult, { expanded = false } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
   return render(
     <QueryClientProvider client={client}>
-      <CuratorLeaderboardSection spaceId="space-1" initialData={initialData} />
+      <CuratorLeaderboardSection spaceId="space-1" initialData={initialData} expanded={expanded} />
     </QueryClientProvider>
   );
 }
@@ -199,63 +199,65 @@ describe('CuratorLeaderboardSection — the viewer’s own row', () => {
   });
 });
 
-describe('CuratorLeaderboardSection — full screen', () => {
-  const expand = () => screen.getByRole('button', { name: 'View leaderboard full screen' });
+describe('CuratorLeaderboardSection — the way out to the full board', () => {
+  const viewAll = () => screen.getByRole('link', { name: 'View all' });
 
   /**
-   * Paging exists because the tab has room for five rows. Full screen is the case where that
-   * constraint is lifted, so it shows the board rather than a page of it — opening onto page 1 of 3
-   * again would be the same view with more whitespace.
+   * The same "View all" the bounties sections on this tab carry, rather than a second kind of
+   * full-screen affordance beside them. One tab with two ways of reaching the full version of
+   * something is a difference that implies one of them does something else.
    */
-  it('shows the whole board, not the page the tab was on', () => {
+  it('offers the tab a link to the board’s own page', () => {
     renderSection(result(board(12)));
 
-    expect(namesOnPage()).toHaveLength(5);
-
-    fireEvent.click(expand());
-
-    const dialog = within(screen.getByRole('dialog'));
-    expect(dialog.getAllByRole('row').slice(1)).toHaveLength(12);
+    expect(viewAll().getAttribute('href')).toBe('/space/space-1/community/leaderboard');
   });
 
-  // It is what the board is *of*. Left behind, full screen becomes a view of a window the viewer
-  // can no longer change.
-  it('brings the time window with it', () => {
-    renderSection(result(board(12)));
-    fireEvent.click(expand());
-
-    expect(within(screen.getByRole('dialog')).getByRole('button', { name: /Last week/ })).toBeTruthy();
-  });
-
-  it('closes', () => {
-    renderSection(result(board(12)));
-    fireEvent.click(expand());
-    expect(screen.queryByRole('dialog')).not.toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Close full screen' }));
-
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
-
-  // Nothing has no full-screen version of itself.
+  // Nothing has no fuller version of itself.
   it('is not offered for a board with nothing on it', () => {
     renderSection(result([]));
 
-    expect(screen.queryByRole('button', { name: 'View leaderboard full screen' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'View all' })).toBeNull();
   });
 
   /**
-   * A viewer with no activity is on no page of the board, so they are pinned in the tab. Full screen
+   * Paging exists because the tab gives the board five rows' worth of room. On its own page that
+   * constraint is gone, so it shows the board — opening onto page 1 of 3 again would be the same
+   * view with more whitespace.
+   */
+  it('shows the whole board on its own page, unpaged', () => {
+    renderSection(result(board(12)), { expanded: true });
+
+    expect(namesOnPage()).toHaveLength(12);
+    expect(screen.queryByRole('button', { name: 'Next page' })).toBeNull();
+  });
+
+  // And does not offer a way out to the page it already is.
+  it('offers no link from the page itself', () => {
+    renderSection(result(board(12)), { expanded: true });
+
+    expect(screen.queryByRole('link', { name: 'View all' })).toBeNull();
+  });
+
+  // It is what the board is *of*, so it comes along rather than being left on the tab.
+  it('keeps the time window on the page', () => {
+    renderSection(result(board(12)), { expanded: true });
+
+    expect(screen.getByRole('button', { name: /Last week/ })).toBeTruthy();
+  });
+
+  /**
+   * A viewer with no activity is on no page of the board, so they are pinned in the tab. The page
    * shows every row and still does not contain them — the pin is the only thing that answers "where
    * am I" for somebody who is nowhere.
    */
   it('still pins a viewer who is not on the board', () => {
-    renderSection(result(board(7), row({ curatorSpaceId: VIEWER_SPACE_ID, isCurrentUser: true, rank: 8 })));
-    fireEvent.click(expand());
+    renderSection(result(board(7), row({ curatorSpaceId: VIEWER_SPACE_ID, isCurrentUser: true, rank: 8 })), {
+      expanded: true,
+    });
 
-    const rows = within(screen.getByRole('dialog')).getAllByRole('row').slice(1);
-    expect(rows).toHaveLength(8);
-    expect(within(rows[7]).getAllByRole('cell')[1]?.textContent).toBe('You');
+    expect(namesOnPage()).toHaveLength(8);
+    expect(namesOnPage().at(-1)).toBe('You');
   });
 });
 
