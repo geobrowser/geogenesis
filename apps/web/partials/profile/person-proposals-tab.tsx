@@ -2,10 +2,12 @@
 
 import * as React from 'react';
 
+import type { HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useInfiniteSentinel } from '~/core/profile/use-infinite-sentinel';
-import { type PersonProposal, usePersonProposals } from '~/core/profile/use-person-proposals';
+import { usePersonProposalSpaces } from '~/core/profile/use-person-proposal-spaces';
+import { type PersonProposal, type ProposalSort, usePersonProposals } from '~/core/profile/use-person-proposals';
 import type { Profile } from '~/core/types';
 import { NavUtils, getProposalName } from '~/core/utils/utils';
 
@@ -14,6 +16,21 @@ import { Skeleton } from '~/design-system/skeleton';
 import { SpacePillAvatar } from '~/design-system/space-pill';
 
 import { GovernanceProposalRow, percentageFromCounts } from '~/partials/governance/governance-proposal-row';
+
+import { RecordFilterRow } from './record-filter-row';
+import { useRecordSelection } from './use-record-selection';
+
+/**
+ * No Top here, and not for want of a connection (GEO-2918).
+ *
+ * A proposal carries no score, and ranking a governance record by its vote tally
+ * would put a contested change above an uncontested one for no reason a reader
+ * could name.
+ */
+const SORT_OPTIONS: HubFilterOption<string>[] = [
+  { value: 'newest', label: 'Newest' },
+  { value: 'oldest', label: 'Oldest' },
+];
 
 /**
  * Everything this person proposed, newest first (GEO-2859).
@@ -24,58 +41,136 @@ import { GovernanceProposalRow, percentageFromCounts } from '~/partials/governan
  * first thing that distinguishes one row from the next.
  */
 export function PersonProposalsTab({ spaceId, proposer }: { spaceId: string; proposer: Profile }) {
+  const [sort, setSort] = React.useState<ProposalSort>('newest');
+  const spaces = useRecordSelection();
+
   const { proposals, isLoading, isError, isFetchingNextPage, hasNextPage, fetchNextPage } = usePersonProposals({
     spaceId,
+    sort,
+    spaceIds: spaces.values,
   });
+
+  // Over the whole record, not the pages in hand: 770 proposals across 30
+  // spaces, where the first page touches three of them.
+  const { spaces: spaceFacets, isLoading: isLoadingSpaces } = usePersonProposalSpaces({ spaceId });
 
   // Looked up once for the page. These are routinely spaces the viewer has never
   // opened, which the browse sidebar cannot name.
-  const rowSpaceIds = React.useMemo(() => [...new Set(proposals.map(proposal => proposal.spaceId))], [proposals]);
+  const rowSpaceIds = React.useMemo(
+    // The menu's spaces as well as the rows', so the two are one lookup rather
+    // than two — the menu lists every space this person proposed into, which is
+    // a superset of whatever the loaded rows touch.
+    () => [...new Set([...proposals.map(proposal => proposal.spaceId), ...spaceFacets.map(facet => facet.id)])],
+    [proposals, spaceFacets]
+  );
   const { labelsById } = useSpaceLabels(rowSpaceIds);
+
+  const spaceOptions = React.useMemo(
+    () =>
+      spaceFacets.map(facet => ({
+        value: facet.id,
+        label: spaceLabel(labelsById, facet.id)?.name ?? `Space ${facet.id.slice(0, 6)}`,
+        count: facet.count,
+      })),
+    [labelsById, spaceFacets]
+  );
+
+  const controls = (
+    <RecordFilterRow
+      sort={{ value: sort, options: SORT_OPTIONS, onChange: value => setSort(value as ProposalSort) }}
+      dimensions={[
+        {
+          key: 'spaces',
+          options: spaceOptions,
+          values: spaces.values,
+          onToggle: spaces.toggle,
+          onClear: spaces.clear,
+          anyLabel: 'Any space',
+          noun: ['space', 'spaces'],
+          isPending: isLoadingSpaces,
+        },
+      ]}
+    />
+  );
 
   // `isError` included, or a page that failed leaves the sentinel on screen to
   // ask for it again on every intersection.
   const sentinelRef = useInfiniteSentinel({ hasNextPage, isFetchingNextPage, isError, fetchNextPage });
 
-  if (isLoading && proposals.length === 0) {
-    return <p className="py-6 text-body text-grey-04">Loading proposals…</p>;
-  }
-
-  // Before the empty line: a request that failed is not the fact that this
-  // person has never proposed anything.
-  if (isError && proposals.length === 0) {
-    return <p className="py-6 text-body text-grey-04">Couldn’t load proposals.</p>;
-  }
+  const isFiltered = spaces.values.length > 0;
 
   if (proposals.length === 0) {
-    return <p className="py-6 text-body text-grey-04">No proposals yet</p>;
+    return (
+      <Shell controls={controls}>
+        <p className="py-6 text-body text-grey-04">{emptyLine({ isLoading, isError, isFiltered })}</p>
+      </Shell>
+    );
   }
 
   return (
-    <div className="flex flex-col">
-      {proposals.map(proposal => (
-        <ProposalRow
-          key={proposal.id}
-          proposal={proposal}
-          proposer={proposer}
-          label={spaceLabel(labelsById, proposal.spaceId)}
-          returnSpaceId={spaceId}
-        />
-      ))}
+    <Shell controls={controls}>
+      <div className="flex flex-col">
+        {proposals.map(proposal => (
+          <ProposalRow
+            key={proposal.id}
+            proposal={proposal}
+            proposer={proposer}
+            label={spaceLabel(labelsById, proposal.spaceId)}
+            returnSpaceId={spaceId}
+          />
+        ))}
 
-      {/* Well above the fold, so the next page is already in by the time the
+        {/* Well above the fold, so the next page is already in by the time the
           reader reaches the end — 765 rows on the reference account. */}
-      <div ref={sentinelRef} className="h-4 w-full" aria-hidden />
+        <div ref={sentinelRef} className="h-4 w-full" aria-hidden />
 
-      {isFetchingNextPage && (
-        <div className="mt-4 space-y-4">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <Skeleton key={index} className="h-20 w-full" />
-          ))}
-        </div>
-      )}
+        {isFetchingNextPage && (
+          <div className="mt-4 space-y-4">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Skeleton key={index} className="h-20 w-full" />
+            ))}
+          </div>
+        )}
+      </div>
+    </Shell>
+  );
+}
+
+/**
+ * The controls, then whatever the list currently is.
+ *
+ * Every state renders inside them — including the empty one, which needs them
+ * most: an empty list is usually the filter's doing, and the menu that caused it
+ * is the only way back.
+ */
+function Shell({ controls, children }: { controls: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-4">
+      {controls}
+      {children}
     </div>
   );
+}
+
+/**
+ * What an empty list says, which depends on why it is empty.
+ *
+ * Three different facts, and printing the last for the first two is how a failed
+ * request came to read as a person who has never proposed anything.
+ */
+export function emptyLine({
+  isLoading,
+  isError,
+  isFiltered,
+}: {
+  isLoading: boolean;
+  isError: boolean;
+  isFiltered: boolean;
+}) {
+  if (isLoading) return 'Loading proposals…';
+  if (isError) return 'Couldn’t load proposals.';
+  if (isFiltered) return 'No proposals match these filters.';
+  return 'No proposals yet';
 }
 
 function ProposalRow({

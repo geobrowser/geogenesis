@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   proposals: [] as PersonProposal[],
   isLoading: false,
   isError: false,
+  spaceFacets: [] as { id: string; count: number }[],
   /** Every space id set the label lookup was asked for, in render order. */
   labelCalls: [] as string[][],
   /** Every props object the shared governance row was rendered with. */
@@ -29,6 +30,12 @@ vi.mock('~/core/profile/use-person-proposals', () => ({
     hasNextPage: false,
     fetchNextPage: () => {},
   }),
+}));
+
+// The menu's spaces are a second query over the whole record. Mocked rather
+// than provided, because this file is about the rows.
+vi.mock('~/core/profile/use-person-proposal-spaces', () => ({
+  usePersonProposalSpaces: () => ({ spaces: mocks.spaceFacets, isLoading: false, isError: false }),
 }));
 
 vi.mock('~/core/hooks/use-space-labels', () => ({
@@ -111,6 +118,7 @@ describe('PersonProposalsTab', () => {
     mocks.proposals = [];
     mocks.isLoading = false;
     mocks.isError = false;
+    mocks.spaceFacets = [];
     mocks.labelCalls = [];
     mocks.rowProps = [];
   });

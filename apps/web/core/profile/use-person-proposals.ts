@@ -38,8 +38,6 @@ export type PersonProposalsPage = {
   totalCount: number;
 };
 
-const EMPTY_PAGE: PersonProposalsPage = { proposals: [], endCursor: null, hasNextPage: false, totalCount: 0 };
-
 type ProposalNode = {
   id: string;
   spaceId: string;
@@ -61,6 +59,15 @@ interface NetworkResult {
   } | null;
 }
 
+/**
+ * Newest or oldest first.
+ *
+ * No Top, and not for want of a connection: a proposal carries no score, and
+ * ordering a governance record by its vote tally would rank a contested change
+ * above an uncontested one for no reason a reader could name.
+ */
+export type ProposalSort = 'newest' | 'oldest';
+
 interface ActionsResult {
   proposalActionsConnection: { nodes: { proposalId: string; actionType: string }[] } | null;
 }
@@ -80,14 +87,26 @@ interface ActionsResult {
  * which is where the name, window and tally live — so the whole card comes back
  * in one cursor-paged request rather than a join per row.
  */
-function personProposalsQuery(spaceId: string, first: number, after: string | null) {
+function personProposalsQuery(
+  spaceId: string,
+  first: number,
+  after: string | null,
+  sort: ProposalSort,
+  spaceIds: readonly string[]
+) {
   const sp = JSON.stringify(ID.hexToUuid(spaceId));
   const cursor = after ? `, after: ${JSON.stringify(after)}` : '';
 
+  // Narrowed by the server, so the filter applies to all 770 rather than to the
+  // pages already scrolled past. Spaces are OR, matching every other
+  // multi-select on these tabs.
+  const spaceClause =
+    spaceIds.length > 0 ? `, spaceId: { in: ${JSON.stringify(spaceIds.map(id => ID.hexToUuid(id)))} }` : '';
+
   return `query {
     proposalsCurrentsConnection(
-      filter: { proposedBy: { is: ${sp} } }
-      orderBy: CREATED_AT_DESC
+      filter: { proposedBy: { is: ${sp} }${spaceClause} }
+      orderBy: ${sort === 'oldest' ? 'CREATED_AT_ASC' : 'CREATED_AT_DESC'}
       first: ${first}${cursor}
     ) {
       totalCount
@@ -125,8 +144,10 @@ function proposalActionsQuery(proposalIds: string[]) {
   }`;
 }
 
-export function personProposalsQueryKey(spaceId: string) {
-  return ['person-proposals', ID.uuidToHex(spaceId)] as const;
+export function personProposalsQueryKey(spaceId: string, sort: ProposalSort, spaceIds: readonly string[]) {
+  // The space selection is sorted into the key rather than taken as given, so
+  // picking two spaces in either order is one cache entry rather than two.
+  return ['person-proposals', ID.uuidToHex(spaceId), sort, [...spaceIds].sort().join(',')] as const;
 }
 
 async function fetchActionTypes(proposalIds: string[], signal?: AbortSignal): Promise<Map<string, ProposalType>> {
@@ -161,13 +182,18 @@ async function fetchActionTypes(proposalIds: string[], signal?: AbortSignal): Pr
 export function usePersonProposals({
   spaceId,
   first = 20,
+  sort = 'newest',
+  spaceIds = [],
 }: {
   /** The personal space. `proposedBy` is this, not the person entity. */
   spaceId: string;
   first?: number;
+  sort?: ProposalSort;
+  /** Spaces the proposals landed in. Empty means every one of them. */
+  spaceIds?: readonly string[];
 }) {
   const { data, isLoading, isError, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteQuery({
-    queryKey: personProposalsQueryKey(spaceId),
+    queryKey: personProposalsQueryKey(spaceId, sort, spaceIds),
     enabled: spaceId !== '',
     initialPageParam: null as string | null,
     getNextPageParam: (page: PersonProposalsPage) => (page.hasNextPage ? page.endCursor : null),
@@ -175,7 +201,7 @@ export function usePersonProposals({
       const result = await Effect.runPromise(
         Effect.either(
           graphql<NetworkResult>({
-            query: personProposalsQuery(spaceId, first, pageParam),
+            query: personProposalsQuery(spaceId, first, pageParam, sort, spaceIds),
             endpoint: Environment.getConfig().api,
             signal,
           })
@@ -183,10 +209,12 @@ export function usePersonProposals({
       );
 
       if (Either.isLeft(result)) {
-        // Answered with nothing rather than thrown, like the rail's counts: this
-        // is a record somebody is reading, and an empty tab beats an error page.
+        // Thrown, not swallowed. Answering `EMPTY_PAGE` here made a failed
+        // request indistinguishable from a person who has never proposed
+        // anything — the tab printed "No proposals yet" over it, and the error
+        // state that exists to say otherwise could never fire.
         console.error(`[person-proposals] failed to fetch proposals for ${spaceId}:`, result.left);
-        return EMPTY_PAGE;
+        throw result.left;
       }
 
       const connection = result.right.proposalsCurrentsConnection;

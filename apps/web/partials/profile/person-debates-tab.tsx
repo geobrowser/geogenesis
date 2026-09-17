@@ -1,11 +1,18 @@
 'use client';
 
+import * as React from 'react';
+
+import type { HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { usePersonDebates } from '~/core/debates/use-person-debates';
+import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { type DebateSort, filterRowsBySpace, sortRows, spaceFacetsFromRows } from '~/core/profile/record-client-filter';
 
 import { PersonRecordFeed } from './person-record-feed';
+import { RecordFilterRow } from './record-filter-row';
+import { useRecordSelection } from './use-record-selection';
 
 /**
- * The debates a person argued (GEO-2859).
+ * The debates a person argued (GEO-2859, GEO-2918).
  *
  * Explore cards, not the full-screen player. This is a record being read
  * alongside the rest of a profile, and a viewport-filling swipe feed takes the
@@ -14,22 +21,87 @@ import { PersonRecordFeed } from './person-record-feed';
  *
  * Unpaged, and so with nothing to scroll for: the list is bounded by how many
  * debates one person has argued, which is eleven at the top of the graph, and
- * the relation query takes the lot in one request.
+ * the relation query takes the lot in one request. That is also why its controls
+ * act on the array in hand — with the whole record present, doing it locally is
+ * exact rather than a compromise.
+ *
+ * No topic menu here. A debate is not tagged with topics the way a claim is, and
+ * a type menu would list `Debate` and nothing else.
  */
+const SORT_OPTIONS: HubFilterOption<string>[] = [
+  { value: 'new', label: 'New' },
+  { value: 'oldest', label: 'Oldest' },
+];
+
 export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
+  const [sort, setSort] = React.useState<DebateSort>('new');
+  const spaces = useRecordSelection();
+
   const { rows, isLoading, isError } = usePersonDebates(spaceId, true);
 
+  const facets = React.useMemo(() => spaceFacetsFromRows(rows), [rows]);
+  const shown = React.useMemo(
+    () => sortRows(filterRowsBySpace(rows, spaces.values), sort),
+    [rows, sort, spaces.values]
+  );
+
+  const spaceIds = React.useMemo(() => facets.map(facet => facet.id), [facets]);
+  const { labelsById } = useSpaceLabels(spaceIds);
+
+  const spaceOptions = React.useMemo(
+    () =>
+      facets.map(facet => ({
+        value: facet.id,
+        label: spaceLabel(labelsById, facet.id)?.name ?? `Space ${facet.id.slice(0, 6)}`,
+        count: facet.count,
+      })),
+    [facets, labelsById]
+  );
+
+  const isFiltered = spaces.values.length > 0;
+
   return (
-    <PersonRecordFeed
-      rows={rows}
-      isLoading={isLoading}
-      isError={isError}
-      loadingLabel="Loading debates…"
-      // Said here rather than by the browse feed, which offers "Start one from
-      // the Claims tab" — right for a space with no debates in it, wrong for a
-      // person who has never been in one.
-      emptyLabel="No debates yet."
-      errorLabel="Couldn’t load debates."
-    />
+    <div className="flex flex-col gap-4">
+      {/*
+       * Above every state, the empty one included. An empty list is usually the
+       * filter's doing, and the menu that caused it is the only way back —
+       * unmounting the controls along with the rows is a dead end.
+       *
+       * Hidden when there is nothing to control: ten of this account's eleven
+       * debates sit in one space, and a menu with a single row cannot act.
+       */}
+      {facets.length > 1 || rows.length > 1 ? (
+        <RecordFilterRow
+          sort={{ value: sort, options: SORT_OPTIONS, onChange: value => setSort(value as DebateSort) }}
+          dimensions={
+            facets.length > 1
+              ? [
+                  {
+                    key: 'spaces',
+                    options: spaceOptions,
+                    values: spaces.values,
+                    onToggle: spaces.toggle,
+                    onClear: spaces.clear,
+                    anyLabel: 'Any space',
+                    noun: ['space', 'spaces'],
+                  },
+                ]
+              : []
+          }
+        />
+      ) : null}
+
+      <PersonRecordFeed
+        rows={shown}
+        isLoading={isLoading}
+        isError={isError}
+        loadingLabel="Loading debates…"
+        // Said here rather than by the browse feed, which offers "Start one from
+        // the Claims tab" — right for a space with no debates in it, wrong for a
+        // person who has never been in one.
+        emptyLabel={isFiltered ? 'No debates match these filters.' : 'No debates yet.'}
+        errorLabel="Couldn’t load debates."
+      />
+    </div>
   );
 }

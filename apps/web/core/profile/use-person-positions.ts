@@ -1,236 +1,141 @@
 'use client';
 
-import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { Effect } from 'effect';
-import { parse } from 'graphql';
-
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { ID } from '~/core/id';
-import { graphql } from '~/core/io/graphql-client';
 import { fetchExploreRowsByIds } from '~/core/profile/explore-rows-by-ids';
+import {
+  type PositionOrder,
+  type PositionSort,
+  type Stance,
+  fetchPositionOrder,
+  personPositionOrderQueryKey,
+} from '~/core/profile/person-position-order';
 import { normId } from '~/core/utils/norm-id';
 
-/**
- * Which claims a person voted on, newest first.
- *
- * Two facts decide this. **A vote's `userId` is the personal space id** — the
- * same id the debate relations point at and the same one in the route, not the
- * person entity. And **`voteKind` 1 and 2 are the position kinds**, stance and
- * veracity; the table holds others, and counting it unfiltered overstates the
- * figure threefold on the reference account.
- *
- * Ids only. `UserVote` carries an `objectId` and no way to traverse to the thing
- * itself, so the claims come from a second request — see `fetchExploreRowsByIds`.
- *
- * Paged by **cursor, not offset**, which is what the rest of the repo does —
- * see `fetchRelationsByToEntityIds`, which says why in one line. The server
- * rejects any `offset` above 1000, so offset paging silently caps a person's
- * record at 1000 vote rows and then errors on the page that would pass it.
- * `after` has no such ceiling.
- *
- * It was offset for a while, and the reason is worth keeping: `after` really
- * did answer 500 for the cursor this connection had just issued (GEO-2916).
- * `user_votes` had no primary key, so its cursors encoded a bare row offset —
- * gaia #937 gave the table one, and the cursors have worked since.
- */
-const PERSON_VOTES_SOURCE = /* GraphQL */ `
-  query PersonVotes($userId: UUID!, $first: Int, $after: Cursor) {
-    userVotesConnection(
-      first: $first
-      after: $after
-      orderBy: VOTED_AT_DESC
-      filter: { userId: { is: $userId }, or: [{ voteKind: { is: 1 } }, { voteKind: { is: 2 } }] }
-    ) {
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      nodes {
-        objectId
-        voteType
-        voteKind
-        votedAt
-      }
-    }
-  }
-`;
-
-export const personVotesDocument = parse(PERSON_VOTES_SOURCE) as TypedDocumentNode<any, any>;
-
-/** Which way somebody came down on a claim. */
-export type Stance = 'agree' | 'disagree';
-
-export type PersonPositionsPage = {
-  /** Card rows, still missing what only a space lookup can answer. */
-  rows: ExploreFeedRow[];
-  /** Which side this person took, by claim id. Absent where they only rated veracity. */
-  stanceByClaimId: Record<string, Stance>;
-  /** The cursor the next page starts after. Null once there is none. */
-  nextCursor: string | null;
-};
-
-type VoteNode = { objectId?: string | null; voteType?: number | null; voteKind?: number | null };
-
-type VotesResponse = {
-  userVotesConnection?: {
-    pageInfo?: { hasNextPage?: boolean | null; endCursor?: string | null } | null;
-    nodes?: (VoteNode | null)[] | null;
-  } | null;
-};
-
-type VotePage = {
-  ids: string[];
-  stanceByClaimId: Record<string, Stance>;
-  hasNextPage: boolean;
-  endCursor: string | null;
-};
+export type { PositionSort, Stance };
 
 /**
- * `voteType` 0 is agree and 1 is disagree; 2 is neither and carries no side.
+ * The claims a person holds a position on, ordered and narrowed (GEO-2859, GEO-2918).
  *
- * Measured on the reference account: 96 agree, 83 disagree, 4 of the third
- * across 183 stance votes.
+ * Built in two halves, and the split is the point. **Which claims, in what
+ * order** is a complete list of ids — see `person-position-order` — because the
+ * control row narrows the record rather than the screen, and an ordering can
+ * only meet a filter over the whole set. **What those claims are** is fetched a
+ * page at a time, because that is the expensive half and the reader sees twenty.
+ *
+ * Deduping therefore happens once, over the complete list, rather than per page.
+ * The old shape paged the vote table directly and merged pages afterwards: a
+ * claim whose stance and veracity votes straddled a page boundary escaped the
+ * per-page dedupe and rendered twice, with two React keys the same. That class
+ * of bug is gone rather than fixed — there are no page boundaries left in the id
+ * list for anything to straddle.
  */
-function stanceOf(node: VoteNode): Stance | null {
-  if (node.voteType === 0) return 'agree';
-  if (node.voteType === 1) return 'disagree';
-  return null;
+const PAGE_SIZE = 20;
+
+const EMPTY_STANCES: Record<string, Stance> = {};
+
+export function personPositionsQueryKey(spaceId: string, sort: PositionSort, filterKey: string) {
+  return ['person-positions', ID.uuidToHex(spaceId), sort, filterKey] as const;
 }
 
-function decodeVotes(response: VotesResponse): VotePage {
-  const connection = response.userVotesConnection;
-
-  // One claim, however many times they voted on it. Stance and veracity are
-  // separate votes on the same claim, so somebody who took both would otherwise
-  // appear twice in their own record. Order is preserved: first vote wins the
-  // position, which is the most recent one.
-  const seen = new Set<string>();
-  const ids: string[] = [];
-  const stanceByClaimId: Record<string, Stance> = {};
-  const nodes = connection?.nodes ?? [];
-
-  for (const node of nodes) {
-    const id = node?.objectId;
-    if (!id) continue;
-    const key = normId(id);
-
-    // The side they took, from the stance vote. `voteKind` 2 is veracity — a
-    // judgement about whether the claim is *true*, which is a different question
-    // from whether they agree with it — so it never sets the badge. A claim they
-    // only rated for veracity carries no side, which is the honest answer.
-    if (node.voteKind === 1) {
-      const stance = stanceOf(node);
-      if (stance && !(key in stanceByClaimId)) stanceByClaimId[key] = stance;
-    }
-
-    if (seen.has(key)) continue;
-    seen.add(key);
-    ids.push(id);
-  }
-
-  return {
-    ids,
-    stanceByClaimId,
-    hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
-    // The server's own place-marker, so it counts vote rows rather than the
-    // claims left after deduping. Advancing by the kept count would walk the
-    // next page back over rows this one already collapsed.
-    endCursor: connection?.pageInfo?.endCursor ?? null,
-  };
-}
-
-/** Exposed for tests: the decode is where `voteKind` and `voteType` get confused. */
-export const decodeVotesForTest = decodeVotes;
-
-/**
- * Every page as one list.
- *
- * Deduped *across* pages, not only within one. `decodeVotes` collapses a claim's
- * stance and veracity votes into one card among the twenty rows it was handed,
- * so a claim whose two votes fall either side of a page boundary escaped it
- * entirely — rendered twice, with two React keys the same.
- *
- * First seen wins, for the rows and for the stance. Pages arrive newest-first,
- * so a later page holds older votes; merging their stances over the top — which
- * is what `Object.assign` did — let the older vote decide the badge.
- */
-export function mergePositionPages(pages: readonly PersonPositionsPage[]): {
-  rows: ExploreFeedRow[];
-  stanceByClaimId: Record<string, Stance>;
-} {
-  const seen = new Set<string>();
-  const rows: ExploreFeedRow[] = [];
-  const stanceByClaimId: Record<string, Stance> = {};
-
-  for (const page of pages) {
-    for (const [id, stance] of Object.entries(page.stanceByClaimId)) {
-      if (!(id in stanceByClaimId)) stanceByClaimId[id] = stance;
-    }
-
-    for (const row of page.rows) {
-      const key = normId(row.entityId);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      rows.push(row);
-    }
-  }
-
-  return { rows, stanceByClaimId };
-}
-
-export function personPositionsQueryKey(spaceId: string) {
-  return ['person-positions', ID.uuidToHex(spaceId)] as const;
-}
+export type UsePersonPositionsParams = {
+  /** The personal space. A vote's `userId` is this, not the person entity. */
+  spaceId: string;
+  sort?: PositionSort;
+  /**
+   * The claims the filters left, or null for "no filter applied".
+   *
+   * Null and an empty array mean opposite things — everything, and nothing — and
+   * the tab renders an empty list for the second. Passing `[]` while the index
+   * is still loading would flash "no positions" over a record holding hundreds,
+   * so callers pass null until they know.
+   */
+  matchingIds?: readonly string[] | null;
+  first?: number;
+};
 
 export function usePersonPositions({
   spaceId,
-  first = 20,
-}: {
-  /** The personal space. A vote's `userId` is this, not the person entity. */
-  spaceId: string;
-  first?: number;
-}) {
-  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage, isError } = useInfiniteQuery({
-    queryKey: personPositionsQueryKey(spaceId),
+  sort = 'new',
+  matchingIds = null,
+  first = PAGE_SIZE,
+}: UsePersonPositionsParams) {
+  const order = useQuery({
+    queryKey: personPositionOrderQueryKey(spaceId, sort),
     enabled: spaceId !== '',
-    initialPageParam: null as string | null,
-    getNextPageParam: (page: PersonPositionsPage) => page.nextCursor,
-    queryFn: async ({ pageParam, signal }): Promise<PersonPositionsPage> => {
-      const votes = await Effect.runPromise(
-        graphql({
-          query: personVotesDocument,
-          decoder: decodeVotes,
-          variables: { userId: ID.uuidToHex(spaceId), first, after: pageParam },
-          signal,
-        })
-      );
+    staleTime: 60_000,
+    queryFn: ({ signal }) => fetchPositionOrder(spaceId, sort, signal),
+  });
 
-      return {
-        rows: await fetchExploreRowsByIds(votes.ids, signal),
-        stanceByClaimId: votes.stanceByClaimId,
-        // A page with no cursor ends the list whatever `hasNextPage` says, or
-        // the same cursor would be asked for again and the sentinel would fire
-        // forever against an unmoving list.
-        nextCursor: votes.hasNextPage ? votes.endCursor : null,
-      };
+  // Stances come from the vote table and nowhere else, so Top needs it as well
+  // as its own order. Keyed identically to the `new` order, so the two share one
+  // cache entry and switching sorts back and forth costs nothing.
+  const stanceSource = useQuery({
+    queryKey: personPositionOrderQueryKey(spaceId, 'new'),
+    enabled: spaceId !== '' && sort !== 'new',
+    staleTime: 60_000,
+    queryFn: ({ signal }) => fetchPositionOrder(spaceId, 'new', signal),
+  });
+
+  const stanceByClaimId = (sort === 'new' ? order.data : stanceSource.data)?.stanceByClaimId ?? EMPTY_STANCES;
+
+  const orderedIds = React.useMemo(() => applyFilter(order.data, matchingIds), [order.data, matchingIds]);
+
+  // The ids the page fetcher closes over. Without them in the key, changing a
+  // filter would serve the previous selection's pages straight from cache.
+  const filterKey = matchingIds === null ? 'all' : `${matchingIds.length}:${orderedIds.length}`;
+
+  const {
+    data,
+    isLoading: isLoadingRows,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    isError: isRowsError,
+  } = useInfiniteQuery({
+    queryKey: personPositionsQueryKey(spaceId, sort, filterKey),
+    enabled: spaceId !== '' && order.isSuccess,
+    initialPageParam: 0,
+    getNextPageParam: (_last: ExploreFeedRow[], _pages: ExploreFeedRow[][], lastOffset: number) => {
+      const next = lastOffset + first;
+      return next < orderedIds.length ? next : null;
     },
+    queryFn: ({ pageParam, signal }) => fetchExploreRowsByIds(orderedIds.slice(pageParam, pageParam + first), signal),
     retry: 1,
     staleTime: 30_000,
   });
 
-  const { rows, stanceByClaimId } = React.useMemo(() => mergePositionPages(data?.pages ?? []), [data]);
+  const rows = React.useMemo(() => (data?.pages ?? []).flat(), [data]);
 
   return {
     rows,
     stanceByClaimId,
-    isLoading,
-    isError,
+    /** How many claims the current filter leaves — not how many are rendered. */
+    total: orderedIds.length,
+    isLoading: order.isLoading || isLoadingRows,
+    isError: order.isError || isRowsError,
     isFetchingNextPage,
     hasNextPage: Boolean(hasNextPage),
     fetchNextPage,
   };
+}
+
+/**
+ * The ordered list, keeping only what the filters left.
+ *
+ * Intersected rather than re-queried. The order and the filter are both complete
+ * lists over the same record, so this is exact — and it is what lets the two
+ * halves come from different connections without ever disagreeing.
+ */
+export function applyFilter(order: PositionOrder | undefined, matchingIds: readonly string[] | null): string[] {
+  if (!order) return [];
+  if (matchingIds === null) return order.entityIds;
+
+  const keep = new Set(matchingIds.map(normId));
+
+  return order.entityIds.filter(id => keep.has(id));
 }
