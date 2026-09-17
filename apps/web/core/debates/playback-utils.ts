@@ -93,8 +93,15 @@ function offsetSeconds(startedAtMs: number | null, windowStartMs: number): numbe
   return (startedAtMs - windowStartMs) / 1_000;
 }
 
-/** What `pairPlayheadSeconds` needs off an element, so tests need not build a whole video. */
+/** What `pairPlayhead` needs off an element, so tests need not build a whole video. */
 export type ClockVideo = Pick<HTMLVideoElement, 'paused' | 'currentTime'>;
+
+export type PairPlayhead = {
+  /** Debate-timeline seconds. */
+  seconds: number;
+  /** Read off an element that is actually running, rather than reconstructed from a paused one. */
+  live: boolean;
+};
 
 /**
  * Where the debate is, in debate-timeline seconds, given the two recordings' own clocks.
@@ -109,17 +116,31 @@ export type ClockVideo = Pick<HTMLVideoElement, 'paused' | 'currentTime'>;
  * to the next speaker, and the resume on return seeks the pair back to the frozen position,
  * replaying everything the viewer heard in the background.
  *
- * So: whichever element is actually running is the clock, slot 1 first. With both paused —
- * the ordinary paused, scrubbing and pre-resume states — it is slot 1 again, unchanged.
+ * So: whichever element is actually running is the clock, slot 1 first.
+ *
+ * With neither running there is no clock left to read, and the frozen one can be arbitrarily
+ * stale — slot 1 stops, slot 2 plays on for a minute, then slot 2 stops too (or reaches `ended`,
+ * which also reads as paused). That is what `lastRunningSeconds` is for: the caller's memory of
+ * where the debate had actually got to, which wins over a frozen clock behind it. Callers must
+ * reset that memory on a deliberate seek and when the recordings change, or a scrub backwards
+ * would be dragged forward by it — `useDebatePlayback` does both.
+ *
+ * `live` says which of those two it was, so a caller can keep its memory current without
+ * re-deriving "is either element running" for itself.
  */
-export function pairPlayheadSeconds(
+export function pairPlayhead(
   primary: ClockVideo | null,
   secondary: ClockVideo | null,
-  offsets: { slot1: number; slot2: number }
-): number {
-  if (primary && !primary.paused) return primary.currentTime + offsets.slot1;
-  if (secondary && !secondary.paused) return secondary.currentTime + offsets.slot2;
-  return (primary?.currentTime ?? 0) + offsets.slot1;
+  offsets: { slot1: number; slot2: number },
+  lastRunningSeconds: number | null = null
+): PairPlayhead {
+  if (primary && !primary.paused) return { seconds: primary.currentTime + offsets.slot1, live: true };
+  if (secondary && !secondary.paused) return { seconds: secondary.currentTime + offsets.slot2, live: true };
+  const frozen = (primary?.currentTime ?? 0) + offsets.slot1;
+  return {
+    seconds: lastRunningSeconds === null ? frozen : Math.max(frozen, lastRunningSeconds),
+    live: false,
+  };
 }
 
 export function participantForSlot(debate: Debate, slot: ParticipantSlot) {

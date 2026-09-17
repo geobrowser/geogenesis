@@ -512,6 +512,61 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
     expect(result.current.playing).toBe(true);
   });
 
+  /**
+   * Copilot's second catch, and the sequence it asked for: slot 1 stops, slot 2 advances, slot 2
+   * stops too, tab returns. Both elements are now paused and *both* clocks are behind where the
+   * debate actually got to — slot 1 by a minute, slot 2 by however long it took the browser to
+   * get round to it. Reconstructing the position from either one replays background progress.
+   */
+  it('resumes from the furthest point reached when the tab stopped both videos in turn', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    visibilityState = 'hidden';
+    slot1.browserPause(); // frozen at 0
+    // Slot 2's turn (30s each, slot 1 first), so slot 2 is the speaker and nothing restarts
+    // slot 1 — this is the pair genuinely running on one clock.
+    slot2.currentTime = 40;
+    act(() => result.current.onPlaybackTick()); // the tick that observes slot 2 at 40
+    slot2.browserPause(); // ...and now the browser stops it too
+
+    await act(async () => {
+      setVisibility('visible');
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(slot1.currentTime).toBeCloseTo(40, 1); // not rewound to slot 1's frozen 0
+    expect(slot2.currentTime).toBeCloseTo(40, 1);
+    expect(result.current.playing).toBe(true);
+  });
+
+  /**
+   * The counterweight to that memory: it must never drag a deliberate move forward. A scrub back
+   * to 10s after playing to 25s has to stay at 10s, not be "corrected" to the furthest point.
+   */
+  it('lets the viewer scrub backwards past the furthest point played', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    slot1.currentTime = 25;
+    slot2.currentTime = 25;
+    act(() => result.current.onPlaybackTick());
+
+    act(() => result.current.beginScrub());
+    act(() => result.current.seekBoth(10));
+    await act(async () => {
+      result.current.endScrub();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(slot1.currentTime).toBeCloseTo(10, 1);
+    expect(slot2.currentTime).toBeCloseTo(10, 1);
+  });
+
   /** A pair the browser let run must not be seeked on return — that is the "no reset" half. */
   it('does not touch a pair that kept playing while the tab was hidden', async () => {
     const { result, slot1, slot2 } = await playing();

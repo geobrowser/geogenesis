@@ -5,7 +5,7 @@ import {
   clampSeconds,
   hasProcessedVideo,
   normalizeTurnDurationsMs,
-  pairPlayheadSeconds,
+  pairPlayhead,
   playBothWithMutedFallback,
   recordingWindowOffsetsSeconds,
   timelineSecondsFor,
@@ -139,32 +139,51 @@ describe('recordingWindowOffsetsSeconds', () => {
   });
 });
 
-describe('pairPlayheadSeconds (GEO-2947)', () => {
+describe('pairPlayhead (GEO-2947)', () => {
   const offsets = { slot1: 1, slot2: 3 };
   const video = (paused: boolean, currentTime: number) => ({ paused, currentTime });
 
   it('reads slot 1 while it is running', () => {
-    expect(pairPlayheadSeconds(video(false, 10), video(false, 8), offsets)).toBe(11);
+    expect(pairPlayhead(video(false, 10), video(false, 8), offsets)).toEqual({ seconds: 11, live: true });
   });
 
   it('falls back to slot 1 when both are paused', () => {
-    expect(pairPlayheadSeconds(video(true, 10), video(true, 8), offsets)).toBe(11);
+    expect(pairPlayhead(video(true, 10), video(true, 8), offsets)).toEqual({ seconds: 11, live: false });
   });
 
   /**
-   * THE REGRESSION. A hidden tab stops the element it considers silent. If that is slot 1, its
-   * clock freezes where it stopped while slot 2 carries the debate on — so trusting slot 1 both
-   * freezes the turn (audio never reaches the next speaker) and rewinds the pair on return,
-   * replaying everything heard in the background.
+   * A hidden tab stops the element it considers silent. If that is slot 1, its clock freezes
+   * where it stopped while slot 2 carries the debate on — so trusting slot 1 both freezes the
+   * turn (audio never reaches the next speaker) and rewinds the pair on return, replaying
+   * everything heard in the background.
    */
   it('reads the element still running when slot 1 is the one that stopped', () => {
     // Slot 1 frozen at 10 (debate 11) while slot 2 has reached 20 (debate 23).
-    expect(pairPlayheadSeconds(video(true, 10), video(false, 20), offsets)).toBe(23);
+    expect(pairPlayhead(video(true, 10), video(false, 20), offsets)).toEqual({ seconds: 23, live: true });
+  });
+
+  /**
+   * THE SEQUENCE Copilot asked for: slot 1 stops, slot 2 plays on, slot 2 stops too. Now every
+   * clock on the page is behind where the debate got to, and the caller's memory is the only
+   * record of it. `ended` reads as paused, so it arrives here the same way.
+   */
+  it('prefers the remembered position once neither element is running', () => {
+    expect(pairPlayhead(video(true, 10), video(true, 20), offsets, 23)).toEqual({ seconds: 23, live: false });
+  });
+
+  /** Never backwards: a memory behind the frozen clock is the stale one. */
+  it('keeps the frozen clock when it is ahead of the remembered position', () => {
+    expect(pairPlayhead(video(true, 40), video(true, 5), offsets, 12)).toEqual({ seconds: 41, live: false });
+  });
+
+  /** A running element always wins over the memory — that is what keeps a scrub honest. */
+  it('ignores the remembered position while something is running', () => {
+    expect(pairPlayhead(video(false, 5), video(true, 20), offsets, 90)).toEqual({ seconds: 6, live: true });
   });
 
   it('survives an element that is not mounted yet', () => {
-    expect(pairPlayheadSeconds(null, null, offsets)).toBe(1);
-    expect(pairPlayheadSeconds(null, video(false, 20), offsets)).toBe(23);
+    expect(pairPlayhead(null, null, offsets)).toEqual({ seconds: 1, live: false });
+    expect(pairPlayhead(null, video(false, 20), offsets)).toEqual({ seconds: 23, live: true });
   });
 });
 

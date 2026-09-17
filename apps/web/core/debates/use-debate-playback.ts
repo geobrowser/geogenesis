@@ -11,7 +11,7 @@ import {
   type TurnState,
   clampSeconds,
   normalizeTurnDurationsMs,
-  pairPlayheadSeconds,
+  pairPlayhead,
   participantForSlot,
   playBothWithMutedFallback,
   recordingWindowOffsetsSeconds,
@@ -106,6 +106,16 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const lastSyncSeekAtRef = React.useRef(0);
   /** See MIN_BACKGROUND_RESTART_INTERVAL_MS. */
   const lastBackgroundRestartAtRef = React.useRef(0);
+  /**
+   * Debate-time of the last tick where an element was actually running.
+   *
+   * The pair's position is normally readable straight off the elements, but not once a hidden
+   * tab has stopped both of them at different moments: slot 1 stops, slot 2 plays on, slot 2
+   * stops too, and now every clock on the page is behind where the debate actually got to. This
+   * is the only record of it. Reset on a deliberate seek and when the recordings change, so it
+   * can never drag a scrub — or a different debate — forward. See `pairPlayhead`.
+   */
+  const lastRunningPlayheadRef = React.useRef<number | null>(null);
   /**
    * Which resume attempt is current.
    *
@@ -221,6 +231,9 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       if (fetchedForRef.current === recordingsKey) fetchedForRef.current = null;
     };
     setUrls({ slot1: null, slot2: null });
+    // A different debate's clocks start over; carrying this across would strand the new one
+    // at the old one's position.
+    lastRunningPlayheadRef.current = null;
     setError(null);
 
     Promise.all([
@@ -268,6 +281,9 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       // construction here, and slot 1's `currentTime` has just jumped, which is not progress.
       secondaryVideo.playbackRate = 1;
       primaryProgressRef.current = null;
+      // This *is* the debate's position now — a scrub backwards must not be dragged forward by
+      // where playback had previously got to.
+      lastRunningPlayheadRef.current = playhead;
       lastSyncSeekAtRef.current = Date.now();
       return true;
     },
@@ -283,8 +299,11 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     }
 
     // Slot 1 is the clock — except when it is the element a hidden tab stopped, in which case
-    // its clock is frozen and slot 2 is carrying the debate. See `pairPlayheadSeconds`.
-    const playhead = clampSeconds(pairPlayheadSeconds(primaryVideo, secondaryVideo, offsets), timelineSeconds);
+    // its clock is frozen and slot 2 is carrying the debate, and except when both have been
+    // stopped, where only our own memory of the position is left. See `pairPlayhead`.
+    const position = pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current);
+    const playhead = clampSeconds(position.seconds, timelineSeconds);
+    if (position.live) lastRunningPlayheadRef.current = playhead;
     setPlayheadSeconds(playhead);
 
     // Lock slot 2 to slot 1, offset by the gap between when the two recordings started, so
@@ -464,7 +483,12 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // element's clock, not slot 1's unconditionally: a resume on return from a backgrounded tab
     // is exactly the case where slot 1 may be the one the browser stopped, and seeking to its
     // frozen position would rewind the debate over everything just heard (GEO-2947).
-    seekVideosTo(clampSeconds(pairPlayheadSeconds(primaryVideo, secondaryVideo, offsets), timelineSeconds));
+    seekVideosTo(
+      clampSeconds(
+        pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current).seconds,
+        timelineSeconds
+      )
+    );
     // allSettled never rejects, so a failed play() (e.g. blocked by autoplay
     // policy) leaves the video paused rather than throwing — check both the
     // settled results and the paused state, and surface the error inline.
