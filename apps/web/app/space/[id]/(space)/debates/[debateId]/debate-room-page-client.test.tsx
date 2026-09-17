@@ -939,7 +939,7 @@ describe('DebateRoomPageClient', () => {
       view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
       expect(screen.queryByRole('dialog', { name: 'Debate readiness' })).not.toBeInTheDocument();
-      expect(screen.getByRole('status', { name: 'Connecting to the debate' })).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Connecting to the debate' })).toBeInTheDocument();
       expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
       await waitFor(() => expect(mocks.ownershipAcquire).toHaveBeenCalledTimes(2));
       expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
@@ -955,7 +955,7 @@ describe('DebateRoomPageClient', () => {
 
       render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-      expect(screen.getByRole('status', { name: 'Connecting to the debate' })).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Connecting to the debate' })).toBeInTheDocument();
       await waitFor(() => expect(mocks.ownershipAcquire).toHaveBeenCalledOnce());
       expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
 
@@ -970,7 +970,7 @@ describe('DebateRoomPageClient', () => {
       render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
       expect(await screen.findByText('join failed')).toBeInTheDocument();
-      expect(screen.queryByRole('status', { name: 'Connecting to the debate' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: 'Connecting to the debate' })).not.toBeInTheDocument();
     });
 
     it('holds a full-screen state instead of a blank page while leaving a finished debate', async () => {
@@ -979,9 +979,9 @@ describe('DebateRoomPageClient', () => {
 
       render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-      expect(screen.getByRole('status', { name: 'Leaving the debate' })).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Leaving the debate' })).toBeInTheDocument();
       await waitFor(() => expect(mocks.back).toHaveBeenCalled());
-      expect(screen.getByRole('status', { name: 'Leaving the debate' })).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Leaving the debate' })).toBeInTheDocument();
     });
 
     it('holds a full-screen state while an idle room walks into the rematch', async () => {
@@ -990,8 +990,55 @@ describe('DebateRoomPageClient', () => {
 
       render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-      expect(screen.getByRole('status', { name: 'Leaving the debate' })).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Leaving the debate' })).toBeInTheDocument();
       await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    });
+
+    it('holds focus, the scroll lock and a visible label while the holding screen is up', async () => {
+      mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+      mocks.rematch = rematchSession('browsing');
+
+      const { unmount } = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      const holdingScreen = screen.getByRole('dialog', { name: 'Leaving the debate' });
+      // The screens on either side take focus the same way; without this it falls to `body` and
+      // the app shell behind the overlay stays reachable by keyboard.
+      expect(holdingScreen).toHaveFocus();
+      // `aria-modal` does not contain Tab on its own, and the app shell behind is still in the tab
+      // order. Nothing here is focusable, so both directions are swallowed and focus stays put.
+      expect(fireEvent.keyDown(holdingScreen, { key: 'Tab' })).toBe(false);
+      expect(holdingScreen).toHaveFocus();
+      expect(fireEvent.keyDown(holdingScreen, { key: 'Tab', shiftKey: true })).toBe(false);
+      expect(holdingScreen).toHaveFocus();
+      // Both neighbours lock too, so the scrollbar never returns between them.
+      expect(document.body.style.overflow).toBe('hidden');
+      // Named on screen, not only to assistive tech: leaving and connecting are otherwise identical.
+      expect(holdingScreen).toHaveTextContent('Leaving the debate');
+
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
+      unmount();
+      expect(document.body.style.overflow).toBe('');
+    });
+
+    it('spends the debate auto-connect when the intro connection lands after the debate starts', async () => {
+      const connecting = deferred<void>();
+      mocks.roomConnect.mockReturnValueOnce(connecting.promise);
+      mocks.debate = readyDebate({ localReady: true, remoteReady: false });
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+
+      // The opponent presses ready while this handshake is still running, so the debate has already
+      // left `ready` by the time the intro connection lands.
+      mocks.debate = connectingDebate();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await act(async () => connecting.resolve());
+      expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+
+      act(() => emitRoomEvent('disconnected', 99));
+
+      // The intro connection carried into the debate, so the drop offers a retry instead of reconnecting.
+      expect(await screen.findByRole('button', { name: 'Retry connection' })).toBeInTheDocument();
+      expect(mocks.roomConnect).toHaveBeenCalledOnce();
     });
   });
 

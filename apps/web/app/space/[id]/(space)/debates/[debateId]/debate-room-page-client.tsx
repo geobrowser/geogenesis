@@ -1462,13 +1462,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         setConnectionConflictSource(null);
         setPostJoinConnectionFailure(false);
         postJoinRecoveryAttemptsRef.current = 0;
-        // An intro connection carries into the debate, so it spends the debate phase's auto-connect
-        // too. Without this the first drop after the intro would silently re-acquire the camera and
-        // republish — which the room has always deliberately left to an explicit retry.
-        if (debateStatusRef.current === 'ready') {
-          autoConnectAttemptedRef.current = `${debateId}:debate`;
-          setAutoConnectAttemptedKey(autoConnectAttemptedRef.current);
-        }
+        // Any successful connection spends the debate phase's auto-connect, so the next drop offers
+        // an explicit retry instead of re-acquiring the camera and republishing. Not gated on the
+        // status still reading `ready`: an opponent pressing ready advances it mid-handshake.
+        autoConnectAttemptedRef.current = `${debateId}:debate`;
+        setAutoConnectAttemptedKey(autoConnectAttemptedRef.current);
         setRoomState('connected');
       } catch (error) {
         if (connectingRoom && connectingRoomRef.current === connectingRoom) connectingRoomRef.current = null;
