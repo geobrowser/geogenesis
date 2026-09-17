@@ -30,7 +30,6 @@ function indexOf(entries: PositionIndexEntry[], names: Record<string, string> = 
     entries,
     topics: facetsFrom(entries, e => e.topicIds, nameMap),
     spaces: facetsFrom(entries, e => e.spaceIds, new Map()),
-    isPartial: false,
   };
 }
 

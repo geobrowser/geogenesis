@@ -44,6 +44,16 @@ export type ActivityKind = {
    * reason: "0 debates" is a claim about a person.
    */
   isCountUnavailable?: boolean;
+  /**
+   * This kind's rows could not be read.
+   *
+   * Kept apart from "no rows", because the two look identical and mean opposite
+   * things. A kind with neither rows nor an error is a person who has not done
+   * that yet and is left out; a kind that *failed* stays, or the card quietly
+   * drops half the record and the remaining toggle implies the other half is
+   * empty.
+   */
+  isError?: boolean;
   /** The tab holding the rest. */
   href: string;
   seeAllLabel: string;
@@ -66,7 +76,9 @@ export type ActivityKind = {
  * video inside an `<img>` and showed a grey box.
  */
 export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
-  const available = React.useMemo(() => kinds.filter(kind => kind.rows.length > 0), [kinds]);
+  // A failed kind is available: it has something to say, even if the something
+  // is that it could not be read.
+  const available = React.useMemo(() => kinds.filter(kind => kind.rows.length > 0 || kind.isError), [kinds]);
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
 
   // Whichever the reader picked, or the first with anything in it. Held as a key
@@ -116,7 +128,16 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
         )}
       </header>
 
-      <ActivityGallery rows={selected.rows} stanceByClaimId={selected.stanceByClaimId} />
+      {selected.isError && selected.rows.length === 0 ? (
+        /*
+         * No retry here on purpose. This card is a summary; the tab its count
+         * links to holds the authoritative list and offers the retry, so a
+         * second control here would be a second thing to keep in step.
+         */
+        <p className="px-4 py-6 text-metadata text-grey-04">Couldn’t load {selected.label.toLowerCase()}.</p>
+      ) : (
+        <ActivityGallery rows={selected.rows} stanceByClaimId={selected.stanceByClaimId} />
+      )}
 
       <Link
         href={selected.href}

@@ -92,7 +92,13 @@ export const personScoreOrderDocument = parse(SCORE_ORDER_SOURCE) as TypedDocume
 
 const ORDER_PAGE_SIZE = 500;
 
-/** Bounds the request count, not the answer. Matches the index's ceiling. */
+/**
+ * Bounds the request count. Reaching it throws, matching the index's ceiling.
+ *
+ * Stopping quietly here would hand the tab a short list it would render as the
+ * whole record — the list ending well before the count beside it, with nothing
+ * saying why.
+ */
 const ORDER_MAX_PAGES = 20;
 
 /** Which way somebody came down on a claim. */
@@ -190,6 +196,9 @@ async function pageAll(
 
     nodes.push(...decoded.nodes);
     if (!decoded.hasNextPage || !decoded.endCursor) break;
+    if (page === ORDER_MAX_PAGES - 1) {
+      throw new Error(`[position-order] exceeds ${ORDER_MAX_PAGES} pages`);
+    }
     after = decoded.endCursor;
   }
 

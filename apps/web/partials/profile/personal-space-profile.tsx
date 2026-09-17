@@ -125,6 +125,7 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       // without `isError` they render under one forever if it failed.
       isLoading: debates.isLoading || isLoadingFacts,
       isCountUnavailable: isFactsError,
+      isError: debates.isError,
       href: `/space/${spaceId}/debates`,
       seeAllLabel: 'See all debates',
     },
@@ -136,6 +137,7 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       total: facts.positions,
       isLoading: positions.isLoading || isLoadingFacts,
       isCountUnavailable: isFactsError,
+      isError: positions.isError,
       href: `/space/${spaceId}/positions`,
       seeAllLabel: 'See all claims',
     },

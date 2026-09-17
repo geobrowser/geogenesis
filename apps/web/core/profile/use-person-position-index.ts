@@ -56,7 +56,16 @@ export const personPositionIndexDocument = parse(POSITION_INDEX_SOURCE) as Typed
 
 const INDEX_PAGE_SIZE = 500;
 
-/** Bounds the request count, not the answer. 20 pages is 10,000 claims. */
+/**
+ * Bounds the request count. Reaching it is an error, not a smaller answer.
+ *
+ * 20 pages is 10,000 claims against 208 on the busiest account, so this is a
+ * guard rather than a limit. It throws because a *truncated* index is worse than
+ * none: the menus would offer the topics of the first 10,000 claims and report
+ * "no matches" for anything beyond them, while the rail beside it counts the
+ * whole record. The proposal-facet query takes the same line for the same
+ * reason, and so does the order fetch.
+ */
 const POSITION_INDEX_MAX_PAGES = 20;
 
 /** One claim, reduced to what the control row narrows by. */
@@ -80,15 +89,12 @@ export type PersonPositionIndex = {
   topics: PositionFacet[];
   /** Spaces across the whole record, most-used first. Named by the caller. */
   spaces: PositionFacet[];
-  /** The index stopped at the ceiling, so the facets describe most of the record rather than all. */
-  isPartial: boolean;
 };
 
 export const EMPTY_POSITION_INDEX: PersonPositionIndex = {
   entries: [],
   topics: [],
   spaces: [],
-  isPartial: false,
 };
 
 type IndexNode = {
@@ -324,7 +330,6 @@ export function usePersonPositionIndex({ spaceId, enabled = true }: { spaceId: s
       const names = new Map<string, string | null>();
       let after: string | null = null;
       let pages = 0;
-      let isPartial = false;
 
       for (;;) {
         const page: IndexPage = await Effect.runPromise(
@@ -349,8 +354,7 @@ export function usePersonPositionIndex({ spaceId, enabled = true }: { spaceId: s
         pages += 1;
         if (!page.hasNextPage || !page.endCursor) break;
         if (pages >= POSITION_INDEX_MAX_PAGES) {
-          isPartial = true;
-          break;
+          throw new Error(`[position-index] ${spaceId} exceeds ${POSITION_INDEX_MAX_PAGES} pages`);
         }
         after = page.endCursor;
       }
@@ -361,7 +365,6 @@ export function usePersonPositionIndex({ spaceId, enabled = true }: { spaceId: s
         // Spaces are counted here and named by the caller, which already looks
         // space names up for the rows and would otherwise ask twice.
         spaces: facetsFrom(entries, entry => entry.spaceIds, new Map()),
-        isPartial,
       };
     },
   });
