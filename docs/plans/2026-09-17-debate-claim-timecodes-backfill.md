@@ -1,7 +1,7 @@
 # Backfilling claim timecodes across every debate
 
 Companion to `2026-09-15-debate-claim-timecodes-publish-instructions.md`, which did this for one
-debate by hand. Same writes, same properties, same space rules — 49 debates instead of one, and the
+debate by hand. Same writes, same properties, same space rules — 62 debates instead of one, and the
 offsets come from the matcher rather than from reading a transcript by eye.
 
 ---
@@ -31,50 +31,61 @@ between a transcript block and a claim — the same target, the same two propert
 
 The difference is where the numbers come from. The 13 offsets in the first publish were produced by
 the matcher and then hand-corrected against the transcript: 9 were right, 4 were not. There is no
-hand-correcting 610 of them, so the plan publishes only the ones the matcher is confident about and
+hand-correcting 617 of them, so the plan publishes only the ones the matcher is confident enough about and
 leaves the rest alone.
 
 **Leaving a claim alone costs nothing.** `core/debates/claim-timing.ts` runs the same matcher at read
 time for any claim with no published offsets, so an unpublished claim is displayed exactly as it is
 today. Publishing is not what makes a claim work; it makes it *permanent*.
 
-**Which is why the floor is high.** `published` is the resolver's most-trusted source, scored 1.0 —
-so writing a 0.45 match does not preserve its weakness, it launders a guess into an exact answer
-that no later gate can catch, on a surface that quotes a real person saying something at a specific
-second. The floor is 0.7, well above the 0.55 the live layer draws at.
+**Which is why there is a floor at all.** `published` is the resolver's most-trusted source, scored
+1.0 — so writing a weak match does not preserve its weakness. It promotes a guess to an exact answer
+that no later gate can demote, on a surface that quotes a real person saying something at a specific
+second.
 
-At that floor, every claim being published **already displays today** on the strength of its match.
-So this changes nothing a viewer sees. What it buys:
+**The floor is 0.55, which is Preston's call.** It is exactly the bar the live layer draws at, so
+the rule is: *if the app is already willing to say this claim was said at this second, make it
+permanent.* Nothing is published that the viewer is not already being shown. The consequence worth
+knowing is that it leaves no margin — a claim scoring 0.551 is published at the same 1.0 as a
+hand-checked offset, and the boundary cases are exactly the ones a margin would have caught. The
+plan file is the mitigation: it records every claim's real score, so a claim published at 0.56 can
+be found again and overwritten when GEO-2958 produces the extractor's true span.
+
+At this floor every claim being published **already displays today** on the strength of its match,
+so this changes nothing a viewer sees. What it buys:
 
 - The offsets stop depending on geo-chat still serving that debate's transcript, and on its
   segmentation not changing under us.
 - The matching stops being redone on every view.
 - There is a written record — this plan file — of which offsets were inferred and how strongly,
-  which matters when GEO-2958 lands and the extractor starts emitting true spans. Without it, a
-  guessed offset and an exact one are indistinguishable in the graph.
+  which matters when GEO-2958 lands. Without it, a guessed offset and an exact one are
+  indistinguishable in the graph.
 
 ### Where the claims actually fall
 
-844 claims across 65 debates that have any. 13 already carry offsets (the test debate). 221 could
-not be matched at all and fall back to their turn. That leaves 610 matched claims:
+854 claims across the debates that have any. 13 already carry offsets (the test debate). 224 could
+not be matched at all and fall back to their turn. That leaves 617 matched claims:
 
 | Floor | Claims published | Share of matched | What it means |
 |---|---:|---:|---|
-| ≥ 0.80 | 67 | 11% | Near-certain only |
-| ≥ 0.75 | 103 | 17% | |
-| **≥ 0.70** | **135** | **22%** | **The plan. Comfortably above the live-display bar** |
-| ≥ 0.65 | 173 | 28% | |
-| ≥ 0.60 | 239 | 39% | Starts including matches the live layer barely trusts |
-| ≥ 0.55 | 303 | 50% | Exactly the live bar — no margin for a permanent write |
-| ≥ 0.50 | 381 | 62% | |
-| ≥ 0.35 | 610 | 100% | Everything the resolver considers usable at all |
+| ≥ 0.80 | 70 | 11% | Near-certain only |
+| ≥ 0.75 | 107 | 17% | |
+| ≥ 0.70 | 140 | 23% | A margin above the live bar |
+| ≥ 0.65 | 178 | 29% | |
+| ≥ 0.60 | 244 | 40% | |
+| **≥ 0.55** | **309** | **50%** | **The plan. Exactly the live-display bar** |
+| ≥ 0.50 | 387 | 63% | Below what the app will draw — do not |
+| ≥ 0.35 | 617 | 100% | Everything the resolver considers usable at all |
 
 `plan-claim-timecodes.ts` prints this table on every run, so a different floor can be chosen with
 the consequence in front of you rather than by picking a round number.
 
 The distribution has its mass between 0.4 and 0.7, so the floor is doing real work rather than
-rubber-stamping. Raising it to 0.8 halves the run; dropping it to 0.6 nearly doubles it and starts
-publishing claims the live layer would not have drawn on its own.
+rubber-stamping: it turns away half of what was matched. Raising it to 0.7 would more than halve the
+run again.
+
+These counts drift by a few between runs as debates are recorded and transcripts come and go. If the
+regenerated numbers differ slightly from the table, that is why; a large difference is not.
 
 ---
 
@@ -100,8 +111,8 @@ there rather than retyped.
 
 ```jsonc
 {
-  "floor": 0.7,
-  "totals": { "claims": 844, "writes": 135, "alreadyPublished": 13, "belowFloor": 475, "noMatch": 221 },
+  "floor": 0.55,
+  "totals": { "claims": 854, "writes": 309, "alreadyPublished": 13, "belowFloor": 308, "noMatch": 224 },
   "debates": [
     {
       "debateEntityId": "…",
@@ -168,16 +179,21 @@ is the space its claims were found in; use that and nothing else.
 
 | Space | Writes | Ops (values + relations) |
 |---|---:|---:|
-| `41e851610e13a19441c4d980f2f2ce6b` | 56 | 112 + 112 |
-| `224406e0de3c48d78ef12774111b8b2f` | 29 | 58 + 58 |
-| `4582fbbee28a16589154f7e36f1ee3c5` | 27 | 54 + 54 |
-| `89bd89bf28ff8a0963faf92a8c905e20` | 9 | 18 + 18 |
-| `52c7ae149838b6d47ce0f3b2a5974546` | 9 | 18 + 18 |
-| `c9f267dcb0d270718c2a3c45a64afd32` | 5 | 10 + 10 |
+| `41e851610e13a19441c4d980f2f2ce6b` | 112 | 224 + 224 |
+| `224406e0de3c48d78ef12774111b8b2f` | 79 | 158 + 158 |
+| `4582fbbee28a16589154f7e36f1ee3c5` | 71 | 142 + 142 |
+| `52c7ae149838b6d47ce0f3b2a5974546` | 20 | 40 + 40 |
+| `89bd89bf28ff8a0963faf92a8c905e20` | 18 | 36 + 36 |
+| `c9f267dcb0d270718c2a3c45a64afd32` | 9 | 18 + 18 |
 
-The largest is 224 ops, against 52 in the single-debate publish. If a proposal is rejected for size,
-split that space by debate — the writes are independent, and nothing depends on two of them landing
-together.
+The largest is 448 ops, against 52 in the single-debate publish — nearly nine times the biggest
+proposal this pattern has actually landed. **Publish the smallest space first** and confirm it
+before committing to the large ones.
+
+If a proposal is rejected for size, or you would rather not risk one that big, split that space by
+debate: group its writes by `debateEntityId` and publish one proposal per debate. The writes are
+independent and nothing depends on two of them landing together, so the split costs nothing but
+transactions.
 
 **Partial runs are safe.** A claim that already carries offsets is skipped when the plan is next
 generated, so a run that dies half way through can be resumed by regenerating and republishing. It
@@ -211,9 +227,9 @@ Three things to check across the run:
 
 *Background, not instructions.*
 
-- **It does not touch the 475 claims below the floor.** They keep working through the read-time
+- **It does not touch the 308 claims below the floor.** They keep working through the read-time
   matcher, at their true confidence, and they keep the option of being published properly later.
-- **It does not touch the 221 claims with no usable match.** A whole-turn window is the absence of a
+- **It does not touch the 224 claims with no usable match.** A whole-turn window is the absence of a
   timecode, not a loose one; publishing a 30-second span as an exact offset would be worse than
   publishing nothing.
 - **It does not overwrite the test debate.** Its 13 claims already carry hand-checked offsets and
@@ -228,7 +244,7 @@ Three things to check across the run:
 *Background, not instructions. The committed plan is what to publish.*
 
 ```
-bun scripts/plan-claim-timecodes.ts [--floor 0.7] [--out plan.json] [--limit N]
+bun scripts/plan-claim-timecodes.ts [--floor 0.55] [--out plan.json] [--limit N]
 ```
 
 Read-only: it enumerates every `Debate`-typed entity, pulls each one's blocks and claims in its own
