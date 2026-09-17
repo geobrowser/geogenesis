@@ -50,6 +50,7 @@ import {
   useMarkDebateJoined,
   useMarkDebateReady,
 } from '~/core/debates/hooks';
+import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
   DebateMediaSessionBoundary,
   type LocalTrackLike,
@@ -2184,7 +2185,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   if (debate && awaitingDebateConnection) {
     return (
       <>
-        <DebateRoomHoldingScreen label="Connecting to the debate" claim={debate.claim.claim} />
+        <DebateRoomHoldingScreen
+          label="Connecting to the debate"
+          claim={debate.claim.claim}
+          trapFocus={!recordingRemovalNotice}
+        />
         {recordingRemovalNotice}
       </>
     );
@@ -2910,13 +2915,19 @@ function DebateRecordingRemovedDialog({
   claim: string;
   onAcknowledge: () => void;
 }) {
+  // Renders over the thank-you screen and over the connecting holding screen, so it is the dialog
+  // that traps: without this, the trap underneath swallows Tab and "Okay" is unreachable.
+  const dialogRef = useFocusTrap(true);
+
   return (
     <div className="fixed inset-0 z-[1100] grid place-items-center bg-black/60 px-4">
       <div
+        ref={dialogRef as React.RefObject<HTMLDivElement>}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="Your debate was removed"
-        className="w-full max-w-[370px] rounded-lg bg-white p-5 text-center text-text"
+        className="w-full max-w-[370px] rounded-lg bg-white p-5 text-center text-text outline-none"
       >
         <Text as="h2" variant="cardEntityTitle" color="text" className="leading-none">
           Your debate was removed

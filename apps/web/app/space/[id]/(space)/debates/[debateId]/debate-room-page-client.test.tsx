@@ -1020,6 +1020,33 @@ describe('DebateRoomPageClient', () => {
       expect(document.body.style.overflow).toBe('');
     });
 
+    it('keeps the removal notice reachable when it sits above the holding screen', async () => {
+      const ownership = deferred<{ acquired: boolean; waitedForLocalRelease: boolean }>();
+      mocks.ownershipAcquire.mockReturnValueOnce(ownership.promise);
+      mocks.rematch = rematchSession('browsing');
+      mocks.debate = {
+        ...completedDebate(),
+        status: 'thanking',
+        completed_at: null,
+        rematch_session_id: 'rematch-1',
+        recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+        recording_cancelled_by: 'user-b',
+        recordings: [],
+      };
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('dialog', { name: 'Connecting to the debate' })).toBeInTheDocument();
+      const notice = screen.getByRole('dialog', { name: 'Your debate was removed' });
+      // The notice is the top dialog, so it holds focus rather than the holding screen under it.
+      expect(notice).toHaveFocus();
+      fireEvent.keyDown(notice, { key: 'Tab' });
+      expect(notice).toHaveFocus();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Okay' }));
+      await waitFor(() => expect(screen.queryByText('Your debate was removed')).not.toBeInTheDocument());
+    });
+
     it('spends the debate auto-connect when the intro connection lands after the debate starts', async () => {
       const connecting = deferred<void>();
       mocks.roomConnect.mockReturnValueOnce(connecting.promise);

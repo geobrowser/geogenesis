@@ -23,10 +23,19 @@ export function DebateRoomLoadingState() {
 /**
  * Full-screen placeholder for the gaps between the room's full-screen views. Modal like the intro
  * and recording screens it sits between: it holds their scroll lock so the page does not unlock
- * across the swap, and traps focus, which `aria-modal` claims but does not do on its own.
+ * across the swap, and traps focus, which `aria-modal` claims but does not do on its own. Only the
+ * top dialog may trap, so `trapFocus` is false while a dialog sits above this one.
  */
-export function DebateRoomHoldingScreen({ label, claim }: { label: string; claim?: string }) {
-  const dialogRef = useFocusTrap(true);
+export function DebateRoomHoldingScreen({
+  label,
+  claim,
+  trapFocus = true,
+}: {
+  label: string;
+  claim?: string;
+  trapFocus?: boolean;
+}) {
+  const dialogRef = useFocusTrap(trapFocus);
   useScrollLock();
 
   return (
