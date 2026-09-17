@@ -93,9 +93,6 @@ function EmailCapturePopup() {
   // The address as accepted, so the account is created against what was actually subscribed rather
   // than whatever is in the field if they keep typing.
   const [subscribedEmail, setSubscribedEmail] = React.useState('');
-  // Falls back to Privy's own dialog if the shortcut cannot start. Signing up is the point; not
-  // retyping an email is a convenience, and it must not become the reason nobody can sign up.
-  const openPrivyModal = usePrivySignIn();
 
   // Watched only while the popup could still appear. The observer covers the whole body on a page
   // holding an infinite feed, so leaving it on after the card is dismissed, closed, or made moot by
@@ -309,10 +306,9 @@ function EmailCapturePopup() {
             {wantsAccount ? (
               <AccountStep
                 email={subscribedEmail}
-                onCannotStart={() => {
+                onGiveUp={() => {
                   setWantsAccount(false);
                   close();
-                  openPrivyModal();
                 }}
               />
             ) : (
@@ -429,18 +425,24 @@ function EmailCapturePopup() {
  * labelled control instead of six unlabelled ones, and the code arrives by mail, so pasting is what
  * most people actually do.
  */
-function AccountStep({ email, onCannotStart }: { email: string; onCannotStart: () => void }) {
+function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () => void }) {
   // Mounted only while someone is signing up, which is the point of it living here: Privy's login
   // hooks register on a shared emitter, and one of these sitting on every Explore visit would be
   // registering callbacks beside the navbar's own login for every reader who never presses the
   // button that leads here.
   const { sendCode, loginWithCode, state: otpState } = useGeoLoginWithEmail();
+  // Here for the same reason as the hook above, and it is the one that matters more: this registers
+  // a second `useLogin` beside the navbar's own, and the navbar's is the login button people
+  // actually press. Mounted in the parent it would do that on every Explore visit.
+  const openPrivyModal = usePrivySignIn();
   const [code, setCode] = React.useState('');
 
   // Held in a ref so the effect below does not re-run and re-send when the callback identity
   // changes, which would mail a second code on an unrelated re-render.
-  const onCannotStartRef = React.useRef(onCannotStart);
-  onCannotStartRef.current = onCannotStart;
+  const giveUpRef = React.useRef(onGiveUp);
+  giveUpRef.current = onGiveUp;
+  const openPrivyModalRef = React.useRef(openPrivyModal);
+  openPrivyModalRef.current = openPrivyModal;
 
   const requestCode = React.useCallback(async () => {
     setCode('');
@@ -449,7 +451,8 @@ function AccountStep({ email, onCannotStart }: { email: string; onCannotStart: (
     } catch {
       // Captcha, a Privy outage, an address it will not take. Hand them the dialog that does work
       // rather than a dead end.
-      onCannotStartRef.current();
+      giveUpRef.current();
+      openPrivyModalRef.current();
     }
   }, [sendCode, email]);
 

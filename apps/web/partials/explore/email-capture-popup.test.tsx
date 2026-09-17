@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   openPrivyModal: vi.fn(),
   prepareOnboarding: vi.fn(),
   useGeoLoginWithEmail: vi.fn(),
+  usePrivySignIn: vi.fn(),
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -36,7 +37,10 @@ vi.mock('@geogenesis/auth', () => ({
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: () => mocks.openPrivyModal,
+  usePrivySignIn: () => {
+    mocks.usePrivySignIn();
+    return mocks.openPrivyModal;
+  },
 }));
 
 vi.mock('~/core/hooks/use-prepare-onboarding', () => ({
@@ -74,6 +78,7 @@ beforeEach(() => {
   mocks.openPrivyModal.mockReset();
   mocks.prepareOnboarding.mockReset();
   mocks.useGeoLoginWithEmail.mockReset();
+  mocks.usePrivySignIn.mockReset();
   mocks.otpState = { status: 'initial' };
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ json: async () => ({ result: 'subscribed' }) });
@@ -521,12 +526,15 @@ describe('ExploreEmailCapturePopup', () => {
     // Privy's login hooks register on a shared emitter. One mounted on every Explore visit would be
     // registering callbacks beside the navbar's own login for every reader who never presses the
     // button that leads here, which is both waste and a plausible way to disturb that login.
-    it('does not mount the login hook until someone actually asks for an account', async () => {
+    it('registers no Privy login callbacks until someone actually asks for an account', async () => {
       await subscribeSuccessfully();
 
       // The confirmation is on screen with the offer showing, and still nothing is registered.
       expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
       expect(mocks.useGeoLoginWithEmail).not.toHaveBeenCalled();
+      // The fallback counts too: it is a second `useLogin` beside the navbar's own, and the
+      // navbar's is the login button people actually press.
+      expect(mocks.usePrivySignIn).not.toHaveBeenCalled();
     });
 
     // Mounting the step is what requests the code, so a re-render must not mail a second one and
