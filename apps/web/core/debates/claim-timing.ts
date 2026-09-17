@@ -170,8 +170,13 @@ export function scoreWindow(claimWords: string[], windowText: string): number {
   const windowWords = new Set(contentWords(windowText));
   if (windowWords.size === 0) return 0;
 
-  const hits = claimWords.reduce((count, word) => (windowWords.has(word) ? count + 1 : count), 0);
-  const containment = hits / claimWords.length;
+  // Distinct words on both sides. Counting a repeated claim word once per occurrence let `hits`
+  // exceed the number of distinct words in the window, which pushed `precision` — a ratio of one
+  // set's size to another's — above 1 and the whole score past the [0, 1] this documents. A claim
+  // that says "AI" three times was scoring 1.05 and outranking a claim that said it once.
+  const distinct = new Set(claimWords);
+  const hits = [...distinct].reduce((count, word) => (windowWords.has(word) ? count + 1 : count), 0);
+  const containment = hits / distinct.size;
   const precision = hits / windowWords.size;
 
   return containment * (0.75 + 0.25 * precision);
