@@ -4,17 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // out its retries, and so the unavailable case below can be provoked on demand.
 const emailLimitMock = vi.fn<(identifier: string) => Promise<{ success: boolean }>>();
 const ipLimitMock = vi.fn<(identifier: string) => Promise<{ success: boolean }>>();
-const limitersConfigured = vi.hoisted(() => ({ value: true }));
 vi.mock('../rate-limit', () => ({
-  get emailLimit() {
-    return limitersConfigured.value ? { limit: (id: string) => emailLimitMock(id) } : null;
-  },
-  get ipLimit() {
-    return limitersConfigured.value ? { limit: (id: string) => ipLimitMock(id) } : null;
-  },
-  get hasUpstashEnv() {
-    return limitersConfigured.value;
-  },
+  emailLimit: { limit: (id: string) => emailLimitMock(id) },
+  ipLimit: { limit: (id: string) => ipLimitMock(id) },
 }));
 
 const { POST } = await import('./route');
@@ -39,7 +31,6 @@ beforeEach(() => {
   fetchMock.mockReset().mockResolvedValue({ ok: true, status: 201 });
   vi.stubGlobal('fetch', fetchMock);
   vi.stubEnv('MAILERLITE_API_KEY', 'test-key');
-  limitersConfigured.value = true;
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
@@ -117,6 +108,7 @@ describe('POST /api/newsletter/subscribe', () => {
   // with no limit at all -- an anonymous write into someone else's mailing list.
   it('fails closed when the rate limiter itself is unavailable', async () => {
     ipLimitMock.mockRejectedValue(new Error('upstash unreachable'));
+    vi.stubEnv('NODE_ENV', 'production');
 
     const response = await subscribe({ email: 'reader@example.com' });
 
@@ -125,21 +117,20 @@ describe('POST /api/newsletter/subscribe', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  // Not configured is a different fact from not reachable, and they want opposite answers. A
-  // developer who has never held Upstash credentials is not a threat model; refusing there only
-  // means the feature cannot be tried locally at all.
-  it('still subscribes in development when Upstash was never configured', async () => {
-    limitersConfigured.value = false;
+  // A developer without Redis is not a threat model, and refusing there only means the feature
+  // cannot be tried at all.
+  it('still subscribes in development when the limiter is unavailable', async () => {
+    ipLimitMock.mockRejectedValue(new Error('no redis here'));
     vi.stubEnv('NODE_ENV', 'development');
 
     expect(await resultOf(await subscribe({ email: 'reader@example.com' }))).toBe('subscribed');
     expect(fetchMock).toHaveBeenCalled();
   });
 
-  // The other half, and the one that must not regress: a deploy missing its credentials would
-  // otherwise become a silently unlimited public relay into someone else's mailing list.
-  it('refuses in production when Upstash was never configured, rather than running unlimited', async () => {
-    limitersConfigured.value = false;
+  // The other half, and the one that must not regress: an unlimited public relay into someone
+  // else's mailing list is not a thing to serve while we work out why Redis is unhappy.
+  it('refuses in production when the limiter is unavailable, rather than running unlimited', async () => {
+    ipLimitMock.mockRejectedValue(new Error('upstash unreachable'));
     vi.stubEnv('NODE_ENV', 'production');
 
     const response = await subscribe({ email: 'reader@example.com' });

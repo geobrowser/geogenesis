@@ -48,32 +48,31 @@ export async function POST(request: Request) {
 
   const normalizedEmail = email.trim().toLowerCase();
 
-  if (emailLimit && ipLimit) {
-    // Failing closed, as `app/api/chat` does. A configured Redis that is briefly unreachable is
-    // exactly when this endpoint must refuse: letting the error through would answer from Next's
-    // own error path with no JSON body, and would leave an anonymous write into someone else's
-    // mailing list running with no limit of any kind.
-    let perEmail: Awaited<ReturnType<NonNullable<typeof emailLimit>['limit']>>;
-    let perIp: Awaited<ReturnType<NonNullable<typeof ipLimit>['limit']>>;
-    try {
-      [perEmail, perIp] = await Promise.all([emailLimit.limit(normalizedEmail), ipLimit.limit(getClientIp(request))]);
-    } catch (error) {
-      console.error('newsletter subscribe: rate limiter unavailable; failing closed', error);
-      return answer('failed', 503);
-    }
+  try {
+    const [perEmail, perIp] = await Promise.all([
+      emailLimit.limit(normalizedEmail),
+      ipLimit.limit(getClientIp(request)),
+    ]);
 
     if (!perEmail.success || !perIp.success) {
       return answer('rate-limited', 429);
     }
-  } else if (process.env.NODE_ENV === 'production') {
-    // No credentials in production is a misconfigured deploy, not a local convenience. Refusing is
-    // the only safe reading: the alternative is silently serving an unlimited public relay.
-    console.error('newsletter subscribe: Upstash is not configured; refusing to run unlimited');
-    return answer('failed', 503);
-  } else {
-    console.warn(
-      'newsletter subscribe: Upstash is not configured, so rate limiting is off. Development only; production refuses instead.'
-    );
+  } catch (error) {
+    // Whether the limiter is usable is answered by calling it, not by guessing from variable names
+    // -- which is what the previous version got wrong, refusing every request on a deploy where
+    // Upstash was configured under the `KV_REST_API_*` names that `Redis.fromEnv()` also accepts.
+    //
+    // In production any failure here is refused, whether the credentials are missing or Redis is
+    // briefly unreachable. This endpoint writes into someone else's mailing list for anonymous
+    // callers, so an unlimited version of it is not a thing to serve while we work out which.
+    if (process.env.NODE_ENV === 'production') {
+      console.error('newsletter subscribe: rate limiter unavailable; failing closed', error);
+      return answer('failed', 503);
+    }
+
+    // Locally there is usually no Redis at all, and refusing there only means the feature cannot
+    // be tried. A developer without Upstash credentials is not the threat model.
+    console.warn('newsletter subscribe: rate limiting unavailable; continuing without it (development only)', error);
   }
 
   const apiKey = process.env.MAILERLITE_API_KEY;

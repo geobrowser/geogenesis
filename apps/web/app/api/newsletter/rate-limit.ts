@@ -2,25 +2,20 @@ import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 
 /**
- * Whether Upstash is configured at all — which is a different question from whether it is working,
- * and the two want opposite answers.
+ * Configured exactly the way `app/api/chat` does it, and for a reason worth recording.
  *
- * `Redis.fromEnv()` hands back a client whether or not the variables exist and only fails once a
- * command runs, so without this check "not set up" and "briefly unreachable" arrive at the route as
- * the same thrown error. They are not the same: an outage against a configured Redis is exactly
- * when this endpoint must refuse, since it writes into someone else's mailing list for anonymous
- * callers; a developer who has never had Upstash credentials is not a threat model, and failing
- * closed there only means the feature cannot be tried locally at all.
+ * An earlier version of this file gated on `process.env.UPSTASH_REDIS_REST_URL/TOKEN` before
+ * building a client, so that an unconfigured machine could be told apart from an unreachable one.
+ * It was wrong, and wrong in a way nothing local could show: `Redis.fromEnv()` resolves
+ * `KV_REST_API_URL`/`KV_REST_API_TOKEN` as well — the names Vercel's own Upstash integration
+ * provisions — so on a deploy carrying only those, the client connects happily while a check
+ * naming the other pair reads as "not configured". Chat's limiters worked on the same deployment
+ * where this one refused every request.
  *
- * The route keeps the strict half of that: unconfigured is tolerated in development and refused in
- * production, so a deploy that is missing its credentials fails loudly instead of quietly becoming
- * an open relay.
+ * So the client resolves its own configuration and nothing here second-guesses which variables it
+ * found. Whether a limiter is *usable* is answered where it is used, by calling it.
  */
-export const hasUpstashEnv = Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
-
-// Built only when there is something to connect to, so an unconfigured environment holds a plain
-// `null` rather than a client that throws on first use.
-const redis = hasUpstashEnv ? Redis.fromEnv() : null;
+const redis = Redis.fromEnv();
 
 /**
  * Two windows, because an anonymous public endpoint has two things worth protecting.
@@ -30,13 +25,18 @@ const redis = hasUpstashEnv ? Redis.fromEnv() : null;
  * relay for writing arbitrary addresses into someone's mailing list, and the cost of that lands on
  * the list owner rather than on us.
  *
- * Both are generous enough that no real visitor meets them. The same shape as `app/api/chat` uses,
- * so there is one way this codebase rate-limits rather than two.
+ * Both are generous enough that no real visitor meets them.
  */
-export const emailLimit = redis
-  ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(5, '10 m'), analytics: true, prefix: 'newsletter:email' })
-  : null;
+export const emailLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, '10 m'),
+  analytics: true,
+  prefix: 'newsletter:email',
+});
 
-export const ipLimit = redis
-  ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(20, '1 h'), analytics: true, prefix: 'newsletter:ip' })
-  : null;
+export const ipLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(20, '1 h'),
+  analytics: true,
+  prefix: 'newsletter:ip',
+});
