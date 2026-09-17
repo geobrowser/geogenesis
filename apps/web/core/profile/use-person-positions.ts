@@ -55,6 +55,14 @@ export type UsePersonPositionsParams = {
    * so callers pass null until they know.
    */
   matchingIds?: readonly string[] | null;
+  /**
+   * Where to show each claim, for claims the reader narrowed to a space.
+   *
+   * `pickDisplaySpaceId` otherwise takes the first of an entity's spaces, which
+   * for a multi-space claim is not necessarily one the reader picked — see
+   * `preferredSpacesFor`.
+   */
+  preferredSpaceById?: Map<string, string>;
   first?: number;
 };
 
@@ -62,6 +70,7 @@ export function usePersonPositions({
   spaceId,
   sort = 'new',
   matchingIds = null,
+  preferredSpaceById,
   first = PAGE_SIZE,
 }: UsePersonPositionsParams) {
   const order = useQuery({
@@ -99,10 +108,16 @@ export function usePersonPositions({
   // selections. Worth revisiting if a record ever gets big enough for the key to
   // matter, which is the same point at which the whole complete-list approach
   // needs rethinking anyway.
-  const filterKey = React.useMemo(
-    () => (matchingIds === null ? 'all' : orderedIds.join(',')),
-    [matchingIds, orderedIds]
-  );
+  const filterKey = React.useMemo(() => {
+    const ids = matchingIds === null ? 'all' : orderedIds.join(',');
+    // The preference is in the closure too, and it can change while the id list
+    // does not: two spaces holding the same claims narrow to the same rows but
+    // label them differently. Without this the second selection is served the
+    // first one's cards, pointing at the space the reader just navigated away
+    // from — the same collision as above, one field over.
+    const preferred = orderedIds.map(id => preferredSpaceById?.get(id) ?? '').join(',');
+    return `${ids}|${preferred}`;
+  }, [matchingIds, orderedIds, preferredSpaceById]);
 
   const {
     data,
@@ -119,7 +134,8 @@ export function usePersonPositions({
       const next = lastOffset + first;
       return next < orderedIds.length ? next : null;
     },
-    queryFn: ({ pageParam, signal }) => fetchExploreRowsByIds(orderedIds.slice(pageParam, pageParam + first), signal),
+    queryFn: ({ pageParam, signal }) =>
+      fetchExploreRowsByIds(orderedIds.slice(pageParam, pageParam + first), signal, preferredSpaceById),
     retry: 1,
     staleTime: 30_000,
   });

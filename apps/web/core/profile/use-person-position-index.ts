@@ -273,6 +273,41 @@ function withZeroes(all: readonly PositionFacet[], narrowed: readonly PositionFa
   return all.map(facet => ({ ...facet, count: counts.get(facet.id) ?? 0 }));
 }
 
+/**
+ * Which space to show a claim in, when the reader has narrowed to some.
+ *
+ * 4% of the reference account's claims live in more than one space, and 7% of
+ * the busiest voter's. `pickDisplaySpaceId` takes the *first* of an entity's
+ * spaces by default, so without this, filtering to Space A renders those claims
+ * labelled and linked to Space B — the card contradicting the control that
+ * produced it.
+ *
+ * Only meaningful under a selection. With no filter there is no space the reader
+ * asked for, so there is nothing to prefer and the default stands.
+ *
+ * The same mechanism Debates has used since `preferredSpaceById` was added for
+ * it: a side relation names the space its debate lives in. This is the other
+ * caller, and it went without one until the space filter gave it an answer.
+ */
+export function preferredSpacesFor(
+  index: PersonPositionIndex,
+  selection: { spaceIds: readonly string[] }
+): Map<string, string> {
+  const preferred = new Map<string, string>();
+  if (selection.spaceIds.length === 0) return preferred;
+
+  const picked = selection.spaceIds.map(normId);
+
+  for (const entry of index.entries) {
+    // In the reader's order, not the entity's: picking one space and then a
+    // second should not silently rewrite where the first one's claims appear.
+    const match = picked.find(spaceId => entry.spaceIds.includes(spaceId));
+    if (match) preferred.set(entry.entityId, match);
+  }
+
+  return preferred;
+}
+
 export function personPositionIndexQueryKey(spaceId: string) {
   return ['person-position-index', ID.uuidToHex(spaceId)] as const;
 }

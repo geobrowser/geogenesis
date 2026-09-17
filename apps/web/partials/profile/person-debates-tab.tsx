@@ -35,6 +35,16 @@ const SORT_OPTIONS: HubFilterOption<string>[] = [
   { value: 'old', label: 'Old' },
 ];
 
+/**
+ * Top, dropped when its scores could not be read.
+ *
+ * An empty score map is what both loading and failure look like, and `sortRows`
+ * reads it as "keep the incoming order" — so a failed lookup leaves the list in
+ * New order under a menu still reading Top. Offering a sort that silently does
+ * nothing is worse than offering two.
+ */
+const SORT_OPTIONS_WITHOUT_TOP = SORT_OPTIONS.filter(option => option.value !== 'top');
+
 export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
   const [sort, setSort] = React.useState<DebateSort>('new');
   const spaces = useRecordSelection();
@@ -47,11 +57,15 @@ export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
   // Explore ranks by ordering rows server-side rather than decorating them — so
   // a list already complete in memory has to look them up to rank itself.
   const debateIds = React.useMemo(() => rows.map(row => row.entityId), [rows]);
-  const { scores } = useEntityScores({ ids: debateIds, enabled: sort === 'top' });
+  const { scores, isError: isScoresError } = useEntityScores({ ids: debateIds, enabled: sort === 'top' });
+
+  // The order the menu is claiming. With Top withdrawn, that is New — not Top
+  // quietly behaving like New.
+  const effectiveSort = isScoresError && sort === 'top' ? 'new' : sort;
 
   const shown = React.useMemo(
-    () => sortRows(filterRowsBySpace(rows, spaces.values), sort, scores),
-    [rows, scores, sort, spaces.values]
+    () => sortRows(filterRowsBySpace(rows, spaces.values), effectiveSort, scores),
+    [effectiveSort, rows, scores, spaces.values]
   );
 
   const spaceIds = React.useMemo(() => facets.map(facet => facet.id), [facets]);
@@ -81,7 +95,13 @@ export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
        */}
       {facets.length > 1 || rows.length > 1 ? (
         <RecordFilterRow
-          sort={{ value: sort, options: SORT_OPTIONS, onChange: value => setSort(value as DebateSort) }}
+          sort={{
+            // Falls back to New rather than stranding the reader on a sort that
+            // is no longer offered.
+            value: isScoresError && sort === 'top' ? 'new' : sort,
+            options: isScoresError ? SORT_OPTIONS_WITHOUT_TOP : SORT_OPTIONS,
+            onChange: value => setSort(value as DebateSort),
+          }}
           dimensions={
             facets.length > 1
               ? [

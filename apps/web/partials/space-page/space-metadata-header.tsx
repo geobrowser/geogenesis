@@ -27,8 +27,11 @@ interface SpacePageMetadataHeaderProps {
    * it — moving the votes rather than suppressing them would leave two controls
    * fighting over one number.
    *
-   * The editor keeps the row, because the types editor lives in it and the
-   * rail's pills are a read-only view.
+   * An editor keeps the *types editor* out of that row and nothing else. It
+   * used to keep the whole row, which put a second `EntityVoteButtons` beside
+   * the pair `ProfileActions` already draws — two controls fighting over one
+   * number, which is the exact thing this flag exists to prevent — and brought
+   * back the members and Add Data chips with it.
    */
   profileChrome?: boolean;
 }
@@ -54,32 +57,42 @@ export function SpacePageMetadataHeader({
 
   const editable = useUserIsEditing(spaceId);
 
+  /*
+   * The editor still edits types even on a profile: the rail's pills are a
+   * read-only view, and the only other way to add a type would be a control the
+   * profile does not have. Hoisted so the profile branch and the space row draw
+   * the same control rather than two that drift.
+   */
+  const typesEditor = editable ? (
+    <div className="box-border h-6">
+      {types.length > 0 || (addTypeState && types.length === 0) ? (
+        <RelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
+      ) : (
+        <button
+          onClick={() => setAddTypeState(true)}
+          className="flex h-6 items-center gap-[6px] rounded border border-dashed border-grey-02 px-2"
+        >
+          <Create color="grey-04" className="h-3 w-3" /> type
+        </button>
+      )}
+    </div>
+  ) : (
+    additionalTypeChips
+  );
+
   if (profileChrome && !editable) return null;
+
+  // The types editor alone. Everything else in this row is either drawn
+  // elsewhere on a profile or is about a space rather than a person, and
+  // rendering it here duplicates or contradicts what the profile already shows.
+  if (profileChrome) {
+    return <div className="relative z-20 flex items-center gap-1 text-text">{typesEditor}</div>;
+  }
 
   return (
     <div className="relative z-20 flex flex-wrap items-center justify-between gap-y-4 text-text">
       <div className="flex items-center gap-1">
-        {/*
-         * The editor still edits types here even on a profile: the rail's
-         * pills are a read-only view, and the only other way to add a type
-         * would be a control the profile does not have.
-         */}
-        {editable ? (
-          <div className="box-border h-6">
-            {types.length > 0 || (addTypeState && types.length === 0) ? (
-              <RelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
-            ) : (
-              <button
-                onClick={() => setAddTypeState(true)}
-                className="flex h-6 items-center gap-[6px] rounded border border-dashed border-grey-02 px-2"
-              >
-                <Create color="grey-04" className="h-3 w-3" /> type
-              </button>
-            )}
-          </div>
-        ) : (
-          additionalTypeChips
-        )}
+        {typesEditor}
         {membersComponent}
         <AddDataChip spaceId={spaceId} />
       </div>

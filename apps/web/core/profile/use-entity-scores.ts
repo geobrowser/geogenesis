@@ -76,7 +76,7 @@ const NO_SCORES = new Map<string, number>();
 export function useEntityScores({ ids, enabled = true }: { ids: readonly string[]; enabled?: boolean }) {
   const capped = ids.slice(0, MAX_IDS);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: entityScoresQueryKey(capped),
     enabled: enabled && capped.length > 0,
     staleTime: 5 * 60_000,
@@ -91,5 +91,9 @@ export function useEntityScores({ ids, enabled = true }: { ids: readonly string[
       ),
   });
 
-  return { scores: data ?? NO_SCORES, isLoading };
+  // `isError` matters because the empty map is indistinguishable from the
+  // loading one, and `sortRows` treats "no scores" as "keep the incoming order".
+  // A caller that ignores it therefore shows the New order under a menu that
+  // says Top, permanently and silently.
+  return { scores: data ?? NO_SCORES, isLoading, isError };
 }

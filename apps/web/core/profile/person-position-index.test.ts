@@ -6,6 +6,7 @@ import {
   facetsFrom,
   matchingEntityIds,
   narrowedFacets,
+  preferredSpacesFor,
 } from './use-person-position-index';
 
 /**
@@ -120,5 +121,48 @@ describe('narrowedFacets', () => {
 
     expect(topics.map(topic => topic.id).sort()).toEqual(['ai', 'society']);
     expect(topics.every(topic => topic.count === 0)).toBe(true);
+  });
+});
+
+/**
+ * Which space a filtered claim is shown in.
+ *
+ * 4% of the reference account's claims live in more than one space, and 7% of
+ * the busiest voter's. `pickDisplaySpaceId` takes the first of an entity's
+ * spaces by default, so without a preference, filtering to one space renders
+ * those claims labelled and linked to another — the card contradicting the
+ * control that produced it.
+ */
+describe('preferredSpacesFor', () => {
+  const multi = indexOf([entry('claim-both', ['crypto', 'academia'], []), entry('claim-crypto', ['crypto'], [])]);
+
+  it('has no preference when no space is picked', () => {
+    // Nothing was asked for, so there is nothing to honour.
+    expect(preferredSpacesFor(multi, { spaceIds: [] }).size).toBe(0);
+  });
+
+  it('shows a multi-space claim in the space that was picked', () => {
+    expect(preferredSpacesFor(multi, { spaceIds: ['academia'] }).get('claim-both')).toBe('academia');
+  });
+
+  it("follows the reader's order, not the entity's", () => {
+    // The entity lists crypto first. Picking academia first has to win, or a
+    // second pick silently moves where the first one's claims appear.
+    expect(preferredSpacesFor(multi, { spaceIds: ['academia', 'crypto'] }).get('claim-both')).toBe('academia');
+    expect(preferredSpacesFor(multi, { spaceIds: ['crypto', 'academia'] }).get('claim-both')).toBe('crypto');
+  });
+
+  it('leaves out a claim that is in none of the picked spaces', () => {
+    const preferred = preferredSpacesFor(multi, { spaceIds: ['academia'] });
+
+    expect(preferred.has('claim-crypto')).toBe(false);
+  });
+
+  it('matches however the ids are spelled', () => {
+    const dashed = indexOf([entry('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', ['ssssssss'], [])]);
+
+    expect(preferredSpacesFor(dashed, { spaceIds: ['SSSSSSSS'] }).get('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')).toBe(
+      'ssssssss'
+    );
   });
 });

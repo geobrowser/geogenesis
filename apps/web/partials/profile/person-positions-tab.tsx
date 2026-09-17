@@ -4,7 +4,12 @@ import * as React from 'react';
 
 import type { HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import { matchingEntityIds, narrowedFacets, usePersonPositionIndex } from '~/core/profile/use-person-position-index';
+import {
+  matchingEntityIds,
+  narrowedFacets,
+  preferredSpacesFor,
+  usePersonPositionIndex,
+} from '~/core/profile/use-person-position-index';
 import { type PositionSort, usePersonPositions } from '~/core/profile/use-person-positions';
 
 import { PersonRecordFeed } from './person-record-feed';
@@ -51,10 +56,18 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
     return matchingEntityIds(index, selection);
   }, [index, isFiltered, isLoadingIndex, selection]);
 
+  // A claim in two spaces must render in one the reader picked, not in whichever
+  // the entity happens to list first.
+  const preferredSpaceById = React.useMemo(
+    () => (isLoadingIndex ? undefined : preferredSpacesFor(index, selection)),
+    [index, isLoadingIndex, selection]
+  );
+
   const { rows, isLoading, isError, isFetchingNextPage, hasNextPage, fetchNextPage } = usePersonPositions({
     spaceId,
     sort,
     matchingIds,
+    preferredSpaceById,
   });
 
   // These are this person's spaces, which the viewer has often never opened —
