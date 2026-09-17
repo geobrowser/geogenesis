@@ -5,13 +5,14 @@ import type { EntityDiff } from '~/core/utils/diff/types';
 
 const { BLOCKS } = SystemIds;
 
-/** Maps each entity id in a proposal to the display row that governs it (blocks fold into parents). */
+/** Maps each entity id in a proposal to the display row that governs it.
+ */
 export type OwnershipIndex = {
   readonly ownerOf: ReadonlyMap<string, string>;
   readonly displayIds: ReadonlySet<string>;
 };
 
-/** Builds the ownership index. `relations` supplies BLOCKS links stripped during diff folding. */
+/** Builds the ownership index. `relations` supplies BLOCKS and IMAGE/VIDEO links. */
 export function buildOwnershipIndex(
   displayEntities: readonly EntityDiff[],
   relations: readonly Relation[]
@@ -30,12 +31,15 @@ export function buildOwnershipIndex(
     }
   }
 
-  // Blocks reachable via BLOCKS relations; fixpoint handles nested blocks seen out of order.
+  // Fold BLOCKS / IMAGE / VIDEO targets into their parent row (first parent wins).
+  const isContainmentRelation = (relation: Relation) =>
+    relation.type.id === BLOCKS || relation.renderableType === 'IMAGE' || relation.renderableType === 'VIDEO';
+
   let settled = false;
   while (!settled) {
     settled = true;
     for (const relation of relations) {
-      if (relation.type.id !== BLOCKS) continue;
+      if (!isContainmentRelation(relation)) continue;
       const parent = relation.fromEntity.id;
       const child = relation.toEntity.id;
       if (child === parent || displayIds.has(child) || ownerOf.has(child)) continue;

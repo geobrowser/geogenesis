@@ -44,6 +44,11 @@ const relation = (
 const blocksRelation = (parent: string, block: string) =>
   relation(parent, block, { typeId: SystemIds.BLOCKS, entityId: `blocks-rel-${parent}-${block}` });
 
+const mediaRelation = (from: string, to: string, renderableType: 'IMAGE' | 'VIDEO' = 'IMAGE'): Relation => ({
+  ...relation(from, to, { entityId: `media-rel-${from}-${to}` }),
+  renderableType,
+});
+
 const diff = (entityId: string, blockIds: string[] = []): EntityDiff => ({
   entityId,
   name: entityId,
@@ -520,5 +525,42 @@ describe('findDanglingDependencies', () => {
     const index = buildOwnershipIndex([diff('parent', ['block-a'])], relations);
 
     expect(findDanglingDependencies(index, new Set(['parent']), relations, always)).toEqual([]);
+  });
+});
+
+describe('a media entity linked from a row', () => {
+  const relations = [mediaRelation('entity', 'image-1')];
+
+  it('folds into the row that shows it', () => {
+    const index = buildOwnershipIndex([diff('entity')], relations);
+
+    expect(index.ownerOf.get('image-1')).toBe('entity');
+  });
+
+  it('does not read as dangling while the row is selected', () => {
+    const index = buildOwnershipIndex([diff('entity')], relations);
+
+    expect(findDanglingDependencies(index, new Set(['entity']), relations, always)).toEqual([]);
+  });
+
+  it('publishes with the row, and drops with it', () => {
+    const values = [value('entity'), value('image-1')];
+    const index = buildOwnershipIndex([diff('entity')], relations);
+
+    const kept = selectOpsForPublish(index, new Set(['entity']), values, relations);
+    expect(kept.values.map(v => v.entity.id)).toEqual(['entity', 'image-1']);
+    expect(kept.unattributed.values).toEqual([]);
+
+    const dropped = selectOpsForPublish(index, new Set(), values, relations);
+    expect(dropped.values).toEqual([]);
+  });
+
+  it('reaches a video’s keyframe image nested under the video', () => {
+    const nested = [mediaRelation('entity', 'video-1', 'VIDEO'), mediaRelation('video-1', 'keyframe', 'IMAGE')];
+    const index = buildOwnershipIndex([diff('entity')], nested);
+
+    expect(index.ownerOf.get('video-1')).toBe('entity');
+    expect(index.ownerOf.get('keyframe')).toBe('entity');
+    expect(findDanglingDependencies(index, new Set(['entity']), nested, always)).toEqual([]);
   });
 });
