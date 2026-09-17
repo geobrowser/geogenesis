@@ -54,6 +54,35 @@ describe('POST /api/newsletter/subscribe', () => {
     expect(JSON.parse(init.body as string)).toEqual({ email: 'reader@example.com' });
   });
 
+  // Groups are how this account already tracks where a signup came from, and the Explore popup is
+  // the first of several entry points.
+  it('files a known source under its group', async () => {
+    await subscribe({ email: 'reader@example.com', source: 'explore' });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.groups).toEqual(['198826253148489537']);
+  });
+
+  // An anonymous write. If the body could name a group, anyone could file addresses into any group
+  // on the account, including ones live campaigns send to.
+  it('ignores a group named by the caller, and still subscribes them', async () => {
+    expect(await resultOf(await subscribe({ email: 'reader@example.com', source: '176089367484302771' }))).toBe(
+      'subscribed'
+    );
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.groups).toBeUndefined();
+  });
+
+  // Omitted rather than sent empty: `groups: []` is a membership list on an upsert, so it would
+  // strip an existing subscriber out of every group they were already in.
+  it('omits groups entirely when the source is unknown, rather than sending an empty list', async () => {
+    await subscribe({ email: 'reader@example.com' });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect('groups' in body).toBe(false);
+  });
+
   it('lowercases and trims before sending, so one address is one subscriber', async () => {
     await subscribe({ email: '  Reader@Example.COM  ' });
 

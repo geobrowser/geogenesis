@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
+import { groupIdForSource } from '~/core/newsletter/subscribe-source';
 import { timeoutSignal } from '~/core/timeout-signal';
 
 import { getClientIp } from '../../client-ip';
@@ -62,8 +63,9 @@ function answer(result: NewsletterSubscribeResult, status: number) {
 
 export async function POST(request: Request) {
   let email: unknown;
+  let source: unknown;
   try {
-    ({ email } = (await request.json()) as { email?: unknown });
+    ({ email, source } = (await request.json()) as { email?: unknown; source?: unknown });
   } catch {
     return answer('invalid-email', 400);
   }
@@ -73,6 +75,9 @@ export async function POST(request: Request) {
   }
 
   const normalizedEmail = email.trim().toLowerCase();
+  // Resolved against a closed map, so the request cannot name an arbitrary group. An unrecognised
+  // source is dropped rather than rejected -- see `subscribe-source.ts`.
+  const groupId = groupIdForSource(source);
 
   try {
     const [perEmail, perIp] = await Promise.all([
@@ -118,7 +123,10 @@ export async function POST(request: Request) {
         accept: 'application/json',
         authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({ email: normalizedEmail }),
+      // `groups` is omitted rather than sent empty when the source is unknown: an empty array is a
+      // membership list on an upsert, so it would strip the groups an existing subscriber is
+      // already in -- someone who signed up through another surface would lose that record.
+      body: JSON.stringify(groupId ? { email: normalizedEmail, groups: [groupId] } : { email: normalizedEmail }),
       signal: timeoutSignal(MAILERLITE_TIMEOUT_MS),
     });
 

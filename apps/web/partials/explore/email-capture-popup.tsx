@@ -143,7 +143,9 @@ function EmailCapturePopup() {
         const response = await fetch('/api/newsletter/subscribe', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ email }),
+          // Names the surface so the signup is filed under its own group. The server resolves this
+          // against a closed map; it is not a group name and cannot become one.
+          body: JSON.stringify({ email, source: 'explore' }),
           signal: timeoutSignal(SUBMIT_TIMEOUT_MS),
         });
         const body = (await response.json()) as { result?: NewsletterSubscribeResult };
