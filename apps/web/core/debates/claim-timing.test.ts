@@ -10,6 +10,7 @@ import {
   isAssertableMoment,
   matchClaimWindow,
   resolveClaimTimings,
+  scoreWindow,
   sortClaimsBySpokenOrder,
 } from './claim-timing';
 import type { TranscriptBlock, TranscriptClaim } from './transcript-claims';
@@ -296,6 +297,36 @@ describe('sortClaimsBySpokenOrder', () => {
       'timed',
       'untimed',
     ]);
+  });
+});
+
+describe('scoreWindow', () => {
+  // Found while planning the backfill: two claims scored 1.05 and 1.03, which a function
+  // documented as returning [0, 1] cannot do. A repeated claim word was counted once per
+  // occurrence against a *set* of window words, so `hits` could exceed the window's distinct-word
+  // count and push the precision term above 1 — inflating a repetitive claim over a tighter match.
+  it('never scores above 1, however often a claim repeats a word', () => {
+    const repetitive = ['ai', 'ai', 'ai', 'therapist'];
+
+    expect(scoreWindow(repetitive, 'ai therapist')).toBeLessThanOrEqual(1);
+  });
+
+  it('scores a perfect, tight match at 1', () => {
+    expect(scoreWindow(['executive', 'orders'], 'executive orders')).toBe(1);
+  });
+
+  it('scores nothing for a window sharing no content words', () => {
+    expect(scoreWindow(['executive', 'orders'], 'the weather today')).toBe(0);
+  });
+
+  // The quarter-weight precision term exists to break ties towards the tightest window: a wide
+  // window contains everything a narrow one does, so without it the widest always wins.
+  it('prefers the tighter of two windows that both contain the claim', () => {
+    const claim = ['executive', 'orders'];
+    const tight = scoreWindow(claim, 'executive orders');
+    const wide = scoreWindow(claim, 'executive orders and a great many other unrelated matters besides');
+
+    expect(tight).toBeGreaterThan(wide);
   });
 });
 
