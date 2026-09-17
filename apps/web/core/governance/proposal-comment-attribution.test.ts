@@ -81,6 +81,32 @@ describe('who is speaking', () => {
   });
 
   /**
+   * The same revocation, one step less severe: editorship gone, membership intact. Editor and member
+   * are independent here, so this is the ordinary shape of a demotion — and it used to be the case
+   * that lost the vote, because the member loop had already claimed the entry. The stranger above kept
+   * their vote while the member lost theirs, which is backwards.
+   */
+  it('keeps a vote from a former editor who is still a member', () => {
+    const map = attribution({
+      memberSpaceIds: [EDITOR_HEX],
+      votes: [{ voterSpaceId: EDITOR_HEX, vote: 'REJECT' }],
+    });
+
+    expect(map.get(EDITOR_HEX)).toEqual({ role: 'member', vote: 'REJECT' });
+    expect(proposalAttributionLabel(map.get(EDITOR_HEX))).toBe('Member · Rejected');
+  });
+
+  /**
+   * And a member who never voted still says nothing about voting. The suppression rule was right for
+   * them — they cannot cast one — it was only wrong for a member holding a vote already cast.
+   */
+  it('still says nothing about voting for a member with no vote', () => {
+    const map = attribution({ memberSpaceIds: [MEMBER_HEX] });
+
+    expect(proposalAttributionLabel(map.get(MEMBER_HEX))).toBe('Member');
+  });
+
+  /**
    * Nothing in the comment path checks membership — a comment is published into its author's own
    * personal space — so a commenter the space has no record of is reachable today.
    */

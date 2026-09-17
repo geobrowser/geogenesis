@@ -14,7 +14,9 @@ export type ProposalCommentAttribution = {
    * who has not voted is the most consequential voice on an open proposal, and saying so is the
    * point of this whole join (GEO-2907).
    *
-   * Only editors vote, so this is always `null` for a member.
+   * Only editors can cast one, but a member can still carry one: the roles are independent, so an
+   * editor who voted and later lost editorship while keeping membership still has that vote on the
+   * record.
    */
   vote: 'ACCEPT' | 'REJECT' | 'ABSTAIN' | null;
 };
@@ -66,37 +68,47 @@ export function proposalCommentAttribution({
     attribution.set(key, { role: 'editor', vote: voteBySpaceId.get(key) ?? null });
   }
 
-  // A vote from someone the role lists do not cover. Editorship can be revoked after a vote is
-  // cast, and the vote stays on the record — so the vote is reported without claiming a role for
-  // them, rather than dropped for want of one.
+  // Every recorded vote lands on its voter's entry, whatever role they hold now. Editorship can be
+  // revoked after a vote is cast and the vote stays on the record, so the voter may since have become
+  // someone with no role at all — or, because the two roles are independent here, a plain member.
+  // Skipping anyone who already had an entry dropped exactly that second case, which is the more
+  // connected of the two: the stranger kept their vote and the member lost it.
   for (const [key, vote] of voteBySpaceId) {
-    if (attribution.has(key)) continue;
-    attribution.set(key, { role: null, vote });
+    const existing = attribution.get(key);
+    attribution.set(key, { role: existing?.role ?? null, vote });
   }
 
   return attribution;
 }
 
 /** What the badge reads, or `null` where there is nothing worth saying. */
+function voteClause(vote: ProposalCommentAttribution['vote']): string | null {
+  switch (vote) {
+    case 'ACCEPT':
+      return 'Accepted';
+    case 'REJECT':
+      return 'Rejected';
+    case 'ABSTAIN':
+      return 'Abstained';
+    case null:
+      return null;
+  }
+}
+
 export function proposalAttributionLabel(attribution: ProposalCommentAttribution | undefined): string | null {
   if (!attribution) return null;
 
   const role = attribution.role === 'editor' ? 'Editor' : attribution.role === 'member' ? 'Member' : null;
+  const vote = voteClause(attribution.vote);
 
-  // Only editors vote, so a vote clause on a member would be describing something that cannot
-  // happen. A member's standing is the whole of what there is to say about them.
-  if (attribution.role === 'member') return role;
+  // A recorded vote is always said, whatever role its voter holds now. The rule that used to suppress
+  // a member's vote clause was there because a member cannot cast one — but a vote on the record is
+  // proof that this person did, back when they could, so the premise does not hold for them.
+  if (vote) return role ? `${role} · ${vote}` : vote;
 
-  switch (attribution.vote) {
-    case 'ACCEPT':
-      return role ? `${role} · Accepted` : 'Accepted';
-    case 'REJECT':
-      return role ? `${role} · Rejected` : 'Rejected';
-    case 'ABSTAIN':
-      return role ? `${role} · Abstained` : 'Abstained';
-    // Said out loud rather than left blank. An editor who has not voted looks identical to a
-    // passer-by otherwise, and on an open proposal they are the opposite of one.
-    case null:
-      return role ? `${role} · Not voted` : null;
-  }
+  // No vote. Only an editor can still cast one, so only an editor's silence is worth reporting:
+  // "Member · Not voted" would describe something that cannot happen.
+  if (attribution.role === 'editor') return 'Editor · Not voted';
+
+  return role;
 }

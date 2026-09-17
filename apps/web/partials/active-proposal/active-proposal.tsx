@@ -53,17 +53,24 @@ async function ReviewProposal({ proposalId, spaceId }: Props) {
     return null;
   }
 
-  const proposal = await fetchProposal({ id: proposalId });
+  // Every proposal has a system entity at its own id, in its own space, so its comments are the
+  // comments on that entity and nothing new has to be stored (GEO-2907). Counted here so the button
+  // can say how many there are before the panel is opened; a failed count reads as none rather than
+  // taking the page down over a number beside an icon.
+  //
+  // Started alongside the proposal rather than after it. The count only needs the id we were already
+  // given — `proposal.id` is the same proposal, and the API resolves either spelling of it — so
+  // awaiting the proposal first would put a second round trip in front of this Suspense boundary for
+  // nothing, on a path every scheduled `router.refresh()` walks again. An id with no proposal behind
+  // it spends one cheap count query before redirecting, which is the whole cost of not serialising.
+  const [proposal, commentCount] = await Promise.all([
+    fetchProposal({ id: proposalId }),
+    Effect.runPromise(getEntityCommentCount(proposalId)).catch(() => 0),
+  ]);
 
   if (!proposal) {
     redirect(`/space/${spaceId}/governance`);
   }
-
-  // Every proposal has a system entity at its own id, in its own space, so its comments are the
-  // comments on that entity and nothing new has to be stored (GEO-2907). Counted here so the
-  // button can say how many there are before the panel is opened; a failed count reads as none
-  // rather than taking the page down over a number beside an icon.
-  const commentCount = await Effect.runPromise(getEntityCommentCount(proposal.id)).catch(() => 0);
 
   const votes = proposal.proposalVotes.nodes;
   const votesCount = proposal.proposalVotes.totalCount;
