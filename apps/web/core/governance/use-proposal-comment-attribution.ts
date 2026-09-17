@@ -66,6 +66,33 @@ export function useProposalCommentAttribution({
   const optimisticVote = useOptimisticVoteChoice(entityId ?? '');
   const { personalSpaceId } = usePersonalSpaceId();
 
+  /** What the fetched record says about the reader, which is what the optimistic choice is racing. */
+  const recordedOwnVote = React.useMemo(() => {
+    if (!proposal || !personalSpaceId) return null;
+    const own = proposal.votes.find(v => normalizeSpaceId(v.voterSpaceId) === normalizeSpaceId(personalSpaceId));
+    return own?.vote ?? null;
+  }, [proposal, personalSpaceId]);
+
+  // That optimistic record is deliberately never cleared once the vote lands — the governance list
+  // reads it to keep a voted card sunk, because the API's own sort gate is disabled (see
+  // `accept-or-reject.tsx`) — so it cannot stay authoritative here. Left to win forever it would mask
+  // every later change: vote in this tab, change the vote in another, and the refetched record would
+  // be overwritten by this session's stale choice until a reload.
+  //
+  // So it is retired the first time the record agrees with it. Until then the reader sees their own
+  // vote; after that the record speaks for itself, including when it has moved on. Changing the vote
+  // is a new choice, so it arms again.
+  const optimisticKey = optimisticVote ? `${normalizeSpaceId(entityId ?? '')}:${optimisticVote}` : null;
+  const [confirmedKey, setConfirmedKey] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (optimisticKey && recordedOwnVote === optimisticVote) {
+      setConfirmedKey(optimisticKey);
+    }
+  }, [optimisticKey, optimisticVote, recordedOwnVote]);
+
+  const ownVoteToShow = optimisticKey && confirmedKey !== optimisticKey ? optimisticVote : null;
+
   // Both role sets were gathered against the caller's space. For a proposal entity that is the
   // proposal's own space, which is the premise this feature rests on — but if the two ever disagree,
   // those ids answer a question about a different space. Say nothing rather than badge someone with a
@@ -87,10 +114,10 @@ export function useProposalCommentAttribution({
     if (isLoadingRoles || isRolesError) return EMPTY_ATTRIBUTION;
 
     const votes =
-      optimisticVote && personalSpaceId
+      ownVoteToShow && personalSpaceId
         ? [
             ...proposal.votes.filter(v => normalizeSpaceId(v.voterSpaceId) !== normalizeSpaceId(personalSpaceId)),
-            { voterSpaceId: personalSpaceId, vote: optimisticVote },
+            { voterSpaceId: personalSpaceId, vote: ownVoteToShow },
           ]
         : proposal.votes;
 
@@ -106,7 +133,7 @@ export function useProposalCommentAttribution({
     memberSpaceIds,
     isLoadingRoles,
     isRolesError,
-    optimisticVote,
+    ownVoteToShow,
     personalSpaceId,
   ]);
 }

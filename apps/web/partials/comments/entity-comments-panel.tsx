@@ -39,6 +39,12 @@ export function EntityCommentsPanel({
   // Same arguments as the host's own count query, so posting here updates it.
   const { totalCount } = useComments({ entityId, spaceId });
 
+  // A slide-up — the proposal review sheet, the edit review — sits at z-10000, so a panel at 150
+  // opens *underneath* it and reads as not opening at all. Raised over one when there is one, which
+  // is the same move the entity side panel makes, and registered below as a scroll shard so it can
+  // actually be scrolled once it is up there.
+  const slideUpOpenCount = useAtomValue(slideUpOpenCountAtom);
+
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return;
@@ -47,23 +53,33 @@ export function EntityCommentsPanel({
       // without this one press would dismiss both layers at once — leave it to
       // the top layer and close on the next press.
       if (document.querySelector('[data-entity-side-panel]')) return;
+      // The same rule one layer down, for the same reason: a docked panel sits *behind* a slide-up
+      // rather than over it, so a press aimed at the sheet is not aimed at this panel, and closing
+      // in the background is a change the reader cannot see happen. An overlay over a sheet is the
+      // top layer and does answer.
+      if (presentation !== 'overlay' && slideUpOpenCount > 0) return;
       onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  }, [onClose, presentation, slideUpOpenCount]);
 
-  // A slide-up — the proposal review sheet, the edit review — sits at z-10000, so a panel at 150
-  // opens *underneath* it and reads as not opening at all. Raised over one when there is one, which
-  // is the same move the entity side panel makes, and registered below as a scroll shard so it can
-  // actually be scrolled once it is up there.
-  const slideUpOpenCount = useAtomValue(slideUpOpenCountAtom);
   const setPanelHostElement = useSetAtom(commentsPanelHostElementAtom);
   const panelHostRef = React.useCallback(
     (node: HTMLElement | null) => {
+      // Only an overlay registers. A docked panel lives in its own page, and the app-wide review
+      // sheet can open while that page stays mounted — at which point registering would tell
+      // `SlideUp` there is a raised overlay above it, so it would hand the first Escape to a panel
+      // the reader cannot see and only close on the second. It needs no scroll-lock exemption either:
+      // it is behind the sheet, and scrolling it there is exactly what the lock is for.
+      //
+      // A docked panel writes nothing rather than writing null, because both presentations can be
+      // mounted at once — the feed's docked panel and the app-wide overlay — and null would clear the
+      // overlay's own registration.
+      if (presentation !== 'overlay') return;
       setPanelHostElement(node);
     },
-    [setPanelHostElement]
+    [setPanelHostElement, presentation]
   );
 
   return (

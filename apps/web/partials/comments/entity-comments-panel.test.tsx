@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Z_LAYERS } from '~/core/z-layers';
 
 import { EntityCommentsPanel } from './entity-comments-panel';
-import { slideUpOpenCountAtom } from '~/atoms';
+import { commentsPanelHostElementAtom, slideUpOpenCountAtom } from '~/atoms';
 
 vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 3, isLoading: false, error: null, refetch: vi.fn() }),
@@ -79,6 +79,93 @@ describe('EntityCommentsPanel', () => {
     expect(panel.className).toContain('z-[150]');
     expect(panel.className).toContain('md:z-[80]');
     expect(panel.className).not.toContain(`z-[${Z_LAYERS.commentsPanelOverSlideUp}]`);
+  });
+
+  /**
+   * The app-wide review sheet can open while a page holding a docked panel stays mounted. Registering
+   * the host there would tell `SlideUp` a raised overlay is above it, so it would hand the first
+   * Escape to a panel the reader cannot see — and would exempt that panel from the sheet's scroll
+   * lock, which is the one thing the lock is for.
+   */
+  it('registers the shared host only for an overlay', () => {
+    const store = createStore();
+
+    const docked = render(
+      <Provider store={store}>
+        <EntityCommentsPanel entityId="entity-1" spaceId="space-1" onClose={vi.fn()} presentation="docked" />
+      </Provider>
+    );
+    expect(store.get(commentsPanelHostElementAtom)).toBeNull();
+    docked.unmount();
+
+    render(
+      <Provider store={store}>
+        <EntityCommentsPanel entityId="entity-1" spaceId="space-1" onClose={vi.fn()} presentation="overlay" />
+      </Provider>
+    );
+    expect(store.get(commentsPanelHostElementAtom)).not.toBeNull();
+  });
+
+  /** And a docked panel must not disturb the overlay's registration, since both can be mounted at once. */
+  it('leaves an overlay registration alone when a docked panel mounts beside it', () => {
+    const store = createStore();
+
+    const { rerender } = render(
+      <Provider store={store}>
+        <EntityCommentsPanel entityId="entity-1" spaceId="space-1" onClose={vi.fn()} presentation="overlay" />
+      </Provider>
+    );
+
+    const overlayHost = store.get(commentsPanelHostElementAtom);
+    expect(overlayHost).not.toBeNull();
+
+    rerender(
+      <Provider store={store}>
+        <EntityCommentsPanel entityId="entity-1" spaceId="space-1" onClose={vi.fn()} presentation="overlay" />
+        <EntityCommentsPanel entityId="entity-2" spaceId="space-1" onClose={vi.fn()} presentation="docked" />
+      </Provider>
+    );
+
+    // The same element, not merely some element: writing null would clear it and writing its own node
+    // would hand the sheet the wrong panel to defer to.
+    expect(store.get(commentsPanelHostElementAtom)).toBe(overlayHost);
+  });
+
+  /**
+   * A docked panel sits behind a sheet, so a press aimed at the sheet is not aimed at it — and
+   * `SlideUp` no longer defers, so without this both would close on one press.
+   */
+  it('does not take Escape while a slide-up is open over a docked panel', () => {
+    const onClose = vi.fn();
+    const store = createStore();
+    store.set(slideUpOpenCountAtom, 1);
+
+    render(
+      <Provider store={store}>
+        <EntityCommentsPanel entityId="entity-1" spaceId="space-1" onClose={onClose} presentation="docked" />
+      </Provider>
+    );
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  // An overlay over a sheet *is* the top layer, so it still answers.
+  it('still takes Escape as an overlay over a slide-up', () => {
+    const onClose = vi.fn();
+    const store = createStore();
+    store.set(slideUpOpenCountAtom, 1);
+
+    render(
+      <Provider store={store}>
+        <EntityCommentsPanel entityId="entity-1" spaceId="space-1" onClose={onClose} presentation="overlay" />
+      </Provider>
+    );
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('closes on Escape', () => {

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -170,6 +170,57 @@ describe('useProposalCommentAttribution', () => {
     await waitFor(() => expect(result.current.get(EDITOR_SPACE_ID)).toEqual({ role: 'editor', vote: 'ACCEPT' }));
     // The overlay replaces the reader's own vote, not the whole record.
     expect(result.current.get(OTHER_EDITOR_SPACE_ID)).toEqual({ role: 'editor', vote: 'REJECT' });
+  });
+
+  /**
+   * The optimistic record is deliberately never cleared once a vote lands, because the governance
+   * list reads it to keep a voted card sunk. Treated as authoritative here it would mask every later
+   * change — vote in this tab, change it in another, and the refetched record loses to this session's
+   * stale choice until a reload.
+   */
+  it('lets a newer record win once the optimistic vote has been confirmed', async () => {
+    // The record already agrees with what the reader cast, so the overlay has done its job.
+    fetchProposalVotes.mockResolvedValue({
+      spaceId: SPACE_ID,
+      votes: [{ voterSpaceId: EDITOR_SPACE_ID, vote: 'ACCEPT' }],
+    });
+    optimisticVote = 'ACCEPT';
+
+    const { result } = render();
+
+    await waitFor(() => expect(result.current.get(EDITOR_SPACE_ID)).toEqual({ role: 'editor', vote: 'ACCEPT' }));
+
+    // The vote is changed elsewhere and the record is refetched — the same invalidation
+    // `AcceptOrReject` fires on success.
+    fetchProposalVotes.mockResolvedValue({
+      spaceId: SPACE_ID,
+      votes: [{ voterSpaceId: EDITOR_SPACE_ID, vote: 'REJECT' }],
+    });
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['proposal-comment-votes', PROPOSAL_ID] });
+    });
+
+    await waitFor(() => expect(result.current.get(EDITOR_SPACE_ID)).toEqual({ role: 'editor', vote: 'REJECT' }));
+  });
+
+  /** Changing the vote is a new choice, so it is the reader's own again until the record catches up. */
+  it('shows a changed vote again after the previous one was confirmed', async () => {
+    fetchProposalVotes.mockResolvedValue({
+      spaceId: SPACE_ID,
+      votes: [{ voterSpaceId: EDITOR_SPACE_ID, vote: 'ACCEPT' }],
+    });
+    optimisticVote = 'ACCEPT';
+
+    const { result, rerender } = render();
+
+    await waitFor(() => expect(result.current.get(EDITOR_SPACE_ID)).toEqual({ role: 'editor', vote: 'ACCEPT' }));
+
+    // The reader switches to reject. The record still says ACCEPT — the indexer is behind — and their
+    // own choice has to win again.
+    optimisticVote = 'REJECT';
+    rerender();
+
+    await waitFor(() => expect(result.current.get(EDITOR_SPACE_ID)).toEqual({ role: 'editor', vote: 'REJECT' }));
   });
 
   /**
