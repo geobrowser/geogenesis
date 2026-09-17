@@ -32,7 +32,13 @@ vi.mock('@geogenesis/auth', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: mocks.isModalOpen }),
   useGeoLoginWithEmail: () => {
     mocks.useGeoLoginWithEmail();
-    return { sendCode: mocks.sendCode, loginWithCode: mocks.loginWithCode, state: mocks.otpState };
+    // Fresh identities per render, as a real hook returns. A stable `vi.fn()` here made an effect
+    // keyed on these look like it ran once when it in fact re-runs on every render.
+    return {
+      sendCode: (args: { email: string }) => mocks.sendCode(args),
+      loginWithCode: (args: { code: string }) => mocks.loginWithCode(args),
+      state: mocks.otpState,
+    };
   },
 }));
 
@@ -539,6 +545,10 @@ describe('ExploreEmailCapturePopup', () => {
 
     // Mounting the step is what requests the code, so a re-render must not mail a second one and
     // silently retire the first.
+    // The failure reported from the preview, and the one the mock above used to hide: a hook returns
+    // new callback identities every render, so an effect keyed on them re-fires. Each re-fire
+    // mailed another code, cleared the field mid-typing, and eventually tripped Privy's own limit —
+    // whose rejection lands in the fallback and opens the dialog this exists to avoid.
     it('requests exactly one code, however often the card re-renders', async () => {
       const view = await subscribeSuccessfully();
       await act(async () => {
@@ -626,6 +636,39 @@ describe('ExploreEmailCapturePopup', () => {
       fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '123' } });
 
       expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    });
+
+    // The other half of the same bug, and the one that made the step unusable even when the modal
+    // did not appear: the send cleared the field, so a re-fire wiped whatever had been typed.
+    it('does not clear a code being typed when the card re-renders', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      const field = () => screen.getByRole('textbox', { name: 'Verification code' }) as HTMLInputElement;
+      fireEvent.change(field(), { target: { value: '1234' } });
+      view.rerender(<ExploreEmailCapturePopup />);
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      expect(field().value).toBe('1234');
+    });
+
+    // Never offered to the reader, but it is what StrictMode does to every effect in development,
+    // and the dependency array alone does not survive it.
+    it('sends one code even when the step is mounted twice', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+
+      const sendsAfterFirstMount = mocks.sendCode.mock.calls.length;
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      expect(sendsAfterFirstMount).toBe(1);
+      expect(mocks.sendCode).toHaveBeenCalledTimes(1);
     });
 
     it('says so when the code is refused, and offers a new one', async () => {

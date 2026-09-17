@@ -443,23 +443,37 @@ function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () => void 
   giveUpRef.current = onGiveUp;
   const openPrivyModalRef = React.useRef(openPrivyModal);
   openPrivyModalRef.current = openPrivyModal;
+  // Behind a ref because a hook's returned callbacks are new objects on every render. Naming
+  // `sendCode` as a dependency below makes `requestCode` new on every render too, and the effect
+  // that depends on *it* re-fires -- mailing a fresh code each time, wiping the field mid-typing,
+  // and eventually tripping Privy's own limit, whose rejection lands in the fallback and throws up
+  // the dialog this exists to avoid. Which is exactly what it did.
+  const sendCodeRef = React.useRef(sendCode);
+  sendCodeRef.current = sendCode;
 
   const requestCode = React.useCallback(async () => {
     setCode('');
     try {
-      await sendCode({ email });
+      await sendCodeRef.current({ email });
     } catch {
       // Captcha, a Privy outage, an address it will not take. Hand them the dialog that does work
       // rather than a dead end.
       giveUpRef.current();
       openPrivyModalRef.current();
     }
-  }, [sendCode, email]);
+  }, [email]);
 
   // Sent on mount rather than on the press, so this component owns the whole flow and the parent
-  // owns none of it. Runs once: `requestCode` is stable, and a second run would mail a second code
-  // and silently retire the first.
+  // owns none of it.
+  //
+  // Guarded as well as keyed on a stable callback: one code is what mounting means, and the guard
+  // holds even under StrictMode's deliberate double-invoke, where the dependency array alone does
+  // not. A second send mails a second code and silently retires the first, so the one the reader
+  // is looking at stops working.
+  const hasRequestedRef = React.useRef(false);
   React.useEffect(() => {
+    if (hasRequestedRef.current) return;
+    hasRequestedRef.current = true;
     void requestCode();
   }, [requestCode]);
 
