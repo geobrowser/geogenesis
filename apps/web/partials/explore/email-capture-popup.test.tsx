@@ -52,7 +52,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const popup = () => screen.queryByRole('dialog', { name: 'Geo network launching soon' });
+const popup = () => screen.queryByRole('region', { name: 'Geo network launching soon' });
 
 describe('ExploreEmailCapturePopup', () => {
   it('stays away until the reader has scrolled', () => {
@@ -225,6 +225,66 @@ describe('ExploreEmailCapturePopup', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toBeInTheDocument();
     expect(alert.textContent).not.toMatch(/\bminute\b|\bsecond\b|\bmoment\b/i);
+  });
+
+  // Nothing here asked to be opened, so a `dialog` would owe its reader a focus move that would
+  // interrupt them mid-sentence — and a `dialog` that never moves focus promises behaviour it does
+  // not implement. A named landmark is reachable without taking anything away.
+  it('is a named landmark rather than a dialog that never takes focus', () => {
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(popup()).toBeInTheDocument();
+    // Reading focus did not move; the reader is still wherever they were.
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('closes on Escape from inside the card, and records the dismissal', async () => {
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+
+    expect(popup()).toBeNull();
+    expect(window.localStorage.getItem('dismissedNotices')).toContain('exploreEmailCapture');
+  });
+
+  // Submitting removes the button that had focus, so without a live region a reader not watching
+  // this corner gets silence exactly where the confirmation is.
+  it('announces the confirmation, which replaces the control that had focus', async () => {
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reader@example.com' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+    });
+
+    const confirmation = await screen.findByRole('status');
+    expect(confirmation.textContent).toContain('You are on the list.');
+  });
+
+  // The same gap the route had on its own call, on this side of the wire: a request accepted and
+  // never answered would leave the button disabled and the form stuck with no way forward.
+  it('bounds its own request rather than sitting in submitting forever', async () => {
+    let signal: AbortSignal | undefined;
+    mocks.fetch.mockImplementation((_url: string, init: { signal?: AbortSignal }) => {
+      signal = init.signal;
+      return Promise.reject(Object.assign(new Error('The operation was aborted'), { name: 'TimeoutError' }));
+    });
+
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reader@example.com' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+    });
+
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    // Back to a usable form rather than a disabled button.
+    expect(screen.getByRole('button', { name: 'Subscribe' })).not.toBeDisabled();
   });
 
   // Privy's modal is a sign-in the reader actively started; stacking on it is the worse

@@ -133,9 +133,36 @@ describe('POST /api/newsletter/subscribe', () => {
     expect(await resultOf(await subscribe({ email: 'reader@example.com' }))).toBe('invalid-email');
   });
 
-  it('passes the provider verdict through when it is the one rate limiting us', async () => {
+  // Their ceiling, not this reader's. Reported as `rate-limited` the popup says "too many tries
+  // from here", blaming someone who did nothing and inviting them to wait out a limit that will
+  // not clear because they stopped. Only the local limiters can truthfully say that.
+  it('does not blame the reader for the provider throttling our account', async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 429 });
-    expect(await resultOf(await subscribe({ email: 'reader@example.com' }))).toBe('rate-limited');
+
+    const response = await subscribe({ email: 'reader@example.com' });
+
+    expect(await resultOf(response)).toBe('failed');
+    expect(response.status).toBe(502);
+  });
+
+  // A connection the provider accepts and then stops answering. Unbounded, nothing returns: the
+  // invocation is held until the platform kills it and the caller never gets one of these answers.
+  it('bounds the provider request rather than hanging on it', async () => {
+    let signal: AbortSignal | undefined;
+    fetchMock.mockImplementation((_url: string, init: { signal?: AbortSignal }) => {
+      // Captured, not asserted here: an assertion that throws inside the mock is caught by the
+      // route's own error handling and answered as a plain failure, so the test would pass with
+      // the bound removed. That is precisely the bug it is meant to catch.
+      signal = init.signal;
+      // What `AbortSignal.timeout` produces once it expires.
+      return Promise.reject(Object.assign(new Error('The operation was aborted'), { name: 'TimeoutError' }));
+    });
+
+    const response = await subscribe({ email: 'reader@example.com' });
+
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(await resultOf(response)).toBe('failed');
+    expect(response.status).toBe(502);
   });
 
   it('survives the provider being down or unreachable', async () => {

@@ -32,6 +32,14 @@ const EMAIL_CAPTURE_ID = 'exploreEmailCapture';
  */
 const SCROLL_TRIGGER_VIEWPORTS = 2;
 
+/**
+ * The same guard the route puts on its own call to MailerLite, for the same reason: a request that
+ * is accepted and never answered would otherwise leave this stuck in `submitting` with the button
+ * disabled and no way forward. Longer than the route's own eight seconds on purpose — the server's
+ * specific answer should win whenever it is coming, and this is only for when nothing is.
+ */
+const SUBMIT_TIMEOUT_MS = 15_000;
+
 type Status = 'idle' | 'submitting' | 'done' | NewsletterSubscribeResult;
 
 /**
@@ -106,6 +114,7 @@ function EmailCapturePopup() {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ email }),
+          signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
         });
         const body = (await response.json()) as { result?: NewsletterSubscribeResult };
         if (body.result === 'subscribed') {
@@ -150,8 +159,19 @@ function EmailCapturePopup() {
 
   return (
     <div
-      role="dialog"
+      // A named `region` rather than a `dialog`. Nothing here asked to be opened, so the focus move
+      // a dialog owes its reader would be an interruption mid-sentence — and a `dialog` that never
+      // takes focus is the worst of both, promising behaviour that is not implemented. As a
+      // landmark this is reachable by the same landmark navigation used to skip between page
+      // sections, and it is mounted ahead of the feed (`explore-page.tsx`) so tabbing reaches it
+      // early rather than after an infinite list, which is where it actually sits on screen.
+      role="region"
       aria-label="Geo network launching soon"
+      // Escape closes it, scoped to the card: while focus is inside, Escape is unambiguous. A
+      // document listener would take the key from whatever else the reader is doing out in the feed.
+      onKeyDown={event => {
+        if (event.key === 'Escape') close();
+      }}
       // `z-1101` is one above the chat launcher's `z-1100` (`partials/chat/chat-widget.tsx`), which
       // shares this corner: at `z-100` the assistant's button sat over the "Remind me" button and
       // took the click. Deliberately no higher — the slide-up, status bar and toast layers start at
@@ -194,14 +214,18 @@ function EmailCapturePopup() {
           same total: 144 artwork + 20 + 17 heading + 8 + 19 subtext + 20 + 28 row + 25 = 281. */}
       <div className="px-5 pt-5 pb-[25px]">
         {status === 'done' ? (
-          <>
+          // `role="status"` because submitting removes the button that had focus, so a reader who
+          // is not watching this corner would otherwise get silence where the confirmation is. The
+          // failure path has had `role="alert"` all along; this is the same courtesy for the case
+          // that actually worked.
+          <div role="status">
             <p className="text-[28px] leading-[17px] font-medium tracking-[-0.84px] text-[#151515]">
               You are on the list.
             </p>
             <p className="mt-[8px] text-[16px] leading-[19px] tracking-[-0.48px] text-[rgba(21,21,21,0.7)]">
               We will be in touch about features, points, and the path to mainnet.
             </p>
-          </>
+          </div>
         ) : (
           // `noValidate`, and the field below is a text input rather than `type="email"`. Native
           // constraint validation blocks the submit event outright for a malformed address, so the

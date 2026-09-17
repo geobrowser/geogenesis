@@ -21,6 +21,15 @@ import { emailLimit, ipLimit } from '../rate-limit';
  */
 const MAILERLITE_SUBSCRIBERS_URL = 'https://connect.mailerlite.com/api/subscribers';
 
+/**
+ * A connection MailerLite accepts and then stops answering is the failure this guards. Without a
+ * bound, nothing here ever returns: the invocation is held until the platform kills it, and the
+ * caller is left in `submitting` with no answer at all -- the one outcome this route's controlled
+ * JSON failures exist to avoid. Eight seconds is far longer than the API's normal reply and well
+ * inside any serverless ceiling, so expiry means genuinely stuck rather than merely slow.
+ */
+const MAILERLITE_TIMEOUT_MS = 8_000;
+
 function answer(result: NewsletterSubscribeResult, status: number) {
   return NextResponse.json({ result }, { status });
 }
@@ -75,6 +84,7 @@ export async function POST(request: Request) {
         authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({ email: normalizedEmail }),
+      signal: AbortSignal.timeout(MAILERLITE_TIMEOUT_MS),
     });
 
     // 201 is a new subscriber and 200 is one MailerLite already had. Both are "you are on the list"
@@ -83,11 +93,17 @@ export async function POST(request: Request) {
     if (response.ok) return answer('subscribed', 200);
 
     if (response.status === 422) return answer('invalid-email', 400);
-    if (response.status === 429) return answer('rate-limited', 429);
 
+    // A 429 from MailerLite is *our* account hitting *their* ceiling, which the person typing had
+    // no part in. Passing it through as `rate-limited` would tell them "too many tries from here"
+    // and invite them to wait out a limit that is not theirs and will not clear because they
+    // stopped. The local limiters above are the only thing that can truthfully say that; from here
+    // down it is our outage to report.
     console.error(`newsletter subscribe: MailerLite responded ${response.status}`);
     return answer('failed', 502);
   } catch (error) {
+    // `AbortSignal.timeout` rejects with a TimeoutError, which lands here alongside DNS and
+    // connection failures. All of them are the same thing to the reader: it did not work, try later.
     console.error('newsletter subscribe: request to MailerLite failed', error);
     return answer('failed', 502);
   }
