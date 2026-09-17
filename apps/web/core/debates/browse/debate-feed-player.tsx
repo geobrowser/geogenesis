@@ -107,6 +107,17 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   const recede = 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100';
   const idle = !playing || playbackEnded;
 
+  // Whether the scrubber is on screen, which the claim stack has to know as well as the scrubber
+  // itself — it sits in the same bottom band and lifts clear of it. Hover is the remaining case and
+  // stays in CSS (`group-hover` on both), since neither element can ask about the other in a class.
+  //
+  // Keyboard focus is here rather than a `focus-within:` variant for exactly that reason: tabbing
+  // to the timeline has to raise the cards too, and a sibling cannot see focus land inside the
+  // scrubber. Guarded on `relatedTarget` so moving between the markers and the range input — both
+  // inside the wrapper — does not blink it off and on.
+  const [timelineFocused, setTimelineFocused] = React.useState(false);
+  const scrubberShown = showControls || timelineFocused;
+
   return (
     // No gap and one radius on the outside: the two tiles are a single surface in the Figma frame,
     // which is what lets the subtitle straddle the seam instead of sitting inside one of them.
@@ -160,12 +171,18 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
           ready ? (
             // Always available so the viewer can seek. During playback it recedes to
             // hover-only and drops pointer-events so it can't swallow play/pause taps.
+            // `pointer-events-none` does not stop keyboard focus reaching the range input, which
+            // is what brings it back up for a viewer who never touches the pointer.
             <div
+              onFocus={() => setTimelineFocused(true)}
+              onBlur={event => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setTimelineFocused(false);
+              }}
               className={cx(
                 'transition-opacity',
-                showControls
+                scrubberShown
                   ? 'opacity-100'
-                  : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100'
+                  : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100'
               )}
             >
               <FeedScrubber
@@ -191,9 +208,22 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
 
           Capped at the 209px the frame draws it at. The explore card is 484px wide, where 43% comes
           out at exactly that; the fullscreen player is far wider, and letting the card scale with it
-          would hold a paragraph and stop being a glance. */}
+          would hold a paragraph and stop being a glance.
+
+          The bottom padding lifts the stack clear of the scrubber whenever the scrubber is up, so
+          the newest card is never the thing the progress bar is drawn through. It lands 12px above
+          the bar — the same gap it keeps from the bottom edge when the bar is hidden — and eases,
+          because the bar it is making room for fades rather than appears. */}
       {!playbackEnded && ticker.cards.length > 0 && (
-        <div className="pointer-events-none absolute inset-y-3 left-3 z-10 flex w-[43%] max-w-[13.0625rem] flex-col justify-end">
+        <div
+          className={cx(
+            'pointer-events-none absolute inset-y-3 left-3 z-10 flex w-[43%] max-w-[13.0625rem] flex-col justify-end transition-[padding-bottom] duration-150',
+            // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Both spellings
+            // are written out because Tailwind generates classes by scanning this source text, so
+            // a composed `group-hover:${…}` would produce a rule that does not exist.
+            scrubberShown ? 'pb-5' : 'group-hover:pb-5'
+          )}
+        >
           <DebateClaimTickerStack
             cards={ticker.cards}
             history={ticker.history}
