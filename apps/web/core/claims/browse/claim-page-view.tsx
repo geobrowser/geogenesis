@@ -8,7 +8,6 @@ import type { DebateClaim } from '~/core/debates/api';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import { useRetireConfirmedResponseIndexing } from '~/core/debates/retire-confirmed-response-indexing';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -200,9 +199,6 @@ function ClaimPositionSection({
     responseBlockedReason,
     onRequireSignIn: promptSignIn,
   });
-  // See claims-page-client: retiring the optimistic snapshot outlived the toggle that used to own
-  // it, because `claim-response-summary` on this page reads that snapshot for display.
-  useRetireConfirmedResponseIndexing({ debateClaim: row, entityId, spaceId });
   useBackfillReadinessForHeldPosition({ readiness: row, entityId, spaceId });
 
   return (

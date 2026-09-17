@@ -85,9 +85,6 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   }),
 }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => () => {} }));
-vi.mock('~/core/debates/retire-confirmed-response-indexing', () => ({
-  useRetireConfirmedResponseIndexing: () => {},
-}));
 vi.mock('~/core/debates/backfill-readiness-for-held-position', () => ({
   useBackfillReadinessForHeldPosition: () => {},
 }));

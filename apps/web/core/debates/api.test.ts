@@ -4,6 +4,7 @@ import { MAX_SEARCH_QUERY_LENGTH } from '~/core/io/search-query';
 
 import {
   GeoChatRequestError,
+  GeoChatSessionError,
   blockDebateUser,
   completeLocalRecordingUpload,
   createDebateRequest,
@@ -110,6 +111,30 @@ describe('geo-chat request errors', () => {
       code: null,
       status: 503,
     });
+  });
+
+  it('reads Retry-After from a 429 as seconds or an HTTP date, without retrying the request', async () => {
+    const rateLimited = (retryAfter: string) =>
+      new Response(JSON.stringify({ error: { code: 'rate_limited', message: 'Too many requests' } }), {
+        status: 429,
+        statusText: 'Too Many Requests',
+        headers: { 'Content-Type': 'application/json', 'Retry-After': retryAfter },
+      });
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(rateLimited('7'))
+      .mockResolvedValueOnce(rateLimited(new Date(Date.now() + 30_000).toUTCString()));
+    vi.stubGlobal('fetch', fetch);
+    const notify = () => notifyClaimResponseIndexed('space-1', 'claim-1', 'stance', true, vi.fn(), 'user-a');
+
+    await expect(notify()).rejects.toMatchObject({ status: 429, retryAfterMs: 7_000 });
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    const error = await notify().catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(GeoChatRequestError);
+    expect((error as GeoChatRequestError).retryAfterMs).toBeGreaterThan(28_000);
+    expect((error as GeoChatRequestError).retryAfterMs).toBeLessThanOrEqual(30_000);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -948,5 +973,12 @@ describe('geo-chat session sharing', () => {
 
     await result;
     expect((requestSignal as AbortSignal | null)?.aborted).toBe(true);
+  });
+});
+
+describe('GeoChatSessionError', () => {
+  it('keeps the Retry-After delay of the error it wraps', () => {
+    const wrapped = new GeoChatSessionError(new GeoChatRequestError('Too many requests', 'rate_limited', 429, 1_500));
+    expect(wrapped.retryAfterMs).toBe(1_500);
   });
 });
