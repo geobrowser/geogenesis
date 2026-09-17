@@ -27,6 +27,7 @@ import {
   RecordingCircleButton,
   SpeakerIcon,
 } from '~/core/debates/debate-room-controls';
+import { DebateRoomHoldingScreen, DebateRoomLoadingState } from '~/core/debates/debate-room-holding-screens';
 import {
   type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
@@ -277,6 +278,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * driven by what is actually being written rather than by a status the pill infers.
    */
   const [capturing, setCapturing] = React.useState(false);
+  /** Mirrors `autoConnectAttemptedRef`, so render can tell when the debate connection is still due. */
+  const [autoConnectAttemptedKey, setAutoConnectAttemptedKey] = React.useState<string | null>(null);
+  /** From a `connect` call until it sets `roomState`; it waits on tab ownership in between. */
+  const [connectStarting, setConnectStarting] = React.useState(false);
+  const connectStartingGenerationRef = React.useRef(0);
   const [rematchConsentRequested, setRematchConsentRequested] = React.useState(false);
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
   const [audioMuted, setAudioMuted] = React.useState(false);
@@ -554,6 +560,17 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     (shouldExitTerminalDebate && !hasRecordingPersistenceError) ||
     (recordingCancelledBy !== null && !opponentCancelledRecording && !rematchSurvivesCancellation) ||
     idleRematchDestination !== null;
+
+  // Between the intro and the recording view, the debate connection has not set `roomState` yet:
+  // either the auto-connect effect has not run, or `connect` is waiting on tab ownership. A spent
+  // attempt leaves this false, so a failed connection still shows its retry.
+  const awaitingDebateConnection = Boolean(
+    debate &&
+    !['ready', 'complete', 'cancelled'].includes(debate.status) &&
+    roomState === 'idle' &&
+    connectionConflictSource === null &&
+    (connectStarting || autoConnectAttemptedKey !== `${debate.id}:debate`)
+  );
 
   const returnFromDebate = React.useCallback(
     ({ forwardOnly = false }: { forwardOnly?: boolean } = {}) => {
@@ -1097,6 +1114,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       const connectionStartedAt = performance.now();
       let connectionStage: DebateRoomConnectionStage = 'livekit_token';
       const isCurrent = () => mountedRef.current && connectionGenerationRef.current === generation;
+      connectStartingGenerationRef.current = generation;
+      setConnectStarting(true);
       let connectingRoom: RoomLike | null = null;
       let newlyCreatedTracks: LocalTrackLike[] = [];
       const ownership = ownershipRef.current;
@@ -1109,11 +1128,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         ownsConnection = acquisition?.acquired;
         waitedForLocalRelease = acquisition?.waitedForLocalRelease ?? false;
       }
-      if (!isCurrent()) return;
+      if (!isCurrent()) {
+        // Superseded by a teardown rather than a newer attempt, which would own the flag.
+        if (connectStartingGenerationRef.current === generation) setConnectStarting(false);
+        return;
+      }
       if (ownsConnection && waitedForLocalRelease) {
         reportLocalReleaseRecovery(generation, ownership?.coordinationMode ?? 'livekit-fallback');
       }
       if (ownsConnection === false) {
+        setConnectStarting(false);
         setConnectionConflictSource('web_lock_blocked');
         setRoomError('This debate is already open in another tab.');
         setRoomState('idle');
@@ -1141,6 +1165,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setConnectionConflictSource(null);
       setRoomError(null);
       setPostJoinConnectionFailure(false);
+      setConnectStarting(false);
       setRoomState('connecting');
       setServerClockSettled(false);
       setRemoteVideoReady(false);
@@ -1440,7 +1465,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // An intro connection carries into the debate, so it spends the debate phase's auto-connect
         // too. Without this the first drop after the intro would silently re-acquire the camera and
         // republish — which the room has always deliberately left to an explicit retry.
-        if (debateStatusRef.current === 'ready') autoConnectAttemptedRef.current = `${debateId}:debate`;
+        if (debateStatusRef.current === 'ready') {
+          autoConnectAttemptedRef.current = `${debateId}:debate`;
+          setAutoConnectAttemptedKey(autoConnectAttemptedRef.current);
+        }
         setRoomState('connected');
       } catch (error) {
         if (connectingRoom && connectingRoomRef.current === connectingRoom) connectingRoomRef.current = null;
@@ -1896,6 +1924,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     mountedRef.current = true;
     if (resumingAfterEffectCleanup) {
       autoConnectAttemptedRef.current = null;
+      setAutoConnectAttemptedKey(null);
     }
     return () => {
       mountedRef.current = false;
@@ -1960,6 +1989,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     const autoConnectKey = `${debate.id}:${debate.status === 'ready' ? 'intro' : 'debate'}`;
     if (autoConnectAttemptedRef.current === autoConnectKey) return;
     autoConnectAttemptedRef.current = autoConnectKey;
+    setAutoConnectAttemptedKey(autoConnectKey);
     void connect();
   }, [connect, connectionConflictSource, debate, previewState, roomState]);
 
@@ -2122,7 +2152,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // returning it here instead would unmount that screen and leave the backdrop on the app shell.
   if (recordingRemovalNotice && !rematchSurvivesCancellation) return recordingRemovalNotice;
 
-  if (shouldHideTerminalDebate) return null;
+  // The exit navigation is still running, and nothing else covers the app shell on this route.
+  if (shouldHideTerminalDebate)
+    return <DebateRoomHoldingScreen label="Leaving the debate" claim={debate?.claim.claim} />;
 
   if (connectionConflictWithoutTakeover) {
     return (
@@ -2148,6 +2180,18 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     );
   }
 
+  // Same view as the route's `loading.tsx`, so arriving swaps straight to the intro.
+  if (!debate && !(debateQuery.error instanceof Error)) return <DebateRoomLoadingState />;
+
+  if (debate && awaitingDebateConnection) {
+    return (
+      <>
+        <DebateRoomHoldingScreen label="Connecting to the debate" claim={debate.claim.claim} />
+        {recordingRemovalNotice}
+      </>
+    );
+  }
+
   return (
     <div className="py-8">
       {debate?.status !== 'ready' && (
@@ -2165,12 +2209,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           <Button type="button" variant="secondary" onClick={() => router.push(`/space/${spaceId}/debates`)}>
             Back to debates
           </Button>
-        </div>
-      )}
-
-      {debateQuery.isLoading && (
-        <div className="rounded-lg border border-grey-02 bg-white px-5 py-6">
-          <Text color="grey-04">Loading debate...</Text>
         </div>
       )}
 

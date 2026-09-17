@@ -67,6 +67,7 @@ const mocks = vi.hoisted(() => ({
   useRealRoomOwnership: false,
   deviceChangeHandler: null as null | (() => void),
   debate: null as Debate | null,
+  debateLoading: false,
   rematch: null as DebateRematchSession | null,
   featureFlags: {
     debateDebugging: false,
@@ -109,7 +110,12 @@ vi.mock('~/core/debates/hooks', () => ({
   useClearTimedOutDebateActivity: () => mocks.clearTimedOutDebateActivity,
   useConsentToDebateRematch: () => ({ mutateAsync: mocks.consentMutateAsync, isPending: false }),
   useEndDebateTurn: () => ({ mutateAsync: mocks.endTurnMutateAsync, isPending: false }),
-  useDebate: () => ({ data: mocks.debate, isLoading: false, error: null, refetch: mocks.refetchDebate }),
+  useDebate: () => ({
+    data: mocks.debate,
+    isLoading: mocks.debateLoading,
+    error: null,
+    refetch: mocks.refetchDebate,
+  }),
   useDebateRematch: () => ({ data: mocks.rematch, isLoading: false, error: null }),
   useLeaveDebateRematch: () => ({ mutateAsync: mocks.leaveRematchMutateAsync, isPending: false }),
   useLiveKitJoin: () => ({ mutateAsync: mocks.liveKitJoinMutateAsync, isPending: false }),
@@ -355,6 +361,7 @@ beforeEach(() => {
   mocks.useRealRoomOwnership = false;
   mocks.deviceChangeHandler = null;
   mocks.debate = completedDebate();
+  mocks.debateLoading = false;
   mocks.rematch = null;
   mocks.featureFlags = {
     debateDebugging: false,
@@ -515,7 +522,7 @@ describe('DebateRoomPageClient', () => {
   // GEO-2758. The picker that opens when this debate ends offers the claims related to the one
   // being argued, and finding them is three serial requests. Asked from here, they are answered
   // long before anyone is waiting on them.
-  it("warms the claims related to the one being argued, once the debate is under way", () => {
+  it('warms the claims related to the one being argued, once the debate is under way', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(mocks.warmRelatedClaims).toHaveBeenCalledWith(
@@ -877,10 +884,115 @@ describe('DebateRoomPageClient', () => {
     );
     expect(screen.getByText('Requesting camera and mic…')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: "I'm ready to debate" })).not.toBeInTheDocument();
+    // Still laid out, hidden and inert, so the screen does not jump when access is granted.
+    const reservedReadyButton = screen.getByRole('button', { name: "I'm ready to debate", hidden: true });
+    expect(reservedReadyButton.closest('[inert]')).toHaveClass('invisible');
 
     pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
 
     expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
+  });
+
+  // GEO-2770. Each view below replaces a full-screen one, so anything else rendered in between
+  // shows as a flash.
+  describe('screen transitions', () => {
+    const connectingDebate = (): Debate => ({
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    });
+
+    it('shows the route loading state while the debate loads', () => {
+      mocks.debate = null;
+      mocks.debateLoading = true;
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('status')).toHaveTextContent('Opening your debate room…');
+      expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading debate...')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back to debates' })).not.toBeInTheDocument();
+    });
+
+    it('goes straight from the intro to the recording view when the intro connected', async () => {
+      mocks.debate = readyDebate({ localReady: true, remoteReady: false });
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+      await screen.findByRole('button', { name: /Waiting for/ });
+
+      mocks.debate = connectingDebate();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    });
+
+    it('holds a full-screen state while a failed intro reconnects for the debate', async () => {
+      mocks.liveKitJoinMutateAsync.mockRejectedValueOnce(new Error('intro failed'));
+      mocks.debate = readyDebate({ localReady: true, remoteReady: false });
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      expect(await screen.findByText('intro failed')).toBeInTheDocument();
+
+      const ownership = deferred<{ acquired: boolean; waitedForLocalRelease: boolean }>();
+      mocks.ownershipAcquire.mockReturnValueOnce(ownership.promise);
+      mocks.debate = connectingDebate();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.queryByRole('dialog', { name: 'Debate readiness' })).not.toBeInTheDocument();
+      expect(screen.getByRole('status', { name: 'Connecting to the debate' })).toBeInTheDocument();
+      expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
+      await waitFor(() => expect(mocks.ownershipAcquire).toHaveBeenCalledTimes(2));
+      expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
+
+      await act(async () => ownership.resolve({ acquired: true, waitedForLocalRelease: false }));
+      expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    });
+
+    it('holds a full-screen state while rejoining a debate already under way', async () => {
+      const ownership = deferred<{ acquired: boolean; waitedForLocalRelease: boolean }>();
+      mocks.ownershipAcquire.mockReturnValueOnce(ownership.promise);
+      mocks.debate = { ...completedDebate(), status: 'in_progress', completed_at: null };
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('status', { name: 'Connecting to the debate' })).toBeInTheDocument();
+      await waitFor(() => expect(mocks.ownershipAcquire).toHaveBeenCalledOnce());
+      expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
+
+      await act(async () => ownership.resolve({ acquired: true, waitedForLocalRelease: false }));
+      expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    });
+
+    it('keeps the retry reachable once the debate connection has failed', async () => {
+      mocks.liveKitJoinMutateAsync.mockRejectedValue(new Error('join failed'));
+      mocks.debate = { ...connectingDebate(), status: 'preflight', preflight_ends_at: '2099-07-02T00:00:15.000Z' };
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(await screen.findByText('join failed')).toBeInTheDocument();
+      expect(screen.queryByRole('status', { name: 'Connecting to the debate' })).not.toBeInTheDocument();
+    });
+
+    it('holds a full-screen state instead of a blank page while leaving a finished debate', async () => {
+      setHistoryLength(2);
+      mocks.debate = completedDebate();
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('status', { name: 'Leaving the debate' })).toBeInTheDocument();
+      await waitFor(() => expect(mocks.back).toHaveBeenCalled());
+      expect(screen.getByRole('status', { name: 'Leaving the debate' })).toBeInTheDocument();
+    });
+
+    it('holds a full-screen state while an idle room walks into the rematch', async () => {
+      mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+      mocks.rematch = rematchSession('browsing');
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('status', { name: 'Leaving the debate' })).toBeInTheDocument();
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    });
   });
 
   it('locks background scrolling while the pre-screen modal is open', () => {
