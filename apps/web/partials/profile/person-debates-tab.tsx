@@ -6,6 +6,7 @@ import type { HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu
 import { usePersonDebates } from '~/core/debates/use-person-debates';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { type DebateSort, filterRowsBySpace, sortRows, spaceFacetsFromRows } from '~/core/profile/record-client-filter';
+import { useEntityScores } from '~/core/profile/use-entity-scores';
 
 import { PersonRecordFeed } from './person-record-feed';
 import { RecordFilterRow } from './record-filter-row';
@@ -30,7 +31,8 @@ import { useRecordSelection } from './use-record-selection';
  */
 const SORT_OPTIONS: HubFilterOption<string>[] = [
   { value: 'new', label: 'New' },
-  { value: 'oldest', label: 'Oldest' },
+  { value: 'top', label: 'Top' },
+  { value: 'old', label: 'Old' },
 ];
 
 export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
@@ -40,9 +42,16 @@ export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
   const { rows, isLoading, isError } = usePersonDebates(spaceId, true);
 
   const facets = React.useMemo(() => spaceFacetsFromRows(rows), [rows]);
+
+  // Only asked for when Top is showing. The card carries no score of its own —
+  // Explore ranks by ordering rows server-side rather than decorating them — so
+  // a list already complete in memory has to look them up to rank itself.
+  const debateIds = React.useMemo(() => rows.map(row => row.entityId), [rows]);
+  const { scores } = useEntityScores({ ids: debateIds, enabled: sort === 'top' });
+
   const shown = React.useMemo(
-    () => sortRows(filterRowsBySpace(rows, spaces.values), sort),
-    [rows, sort, spaces.values]
+    () => sortRows(filterRowsBySpace(rows, spaces.values), sort, scores),
+    [rows, scores, sort, spaces.values]
   );
 
   const spaceIds = React.useMemo(() => facets.map(facet => facet.id), [facets]);

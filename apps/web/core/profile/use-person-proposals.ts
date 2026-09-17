@@ -60,13 +60,14 @@ interface NetworkResult {
 }
 
 /**
- * Newest or oldest first.
+ * New or old.
  *
- * No Top, and not for want of a connection: a proposal carries no score, and
- * ordering a governance record by its vote tally would rank a contested change
- * above an uncontested one for no reason a reader could name.
+ * No Top here, and this one really is for want of a score: a proposal carries
+ * none, unlike a claim or a debate. Ranking a governance record by its vote
+ * tally instead would put a contested change above an uncontested one for no
+ * reason a reader could name.
  */
-export type ProposalSort = 'newest' | 'oldest';
+export type ProposalSort = 'new' | 'old';
 
 interface ActionsResult {
   proposalActionsConnection: { nodes: { proposalId: string; actionType: string }[] } | null;
@@ -106,7 +107,7 @@ function personProposalsQuery(
   return `query {
     proposalsCurrentsConnection(
       filter: { proposedBy: { is: ${sp} }${spaceClause} }
-      orderBy: ${sort === 'oldest' ? 'CREATED_AT_ASC' : 'CREATED_AT_DESC'}
+      orderBy: ${sort === 'old' ? 'CREATED_AT_ASC' : 'CREATED_AT_DESC'}
       first: ${first}${cursor}
     ) {
       totalCount
@@ -182,7 +183,7 @@ async function fetchActionTypes(proposalIds: string[], signal?: AbortSignal): Pr
 export function usePersonProposals({
   spaceId,
   first = 20,
-  sort = 'newest',
+  sort = 'new',
   spaceIds = [],
 }: {
   /** The personal space. `proposedBy` is this, not the person entity. */

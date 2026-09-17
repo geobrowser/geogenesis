@@ -15,7 +15,7 @@ import { normId } from '~/core/utils/norm-id';
  * genuinely paged, so the same code there would filter the reader's scroll
  * position.
  */
-export type DebateSort = 'new' | 'oldest';
+export type DebateSort = 'new' | 'top' | 'old';
 
 /**
  * Spaces are OR, matching every other multi-select on these tabs.
@@ -53,17 +53,40 @@ export function spaceFacetsFromRows<T extends Pick<ExploreFeedRow, 'spaceId'>>(
 }
 
 /**
- * Newest or oldest, and nothing else.
+ * New, Top or Old.
  *
- * No Top: Best and Top both rank by a *claim's* score, and a debate carries
- * none. Ordering debates by their claims' scores would rank a debate by an
- * argument somebody else made in it.
+ * **Top ranks by the debate's own Score**, which debates do carry: 66 of the 68
+ * in the graph have one. An earlier version of this file claimed they had none
+ * and left the sort out on that basis, which was simply unchecked — the score is
+ * on the debate entity, not borrowed from the claims argued inside it.
  *
- * The incoming order is the relation query's, which is newest-first — so `new`
- * is the identity and `oldest` is its reverse. Reversing rather than sorting on
- * a timestamp because the rows carry none: a debate's date lives on the entity,
- * and the relation is what this list is built from.
+ * New and Old are the relation query's order and its reverse. Reversed rather
+ * than sorted on a date because these rows carry none: a debate's date lives on
+ * the entity, and the relation is what this list is built from.
+ *
+ * Best is still absent, and that one is deliberate. It is a diversity-windowed
+ * ranking over a *set of spaces*, built to stop one space crowding an infinite
+ * feed — not a question one person's eleven debates can answer.
  */
-export function sortRows<T>(rows: readonly T[], sort: DebateSort): T[] {
-  return sort === 'oldest' ? [...rows].reverse() : [...rows];
+export function sortRows<T extends { entityId: string }>(
+  rows: readonly T[],
+  sort: DebateSort,
+  /** Keyed by normalised id, which is what `decodeScores` hands back. */
+  scores?: ReadonlyMap<string, number>
+): T[] {
+  if (sort === 'old') return [...rows].reverse();
+  if (sort !== 'top') return [...rows];
+
+  // Unscored rows sort last rather than disappearing, and ties keep the order
+  // they arrived in — so Top with no scores yet is the New list rather than a
+  // shuffled one.
+  return [...rows]
+    .map((row, index) => ({ row, index, score: scores?.get(normId(row.entityId)) ?? null }))
+    .sort((a, b) => {
+      if (a.score === b.score) return a.index - b.index;
+      if (a.score === null) return 1;
+      if (b.score === null) return -1;
+      return b.score - a.score;
+    })
+    .map(entry => entry.row);
 }

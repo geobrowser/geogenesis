@@ -28,8 +28,8 @@ import { useRecordSelection } from './use-record-selection';
  * could name.
  */
 const SORT_OPTIONS: HubFilterOption<string>[] = [
-  { value: 'newest', label: 'Newest' },
-  { value: 'oldest', label: 'Oldest' },
+  { value: 'new', label: 'New' },
+  { value: 'old', label: 'Old' },
 ];
 
 /**
@@ -41,7 +41,7 @@ const SORT_OPTIONS: HubFilterOption<string>[] = [
  * first thing that distinguishes one row from the next.
  */
 export function PersonProposalsTab({ spaceId, proposer }: { spaceId: string; proposer: Profile }) {
-  const [sort, setSort] = React.useState<ProposalSort>('newest');
+  const [sort, setSort] = React.useState<ProposalSort>('new');
   const spaces = useRecordSelection();
 
   const { proposals, isLoading, isError, isFetchingNextPage, hasNextPage, fetchNextPage } = usePersonProposals({

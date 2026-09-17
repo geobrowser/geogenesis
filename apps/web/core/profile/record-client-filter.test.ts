@@ -65,14 +65,58 @@ describe('sortRows', () => {
     expect(sortRows(ROWS, 'new').map(r => r.entityId)).toEqual(['d1', 'd2', 'd3']);
   });
 
-  it('reverses it for Oldest', () => {
-    expect(sortRows(ROWS, 'oldest').map(r => r.entityId)).toEqual(['d3', 'd2', 'd1']);
+  it('reverses it for Old', () => {
+    expect(sortRows(ROWS, 'old').map(r => r.entityId)).toEqual(['d3', 'd2', 'd1']);
   });
 
   it('does not mutate the list it was given', () => {
     const original = [...ROWS];
-    sortRows(ROWS, 'oldest');
+    sortRows(ROWS, 'old');
 
     expect(ROWS).toEqual(original);
+  });
+
+  // Debates do carry a Score — 66 of the 68 in the graph — which is what makes
+  // Top a real sort here rather than the borrowed one it was first assumed to be.
+  describe('Top', () => {
+    const scores = new Map([
+      ['d1', 3],
+      ['d2', 9],
+      ['d3', 5],
+    ]);
+
+    it('ranks by the score, highest first', () => {
+      expect(sortRows(ROWS, 'top', scores).map(r => r.entityId)).toEqual(['d2', 'd3', 'd1']);
+    });
+
+    it('puts an unscored row last rather than dropping it', () => {
+      const partial = new Map([['d3', 5]]);
+
+      expect(sortRows(ROWS, 'top', partial).map(r => r.entityId)).toEqual(['d3', 'd1', 'd2']);
+    });
+
+    it('holds the incoming order where scores tie', () => {
+      const tied = new Map([
+        ['d1', 5],
+        ['d2', 5],
+        ['d3', 5],
+      ]);
+
+      expect(sortRows(ROWS, 'top', tied).map(r => r.entityId)).toEqual(['d1', 'd2', 'd3']);
+    });
+
+    // Top is selected before its scores arrive, so this is the first thing drawn.
+    it('is the New order when no scores have arrived', () => {
+      expect(sortRows(ROWS, 'top').map(r => r.entityId)).toEqual(['d1', 'd2', 'd3']);
+    });
+
+    // The map comes from `decodeScores` and is keyed normalised; the rows are
+    // the half that arrive spelled either way.
+    it('matches a dashed row id against the normalised score map', () => {
+      const rows = [row('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 's'), row('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 's')];
+      const normalised = new Map([['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 10]]);
+
+      expect(sortRows(rows, 'top', normalised)[0].entityId).toBe('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+    });
   });
 });
