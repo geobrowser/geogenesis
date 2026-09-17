@@ -222,6 +222,29 @@ function DebaterVideo({
   const { openSidePanel } = useEntitySidePanel();
   const name = participant ? speakerLabel(participant) : 'Debater';
 
+  /**
+   * Whose turn it is decides the *volume*, not the `muted` flag (GEO-2947).
+   *
+   * `muted` now carries only the viewer's own mute, which is the one thing it should mean — and
+   * the one thing `playFromStart` and `playBothWithMutedFallback` already write it for, so the
+   * element no longer has two different notions of "muted" written to it from two places.
+   *
+   * The reason to move the per-turn gate off it: a browser is entitled to stop a <video> it
+   * considers silent once the tab is off screen, and muting the listening debater for the length
+   * of a turn is what made one of the pair look silent. Volume 0 is the same silence to a
+   * listener without being a mute. It is not a guarantee — a browser may well count volume 0 as
+   * inaudible too — but it costs nothing, and the player no longer depends on the answer either
+   * way: `useDebatePlayback` now leaves a split pair alone off screen and reconciles on return.
+   *
+   * Layout effect, so the volume lands in the same commit that React writes `muted` — a turn
+   * change must never leave both recordings briefly audible at once.
+   */
+  React.useLayoutEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.volume = audible ? 1 : 0;
+  }, [audible, src, videoRef]);
+
   // A personal space's own id resolves to its "system entity" (an ugly technical
   // record). The space's page entity is the real profile, so open that once it's
   // loaded and fall back to the space id while it's still fetching.
@@ -244,7 +267,7 @@ function DebaterVideo({
             playsInline
             preload="metadata"
             src={src}
-            muted={!audible || mutedByUser}
+            muted={mutedByUser}
             onEnded={onPlaybackTick}
             onLoadedMetadata={onPlaybackTick}
             onPause={onPlaybackTick}

@@ -388,6 +388,61 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
     expect(result.current.playing).toBe(false);
   });
 
+  /**
+   * The turn is what un-mutes the speaking video, so nulling it is a mute. Off screen the
+   * browser stops whichever element is silent — during slot 2's turn that is slot 1, the one the
+   * playhead is read from. Reading "slot 1 is paused" as "there is no turn" therefore silenced
+   * slot 2 while it was still playing: the same silence the ticket is about, by another route.
+   */
+  it('keeps the turn when the hidden tab stops the clock video but not the speaking one', async () => {
+    const { result, slot1 } = await playing();
+
+    // Far enough in to be slot 2's turn (30s each), so slot 1 is the muted element.
+    act(() => result.current.seekBoth(40));
+    await waitFor(() => expect(result.current.turnState?.slot).toBe(2));
+
+    visibilityState = 'hidden';
+    slot1.browserPause();
+
+    act(() => result.current.onPlaybackTick());
+
+    expect(result.current.turnState?.slot).toBe(2); // slot 2 stays audible
+    expect(result.current.playing).toBe(true);
+  });
+
+  /**
+   * The return path must not re-create the bug it fixes. `resumeBoth` starts both elements and
+   * then spends up to ~300ms confirming, and slot 2 (a cue-less WebM) routinely starts later —
+   * so the pair is legitimately split while the tab is already visible again. Slot 1 emits
+   * `timeupdate` about four times a second throughout, so a tick lands in that window as a
+   * matter of course; treating it as a browser block paused the video that had just started and
+   * made it a sticky user pause.
+   */
+  it('does not pause the pair while a resume is still confirming', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    visibilityState = 'hidden';
+    slot1.browserPause();
+    slot2.browserPause();
+
+    await act(async () => {
+      setVisibility('visible');
+      await Promise.resolve();
+      // Slot 1 is up; slot 2 is still parsing. A tick here used to pause slot 1 and stick.
+      slot1.settlePlay();
+      result.current.onPlaybackTick();
+      await Promise.resolve();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(slot1.paused).toBe(false);
+    expect(slot2.paused).toBe(false);
+    expect(result.current.playing).toBe(true);
+    expect(result.current.userPaused).toBe(false);
+    expect(result.current.error).toBeNull();
+  });
+
   /** A pair the browser let run must not be seeked on return — that is the "no reset" half. */
   it('does not touch a pair that kept playing while the tab was hidden', async () => {
     const { result, slot1, slot2 } = await playing();

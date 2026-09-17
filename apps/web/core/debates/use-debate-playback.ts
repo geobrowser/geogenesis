@@ -7,6 +7,7 @@ import { atom, useAtom } from 'jotai';
 import type { Debate } from './api';
 import { useDebateTranscript, useRecordingUrl } from './hooks';
 import {
+  type PlayBothOutcome,
   type TurnState,
   clampSeconds,
   normalizeTurnDurationsMs,
@@ -63,6 +64,10 @@ const STALL_EPSILON_SECONDS = 0.001;
  *
  * Visibility, not focus: `document.hasFocus()` is false for every window but the frontmost one,
  * including a tab sitting fully on screen beside the one being typed in.
+ *
+ * Read straight off the document rather than through `useDebateVisibility`, whose answer is
+ * deliberately graced by a minute (GEO-2836) because it gates polling cadence. A grace is exactly
+ * wrong here — playback needs the instant a tab goes off screen, not "recently on screen".
  */
 const documentIsHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
@@ -113,6 +118,21 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
    *   - `setUserPaused(false)` could erase a pause the viewer made during the await.
    */
   const resumeGenerationRef = React.useRef(0);
+  /**
+   * How many resumes are still confirming.
+   *
+   * `resumeGenerationRef` above answers "is this attempt still the current one"; this answers
+   * "is an attempt in progress at all", which the corrections in `updateTurnState` need and
+   * cannot get from a generation number.
+   *
+   * A resume is a split pair by construction: `playBothWithMutedFallback` starts both elements
+   * and then spends up to ~300ms confirming, and slot 2 — a cue-less MediaRecorder WebM — is
+   * routinely the later of the two. Slot 1 emits `timeupdate` about four times a second the
+   * whole time, so a tick lands inside that window as a matter of course. Reading it as "the
+   * browser stopped playback on us" pauses the element that had just started and records a user
+   * pause, which is the very failure this file keeps having to fix (GEO-2783, GEO-2895).
+   */
+  const resumesInFlightRef = React.useRef(0);
   const getRecordingPlaybackUrlRef = React.useRef(recordingUrlMutation.mutateAsync);
 
   const turnDurations = React.useMemo(
@@ -282,6 +302,12 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     const syncDelta = offsets.slot2 - offsets.slot1;
     const now = Date.now();
     const hidden = documentIsHidden();
+    // Both corrections below assume the pair's play/pause states are the settled result of a
+    // decision — ours or the viewer's. Two situations break that assumption, and in both the
+    // right move is to leave the elements alone rather than to "fix" them: a hidden tab, where
+    // the browser stops elements of its own accord, and a resume that has not finished starting
+    // them yet.
+    const pairIsSettled = !hidden && resumesInFlightRef.current === 0;
 
     if (primaryVideo) {
       const progress = primaryProgressRef.current;
@@ -340,7 +366,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     if (
       primaryVideo &&
       secondaryVideo &&
-      !hidden &&
+      pairIsSettled &&
       primaryVideo.paused !== secondaryVideo.paused &&
       playhead < timelineSeconds
     ) {
@@ -355,8 +381,19 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       return;
     }
 
-    if (!primaryVideo || primaryVideo.paused || primaryVideo.ended || playhead >= timelineSeconds) {
-      if (playhead >= timelineSeconds) setPlaying(false);
+    if (playhead >= timelineSeconds) {
+      setPlaying(false);
+      setTurnState(null);
+      return;
+    }
+
+    // Whose turn it is comes off the playhead. Slot 1 being stopped normally means playback is
+    // not running, so there is no turn to show — but off screen it usually means the browser
+    // stopped slot 1, which is the *muted* element for the whole of slot 2's turn. Nulling the
+    // turn there drops `audible`, and `audible` is what un-mutes the speaking video, so slot 2
+    // would go silent while it was still perfectly happily playing. Same silence as before,
+    // arriving through the back door.
+    if (pairIsSettled && (!primaryVideo || primaryVideo.paused || primaryVideo.ended)) {
       setTurnState(null);
       return;
     }
@@ -386,7 +423,17 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // allSettled never rejects, so a failed play() (e.g. blocked by autoplay
     // policy) leaves the video paused rather than throwing — check both the
     // settled results and the paused state, and surface the error inline.
-    const outcome = await playBothWithMutedFallback(primaryVideo, secondaryVideo);
+    //
+    // Counted across the await, not just marked: overlapping attempts are normal here (see
+    // `resumeGenerationRef`), and a flag would be cleared by the first to finish while the
+    // other was still starting its elements.
+    resumesInFlightRef.current++;
+    let outcome: PlayBothOutcome;
+    try {
+      outcome = await playBothWithMutedFallback(primaryVideo, secondaryVideo);
+    } finally {
+      resumesInFlightRef.current--;
+    }
     // Superseded while we waited — something else owns these elements now. Every write below
     // would describe a playback attempt that no longer exists, including the 'blocked' error,
     // which at this point only means "someone paused us mid-confirm".
@@ -466,6 +513,12 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
    *
    * Only when the viewer had it playing: an explicit pause, a finished debate or a scrub in
    * progress all mean "leave it alone", which is what `backgroundIntentRef` carries.
+   *
+   * The one thing it cannot tell apart is a pause the viewer made from *outside* the page while
+   * it was hidden — a media key, or an OS media control. That arrives as an element pausing on
+   * its own, indistinguishable from the background pause this exists to undo, so it is resumed
+   * too. Accepted deliberately: the ticket is about background listening, the feed autoplays
+   * muted, and the alternative is to keep a debate stopped for the far commoner reason.
    */
   const backgroundIntentRef = React.useRef<{ shouldBePlaying: boolean; resumeBoth: () => Promise<void> }>({
     shouldBePlaying: false,
@@ -476,12 +529,12 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       shouldBePlaying: playing && !userPaused && !isScrubbing && !playbackEnded,
       resumeBoth,
     };
-  });
+  }, [isScrubbing, playbackEnded, playing, resumeBoth, userPaused]);
 
   React.useEffect(() => {
     if (typeof document === 'undefined') return;
     const reconcile = () => {
-      if (document.visibilityState !== 'visible') return;
+      if (documentIsHidden()) return;
       const { shouldBePlaying, resumeBoth: resume } = backgroundIntentRef.current;
       if (!shouldBePlaying) return;
       const primaryVideo = slot1VideoRef.current;
