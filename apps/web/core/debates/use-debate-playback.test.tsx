@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
+import * as React from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import type { Debate } from './api';
@@ -103,6 +104,39 @@ describe('useDebatePlayback — playback URLs survive re-activation (GEO-2895)',
     rerender({ active: true });
 
     await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+  });
+
+  // StrictMode (on by default in dev) mounts, cleans up and re-runs every effect before the
+  // first fetch settles. The re-run must not be skipped as "already fetched", or the cancelled
+  // first run drops the URLs and the card sits on "Loading…" forever.
+  it('loads URLs under StrictMode', async () => {
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true), { wrapper: React.StrictMode });
+
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    expect(result.current.urls.slot2).not.toBeNull();
+  });
+
+  it('loads URLs when the card is scrolled away and back before the first fetch settles', async () => {
+    let settle: () => void = () => {};
+    const gate = new Promise<void>(resolve => {
+      settle = resolve;
+    });
+    mocks.recordingUrl.mockImplementation(async ({ filename }: { filename: string }) => {
+      await gate;
+      return { url: `https://cdn.test/${filename}?sig=abc` };
+    });
+
+    const debate = debateFixture();
+    const { result, rerender } = renderHook(({ active }) => useDebatePlayback(debate, active), {
+      initialProps: { active: true },
+    });
+
+    rerender({ active: false });
+    rerender({ active: true });
+    await act(async () => settle());
+
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    expect(result.current.urls.slot2).not.toBeNull();
   });
 });
 
