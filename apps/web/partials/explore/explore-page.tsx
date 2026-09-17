@@ -8,6 +8,7 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { EntityFeed, type SpaceOption } from '~/partials/feed/entity-feed';
 
+import { ExploreEmailCapturePopup } from './email-capture-popup';
 import { ExploreSidePanel } from './explore-side-panel';
 import { ExploreWelcomeBanner } from './explore-welcome-banner';
 
@@ -54,6 +55,12 @@ export function ExplorePage({
         ) : null
       }
     >
+      {/* Fixed-position, so it sits outside the column rather than in the feed's flow — and ahead
+          of it in the DOM, because that is where it is on screen. Mounted after the feed it was
+          reachable only by tabbing an infinite list to the end, which for a keyboard reader is not
+          reachable at all. It renders nothing until it is shown, so it costs the tab order
+          nothing the rest of the time. */}
+      <ExploreEmailCapturePopup />
       <main className="min-w-0 pt-5">
         <div className="mx-auto w-full max-w-[880px]">
           <ExploreWelcomeBanner />

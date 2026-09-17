@@ -1,15 +1,11 @@
 'use client';
 
-import { useCallback } from 'react';
-
-import { useAtom } from 'jotai';
-
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
+import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
-import { dismissedNoticesAtom } from '~/atoms';
 
 // Persisted alongside the other one-time notices (see `dismissedNoticesAtom`). Once the
 // user dismisses the banner this id is appended to the list and it never renders again.
@@ -33,16 +29,10 @@ export function ExploreWelcomeBanner() {
 }
 
 function WelcomeBanner() {
-  const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
+  const { dismissed, remember: handleDismiss } = useDismissedNotice(WELCOME_BANNER_ID);
   const { isOpen: isDebatesHubOpen, open: openDebatesHub } = useDebatesHub();
 
-  // Functional setter form so concurrent dismissals can't drop each other via a stale
-  // closure, and the guard keeps the id from being appended twice on a repeat click.
-  const handleDismiss = useCallback(() => {
-    setDismissedNotices(prev => (prev.includes(WELCOME_BANNER_ID) ? prev : [...prev, WELCOME_BANNER_ID]));
-  }, [setDismissedNotices]);
-
-  if (dismissedNotices.includes(WELCOME_BANNER_ID)) return null;
+  if (dismissed) return null;
 
   return (
     <div className="relative mb-5 overflow-clip rounded-lg bg-[#151515]">
