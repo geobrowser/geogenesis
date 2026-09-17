@@ -48,22 +48,32 @@ export async function POST(request: Request) {
 
   const normalizedEmail = email.trim().toLowerCase();
 
-  // Failing closed, as `app/api/chat` does. `Redis.fromEnv()` hands back a client whether or not
-  // Upstash is configured and only rejects once a command runs, so an unset or unreachable Redis
-  // surfaces here rather than at import. Letting it throw would answer from Next's own error path
-  // with no JSON body at all, and would quietly leave this endpoint -- an anonymous write into
-  // someone else's mailing list -- running with no limit of any kind.
-  let perEmail: Awaited<ReturnType<typeof emailLimit.limit>>;
-  let perIp: Awaited<ReturnType<typeof ipLimit.limit>>;
-  try {
-    [perEmail, perIp] = await Promise.all([emailLimit.limit(normalizedEmail), ipLimit.limit(getClientIp(request))]);
-  } catch (error) {
-    console.error('newsletter subscribe: rate limiter unavailable; failing closed', error);
-    return answer('failed', 503);
-  }
+  if (emailLimit && ipLimit) {
+    // Failing closed, as `app/api/chat` does. A configured Redis that is briefly unreachable is
+    // exactly when this endpoint must refuse: letting the error through would answer from Next's
+    // own error path with no JSON body, and would leave an anonymous write into someone else's
+    // mailing list running with no limit of any kind.
+    let perEmail: Awaited<ReturnType<NonNullable<typeof emailLimit>['limit']>>;
+    let perIp: Awaited<ReturnType<NonNullable<typeof ipLimit>['limit']>>;
+    try {
+      [perEmail, perIp] = await Promise.all([emailLimit.limit(normalizedEmail), ipLimit.limit(getClientIp(request))]);
+    } catch (error) {
+      console.error('newsletter subscribe: rate limiter unavailable; failing closed', error);
+      return answer('failed', 503);
+    }
 
-  if (!perEmail.success || !perIp.success) {
-    return answer('rate-limited', 429);
+    if (!perEmail.success || !perIp.success) {
+      return answer('rate-limited', 429);
+    }
+  } else if (process.env.NODE_ENV === 'production') {
+    // No credentials in production is a misconfigured deploy, not a local convenience. Refusing is
+    // the only safe reading: the alternative is silently serving an unlimited public relay.
+    console.error('newsletter subscribe: Upstash is not configured; refusing to run unlimited');
+    return answer('failed', 503);
+  } else {
+    console.warn(
+      'newsletter subscribe: Upstash is not configured, so rate limiting is off. Development only; production refuses instead.'
+    );
   }
 
   const apiKey = process.env.MAILERLITE_API_KEY;
