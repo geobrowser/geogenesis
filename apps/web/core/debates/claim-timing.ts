@@ -31,15 +31,31 @@ export type ClaimTiming = {
 export type TimedClaim = TranscriptClaim & { timing: ClaimTiming | null };
 
 /**
- * The bar a matched claim has to clear before it may be drawn as a moment — a marker on the
- * scrubber, a card that surfaces mid-playback.
+ * The bar a timing has to clear before a surface may state it — see {@link isAssertableMoment}.
  *
  * Measured against the test debate, where every claim above this was placed on the right sentence.
  * Below it the match is usually still in the right region but can start several seconds early, and
- * a card that pops early tells a viewer a debater said something they had not yet said. Those
- * claims stay in the panel, which is a list and makes no claim about *when*.
+ * a card that pops early tells a viewer a debater said something they had not yet said.
  */
 export const LIVE_TIMING_CONFIDENCE = 0.55;
+
+/**
+ * Whether a timing is firm enough to *state* — "Said at 2:29", a card over the video.
+ *
+ * One predicate for every surface that puts a moment in front of a reader, because they were
+ * disagreeing. The live layer asked for {@link LIVE_TIMING_CONFIDENCE} while the panel's timecode
+ * asked only that the claim was matched at all, so a 0.40 match — judged too loose to draw over
+ * the video — still printed a time to the second, and read exactly as authoritative as a published
+ * offset. The weaker evidence was making the more precise claim.
+ *
+ * Ordering deliberately does not go through here. A list has to put a claim *somewhere*, and a
+ * rough position in a list asserts far less than a timestamp does, so
+ * {@link sortClaimsBySpokenOrder} uses any usable match and leaves the rest grouped by their turn.
+ */
+export function isAssertableMoment(timing: ClaimTiming | null): timing is ClaimTiming {
+  // `block` scores zero, so the whole-turn fallback is excluded by the threshold itself.
+  return timing !== null && timing.confidence >= LIVE_TIMING_CONFIDENCE;
+}
 
 /**
  * Below this the match is not worth keeping at all and the claim falls back to its turn.
@@ -257,17 +273,35 @@ export function resolveClaimTimings({ claims, blocks, segments }: ResolveClaimTi
  * the end, where a list that is mostly chronological is still useful.
  */
 export function claimsInSpokenOrder(claims: TranscriptClaim[], timings: Map<string, ClaimTiming>): TimedClaim[] {
+  return sortClaimsBySpokenOrder(claims, timings).map(claim => ({ ...claim, timing: timings.get(claim.id) ?? null }));
+}
+
+/** A claim with no moment at all sorts after every claim that has one. */
+const momentOf = (timing: ClaimTiming | null) => timing?.startMs ?? Number.MAX_SAFE_INTEGER;
+
+/**
+ * Claims in the order they were said.
+ *
+ * Any usable match counts here, not only the firm ones {@link isAssertableMoment} admits: a list
+ * has to put every claim somewhere, and where it lands says far less than a printed timecode does.
+ * A match too loose even for that was already discarded by the resolver, which falls back to the
+ * claim's own turn — so a claim nothing could be recovered for still sorts into the turn it was
+ * made in, which is the answer the transcript block gives.
+ *
+ * All the claims of one turn therefore share a moment and tie. `tiebreak` decides those, since
+ * nothing about *when* can: the order they arrive in is relation `position`, which
+ * `debate-publish-draft.ts` fills with `Position.generate()` — random, not monotonic — so leaving
+ * ties to arrival order is leaving them to a shuffle.
+ */
+export function sortClaimsBySpokenOrder<T extends { id: string }>(
+  claims: T[],
+  timings: Map<string, ClaimTiming>,
+  tiebreak: (a: T, b: T) => number = () => 0
+): T[] {
   return claims
-    .map((claim, index) => ({ claim, index, timing: timings.get(claim.id) ?? null }))
-    .sort((a, b) => {
-      if (a.timing && b.timing) {
-        return a.timing.startMs === b.timing.startMs ? a.index - b.index : a.timing.startMs - b.timing.startMs;
-      }
-      if (a.timing) return -1;
-      if (b.timing) return 1;
-      return a.index - b.index;
-    })
-    .map(({ claim, timing }) => ({ ...claim, timing }));
+    .map((claim, index) => ({ claim, index, moment: momentOf(timings.get(claim.id) ?? null) }))
+    .sort((a, b) => a.moment - b.moment || tiebreak(a.claim, b.claim) || a.index - b.index)
+    .map(entry => entry.claim);
 }
 
 /** `2:05`, for a timecode chip. */

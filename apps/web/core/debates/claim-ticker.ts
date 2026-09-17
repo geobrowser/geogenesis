@@ -1,4 +1,4 @@
-import { LIVE_TIMING_CONFIDENCE, type TimedClaim } from './claim-timing';
+import { type TimedClaim, isAssertableMoment } from './claim-timing';
 
 /** A claim eligible to surface over the video, with the moment it starts being said. */
 export type TickerWindow = { claim: TimedClaim; startMs: number };
@@ -12,7 +12,7 @@ export type TickerWindow = { claim: TimedClaim; startMs: number };
  */
 export function tickerWindows(claims: TimedClaim[]): TickerWindow[] {
   return claims
-    .filter(claim => claim.timing !== null && claim.timing.confidence >= LIVE_TIMING_CONFIDENCE)
+    .filter(claim => isAssertableMoment(claim.timing))
     .map(claim => ({ claim, startMs: (claim.timing as NonNullable<TimedClaim['timing']>).startMs }))
     .sort((a, b) => a.startMs - b.startMs);
 }
