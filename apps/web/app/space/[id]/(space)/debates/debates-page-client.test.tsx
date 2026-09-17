@@ -147,7 +147,11 @@ describe('DebatesPageClient browse feed', () => {
     expect(screen.getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
     expect(screen.getAllByText('Fashion').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Join a debate' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Winner?').length).toBeGreaterThan(0);
+    // Both debaters name themselves on their own tile. The "Winner?" pill used to sit here too;
+    // it moved off the tile entirely when the name row took the bottom-right corner, and winner
+    // voting now happens on the end-of-debate scorecard and in the claims panel.
+    expect(screen.getAllByText('Alex').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Sam').length).toBeGreaterThan(0);
     expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(2);
 
     await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));
