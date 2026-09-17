@@ -8,6 +8,7 @@ import cx from 'classnames';
 import { useAtomValue } from 'jotai';
 
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
+import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
 import { timeoutSignal } from '~/core/timeout-signal';
@@ -75,23 +76,33 @@ function EmailCapturePopup() {
   // two are different acts: one remembers, one closes.
   const [closed, setClosed] = React.useState(false);
 
+  // Only watched once the reader is past the trigger: before that the answer cannot matter, and
+  // this observes a page holding an infinite feed.
+  const isAnyModalOpen = useAnyModalOpen(scrolledEnough);
+
   // Anything the reader deliberately opened owns the screen until they close it, and this waits
-  // rather than competing. Listed rather than folded into a z-index rule because the problem is not
-  // really stacking order: each of these is a surface someone chose to open, and interrupting it
-  // with an unasked-for signup card is the worse of the two interruptions whichever draws on top.
+  // rather than competing. Not a z-index rule: each of these is a surface someone chose to open,
+  // and an unasked-for signup card over it is the worse interruption whichever draws on top.
   //
-  //  - Privy's modal is a sign-in they actively started.
+  // `useAnyModalOpen` is the general half, and it exists because the specific half kept losing.
+  // This guard was built by naming surfaces one at a time and every round of review found another
+  // — the sign-in prompt and global search were the fifth and sixth — which is the signal that
+  // enumerating was the wrong method. Asking the document whether a modal is open covers those two
+  // and whatever is added next, without anyone remembering to come back here.
+  //
+  // The named ones stay because none of them is a modal dialog and none would be caught:
+  //
+  //  - Privy's modal lives in its own portal and reports through `usePrivy`.
   //  - The chat panel shares this exact corner (`chat-panel.tsx` is `z-1100` at the same
   //    `fixed right-4 bottom-…`), so one above it covers its controls and takes their clicks.
-  //  - The debates hub opens from the welcome banner on this very page, so a logged-out reader
-  //    reaches it in one click. On desktop it is `fixed top-11 right-0 bottom-0 z-[200]` — this
-  //    card sits inside that column; on mobile it is `fixed inset-0`, which this would escape.
-  //  - The entity side panel is what every card title opens here (`titleOpensSidePanel`), at
-  //    `fixed inset-0 z-[200]`. Not in the review, but the same mistake and the likeliest to be
-  //    met, since reading a claim is the ordinary thing to do on this page.
+  //  - The debates hub opens from the welcome banner on this very page. Its mobile sheet is
+  //    `aria-modal` and would be caught; its desktop aside is deliberately a non-modal companion
+  //    panel, carrying no dialog role, and would not.
+  //  - The entity side panel is what every card title opens here (`titleOpensSidePanel`).
   //
   // All reactive, so the popup returns on its own once they close whichever it was.
-  const anOverlayIsOpen = isModalOpen || isChatOpen || isDebatesHubOpen || entitySidePanelTarget !== null;
+  const anOverlayIsOpen =
+    isModalOpen || isChatOpen || isDebatesHubOpen || entitySidePanelTarget !== null || isAnyModalOpen;
 
   React.useEffect(() => {
     if (authenticated || dismissed || scrolledEnough) return;

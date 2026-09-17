@@ -377,6 +377,31 @@ describe('ExploreEmailCapturePopup', () => {
     expect(screen.getByRole('status').textContent).toContain('You are on the list.');
   });
 
+  // The general case, and the reason this guard stopped being a list of names. The sign-in prompt
+  // (`partials/sign-in-prompt/sign-in-prompt.tsx`) and global search (`partials/search/dialog.tsx`)
+  // are both Radix underneath, which renders `role="dialog"` with `data-state` and no `aria-modal`
+  // — so neither is reachable by naming it here, and both are covered by asking the document.
+  it('waits while any modal dialog is open, including ones it does not know about', async () => {
+    const view = render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+    expect(popup()).toBeInTheDocument();
+
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('data-state', 'open');
+    await act(async () => {
+      document.body.appendChild(dialog);
+    });
+    view.rerender(<ExploreEmailCapturePopup />);
+    await waitFor(() => expect(popup()).toBeNull());
+
+    await act(async () => {
+      dialog.remove();
+    });
+    view.rerender(<ExploreEmailCapturePopup />);
+    await waitFor(() => expect(popup()).toBeInTheDocument());
+  });
+
   // Privy's modal is a sign-in the reader actively started; stacking on it is the worse
   // interruption. It waits rather than competing, and comes back when they close it.
   it('waits while the sign-in modal is open, then returns', () => {
