@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
-import type { Debate, DebateClaim } from '~/core/debates/api';
+import type { Debate, DebateClaim, DebateParticipant } from '~/core/debates/api';
 import {
   type ClaimMarker,
   type StackedCard,
@@ -26,6 +26,7 @@ import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
+import { Avatar } from '~/design-system/avatar';
 import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { ChevronUp } from '~/design-system/icons/chevron-up';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
@@ -33,12 +34,13 @@ import { ThumbUp } from '~/design-system/icons/thumb-up';
 
 export type DebateTicker = {
   /**
-   * The cards to draw over each debater right now, oldest first, keyed by participant slot.
+   * The cards to draw over the video right now, oldest first.
    *
-   * Split by slot because a card belongs over the person who said it: the corner it sits in is
-   * their corner, above their name.
+   * One stack for the whole player rather than one per debater. The card carries the speaker's
+   * avatar and name itself now, so it no longer has to sit over their tile to say who is talking —
+   * which frees it to live in a single fixed corner and read as a feed of what is being said.
    */
-  stacks: Map<number, StackedCard[]>;
+  cards: StackedCard[];
   /** Every precisely-placed claim, for the scrubber. */
   markers: ClaimMarker[];
   /** Claims in the order they were said, for the card at the end. */
@@ -52,8 +54,10 @@ export type DebateTicker = {
   /** Per-claim lookups, hoisted so the card and the end-of-debate stack share one batch. */
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
-  /** Claim id → the debater who said it, for the card's "Ana just said". */
+  /** Claim id → the debater's display label, for the card at the end. */
   speakerByClaimId: Map<string, string>;
+  /** Claim id → the debater who said it, for the avatar and name the live card wears. */
+  participantByClaimId: Map<string, DebateParticipant>;
 };
 
 /**
@@ -128,51 +132,42 @@ export function useDebateClaimTicker(debate: Debate, playheadMs: number, enabled
   // Attribution rides the *block*, not the claim: a claim's own space is the debate's publication
   // space, which both debaters share. The block's `Authors` relation points at the speaker's
   // personal space, which is the id the participant list keys on.
-  const { speakerByClaimId, slotByClaimId } = React.useMemo(() => {
-    const bySpace = new Map<string, { label: string; slot: number }>();
+  const { speakerByClaimId, participantByClaimId } = React.useMemo(() => {
+    const bySpace = new Map<string, DebateParticipant>();
     for (const participant of orderedParticipants(debate)) {
-      bySpace.set(uuidToHex(participant.profile_space_id), {
-        label: speakerLabel(participant),
-        slot: participant.participant_slot,
-      });
+      bySpace.set(uuidToHex(participant.profile_space_id), participant);
     }
 
-    const byBlock = new Map<string, { label: string; slot: number }>();
+    const byBlock = new Map<string, DebateParticipant>();
     for (const block of claims.blocks) {
       const speaker = block.authorSpaceId ? bySpace.get(uuidToHex(block.authorSpaceId)) : undefined;
       if (speaker) byBlock.set(block.id, speaker);
     }
 
     const labels = new Map<string, string>();
-    const slots = new Map<string, number>();
+    const speakers = new Map<string, DebateParticipant>();
     for (const claim of claims.all) {
       const speaker = byBlock.get(claim.blockId);
       if (!speaker) continue;
-      labels.set(claim.id, speaker.label);
-      slots.set(claim.id, speaker.slot);
+      labels.set(claim.id, speakerLabel(speaker));
+      speakers.set(claim.id, speaker);
     }
-    return { speakerByClaimId: labels, slotByClaimId: slots };
+    return { speakerByClaimId: labels, participantByClaimId: speakers };
   }, [claims.all, claims.blocks, debate]);
 
-  // One stack per debater. A claim whose speaker could not be resolved — attribution and the
-  // participant list can disagree — is left out rather than parked over whichever tile: putting a
-  // claim over the wrong face is the misquote this whole layer is careful about.
-  const stacks = React.useMemo(() => {
-    const bySlot = new Map<number, StackedCard[]>();
-    if (!enabled) return bySlot;
-
-    for (const card of tickerStack(windows, playheadMs, dismissed)) {
-      const slot = slotByClaimId.get(card.window.claim.id);
-      if (slot === undefined) continue;
-      const existing = bySlot.get(slot);
-      if (existing) existing.push(card);
-      else bySlot.set(slot, [card]);
-    }
-    return bySlot;
-  }, [enabled, windows, playheadMs, dismissed, slotByClaimId]);
+  // One stack for the whole player. A claim whose speaker could not be resolved — attribution and
+  // the participant list can disagree — is left out rather than drawn anonymously: the card now
+  // puts a name and a face against the sentence, and putting the wrong one there is the misquote
+  // this whole layer is careful about.
+  const cards = React.useMemo(() => {
+    if (!enabled) return [];
+    return tickerStack(windows, playheadMs, dismissed).filter(card =>
+      participantByClaimId.has(card.window.claim.id)
+    );
+  }, [enabled, windows, playheadMs, dismissed, participantByClaimId]);
 
   return {
-    stacks,
+    cards,
     markers,
     claims: timedClaims,
     answered,
@@ -182,20 +177,36 @@ export function useDebateClaimTicker(debate: Debate, playheadMs: number, enabled
     rowsByClaimId,
     entitiesByClaimId,
     speakerByClaimId,
+    participantByClaimId,
   };
 }
 
 /**
+ * The ramp the card above the newest one wears as it ages out.
+ *
+ * Figma draws this as one 209×168 alpha gradient over the whole stack region — transparent at the
+ * top, fully opaque 71.5px down — with the cards sliding up through it. Reproduced per-card rather
+ * than as a mask on a fixed-height box, because that box would have to stay 168px at every player
+ * width and the player is responsive. With the stack capped at two (`MAX_STACKED_CARDS`) the
+ * arithmetic comes out the same: the newest card sits entirely inside the opaque zone, so the card
+ * above it is the only one carrying any of the ramp.
+ */
+const OLDER_CARD_FADE = 'linear-gradient(to bottom, transparent 6%, #000 89%)';
+
+/**
  * The claim card that rises over the video as it is said.
  *
- * Sits in the seam between the two tiles, which is the one strip of the player that is never a
- * face. One card at a time, dismissible, and it never pauses the video or opens a dialog — the
- * only thing that interrupts playback is the sign-in prompt, which is the app's standard prompt
- * and only appears if the viewer presses a pill while signed out.
+ * A translucent dark card in the player's bottom-left corner, stacked upward: the newest arrives
+ * at the bottom and earlier ones ride up and dissolve, which is the shape of a chat rather than a
+ * dialog. It never pauses the video or opens anything — the only thing that interrupts playback is
+ * the sign-in prompt, which is the app's standard prompt and only appears if the viewer presses a
+ * thumb while signed out.
  */
 export function DebateClaimTickerCard({
   window,
   opacity = 1,
+  fading = false,
+  speaker = null,
   row,
   entity,
   onAnswered,
@@ -203,6 +214,10 @@ export function DebateClaimTickerCard({
   window: TickerWindow;
   /** Driven by the playhead, so a scrub lands on the right strength rather than mid-animation. */
   opacity?: number;
+  /** True for a card that has another below it — the one the stack's gradient dissolves. */
+  fading?: boolean;
+  /** Who said it. The card names them, so it no longer has to sit over their tile to attribute. */
+  speaker?: DebateParticipant | null;
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean) => void;
@@ -216,38 +231,42 @@ export function DebateClaimTickerCard({
       // The video behind is one big play/pause button; without this every tap on a thumb would
       // also toggle playback.
       onClick={event => event.stopPropagation()}
-      style={{ opacity }}
-      className="pointer-events-auto flex w-full flex-col gap-0.5 rounded bg-black/65 px-2 py-1.5 backdrop-blur-[2px]"
+      style={{
+        opacity,
+        ...(fading ? { maskImage: OLDER_CARD_FADE, WebkitMaskImage: OLDER_CARD_FADE } : null),
+      }}
+      className="pointer-events-auto flex w-full flex-col gap-1.5 rounded-lg bg-[#151515]/30 p-3"
     >
-      <span className="text-[0.8125rem] leading-snug text-white">{claim.text}</span>
-      <TickerClaimControls
+      <TickerClaimHeader
         claimId={claim.id}
         spaceId={claim.spaceId}
+        speaker={speaker}
         row={row}
         entity={entity}
         onAnswered={onAnswered}
       />
+      {/* Three lines and then an ellipsis. A claim that runs long is a claim the viewer can read in
+          full in the panel; letting the card grow to fit it would cover the face saying it. */}
+      <p className="line-clamp-3 text-[1rem] leading-[1.0625rem] tracking-[-0.16px] text-white">{claim.text}</p>
     </div>
   );
 }
 
 /**
- * The stack of claim cards over one debater, oldest at the top.
+ * The stack of claim cards in the player's bottom-left corner, oldest at the top.
  *
- * Anchored above the name in the corner rather than centred over the video: a card in the middle
- * reads as a dialog demanding an answer, and it covers the face of the person making the argument.
- * Here it behaves like a chat — the newest arrives at the bottom, earlier ones ride up and fade.
+ * Anchored in the corner rather than centred over the video: a card in the middle reads as a
+ * dialog demanding an answer, and it covers the face of the person making the argument.
  */
 export function DebateClaimTickerStack({
   cards,
-  maxWidth,
+  participantByClaimId,
   rowsByClaimId,
   entitiesByClaimId,
   onAnswered,
 }: {
   cards: StackedCard[];
-  /** The name row's width, so a line never runs past the debater's position chip. */
-  maxWidth?: number | null;
+  participantByClaimId?: Map<string, DebateParticipant>;
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
   onAnswered: (claimId: string, position: boolean) => void;
@@ -255,15 +274,15 @@ export function DebateClaimTickerStack({
   if (cards.length === 0) return null;
 
   return (
-    <div
-      style={maxWidth ? { maxWidth } : undefined}
-      className="flex w-full flex-col items-start gap-1"
-    >
-      {cards.map(card => (
+    <div className="flex w-full flex-col gap-1.5">
+      {cards.map((card, index) => (
         <DebateClaimTickerCard
           key={card.window.claim.id}
           window={card.window}
           opacity={card.opacity}
+          // Everything but the last, which is the newest and sits at full strength.
+          fading={index < cards.length - 1}
+          speaker={participantByClaimId?.get(card.window.claim.id) ?? null}
           row={rowsByClaimId.get(card.window.claim.id) ?? null}
           entity={entitiesByClaimId.get(card.window.claim.id) ?? null}
           onAnswered={onAnswered}
@@ -275,26 +294,31 @@ export function DebateClaimTickerStack({
 
 
 /**
- * The same control logic and the same publish path as every other claim surface, drawn small.
+ * The card's top line: who said it, how the crowd has answered it, and the two ways to answer.
  *
  * `PositionRow` is not reused here, and the reason is size rather than taste: it is a container
  * query that stacks its two pills vertically below ~230px, which is exactly the width this card
  * wants to be. Reusing it would force the card wide enough to cover the face it sits beside. What
- * matters is shared underneath — `useClaimPositionControl` publishes the response, and the labels
- * come from the same vocabulary table, so a factual claim still reads Verify/Dispute here.
+ * matters is shared underneath — `useClaimResponseState` and `useClaimPositionControl` resolve the
+ * vocabulary and publish the response, so a factual claim still reads Verify/Dispute here and the
+ * share is the same number the claim page prints.
  *
- * The crowd split is deliberately withheld until the viewer has answered. Showing it first biases
- * the answer and makes the tally a measure of itself; withholding it also gives the tap a payoff.
+ * The crowd split is shown up front, per the Figma card. It is worth knowing that this cuts against
+ * the usual argument for withholding it — a viewer who sees "65% agree" before answering is being
+ * nudged, and the tally becomes partly a measure of itself. Drawn as designed because it is a
+ * deliberate call about what the card is *for*: a running read of the room rather than a poll.
  */
-function TickerClaimControls({
+function TickerClaimHeader({
   claimId,
   spaceId,
+  speaker,
   row,
   entity,
   onAnswered,
 }: {
   claimId: string;
   spaceId: string;
+  speaker: DebateParticipant | null;
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean) => void;
@@ -308,6 +332,7 @@ function TickerClaimControls({
     claim,
     positions,
     readiness,
+    summary,
   } = useClaimResponseState({ claimId, spaceId, row, entity });
 
   const control = useClaimPositionControl({
@@ -335,30 +360,54 @@ function TickerClaimControls({
   }, [position, claimId, onAnswered]);
 
   const copy = ENTITY_RESPONSE_COPY[responseKind];
+  // Null on a claim nobody has answered, which is most of them — and a genuine 0% is a different
+  // statement from "no responses", so the share drops out rather than printing a zero.
+  const percent = summary.percent;
 
   return (
-    <span className="flex items-center gap-0.5">
-      <ClaimIconButton
-        responseKind={responseKind}
-        position
-        label={copy.positiveAction}
-        selected={control.viewerPosition === true}
-        disabled={!control.canRespond}
-        title={control.actionTitle(true) || copy.positiveAction}
-        onClick={() => control.respond(true)}
-      />
-      <ClaimIconButton
-        responseKind={responseKind}
-        position={false}
-        label={copy.negativeAction}
-        selected={control.viewerPosition === false}
-        disabled={!control.canRespond}
-        title={control.actionTitle(false) || copy.negativeAction}
-        onClick={() => control.respond(false)}
-      />
-      {/* No crowd split and no error text here. Both would make the card grow while the reader is
-          part-way through it; the end-of-debate card is where the numbers live. */}
-    </span>
+    <div className="flex items-center justify-between gap-2">
+      <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[1.0625rem] text-white">
+        {speaker && (
+          <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-white">
+            <Avatar avatarUrl={speaker.avatar_cid} value={speaker.profile_space_id} size={16} />
+          </span>
+        )}
+        {speaker && <span className="truncate">{speakerLabel(speaker)}</span>}
+        {percent !== null && (
+          <>
+            {speaker && <span aria-hidden>·</span>}
+            {/* Same wording as the verdict on the claim page — "65% agree", or "65% verify" on a
+                factual claim, so the share reads the same wherever it is printed. */}
+            <span className="shrink-0 tabular-nums">
+              {percent}% {copy.positiveAction.toLowerCase()}
+            </span>
+          </>
+        )}
+      </span>
+      {/* 4px apart rather than the Figma card's 12px: those are bare 12px glyphs and these are
+          20px buttons, so the same gap between glyph *centres* needs a smaller gap between boxes.
+          No error text here — it would make the card grow while the reader is part-way through it. */}
+      <span className="flex shrink-0 items-center gap-1">
+        <ClaimIconButton
+          responseKind={responseKind}
+          position
+          label={copy.positiveAction}
+          selected={control.viewerPosition === true}
+          disabled={!control.canRespond}
+          title={control.actionTitle(true) || copy.positiveAction}
+          onClick={() => control.respond(true)}
+        />
+        <ClaimIconButton
+          responseKind={responseKind}
+          position={false}
+          label={copy.negativeAction}
+          selected={control.viewerPosition === false}
+          disabled={!control.canRespond}
+          title={control.actionTitle(false) || copy.negativeAction}
+          onClick={() => control.respond(false)}
+        />
+      </span>
+    </div>
   );
 }
 

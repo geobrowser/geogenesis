@@ -75,18 +75,18 @@ export function Share({ color }: Props) {
   );
 }
 
-export function Pause({ color }: Props) {
+export function Pause({ color, size = 18 }: Props & { size?: number }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width={size} height={size} viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="4.5" y="3" width="3" height="12" rx="1" fill={resolve(color)} />
       <rect x="10.5" y="3" width="3" height="12" rx="1" fill={resolve(color)} />
     </svg>
   );
 }
 
-export function Play({ color }: Props) {
+export function Play({ color, size = 18 }: Props & { size?: number }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width={size} height={size} viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
         d="M5.5 3.5L14 9L5.5 14.5V3.5Z"
         fill={resolve(color)}
@@ -98,10 +98,10 @@ export function Play({ color }: Props) {
   );
 }
 
-export function Speaker({ color }: Props) {
+export function Speaker({ color, size = 16 }: Props & { size?: number }) {
   const themeColor = resolve(color);
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
         d="M2 6V10H4.5L8 12.5V3.5L4.5 6H2Z"
         fill={themeColor}
@@ -119,10 +119,10 @@ export function Speaker({ color }: Props) {
   );
 }
 
-export function SpeakerMuted({ color }: Props) {
+export function SpeakerMuted({ color, size = 16 }: Props & { size?: number }) {
   const themeColor = resolve(color);
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
         d="M2 6V10H4.5L8 12.5V3.5L4.5 6H2Z"
         fill={themeColor}
