@@ -10,6 +10,7 @@ import {
   type ClaimMarker,
   type StackedCard,
   type TickerWindow,
+  claimHistory,
   claimMarkers,
   tickerStack,
   tickerWindows,
@@ -32,6 +33,8 @@ import { ChevronUp } from '~/design-system/icons/chevron-up';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
 
+import { useLineClampOverflow } from './line-clamp-overflow';
+
 export type DebateTicker = {
   /**
    * The cards to draw over the video right now, oldest first.
@@ -41,6 +44,13 @@ export type DebateTicker = {
    * which frees it to live in a single fixed corner and read as a feed of what is being said.
    */
   cards: StackedCard[];
+  /**
+   * Every claim said so far, oldest first — what the resting stack opens into on hover.
+   *
+   * Bounded by the playhead, so it is a record of what has been said rather than a table of
+   * contents for what is coming.
+   */
+  history: StackedCard[];
   /** Every precisely-placed claim, for the scrubber. */
   markers: ClaimMarker[];
   /** Claims in the order they were said, for the card at the end. */
@@ -50,7 +60,6 @@ export type DebateTicker = {
   /** Which way they answered each one, for the tally at the end. */
   answers: ReadonlyMap<string, boolean>;
   onAnswered: (claimId: string, position: boolean) => void;
-  onDismiss: (claimId: string) => void;
   /** Per-claim lookups, hoisted so the card and the end-of-debate stack share one batch. */
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
@@ -72,19 +81,17 @@ export function useDebateClaimTicker(debate: Debate, playheadMs: number, enabled
   const { timings } = useClaimTimings(debate.id, claims, enabled);
 
   const [answers, setAnswers] = React.useState<ReadonlyMap<string, boolean>>(() => new Map());
-  const [dismissed, setDismissed] = React.useState<ReadonlySet<string>>(() => new Set());
 
+  // Recorded, not acted on. Answering used to also dismiss the card, which took the side the
+  // viewer had just chosen off the screen before they saw it land; the filled icon is the
+  // acknowledgement now, and the card stays until a newer claim displaces it. The end-of-debate
+  // card still reads this to skip what has already been answered.
   const onAnswered = React.useCallback((claimId: string, position: boolean) => {
     setAnswers(current => new Map(current).set(claimId, position));
-    setDismissed(current => new Set(current).add(claimId));
   }, []);
 
   // The ids alone, for every caller that only asks "has this been answered".
   const answered = React.useMemo(() => new Set(answers.keys()), [answers]);
-
-  const onDismiss = React.useCallback((claimId: string) => {
-    setDismissed(current => new Set(current).add(claimId));
-  }, []);
 
   const timedClaims = React.useMemo(() => claimsInSpokenOrder(claims.all, timings), [claims.all, timings]);
   const windows = React.useMemo(() => tickerWindows(timedClaims), [timedClaims]);
@@ -159,21 +166,28 @@ export function useDebateClaimTicker(debate: Debate, playheadMs: number, enabled
   // the participant list can disagree — is left out rather than drawn anonymously: the card now
   // puts a name and a face against the sentence, and putting the wrong one there is the misquote
   // this whole layer is careful about.
-  const cards = React.useMemo(() => {
-    if (!enabled) return [];
-    return tickerStack(windows, playheadMs, dismissed).filter(card =>
-      participantByClaimId.has(card.window.claim.id)
-    );
-  }, [enabled, windows, playheadMs, dismissed, participantByClaimId]);
+  const attributed = React.useMemo(
+    () => windows.filter(window => participantByClaimId.has(window.claim.id)),
+    [windows, participantByClaimId]
+  );
+
+  const cards = React.useMemo(
+    () => (enabled ? tickerStack(attributed, playheadMs) : []),
+    [enabled, attributed, playheadMs]
+  );
+  const history = React.useMemo(
+    () => (enabled ? claimHistory(attributed, playheadMs) : []),
+    [enabled, attributed, playheadMs]
+  );
 
   return {
     cards,
+    history,
     markers,
     claims: timedClaims,
     answered,
     answers,
     onAnswered,
-    onDismiss,
     rowsByClaimId,
     entitiesByClaimId,
     speakerByClaimId,
@@ -245,10 +259,67 @@ export function DebateClaimTickerCard({
         entity={entity}
         onAnswered={onAnswered}
       />
-      {/* Three lines and then an ellipsis. A claim that runs long is a claim the viewer can read in
-          full in the panel; letting the card grow to fit it would cover the face saying it. */}
-      <p className="line-clamp-3 text-[1rem] leading-[1.0625rem] tracking-[-0.16px] text-white">{claim.text}</p>
+      <TickerClaimText text={claim.text} />
     </div>
+  );
+}
+
+/** Three lines of a claim before the card would start covering the face saying it. */
+const TICKER_CLAMP_LINES = 3;
+
+/**
+ * The claim itself, clamped to three lines, and expandable in place when there is more.
+ *
+ * A claim runs to a sentence or two and three lines of a 209px card is often not all of it. The
+ * alternative to expanding here is "go and find it in the panel", which means leaving the debate
+ * to read a sentence that is on screen — so the text opens where it is, and closes again the same
+ * way.
+ *
+ * Only interactive when it is actually truncated. A button that visibly does nothing is worse than
+ * no button, and most short claims fit.
+ */
+function TickerClaimText({ text }: { text: string }) {
+  // In state rather than a ref: wrapping the text in a button below remounts this node, and the
+  // measurement has to follow it. See `useLineClampOverflow`.
+  const [textElement, setTextElement] = React.useState<HTMLSpanElement | null>(null);
+  const [expanded, setExpanded] = React.useState(false);
+
+  // A new claim in the same card slot starts collapsed rather than inheriting the last one's state.
+  React.useEffect(() => setExpanded(false), [text]);
+
+  const overflowing = useLineClampOverflow(textElement, {
+    maxLines: TICKER_CLAMP_LINES,
+    enabled: !expanded,
+    contentKey: text,
+  });
+
+  const body = (
+    <span
+      ref={setTextElement}
+      // `line-clamp-3` and `block` both set `display`, and `block` wins — which silently turns the
+      // clamp off, so the card grows to fit the whole claim and nothing ever reports as truncated.
+      // The clamp already blockifies the box; only the expanded state needs `block` of its own.
+      className={cx(
+        'text-[1rem] leading-[1.0625rem] tracking-[-0.16px] text-white',
+        expanded ? 'block' : 'line-clamp-3'
+      )}
+    >
+      {text}
+    </span>
+  );
+
+  if (!overflowing && !expanded) return body;
+
+  return (
+    <button
+      type="button"
+      aria-expanded={expanded}
+      title={expanded ? 'Show less' : 'Show the whole claim'}
+      onClick={() => setExpanded(current => !current)}
+      className="w-full cursor-pointer text-left"
+    >
+      {body}
+    </button>
   );
 }
 
@@ -257,31 +328,70 @@ export function DebateClaimTickerCard({
  *
  * Anchored in the corner rather than centred over the video: a card in the middle reads as a
  * dialog demanding an answer, and it covers the face of the person making the argument.
+ *
+ * At rest it shows the last couple of claims. Pointing at it — or tabbing into it — opens the
+ * whole of what has been said so far, scrollable, newest at the bottom. That is the Twitch-chat
+ * bargain: the corner stays a corner while you are watching, and the backlog is there the moment
+ * you go looking for it, without pausing the video or opening a panel.
  */
 export function DebateClaimTickerStack({
   cards,
+  history,
   participantByClaimId,
   rowsByClaimId,
   entitiesByClaimId,
   onAnswered,
 }: {
   cards: StackedCard[];
+  /** Everything said so far. Falls back to the resting stack where a caller has no history. */
+  history?: StackedCard[];
   participantByClaimId?: Map<string, DebateParticipant>;
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
   onAnswered: (claimId: string, position: boolean) => void;
 }) {
-  if (cards.length === 0) return null;
+  const [open, setOpen] = React.useState(false);
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+
+  const shown = open ? (history ?? cards) : cards;
+
+  // Opened at the bottom, on the claim they were just looking at — scrolling *up* from there is
+  // the "go back through it" this exists for. Re-run as the history grows so a claim arriving
+  // while the list is open does not leave the view stranded mid-list.
+  React.useEffect(() => {
+    if (!open) return;
+    const element = scrollRef.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [open, shown.length]);
+
+  if (shown.length === 0) return null;
 
   return (
-    <div className="flex w-full flex-col gap-1.5">
-      {cards.map((card, index) => (
+    <div
+      ref={scrollRef}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      // Only when focus leaves the stack entirely — moving between two cards inside it must not
+      // collapse the list out from under the keyboard.
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }}
+      className={cx(
+        'pointer-events-auto flex w-full flex-col gap-1.5',
+        // Capped to the lower half so the open list never reaches over the other debater's face,
+        // and scrollable inside that.
+        open && 'no-scrollbar max-h-[calc(50%-1.5rem)] overflow-y-auto'
+      )}
+    >
+      {shown.map((card, index) => (
         <DebateClaimTickerCard
           key={card.window.claim.id}
           window={card.window}
           opacity={card.opacity}
-          // Everything but the last, which is the newest and sits at full strength.
-          fading={index < cards.length - 1}
+          // Only the resting stack dissolves its older card. In the open list every claim is one
+          // the reader chose to look at, so fading any of them would just make it hard to read.
+          fading={!open && index < shown.length - 1}
           speaker={participantByClaimId?.get(card.window.claim.id) ?? null}
           row={rowsByClaimId.get(card.window.claim.id) ?? null}
           entity={entitiesByClaimId.get(card.window.claim.id) ?? null}

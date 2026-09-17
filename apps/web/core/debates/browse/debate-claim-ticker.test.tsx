@@ -7,7 +7,7 @@ import type { DebateParticipant } from '~/core/debates/api';
 import type { TickerWindow } from '~/core/debates/claim-ticker';
 import type { TimedClaim } from '~/core/debates/claim-timing';
 
-import { DebateClaimTickerCard } from './debate-claim-ticker';
+import { DebateClaimTickerCard, DebateClaimTickerStack } from './debate-claim-ticker';
 
 const CLAIM_SPACE = '52c7ae149838b6d47ce0f3b2a5974546';
 
@@ -66,7 +66,7 @@ function claim(overrides: Partial<TimedClaim> = {}): TimedClaim {
 }
 
 function window(overrides: Partial<TimedClaim> = {}): TickerWindow {
-  return { claim: claim(overrides), startMs: 134_600, endMs: 148_140 };
+  return { claim: claim(overrides), startMs: 134_600 };
 }
 
 const SPEAKER = {
@@ -213,5 +213,107 @@ describe('DebateClaimTickerCard', () => {
     const { container } = renderCard({ window: { ...window({ spaceId: null }) } });
 
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+/**
+ * jsdom lays nothing out, so a clamped element reports zero for both heights and the overflow
+ * measurement correctly concludes there is nothing to expand. These make it report a fourth line.
+ */
+function forceClampedOverflow() {
+  Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, get: () => 68 });
+  Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 51 });
+}
+
+describe('the claim text', () => {
+  afterEach(() => {
+    // @ts-expect-error — dropping the stubs restores jsdom's own zero-height getters.
+    delete HTMLElement.prototype.scrollHeight;
+    // @ts-expect-error — as above.
+    delete HTMLElement.prototype.clientHeight;
+  });
+
+  // Most claims fit in three lines, and a control that visibly does nothing is worse than none.
+  it('is not a control when the whole claim already fits', () => {
+    renderCard();
+
+    expect(screen.queryByTitle('Show the whole claim')).not.toBeInTheDocument();
+  });
+
+  it('expands in place when there is more than the clamp shows, and collapses again', () => {
+    forceClampedOverflow();
+    renderCard();
+
+    const toggle = screen.getByTitle('Show the whole claim');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(toggle);
+    expect(screen.getByTitle('Show less')).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(screen.getByTitle('Show less'));
+    expect(screen.getByTitle('Show the whole claim')).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  // The video behind is one large play/pause button, so reading a claim must not stop the debate.
+  it('does not toggle playback when expanded', () => {
+    forceClampedOverflow();
+    const onToggle = vi.fn();
+
+    render(
+      <button type="button" onClick={onToggle}>
+        <DebateClaimTickerCard window={window()} speaker={SPEAKER} row={null} entity={null} onAnswered={vi.fn()} />
+      </button>
+    );
+    fireEvent.click(screen.getByTitle('Show the whole claim'));
+
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+});
+
+describe('DebateClaimTickerStack', () => {
+  const resting = [{ window: window(), opacity: 1 }];
+  const history = [
+    { window: window({ id: 'older', text: 'Congress has ceded its war powers over decades' }), opacity: 1 },
+    { window: window(), opacity: 1 },
+  ];
+
+  function renderStack() {
+    return render(
+      <DebateClaimTickerStack
+        cards={resting}
+        history={history}
+        participantByClaimId={new Map([['claim-1', SPEAKER]])}
+        rowsByClaimId={new Map()}
+        entitiesByClaimId={new Map()}
+        onAnswered={vi.fn()}
+      />
+    );
+  }
+
+  it('rests on the most recent claims rather than the whole backlog', () => {
+    renderStack();
+
+    expect(screen.queryByText(/Congress has ceded/)).not.toBeInTheDocument();
+  });
+
+  // The point of the corner is that the backlog is one hover away — no pause, no panel.
+  it('opens everything said so far on hover, and closes again on leave', () => {
+    const { container } = renderStack();
+    const stack = container.firstElementChild as HTMLElement;
+
+    fireEvent.mouseEnter(stack);
+    expect(screen.getByText(/Congress has ceded/)).toBeInTheDocument();
+
+    fireEvent.mouseLeave(stack);
+    expect(screen.queryByText(/Congress has ceded/)).not.toBeInTheDocument();
+  });
+
+  // Hover is not available to a keyboard, and the backlog is content rather than decoration.
+  it('opens on focus reaching the stack', () => {
+    const { container } = renderStack();
+
+    fireEvent.focus(container.firstElementChild as HTMLElement);
+
+    expect(screen.getByText(/Congress has ceded/)).toBeInTheDocument();
   });
 });
