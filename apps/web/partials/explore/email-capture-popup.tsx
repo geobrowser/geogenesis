@@ -1,6 +1,6 @@
 'use client';
 
-import { type UseLoginWithEmail, useGeoLoginWithEmail, usePrivy } from '@geogenesis/auth';
+import { useGeoLoginWithEmail, usePrivy } from '@geogenesis/auth';
 
 import * as React from 'react';
 
@@ -85,13 +85,11 @@ function EmailCapturePopup() {
   // the modal's first step -- asking for it again -- is the one thing worth removing. `state` is
   // Privy's own flow state ('sending-code' | 'awaiting-code-input' | 'submitting-code' | 'error' |
   // 'done'), which is more trustworthy than a second copy of the same machine kept here.
-  const { sendCode, loginWithCode, state: otpState } = useGeoLoginWithEmail();
   // The same preparation `usePrivySignIn` does before the modal opens. Onboarding's step and field
   // atoms are persisted, so without this a new account resumes whatever half-finished run was left
   // in this browser, and finishes onboarding on whichever page it was abandoned on.
   const prepareOnboarding = usePrepareOnboarding();
   const [wantsAccount, setWantsAccount] = React.useState(false);
-  const [code, setCode] = React.useState('');
   // The address as accepted, so the account is created against what was actually subscribed rather
   // than whatever is in the field if they keep typing.
   const [subscribedEmail, setSubscribedEmail] = React.useState('');
@@ -148,59 +146,25 @@ function EmailCapturePopup() {
   }, [authenticated, dismissed, scrolledEnough]);
 
   /** What the close button does: remember it, and take it off the screen now. */
+  /**
+   * Hands over to the account step, which owns the OTP flow from here.
+   *
+   * Deliberately does not request the code itself. Privy's headless login is a hook, and a hook
+   * called here would be mounted on every Explore visit -- registering login callbacks on Privy's
+   * shared emitter for every reader who never presses this, alongside the ones the navbar's own
+   * login already registers. Mounted inside the step instead, it exists only while someone is
+   * actually signing up.
+   */
+  const startAccount = React.useCallback(() => {
+    prepareOnboarding();
+    setWantsAccount(true);
+  }, [prepareOnboarding]);
+
   const close = React.useCallback(() => {
     rememberDismissed();
     setClosed(true);
   }, [rememberDismissed]);
 
-
-  /**
-   * Asks Privy for a code against the address they just subscribed with.
-   *
-   * Fired the moment they press, so the mail is already in flight while the card swaps to the code
-   * field -- there is no code waiting from the newsletter signup, which sends none, so this request
-   * is what creates one.
-   */
-  const startAccount = React.useCallback(async () => {
-    setWantsAccount(true);
-    prepareOnboarding();
-    try {
-      await sendCode({ email: subscribedEmail });
-    } catch {
-      // Captcha, a Privy outage, an address it will not take. Hand them the dialog that does work
-      // rather than a dead end, and let it carry the address in the normal way.
-      setWantsAccount(false);
-      close();
-      openPrivyModal();
-    }
-  }, [sendCode, subscribedEmail, close, openPrivyModal, prepareOnboarding]);
-
-  const submitCode = React.useCallback(
-    async (event: React.FormEvent) => {
-      event.preventDefault();
-      if (code.length !== CODE_LENGTH) return;
-      try {
-        await loginWithCode({ code });
-        // Nothing to do on success. `authenticated` flips, the guard above unmounts this, and the
-        // onboarding dialog picks up a new account with no profile on its own.
-      } catch {
-        // Privy puts the reason in `otpState`, which the code step reads.
-      }
-    },
-    [code, loginWithCode]
-  );
-
-  /** A fresh code, after five wrong attempts have killed the last one or it has expired. */
-  const resendCode = React.useCallback(async () => {
-    setCode('');
-    try {
-      await sendCode({ email: subscribedEmail });
-    } catch {
-      setWantsAccount(false);
-      close();
-      openPrivyModal();
-    }
-  }, [sendCode, subscribedEmail, close, openPrivyModal]);
 
   const submit = React.useCallback(
     async (event: React.FormEvent) => {
@@ -343,13 +307,13 @@ function EmailCapturePopup() {
             </p>
 
             {wantsAccount ? (
-              <CodeStep
+              <AccountStep
                 email={subscribedEmail}
-                code={code}
-                onCodeChange={setCode}
-                otpState={otpState}
-                onSubmit={submitCode}
-                onResend={resendCode}
+                onCannotStart={() => {
+                  setWantsAccount(false);
+                  close();
+                  openPrivyModal();
+                }}
               />
             ) : (
               <>
@@ -465,27 +429,58 @@ function EmailCapturePopup() {
  * labelled control instead of six unlabelled ones, and the code arrives by mail, so pasting is what
  * most people actually do.
  */
-function CodeStep({
-  email,
-  code,
-  onCodeChange,
-  otpState,
-  onSubmit,
-  onResend,
-}: {
-  email: string;
-  code: string;
-  onCodeChange: (code: string) => void;
-  otpState: UseLoginWithEmail['state'];
-  onSubmit: (event: React.FormEvent) => void;
-  onResend: () => void;
-}) {
+function AccountStep({ email, onCannotStart }: { email: string; onCannotStart: () => void }) {
+  // Mounted only while someone is signing up, which is the point of it living here: Privy's login
+  // hooks register on a shared emitter, and one of these sitting on every Explore visit would be
+  // registering callbacks beside the navbar's own login for every reader who never presses the
+  // button that leads here.
+  const { sendCode, loginWithCode, state: otpState } = useGeoLoginWithEmail();
+  const [code, setCode] = React.useState('');
+
+  // Held in a ref so the effect below does not re-run and re-send when the callback identity
+  // changes, which would mail a second code on an unrelated re-render.
+  const onCannotStartRef = React.useRef(onCannotStart);
+  onCannotStartRef.current = onCannotStart;
+
+  const requestCode = React.useCallback(async () => {
+    setCode('');
+    try {
+      await sendCode({ email });
+    } catch {
+      // Captcha, a Privy outage, an address it will not take. Hand them the dialog that does work
+      // rather than a dead end.
+      onCannotStartRef.current();
+    }
+  }, [sendCode, email]);
+
+  // Sent on mount rather than on the press, so this component owns the whole flow and the parent
+  // owns none of it. Runs once: `requestCode` is stable, and a second run would mail a second code
+  // and silently retire the first.
+  React.useEffect(() => {
+    void requestCode();
+  }, [requestCode]);
+
+  const submitCode = React.useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      if (code.length !== CODE_LENGTH) return;
+      try {
+        await loginWithCode({ code });
+        // Nothing to do on success. `authenticated` flips, the guard in the parent unmounts this,
+        // and onboarding picks up a new account with no profile on its own.
+      } catch {
+        // Privy puts the reason in `otpState`, which the markup below reads.
+      }
+    },
+    [code, loginWithCode]
+  );
+
   const sending = otpState.status === 'sending-code';
   const verifying = otpState.status === 'submitting-code';
   const failed = otpState.status === 'error';
 
   return (
-    <form onSubmit={onSubmit} noValidate>
+    <form onSubmit={submitCode} noValidate>
       <p className="mt-[8px] text-[16px] leading-[19px] tracking-[-0.48px] text-[rgba(21,21,21,0.7)]">
         {sending ? 'Sending a code to ' : 'Enter the code we sent to '}
         <span className="text-[#151515]">{email}</span>
@@ -503,7 +498,7 @@ function CodeStep({
           pattern="\d*"
           maxLength={CODE_LENGTH}
           value={code}
-          onChange={event => onCodeChange(event.currentTarget.value.replace(/\D/g, '').slice(0, CODE_LENGTH))}
+          onChange={event => setCode(event.currentTarget.value.replace(/\D/g, '').slice(0, CODE_LENGTH))}
           placeholder="123456"
           aria-label="Verification code"
           aria-invalid={failed}
@@ -526,7 +521,7 @@ function CodeStep({
       {failed ? (
         <p role="alert" className="mt-2 text-[14px] tracking-[-0.35px] text-red-01">
           That code did not work.{' '}
-          <button type="button" onClick={onResend} className="underline underline-offset-2">
+          <button type="button" onClick={() => void requestCode()} className="underline underline-offset-2">
             Send a new one
           </button>
         </p>
@@ -536,7 +531,7 @@ function CodeStep({
         <p className="mt-2 text-[14px] tracking-[-0.35px] text-[rgba(21,21,21,0.7)]">
           <button
             type="button"
-            onClick={onResend}
+            onClick={() => void requestCode()}
             disabled={sending}
             className="underline underline-offset-2 disabled:opacity-60"
           >

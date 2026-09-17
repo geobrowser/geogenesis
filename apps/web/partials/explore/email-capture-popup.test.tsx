@@ -511,8 +511,37 @@ describe('ExploreEmailCapturePopup', () => {
     // site: swapping back to the raw hook leaves this spy uncalled and the import undefined.
     it('logs in through the wrapper that puts the wallet into wagmi, not the raw Privy hook', async () => {
       await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
 
       expect(mocks.useGeoLoginWithEmail).toHaveBeenCalled();
+    });
+
+    // Privy's login hooks register on a shared emitter. One mounted on every Explore visit would be
+    // registering callbacks beside the navbar's own login for every reader who never presses the
+    // button that leads here, which is both waste and a plausible way to disturb that login.
+    it('does not mount the login hook until someone actually asks for an account', async () => {
+      await subscribeSuccessfully();
+
+      // The confirmation is on screen with the offer showing, and still nothing is registered.
+      expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+      expect(mocks.useGeoLoginWithEmail).not.toHaveBeenCalled();
+    });
+
+    // Mounting the step is what requests the code, so a re-render must not mail a second one and
+    // silently retire the first.
+    it('requests exactly one code, however often the card re-renders', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      expect(mocks.sendCode).toHaveBeenCalledTimes(1);
     });
 
     // Onboarding's step and field atoms are persisted, so a run abandoned in this browser is still
