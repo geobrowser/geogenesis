@@ -151,6 +151,7 @@ export function useExploreTopicFacet(args: {
 
   return {
     topics,
+    namesPending: enabled && ids.length > 0 && (names.isLoading || names.isPlaceholderData),
     countsPending: enabled && (counts.isLoading || counts.isPlaceholderData),
     settled: enabled ? !counts.isLoading && !counts.isPlaceholderData && !counts.error : false,
   };

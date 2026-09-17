@@ -402,10 +402,10 @@ export function EntityFeed({
       orderFacetOptions(keepSelectedVisible(topicFacet.topics, topicIds), topicIds).map(option => ({
         value: option.id,
         label: option.name ?? 'Topic',
-        pending: option.name === null && option.count > 0,
+        pending: option.name === null && topicFacet.namesPending,
         count: option.count,
       })),
-    [topicFacet.topics, topicIds]
+    [topicFacet.topics, topicFacet.namesPending, topicIds]
   );
   const onTopicToggle = React.useCallback((id: string) => setTopicIds(current => toggleId(current, id)), []);
   const onTopicsClear = React.useCallback(() => setTopicIds([]), []);
