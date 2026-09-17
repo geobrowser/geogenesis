@@ -385,7 +385,7 @@ function ControlCircle({
         onClick();
       }}
       className={cx(
-        'grid size-10.5 place-items-center rounded-full bg-white text-text shadow-light [&>svg]:scale-130',
+        'grid size-10.5 place-items-center rounded-full bg-white text-text shadow-light [&>svg]:scale-[1.3]',
         className
       )}
     >
