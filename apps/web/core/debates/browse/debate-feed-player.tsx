@@ -17,7 +17,7 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
-import { Play, Speaker, SpeakerMuted } from './icons';
+import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { WinnerVoteButton } from './winner-vote-button';
 
 type DebateFeedPlayerProps = {
@@ -98,6 +98,25 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   const showReplay = ready && playbackEnded && !hasVoted;
   const showPausedGlyph = ready && userPaused && !playbackEnded;
 
+  // Clicking the video briefly flashes the action it just took — feedback only, not a control.
+  const [flash, setFlash] = React.useState<{ icon: 'play' | 'pause'; visible: boolean }>({
+    icon: 'play',
+    visible: false,
+  });
+  const flashTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(
+    () => () => {
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    },
+    []
+  );
+  const toggleFromVideo = () => {
+    setFlash({ icon: playing ? 'pause' : 'play', visible: true });
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    flashTimeoutRef.current = setTimeout(() => setFlash(current => ({ ...current, visible: false })), 600);
+    togglePlayback();
+  };
+
   return (
     <div ref={measurement.elementRef} className="group relative flex flex-col gap-2">
       <DebaterVideo
@@ -109,31 +128,45 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         subtitle={activeSlot === 1 ? subtitle : null}
         mutedByUser={mutedByUser}
         onPlaybackTick={onPlaybackTick}
-        onToggle={togglePlayback}
+        onToggle={toggleFromVideo}
         votes={votes}
         topLeft={
-          showReplay ? (
-            <ControlCircle ariaLabel="Replay debate" onClick={playFromStart}>
-              <RetrySmall />
-            </ControlCircle>
-          ) : ready ? (
-            // Feed debates autoplay muted, so the unmute control stays visible during
-            // playback — otherwise there's no way to hear audio. Once unmuted it recedes
-            // to hover-only.
-            <ControlCircle
-              ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
-              onClick={() => {
-                measurement.control(mutedByUser ? 'unmute' : 'mute');
-                setMutedByUser(current => !current);
-              }}
-              className={
-                mutedByUser
-                  ? undefined
-                  : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100'
-              }
-            >
-              {mutedByUser ? <SpeakerMuted /> : <Speaker />}
-            </ControlCircle>
+          ready ? (
+            <div className="flex items-center gap-2">
+              {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
+                  centred paused glyph and tap-to-toggle instead. */}
+              <ControlCircle
+                ariaLabel={playing ? 'Pause debate' : 'Play debate'}
+                onClick={togglePlayback}
+                className="md:hidden"
+              >
+                {playing ? <Pause /> : <Play />}
+              </ControlCircle>
+              {showReplay ? (
+                <ControlCircle ariaLabel="Replay debate" onClick={playFromStart}>
+                  <RetrySmall />
+                </ControlCircle>
+              ) : (
+                // Feed debates autoplay muted, so the unmute control stays visible during
+                // playback — otherwise there's no way to hear audio. Once unmuted it recedes
+                // to hover-only on desktop; touch has no hover, so on mobile it stays visible
+                // or there'd be no way to find it again.
+                <ControlCircle
+                  ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
+                  onClick={() => {
+                    measurement.control(mutedByUser ? 'unmute' : 'mute');
+                    setMutedByUser(current => !current);
+                  }}
+                  className={
+                    mutedByUser
+                      ? undefined
+                      : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100'
+                  }
+                >
+                  {mutedByUser ? <SpeakerMuted /> : <Speaker />}
+                </ControlCircle>
+              )}
+            </div>
           ) : null
         }
       />
@@ -146,7 +179,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         subtitle={activeSlot === 2 ? subtitle : null}
         mutedByUser={mutedByUser}
         onPlaybackTick={onPlaybackTick}
-        onToggle={togglePlayback}
+        onToggle={toggleFromVideo}
         votes={votes}
         scrubber={
           ready ? (
@@ -172,16 +205,28 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         }
       />
 
+      {/* Mobile only — desktop has the persistent play/pause beside the mute control. */}
       {showPausedGlyph && (
         <button
           type="button"
           aria-label="Resume debate"
           onClick={togglePlayback}
-          className="absolute top-1/2 left-1/2 z-20 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card"
+          className="absolute top-1/2 left-1/2 z-20 hidden size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card md:grid"
         >
           <Play />
         </button>
       )}
+
+      {/* Desktop only — mobile already shows the centred paused glyph in this spot. */}
+      <div
+        aria-hidden
+        className={cx(
+          'pointer-events-none absolute top-1/2 left-1/2 z-20 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card transition-[opacity,scale] duration-300 md:hidden',
+          flash.visible ? 'scale-100 opacity-100' : 'scale-110 opacity-0'
+        )}
+      >
+        {flash.icon === 'pause' ? <Pause /> : <Play />}
+      </div>
 
       {error && (
         <Text as="p" variant="metadata" color="red-01" className="absolute inset-x-0 -bottom-6 text-center">
@@ -339,7 +384,10 @@ function ControlCircle({
         event.stopPropagation();
         onClick();
       }}
-      className={cx('grid size-8 place-items-center rounded-full bg-white text-text shadow-light', className)}
+      className={cx(
+        'grid size-10.5 place-items-center rounded-full bg-white text-text shadow-light [&>svg]:scale-130',
+        className
+      )}
     >
       {children}
     </button>
