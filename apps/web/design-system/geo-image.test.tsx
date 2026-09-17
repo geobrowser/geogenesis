@@ -21,7 +21,6 @@ vi.mock('next/image', () => ({
     onLoad?: () => void;
     'aria-hidden'?: boolean | 'true' | 'false';
   }) => (
-    // eslint-disable-next-line @next/next/no-img-element -- test stand-in for next/image
     <img
       src={typeof src === 'string' ? src : ''}
       alt={alt ?? ''}
