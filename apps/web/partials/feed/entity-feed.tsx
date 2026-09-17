@@ -20,10 +20,10 @@ import {
 } from '~/core/debates/matchmaking/topic-facets';
 import { type ExplorePageSort, PUBLIC_FEED_PARAM } from '~/core/explore/explore-feed-params';
 import type { ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
-import { useExploreTopicFacet } from '~/core/explore/use-explore-topic-facet';
 import { composeSeenPages } from '~/core/explore/seen-demotion/hide-seen';
 import { readSeenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
 import { seenStore } from '~/core/explore/seen-demotion/seen-store';
+import { useExploreTopicFacet } from '~/core/explore/use-explore-topic-facet';
 import { useFeedViewer } from '~/core/hooks/use-awaited-smart-account';
 import { exploreMoreFiltersOpenAtom } from '~/core/state/explore-more-filters';
 import { normId } from '~/core/utils/norm-id';
@@ -414,13 +414,21 @@ export function EntityFeed({
           value: option.id,
           label: option.name ?? 'Topic',
           // The count is in before the name resolves; draw a skeleton rather than "Topic".
-          pending: option.name === null && option.count > 0,
+          pending: option.name === null && exploreTopicFacet.namesPending,
           count: option.count,
         })
       );
     }
     return topicOptions;
-  }, [topicFacetEndpoint, topicFacets.data?.topics, showTopicFilter, exploreTopicFacet.topics, selectedTopicIds, topicOptions]);
+  }, [
+    topicFacetEndpoint,
+    topicFacets.data?.topics,
+    showTopicFilter,
+    exploreTopicFacet.topics,
+    exploreTopicFacet.namesPending,
+    selectedTopicIds,
+    topicOptions,
+  ]);
 
   // A contextual feed prunes its selection against the settled REST payload; Explore prunes against
   // the settled graph facet. Either way a topic that drops to zero and is not selected leaves the
