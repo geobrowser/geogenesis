@@ -133,6 +133,37 @@ describe('useCommentCount', () => {
     expect(result.current).toBe(2);
   });
 
+  /**
+   * This hook is rendered on surfaces that swap which entity they are about without remounting, and
+   * two entities can easily have the same number of comments — so a seed keyed on the count alone
+   * would keep the previous entity's timestamp, and a stale list for the new entity could look newer
+   * than it and outrank a freshly rendered count.
+   */
+  it('re-seeds when the entity changes, even at an identical server count', async () => {
+    vi.setSystemTime(2_000);
+    const { result, rerender } = renderHook((props: { entityId: string }) => useCommentCount(props.entityId, 4), {
+      wrapper,
+      initialProps: { entityId: ENTITY_ID },
+    });
+
+    // This entity's own list is written after its seed, so it legitimately wins.
+    vi.setSystemTime(3_000);
+    act(() => {
+      client.setQueryData<CommentEntity[]>(['comments', ENTITY_ID], [comment('a')]);
+      // And a list for the entity we are about to switch to, written at the same moment: newer than
+      // the seed taken above, which is the seed a count-keyed hook would still be holding.
+      client.setQueryData<CommentEntity[]>(['comments', 'other-entity'], [comment('1'), comment('2'), comment('3')]);
+    });
+    await waitFor(() => expect(result.current).toBe(1));
+
+    // Same server count, different entity. That list predates *this* render, so the freshly rendered
+    // count wins — but only if switching entities took a new seed.
+    vi.setSystemTime(90_000);
+    rerender({ entityId: 'other-entity' });
+
+    expect(result.current).toBe(4);
+  });
+
   it('never fetches — no queryFn is configured, so an enabled query would throw', async () => {
     const { result } = renderHook(() => useCommentCount(ENTITY_ID, 2), { wrapper });
 

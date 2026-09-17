@@ -36,9 +36,14 @@ export function useCommentCount(entityId: string, serverCount: number): number {
   // When this server count reached us, as closely as a client can tell: a different value means a
   // different server render. Held in state rather than recomputed, because a later timestamp would
   // move the comparison below and could drop a live count that had already won it.
-  const [seed, setSeed] = React.useState(() => ({ count: serverCount, at: Date.now() }));
-  if (seed.count !== serverCount) {
-    setSeed({ count: serverCount, at: Date.now() });
+  //
+  // Keyed on the entity as well as the count. This hook is rendered on surfaces that swap which
+  // entity they are about without remounting, and two entities can easily have the same number of
+  // comments — so a seed keyed on the count alone would keep the previous entity's timestamp, and a
+  // stale list for the new entity could then look newer than it and outrank a fresh server count.
+  const [seed, setSeed] = React.useState(() => ({ entityId, count: serverCount, at: Date.now() }));
+  if (seed.entityId !== entityId || seed.count !== serverCount) {
+    setSeed({ entityId, count: serverCount, at: Date.now() });
   }
 
   if (!data) return serverCount;

@@ -22,7 +22,9 @@ export const Z_LAYERS = {
   commentsPanelOverSlideUp: 10001,
   entitySidePanelOverSlideUp: 10002,
 
-  // 10003 is the elevated popover, in styles.css under `body[data-entity-side-panel-open]`.
+  // 10003 is the elevated popover, in styles.css — raised there rather than here because what needs
+  // lifting is a wrapper radix owns. Both `body[data-entity-side-panel-open]` and
+  // `body[data-slide-up-open]` claim it, so a popover opened from inside either sits above both.
 
   statusBar: 10004,
   // Strictly above statusBar: <StatusBar /> renders after <Toast /> in

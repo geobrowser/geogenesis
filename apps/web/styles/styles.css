@@ -667,6 +667,24 @@ body[data-entity-side-panel-open] [data-radix-popper-content-wrapper] {
   z-index: 10003 !important;
 }
 
+/* The same problem one layer up: a slide-up sits at 10000, and anything radix portals to the body
+   lands there at `z-index: auto`, so a popover opened from inside a sheet — a comment's responder
+   list, for one — paints behind the sheet and reads as not opening at all. 10003 is above both
+   raised panels (10001-10002) and below the status bar and toasts (10004-10005), which should still
+   be visible over everything. Driven by `SlideUpBodyState`. */
+body[data-slide-up-open] {
+  --elevated-popover-z: 10003;
+}
+
+body[data-slide-up-open] .elevated-popover {
+  z-index: 10003;
+  position: relative;
+}
+
+body[data-slide-up-open] [data-radix-popper-content-wrapper] {
+  z-index: 10003 !important;
+}
+
 /* Ranking compose edit mode (mobile): hide app navbar and use full viewport. */
 @media (max-width: 1023px) {
   html[data-ranking-compose-edit] [data-app-navbar],
