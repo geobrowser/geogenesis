@@ -120,14 +120,20 @@ describe('space-access', () => {
 
   it('resolves editor badges from a server-filtered role lookup', async () => {
     queries.getSpaceRolesForParticipants.mockReturnValue(
-      Effect.succeed({ editorSpaceIds: ['editorspaceid'], memberSpaceIds: ['editorspaceid', 'memberspaceid'] })
+      Effect.succeed({
+        editorSpaceIds: ['4cd9cca5530b69056aead853c8088e7e'],
+        memberSpaceIds: ['4cd9cca5530b69056aead853c8088e7e', 'cc0bf85a27c217d75993bc785a15b198'],
+      })
     );
 
     const editorIds = await Effect.runPromise(
-      getEditorSpaceIdsForSpace('dao-space-id', ['editor-space-id', 'member-space-id'])
+      getEditorSpaceIdsForSpace('d4bee092-8fb5-405b-aba3-b1513f085835', [
+        '4cd9cca5-530b-6905-6aea-d853c8088e7e',
+        'cc0bf85a-27c2-17d7-5993-bc785a15b198',
+      ])
     );
 
-    expect(editorIds).toEqual(new Set(['editorspaceid']));
+    expect(editorIds).toEqual(new Set(['4cd9cca5530b69056aead853c8088e7e']));
   });
 
   /**
@@ -136,30 +142,70 @@ describe('space-access', () => {
    */
   it('asks about every participant at once, for both roles', async () => {
     queries.getSpaceRolesForParticipants.mockReturnValue(
-      Effect.succeed({ editorSpaceIds: ['editorspaceid'], memberSpaceIds: ['memberspaceid'] })
+      Effect.succeed({
+        editorSpaceIds: ['4cd9cca5530b69056aead853c8088e7e'],
+        memberSpaceIds: ['cc0bf85a27c217d75993bc785a15b198'],
+      })
     );
 
     const roles = await Effect.runPromise(
-      getSpaceRoles('dao-space-id', ['editor-space-id', 'member-space-id', 'Editor-Space-Id'])
+      getSpaceRoles('d4bee092-8fb5-405b-aba3-b1513f085835', [
+        '4cd9cca5-530b-6905-6aea-d853c8088e7e',
+        'cc0bf85a-27c2-17d7-5993-bc785a15b198',
+        '4CD9CCA5-530B-6905-6AEA-D853C8088E7E',
+      ])
     );
 
     expect(queries.getSpaceRolesForParticipants).toHaveBeenCalledTimes(1);
     const [askedSpaceId, askedIds] = queries.getSpaceRolesForParticipants.mock.calls[0];
-    expect(askedSpaceId).toBe('daospaceid');
+    expect(askedSpaceId).toBe('d4bee0928fb5405baba3b1513f085835');
     // Deduped across spellings, so the same person is not asked about twice.
-    expect(askedIds).toEqual(['editorspaceid', 'memberspaceid']);
-    expect(roles.editorSpaceIds).toEqual(new Set(['editorspaceid']));
-    expect(roles.memberSpaceIds).toEqual(new Set(['memberspaceid']));
+    expect(askedIds).toEqual(['4cd9cca5530b69056aead853c8088e7e', 'cc0bf85a27c217d75993bc785a15b198']);
+    expect(roles.editorSpaceIds).toEqual(new Set(['4cd9cca5530b69056aead853c8088e7e']));
+    expect(roles.memberSpaceIds).toEqual(new Set(['cc0bf85a27c217d75993bc785a15b198']));
+  });
+
+  /**
+   * A comment that has not published yet stands in with `pending:<wallet>` for its author's space, and
+   * that is not a UUID. Batched into a `[UUID!]` variable it fails coercion and takes the whole
+   * request down — so every badge on the page would vanish because one comment was mid-publish.
+   */
+  it('leaves out ids the API could not accept, rather than failing the batch', async () => {
+    queries.getSpaceRolesForParticipants.mockReturnValue(
+      Effect.succeed({ editorSpaceIds: ['4cd9cca5530b69056aead853c8088e7e'], memberSpaceIds: [] })
+    );
+
+    const roles = await Effect.runPromise(
+      getSpaceRoles('d4bee092-8fb5-405b-aba3-b1513f085835', [
+        '4cd9cca5-530b-6905-6aea-d853c8088e7e',
+        'pending:0x5D6d0E45D76D360AB4F94941CE9a005b0AEa2ebD',
+        '',
+      ])
+    );
+
+    const [, askedIds] = queries.getSpaceRolesForParticipants.mock.calls[0];
+    expect(askedIds).toEqual(['4cd9cca5530b69056aead853c8088e7e']);
+    // The real author keeps their badge; the one still publishing simply has none yet.
+    expect(roles.editorSpaceIds).toEqual(new Set(['4cd9cca5530b69056aead853c8088e7e']));
+  });
+
+  it('asks nothing at all when the space id itself is not an id', async () => {
+    const roles = await Effect.runPromise(getSpaceRoles('pending:0xabc', ['4cd9cca5-530b-6905-6aea-d853c8088e7e']));
+
+    expect(queries.getSpaceRolesForParticipants).not.toHaveBeenCalled();
+    expect(roles.editorSpaceIds.size).toBe(0);
   });
 
   /** A personal space holds every role in itself, and the participant lists do not say so. */
   it('grants a personal space both roles in itself without asking', async () => {
     queries.getSpaceRolesForParticipants.mockReturnValue(Effect.succeed({ editorSpaceIds: [], memberSpaceIds: [] }));
 
-    const roles = await Effect.runPromise(getSpaceRoles('personal-space-id', ['personal-space-id']));
+    const roles = await Effect.runPromise(
+      getSpaceRoles('fcf1ddb1-4f46-1bf7-47bb-f148254935ed', ['fcf1ddb1-4f46-1bf7-47bb-f148254935ed'])
+    );
 
     expect(queries.getSpaceRolesForParticipants).not.toHaveBeenCalled();
-    expect(roles.editorSpaceIds).toEqual(new Set(['personalspaceid']));
-    expect(roles.memberSpaceIds).toEqual(new Set(['personalspaceid']));
+    expect(roles.editorSpaceIds).toEqual(new Set(['fcf1ddb14f461bf747bbf148254935ed']));
+    expect(roles.memberSpaceIds).toEqual(new Set(['fcf1ddb14f461bf747bbf148254935ed']));
   });
 });

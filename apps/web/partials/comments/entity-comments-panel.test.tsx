@@ -25,7 +25,7 @@ describe('EntityCommentsPanel', () => {
    * 150, this panel draws underneath it and reads as not opening at all, which is exactly how it
    * was reported (GEO-2907).
    */
-  it('clears a slide-up when one is open', () => {
+  it('draws above a slide-up when one is open', () => {
     const store = createStore();
     store.set(slideUpOpenCountAtom, 1);
 

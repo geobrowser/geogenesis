@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import type { Space } from '~/core/io/dto/spaces';
 import { getIsEditorOfSpace, getIsMemberOfSpace, getSpaceRolesForParticipants } from '~/core/io/queries';
+import { validateSpaceId } from '~/core/io/rest/validation';
 
 export type SpaceAccess = {
   isEditor: boolean;
@@ -106,6 +107,12 @@ export type SpaceRoles = {
   memberSpaceIds: Set<string>;
 };
 
+const EMPTY_SPACE_ROLES: SpaceRoles = { editorSpaceIds: new Set(), memberSpaceIds: new Set() };
+
+function isSpaceId(id: string | null): id is string {
+  return id !== null;
+}
+
 /**
  * Both roles, for the people asked about, in one request per chunk of 100.
  *
@@ -119,8 +126,15 @@ export function getSpaceRoles(
   participantSpaceIds: string[],
   signal?: AbortController['signal']
 ): Effect.Effect<SpaceRoles, unknown> {
-  const normalizedSpaceId = normalizeSpaceId(spaceId);
-  const normalizedIds = [...new Set(participantSpaceIds.map(normalizeSpaceId))];
+  // Only ids the API can actually accept reach the query. A comment that has not published yet stands
+  // in with `pending:<wallet>` for its author's space (see `useCreateComment`), and one of those in
+  // the batch fails coercion against a `[UUID!]` variable — which takes down the whole request, and
+  // with it every badge on the page rather than only that author's. Batching for one request is
+  // exactly what makes a single bad id everyone's problem, so this boundary has to be strict.
+  const normalizedSpaceId = validateSpaceId(spaceId);
+  const normalizedIds = [...new Set(participantSpaceIds.map(validateSpaceId).filter(isSpaceId))];
+
+  if (!normalizedSpaceId) return Effect.succeed(EMPTY_SPACE_ROLES);
 
   return Effect.gen(function* () {
     const editorSpaceIds = new Set<string>();

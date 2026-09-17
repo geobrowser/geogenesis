@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
 import { type SpaceRoles, getSpaceRoles, normalizeSpaceId } from '~/core/access/space-access';
+import { validateSpaceId } from '~/core/io/rest/validation';
 
 const EMPTY_ROLE_SPACE_IDS = new Set<string>();
 const EMPTY_SPACE_ROLES: SpaceRoles = { editorSpaceIds: EMPTY_ROLE_SPACE_IDS, memberSpaceIds: EMPTY_ROLE_SPACE_IDS };
@@ -19,7 +20,10 @@ const EMPTY_SPACE_ROLES: SpaceRoles = { editorSpaceIds: EMPTY_ROLE_SPACE_IDS, me
  */
 export function useSpaceRoles(spaceId: string, memberSpaceIds: string[]) {
   const normalizedSpaceId = normalizeSpaceId(spaceId);
-  const normalizedMemberSpaceIds = [...new Set(memberSpaceIds.map(normalizeSpaceId))].sort();
+  // Filtered here as well as at the loader, so the key says who is actually being asked about. A
+  // comment mid-publish carries `pending:<wallet>` for its author's space, and leaving that in the key
+  // would mint a fresh cache entry for the same question and then discard it seconds later.
+  const normalizedMemberSpaceIds = [...new Set(memberSpaceIds.map(validateSpaceId).filter(id => id !== null))].sort();
 
   const {
     data = EMPTY_SPACE_ROLES,
