@@ -17,6 +17,7 @@ import { SpacePillAvatar } from '~/design-system/space-pill';
 
 import { GovernanceProposalRow, percentageFromCounts } from '~/partials/governance/governance-proposal-row';
 
+import { PartialLoadError } from './partial-load-error';
 import { RecordFilterRow } from './record-filter-row';
 import { useRecordSelection } from './use-record-selection';
 
@@ -141,6 +142,12 @@ export function PersonProposalsTab({ spaceId, proposer }: { spaceId: string; pro
             ))}
           </div>
         )}
+
+        {/*
+         * 770 proposals on the reference account, so a page-two failure used to
+         * leave twenty on screen looking like the whole record.
+         */}
+        {isError && !isFetchingNextPage && <PartialLoadError noun="proposals" onRetry={fetchNextPage} />}
       </div>
     </Shell>
   );

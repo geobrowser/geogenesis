@@ -244,6 +244,27 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
   }
 
   if (editable && typeIds.includes(SystemIds.SPACE_TYPE)) {
+    /*
+     * No reserved-label filter here, unlike the read-only path below, and that
+     * asymmetry is deliberate.
+     *
+     * Read-only hides an authored tab whose name collides with one of the four
+     * record labels, because shadowing a record tab makes it unreachable and
+     * About is the only route to the rail's facts below 1024px. Doing the same
+     * in edit mode would leave the owner a tab they can neither see nor rename
+     * nor delete — an orphan, which is strictly worse than a duplicate.
+     *
+     * So edit mode is the escape hatch: the authored tab is a draggable
+     * `SortableTab` carrying rename and delete, beside the system tab's plain
+     * `StaticTab`, so the two are told apart by what they can do even where
+     * their labels match.
+     *
+     * Three spaces in the graph are in this position today — one authored
+     * `Debates`, one `Positions`, one `About`. (Seventy-two more authored
+     * `About` tabs sit on DAO spaces, which the reservation never touches.)
+     * Whether the owner should also be *warned* that a tab of theirs is hidden
+     * in the read-only view is a design question, not a bug in this branch.
+     */
     const editableTabs = sortedTabRelations.map((relation, i) => ({
       relation,
       entityId: sortedTabEntities[i].id,

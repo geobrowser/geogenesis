@@ -10,6 +10,8 @@ import { Skeleton } from '~/design-system/skeleton';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
+import { PartialLoadError } from './partial-load-error';
+
 /**
  * A person's record, rendered as explore cards (GEO-2859).
  *
@@ -32,6 +34,7 @@ export function PersonRecordFeed({
   loadingLabel,
   emptyLabel,
   errorLabel,
+  noun,
 }: {
   rows: ExploreFeedRow[];
   isLoading: boolean;
@@ -49,6 +52,11 @@ export function PersonRecordFeed({
   emptyLabel: string;
   /** Said instead of `emptyLabel` when the list could not be read at all. */
   errorLabel: string;
+  /**
+   * What this list holds, for the partial-failure line: "Couldn't load more
+   * positions."
+   */
+  noun: string;
 }) {
   // Looked up once for the page. These are routinely spaces the viewer has never
   // opened, which the browse sidebar cannot name.
@@ -117,6 +125,13 @@ export function PersonRecordFeed({
           ))}
         </div>
       )}
+
+      {/*
+       * A later page that failed, said out loud. The sentinel above has stopped
+       * asking — deliberately — so without this the list simply ends early and
+       * reads as complete.
+       */}
+      {isError && !isFetchingNextPage && fetchNextPage && <PartialLoadError noun={noun} onRetry={fetchNextPage} />}
     </div>
   );
 }

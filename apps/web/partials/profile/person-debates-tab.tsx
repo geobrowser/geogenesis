@@ -130,6 +130,7 @@ export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
         // person who has never been in one.
         emptyLabel={isFiltered ? 'No debates match these filters.' : 'No debates yet.'}
         errorLabel="Couldn’t load debates."
+        noun="debates"
       />
     </div>
   );

@@ -138,6 +138,7 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
         // result is a statement about the filter, not about the person.
         emptyLabel={isFiltered ? 'No positions match these filters.' : 'No positions on claims yet.'}
         errorLabel="Couldn’t load positions."
+        noun="positions"
       />
     </div>
   );

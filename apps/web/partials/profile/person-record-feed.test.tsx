@@ -33,6 +33,7 @@ function renderFeed(props: Partial<React.ComponentProps<typeof PersonRecordFeed>
       loadingLabel="Loading positions…"
       emptyLabel="No positions on claims yet."
       errorLabel="Couldn’t load positions."
+      noun="positions"
       {...props}
     />
   );
@@ -74,6 +75,37 @@ describe('PersonRecordFeed', () => {
 
     expect(screen.getAllByTestId('card')).toHaveLength(2);
     expect(screen.queryByText('Couldn’t load positions.')).not.toBeInTheDocument();
+  });
+
+  /**
+   * ...but it does have to say so.
+   *
+   * The sentinel stops on `isError` — it must, or the 8000px margin turns one
+   * failing page into a loop — so nothing will ask again on its own. Keeping the
+   * rows without a word left a 208-claim record looking like a complete 20-claim
+   * one, with nothing to press.
+   */
+  it('offers a retry when a later page failed', () => {
+    const fetchNextPage = vi.fn();
+    renderFeed({ rows: [row('claim-1')], isError: true, fetchNextPage });
+
+    expect(screen.getByText('Couldn’t load more positions.')).toBeInTheDocument();
+
+    screen.getByRole('button', { name: 'Try again' }).click();
+
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('says nothing about a later page while one is still in flight', () => {
+    renderFeed({ rows: [row('claim-1')], isError: true, isFetchingNextPage: true, fetchNextPage: () => {} });
+
+    expect(screen.queryByText('Couldn’t load more positions.')).not.toBeInTheDocument();
+  });
+
+  it('offers no retry when nothing failed', () => {
+    renderFeed({ rows: [row('claim-1')], fetchNextPage: () => {} });
+
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
 
   it('prefers the loading line while a first page is still out, error or not', () => {
