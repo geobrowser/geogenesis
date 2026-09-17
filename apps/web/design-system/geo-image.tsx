@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useCallback, useState } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useState } from 'react';
 import type { ImgHTMLAttributes } from 'react';
 
 import cn from 'classnames';
@@ -14,9 +14,12 @@ import { IPFS_GATEWAY_COUNT, getImagePathAtLevel, isOptimizableImageSrc } from '
  */
 export const DEFAULT_IMAGE_SIZES = '(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 25vw';
 
-type GeoImageProps = Omit<ImageProps, 'src' | 'onError'> & {
-  value: string;
-};
+/** Skip the low-quality placeholder below this rendered width. */
+const LQIP_MIN_PX = 48;
+
+const LQIP_SIZES = '32px';
+
+const DEFAULT_FADE_MS = 150;
 
 // next/image throws synchronously if `src` isn't a valid URL or local path, so
 // skip values that don't resolve to something renderable — e.g. a bare CID or an
@@ -25,36 +28,146 @@ function isRenderableSrc(src: string): boolean {
   return src.startsWith('https://') || src.startsWith('http://') || src.startsWith('/') || src.startsWith('data:');
 }
 
-/**
- * Image component that resolves IPFS values through the gateway fallback chain (Filebase →
- * Pinata → Lighthouse).
- *
- * Images from hosts we do not control are rendered unoptimized, so the browser fetches them from
- * their own origin rather than our deployment fetching, decoding, resizing and re-serving
- * arbitrary remote content under our certificate (GEO-2984). Passing `unoptimized` explicitly
- * still works; it can only turn optimization further off, never back on for a foreign host.
- */
-export function GeoImage({ value, alt = '', unoptimized = false, ...props }: GeoImageProps) {
-  const [level, setLevel] = useState(0);
+function isHttpSrc(src: string): boolean {
+  return src.startsWith('https://') || src.startsWith('http://');
+}
 
-  const handleError = useCallback(() => {
-    if (value.startsWith('ipfs://')) {
-      setLevel(prev => Math.min(prev + 1, IPFS_GATEWAY_COUNT - 1));
-    }
+function isSvgSrc(src: string): boolean {
+  return /\.svg(\?|#|$)/i.test(src);
+}
+
+function fixedWidthFromSizes(sizes: string | undefined): number | null {
+  if (!sizes) return null;
+  const match = sizes.trim().match(/^(\d+)px$/);
+  return match ? Number(match[1]) : null;
+}
+
+// Filebase optimized → Filebase raw → Pinata → Lighthouse.
+const STAGES: { level: number; unoptimized: boolean }[] = [
+  { level: 0, unoptimized: false },
+  { level: 0, unoptimized: true },
+  { level: 1, unoptimized: true },
+  { level: 2, unoptimized: true },
+];
+
+/**
+ * Walks the gateway/optimizer fallback chain, advancing on each load error until a
+ * stage renders or the chain is exhausted.
+ */
+function useStagedImage(value: string, forceUnoptimized: boolean) {
+  const [attempt, setAttempt] = useState({ value, stage: 0, failed: false });
+
+  const stage = attempt.value === value ? attempt.stage : 0;
+  const failed = attempt.value === value ? attempt.failed : false;
+
+  const advance = useCallback(() => {
+    setAttempt(previous => {
+      const current = previous.value === value ? previous : { value, stage: 0, failed: false };
+      let next = current.stage + 1;
+
+      if (!value.startsWith('ipfs://')) {
+        while (next < STAGES.length && STAGES[next].level > 0) next++;
+      }
+      if (next >= STAGES.length) return { value, stage: current.stage, failed: true };
+      return { value, stage: next, failed: false };
+    });
   }, [value]);
 
+  const { level, unoptimized } = STAGES[stage];
   const src = getImagePathAtLevel(value, level);
-  if (!isRenderableSrc(src)) return null;
+  return {
+    src,
+    // A host we do not control is served as-is rather than fetched, decoded and re-served under
+    // our deployment (GEO-2984). This can only turn optimization further off, never back on.
+    unoptimized: forceUnoptimized || unoptimized || !isOptimizableImageSrc(src),
+    failed,
+    advance,
+  };
+}
 
-  const imageProps = props.fill && !props.sizes ? { ...props, sizes: DEFAULT_IMAGE_SIZES } : props;
-  return (
+type GeoImageProps = Omit<ImageProps, 'src' | 'onError'> & {
+  value: string;
+  lqip?: boolean;
+  fadeMs?: number;
+  fallback?: ReactNode;
+};
+
+/**
+ * The single progressive image component. Resolves IPFS values through the gateway fallback
+ * chain (Filebase → Pinata → Lighthouse, optimized then unoptimized), shows a blurred
+ * low-quality placeholder first, and cross-fades the full image in on load without shifting
+ * layout. If the full image can never load, the placeholder (or `fallback`) stays put.
+ */
+export function GeoImage({
+  value,
+  alt = '',
+  unoptimized = false,
+  lqip = true,
+  fadeMs = DEFAULT_FADE_MS,
+  className,
+  style,
+  fallback,
+  ...props
+}: GeoImageProps) {
+  const { src, unoptimized: effectiveUnoptimized, failed, advance } = useStagedImage(value, unoptimized);
+
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const loaded = loadedSrc === src;
+
+  if (!isRenderableSrc(src)) return <>{fallback ?? null}</>;
+
+  const isFill = Boolean(props.fill);
+  const sizes = props.sizes ?? (isFill ? DEFAULT_IMAGE_SIZES : undefined);
+  const fixedWidth = fixedWidthFromSizes(sizes);
+  const objectFit = (style as CSSProperties | undefined)?.objectFit ?? 'cover';
+
+  const placeholderSrc = getImagePathAtLevel(value, 0);
+  const wantsLqip =
+    lqip &&
+    isFill &&
+    !unoptimized &&
+    isHttpSrc(placeholderSrc) &&
+    // The placeholder is an optimized 32px request; a host we do not control is never optimized
+    // (GEO-2984), so there is no cheap low-quality version to show and the LQIP is skipped.
+    isOptimizableImageSrc(placeholderSrc) &&
+    !isSvgSrc(value) &&
+    !isSvgSrc(placeholderSrc) &&
+    (fixedWidth === null || fixedWidth > LQIP_MIN_PX);
+
+  const placeholder = wantsLqip ? (
     <Image
-      {...imageProps}
-      src={src}
-      alt={alt}
-      onError={handleError}
-      unoptimized={unoptimized || !isOptimizableImageSrc(src)}
+      aria-hidden
+      src={placeholderSrc}
+      alt=""
+      fill
+      sizes={LQIP_SIZES}
+      className="scale-105 blur-lg"
+      style={{ objectFit }}
+      priority={props.priority}
+      draggable={false}
     />
+  ) : null;
+
+  if (failed) return placeholder ? <>{placeholder}</> : <>{fallback ?? null}</>;
+
+  return (
+    <>
+      {placeholder}
+      <Image
+        {...props}
+        ref={node => {
+          if (node?.complete && node.naturalWidth > 0) setLoadedSrc(src);
+        }}
+        src={src}
+        alt={alt}
+        sizes={sizes}
+        className={className}
+        style={{ ...style, opacity: loaded ? 1 : 0, transition: `opacity ${fadeMs}ms ease-in-out` }}
+        unoptimized={effectiveUnoptimized}
+        onError={advance}
+        onLoad={() => setLoadedSrc(src)}
+      />
+    </>
   );
 }
 
@@ -68,13 +181,16 @@ type NativeGeoImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'on
   fallback?: ReactNode;
 };
 
-/** Native img element resolving IPFS values through the gateway fallback chain (Filebase → Pinata → Lighthouse). */
+/**
+ * Native img escape hatch for the cases the optimizer-backed {@link GeoImage} can't serve:
+ * SVGs, and direct callers without a positioned box for a fill image.
+ */
 export function NativeGeoImage({ value, alt = '', fallback, ...props }: NativeGeoImageProps) {
   const [attempt, setAttempt] = useState({ value, level: 0, failed: false });
 
-  // Reset when the value changes rather than in an effect: these render in recycled lists — a
-  // LiveKit participant strip reorders constantly — and carrying a previous participant's
-  // exhausted-gateway state across would show their fallback for someone whose avatar is fine.
+  // Keyed on `value` rather than reset in an effect: these render in recycled lists — a LiveKit
+  // participant strip reorders constantly — and carrying a previous participant's exhausted-gateway
+  // state across would show their fallback for someone whose avatar is fine.
   const level = attempt.value === value ? attempt.level : 0;
   const failed = attempt.value === value ? attempt.failed : false;
 
@@ -105,33 +221,27 @@ type ThumbGeoImageProps = {
   fetchPriority?: ImgHTMLAttributes<HTMLImageElement>['fetchPriority'];
   className?: string;
   style?: ImgHTMLAttributes<HTMLImageElement>['style'];
-  onLoad?: ImgHTMLAttributes<HTMLImageElement>['onLoad'];
 };
 
 /**
- * Tiny space-style image: native &lt;img&gt; so remote IPFS URLs skip the Next optimizer
- * (avoids soft/downscaled output and occasional failed optimized requests for small slots).
+ * Tiny space-style image. Fills a small `relative` parent through {@link GeoImage}; being below
+ * the placeholder threshold it loads a single optimized request directly — fast and sharp.
  */
-export function ThumbGeoImage({
-  value,
-  alt = '',
-  loading = 'lazy',
-  fetchPriority,
-  className,
-  style,
-  onLoad,
-}: ThumbGeoImageProps) {
+export function ThumbGeoImage({ value, alt = '', loading, fetchPriority, className, style }: ThumbGeoImageProps) {
+  // next/image rejects `priority` and `loading` together — `priority` already implies eager.
+  const priority = fetchPriority === 'high';
   return (
-    <NativeGeoImage
+    <GeoImage
       value={value}
       alt={alt}
-      className={cn('absolute inset-0', className)}
-      style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', ...style }}
-      loading={loading}
-      fetchPriority={fetchPriority}
-      decoding="async"
+      fill
+      sizes="64px"
+      lqip={false}
+      loading={priority ? undefined : loading}
+      priority={priority}
+      className={cn('object-cover', className)}
+      style={{ objectFit: 'cover', ...style }}
       draggable={false}
-      onLoad={onLoad}
     />
   );
 }
