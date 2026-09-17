@@ -136,7 +136,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
               {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
                   centred paused glyph and tap-to-toggle instead. */}
               <ControlCircle
-                ariaLabel={playing ? 'Pause debate' : 'Play debate'}
+                ariaLabel={playing ? 'Pause debate' : playbackEnded ? 'Replay debate' : 'Play debate'}
                 onClick={togglePlayback}
                 className="md:hidden"
               >
