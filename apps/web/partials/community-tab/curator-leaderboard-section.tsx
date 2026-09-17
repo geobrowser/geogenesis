@@ -38,7 +38,7 @@ type Props = {
 
 const DEFAULT_PERIOD: CuratorLeaderboardPeriod = 'week';
 
-const EMPTY_METRICS: CuratorLeaderboardMetrics = { activeCurators: 0, rankings: 0, newsStories: 0 };
+const EMPTY_METRICS: CuratorLeaderboardMetrics = { activeCurators: 0, rankings: 0, newsStories: 0, debates: 0 };
 
 const INK = 'text-[#2A2B2E]';
 
@@ -65,6 +65,7 @@ const LEADERBOARD_COLUMNS: { key: string; label: string; align: ColumnAlignment 
   { key: 'newsStories', label: 'News stories', align: 'center' },
   { key: 'votes', label: 'Votes', align: 'center' },
   { key: 'submissions', label: 'Submissions', align: 'center' },
+  { key: 'debates', label: 'Debates', align: 'center' },
 ];
 
 function MetricCard({ label, value, isLoading }: { label: string; value: number; isLoading: boolean }) {
@@ -88,6 +89,7 @@ function LeaderboardMetrics({ metrics, isLoading }: { metrics: CuratorLeaderboar
       <MetricCard label="Active curators" value={metrics.activeCurators} isLoading={isLoading} />
       <MetricCard label="Rankings" value={metrics.rankings} isLoading={isLoading} />
       <MetricCard label="News stories" value={metrics.newsStories} isLoading={isLoading} />
+      <MetricCard label="Debates" value={metrics.debates} isLoading={isLoading} />
     </div>
   );
 }
@@ -124,6 +126,7 @@ function LeaderboardTableRow({ row, showTopBorder = false }: { row: CuratorLeade
       <NumberCell value={row.newsStories} />
       <NumberCell value={row.votes} />
       <NumberCell value={row.submissions} colorClass={row.submissions === 0 ? 'text-grey-04' : INK} />
+      <NumberCell value={row.debates} colorClass={row.debates === 0 ? 'text-grey-04' : INK} />
     </tr>
   );
 }

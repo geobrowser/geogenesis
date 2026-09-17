@@ -13,6 +13,7 @@ export type CuratorLeaderboardMetrics = {
   activeCurators: number;
   rankings: number;
   newsStories: number;
+  debates: number;
 };
 
 export type CuratorLeaderboardRow = {
@@ -23,6 +24,7 @@ export type CuratorLeaderboardRow = {
   newsStories: number;
   votes: number;
   submissions: number;
+  debates: number;
   activityScore: number;
   rank: number;
   isCurrentUser: boolean;

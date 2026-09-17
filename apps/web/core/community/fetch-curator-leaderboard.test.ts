@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   /** Rows the "submitted to ranking block" connection returns, one per ranking published. */
   rankingRelations: [] as { fromEntityId: string; spaceId: string }[],
   votes: [] as { userId: string }[],
+  debates: [] as { id: string }[],
+  debateParticipants: [] as { fromEntityId: string; toEntityId: string }[],
   profileSpaceIds: [] as string[][],
 }));
 
@@ -45,6 +47,10 @@ vi.mock('./community-graphql', async importOriginal => {
           return { nodes: mocks.rankingRelations, truncated: false, totalCount: mocks.rankingRelations.length };
         case 'user votes':
           return { nodes: mocks.votes, truncated: false };
+        case 'debate entities':
+          return { nodes: mocks.debates, truncated: false, totalCount: mocks.debates.length };
+        case 'debate participant relations':
+          return { nodes: mocks.debateParticipants, truncated: false, totalCount: mocks.debateParticipants.length };
         case 'bounty links':
         case 'news story entities':
         case 'news story type relation versions':
@@ -72,6 +78,8 @@ function ranking(curatorSpaceId: string, index: number) {
 beforeEach(() => {
   mocks.rankingRelations = [];
   mocks.votes = [];
+  mocks.debates = [];
+  mocks.debateParticipants = [];
   mocks.profileSpaceIds = [];
 });
 
@@ -120,6 +128,71 @@ describe('fetchCuratorLeaderboard exclusions', () => {
     await fetchCuratorLeaderboard({ spaceId: SPACE, period: 'all' });
 
     expect(mocks.profileSpaceIds.flat()).not.toContain(EXCLUDED);
+  });
+
+  /**
+   * Debates count appearances, either side, through the side-agnostic `Participants` relation.
+   */
+  it('counts a debate for both of its participants', async () => {
+    mocks.debates = [{ id: 'debate-1' }];
+    mocks.debateParticipants = [
+      { fromEntityId: 'debate-1', toEntityId: KEEPER },
+      { fromEntityId: 'debate-1', toEntityId: OTHER },
+    ];
+
+    const result = await fetchCuratorLeaderboard({ spaceId: SPACE, period: 'all' });
+
+    expect(result.rows.find(row => row.curatorSpaceId === KEEPER)?.debates).toBe(1);
+    expect(result.rows.find(row => row.curatorSpaceId === OTHER)?.debates).toBe(1);
+  });
+
+  /**
+   * Once per debate per curator, however many Participants relations say so.
+   */
+  it('counts a debate once for a curator named on it more than once', async () => {
+    mocks.debates = [{ id: 'debate-1' }];
+    mocks.debateParticipants = [
+      { fromEntityId: 'debate-1', toEntityId: KEEPER },
+      { fromEntityId: 'debate-1', toEntityId: KEEPER },
+    ];
+
+    const result = await fetchCuratorLeaderboard({ spaceId: SPACE, period: 'all' });
+
+    expect(result.rows.find(row => row.curatorSpaceId === KEEPER)?.debates).toBe(1);
+  });
+
+  /**
+   * The box counts the space's debates; the column counts appearances in them. One debate has two
+   * participants, so summing the column would report every debate twice and disagree with the board
+   * directly beneath it.
+   */
+  it('reports the space’s debates in the metrics, not the sum of the column', async () => {
+    mocks.debates = [{ id: 'debate-1' }];
+    mocks.debateParticipants = [
+      { fromEntityId: 'debate-1', toEntityId: KEEPER },
+      { fromEntityId: 'debate-1', toEntityId: OTHER },
+    ];
+
+    const result = await fetchCuratorLeaderboard({ spaceId: SPACE, period: 'all' });
+
+    expect(result.metrics.debates).toBe(1);
+    expect(result.rows.reduce((total, row) => total + row.debates, 0)).toBe(2);
+  });
+
+  // Displayed, not scored — as votes are. Folding it in would re-rank every curator the day it
+  // shipped, moving people who had done nothing.
+  it('leaves debates out of the score the board is ordered by', async () => {
+    mocks.rankingRelations = [ranking(OTHER, 1)];
+    mocks.debates = [{ id: 'debate-1' }];
+    mocks.debateParticipants = [{ fromEntityId: 'debate-1', toEntityId: KEEPER }];
+
+    const result = await fetchCuratorLeaderboard({ spaceId: SPACE, period: 'all' });
+
+    const keeper = result.rows.find(row => row.curatorSpaceId === KEEPER);
+    expect(keeper?.debates).toBe(1);
+    expect(keeper?.activityScore).toBe(0);
+    // So one ranking still outranks one debate.
+    expect(result.rows[0]?.curatorSpaceId).toBe(OTHER);
   });
 
   it('returns the whole ranked board, not a top slice of it', async () => {

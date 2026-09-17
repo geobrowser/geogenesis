@@ -47,6 +47,7 @@ function row(overrides: Partial<CuratorLeaderboardResult['rows'][number]> = {}) 
     newsStories: 1,
     votes: 2,
     submissions: 0,
+    debates: 1,
     activityScore: 4,
     rank: 1,
     isCurrentUser: false,
@@ -70,7 +71,7 @@ function result(
 ) {
   return {
     period: 'week',
-    metrics: { activeCurators: rows.length, rankings: 0, newsStories: 0 },
+    metrics: { activeCurators: rows.length, rankings: 0, newsStories: 0, debates: 0 },
     rows,
     currentUserRow,
     truncated: false,
