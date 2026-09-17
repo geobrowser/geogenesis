@@ -1,13 +1,75 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { IPFS_GATEWAY_COUNT } from '~/core/utils/utils';
 
-import { NativeGeoImage } from './geo-image';
+import { GeoImage, NativeGeoImage } from './geo-image';
+
+vi.mock('next/image', () => ({
+  default: ({
+    src,
+    alt,
+    onError,
+    onLoad,
+    'aria-hidden': ariaHidden,
+  }: {
+    src: string;
+    alt?: string;
+    onError?: () => void;
+    onLoad?: () => void;
+    'aria-hidden'?: boolean | 'true' | 'false';
+  }) => (
+    // eslint-disable-next-line @next/next/no-img-element -- test stand-in for next/image
+    <img
+      src={typeof src === 'string' ? src : ''}
+      alt={alt ?? ''}
+      aria-hidden={ariaHidden}
+      onError={onError}
+      onLoad={onLoad}
+    />
+  ),
+}));
 
 afterEach(cleanup);
+
+describe('GeoImage progressive placeholder', () => {
+  const value = 'ipfs://bafyProgressive';
+
+  it('keeps the blurred placeholder after a stage hop', () => {
+    render(
+      <div className="relative h-40 w-40">
+        <GeoImage value={value} alt="cover" fill sizes="200px" fallback={<span>fallback</span>} />
+      </div>
+    );
+
+    expect(screen.getByAltText('').getAttribute('aria-hidden')).toBe('true');
+    fireEvent.error(screen.getByAltText('cover'));
+
+    // Mid-chain unoptimized stages must not tear down the LQIP and leave a blank box.
+    expect(screen.getByAltText('').getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByAltText('cover')).toBeInTheDocument();
+    expect(screen.queryByText('fallback')).toBeNull();
+  });
+
+  it('keeps the blurred placeholder when every gateway fails', () => {
+    render(
+      <div className="relative h-40 w-40">
+        <GeoImage value={value} alt="cover" fill sizes="200px" fallback={<span>fallback</span>} />
+      </div>
+    );
+
+    // Optimized + unoptimized on Filebase, then Pinata, then Lighthouse.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      fireEvent.error(screen.getByAltText('cover'));
+    }
+
+    expect(screen.getByAltText('').getAttribute('aria-hidden')).toBe('true');
+    expect(screen.queryByAltText('cover')).toBeNull();
+    expect(screen.queryByText('fallback')).toBeNull();
+  });
+});
 
 /**
  * GEO-2642. An avatar whose image cannot load used to leave the browser's broken-image icon on
