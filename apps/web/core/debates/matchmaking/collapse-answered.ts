@@ -1,0 +1,238 @@
+'use client';
+
+import * as React from 'react';
+
+/**
+ * How long an answered row stays on screen before it folds away (GEO-2863).
+ *
+ * The press has to land visually before the card it was made on leaves. Collapsing on the same tick
+ * takes the row out from under the cursor at the moment of the click, which reads as the button
+ * having missed rather than as the claim being done with.
+ *
+ * Only a row answered *while the viewer was looking at it* waits. One that was already answered when
+ * the list first drew is simply never shown — there is nothing to fold, and nothing happened.
+ */
+export const ANSWERED_COLLAPSE_HOLD_MS = 1_000;
+
+/**
+ * What the caller knows about the viewer's side on a row.
+ *
+ * `unknown` is the one that matters and the reason this is three-valued rather than a boolean: the
+ * lookups that carry the viewer's side are separate queries from the list, and "holds no position"
+ * and "not asked yet" arrive as the same `null`. Reading the second as the first folds a row away
+ * underneath someone before anyone knew whether they had answered it.
+ */
+export type AnsweredState = 'answered' | 'unanswered' | 'unknown';
+
+type CollapseOptions<T> = {
+  /** Stable per row, and stable across a refetch — the same key the list is keyed by. */
+  keyOf: (row: T) => string;
+  answeredStateOf: (row: T) => AnsweredState;
+  /**
+   * Off for a list that is *about* the viewer's positions. Collapsing every row of one leaves it
+   * permanently empty, which is not a filter but a broken tab.
+   */
+  enabled: boolean;
+  /**
+   * How long a row answered under the viewer stays before folding away, or `null` to keep it for
+   * good.
+   *
+   * `null` is the debate-again flow. Answering a claim there is the first half of an action rather
+   * than the end of one — `debateRequestGate` refuses a request from someone holding no position,
+   * so the claim you have just answered is the one you are about to press "Request debate" on.
+   * Folding it away at any delay takes that button with it. What the toggle there hides is the
+   * backlog the viewer arrived with, which is the whole of the complaint it answers.
+   *
+   * A number is the hub, where answering *is* the action and the wait is only long enough for the
+   * press to land before the row leaves. Tests pass their own.
+   */
+  holdMs?: number | null;
+  /**
+   * Throws the bookkeeping away when it changes — the list this hook is describing is now a
+   * different one, about different people.
+   *
+   * The debate-again flow passes its session id, because that page is *reused* when the route moves
+   * between rematches rather than remounted. Without this, a claim seen unanswered opposite one
+   * opponent counted as seen for the next, and so was held on screen instead of hidden as the
+   * backlog it is for them. Everything here is keyed per row, and a row means something different
+   * once the pair changes.
+   *
+   * Surfaces that die with their list — the hub's tabs — need none, and omitting it never resets.
+   */
+  resetKey?: string;
+  /**
+   * Whether the answers behind {@link answeredStateOf} are still arriving.
+   *
+   * Only ever about rows this hook has *never* classified. Those are held back while it is true,
+   * because drawing one now is drawing a row that may be gone a moment later — which is the
+   * paging-shaped version of the first-paint problem, and reads the same way: a screenful appears
+   * and part of it is taken back.
+   *
+   * Rows it has classified before are unaffected. A refetch does not un-answer a claim, and the
+   * remembered answer is what keeps a collapsed row collapsed while a later page is looked up.
+   */
+  classifying?: boolean;
+};
+
+/**
+ * Drops the rows the viewer has already answered, holding back the ones they answered in place.
+ *
+ * The distinction the hold turns on is "was this row ever on screen unanswered". A row that arrives
+ * answered never had a presence to lose, so it is filtered on the first render it appears in and
+ * never flashes. A row the viewer answers while reading it was on screen a moment ago, so it stays
+ * for {@link ANSWERED_COLLAPSE_HOLD_MS} and then leaves — which is what gives `AnimatePresence`
+ * something to animate rather than a list that silently has one fewer row.
+ *
+ * That distinction is also what lets one hook serve two surfaces that want opposite things from an
+ * answer. Both hide the backlog the viewer arrived with; they differ only in what happens to a row
+ * answered under them, which is `holdMs` — a moment for the hub, forever for the debate-again flow.
+ *
+ * Bookkeeping runs in an effect rather than during render, and that ordering is the point: on the
+ * render where a row first appears the effect has not seen it, so it counts as never-seen and an
+ * answered one is dropped straight away. Only a row recorded by an earlier commit can hold.
+ */
+export function useCollapseAnswered<T>(
+  rows: T[],
+  { keyOf, answeredStateOf, enabled, holdMs, resetKey, classifying = false }: CollapseOptions<T>
+): T[] {
+  // Not `??`: `null` is a meaningful value here — hold forever — and would otherwise fall through
+  // to the default and fold the row away after a second.
+  const hold = holdMs === undefined ? ANSWERED_COLLAPSE_HOLD_MS : holdMs;
+  // Rows this hook has seen unanswered, and rows whose hold has already run out. Refs rather than
+  // state: neither changes what is on screen on its own — `holding` below does that — and a render
+  // per bookkeeping write would be a render per row.
+  const seenUnanswered = React.useRef(new Set<string>());
+  const foldedOut = React.useRef(new Set<string>());
+  /**
+   * The last answer each row gave, so a row that has been classified once stays classified.
+   *
+   * The lookups behind `answeredStateOf` are usually one flag for the whole list — "the row query
+   * is loading" — and a paged list starts that query again for every page it fetches. Without this,
+   * every row on screen fell back to `unknown` the moment a later page was looked up, and a
+   * collapsed claim reappeared for as long as that took: the list growing by fifty put the
+   * viewer's whole answered backlog back in front of them, repeatedly.
+   */
+  const lastKnown = React.useRef(new Map<string, Exclude<AnsweredState, 'unknown'>>());
+  const timers = React.useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const [holding, setHolding] = React.useState<ReadonlySet<string>>(() => new Set());
+
+  // During render, so the very first render of the new list is already clean. An effect would let
+  // one commit classify the new rows against the old list's history, which is the whole of what
+  // this prevents.
+  const lastResetKey = React.useRef(resetKey);
+  const lastEnabled = React.useRef(enabled);
+  // Switching off is a reset too, and not only for tidiness.
+  //
+  // Nothing is recorded while the filter is off, so a row seen unanswered before it was switched
+  // off and answered while it was off comes back still marked as seen — and on the debate-again
+  // flow, where the hold is indefinite, "seen unanswered" means *keep for good*. Switching the
+  // filter back on then failed to hide it, permanently. What is on screen when it comes back on is
+  // the backlog, whatever happened while nobody was watching.
+  const switchedOff = lastEnabled.current && !enabled;
+  if (lastResetKey.current !== resetKey || switchedOff) {
+    lastResetKey.current = resetKey;
+    seenUnanswered.current.clear();
+    foldedOut.current.clear();
+    lastKnown.current.clear();
+    for (const timer of timers.current.values()) clearTimeout(timer);
+    timers.current.clear();
+    setHolding(current => (current.size === 0 ? current : new Set()));
+  }
+  lastEnabled.current = enabled;
+
+  // Every render rather than on a dependency list, and that is the cheaper of the two: the callbacks
+  // come from the caller, so a list would either churn on inline ones or go stale on memoized ones.
+  // The guards below make the body idempotent — a row already holding, already folded, or already
+  // recorded does nothing — so the cost is one pass over the rows and `setHolding` bails on identity.
+  React.useEffect(() => {
+    if (!enabled) return;
+
+    for (const row of rows) {
+      const key = keyOf(row);
+      const state = answeredStateOf(row);
+
+      if (state === 'unknown') continue;
+      lastKnown.current.set(key, state);
+      if (state === 'unanswered') {
+        // Answering, clearing, and answering again is two separate folds, so the record of having
+        // folded is cleared with the answer that produced it.
+        //
+        // The *pending* fold goes with it, and that is the part that bites. A viewer who clears an
+        // answer inside the hold left a timer running against a row that is no longer answered; it
+        // fired into the empty, recorded the key as folded, and the next answer was then dropped on
+        // the spot with no hold at all — the one thing the hold exists to prevent.
+        const pending = timers.current.get(key);
+        if (pending !== undefined) {
+          clearTimeout(pending);
+          timers.current.delete(key);
+        }
+        seenUnanswered.current.add(key);
+        foldedOut.current.delete(key);
+        continue;
+      }
+      if (!seenUnanswered.current.has(key)) continue;
+      if (foldedOut.current.has(key) || timers.current.has(key)) continue;
+
+      // The timer lives in a ref rather than in this effect's cleanup. The effect re-runs on every
+      // render, and a cleanup that cancelled the pending fold would restart the hold each time —
+      // which, with a list that refetches, is a row that never leaves.
+      //
+      // No timer at all when the hold is indefinite: the key goes into `holding` below and nothing
+      // ever takes it out, which is exactly "kept for good".
+      if (hold !== null) {
+        timers.current.set(
+          key,
+          setTimeout(() => {
+            timers.current.delete(key);
+            foldedOut.current.add(key);
+            setHolding(current => {
+              const next = new Set(current);
+              next.delete(key);
+              return next;
+            });
+          }, hold)
+        );
+      }
+      // Same set back where the key is already in it: a fresh `Set` every render is a fresh
+      // identity, and this effect runs on every render.
+      setHolding(current => (current.has(key) ? current : new Set(current).add(key)));
+    }
+  });
+
+  // Only on the way out. A fold in flight when the tab unmounts has nothing left to fold.
+  React.useEffect(() => {
+    const pending = timers.current;
+
+    return () => {
+      for (const timer of pending.values()) clearTimeout(timer);
+      pending.clear();
+    };
+  }, []);
+
+  return React.useMemo(() => {
+    if (!enabled) return rows;
+
+    return rows.filter(row => {
+      const key = keyOf(row);
+      // A row that has answered before keeps that answer through a lookup that has not. Only a row
+      // nobody has classified yet is genuinely unknown, and while the answers are still arriving it
+      // is not ready to be drawn at all — see `classifying`.
+      const remembered = lastKnown.current.get(key);
+      const state = answeredStateOf(row);
+      const known = state === 'unknown' ? remembered : state;
+
+      if (known === undefined) return !classifying;
+      if (known !== 'answered') return true;
+      // `holding` is set by the effect, which runs *after* the commit that first sees the answer —
+      // so on that one commit a row the viewer just answered was neither unanswered nor held, and
+      // dropped out of the list only to come back a tick later. On a one-row list that is the empty
+      // state flashing up; on the rematch page it is the "Request debate" button they were reaching
+      // for blinking out from under them.
+      //
+      // The refs say the same thing a commit earlier: seen unanswered before, and not yet folded.
+      // They are written in the effect too, but by the time a row *becomes* answered they already
+      // carry the answer this needs.
+      return holding.has(key) || (seenUnanswered.current.has(key) && !foldedOut.current.has(key));
+    });
+  }, [answeredStateOf, classifying, enabled, holding, keyOf, rows]);
+}

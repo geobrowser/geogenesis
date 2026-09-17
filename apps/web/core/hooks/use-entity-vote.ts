@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import { Effect, Either } from 'effect';
 
 import { ensureSpaceMembership } from '~/core/access/request-space-membership';
-import { observeOperation } from '~/core/analytics-operations';
+import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import {
@@ -48,6 +48,7 @@ import { readCachedPersonalSpace, readCachedSmartAccount } from './cached-write-
 
 interface UseEntityResponseArgs {
   entityId: string;
+  entityName?: string | null;
   spaceId: string;
   responseKind: ResponseKind | null;
 }
@@ -191,7 +192,7 @@ export function useResetEntityResponseIndexingSnapshot({ entityId, spaceId, resp
   );
 }
 
-export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntityResponseArgs) {
+export function useEntityResponse({ entityId, entityName, spaceId, responseKind }: UseEntityResponseArgs) {
   const queryClient = useQueryClient();
   const responseIndexingRegistry = getResponseIndexingRegistry(queryClient);
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
@@ -492,7 +493,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
         pending,
         runId,
       });
-      return { previousState, runId, runOrder, previousResponse, operation };
+      return { previousState, runId, runOrder, previousResponse, operation, entityName };
     },
     onSuccess: (submission, direction, context) => {
       const previousDirection =
@@ -509,6 +510,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
         response_kind: submission.pending.responseKind,
         response_action: getResponseActionMethod(submission.pending.responseKind, direction),
         entity_id: submission.pending.entityId,
+        target_name: context?.entityName || undefined,
         space_id: submission.pending.spaceId,
         object_type: 0,
         user_operation_hash: submission.transaction,
@@ -543,9 +545,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       }
     },
     onError: (_error, _direction, context) => {
-      context?.operation.failed(
-        _error instanceof Error && _error.message.includes('User rejected') ? 'rejected' : 'unknown'
-      );
+      context?.operation.failed(classifyOperationFailure(_error));
       if (!context) return;
       const runs = responseIndexingRegistry.submissionRuns.get(indexingKeyId);
       const failedRun = runs?.get(context.runId);

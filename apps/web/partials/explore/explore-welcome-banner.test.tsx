@@ -34,15 +34,15 @@ beforeEach(() => localStorage.clear());
 afterEach(cleanup);
 
 describe('ExploreWelcomeBanner', () => {
-  it('opens the debates hub on the claims tab when the inline link is clicked', async () => {
+  it('opens the debates hub on Lobby when the inline link is clicked', async () => {
     const store = renderBanner();
     expect(store.get(debatesHubAtom)).toBeNull();
 
     await userEvent.click(hubLink());
 
-    // Claims is where the copy points the reader — taking a position on a claim is the first step,
-    // not requests or matches.
-    expect(store.get(debatesHubAtom)).toEqual({ tab: 'claims' });
+    // Lobby is where the copy points the reader: "find your first debate" is the question Lobby
+    // answers, and taking a position on a claim is the first step of it.
+    expect(store.get(debatesHubAtom)).toEqual({ tab: 'lobby' });
   });
 
   // The desktop panel is a non-modal aside that takes no focus, so this attribute is the only

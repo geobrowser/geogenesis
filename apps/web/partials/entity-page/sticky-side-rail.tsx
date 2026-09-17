@@ -26,3 +26,29 @@ export function StickySideRail({ children }: { children: React.ReactNode }) {
     </aside>
   );
 }
+
+export type SideRailSection = { key: string; node: React.ReactNode };
+
+/**
+ * The rail's sections, separated by rules.
+ *
+ * Built from a list rather than from `showA && showB ? <hr/> : null` pairs because every section is
+ * optional: past two of them those pairs stop being readable, and a section that renders nothing
+ * leaves a dangling rule behind it. Keys are stable, so a section appearing or disappearing does
+ * not remount its neighbours.
+ *
+ * Shared by both rails — Explore's and the space overview's. They compose identically, and the
+ * block had been written out twice.
+ */
+export function SideRailSections({ sections }: { sections: SideRailSection[] }) {
+  return (
+    <StickySideRail>
+      {sections.map((section, index) => (
+        <React.Fragment key={section.key}>
+          {index > 0 ? <hr className="my-6 border-t border-divider" /> : null}
+          {section.node}
+        </React.Fragment>
+      ))}
+    </StickySideRail>
+  );
+}

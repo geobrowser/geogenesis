@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
+import { DebateTileChip, tileChipSurface } from '~/core/debates/debate-video-tile';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
@@ -22,12 +23,22 @@ import { WinnerVoteButton } from './winner-vote-button';
 type DebateFeedPlayerProps = {
   debate: Debate;
   active: boolean;
+  /**
+   * Load this debate's recordings without playing them — for the card the viewer is about to
+   * reach. Resolving the two signed URLs is a round trip each, and until they land
+   * `DebateFeedPlayer` renders the "Loading…" placeholder instead of a <video>, which is what
+   * makes arriving at a card feel glitchy (GEO-2895).
+   */
+  preload?: boolean;
   votes: DebateVotesResult;
 };
 
-export function DebateFeedPlayer({ debate, active, votes }: DebateFeedPlayerProps) {
+export function DebateFeedPlayer({ debate, active, preload = false, votes }: DebateFeedPlayerProps) {
   const { hasVoted } = votes;
-  const controller = useDebatePlayback(debate, active);
+  // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
+  // fetch and the transcript query — playback is driven by `active` in the effect below — so a
+  // preloading card fetches without autoplaying off-screen.
+  const controller = useDebatePlayback(debate, active || preload);
   const measurement = usePlaybackAnalytics(debate, active, controller);
   const {
     slot1VideoRef,
@@ -273,9 +284,9 @@ function DebaterVideo({
           {name}
         </span>
         {participant && (
-          <span className="inline-flex h-4 shrink-0 items-center rounded-full bg-white/60 px-1.5 text-[0.75rem] leading-none text-text">
+          <DebateTileChip className={cx('shrink-0 text-text', tileChipSurface)}>
             {participant.position_label}
-          </span>
+          </DebateTileChip>
         )}
       </button>
 

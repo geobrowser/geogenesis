@@ -7,7 +7,7 @@ import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
-import { type OperationContext, observeOperation } from '~/core/analytics-operations';
+import { type OperationContext, classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { readCachedPersonalSpace, readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
@@ -279,16 +279,15 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
             retrySchedule('publishEdit', Duration.minutes(1))
           );
 
-          const txHash = yield* Effect.retry(
-            Effect.tryPromise({
-              try: () =>
-                account.sendUserOperation({
-                  calls: [{ to: result.to, value: 0n, data: result.calldata }],
-                }),
-              catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
-            }),
-            retrySchedule('sendUserOperation', Duration.seconds(10))
-          );
+          // Safe submission retries belong to the wallet. An uncertain response
+          // must not cause another ranking write here.
+          const txHash = yield* Effect.tryPromise({
+            try: () =>
+              account.sendUserOperation({
+                calls: [{ to: result.to, value: 0n, data: result.calldata }],
+              }),
+            catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
+          });
 
           return txHash;
         });
@@ -302,7 +301,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
         if (Either.isLeft(result)) {
           const err = result.left;
-          operation.failed(err instanceof Error && err.message.includes('User rejected') ? 'rejected' : 'unknown');
+          operation.failed(classifyOperationFailure(err));
           if (err instanceof Error && err.message.includes('User rejected')) {
             return null;
           }

@@ -229,6 +229,40 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
   });
 
+  /**
+   * GEO-2895. Activation used to be a single `>= 0.6`, so a card resting near that ratio
+   * toggled on every small scroll delta, and each toggle started or interrupted a playback
+   * attempt — Preston's "videos will look frozen / stop auto playing" after scrolling around.
+   * Between the two edges the card must hold whatever it already was, in both directions.
+   */
+  it('holds its state between the activation edges rather than toggling', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+    const isActive = () => screen.getByTestId('player').getAttribute('data-active');
+
+    // Scrolling in: the band alone must not start playback — only reaching 0.6 does.
+    intersectAll(0.5);
+    expect(isActive()).toBe('false');
+    intersectAll(0.55);
+    expect(isActive()).toBe('false');
+    intersectAll(0.6);
+    expect(isActive()).toBe('true');
+
+    // Scrolling out: jitter inside the band must not stop it. Under the old single-ratio rule
+    // every one of these reported below 0.6 and so deactivated.
+    intersectAll(0.55);
+    expect(isActive()).toBe('true');
+    intersectAll(0.45);
+    expect(isActive()).toBe('true');
+    intersectAll(0.59);
+    expect(isActive()).toBe('true');
+
+    // And it does still give way once the card has genuinely left.
+    intersectAll(0.4);
+    expect(isActive()).toBe('false');
+  });
+
   it('shows Claims and Share actions once the debate is ready, opening the claims panel on demand', () => {
     mocks.debateQuery = { data: watchableDebate(), isError: false };
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };

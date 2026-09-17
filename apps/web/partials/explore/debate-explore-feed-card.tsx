@@ -27,6 +27,11 @@ import { ExploreJoinSpaceButton } from './explore-join-space-button';
 import { ExploreShareIcon } from './explore-share-icon';
 import { SpaceThumb } from './space-thumb';
 
+/** Visible fraction at which a card takes over playback, and the one it must fall back to
+ * before it gives it up. Strictly between them the card keeps whatever state it had. */
+const ACTIVATE_RATIO = 0.6;
+const DEACTIVATE_RATIO = 0.4;
+
 type DebateExploreFeedCardProps = {
   item: ExploreFeedItem;
   /** Hide the space thumbnail + space-name link in the meta row (same semantics as ExploreFeedCard). */
@@ -78,16 +83,33 @@ export function DebateExploreFeedCard({
 
   // Autoplay while mostly in view, pause when scrolled past — same activation ratio as the
   // full-screen feed. Playback is muted by default so multiple visible cards can't clash.
+  //
+  // Hysteresis, not a single ratio: this used to activate on `intersectionRatio >= 0.6` and
+  // deactivate on anything less, so a card resting near that boundary toggled on every small
+  // scroll delta. Unlike the full-screen feed — a snap container where exactly one full-height
+  // card can clear 0.6, and activation only ever moves — these cards are short, several are on
+  // screen at once, and nothing else holds a card active. Each toggle starts or interrupts a
+  // playback attempt, which is what made scrolling feel glitchy (GEO-2895).
+  //
+  // Now: reach 0.6 to activate, fall back to 0.4 to give it up, and hold whatever the card
+  // already was strictly between them. The lower edge is inclusive so that the observer's
+  // report at the 0.4 threshold deactivates rather than landing ambiguously inside the band —
+  // a ratio reported exactly at a threshold is the normal case, not an edge case.
   const [active, setActive] = React.useState(false);
   React.useEffect(() => {
     if (!container) return;
     const observer = new IntersectionObserver(
       entries => {
         for (const entry of entries) {
-          setActive(entry.isIntersecting && entry.intersectionRatio >= 0.6);
+          setActive(current => {
+            if (!entry.isIntersecting) return false;
+            if (entry.intersectionRatio >= ACTIVATE_RATIO) return true;
+            if (entry.intersectionRatio <= DEACTIVATE_RATIO) return false;
+            return current;
+          });
         }
       },
-      { threshold: [0.6] }
+      { threshold: [DEACTIVATE_RATIO, ACTIVATE_RATIO] }
     );
     observer.observe(container);
     return () => observer.disconnect();
@@ -160,7 +182,13 @@ export function DebateExploreFeedCard({
       {/* Cap the media at the width the designs (and the full-screen feed) use — feed columns,
           especially data blocks, can be much wider and full-bleed videos dwarf the card. */}
       <div className="w-full max-w-[480px]">
-        {readyDebate ? <DebateCardVideos debate={readyDebate} active={active} /> : <DebateVideoSkeleton />}
+        {readyDebate ? (
+          // `nearViewport` is the same 800px-margin gate the geo-chat lookups already use, so
+          // the recordings resolve while the card is still approaching rather than on arrival.
+          <DebateCardVideos debate={readyDebate} active={active} preload={nearViewport} />
+        ) : (
+          <DebateVideoSkeleton />
+        )}
       </div>
 
       <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
@@ -221,9 +249,17 @@ function DebateCardExtras({ debate, spaceId }: { debate: Debate; spaceId: string
 
 // Separate component so useDebateVotes (which queries as soon as it mounts) only runs once the
 // debate is loaded and known to be watchable.
-function DebateCardVideos({ debate, active }: { debate: Debate; active: boolean }) {
+function DebateCardVideos({
+  debate,
+  active,
+  preload,
+}: {
+  debate: Debate;
+  active: boolean;
+  preload: boolean;
+}) {
   const votes = useDebateVotes(debate);
-  return <DebateFeedPlayer debate={debate} active={active} votes={votes} />;
+  return <DebateFeedPlayer debate={debate} active={active} preload={preload} votes={votes} />;
 }
 
 function DebateVideoSkeleton() {

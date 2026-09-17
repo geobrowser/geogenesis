@@ -3,6 +3,8 @@
 import { useAtom, useAtomValue } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
+import { useHydrated } from '~/core/hooks/use-hydrated';
+
 export const featureFlagsStorageKey = 'geo:feature-flags';
 
 export const featureFlagDefinitions = [
@@ -10,21 +12,34 @@ export const featureFlagDefinitions = [
     id: 'debateDebugging',
     label: 'Debate debugging',
     description: 'Show debate recording debug controls and the paused live-updates banner.',
+    enabledByDefault: false,
   },
   {
     id: 'debateFormatSelector',
     label: 'Debate format selector',
     description: 'Allow the first matched debater to choose a format before accepting.',
+    enabledByDefault: false,
   },
   {
     id: 'debugDebatesPage',
     label: 'Debates debug tab per space',
     description: 'Enable per-space debate processing diagnostics.',
+    enabledByDefault: false,
+  },
+  {
+    id: 'exploreSidePanel',
+    label: 'Explore side panel',
+    description:
+      'Bring back the right side panel on Explore — featured spaces and rankings, community calls, and the onboarding checklist. Off by default (GEO-2914).',
+    // GEO-2914 hid the panel rather than deleting it, so this is off for everyone and the surface
+    // it gates is still built, still fetched for, and one checkbox away from coming back.
+    enabledByDefault: false,
   },
   {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
+    enabledByDefault: true,
   },
 ] as const;
 
@@ -35,20 +50,26 @@ export type FeatureFlags = Record<FeatureFlagId, boolean>;
 // normalizing drops them on the next write rather than reading them back.
 type StoredFeatureFlags = Partial<Record<FeatureFlagId | 'questionsTab' | 'debatesTab', boolean>>;
 
-export const defaultFeatureFlags: FeatureFlags = {
-  debugDebatesPage: false,
-  debateDebugging: false,
-  debateFormatSelector: false,
-  bountiesTab: true,
-};
+/**
+ * Both of these are derived from the definitions above rather than written out beside them.
+ *
+ * A flag used to be spelled three times in this file and five more across two test files, and the
+ * copy that mattered most was the easiest to miss: `normalizeFeatureFlags` is what reads a flag
+ * back out of storage, so an id absent from it is a flag that silently never persists. Adding one
+ * is a single entry above now, and there is no second list to fall out of step with it.
+ *
+ * Deriving also keeps the retirement behaviour that has its own test: only ids the definitions
+ * name are emitted, so `questionsTab` and `debatesTab` — still sitting in browsers that opened the
+ * dialog before claims and debates shipped to everyone — are dropped on the next write.
+ */
+export const defaultFeatureFlags: FeatureFlags = Object.fromEntries(
+  featureFlagDefinitions.map(definition => [definition.id, definition.enabledByDefault])
+) as FeatureFlags;
 
 export function normalizeFeatureFlags(flags: StoredFeatureFlags | null | undefined): FeatureFlags {
-  return {
-    debugDebatesPage: flags?.debugDebatesPage ?? defaultFeatureFlags.debugDebatesPage,
-    debateDebugging: flags?.debateDebugging ?? defaultFeatureFlags.debateDebugging,
-    debateFormatSelector: flags?.debateFormatSelector ?? defaultFeatureFlags.debateFormatSelector,
-    bountiesTab: flags?.bountiesTab ?? defaultFeatureFlags.bountiesTab,
-  };
+  return Object.fromEntries(
+    featureFlagDefinitions.map(definition => [definition.id, flags?.[definition.id] ?? definition.enabledByDefault])
+  ) as FeatureFlags;
 }
 
 export function setFeatureFlagValue(flags: FeatureFlags, id: FeatureFlagId, enabled: boolean): FeatureFlags {
@@ -62,15 +83,41 @@ export const featureFlagsAtom = atomWithStorage<FeatureFlags>(featureFlagsStorag
   getOnInit: true,
 });
 
+/**
+ * The default until the browser has hydrated, then whatever is stored.
+ *
+ * The atom is `getOnInit: true`, so on the client it reads `localStorage` during initialization —
+ * before React's first render. The server has no `localStorage` and always renders the default. A
+ * reader who has ever toggled a flag therefore gets a server tree and a first client tree that
+ * disagree, and React resolves that by discarding the server HTML for the subtree: a hydration
+ * mismatch, thrown by the one reader for whom the flag was doing something.
+ *
+ * Gated here rather than at each call site. None of the four consumers guarded, the gate is easy
+ * to forget precisely because the default state looks fine, and the cost of forgetting lands on
+ * whoever turned the flag on. `useHydrated` is what the rest of the app uses for this — see
+ * `use-access-control` and `use-user-is-editing`.
+ *
+ * The visible consequence is a flag's surface appearing one frame after mount rather than in the
+ * server HTML. For a per-browser developer toggle that is the right trade; the alternative is a
+ * mismatch.
+ */
 export function useFeatureFlag(id: FeatureFlagId) {
   const flags = useAtomValue(featureFlagsAtom);
-  return normalizeFeatureFlags(flags)[id];
+  const hydrated = useHydrated();
+  return hydrated ? normalizeFeatureFlags(flags)[id] : defaultFeatureFlags[id];
 }
 
 export function useDebugDebatesPageEnabled() {
   return useFeatureFlag('debugDebatesPage');
 }
 
+/**
+ * Read *and* write, for the flags dialog. Deliberately not hydration-gated like
+ * {@link useFeatureFlag}: the dialog's contents are inside a Radix `Root` that is closed until a
+ * keyboard shortcut or the hidden route opens it, both of which happen after mount — so there is no
+ * server render of these values to disagree with, and gating the read would only delay the
+ * checkboxes catching up to what they are about to write.
+ */
 export function useFeatureFlags() {
   const [flags, setFlags] = useAtom(featureFlagsAtom);
   const normalizedFlags = normalizeFeatureFlags(flags);

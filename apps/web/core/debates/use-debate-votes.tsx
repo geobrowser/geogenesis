@@ -8,7 +8,7 @@ import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
-import { observeOperation } from '~/core/analytics-operations';
+import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import {
@@ -340,13 +340,12 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           retrySchedule(Duration.minutes(1))
         );
 
-        return yield* Effect.retry(
-          Effect.tryPromise({
-            try: () => smartAccount.sendUserOperation({ calls: [{ to: result.to, value: 0n, data: result.calldata }] }),
-            catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
-          }),
-          retrySchedule(Duration.seconds(10))
-        );
+        // The wallet retries known pre-submission failures. Repeating this whole
+        // call after an uncertain response could submit the vote twice.
+        return yield* Effect.tryPromise({
+          try: () => smartAccount.sendUserOperation({ calls: [{ to: result.to, value: 0n, data: result.calldata }] }),
+          catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
+        });
       });
 
       try {
@@ -363,7 +362,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           });
 
           const error = result.left;
-          operation.failed(error instanceof Error && error.message.includes('User rejected') ? 'rejected' : 'unknown');
+          operation.failed(classifyOperationFailure(error));
           if (error instanceof Error && error.message.includes('User rejected')) return;
 
           console.error('[useDebateVotes] Publish failed:', error);

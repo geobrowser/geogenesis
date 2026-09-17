@@ -18,7 +18,7 @@ import {
   entityRespondersQueryKey,
 } from '~/core/responses/entity-response';
 
-import { Tag } from '~/design-system/tag';
+import { Fire } from '~/design-system/icons/fire';
 import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
@@ -46,12 +46,22 @@ export function ClaimSummary({
   responseKind,
   summary,
   className,
+  layout = 'stacked',
 }: {
   entityId: string;
   spaceId: string;
   responseKind: ResponseKind;
   summary: ClaimResponseSummary;
   className?: string;
+  /**
+   * `'stacked'` puts the bar above its reading, which is what the five surfaces with width do.
+   *
+   * `'inline'` is the compact card's (Figma 76081-15715): share, bar and faces on one line, on the
+   * card's own grey footer. A variant rather than a second component because everything above the
+   * markup — the tier gate, the `hasCounts` guard, the vocabulary — is the part worth having once,
+   * and it is the part that would quietly diverge if this were copied.
+   */
+  layout?: 'stacked' | 'inline';
 }) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const tier = claimSummaryTier(summary.total);
@@ -85,18 +95,41 @@ export function ClaimSummary({
 
   const percent = summary.percent ?? 0;
 
+  const share = (
+    <span className="flex shrink-0 items-center gap-1.5">
+      <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
+        {percent}%
+      </Text>
+      <Text as="span" variant="metadata" color="grey-04">
+        {copy.positiveAction.toLowerCase()}
+      </Text>
+    </span>
+  );
+
+  if (layout === 'inline') {
+    return (
+      // The responder faces sit on this band, not on white, so the rings they draw have to be the
+      // band's colour. Set here rather than passed down: the stack is five components away, through
+      // ranking code that has no opinion about what it is standing on.
+      <div
+        className={cx('flex items-center gap-3', className)}
+        style={{ '--avatar-group-ring': 'var(--color-grey-01)' } as React.CSSProperties}
+      >
+        {share}
+        {/* The bar takes the middle and gives way first: `min-w-0` so a narrow card shortens the
+            rail rather than wrapping the reading off the end of it. Thinner than the stacked one —
+            at full width it is a chart, inline it is a rule between two readings. */}
+        <ClaimSplitBar percent={percent} responseKind={responseKind} className="h-0.5 min-w-0 flex-1" />
+        {responders}
+      </div>
+    );
+  }
+
   return (
     <div className={className}>
       <ClaimSplitBar percent={percent} responseKind={responseKind} className="h-1.5" />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <span className="flex items-center gap-1.5">
-          <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
-            {percent}%
-          </Text>
-          <Text as="span" variant="metadata" color="grey-04">
-            {copy.positiveAction.toLowerCase()}
-          </Text>
-        </span>
+        {share}
         {responders}
       </div>
     </div>
@@ -198,14 +231,37 @@ export function ClaimSides({
  *
  * Lives beside the space chip rather than down in the summary: it says what *kind* of claim this is,
  * which is the question the meta row answers, and it is the one thing on a claim card worth
- * spotting from across a list. Built on the design system's `Tag` so it matches every other tag in
- * the product — it was a hand-rolled span at a size the scale does not contain.
+ * spotting from across a list.
+ *
+ * A flame and red text rather than the tinted pill it used to be, per the Figma card. That makes it
+ * the one thing in these rows that is not a chip, which is the point — every neighbour is a
+ * neutral fact about the claim, and this is the one that wants to be found from across a list.
+ *
+ * Deliberately keeps the size the pill set rather than taking the design's 16px. The three rows it
+ * appears in do not agree on a scale — the explore row sets 14px on its segments, the claim page's
+ * chips are 16px — so naming a size here would change the surfaces this was not asked to touch.
+ * `text-red-01` is the design's `#ff523a` exactly, and the flame inherits it through
+ * `currentColor`, so the two cannot drift apart.
+ *
+ * `whitespace-nowrap` is what keeps the flame attached to the word: it pins this item's min-content
+ * to the whole unbroken run, so a flex parent cannot compress it and the icon needs no shrink guard
+ * of its own. Removing it would let the two separate before anything else gave way.
  *
  * Only ever rendered past the response floor, because "contested" off two responses is not a fact
  * about the claim, it is a fact about how few people have read it.
  */
 export function ControversialTag({ className }: { className?: string }) {
-  return <Tag className={cx('bg-orange/25 text-text', className)}>Controversial</Tag>;
+  return (
+    <span
+      className={cx(
+        'inline-flex items-center gap-1.5 text-[0.875rem] leading-none whitespace-nowrap text-red-01',
+        className
+      )}
+    >
+      <Fire />
+      Controversial
+    </span>
+  );
 }
 
 /**

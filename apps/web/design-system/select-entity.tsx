@@ -65,6 +65,23 @@ type SelectEntityProps = {
     verified?: boolean;
     renderableType?: SwitchableRenderableType;
   }) => void | string;
+  /**
+   * Hand the new entity to `onDone` without writing it to the store.
+   *
+   * For a caller that publishes on its own schedule — a modal whose Save is the
+   * only thing that should reach the graph. Creating here names the entity
+   * immediately, so backing out of such a modal used to leave the name behind as
+   * an unrelated local edit, on an entity nothing pointed at. A caller that sets
+   * this owns writing the name itself.
+   */
+  deferCreate?: boolean;
+  /**
+   * Id of the element naming this search box, for a caller whose visible label
+   * sits outside it. The input is not wrapped in a `<label>` — it renders inside
+   * a popover anchor — so without this it is announced by its placeholder, which
+   * says "Example: Microsoft" where the field is called "Company".
+   */
+  inputLabelledBy?: string;
   spaceId: string;
   relationValueTypes?: Property['relationValueTypes'];
   placeholder?: string;
@@ -80,6 +97,28 @@ type SelectEntityProps = {
   initialQuery?: string;
   waitForFilterTypes?: boolean;
   restrictToFilterTypes?: boolean;
+  /**
+   * Extra spaces to make searchable, for a caller that knows where the thing it
+   * is searching for lives — a curated taxonomy in a space the viewer is not a
+   * member of would otherwise be filtered out before it got here.
+   */
+  alsoSearchSpaceIds?: string[];
+  /**
+   * Rows to offer before anything has been typed, above the results.
+   *
+   * For a caller that already knows the likely answers and would rather not make
+   * the user guess at a search term — the skills an occupation is recorded as
+   * needing, say. They are dropped as soon as there is a query, which is the
+   * point at which the search itself is the better answer.
+   *
+   * Rendered without the space summary a search hit carries: a suggestion was not
+   * found in a space, it was offered by a caller that already knows it fits.
+   */
+  pinnedResults?: SearchResult[];
+  /** Heading above the pinned rows, so they read as a suggestion not a result. */
+  pinnedLabel?: string;
+  /** Heading above the ordinary results, where pinned rows precede them. */
+  restLabel?: string;
   /** When set, the result with this ID gets a "Currently selected" indicator */
   selectedEntityId?: string;
   /** Increment (e.g. on "add row") to move focus into this input even when already mounted. */
@@ -93,6 +132,8 @@ type TypeFilter = { typeId: string; typeName: string | null };
 export const SelectEntity = ({
   onDone,
   onCreateEntity,
+  deferCreate,
+  inputLabelledBy,
   spaceId,
   relationValueTypes,
   placeholder = 'Find or create...',
@@ -108,6 +149,10 @@ export const SelectEntity = ({
   initialQuery,
   waitForFilterTypes,
   restrictToFilterTypes,
+  alsoSearchSpaceIds,
+  pinnedResults,
+  pinnedLabel,
+  restLabel,
   selectedEntityId,
   focusRequestKey,
 }: SelectEntityProps) => {
@@ -155,15 +200,40 @@ export const SelectEntity = ({
   // unrestricted instead of blocking with no way to get results.
   const userClearedTypeFilters = removedTypeIds.size > 0 && allowedTypes.length === 0;
 
-  const { query, onQueryChange, isLoading, isEmpty, results, hasNextPage, fetchNextPage, isFetchingNextPage } =
-    useSearch({
-      filterByTypes,
-      filterBySpace,
-      initialQuery,
-      enabled: isSearchOpen,
-      waitForFilterTypes,
-      restrictToFilterTypes: restrictToFilterTypes && !userClearedTypeFilters,
-    });
+  const {
+    query,
+    onQueryChange,
+    isLoading,
+    isEmpty,
+    results: searchResults,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSearch({
+    filterByTypes,
+    filterBySpace,
+    initialQuery,
+    enabled: isSearchOpen,
+    waitForFilterTypes,
+    restrictToFilterTypes: restrictToFilterTypes && !userClearedTypeFilters,
+    alsoSearchSpaceIds,
+  });
+
+  /**
+   * Pinned rows sit at the top until the user types, and then get out of the way.
+   *
+   * Merged into the one list the results render and the keyboard walks, so
+   * arrowing down and pressing Enter picks a suggestion the same way it picks a
+   * result. Anything pinned is dropped from the results below it rather than
+   * appearing twice.
+   */
+  const pinned = query.trim() === '' ? (pinnedResults ?? []) : [];
+
+  const results = React.useMemo(() => {
+    if (pinned.length === 0) return searchResults;
+    const pinnedIds = new Set(pinned.map(result => result.id));
+    return [...pinned, ...searchResults.filter(result => !pinnedIds.has(result.id))];
+  }, [pinned, searchResults]);
 
   // Auto focus input when component mounts
   useEffect(() => {
@@ -218,20 +288,39 @@ export const SelectEntity = ({
     }
 
     // Create new entity with name and types using internal id
-    storage.entities.name.set(newEntityId, spaceId, query);
+    if (!deferCreate) {
+      storage.entities.name.set(newEntityId, spaceId, query);
+    }
     onDone?.({ id: newEntityId, name: query, space: spaceId }, true);
     onQueryChange('');
     setIsSearchOpen(false);
     setSelectedIndex(0);
-    setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
+    // Nothing to announce or link to yet when the caller is publishing it later —
+    // the toast points at an entity that does not exist until their save lands.
+    if (!deferCreate) {
+      setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
+    }
   };
 
   const hasNoFilters = !typeFilter && !spaceFilter && allowedTypes.length === 0;
 
   const hasResults = results.length > 0;
 
+  /**
+   * Whether the three key handlers below should act.
+   *
+   * They are bound to the window, not to the input, so having results is not
+   * enough — a closed search box with results still standing answered keys meant
+   * for whatever the user was actually typing in. Pinned results made that the
+   * normal state rather than a corner case: they need no query, so a picker that
+   * had never been opened still had results, and Enter in a textarea two fields
+   * away chose the first recommended skill. The arrow handlers `preventDefault`,
+   * so they were also stopping the caret moving anywhere on the page.
+   */
+  const isNavigable = isSearchOpen && hasResults;
+
   useKey('Enter', () => {
-    if (!hasResults) return;
+    if (!isNavigable) return;
 
     const result = results[selectedIndex];
 
@@ -248,21 +337,21 @@ export const SelectEntity = ({
   });
 
   useKey('ArrowUp', event => {
-    if (!hasResults) return;
+    if (!isNavigable) return;
 
     event.preventDefault();
     setSelectedIndex(prev => (prev - 1 + results.length) % results.length);
   });
 
   useKey('ArrowDown', event => {
-    if (!hasResults) return;
+    if (!isNavigable) return;
 
     event.preventDefault();
     setSelectedIndex(prev => (prev + 1) % results.length);
   });
 
   useEffect(() => {
-    if (!hasResults) return;
+    if (!isNavigable) return;
 
     const element = document.querySelector(`#select-entity-result-${selectedIndex}`);
 
@@ -364,6 +453,7 @@ export const SelectEntity = ({
           <input
             ref={inputCallbackRef}
             type="text"
+            aria-labelledby={inputLabelledBy}
             value={query}
             onChange={({ currentTarget: { value } }) => {
               onQueryChange(value);
@@ -577,7 +667,7 @@ export const SelectEntity = ({
                             <div className="truncate text-resultTitle text-text">Loading...</div>
                           </div>
                         )}
-                        {isEmpty ? (
+                        {isEmpty && pinned.length === 0 ? (
                           <div className="w-full bg-white px-3 py-2">
                             <div className="truncate text-resultTitle text-text">No results.</div>
                           </div>
@@ -585,6 +675,12 @@ export const SelectEntity = ({
                           <div className="divide-y divide-divider bg-white">
                             {results.map((result, index) => (
                               <div key={index} className="w-full">
+                                {pinnedLabel && pinned.length > 0 && index === 0 && (
+                                  <div className="px-3 pt-2 text-[0.6875rem] text-grey-04">{pinnedLabel}</div>
+                                )}
+                                {restLabel && pinned.length > 0 && index === pinned.length && (
+                                  <div className="px-3 pt-2 text-[0.6875rem] text-grey-04">{restLabel}</div>
+                                )}
                                 <div className="p-1">
                                   <button
                                     onClick={() => {
@@ -671,7 +767,12 @@ export const SelectEntity = ({
                                     )}
                                   </button>
                                 </div>
-                                {withSelectSpace && (
+                                {/* Not on a pinned row: the space summary counts where a
+                                    search hit was found, and a suggestion was not
+                                    found anywhere — it is offered because the caller
+                                    already knows it fits. Rendering it read "0 spaces"
+                                    beside a "Select space" that had none to pick. */}
+                                {withSelectSpace && index >= pinned.length && (
                                   <div className="-mt-2 p-1">
                                     <button
                                       onClick={() => setResult(result)}

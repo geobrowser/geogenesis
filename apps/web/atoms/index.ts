@@ -1,8 +1,6 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
-import type { MatchmakingClaimsFilter } from '~/core/debates/api';
-
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
 
 export const editingPropertiesAtom = atom<boolean>(false);
@@ -33,7 +31,7 @@ export const spaceSidebarHasContentAtom = atom<boolean | null>(null);
  */
 export const entityCommentsPanelAtom = atom<{ entityId: string; spaceId: string } | null>(null);
 
-export type DebatesHubTab = 'requests' | 'matches' | 'claims' | 'people';
+export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'positions' | 'people';
 
 /** `null` while the debates matchmaking hub is closed. */
 export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
@@ -53,37 +51,85 @@ export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
  * membership-based default meaningful — it seeds once per session rather than once per device,
  * ever — and spares a viewer a filter they set days ago and have forgotten.
  *
- * Split per surface because the two menus describe different lists: the Claims facets are the
- * whole tagged corpus, the Matches ones are only what the viewer has a match on.
+ * Split per surface because the two menus describe different lists: Explore's facets are the whole
+ * tagged corpus, Lobby's are only what the viewer can debate right now.
  */
-/**
- * Which list the Claims tab is showing. `featured` is the tab's own rather than geo-chat's, which
- * is why this is not just {@link MatchmakingClaimsFilter} — typed off it so the two cannot drift.
- *
- * Persisted with the rest of the filter bar (GEO-2850): it is the same dropdown, dismissed the same
- * way, and losing it on a click-away was the same surprise.
- *
- * The signed-out coercion stays where it is, in the tab. It is a rule about what may be *shown*,
- * not about what the viewer picked, so it leaves this value alone — which is what lets a viewer who
- * signs in keep the list they had chosen. Changing account is the one thing that clears it; see
- * {@link debatesHubFiltersOwnerAtom}.
- */
-export type DebatesHubClaimsFilter = MatchmakingClaimsFilter | 'featured';
-export const debatesHubClaimsFilterAtom = atom<DebatesHubClaimsFilter>('featured');
 
-export const debatesHubClaimsSpaceIdsAtom = atom<string[]>([]);
-export const debatesHubClaimsTopicIdsAtom = atom<string[]>([]);
-export const debatesHubMatchesSpaceIdsAtom = atom<string[]>([]);
+export const debatesHubExploreSpaceIdsAtom = atom<string[]>([]);
+export const debatesHubExploreTopicIdsAtom = atom<string[]>([]);
 
 /**
- * Whether the Claims tab's membership default has been applied or forfeited this session.
+ * The search box, which is part of the same filter bar as the menus above it.
+ *
+ * Held out here for Lobby's sake first: its two lists are separate components, so flipping "Matches
+ * only" unmounts one and mounts the other, and a search living in either one's `useState` was
+ * cleared by a toggle that presents itself as narrowing the list. The space and topic selections
+ * were already shared across that switch for exactly this reason; the search is the third thing in
+ * the bar and belongs with them.
+ *
+ * Explore's is here too rather than left as local state, so one surface's bar is not held in two
+ * different places — and so it survives a click-away that closes the panel, which is the whole of
+ * GEO-2850.
+ */
+export const debatesHubExploreSearchAtom = atom('');
+
+/**
+ * Lobby's own space selection (GEO-2861).
+ *
+ * One selection, not two. Claims and Matches each kept their own while they were separate tabs;
+ * Lobby is a single tab whose two states answer the same question, so carrying two selections
+ * across the "Matches only" toggle would silently re-filter the list on a switch the viewer reads
+ * as narrowing, not as changing what they had picked.
+ *
+ * The menu behind it is still derived twice — Explore's comes from a server facet, the matches list
+ * counts from its own rows — so a space can be selected and then absent from the options after a
+ * toggle. `keepSelectedVisible` is what keeps it pickable, and so untickable, either way.
+ */
+export const debatesHubLobbySpaceIdsAtom = atom<string[]>([]);
+export const debatesHubLobbyTopicIdsAtom = atom<string[]>([]);
+export const debatesHubLobbySearchAtom = atom('');
+
+/**
+ * Positions' own filter bar (GEO-2863).
+ *
+ * "My positions" used to be one of three sources behind a dropdown on Explore. It is a tab of its
+ * own now: the dropdown was where a viewer had to go to find the claims they had answered, which
+ * is the wrong shape for a list people want to reach directly — and with it gone, Explore's row has
+ * space for the switch that hides those same claims from it.
+ *
+ * Its own selection rather than Explore's, for the reason Lobby has its own: they are two tabs
+ * asking different questions, and carrying one's spaces and topics into the other re-filters a list
+ * the viewer never narrowed.
+ */
+export const debatesHubPositionsSpaceIdsAtom = atom<string[]>([]);
+export const debatesHubPositionsTopicIdsAtom = atom<string[]>([]);
+export const debatesHubPositionsSearchAtom = atom('');
+
+/**
+ * Whether each browse surface's membership default has been applied or forfeited this session.
  *
  * `useMemberSpaceDefault` spends its seed once per *mount*, which was the right lifetime while the
  * selection died with the mount too. Now that the selection outlives the panel, the seed has to as
  * well — otherwise reopening the hub would re-seed a viewer's deliberately cleared filter and
  * decide they meant something other than what they asked for.
  */
-export const debatesHubClaimsSpaceSeedSpentAtom = atom(false);
+export const debatesHubExploreSpaceSeedSpentAtom = atom(false);
+export const debatesHubLobbySpaceSeedSpentAtom = atom(false);
+export const debatesHubPositionsSpaceSeedSpentAtom = atom(false);
+
+/**
+ * Whether the hub has already moved the viewer off an empty Lobby this session (GEO-2863).
+ *
+ * Held out here because `LobbyTab` cannot hold it: `HubSwap` unmounts the tab when the viewer
+ * leaves it, so a ref or state inside would be gone by the time they came back. With "Matches only"
+ * now defaulting on, a viewer with no matches and an empty `debate_now` list would be moved off
+ * Lobby *every time they opened it* — and Lobby is the tab the hub opens on, so there was no way to
+ * stay there at all.
+ *
+ * The move is a courtesy on first arrival, not a policy. Once it has been made, the viewer gets the
+ * empty state and can read it.
+ */
+export const debatesHubLeftLobbyForExploreAtom = atom(false);
 
 /**
  * Which account the filter state above belongs to, so it is never handed to a different viewer.
@@ -92,7 +138,7 @@ export const debatesHubClaimsSpaceSeedSpentAtom = atom(false);
  * to be recorded rather than assumed. Two transitions, and they want opposite answers:
  *
  * A viewer signing in is the same person authenticating, and keeps the bar they were just using —
- * the Claims tab prompts for sign-in from inside its own empty state, so clearing it there would
+ * Explore prompts for sign-in from inside its own empty state, so clearing it there would
  * lose picks made seconds earlier. `owner` being null marks that case, and nothing is reset.
  *
  * A different established account is a different viewer, and inherits nothing: without this,
@@ -109,12 +155,85 @@ export const debatesHubFiltersOwnerAtom = atom<string | null>(null);
  * atom is added to the reset by adding it here rather than by remembering every call site.
  */
 export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
-  set(debatesHubClaimsFilterAtom, 'featured');
-  set(debatesHubClaimsSpaceIdsAtom, []);
-  set(debatesHubClaimsTopicIdsAtom, []);
-  set(debatesHubClaimsSpaceSeedSpentAtom, false);
-  set(debatesHubMatchesSpaceIdsAtom, []);
+  set(debatesHubExploreSpaceIdsAtom, []);
+  set(debatesHubExploreTopicIdsAtom, []);
+  set(debatesHubExploreSearchAtom, '');
+  set(debatesHubExploreSpaceSeedSpentAtom, false);
+  set(debatesHubLobbySpaceIdsAtom, []);
+  set(debatesHubLobbyTopicIdsAtom, []);
+  set(debatesHubLobbySearchAtom, '');
+  set(debatesHubLobbySpaceSeedSpentAtom, false);
+  set(debatesHubPositionsSpaceIdsAtom, []);
+  set(debatesHubPositionsTopicIdsAtom, []);
+  set(debatesHubPositionsSearchAtom, '');
+  set(debatesHubPositionsSpaceSeedSpentAtom, false);
+  // A different viewer has not been shown anything yet, so the courtesy is theirs to receive.
+  set(debatesHubLeftLobbyForExploreAtom, false);
+  // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than
+  // working state, which is the whole reason it is stored rather than session-scoped. Handing a new
+  // account the previous one's *filters* is a leak; handing them a browsing preference held on this
+  // device is the same thing every other stored preference here does.
 });
+
+/**
+ * Whether Lobby is showing matches only (GEO-2861).
+ *
+ * Stored, unlike the rest of the filter bar. The bar is session-scoped on purpose (GEO-2850)
+ * because it is working state — what you are looking through right now. This is not that: it is a
+ * standing answer to how you like to arrive at a debate, and a viewer who only ever wants a
+ * confirmed match should not have to say so again every session.
+ *
+ * On by default. A confirmed match is what the hub is for, so it is what the hub opens on.
+ *
+ * That was the other way round until now, for a good reason: the wider list is the one that can
+ * always answer, and opening onto a stricter list that is usually empty reads as the hub being
+ * broken rather than as a filter being on. What changed is that the emptiness is now handled where
+ * it arises instead of being avoided by never asking — see `useNarrowedDefault`, which steps back
+ * to the wider list on arrival when there is no match to show, and on to Explore when that is empty
+ * too. The preference stands; only whether it applies on arrival is decided for the viewer.
+ */
+export const debatesHubMatchesOnlyAtom = atomWithStorage('debatesHubMatchesOnly', true);
+
+/**
+ * The same standing preference for the debate-again flow (GEO-2861), under its own key.
+ *
+ * Two keys rather than one: the hub asks "who can I debate right now, out of everyone", the rematch
+ * picker asks "which of this opponent's claims can we go again on". Wanting the strict answer to one
+ * is not a statement about the other, and sharing a key would make it one.
+ *
+ * On by default, and stepped back the same way when this pair has nothing to go again on.
+ */
+export const rematchMatchesOnlyAtom = atomWithStorage('rematchMatchesOnly', true);
+
+/**
+ * "Hide my positions" on the debates hub's Explore tab (GEO-2863).
+ *
+ * On by default, which is the collapse the tab shipped with — browsing is about finding something
+ * new, and a claim you have taken a side on sits in the way of the next one forever. The switch is
+ * what says so: the same behaviour with nothing on screen to explain it read as the list throwing
+ * rows away, which is the report that produced it.
+ *
+ * Two atoms rather than one shared setting, because the two surfaces do not mean the same thing by
+ * it — see {@link rematchHideMyPositionsAtom}. They agree on the default and disagree about what
+ * happens to a claim answered under the viewer, which is the part that matters.
+ */
+export const debatesHubHideMyPositionsAtom = atomWithStorage('debatesHubHideMyPositions', true);
+
+/**
+ * "Hide my positions" on the debate-again flow's Explore tab (GEO-2863).
+ *
+ * Stored rather than session-scoped, and on by default. Stored because the complaint it answers is
+ * chronic rather than momentary: a reader with a long backlog of positions is hunting for new
+ * claims across visits, not for one afternoon.
+ *
+ * On because it gives the page's two tabs one job each. The claims it hides are the ones this page
+ * can act on — `debateRequestGate` refuses a request from someone holding no position — but those
+ * are also what the *opponent's* tab is made of, and with "Matches only" on beside it that tab is
+ * exactly "what we can go again on right now". Explore is then the other half of the flow: finding
+ * a claim to take a side on. Nothing becomes unreachable, because a claim only the viewer has
+ * answered cannot be requested from either tab — the gate needs both sides.
+ */
+export const rematchHideMyPositionsAtom = atomWithStorage('rematchHideMyPositions', true);
 
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 

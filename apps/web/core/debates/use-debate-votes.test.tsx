@@ -422,6 +422,22 @@ describe('useDebateVotes castVote', () => {
     expect(publishAt(1).winnerCreates[0]?.toEntity.id).toBe(BOB_SPACE);
   });
 
+  it.each([
+    ['uncertain submission', new Error('Connection lost after sending'), 'action_outcome_unknown', 'unknown'],
+    ['wallet rejection', Object.assign(new Error('Request denied'), { code: 4001 }), 'action_failed', 'rejected'],
+  ])('does not repeat a %s at the voting layer', async (_label, error, event, failureCode) => {
+    mocks.sendUserOperation.mockRejectedValueOnce(error);
+    const view = await renderVotes();
+
+    await act(async () => {
+      await view.result.current.castVote(ALICE);
+    });
+
+    expect(mocks.sendUserOperation).toHaveBeenCalledTimes(1);
+    expect(mocks.capture).toHaveBeenCalledWith(event, expect.objectContaining({ failure_code: failureCode }));
+    expect(mocks.capture.mock.calls.some(([name]) => name === 'vote_cast')).toBe(false);
+  });
+
   it('restores the previous pick when a change fails to publish', async () => {
     mocks.voteEntities = [voteEntity('vote-1', ALICE_SPACE, 'winner-rel-1')];
     mocks.prepareFails = true;

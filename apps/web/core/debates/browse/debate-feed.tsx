@@ -186,7 +186,7 @@ export function DebatesBrowseFeed({
   // finish what they pressed rather than returning them to the feed to press it again.
   const openPrivySignIn = usePrivySignIn(() => {
     setOpenPanel(null);
-    debatesHub.open('claims');
+    debatesHub.open('lobby');
   });
   // Privy, not the smart account: `useSmartAccount` reports null while the account is restoring
   // and after an initialization failure as well as when nobody is signed in, and sending a
@@ -281,6 +281,10 @@ export function DebatesBrowseFeed({
     }
   }, [activeId, visibleDebates]);
 
+  // Which debate the viewer is on, so the one after it can preload its recordings.
+  // -1 when nothing is active yet, which preloads nothing rather than the first item.
+  const activeIndex = visibleDebates.findIndex(debate => debate.id === activeId);
+
   // Runs after all hooks so the early return never skips one.
   if (anchorMissing && fallback != null) {
     return <>{fallback}</>;
@@ -311,6 +315,12 @@ export function DebatesBrowseFeed({
           spaceImage={space?.entity.image}
           topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
+          // Resolve the NEXT debate's recordings while the viewer is still on this one. Each
+          // debate needs two signed URLs, and until they land the player shows "Loading…"
+          // instead of a video, which is what makes arriving at a card feel glitchy
+          // (GEO-2895). Only one ahead — the feed is vertical and one-at-a-time, so a wider
+          // window would fetch recordings most viewers never reach.
+          preload={activeIndex >= 0 && index === activeIndex + 1}
           root={scrollEl}
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
@@ -340,7 +350,7 @@ export function DebatesBrowseFeed({
             // The hub is its own portal, so the feed's panel state stays out of it. Closing the
             // in-flow panel first keeps the two from stacking over the same feed.
             setOpenPanel(null);
-            debatesHub.open('claims');
+            debatesHub.open('lobby');
           }}
           onOpenClaims={() => {
             setActiveId(debate.id);
@@ -387,6 +397,7 @@ function DebateFeedItem({
   spaceImage,
   topics,
   active,
+  preload,
   root,
   scrollHint,
   onActivate,
@@ -400,6 +411,7 @@ function DebateFeedItem({
   spaceImage?: string | null;
   topics: string[];
   active: boolean;
+  preload: boolean;
   root: HTMLElement | null;
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
@@ -477,7 +489,7 @@ function DebateFeedItem({
             />
           </div>
           <div className="mt-6 md:mt-7">
-            <DebateFeedPlayer debate={debate} active={active} votes={winnerVotes} />
+            <DebateFeedPlayer debate={debate} active={active} preload={preload} votes={winnerVotes} />
           </div>
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}

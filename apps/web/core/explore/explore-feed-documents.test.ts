@@ -1,6 +1,7 @@
 import { type DocumentNode, type FieldNode, Kind, type OperationDefinitionNode, print } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
+import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-document';
 import { exploreBestConnectionDocument } from './explore-best-document';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
@@ -45,6 +46,7 @@ describe('explore feed documents', () => {
       'entitiesOrderedByPropertyConnection'
     );
     expect(rootField(exploreBestConnectionDocument).name.value).toBe('entitiesRankedForFeedConnection');
+    expect(rootField(exploreBestByTypeConnectionDocument).name.value).toBe('entitiesRankedForFeedByTypeConnection');
   });
 
   it('all three select an identical per-entity field set', () => {
@@ -54,6 +56,9 @@ describe('explore feed documents', () => {
     const forNew = nodeFieldNames(exploreEntitiesConnectionDocument);
     expect(nodeFieldNames(exploreEntitiesByPropertyConnectionDocument)).toEqual(forNew);
     expect(nodeFieldNames(exploreBestConnectionDocument)).toEqual(forNew);
+    // The type-filtered Best path renders the same card through the same decoder, so a
+    // field missing here would be a card that quietly differs only when a type is ticked.
+    expect(nodeFieldNames(exploreBestByTypeConnectionDocument)).toEqual(forNew);
     expect(forNew).toContain('name');
     expect(forNew).toContain('createdAt');
   });
@@ -100,5 +105,31 @@ describe('explore feed documents', () => {
       expect(print(exploreBestConnectionDocument)).toContain('endCursor');
       expect(print(exploreBestConnectionDocument)).toContain('hasNextPage');
     });
+  });
+});
+
+describe('the type-filtered Best sort (GEO-2885)', () => {
+  it('sends typeIds and a maxPerType cap, and pages by offset rather than a cursor', () => {
+    expect(argNames(rootField(exploreBestByTypeConnectionDocument))).toEqual(
+      ['createdAfter', 'filter', 'first', 'maxPerType', 'offset', 'spaceIds', 'typeIds'].sort()
+    );
+  });
+
+  it('does NOT page by `after`', () => {
+    // `maxPerType` must be at least `offset + first` to be exact, and an opaque
+    // `["natural", N]` cursor gives no way to know the depth without reading PostGraphile's
+    // cursor encoding. Explicit offsets keep the cap as arithmetic we own. If `after` ever
+    // appears here, the cap silently stops being computable and deep pages return short.
+    expect(argNames(rootField(exploreBestByTypeConnectionDocument))).not.toContain('after');
+  });
+
+  it('asks for maxPerType, without which this connection is the slow plan', () => {
+    // The whole point of routing Explore here is gaia #933's per-type ordered walk, and the
+    // cap is what makes it a walk rather than a gather. Uncapped, Claim (334,808 members)
+    // measured 6.6s against 6.5ms capped — worse than the client-side filtering this
+    // replaces. Dropping the argument would look harmless and be a 1000x regression.
+    const printed = print(exploreBestByTypeConnectionDocument);
+    expect(printed).toContain('maxPerType: $maxPerType');
+    expect(variableNames(exploreBestByTypeConnectionDocument)).toContain('maxPerType');
   });
 });

@@ -5,7 +5,7 @@ import * as React from 'react';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { GeoChatRequestError } from '../api';
+import { GeoChatRequestError, isAccountWarmingUpQuery, isGeoChatRefusal } from '../api';
 import { HubSwap } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 
@@ -27,7 +27,7 @@ export function isMatchmakingUnavailable(error: unknown) {
  * have got anyway instead of "Something went wrong."
  */
 export function isSignInRequired(error: unknown) {
-  return error instanceof GeoChatRequestError && (error.status === 401 || error.status === 403);
+  return isGeoChatRefusal(error);
 }
 
 /**
@@ -89,6 +89,14 @@ type HubQueryStateProps = {
   onRetry?: () => void;
   /** Offered when the list is only reachable signed in. See {@link isSignInRequired}. */
   signInAction?: { label: string; message: string; onClick: () => void };
+  /**
+   * The failure behind an attempt still in flight — react-query's `failureReason`.
+   *
+   * For the states worth naming *before* the retries are exhausted. A refusal aimed at an account
+   * geo-chat has not registered is waited out over about a minute, and without this the viewer
+   * watches a skeleton for all of it.
+   */
+  failureReason?: unknown;
   children: React.ReactNode;
 };
 
@@ -102,16 +110,56 @@ export function HubQueryState({
   emptyAction,
   onRetry,
   signInAction,
+  failureReason,
   children,
 }: HubQueryStateProps) {
   const needsSignIn = Boolean(signInAction) && isSignInRequired(error);
-  const state = needsSignIn ? 'sign-in' : error ? 'error' : isLoading ? 'loading' : isEmpty ? 'empty' : 'content';
+  /**
+   * The same refusal, read for a caller that has already established the viewer is signed in — so
+   * it is geo-chat not knowing them yet rather than them needing to sign in. See the predicate.
+   *
+   * `failureReason` as well as `error`, and it is the one that matters: these reads wait a
+   * warming-up refusal out over about a minute, and until the last attempt fails react-query calls
+   * that loading. So a viewer who had just signed up watched a skeleton for the whole minute, told
+   * nothing, which reads worse than the error did — at least an error says something. The failure
+   * in hand is what is happening *now*, so this says so on the first refusal and the retries carry
+   * on underneath.
+   */
+  const warmingUp = !signInAction && isAccountWarmingUpQuery({ error, failureReason });
+  // Settled, rather than still being waited out. `error` is only set once react-query has given up;
+  // a refusal that is still being retried reaches us through `failureReason` alone.
+  const retriesSpent = Boolean(error);
+  const state = needsSignIn
+    ? 'sign-in'
+    : warmingUp
+      ? 'warming-up'
+      : error
+        ? 'error'
+        : isLoading
+          ? 'loading'
+          : isEmpty
+            ? 'empty'
+            : 'content';
 
   return (
     <HubSwap activeKey={state}>
       {state === 'sign-in' ? (
         <HubMessage action={<HubPillButton onClick={signInAction!.onClick}>{signInAction!.label}</HubPillButton>}>
           {signInAction!.message}
+        </HubMessage>
+      ) : state === 'warming-up' ? (
+        // Deliberately not "Something went wrong", which is wrong about something going right, and
+        // not the sign-in prompt, which is wrong at somebody who just did.
+        //
+        // The button appears only once the retries are spent. While they are still running,
+        // `refetch()` joins the in-flight retry rather than starting a request, so the button would
+        // have been a control that visibly does nothing — worse than no control, because a reader
+        // who presses it and sees no change concludes the page is broken rather than busy. Until
+        // then the message is the whole state, and the reads are getting on with it.
+        <HubMessage
+          action={retriesSpent && onRetry ? <HubPillButton onClick={onRetry}>Try again</HubPillButton> : null}
+        >
+          Setting up your account. Check back in a minute.
         </HubMessage>
       ) : state === 'error' ? (
         <HubMessage

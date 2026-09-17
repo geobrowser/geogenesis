@@ -1,15 +1,11 @@
 'use client';
 
-import { useCallback } from 'react';
-
-import { useAtom } from 'jotai';
-
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
+import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
-import { dismissedNoticesAtom } from '~/atoms';
 
 // Persisted alongside the other one-time notices (see `dismissedNoticesAtom`). Once the
 // user dismisses the banner this id is appended to the list and it never renders again.
@@ -33,16 +29,10 @@ export function ExploreWelcomeBanner() {
 }
 
 function WelcomeBanner() {
-  const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
+  const { dismissed, remember: handleDismiss } = useDismissedNotice(WELCOME_BANNER_ID);
   const { isOpen: isDebatesHubOpen, open: openDebatesHub } = useDebatesHub();
 
-  // Functional setter form so concurrent dismissals can't drop each other via a stale
-  // closure, and the guard keeps the id from being appended twice on a repeat click.
-  const handleDismiss = useCallback(() => {
-    setDismissedNotices(prev => (prev.includes(WELCOME_BANNER_ID) ? prev : [...prev, WELCOME_BANNER_ID]));
-  }, [setDismissedNotices]);
-
-  if (dismissedNotices.includes(WELCOME_BANNER_ID)) return null;
+  if (dismissed) return null;
 
   return (
     <div className="relative mb-5 overflow-clip rounded-lg bg-[#151515]">
@@ -71,9 +61,10 @@ function WelcomeBanner() {
               href to give it. `NavUtils.toDebatesPanel` is for links arriving from elsewhere; from a
               page the hub is already mounted on, opening it directly beats navigating to do it.
 
-              Claims named explicitly rather than leaning on the hook's default, matching "Join a
-              debate" in the debate feed: this is where the copy above sends the reader, and it
-              shouldn't follow the default if that default is ever retuned for the navbar badge.
+              Lobby named explicitly rather than leaning on the hook's default, matching "Join a
+              debate" in the debate feed: this is where the copy above sends the reader — "find your
+              first debate" is the question Lobby answers — and it shouldn't follow the default if
+              that default is ever retuned for the navbar badge.
 
               Styled as the inline prose link in the onboarding dialog, in white for the dark ground.
               `button` inherits font and letter-spacing from the base layer, so it reads as part of
@@ -90,7 +81,7 @@ function WelcomeBanner() {
           <button
             type="button"
             aria-expanded={isDebatesHubOpen}
-            onClick={() => openDebatesHub('claims')}
+            onClick={() => openDebatesHub('lobby')}
             className="text-white underline decoration-white underline-offset-2"
           >
             debate hub

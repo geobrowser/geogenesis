@@ -53,6 +53,36 @@ describe('buildSearchPath', () => {
     });
   });
 
+  // GEO-2876 added this, GEO-2898 is the first caller. The tag is the to-entity a `Tags` relation
+  // points at, which is what makes "claims a curator marked for debating" expressible here at all —
+  // without it the tagged set, a few hundred claims in a corpus of hundreds of thousands, never
+  // reached a ranked page.
+  describe('tag_ids', () => {
+    const DEBATE_TAG = '55c95b2626f8482cb9739ea99dfde438';
+
+    it('sends the tag hyphenated, as the endpoint expects', () => {
+      const path = buildSearchPath({ query: 'trump', tagIds: [DEBATE_TAG] });
+
+      expect(path).toContain('tag_ids=55c95b26-26f8-482c-b973-9ea99dfde438');
+    });
+
+    it('omits the param entirely when no tag is asked for', () => {
+      expect(buildSearchPath({ query: 'trump', tagIds: [] })).toBe('/search?query=trump&limit=10&offset=0');
+      expect(buildSearchPath({ query: 'trump' })).toBe('/search?query=trump&limit=10&offset=0');
+    });
+
+    it('composes with the type filter, which the endpoint ANDs against it', () => {
+      const path = buildSearchPath({
+        query: 'trump',
+        tagIds: [DEBATE_TAG],
+        typeIds: ['96f859efa1ca4b229372c86ad58b694b'],
+      });
+
+      expect(path).toContain('type_ids=96f859ef-a1ca-4b22-9372-c86ad58b694b');
+      expect(path).toContain('tag_ids=55c95b26-26f8-482c-b973-9ea99dfde438');
+    });
+  });
+
   it('omits additional_space_ids when the array is empty or undefined', () => {
     expect(buildSearchPath({ query: 'football', additionalSpaceIds: [] })).toBe(
       '/search?query=football&limit=10&offset=0'

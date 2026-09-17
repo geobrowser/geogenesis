@@ -12,7 +12,6 @@ import type { DebateClaim } from '~/core/debates/api';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import { useRetireConfirmedResponseIndexing } from '~/core/debates/retire-confirmed-response-indexing';
 import {
   ClaimResponseBatchBoundary,
   useClaimResponseSummaryBatch,
@@ -317,9 +316,6 @@ function ClaimListItem({
   const published = isClaimPublishedInSpace(claim, spaceId);
   const activeDebate = debateClaim?.active_debate ?? null;
 
-  // Kept when the Debate toggle went (GEO-2740): the toggle drew this side effect, but the
-  // snapshot it retires is what drives the notification that now creates readiness server-side.
-  useRetireConfirmedResponseIndexing({ debateClaim, entityId: claim.id, spaceId });
   // Catches up readiness for a position the viewer already held before GEO-2740. Temporary; see
   // the hook.
   useBackfillReadinessForHeldPosition({ readiness: debateClaim, entityId: claim.id, spaceId });

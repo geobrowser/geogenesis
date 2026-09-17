@@ -2,6 +2,7 @@
 
 import { usePrivy } from '@geogenesis/auth';
 import {
+  type Query,
   type QueryClient,
   type UseQueryResult,
   useMutation,
@@ -25,6 +26,7 @@ import {
   type DebateParticipantSummary,
   type DebateRematchClaimsResponse,
   type DebateRematchParticipant,
+  GEO_CHAT_CLAIM_IDS_PER_REQUEST,
   GeoChatRequestError,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
@@ -51,6 +53,7 @@ import {
   getRecordingUrl,
   getRematchLiveKitToken,
   handleDebateSharePrompt,
+  isAccountWarmingUp,
   leaveDebateRematch,
   listDebateClaims,
   listDebateRematchClaims,
@@ -85,6 +88,9 @@ import { type SpaceDebateSupport, useSpaceDebateSupport } from './space-debate-s
 import { withQueryData } from './with-query-data';
 
 export const debateQueryNetworkOptions = {
+  // Public and one-shot reads do not repeat themselves: a 503 answered to an anonymous visitor is
+  // one request, not four, and `hooks.test` holds that. Viewer-relative reads want the opposite —
+  // see `viewerReadRetryOptions` in the matchmaking hooks.
   retry: false,
   refetchOnReconnect: false,
   refetchOnWindowFocus: false,
@@ -226,6 +232,25 @@ function withOnlineChoiceAvatars<T extends { online_choices: Array<{ participant
  * `claims` comes back in no particular order: batches are keyed by sorted id so their query keys
  * survive the caller reordering or prepending ids. Key the result by `claim_entity_id`.
  */
+/** How often a refused claim-rows lookup asks again while geo-chat registers the account. */
+const VIEWER_ANSWER_RECOVERY_POLL_MS = 10_000;
+
+/**
+ * And how many times, because a wait that never ends is not a wait.
+ *
+ * Registration finishes in a minute or two, so nine polls at ten seconds covers it — the same
+ * ninety seconds `WARMING_UP_RETRIES` gives the matchmaking reads, which is deliberate: they are
+ * waiting for the same event, and a viewer should not find one half of the hub still trying while
+ * the other gave up. Unbounded, an account that never registers left every failed batch asking
+ * every ten seconds for the life of the tab, once per space, each one a fresh session exchange.
+ *
+ * Counted off `errorUpdateCount`, which is react-query's own and accumulates. Emphatically not
+ * `fetchFailureCount`, which was the obvious choice and is wrong: that one counts retries *within*
+ * a fetch and resets when the next one starts, so with `retry: false` it never exceeds one and the
+ * bound never bites. The test for this caught exactly that — sixty polls where ten were expected.
+ */
+const VIEWER_ANSWER_RECOVERY_POLLS = 9;
+
 export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimIds: string[] }>) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
@@ -254,6 +279,10 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
       claims: results.flatMap(result => result.data?.claims ?? []),
       isLoading: results.some(result => result.isLoading),
       isError: results.some(result => result.isError),
+      // Per batch, so a caller can ask about one claim rather than about the whole fan-out — see
+      // `unresolvedSpaceIds` below. Positional: react-query preserves the order of `queries`, and
+      // `replaceEqualDeep` keeps this array's identity across renders that do not change it.
+      statuses: results.map(result => result.status),
     }),
     []
   );
@@ -266,7 +295,7 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
     [groups]
   );
 
-  return useQueries({
+  const rows = useQueries({
     queries: batches.map(group => ({
       ...debateQueryNetworkOptions,
       queryKey: debateQueryKeys.claims(group.spaceId, group.claimIds, authenticated ? accountKey : null),
@@ -279,13 +308,65 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
           signal
         ),
       enabled: authenticated && group.claimIds.length > 0,
+      /**
+       * How a claim's answers recover from a refusal, rather than staying refused for the visit.
+       *
+       * `answersReady` is a "not yet" that is supposed to clear itself — until it does, every pill on the
+       * card is unpressable, which is right while the lookup is out and wrong the moment it could succeed.
+       * With `retry: false` and nothing to trigger a refetch, a viewer whose account geo-chat had not yet
+       * registered kept a panel of dead pills for the rest of the visit while the same claims in the main
+       * feed took positions perfectly well. The account had finished registering; nothing asked again.
+       *
+       * So: poll, but only while being refused, and only for the reason that resolves on its own.
+       * `refetchInterval` returns `false` on success and on every other failure, which makes this a wait
+       * for one specific event and not a background poll — a real outage still fails once and stays
+       * failed, and a settled lookup is never asked twice.
+       *
+       * Ten seconds against a wait that runs a minute or two: short enough that the pills come alive
+       * while the viewer is still looking at them, long enough that a slow registration costs a handful
+       * of requests rather than a stream of them.
+       */
+      refetchInterval: (query: Query<DebateClaimsResponse, Error>) =>
+        query.state.status === 'error' &&
+        isAccountWarmingUp(query.state.error) &&
+        query.state.errorUpdateCount <= VIEWER_ANSWER_RECOVERY_POLLS
+          ? VIEWER_ANSWER_RECOVERY_POLL_MS
+          : false,
+      // Same reason `useClaimSpaceAllowlist` sets it: a tab nobody is looking at should not spend
+      // requests, and a refocus refetches this anyway.
+      refetchIntervalInBackground: false,
     })),
     combine,
   });
+
+  /**
+   * The spaces this lookup cannot yet speak for, which is the question a *card* has.
+   *
+   * `isError` and `isLoading` are about the fan-out: one batch of one space failing makes both of
+   * them say something about all of them. Callers were reading that as "we do not know this
+   * viewer's side", so a single unreadable space left every pill in the hub panel dead — including
+   * claims in spaces that had answered perfectly well. It showed up the moment the panel stopped
+   * being scoped to one space: geo-chat refuses rows for a space the viewer has no access to, that
+   * refusal never resolves, and it took the whole panel down with it while the same claims in the
+   * main feed stayed pressable, because that surface resolves each claim from its own row.
+   *
+   * A batch still pending counts as unresolved for the same reason it always did — `null` is the
+   * answer for "holds no position" and for "nobody has asked yet" alike, and a pill drawn unselected
+   * over the second republishes a side instead of clearing it.
+   */
+  const unresolvedSpaceIds = React.useMemo(() => {
+    const unresolved = new Set<string>();
+    batches.forEach((group, index) => {
+      if (rows.statuses[index] !== 'success') unresolved.add(group.spaceId);
+    });
+    return unresolved;
+  }, [batches, rows.statuses]);
+
+  return React.useMemo(() => ({ ...rows, unresolvedSpaceIds }), [rows, unresolvedSpaceIds]);
 }
 
 /** Maximum number of ids accepted by geo-chat's per-space debate-claims endpoint. */
-export const DEBATE_CLAIM_ID_BATCH_SIZE = 50;
+export const DEBATE_CLAIM_ID_BATCH_SIZE = GEO_CHAT_CLAIM_IDS_PER_REQUEST;
 
 /**
  * Smallest chunk a content-defined boundary may close, and how often such a boundary occurs. Chosen
@@ -855,8 +936,12 @@ export function useLeaveDebateRematch(sessionId: string) {
 /**
  * geo-chat rejects a request naming more than this many claims outright, so a caller browsing more
  * claims than this has to ask in batches rather than in one request that 400s.
+ *
+ * {@link GEO_CHAT_CLAIM_IDS_PER_REQUEST}, rather than a number of its own. This said a hundred
+ * against a server that caps at fifty, so every batch that filled past fifty 400'd with
+ * `too_many_claim_ids` — permanently, since `debateQueryNetworkOptions` sets `retry: false`.
  */
-export const REMATCH_CLAIM_ID_BATCH_SIZE = 100;
+export const REMATCH_CLAIM_ID_BATCH_SIZE = GEO_CHAT_CLAIM_IDS_PER_REQUEST;
 
 /**
  * {@link useDebateRematchClaims} for a list of ids of any length, split across as many requests as
