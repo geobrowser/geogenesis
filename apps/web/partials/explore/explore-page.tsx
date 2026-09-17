@@ -73,6 +73,7 @@ export function ExplorePage({
           initialSort="best"
           showSortFilter
           showTypeFilter
+          showTopicFilter
           dividerBeforeFeed
           titleOpensSidePanel
           feedTopSpacingClassName=""

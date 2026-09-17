@@ -7,6 +7,12 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
+import {
+  keepSelectableTopics,
+  keepSelectedVisible,
+  orderFacetOptions,
+  toggleId,
+} from '~/core/debates/matchmaking/topic-facets';
 import { memberSpaceSelection, useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
@@ -16,7 +22,9 @@ import {
   toggleExploreTypeId,
 } from '~/core/explore/explore-type-filter';
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
+import { useExploreTopicFacet } from '~/core/explore/use-explore-topic-facet';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { normId } from '~/core/utils/norm-id';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Menu, MenuItem } from '~/design-system/menu';
@@ -96,6 +104,9 @@ type EntityFeedProps = {
   showSortFilter?: boolean;
   /** Whether to render the Explore-only, locally persisted type checklist. Defaults to false. */
   showTypeFilter?: boolean;
+  /**
+   * Whether to render the topics dropdown with per-topic counts (Explore only). Defaults to false. */
+  showTopicFilter?: boolean;
   /** Override the spacing between the filter row and the feed. Defaults to `mt-8`. */
   feedTopSpacingClassName?: string;
   /** When true, renders a divider line between the filter row and the first feed card. */
@@ -117,6 +128,8 @@ async function fetchFeedPage(
     /** Empty means no space narrowing at all. */
     spaceIds: readonly string[];
     typeIds: readonly string[] | undefined;
+    /** Empty means no topic narrowing. */
+    topicIds: readonly string[];
     cursor: string | undefined;
   }
 ): Promise<ExploreFeedResult> {
@@ -129,6 +142,7 @@ async function fetchFeedPage(
   // as "no narrowing", which is the same answer with one fewer special string in it.
   if (params.spaceIds.length > 0) sp.set('spaceIds', params.spaceIds.join(','));
   if (params.typeIds !== undefined) sp.set('typeIds', params.typeIds.join(','));
+  if (params.topicIds.length > 0) sp.set('topicIds', params.topicIds.join(','));
   if (params.cursor) sp.set('cursor', params.cursor);
   const res = await fetch(`${apiEndpoint}?${sp.toString()}`, { credentials: 'include' });
   if (!res.ok) {
@@ -151,12 +165,14 @@ export function EntityFeed({
   showTimeFilter = true,
   showSortFilter = false,
   showTypeFilter = false,
+  showTopicFilter = false,
   feedTopSpacingClassName,
   dividerBeforeFeed = false,
   titleOpensSidePanel = false,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExploreSort>(initialSort);
+  const [topicIds, setTopicIds] = React.useState<string[]>([]);
   // Seeded on the first render rather than by the hook's effect. Both sides are server props on
   // this surface, so the answer is already in hand — and starting empty would subscribe the feed to
   // the unfiltered query, fire that request, and only then narrow, showing the wide feed in
@@ -185,12 +201,14 @@ export function EntityFeed({
   const typeIds =
     showTypeFilter && selectedTypeIds.length !== EXPLORE_ENTITY_TYPE_IDS.length ? selectedTypeIds : undefined;
   const typeIdsKey = typeIds?.join(',') ?? null;
+  const topicIdsKey = topicIds.join(',');
   // One condition behind both the dropdown and the request, so what the viewer can see and what
   // the feed is filtered by cannot drift apart. `time` state is left alone while hidden, so
   // returning to Top restores the range the viewer last picked rather than resetting it.
   const timeRangeApplies = showTimeFilter && SORTS_WITH_TIME_RANGE.includes(sort);
   const requestedTime = timeRangeApplies ? time : undefined;
-  const showFilterRow = showSortFilter || timeRangeApplies || lockedSpaceId == null || showTypeFilter;
+  const showFilterRow =
+    showSortFilter || timeRangeApplies || lockedSpaceId == null || showTypeFilter || showTopicFilter;
 
   React.useEffect(() => {
     if (!showTypeFilter) return;
@@ -223,10 +241,18 @@ export function EntityFeed({
   const { smartAccount } = useSmartAccount();
   const smartAccountAddress = smartAccount?.account.address ?? null;
   // Keyed on what is actually sent: two Best feeds differing only in a hidden range are the same
-  // request, and caching them apart would refetch on a change the viewer never made.
-  const queryKey = showTypeFilter
-    ? [apiEndpoint, sort, requestedTime, spaceIdsKey, typeIdsKey, smartAccountAddress]
-    : [apiEndpoint, sort, requestedTime, spaceIdsKey, smartAccountAddress];
+  // request, and caching them apart would refetch on a change the viewer never made. The type and
+  // topic keys collapse to null on surfaces that don't show those filters, so their absence never
+  // splits the cache.
+  const queryKey = [
+    apiEndpoint,
+    sort,
+    requestedTime,
+    spaceIdsKey,
+    showTypeFilter ? typeIdsKey : null,
+    showTopicFilter ? topicIdsKey : null,
+    smartAccountAddress,
+  ];
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
     queryKey,
@@ -236,6 +262,7 @@ export function EntityFeed({
         time: requestedTime,
         spaceIds: requestedSpaceIds,
         typeIds,
+        topicIds: showTopicFilter ? topicIds : [],
         cursor: pageParam as string | undefined,
       }),
     initialPageParam: undefined as string | undefined,
@@ -339,6 +366,42 @@ export function EntityFeed({
     count => `${count} spaces`
   );
 
+  const facetSpaceIds = React.useMemo(
+    () => (spaceIds.length > 0 ? spaceIds : initialSpaceOptions.map(option => option.value)).map(normId),
+    [spaceIds, initialSpaceOptions]
+  );
+  const topicFacet = useExploreTopicFacet({
+    spaceIds: facetSpaceIds,
+    typeIds,
+    time: requestedTime ?? 'all',
+    topicIds,
+    enabled: showTopicFilter && typeSelectionLoaded,
+  });
+
+  React.useEffect(() => {
+    if (!showTopicFilter) return;
+    setTopicIds(current => keepSelectableTopics(current, topicFacet.topics, topicFacet.settled));
+  }, [showTopicFilter, topicFacet.topics, topicFacet.settled]);
+
+  const topicOptions = React.useMemo(
+    () =>
+      orderFacetOptions(keepSelectedVisible(topicFacet.topics, topicIds), topicIds).map(option => ({
+        value: option.id,
+        label: option.name ?? 'Topic',
+        pending: option.name === null && topicFacet.namesPending,
+        count: option.count,
+      })),
+    [topicFacet.topics, topicFacet.namesPending, topicIds]
+  );
+  const onTopicToggle = React.useCallback((id: string) => setTopicIds(current => toggleId(current, id)), []);
+  const onTopicsClear = React.useCallback(() => setTopicIds([]), []);
+  const topicLabel = pickerLabel(
+    topicIds.length,
+    'Any topic',
+    () => topicOptions.find(option => option.value === topicIds[0])?.label ?? 'Any topic',
+    count => `${count} topics`
+  );
+
   return (
     <div className="mx-auto w-full max-w-[880px]">
       {showFilterRow ? (
@@ -411,7 +474,7 @@ export function EntityFeed({
               ))}
             </Menu>
           ) : null}
-          {lockedSpaceId == null || showTypeFilter ? (
+          {lockedSpaceId == null || showTypeFilter || showTopicFilter ? (
             <div className="ml-auto flex items-center gap-3">
               {lockedSpaceId == null ? (
                 <HubMultiFilterMenu
@@ -422,6 +485,18 @@ export function EntityFeed({
                   onClear={onSpacesClear}
                   clearLabel="Any space"
                   showImages={false}
+                />
+              ) : null}
+              {showTopicFilter ? (
+                <HubMultiFilterMenu
+                  label={topicLabel}
+                  options={topicOptions}
+                  values={topicIds}
+                  onToggle={onTopicToggle}
+                  onClear={onTopicsClear}
+                  clearLabel="Any topic"
+                  showImages={false}
+                  countsPending={topicFacet.countsPending}
                 />
               ) : null}
               {showTypeFilter ? (
