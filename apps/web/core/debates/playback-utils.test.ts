@@ -5,6 +5,7 @@ import {
   clampSeconds,
   hasProcessedVideo,
   normalizeTurnDurationsMs,
+  pairPlayheadSeconds,
   playBothWithMutedFallback,
   recordingWindowOffsetsSeconds,
   timelineSecondsFor,
@@ -135,6 +136,35 @@ describe('recordingWindowOffsetsSeconds', () => {
     const offsets = recordingWindowOffsetsSeconds('not-a-date', null, Number.NaN);
     expect(offsets.slot1).toBe(0);
     expect(offsets.slot2).toBe(0);
+  });
+});
+
+describe('pairPlayheadSeconds (GEO-2947)', () => {
+  const offsets = { slot1: 1, slot2: 3 };
+  const video = (paused: boolean, currentTime: number) => ({ paused, currentTime });
+
+  it('reads slot 1 while it is running', () => {
+    expect(pairPlayheadSeconds(video(false, 10), video(false, 8), offsets)).toBe(11);
+  });
+
+  it('falls back to slot 1 when both are paused', () => {
+    expect(pairPlayheadSeconds(video(true, 10), video(true, 8), offsets)).toBe(11);
+  });
+
+  /**
+   * THE REGRESSION. A hidden tab stops the element it considers silent. If that is slot 1, its
+   * clock freezes where it stopped while slot 2 carries the debate on — so trusting slot 1 both
+   * freezes the turn (audio never reaches the next speaker) and rewinds the pair on return,
+   * replaying everything heard in the background.
+   */
+  it('reads the element still running when slot 1 is the one that stopped', () => {
+    // Slot 1 frozen at 10 (debate 11) while slot 2 has reached 20 (debate 23).
+    expect(pairPlayheadSeconds(video(true, 10), video(false, 20), offsets)).toBe(23);
+  });
+
+  it('survives an element that is not mounted yet', () => {
+    expect(pairPlayheadSeconds(null, null, offsets)).toBe(1);
+    expect(pairPlayheadSeconds(null, video(false, 20), offsets)).toBe(23);
   });
 });
 

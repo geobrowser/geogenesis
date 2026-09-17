@@ -93,6 +93,35 @@ function offsetSeconds(startedAtMs: number | null, windowStartMs: number): numbe
   return (startedAtMs - windowStartMs) / 1_000;
 }
 
+/** What `pairPlayheadSeconds` needs off an element, so tests need not build a whole video. */
+export type ClockVideo = Pick<HTMLVideoElement, 'paused' | 'currentTime'>;
+
+/**
+ * Where the debate is, in debate-timeline seconds, given the two recordings' own clocks.
+ *
+ * Slot 1 is the clock. The pair is kept in lockstep, so its position plus its recording offset
+ * is the debate's position, and every seek is expressed that way.
+ *
+ * The exception is a pair that has been split without anyone deciding to — a browser stopping
+ * the element it considers silent once the tab is off screen (GEO-2947). If slot 1 is the one
+ * that got stopped, its clock is frozen at wherever it stopped while slot 2 carries on, and
+ * reading the debate off it is wrong twice over: the turn never advances, so audio never moves
+ * to the next speaker, and the resume on return seeks the pair back to the frozen position,
+ * replaying everything the viewer heard in the background.
+ *
+ * So: whichever element is actually running is the clock, slot 1 first. With both paused —
+ * the ordinary paused, scrubbing and pre-resume states — it is slot 1 again, unchanged.
+ */
+export function pairPlayheadSeconds(
+  primary: ClockVideo | null,
+  secondary: ClockVideo | null,
+  offsets: { slot1: number; slot2: number }
+): number {
+  if (primary && !primary.paused) return primary.currentTime + offsets.slot1;
+  if (secondary && !secondary.paused) return secondary.currentTime + offsets.slot2;
+  return (primary?.currentTime ?? 0) + offsets.slot1;
+}
+
 export function participantForSlot(debate: Debate, slot: ParticipantSlot) {
   return debate.participants.find(participant => participant.participant_slot === slot) ?? null;
 }

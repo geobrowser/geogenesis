@@ -443,6 +443,75 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
     expect(result.current.error).toBeNull();
   });
 
+  /**
+   * Copilot's catch. Standing down off screen keeps the *current* speaker running — but only
+   * until the turn changes. At the boundary `audible` moves to the other recording, and if that
+   * is the one the browser stopped, the debate goes silent for the rest of it. The stopped
+   * element has to be aligned and started, without recording a pause.
+   */
+  it('restarts the newly speaking video when the turn crosses while hidden', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    visibilityState = 'hidden';
+    // Slot 2 is the muted element for all of slot 1's turn, so it is the one a hidden tab stops.
+    slot2.browserPause();
+    // Slot 1 carries on and crosses into slot 2's turn (30s each, slot 1 speaks first).
+    slot1.currentTime = 35;
+
+    act(() => result.current.onPlaybackTick());
+
+    expect(result.current.turnState?.slot).toBe(2); // the turn moved with the running element
+    await act(async () => {
+      slot2.settlePlay();
+      await Promise.resolve();
+    });
+    expect(slot2.paused).toBe(false); // ...and the speaker was started rather than left stopped
+    expect(slot2.currentTime).toBeCloseTo(35, 1); // aligned to where the debate actually is
+    expect(result.current.userPaused).toBe(false);
+    expect(result.current.error).toBeNull();
+  });
+
+  /** ...but a tab where the browser stopped *both* is nobody's audio. Leave it off screen. */
+  it('does not restart anything while hidden when the whole pair is stopped', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    visibilityState = 'hidden';
+    slot1.browserPause();
+    slot2.browserPause();
+
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.paused).toBe(true);
+    expect(slot2.paused).toBe(true);
+  });
+
+  /**
+   * Copilot's suppressed comment. `resumeBoth` seeks the pair to the clock's position, and slot 1
+   * is the clock — so returning to a tab where slot 1 was the stopped element used to rewind
+   * slot 2 to slot 1's frozen position and replay everything heard in the background. The
+   * ticket's "returning to the tab: no reset" covers exactly this.
+   */
+  it('resumes from where the running video got to, not from the stopped one', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    visibilityState = 'hidden';
+    slot1.browserPause(); // frozen at 0
+    slot2.currentTime = 25; // slot 2 kept playing while the tab was away
+
+    await act(async () => {
+      setVisibility('visible');
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    // Both recordings start at the debate origin in the fixture, so debate time is element time.
+    expect(slot2.currentTime).toBeCloseTo(25, 1); // not rewound to slot 1's frozen 0
+    expect(slot1.currentTime).toBeCloseTo(25, 1); // and slot 1 catches up to it
+    expect(result.current.playing).toBe(true);
+  });
+
   /** A pair the browser let run must not be seeked on return — that is the "no reset" half. */
   it('does not touch a pair that kept playing while the tab was hidden', async () => {
     const { result, slot1, slot2 } = await playing();

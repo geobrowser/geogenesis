@@ -11,6 +11,7 @@ import {
   type TurnState,
   clampSeconds,
   normalizeTurnDurationsMs,
+  pairPlayheadSeconds,
   participantForSlot,
   playBothWithMutedFallback,
   recordingWindowOffsetsSeconds,
@@ -44,6 +45,11 @@ const SYNC_SEEK_DRIFT_SECONDS = 0.75;
 const SYNC_NUDGE_RATE = 0.03;
 /** Floor between hard seeks, so a seek that itself causes drift cannot start a storm. */
 const MIN_SYNC_SEEK_INTERVAL_MS = 2_000;
+/**
+ * Floor between attempts to restart an element the browser stopped while the tab is off screen.
+ * Same reasoning as the seek floor: a browser that re-stops it must not cost a seek per tick.
+ */
+const MIN_BACKGROUND_RESTART_INTERVAL_MS = 2_000;
 /** No forward progress for this long, while unpaused, counts as stalled rather than slow. */
 const STALL_AFTER_MS = 500;
 /** Progress smaller than this is float noise on `currentTime`, not playback. */
@@ -98,6 +104,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   /** Slot 1's last forward progress, for telling "stalled" apart from "merely not paused". */
   const primaryProgressRef = React.useRef<{ seconds: number; at: number } | null>(null);
   const lastSyncSeekAtRef = React.useRef(0);
+  /** See MIN_BACKGROUND_RESTART_INTERVAL_MS. */
+  const lastBackgroundRestartAtRef = React.useRef(0);
   /**
    * Which resume attempt is current.
    *
@@ -274,9 +282,9 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       pendingSeekSecondsRef.current = null;
     }
 
-    // slot 1 is the clock: the debate-timeline playhead is its position plus the offset
-    // between when it started recording and when the debate window opened.
-    const playhead = clampSeconds((primaryVideo?.currentTime ?? 0) + offsets.slot1, timelineSeconds);
+    // Slot 1 is the clock — except when it is the element a hidden tab stopped, in which case
+    // its clock is frozen and slot 2 is carrying the debate. See `pairPlayheadSeconds`.
+    const playhead = clampSeconds(pairPlayheadSeconds(primaryVideo, secondaryVideo, offsets), timelineSeconds);
     setPlayheadSeconds(playhead);
 
     // Lock slot 2 to slot 1, offset by the gap between when the two recordings started, so
@@ -398,8 +406,42 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       return;
     }
 
-    setTurnState(turnStateForTime(debate.first_participant_slot, turnDurations, playhead));
-  }, [debate.first_participant_slot, offsets.slot1, offsets.slot2, seekVideosTo, timelineSeconds, turnDurations]);
+    const turn = turnStateForTime(debate.first_participant_slot, turnDurations, playhead);
+    setTurnState(turn);
+
+    // The turn moving to an element the browser stopped off screen is the one case where a
+    // hidden tab needs us to act rather than stand down.
+    //
+    // Standing down keeps the *current* speaker running, which is all the viewer can hear right
+    // now — but only until the turn changes. At the boundary `audible` moves to the other
+    // recording, and if that is the one the browser stopped, the debate goes silent for the rest
+    // of it. So bring it back: align it to where the running element has got to, and start it.
+    //
+    // Deliberately narrow. It needs a pair that is genuinely split — one element still running —
+    // so a tab where the browser stopped *both* (the feed's muted default, which nobody is
+    // listening to) is left alone rather than being restarted off screen for no one. A floor
+    // between attempts keeps a browser that simply re-stops it from turning this into a seek
+    // storm; seeks on these cue-less WebM files are expensive (GEO-2828). And it never records a
+    // pause or an error on failure: refusing to start a video in a background tab is the
+    // browser's prerogative, not something the viewer needs to be told about.
+    if (hidden && turn) {
+      const speaking = turn.slot === 1 ? primaryVideo : secondaryVideo;
+      const listening = turn.slot === 1 ? secondaryVideo : primaryVideo;
+      const speakingOffset = turn.slot === 1 ? offsets.slot1 : offsets.slot2;
+      if (
+        speaking?.paused &&
+        listening &&
+        !listening.paused &&
+        now - lastBackgroundRestartAtRef.current > MIN_BACKGROUND_RESTART_INTERVAL_MS
+      ) {
+        lastBackgroundRestartAtRef.current = now;
+        speaking.currentTime = Math.max(0, playhead - speakingOffset);
+        void speaking.play().catch(() => {
+          /* The browser is entitled to refuse an off-screen start; the return path retries. */
+        });
+      }
+    }
+  }, [debate.first_participant_slot, offsets, seekVideosTo, timelineSeconds, turnDurations]);
 
   const pauseBoth = React.useCallback(() => {
     // Supersede any resume still confirming, so it cannot un-pause the viewer.
@@ -418,8 +460,11 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // awaiting, so two overlapping activations cannot both write state.
     const generation = ++resumeGenerationRef.current;
     setError(null);
-    // Realign slot 2 to slot 1's position so a resume can't leave the recordings drifting.
-    seekVideosTo(clampSeconds(primaryVideo.currentTime + offsets.slot1, timelineSeconds));
+    // Realign the pair so a resume can't leave the recordings drifting. Off the *running*
+    // element's clock, not slot 1's unconditionally: a resume on return from a backgrounded tab
+    // is exactly the case where slot 1 may be the one the browser stopped, and seeking to its
+    // frozen position would rewind the debate over everything just heard (GEO-2947).
+    seekVideosTo(clampSeconds(pairPlayheadSeconds(primaryVideo, secondaryVideo, offsets), timelineSeconds));
     // allSettled never rejects, so a failed play() (e.g. blocked by autoplay
     // policy) leaves the video paused rather than throwing — check both the
     // settled results and the paused state, and surface the error inline.
@@ -452,7 +497,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     if (outcome === 'playing-muted') setMutedByUser(true);
     setPlaying(true);
     setUserPaused(false);
-  }, [offsets.slot1, seekVideosTo, setMutedByUser, timelineSeconds]);
+  }, [offsets, seekVideosTo, setMutedByUser, timelineSeconds]);
 
   const playFromStart = React.useCallback(async () => {
     const primaryVideo = slot1VideoRef.current;
