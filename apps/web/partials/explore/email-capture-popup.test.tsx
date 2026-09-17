@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { isChatOpenAtom } from '~/core/state/chat-store';
 
+import { entitySidePanelAtom } from '~/atoms';
+
 import { ExploreEmailCapturePopup } from './email-capture-popup';
 
 const store = getDefaultStore();
@@ -15,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   ready: true,
   authenticated: false,
   isModalOpen: false,
+  isDebatesHubOpen: false,
   fetch: vi.fn(),
 }));
 
@@ -23,6 +26,11 @@ vi.mock('@geogenesis/auth', () => ({
 }));
 
 // `ClientOnly` renders nothing until mounted, which is right in a browser and only noise here.
+// The hub's own hook reaches for matchmaking state; only its open flag matters here.
+vi.mock('~/core/debates/matchmaking/use-debates-hub', () => ({
+  useDebatesHub: () => ({ isOpen: mocks.isDebatesHubOpen, open: vi.fn() }),
+}));
+
 vi.mock('~/design-system/client-only', () => ({
   ClientOnly: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -40,7 +48,9 @@ beforeEach(() => {
   mocks.ready = true;
   mocks.authenticated = false;
   mocks.isModalOpen = false;
+  mocks.isDebatesHubOpen = false;
   store.set(isChatOpenAtom, false);
+  store.set(entitySidePanelAtom, null);
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ json: async () => ({ result: 'subscribed' }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -298,6 +308,73 @@ describe('ExploreEmailCapturePopup', () => {
     const artwork = popup()?.querySelector('img');
     expect(artwork).not.toBeNull();
     expect(artwork?.className).toContain('object-right');
+  });
+
+  // Opened from the welcome banner on this very page, so a logged-out reader is one click away.
+  // Desktop is `fixed top-11 right-0 bottom-0 z-[200]` and this card sits inside that column;
+  // mobile is `fixed inset-0`, which this would visually escape.
+  it('waits while the debates hub is open, then returns', () => {
+    mocks.isDebatesHubOpen = true;
+    const view = render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    expect(popup()).toBeNull();
+
+    mocks.isDebatesHubOpen = false;
+    view.rerender(<ExploreEmailCapturePopup />);
+
+    expect(popup()).toBeInTheDocument();
+  });
+
+  // Not in the review, but the same mistake and the likeliest of the four to be met: every card
+  // title on this page opens it (`titleOpensSidePanel`), at `fixed inset-0 z-[200]`.
+  it('waits while the entity side panel is open, then returns', () => {
+    store.set(entitySidePanelAtom, { entityId: 'some-entity', spaceId: 'some-space' } as never);
+    const view = render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    expect(popup()).toBeNull();
+
+    act(() => store.set(entitySidePanelAtom, null));
+    view.rerender(<ExploreEmailCapturePopup />);
+
+    expect(popup()).toBeInTheDocument();
+  });
+
+  // The success state is exempt from the *dismissal* it just recorded, and from nothing else.
+  // Bypassing the whole eligibility check left a logged-out-only card on screen for someone who
+  // had signed in while reading their own confirmation.
+  it('disappears if the reader signs in while the confirmation is open', async () => {
+    const view = render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reader@example.com' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+    });
+    expect(await screen.findByRole('status')).toBeInTheDocument();
+
+    // They sign in without closing the card.
+    mocks.authenticated = true;
+    view.rerender(<ExploreEmailCapturePopup />);
+
+    expect(popup()).toBeNull();
+  });
+
+  // The other half, so the fix above does not simply delete the confirmation for everyone else.
+  it('keeps the confirmation up for a reader who stays logged out', async () => {
+    const view = render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reader@example.com' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+    });
+
+    view.rerender(<ExploreEmailCapturePopup />);
+
+    expect(popup()).toBeInTheDocument();
+    expect(screen.getByRole('status').textContent).toContain('You are on the list.');
   });
 
   // Privy's modal is a sign-in the reader actively started; stacking on it is the worse

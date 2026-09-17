@@ -7,9 +7,12 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtomValue } from 'jotai';
 
+import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
 import { timeoutSignal } from '~/core/timeout-signal';
+
+import { entitySidePanelAtom } from '~/atoms';
 import { isChatOpenAtom } from '~/core/state/chat-store';
 
 import { ClientOnly } from '~/design-system/client-only';
@@ -61,6 +64,8 @@ export function ExploreEmailCapturePopup() {
 function EmailCapturePopup() {
   const { ready, authenticated, isModalOpen } = usePrivy();
   const isChatOpen = useAtomValue(isChatOpenAtom);
+  const { isOpen: isDebatesHubOpen } = useDebatesHub();
+  const entitySidePanelTarget = useAtomValue(entitySidePanelAtom);
   const { dismissed, remember: rememberDismissed } = useDismissedNotice(EMAIL_CAPTURE_ID);
   const [scrolledEnough, setScrolledEnough] = React.useState(false);
   const [email, setEmail] = React.useState('');
@@ -70,18 +75,26 @@ function EmailCapturePopup() {
   // two are different acts: one remembers, one closes.
   const [closed, setClosed] = React.useState(false);
 
-  // Signed in is never, not "not yet": the reader already has an account, and the list is for
-  // people who do not.
+  // Anything the reader deliberately opened owns the screen until they close it, and this waits
+  // rather than competing. Listed rather than folded into a z-index rule because the problem is not
+  // really stacking order: each of these is a surface someone chose to open, and interrupting it
+  // with an unasked-for signup card is the worse of the two interruptions whichever draws on top.
   //
-  // `ready` is what makes that true rather than nearly true. Privy reports `authenticated: false`
-  // while it is still restoring a session from storage, so without it a signed-in reader returning
-  // to a restored scroll position is briefly indistinguishable from an anonymous one — long enough
-  // to be shown a signup card and to start typing into it before it vanishes under them.
-  // `core/auth/use-sign-in-deep-link.ts` gates on `ready` for the same reason.
-  const eligible = ready && !authenticated && !dismissed;
+  //  - Privy's modal is a sign-in they actively started.
+  //  - The chat panel shares this exact corner (`chat-panel.tsx` is `z-1100` at the same
+  //    `fixed right-4 bottom-…`), so one above it covers its controls and takes their clicks.
+  //  - The debates hub opens from the welcome banner on this very page, so a logged-out reader
+  //    reaches it in one click. On desktop it is `fixed top-11 right-0 bottom-0 z-[200]` — this
+  //    card sits inside that column; on mobile it is `fixed inset-0`, which this would escape.
+  //  - The entity side panel is what every card title opens here (`titleOpensSidePanel`), at
+  //    `fixed inset-0 z-[200]`. Not in the review, but the same mistake and the likeliest to be
+  //    met, since reading a claim is the ordinary thing to do on this page.
+  //
+  // All reactive, so the popup returns on its own once they close whichever it was.
+  const anOverlayIsOpen = isModalOpen || isChatOpen || isDebatesHubOpen || entitySidePanelTarget !== null;
 
   React.useEffect(() => {
-    if (!eligible || scrolledEnough) return;
+    if (authenticated || dismissed || scrolledEnough) return;
 
     const check = () => {
       if (window.scrollY >= window.innerHeight * SCROLL_TRIGGER_VIEWPORTS) setScrolledEnough(true);
@@ -93,7 +106,7 @@ function EmailCapturePopup() {
     check();
     window.addEventListener('scroll', check, { passive: true });
     return () => window.removeEventListener('scroll', check);
-  }, [eligible, scrolledEnough]);
+  }, [authenticated, dismissed, scrolledEnough]);
 
   /** What the close button does: remember it, and take it off the screen now. */
   const close = React.useCallback(() => {
@@ -134,20 +147,23 @@ function EmailCapturePopup() {
     [email, rememberDismissed]
   );
 
-  // Privy's own modal is a sign-in the reader has actively started. Stacking a second ask on top of
-  // it would be the worse of the two interruptions, so this waits rather than competing — and
-  // returns on its own once they close it, since `isModalOpen` is reactive.
-  // The open chat panel is the same judgement and the sharper case: it is not merely another
-  // surface but *this* corner at *this* stacking order (`partials/chat/chat-panel.tsx` is `z-1100`
-  // at the same `fixed right-4 bottom-…`), so sitting one above it does not sit beside it — it
-  // covers the panel's own controls and takes their clicks. Whoever opened the panel is reading it;
-  // this waits for them to close it.
-  // `status === 'done'` keeps it on screen after a successful subscribe. Subscribing also records
-  // the dismissal — which is what stops it returning next visit — and without this exception that
-  // same write would make the popup ineligible and unmount it on the spot, so the reader would
-  // never see the confirmation for the thing they just did.
-  if (closed || !ready || (!eligible && status !== 'done') || !scrolledEnough || isModalOpen || isChatOpen)
-    return null;
+  // Signed in is never, not "not yet": the reader already has an account, and the list is for
+  // people who do not. Unconditional, and deliberately outside the `done` exception below — an
+  // earlier version let the success state bypass the whole eligibility check, so signing in while
+  // the confirmation was open left a logged-out-only card sitting there for a logged-in reader.
+  //
+  // `ready` is what makes "signed in" true rather than nearly true. Privy reports
+  // `authenticated: false` while it is still restoring a session from storage, so without it a
+  // signed-in reader returning to a restored scroll position is briefly indistinguishable from an
+  // anonymous one — long enough to be shown a signup card and to start typing into it before it
+  // vanishes under them. `core/auth/use-sign-in-deep-link.ts` gates on `ready` for the same reason.
+  if (closed || !ready || authenticated || !scrolledEnough || anOverlayIsOpen) return null;
+
+  // Dismissal is the one thing the confirmation is exempt from, and only that. Subscribing records
+  // the dismissal — which is what stops the popup returning next visit — and without this the same
+  // write would unmount the card on the spot, so nobody would see the confirmation for the thing
+  // they just did.
+  if (dismissed && status !== 'done') return null;
 
   const errorMessage =
     status === 'invalid-email'
