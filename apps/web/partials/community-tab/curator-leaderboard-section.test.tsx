@@ -32,8 +32,10 @@ vi.mock('~/design-system/avatar', () => ({
   Avatar: () => <div data-testid="avatar" />,
 }));
 
+// Spreads the rest, or a link whose name comes from `aria-label` rather than its text — the expand
+// icon — arrives with no accessible name at all, and the mock decides what the test can see.
 vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  PrefetchLink: ({ children, ...rest }: React.ComponentPropsWithoutRef<'a'>) => <a {...rest}>{children}</a>,
 }));
 
 function row(overrides: Partial<CuratorLeaderboardResult['rows'][number]> = {}) {
@@ -200,24 +202,27 @@ describe('CuratorLeaderboardSection — the viewer’s own row', () => {
 });
 
 describe('CuratorLeaderboardSection — the way out to the full board', () => {
-  const viewAll = () => screen.getByRole('link', { name: 'View all' });
+  const expand = () => screen.getByRole('link', { name: 'View the full leaderboard' });
 
   /**
-   * The same "View all" the bounties sections on this tab carry, rather than a second kind of
-   * full-screen affordance beside them. One tab with two ways of reaching the full version of
-   * something is a difference that implies one of them does something else.
+   * The expand affordance, not the bounties sections' "View all". Those lead to the larger
+   * collection they are a slice of; this leads to the same board with the room to show all of it,
+   * which is what the arrows mean everywhere else in the app.
+   *
+   * A link rather than a button, so it opens in a tab on a modified click and shows its destination
+   * on hover — the whole point of the board having a route.
    */
   it('offers the tab a link to the board’s own page', () => {
     renderSection(result(board(12)));
 
-    expect(viewAll().getAttribute('href')).toBe('/space/space-1/community/leaderboard');
+    expect(expand().getAttribute('href')).toBe('/space/space-1/community/leaderboard');
   });
 
   // Nothing has no fuller version of itself.
   it('is not offered for a board with nothing on it', () => {
     renderSection(result([]));
 
-    expect(screen.queryByRole('link', { name: 'View all' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'View the full leaderboard' })).toBeNull();
   });
 
   /**
@@ -236,7 +241,7 @@ describe('CuratorLeaderboardSection — the way out to the full board', () => {
   it('offers no link from the page itself', () => {
     renderSection(result(board(12)), { expanded: true });
 
-    expect(screen.queryByRole('link', { name: 'View all' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'View the full leaderboard' })).toBeNull();
   });
 
   // It is what the board is *of*, so it comes along rather than being left on the tab.

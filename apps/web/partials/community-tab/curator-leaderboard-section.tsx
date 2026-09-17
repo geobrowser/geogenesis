@@ -20,6 +20,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { NavUtils, PagesPaginationPlaceholder, getPaginationPages } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { Fullscreen } from '~/design-system/icons/full-screen';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
@@ -306,8 +307,12 @@ export function CuratorLeaderboardSection({ spaceId, initialData, expanded = fal
             contentClassName="max-w-[180px]"
           />
           {!expanded && rows.length > 0 ? (
-            <Link href={NavUtils.toCommunityLeaderboard(spaceId)} className={FILTER_PILL_CLASS}>
-              View all
+            <Link
+              href={NavUtils.toCommunityLeaderboard(spaceId)}
+              aria-label="View the full leaderboard"
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04 transition hover:bg-bg focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04"
+            >
+              <Fullscreen color="grey-04" />
             </Link>
           ) : null}
         </div>
