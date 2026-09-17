@@ -204,8 +204,16 @@ export function useDebateClaimTicker(debate: Debate, playheadMs: number, enabled
  * width and the player is responsive. With the stack capped at two (`MAX_STACKED_CARDS`) the
  * arithmetic comes out the same: the newest card sits entirely inside the opaque zone, so the card
  * above it is the only one carrying any of the ramp.
+ *
+ * Measured up from the card's own bottom rather than as a fraction of its height. How far the
+ * resting stack reaches up the video is a physical distance on screen, and a fraction is not one:
+ * Figma's older card is two lines where a real claim is often three, so the same percentages
+ * stretch the ramp over a taller card and leave the whole of it legible — the stack then climbs
+ * most of the tile. Pinned in rem, a long claim fades sooner rather than reaching further.
+ *
+ * The bottom line stays crisp; everything above it is gone within about two more.
  */
-const OLDER_CARD_FADE = 'linear-gradient(to bottom, transparent 6%, #000 89%)';
+const OLDER_CARD_FADE = 'linear-gradient(to top, #000 0, #000 1rem, transparent 3.25rem)';
 
 /**
  * The claim card that rises over the video as it is said.

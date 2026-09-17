@@ -4,7 +4,7 @@
  * Runs the real grouping, the real resolver and the real ticker selection over the real published
  * data, so the answer is what the UI will draw rather than what a fixture says.
  *
- * Usage: bun scripts/verify-claim-timing.ts
+ * Usage: bun scripts/verify-claim-timing.ts [debateEntityId] [spaceId]
  */
 import { claimMarkers, tickerStack, tickerWindows } from '../core/debates/claim-ticker';
 import { claimsInSpokenOrder, formatTimecode, resolveClaimTimings } from '../core/debates/claim-timing';
@@ -22,9 +22,14 @@ import { groupTranscriptClaims } from '../core/debates/transcript-claims';
 
 const API = 'https://api-testnet.geobrowser.io/graphql';
 const CHAT = 'https://chat-api-testnet.geobrowser.io';
-const DEBATE_ENTITY = '01a0a60772dc7cb09bf6ebba15e97b67';
-const DEBATE_ID = '01a0a607-72dc-7cb0-9bf6-ebba15e97b67';
-const SPACE = '4582fbbee28a16589154f7e36f1ee3c5';
+// Any debate, so the resolver can be checked where offsets were *not* published as well as where
+// they were — the fallback path is the one that runs on every debate but the test one.
+const DEBATE_ENTITY = (process.argv[2] ?? '01a0a60772dc7cb09bf6ebba15e97b67').replaceAll('-', '');
+const DEBATE_ID = DEBATE_ENTITY.replace(
+  /^(.{8})(.{4})(.{4})(.{4})(.{12})$/,
+  '$1-$2-$3-$4-$5'
+);
+const SPACE = process.argv[3] ?? '4582fbbee28a16589154f7e36f1ee3c5';
 
 const QUERY = `
 query DebateTranscriptClaims(
@@ -107,8 +112,19 @@ for (const claim of ordered) {
   const timing = claim.timing;
   const at = timing ? formatTimecode(timing.startMs) : ' — ';
   const source = timing ? timing.source : 'none';
-  console.log(`  ${at.padStart(5)}  [${source.padEnd(9)}]  ${claim.text.slice(0, 66)}`);
+  const score = timing ? timing.confidence.toFixed(2) : ' -- ';
+  console.log(`  ${at.padStart(5)}  [${source.padEnd(9)} ${score}]  ${claim.text.slice(0, 60)}`);
 }
+
+// The two gates, spelled out. A claim with no published offsets can still clear both on the
+// strength of its transcript match alone — which is the fallback working, and also the thing worth
+// knowing about, since neither surface distinguishes an inferred moment from a published one.
+const bySource = new Map<string, number>();
+for (const claim of ordered) bySource.set(claim.timing?.source ?? 'none', (bySource.get(claim.timing?.source ?? 'none') ?? 0) + 1);
+console.log(`\nby source: ${[...bySource].map(([key, count]) => `${key}=${count}`).join('  ')}`);
+console.log(
+  `shown as "Said at" (source != block): ${ordered.filter(c => c.timing && c.timing.source !== 'block').length}`
+);
 
 const windows = tickerWindows(ordered);
 console.log(`\nticker-eligible claims: ${windows.length} of ${ordered.length}`);
