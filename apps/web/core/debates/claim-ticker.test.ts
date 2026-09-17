@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ClaimTiming, TimedClaim } from './claim-timing';
-import { CLAIM_LINGER_MS, cardOpacity, claimMarkers, tickerStack, tickerWindows } from './claim-ticker';
+import { cardOpacity, claimHistory, claimMarkers, tickerStack, tickerWindows } from './claim-ticker';
 
 function timed(id: string, timing: ClaimTiming | null, text = `Claim ${id}`): TimedClaim {
   return { id, text, spaceId: 'space-1', blockId: 'block-1', publishedTiming: null, timing };
@@ -30,17 +30,11 @@ const wholeTurn = (startMs: number, endMs: number): ClaimTiming => ({
 });
 
 describe('tickerWindows', () => {
-  it('keeps a card up for a beat after the claim finishes, so it can be read and answered', () => {
-    const [window] = tickerWindows([timed('a', confident(10_000, 14_000))]);
+  it('puts the claims in the order they are said', () => {
+    const windows = tickerWindows([timed('b', confident(18_000, 22_000)), timed('a', confident(10_000, 14_000))]);
 
-    expect(window.startMs).toBe(10_000);
-    expect(window.endMs).toBe(14_000 + CLAIM_LINGER_MS);
-  });
-
-  it('caps a very long claim rather than leaving a card up over the next one', () => {
-    const [window] = tickerWindows([timed('a', confident(0, 30_000))]);
-
-    expect(window.endMs).toBe(12_000);
+    expect(windows.map(window => window.claim.id)).toEqual(['a', 'b']);
+    expect(windows[0].startMs).toBe(10_000);
   });
 
   // The live layer asserts "they are saying this now". A claim the matcher placed roughly is fine
@@ -63,8 +57,7 @@ describe('tickerStack', () => {
     timed('second', confident(18_000, 22_000)),
   ]);
 
-  const ids = (playheadMs: number, dismissed?: Set<string>) =>
-    tickerStack(windows, playheadMs, dismissed).map(card => card.window.claim.id);
+  const ids = (playheadMs: number) => tickerStack(windows, playheadMs).map(card => card.window.claim.id);
 
   it('shows nothing before the first claim is said', () => {
     expect(ids(5_000)).toEqual([]);
@@ -76,16 +69,21 @@ describe('tickerStack', () => {
 
   // The newest is last, so rendered down a column it sits at the bottom, nearest the name, with
   // the older one riding up above it.
-  it('stacks an overlapping claim under the one before it, newest last', () => {
+  it('stacks a newer claim under the one before it, newest last', () => {
     expect(ids(18_500)).toEqual(['first', 'second']);
   });
 
-  it('drops a claim once its window closes', () => {
-    expect(ids(14_000 + CLAIM_LINGER_MS)).toEqual(['second']);
+  // The behaviour this whole change exists for. A card used to be dropped once its window closed,
+  // which left the corner empty for most of a debate; now it rests there until something newer
+  // takes its place, and the viewer always has the last thing said in front of them.
+  it('keeps a claim on screen long after it was said', () => {
+    expect(ids(17_000)).toEqual(['first']);
+    expect(ids(200_000)).toEqual(['first', 'second']);
   });
 
-  // Five claims inside ten seconds is an ordinary turn; the corner has to stay a corner.
-  it('keeps only the most recent few when a turn is busy', () => {
+  // Five claims inside ten seconds is an ordinary turn; the corner has to stay a corner. What is
+  // pushed off is not lost — `claimHistory` still has it.
+  it('rests on only the most recent few when a turn is busy', () => {
     const busy = tickerWindows([
       timed('a', confident(1_000, 2_000)),
       timed('b', confident(1_500, 2_500)),
@@ -93,11 +91,32 @@ describe('tickerStack', () => {
       timed('d', confident(2_500, 3_500)),
     ]);
 
-    expect(tickerStack(busy, 3_000, new Set(), 3).map(card => card.window.claim.id)).toEqual(['b', 'c', 'd']);
+    expect(tickerStack(busy, 3_000, 3).map(card => card.window.claim.id)).toEqual(['b', 'c', 'd']);
+  });
+});
+
+describe('claimHistory', () => {
+  const windows = tickerWindows([
+    timed('a', confident(10_000, 14_000)),
+    timed('b', confident(18_000, 22_000)),
+    timed('c', confident(30_000, 34_000)),
+  ]);
+
+  it('carries everything said so far, oldest first', () => {
+    expect(claimHistory(windows, 20_000).map(card => card.window.claim.id)).toEqual(['a', 'b']);
   });
 
-  it('does not re-ask a claim the viewer has answered or dismissed', () => {
-    expect(ids(12_000, new Set(['first']))).toEqual([]);
+  // A claim the viewer has not reached yet is a spoiler, and "what was said" is a statement about
+  // what is behind them.
+  it('stops at the playhead rather than listing the whole debate', () => {
+    expect(claimHistory(windows, 12_000).map(card => card.window.claim.id)).toEqual(['a']);
+    expect(claimHistory(windows, 0).map(card => card.window.claim.id)).toEqual([]);
+  });
+
+  // The resting stack's gradient says "this one is passing", which is the wrong thing to say
+  // about a list someone has deliberately opened to read.
+  it('holds every entry at full strength', () => {
+    expect(claimHistory(windows, 200_000).map(card => card.opacity)).toEqual([1, 1, 1]);
   });
 });
 
@@ -110,21 +129,18 @@ describe('cardOpacity', () => {
     expect(cardOpacity(window, 10_400)).toBe(1);
   });
 
-  it('holds at full strength through the middle', () => {
+  // No fade out any more: a card leaves the resting stack because something newer arrived, not
+  // because it timed out, and the stack's own gradient is what dissolves it on the way.
+  it('holds at full strength indefinitely once it has arrived', () => {
     expect(cardOpacity(window, 12_000)).toBe(1);
-  });
-
-  it('fades out over the tail of its window', () => {
-    expect(cardOpacity(window, window.endMs - 750)).toBeCloseTo(0.5);
-    expect(cardOpacity(window, window.endMs - 1)).toBeLessThan(0.01);
+    expect(cardOpacity(window, 999_000)).toBe(1);
   });
 
   // A scrub lands wherever it lands; the card has to be as visible as its moment says, not as
   // visible as an animation that started when it mounted.
-  it('is driven by the playhead, so a scrub into the middle lands at full strength', () => {
-    expect(cardOpacity(window, 13_000)).toBe(1);
+  it('is driven by the playhead, so a scrub back before the claim hides it again', () => {
     expect(cardOpacity(window, 9_000)).toBe(0);
-    expect(cardOpacity(window, 99_000)).toBe(0);
+    expect(cardOpacity(window, 13_000)).toBe(1);
   });
 });
 
