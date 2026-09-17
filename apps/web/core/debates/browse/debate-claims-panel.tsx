@@ -5,8 +5,13 @@ import * as React from 'react';
 import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate, DebateClaim } from '~/core/debates/api';
-import { type ClaimTiming, formatTimecode } from '~/core/debates/claim-timing';
-import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
+import {
+  type ClaimTiming,
+  formatTimecode,
+  isAssertableMoment,
+  sortClaimsBySpokenOrder,
+} from '~/core/debates/claim-timing';
+import { compareByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
@@ -44,8 +49,9 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
   // Same query key as the feed's count badge, so opening the panel doesn't refetch.
   const { claims, isLoading, error } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
   // When each claim was said. Published timecodes where they exist, matched against the transcript
-  // otherwise. Rows without an answer simply show no timecode.
-  const { timings } = useClaimTimings(debate.id, claims);
+  // otherwise. This drives the order as well as the timecode, so the panel waits on it — see
+  // `isOrdering`.
+  const { timings, isReady: timingsReady } = useClaimTimings(debate.id, claims);
 
   // Every claim a debate publishes lands in the debate's own space, so one lookup covers the panel.
   const claimsSpaceId = React.useMemo(
@@ -99,23 +105,36 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
     return map;
   }, [rowsQuery.claims]);
 
-  // Held back the way the debate feed holds its rows back while the same ranking loads: painting
-  // transcript order first and reordering a moment later moves claims under someone already
-  // reading, and can carry one across the "Show more" fold after they have looked at it.
-  const isOrdering = isLoading || !rankingReady;
+  // Held back until both inputs have landed: painting one order and reordering a moment later
+  // moves claims under someone already reading, and can carry one across the "Show more" fold
+  // after they have looked at it. The timings matter more than the ranking now — without them
+  // every claim ties, so the whole list would paint in ranking order and then rearrange itself.
+  const isOrdering = isLoading || !rankingReady || !timingsReady;
+
+  /**
+   * In the order the debate said them, ranking breaking the ties.
+   *
+   * These rows were ordered by ranking score, which is the right answer for a feed of unrelated
+   * claims and the wrong one inside a transcript: a debate is an argument, and reading its claims
+   * out of sequence loses the thread. Ties are every claim of a single turn — a turn is one moment
+   * as far as the resolver is concerned — and the ranking still decides those.
+   */
+  const inSpokenOrder = React.useCallback(
+    (subset: TranscriptClaim[]) => sortClaimsBySpokenOrder(subset, timings, compareByBest(rankByClaimId)),
+    [timings, rankByClaimId]
+  );
 
   const orphaned = React.useMemo(
     () =>
       isOrdering
         ? []
-        : sortClaimsByBest(
+        : inSpokenOrder(
             unmatchedClaims(
               claims,
               participants.map(participant => participant.profile_space_id)
-            ),
-            rankByClaimId
+            )
           ),
-    [claims, participants, rankByClaimId, isOrdering]
+    [claims, participants, inSpokenOrder, isOrdering]
   );
 
   React.useEffect(() => {
@@ -158,9 +177,7 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
             </div>
             <ClaimList
               claims={
-                isOrdering
-                  ? []
-                  : sortClaimsByBest(claimsForParticipant(claims, participant.profile_space_id), rankByClaimId)
+                isOrdering ? [] : inSpokenOrder(claimsForParticipant(claims, participant.profile_space_id))
               }
               rowsByClaimId={rowsByClaimId}
               entitiesByClaimId={entitiesByClaimId}
@@ -309,7 +326,11 @@ function ClaimRow({
  * is a worse answer than staying quiet — the reader still has the claim text and the panel.
  */
 function ClaimTimecode({ timing }: { timing: ClaimTiming | null }) {
-  if (!timing || timing.source === 'block') return null;
+  // The same bar the card over the video clears. This used to admit any matched claim, so a loose
+  // match the live layer would not draw still printed a time to the second — and nothing about
+  // "Said at 2:29" tells the reader it was inferred. A claim below the bar is still *ordered* by
+  // its match; it just does not get to name a second.
+  if (!isAssertableMoment(timing)) return null;
 
   return (
     <Text as="span" variant="footnote" color="grey-04" className="mt-1 block tabular-nums">

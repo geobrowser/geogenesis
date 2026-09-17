@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import type { DebateTranscriptSegment } from './api';
 import {
+  type ClaimTiming,
   LIVE_TIMING_CONFIDENCE,
   claimsInSpokenOrder,
   findBlockWindow,
   formatTimecode,
+  isAssertableMoment,
   matchClaimWindow,
   resolveClaimTimings,
+  sortClaimsBySpokenOrder,
 } from './claim-timing';
 import type { TranscriptBlock, TranscriptClaim } from './transcript-claims';
 
@@ -227,6 +230,98 @@ describe('claimsInSpokenOrder', () => {
     const timings = resolveClaimTimings({ claims, blocks: [BLOCK], segments: SEGMENTS });
 
     expect(claimsInSpokenOrder(claims, timings).map(value => value.id)).toEqual([SEC.id, 'orphan-a', 'orphan-b']);
+  });
+});
+
+describe('sortClaimsBySpokenOrder', () => {
+  const timing = (startMs: number, confidence: number, source: ClaimTiming['source']): ClaimTiming => ({
+    startMs,
+    endMs: startMs + 4_000,
+    confidence,
+    source,
+  });
+
+  it('orders by when each claim was said', () => {
+    const timings = new Map([
+      ['late', timing(30_000, 1, 'published')],
+      ['early', timing(10_000, 1, 'published')],
+    ]);
+
+    expect(sortClaimsBySpokenOrder([{ id: 'late' }, { id: 'early' }], timings).map(c => c.id)).toEqual([
+      'early',
+      'late',
+    ]);
+  });
+
+  // A loose match is not firm enough to print a timecode, but a list still has to put the claim
+  // somewhere, and roughly-when beats the turn it happens to sit in.
+  it('uses a match too loose to state as a timecode', () => {
+    const timings = new Map([
+      ['loose', timing(10_000, 0.4, 'segment')],
+      ['firm', timing(30_000, 1, 'published')],
+    ]);
+
+    expect(isAssertableMoment(timings.get('loose')!)).toBe(false);
+    expect(sortClaimsBySpokenOrder([{ id: 'firm' }, { id: 'loose' }], timings).map(c => c.id)).toEqual([
+      'loose',
+      'firm',
+    ]);
+  });
+
+  // Every claim of one turn carries that turn's window, so they tie. Relation `position` is random,
+  // so without a tiebreak the order inside a turn is a shuffle.
+  it('breaks a shared turn with the tiebreak rather than arrival order', () => {
+    const turn = timing(60_000, 0, 'block');
+    const timings = new Map([
+      ['a', turn],
+      ['b', turn],
+      ['c', turn],
+    ]);
+    const rank = new Map([
+      ['a', 2],
+      ['b', 0],
+      ['c', 1],
+    ]);
+    const byRank = (x: { id: string }, y: { id: string }) => rank.get(x.id)! - rank.get(y.id)!;
+
+    expect(
+      sortClaimsBySpokenOrder([{ id: 'a' }, { id: 'b' }, { id: 'c' }], timings, byRank).map(c => c.id)
+    ).toEqual(['b', 'c', 'a']);
+  });
+
+  it('puts a claim with no moment at all last', () => {
+    const timings = new Map([['timed', timing(90_000, 1, 'published')]]);
+
+    expect(sortClaimsBySpokenOrder([{ id: 'untimed' }, { id: 'timed' }], timings).map(c => c.id)).toEqual([
+      'timed',
+      'untimed',
+    ]);
+  });
+});
+
+describe('isAssertableMoment', () => {
+  const at = (confidence: number, source: ClaimTiming['source']): ClaimTiming => ({
+    startMs: 1_000,
+    endMs: 5_000,
+    confidence,
+    source,
+  });
+
+  it('admits a published offset and a confident match', () => {
+    expect(isAssertableMoment(at(1, 'published'))).toBe(true);
+    expect(isAssertableMoment(at(0.62, 'segment'))).toBe(true);
+  });
+
+  // The bug it exists for: the panel's timecode admitted any match, so a claim the live layer
+  // refused to draw still printed a time to the second, indistinguishable from a published one.
+  it('refuses a match too loose for the live layer', () => {
+    expect(isAssertableMoment(at(0.47, 'segment'))).toBe(false);
+    expect(isAssertableMoment(at(0.4, 'segment'))).toBe(false);
+  });
+
+  it('refuses a whole-turn fallback and a claim with no moment', () => {
+    expect(isAssertableMoment(at(0, 'block'))).toBe(false);
+    expect(isAssertableMoment(null)).toBe(false);
   });
 });
 
