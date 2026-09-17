@@ -281,7 +281,29 @@ describe('DebateClaimsPanel', () => {
     expect(mocks.responseControlProps.every(props => props.spaceId === CLAIM_SPACE)).toBe(true);
   });
 
-  it('orders each debater\u2019s claims by the best ranking, unranked keeping transcript order', () => {
+  // A debate is an argument, and reading its claims out of sequence loses the thread. This used to
+  // sort by ranking score, which is the right answer for a feed of unrelated claims and the wrong
+  // one inside a transcript.
+  it('orders a debater\u2019s claims by when they were said, not by ranking', () => {
+    // The ranking would put the last thing said first, so it cannot be what decided this.
+    mocks.rankByClaimId = new Map([['cccc', 0]]);
+    mocks.claims = grouped({
+      [PRESTON_SPACE]: [
+        claim('cccc', 'C.', { publishedTiming: { startMs: 200_000, endMs: 204_000 } }),
+        claim('aaaa', 'A.', { publishedTiming: { startMs: 10_000, endMs: 14_000 } }),
+        claim('bbbb', 'B.', { publishedTiming: { startMs: 100_000, endMs: 104_000 } }),
+      ],
+    });
+
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+
+    expect(mocks.responseControlProps.map(props => props.entityId)).toEqual(['aaaa', 'bbbb', 'cccc']);
+  });
+
+  // Every claim of one turn carries that turn's window, so they tie \u2014 and on a debate with no
+  // timecodes at all, every claim ties. Relation `position` is random, so the ranking is a better
+  // answer to the tie than the order the graph happened to return them in.
+  it('falls back to the best ranking where nothing distinguishes when', () => {
     // Lowercase, dash-free ids: ranks match through `uuidToHex`, which strips dashes and lowercases.
     mocks.rankByClaimId = new Map([['cccc', 0]]);
     mocks.claims = grouped({

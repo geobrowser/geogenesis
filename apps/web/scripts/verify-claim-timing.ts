@@ -7,7 +7,12 @@
  * Usage: bun scripts/verify-claim-timing.ts [debateEntityId] [spaceId]
  */
 import { claimMarkers, tickerStack, tickerWindows } from '../core/debates/claim-ticker';
-import { claimsInSpokenOrder, formatTimecode, resolveClaimTimings } from '../core/debates/claim-timing';
+import {
+  claimsInSpokenOrder,
+  formatTimecode,
+  isAssertableMoment,
+  resolveClaimTimings,
+} from '../core/debates/claim-timing';
 import {
   AUTHORS_PROPERTY_ID,
   BLOCKS_PROPERTY_ID,
@@ -122,8 +127,10 @@ for (const claim of ordered) {
 const bySource = new Map<string, number>();
 for (const claim of ordered) bySource.set(claim.timing?.source ?? 'none', (bySource.get(claim.timing?.source ?? 'none') ?? 0) + 1);
 console.log(`\nby source: ${[...bySource].map(([key, count]) => `${key}=${count}`).join('  ')}`);
+const assertable = ordered.filter(claim => isAssertableMoment(claim.timing)).length;
+console.log(`firm enough to state — timecode, live card: ${assertable} of ${ordered.length}`);
 console.log(
-  `shown as "Said at" (source != block): ${ordered.filter(c => c.timing && c.timing.source !== 'block').length}`
+  `used for ordering only (matched, below the bar): ${ordered.filter(c => c.timing?.source === 'segment').length - assertable}`
 );
 
 const windows = tickerWindows(ordered);

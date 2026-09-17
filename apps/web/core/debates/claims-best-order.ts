@@ -127,10 +127,24 @@ export function useClaimsBestOrder(
  * Same shape as the debate feed's own sort: an absent rank sorts last rather than dropping the row.
  */
 export function sortClaimsByBest<T extends { id: string }>(claims: T[], rankByClaimId: Map<string, number>): T[] {
-  const rankOf = (claim: T) => rankByClaimId.get(ID.uuidToHex(claim.id)) ?? Number.MAX_SAFE_INTEGER;
+  const byBest = compareByBest<T>(rankByClaimId);
 
   return claims
     .map((claim, index) => ({ claim, index }))
-    .sort((a, b) => rankOf(a.claim) - rankOf(b.claim) || a.index - b.index)
+    .sort((a, b) => byBest(a.claim, b.claim) || a.index - b.index)
     .map(entry => entry.claim);
+}
+
+/**
+ * The ranking as a bare comparator, for a sort that ranks *within* some other order.
+ *
+ * The claims panel orders by when a claim was said and needs this underneath: every claim of one
+ * turn shares that turn's moment, so they tie, and the ranking is a better answer to the tie than
+ * the shuffle that relation `position` supplies. Unranked claims sort last among their peers.
+ */
+export function compareByBest<T extends { id: string }>(
+  rankByClaimId: Map<string, number>
+): (a: T, b: T) => number {
+  const rankOf = (claim: T) => rankByClaimId.get(ID.uuidToHex(claim.id)) ?? Number.MAX_SAFE_INTEGER;
+  return (a, b) => rankOf(a) - rankOf(b);
 }
