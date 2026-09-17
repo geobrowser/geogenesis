@@ -10,7 +10,6 @@ import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best
 import { useDebateClaims } from '~/core/debates/hooks';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { EntitiesOrderBy } from '~/core/gql/graphql';
-import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
@@ -63,9 +62,9 @@ export function ClaimRelatedClaims({
   // A page at a time rather than an accumulating gallery: appending pushes everything below down
   // the page as the reader loads more, where swapping keeps the layout where they left it.
   //
-  // `hasNextPage` is the server's own answer, which matters more here than in the debates list:
-  // this claim is filtered out of its own results below, so counting rows to infer a further page
-  // would be off by one exactly on the page that contains it.
+  // `hasNextPage` is the server's own answer rather than a count of the rows on screen, which is
+  // what lets the local-store guard below drop a row without the pager concluding the list has
+  // ended.
   const pages = useCursorPages();
   const {
     entities: page,
@@ -76,7 +75,7 @@ export function ClaimRelatedClaims({
   } = useQueryEntities({
     // Shared with the debate-again picker's Related claims source, so the two surfaces cannot
     // drift into disagreeing about what "related" means (GEO-2758).
-    where: relatedClaimsWhere({ spaceId, topicIds }),
+    where: relatedClaimsWhere({ spaceId, topicIds, excludeClaimId: claimId }),
     first: RELATED_PAGE_SIZE,
     after: pages.cursor,
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
@@ -86,10 +85,7 @@ export function ClaimRelatedClaims({
     enabled: topicIds.length > 0,
   });
 
-  const candidates = React.useMemo(
-    () => page.filter(entity => !ID.equals(entity.id, claimId) && entity.name),
-    [claimId, page]
-  );
+  const candidates = React.useMemo(() => page.filter(entity => Boolean(entity.name)), [page]);
 
   const candidateIds = React.useMemo(() => candidates.map(entity => entity.id), [candidates]);
   const { rankByClaimId, isReady: isRankReady } = useClaimsBestOrder(candidateIds, spaceId);
@@ -107,10 +103,9 @@ export function ClaimRelatedClaims({
     setRelated(current => (sameOrder(current, ordered) ? current : ordered));
   }, [isRankReady, ordered]);
 
-  // The page holding this claim shows one card fewer, and a topic with only this claim on its first
-  // page would show none at all. Skip forward rather than render an empty gallery on a topic that
-  // does have neighbours further down — only from the first page, since past that the reader
-  // navigated here and needs the pager to get back.
+  // Skip forward rather than render an empty gallery on a topic that does have neighbours further
+  // down — only from the first page, since past that the reader navigated here and needs the pager
+  // to get back.
   //
   // Destructured rather than depending on `pages`: the hook returns a fresh object each render, so
   // naming it as a dependency would re-run this on every render. `toNext` is stable for a given
