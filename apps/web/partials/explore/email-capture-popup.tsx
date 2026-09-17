@@ -1,6 +1,6 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
+import { type UseLoginWithEmail, useLoginWithEmail, usePrivy } from '@geogenesis/auth';
 
 import * as React from 'react';
 
@@ -10,6 +10,7 @@ import { useAtomValue } from 'jotai';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
 import { timeoutSignal } from '~/core/timeout-signal';
 
@@ -47,6 +48,9 @@ const SUBMIT_TIMEOUT_MS = 15_000;
 
 type Status = 'idle' | 'submitting' | 'done' | NewsletterSubscribeResult;
 
+/** Privy's OTP is six digits. */
+const CODE_LENGTH = 6;
+
 /**
  * Asks a logged-out reader for their email once they have scrolled the Explore feed (GEO-2925).
  *
@@ -75,6 +79,20 @@ function EmailCapturePopup() {
   // not return next visit, but it must not close the card out from under the confirmation — so the
   // two are different acts: one remembers, one closes.
   const [closed, setClosed] = React.useState(false);
+
+  // Privy's headless email login. The reader has just typed their address into the form above, so
+  // the modal's first step -- asking for it again -- is the one thing worth removing. `state` is
+  // Privy's own flow state ('sending-code' | 'awaiting-code-input' | 'submitting-code' | 'error' |
+  // 'done'), which is more trustworthy than a second copy of the same machine kept here.
+  const { sendCode, loginWithCode, state: otpState } = useLoginWithEmail();
+  const [wantsAccount, setWantsAccount] = React.useState(false);
+  const [code, setCode] = React.useState('');
+  // The address as accepted, so the account is created against what was actually subscribed rather
+  // than whatever is in the field if they keep typing.
+  const [subscribedEmail, setSubscribedEmail] = React.useState('');
+  // Falls back to Privy's own dialog if the shortcut cannot start. Signing up is the point; not
+  // retyping an email is a convenience, and it must not become the reason nobody can sign up.
+  const openPrivyModal = usePrivySignIn();
 
   // Watched only while the popup could still appear. The observer covers the whole body on a page
   // holding an infinite feed, so leaving it on after the card is dismissed, closed, or made moot by
@@ -130,6 +148,54 @@ function EmailCapturePopup() {
     setClosed(true);
   }, [rememberDismissed]);
 
+
+  /**
+   * Asks Privy for a code against the address they just subscribed with.
+   *
+   * Fired the moment they press, so the mail is already in flight while the card swaps to the code
+   * field -- there is no code waiting from the newsletter signup, which sends none, so this request
+   * is what creates one.
+   */
+  const startAccount = React.useCallback(async () => {
+    setWantsAccount(true);
+    try {
+      await sendCode({ email: subscribedEmail });
+    } catch {
+      // Captcha, a Privy outage, an address it will not take. Hand them the dialog that does work
+      // rather than a dead end, and let it carry the address in the normal way.
+      setWantsAccount(false);
+      close();
+      openPrivyModal();
+    }
+  }, [sendCode, subscribedEmail, close, openPrivyModal]);
+
+  const submitCode = React.useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      if (code.length !== CODE_LENGTH) return;
+      try {
+        await loginWithCode({ code });
+        // Nothing to do on success. `authenticated` flips, the guard above unmounts this, and the
+        // onboarding dialog picks up a new account with no profile on its own.
+      } catch {
+        // Privy puts the reason in `otpState`, which the code step reads.
+      }
+    },
+    [code, loginWithCode]
+  );
+
+  /** A fresh code, after five wrong attempts have killed the last one or it has expired. */
+  const resendCode = React.useCallback(async () => {
+    setCode('');
+    try {
+      await sendCode({ email: subscribedEmail });
+    } catch {
+      setWantsAccount(false);
+      close();
+      openPrivyModal();
+    }
+  }, [sendCode, subscribedEmail, close, openPrivyModal]);
+
   const submit = React.useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
@@ -151,6 +217,7 @@ function EmailCapturePopup() {
         const body = (await response.json()) as { result?: NewsletterSubscribeResult };
         if (body.result === 'subscribed') {
           setStatus('done');
+          setSubscribedEmail(email.trim());
           // Recorded, not closed. Having joined is the strongest reason not to ask again next
           // visit, but the confirmation still has to be readable — and still has to be closable,
           // which it was not while this called the same function the close button does.
@@ -266,11 +333,47 @@ function EmailCapturePopup() {
             {/* Same leading, same reason. Shorter copy, but at 28px in 248px it is close enough
                 to the edge that leaving it out would be relying on the string never changing. */}
             <p className="text-[28px] leading-[17px] font-medium tracking-[-0.84px] text-[#151515] max-[382px]:leading-[30px]">
-              You are on the list.
+              {wantsAccount ? 'Check your email.' : 'You are on the list.'}
             </p>
-            <p className="mt-[8px] text-[16px] leading-[19px] tracking-[-0.48px] text-[rgba(21,21,21,0.7)]">
-              We will be in touch about features, points, and the path to mainnet.
-            </p>
+
+            {wantsAccount ? (
+              <CodeStep
+                email={subscribedEmail}
+                code={code}
+                onCodeChange={setCode}
+                otpState={otpState}
+                onSubmit={submitCode}
+                onResend={resendCode}
+              />
+            ) : (
+              <>
+                <p className="mt-[8px] text-[16px] leading-[19px] tracking-[-0.48px] text-[rgba(21,21,21,0.7)]">
+                  Want an account? We can use the email you just gave us.
+                </p>
+
+                {/* The confirmation used to be a dead end whose only action was dismissing it, and
+                    this is the moment someone is most willing -- they have just handed over an
+                    address on purpose. "Skip" is exactly the old behaviour, kept as an equal
+                    option rather than a smaller one, because the newsletter signup they already
+                    completed is a real outcome and nothing here should read as undoing it. */}
+                <div className="mt-5 flex h-7 items-center gap-[6px]">
+                  <button
+                    type="button"
+                    onClick={startAccount}
+                    className="inline-flex h-7 shrink-0 items-center justify-center rounded-full bg-[#151515] px-4 text-[16px] leading-none tracking-[-0.35px] whitespace-nowrap text-white transition-opacity hover:opacity-90"
+                  >
+                    Create account
+                  </button>
+                  <button
+                    type="button"
+                    onClick={close}
+                    className="inline-flex h-7 shrink-0 items-center justify-center rounded-full border border-grey-02 px-4 text-[16px] leading-none tracking-[-0.35px] whitespace-nowrap text-[rgba(21,21,21,0.7)] transition-colors hover:border-text hover:text-text"
+                  >
+                    Skip
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           // `noValidate`, and the field below is a text input rather than `type="email"`. Native
@@ -346,5 +449,95 @@ function EmailCapturePopup() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The code step, driven by Privy's own flow state rather than a second copy of it kept here.
+ *
+ * One field rather than six boxes: paste works without per-box splitting, screen readers get one
+ * labelled control instead of six unlabelled ones, and the code arrives by mail, so pasting is what
+ * most people actually do.
+ */
+function CodeStep({
+  email,
+  code,
+  onCodeChange,
+  otpState,
+  onSubmit,
+  onResend,
+}: {
+  email: string;
+  code: string;
+  onCodeChange: (code: string) => void;
+  otpState: UseLoginWithEmail['state'];
+  onSubmit: (event: React.FormEvent) => void;
+  onResend: () => void;
+}) {
+  const sending = otpState.status === 'sending-code';
+  const verifying = otpState.status === 'submitting-code';
+  const failed = otpState.status === 'error';
+
+  return (
+    <form onSubmit={onSubmit} noValidate>
+      <p className="mt-[8px] text-[16px] leading-[19px] tracking-[-0.48px] text-[rgba(21,21,21,0.7)]">
+        {sending ? 'Sending a code to ' : 'Enter the code we sent to '}
+        <span className="text-[#151515]">{email}</span>
+      </p>
+
+      <div className="mt-5 flex h-7 items-center gap-[6px]">
+        <input
+          // `text` with a numeric `inputMode`, not `type="number"`: a number input drops leading
+          // zeros, accepts `e` and `-`, and puts a spinner on a field that is not a quantity.
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          // Lets iOS and Chrome offer the code straight from the message, which is the whole reason
+          // `one-time-code` exists and the fastest path through this step.
+          pattern="\d*"
+          maxLength={CODE_LENGTH}
+          value={code}
+          onChange={event => onCodeChange(event.currentTarget.value.replace(/\D/g, '').slice(0, CODE_LENGTH))}
+          placeholder="123456"
+          aria-label="Verification code"
+          aria-invalid={failed}
+          disabled={sending || verifying}
+          autoFocus
+          className={cx(
+            'h-7 w-[132px] min-w-0 rounded-full border bg-white px-3 text-[17px] leading-[19px] tracking-[0.2em] text-text outline-hidden transition-colors placeholder:tracking-[0.2em] placeholder:text-[#b6b6b6] disabled:text-grey-03',
+            failed ? 'border-red-01' : 'border-grey-02 focus:border-text'
+          )}
+        />
+        <button
+          type="submit"
+          disabled={sending || verifying || code.length !== CODE_LENGTH}
+          className="inline-flex h-7 shrink-0 items-center justify-center rounded-full bg-[#151515] px-4 text-[16px] leading-none tracking-[-0.35px] whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+        >
+          {verifying ? 'Verifying…' : 'Continue'}
+        </button>
+      </div>
+
+      {failed ? (
+        <p role="alert" className="mt-2 text-[14px] tracking-[-0.35px] text-red-01">
+          That code did not work.{' '}
+          <button type="button" onClick={onResend} className="underline underline-offset-2">
+            Send a new one
+          </button>
+        </p>
+      ) : (
+        // Always reachable, not only after a failure: a code can simply not arrive, and Privy
+        // retires one after five wrong attempts, at which point the only way forward is a new code.
+        <p className="mt-2 text-[14px] tracking-[-0.35px] text-[rgba(21,21,21,0.7)]">
+          <button
+            type="button"
+            onClick={onResend}
+            disabled={sending}
+            className="underline underline-offset-2 disabled:opacity-60"
+          >
+            Send a new code
+          </button>
+        </p>
+      )}
+    </form>
   );
 }

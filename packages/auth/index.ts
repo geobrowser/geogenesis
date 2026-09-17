@@ -1,6 +1,11 @@
 export {
   usePrivy,
   useLogout,
+  // Privy's headless email login: `sendCode`/`loginWithCode` against an address we already hold,
+  // so a reader who has just typed their email into something else is not asked for it twice
+  // (GEO-2948). The modal flow via `useGeoLogin` stays the default everywhere else.
+  useLoginWithEmail,
+  type UseLoginWithEmail,
   useIdentityToken,
   getIdentityToken,
   PrivyProvider,

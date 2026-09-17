@@ -19,10 +19,23 @@ const mocks = vi.hoisted(() => ({
   isModalOpen: false,
   isDebatesHubOpen: false,
   fetch: vi.fn(),
+  sendCode: vi.fn(),
+  loginWithCode: vi.fn(),
+  otpState: { status: 'initial' } as { status: string; error?: Error | null },
+  openPrivyModal: vi.fn(),
 }));
 
 vi.mock('@geogenesis/auth', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: mocks.isModalOpen }),
+  useLoginWithEmail: () => ({
+    sendCode: mocks.sendCode,
+    loginWithCode: mocks.loginWithCode,
+    state: mocks.otpState,
+  }),
+}));
+
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: () => mocks.openPrivyModal,
 }));
 
 // `ClientOnly` renders nothing until mounted, which is right in a browser and only noise here.
@@ -51,6 +64,10 @@ beforeEach(() => {
   mocks.isDebatesHubOpen = false;
   store.set(isChatOpenAtom, false);
   store.set(entitySidePanelAtom, null);
+  mocks.sendCode.mockReset().mockResolvedValue(undefined);
+  mocks.loginWithCode.mockReset().mockResolvedValue(undefined);
+  mocks.openPrivyModal.mockReset();
+  mocks.otpState = { status: 'initial' };
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ json: async () => ({ result: 'subscribed' }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -63,6 +80,17 @@ afterEach(() => {
 });
 
 const popup = () => screen.queryByRole('region', { name: 'Geo network launching soon' });
+
+/** Renders, scrolls past the trigger, and subscribes — landing on the success state. */
+async function subscribeSuccessfully(email = 'reader@example.com') {
+  const view = render(<ExploreEmailCapturePopup />);
+  scrollPastTrigger();
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: email } });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+  });
+  return view;
+}
 
 describe('ExploreEmailCapturePopup', () => {
   it('stays away until the reader has scrolled', () => {
@@ -436,6 +464,139 @@ describe('ExploreEmailCapturePopup', () => {
 
     expect(disconnect.mock.calls.length).toBeGreaterThan(before);
     disconnect.mockRestore();
+  });
+
+  describe('creating an account from the confirmation', () => {
+    it('offers the account and a skip, rather than ending at the confirmation', async () => {
+      await subscribeSuccessfully();
+
+      expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Skip' })).toBeInTheDocument();
+    });
+
+    // The whole point of the ticket: the address is already in hand, so asking for it again is the
+    // one step worth removing. Privy's modal never opens.
+    it('requests a code for the address they just subscribed with, without asking again', async () => {
+      // Deliberately padded: the field's raw value is not what was subscribed, and Privy will not
+      // take an address with spaces around it. Sending the field verbatim passes a test written
+      // with tidy input and fails a real person who typed a trailing space.
+      await subscribeSuccessfully('  Reader@Example.com  ');
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+
+      expect(mocks.sendCode).toHaveBeenCalledWith({ email: 'Reader@Example.com' });
+      expect(mocks.openPrivyModal).not.toHaveBeenCalled();
+      // No second email field anywhere in the card.
+      expect(screen.queryByRole('textbox', { name: 'Email address' })).toBeNull();
+      expect(screen.getByRole('textbox', { name: 'Verification code' })).toBeInTheDocument();
+    });
+
+    it('skip does what dismissing always did, and does not ask Privy for anything', async () => {
+      await subscribeSuccessfully();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+
+      expect(popup()).toBeNull();
+      expect(mocks.sendCode).not.toHaveBeenCalled();
+      expect(window.localStorage.getItem('dismissedNotices')).toContain('exploreEmailCapture');
+    });
+
+    it('submits the code and lets the session take over', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+      fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '123456' } });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      });
+
+      expect(mocks.loginWithCode).toHaveBeenCalledWith({ code: '123456' });
+    });
+
+    // Privy sends six digits and nothing else, so anything pasted around them is noise rather than
+    // a reason to reject what someone pasted out of their mail client.
+    it('keeps only the digits, up to the length of a code', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      const field = screen.getByRole('textbox', { name: 'Verification code' }) as HTMLInputElement;
+      fireEvent.change(field, { target: { value: ' 12a3 b4c5 6789 ' } });
+
+      expect(field.value).toBe('123456');
+    });
+
+    it('will not submit a code that is not the right length', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '123' } });
+
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    });
+
+    it('says so when the code is refused, and offers a new one', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+
+      mocks.otpState = { status: 'error', error: new Error('bad code') };
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      expect(screen.getByRole('alert').textContent).toContain('That code did not work');
+
+      mocks.sendCode.mockClear();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Send a new one' }));
+      });
+      expect(mocks.sendCode).toHaveBeenCalledTimes(1);
+    });
+
+    // Privy retires a code after five wrong attempts, and mail simply fails to arrive sometimes.
+    // Neither of those is an error state, so the way out cannot live only inside one.
+    it('can request a new code without having failed first', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      mocks.sendCode.mockClear();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Send a new code' }));
+      });
+
+      expect(mocks.sendCode).toHaveBeenCalledTimes(1);
+    });
+
+    // Captcha, an outage, an address Privy will not take. Signing up is the point; not retyping an
+    // email is a convenience, and it must not become the reason nobody can sign up at all.
+    it('falls back to the normal sign-in dialog when the shortcut cannot start', async () => {
+      mocks.sendCode.mockRejectedValue(new Error('captcha required'));
+      await subscribeSuccessfully();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+
+      expect(mocks.openPrivyModal).toHaveBeenCalledTimes(1);
+      expect(popup()).toBeNull();
+    });
   });
 
   // Privy's modal is a sign-in the reader actively started; stacking on it is the worse
