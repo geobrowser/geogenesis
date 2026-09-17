@@ -243,21 +243,18 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
   }
 
   return (
-    <Link
-      className={tabGroupTabLinkStyles({ active, disabled })}
-      href={href}
-      prefetch
-      // The tab bar stays put when you change tabs. Next scrolls to the top on
-      // every navigation by default, which reads as the page throwing you back
-      // up for no reason — you have not left the page, you have changed a view
-      // inside it.
-      //
-      // It also took the underline with it: a shared-layout animation measures
-      // the marker before and after, and a scroll to top between those two
-      // measurements is a vertical delta it dutifully animates through — which
-      // is the underline flying up through the label rather than sliding across.
-      scroll={false}
-    >
+    // No `scroll={false}` here, though it is tempting. This component draws the
+    // tab bar on profiles, ordinary spaces, entities and governance alike, and
+    // preserving the offset for all of them lands a reader who switched tabs
+    // near the bottom of a long list somewhere past the end of a shorter one.
+    //
+    // What it was added for is real — Next's jump to the top makes the underline
+    // fly up through the label, because the shared-layout animation measures the
+    // marker before and after and animates through the scroll delta. That wants
+    // scrolling *to the tab bar* rather than to the top or not at all, which is
+    // a behaviour to design alongside the sticky bar in GEO-2923 rather than a
+    // flag to set here.
+    <Link className={tabGroupTabLinkStyles({ active, disabled })} href={href} prefetch>
       {label}
       {badge && <Badge>{badge}</Badge>}
       {active && (

@@ -8,7 +8,7 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
-import { mapActionTypeToProposalType } from '~/core/io/rest/schemas/proposal';
+import { proposalTypeFromActionTypes } from '~/core/io/rest/schemas/proposal';
 import { graphql } from '~/core/io/subgraph/graphql';
 import type { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 
@@ -221,11 +221,23 @@ async function fetchActionTypes(proposalIds: string[], signal?: AbortSignal): Pr
     throw result.left;
   }
 
-  // A proposal can carry several actions; the first stands for the proposal, the
-  // same way the governance list reads it.
+  // Every action per proposal, then the shared precedence — not the first one
+  // back. `proposalActionsConnection` does not promise an order, so first-wins
+  // handed a multi-action proposal whichever action the index returned first,
+  // and for an unnamed proposal the action *is* the title. The REST path has
+  // said so on `findMembershipAction` all along; this had reimplemented the bug
+  // that comment describes.
+  const typesByProposal = new Map<string, string[]>();
+
   for (const node of result.right.proposalActionsConnection?.nodes ?? []) {
     const key = ID.uuidToHex(node.proposalId);
-    if (!byId.has(key)) byId.set(key, mapActionTypeToProposalType(node.actionType));
+    const actionTypes = typesByProposal.get(key);
+    if (actionTypes) actionTypes.push(node.actionType);
+    else typesByProposal.set(key, [node.actionType]);
+  }
+
+  for (const [key, actionTypes] of typesByProposal) {
+    byId.set(key, proposalTypeFromActionTypes(actionTypes));
   }
 
   return byId;
