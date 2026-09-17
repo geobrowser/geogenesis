@@ -49,6 +49,24 @@ const STALL_AFTER_MS = 500;
 const STALL_EPSILON_SECONDS = 0.001;
 
 /**
+ * Is this tab off screen?
+ *
+ * Playback deliberately does *not* stop when the window loses focus or the tab is backgrounded
+ * (GEO-2947) — a debate someone is listening to should keep running while they work in another
+ * window, the way a background YouTube tab does. Scrolling the card out of the viewport is a
+ * separate condition and still pauses; that lives in `suspend`.
+ *
+ * What this gate is for is the browser pausing us. A backgrounded tab is where the two elements
+ * can end up in different play states through nobody's decision, and the corrections below —
+ * written for a foreground pair that has drifted — do the wrong thing there. So they stand down
+ * while hidden, and the pair is reconciled on the way back instead.
+ *
+ * Visibility, not focus: `document.hasFocus()` is false for every window but the frontmost one,
+ * including a tab sitting fully on screen beside the one being typed in.
+ */
+const documentIsHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+
+/**
  * Drives the two synchronized debater recordings for a single debate: loads the
  * per-slot playback URLs, keeps the videos in lockstep, tracks the active turn
  * (for the countdown + subtitles), and exposes play/pause/seek/replay controls.
@@ -263,6 +281,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // kept for a gap too large to close that way.
     const syncDelta = offsets.slot2 - offsets.slot1;
     const now = Date.now();
+    const hidden = documentIsHidden();
 
     if (primaryVideo) {
       const progress = primaryProgressRef.current;
@@ -280,7 +299,14 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       primaryVideo.readyState < HTMLMediaElement.HAVE_FUTURE_DATA ||
       (primaryProgressRef.current !== null && now - primaryProgressRef.current.at > STALL_AFTER_MS);
 
-    if (primaryVideo && secondaryVideo && !primaryVideo.paused && !secondaryVideo.seeking && !primaryStalled) {
+    if (
+      primaryVideo &&
+      secondaryVideo &&
+      !hidden &&
+      !primaryVideo.paused &&
+      !secondaryVideo.seeking &&
+      !primaryStalled
+    ) {
       const drift = secondaryVideo.currentTime - (primaryVideo.currentTime - syncDelta);
       const absDrift = Math.abs(drift);
 
@@ -303,7 +329,21 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // Keep both videos in the same play/pause state. If the browser pauses one
     // on its own (e.g. it blocks the unmuted speaker under autoplay policy),
     // pause the other too so audio and video can never drift apart.
-    if (primaryVideo && secondaryVideo && primaryVideo.paused !== secondaryVideo.paused && playhead < timelineSeconds) {
+    //
+    // Not while the tab is hidden, though (GEO-2947). Backgrounding splits the pair without
+    // anyone deciding to: a browser that stops a silent <video> off screen stops the listening
+    // debater's element and leaves the speaking one running. Reading that as "the browser
+    // stopped playback on us" pauses the half that was still playing — the audio the viewer was
+    // listening to — and records it as a *user* pause, which auto-resume then refuses to undo.
+    // That is the reported bug: switch windows and the debate goes silent until you click it.
+    // A hidden tab is reconciled on return instead; see the visibilitychange effect below.
+    if (
+      primaryVideo &&
+      secondaryVideo &&
+      !hidden &&
+      primaryVideo.paused !== secondaryVideo.paused &&
+      playhead < timelineSeconds
+    ) {
       const stillPlaying = primaryVideo.paused ? secondaryVideo : primaryVideo;
       stillPlaying.pause();
       // The browser stopped playback on us — surface it as a paused state so the
@@ -409,6 +449,52 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     }
     void resumeBoth();
   }, [pauseBoth, playFromStart, playbackEnded, playing, resumeBoth]);
+
+  /**
+   * Come back from a backgrounded tab in the state the viewer left (GEO-2947).
+   *
+   * Nothing here pauses on blur or on hide. But the browser can still pause an element while the
+   * tab is off screen, and the sync step above stands down rather than reacting to it, so a tab
+   * that has been away may come back with one or both videos paused while this hook still
+   * believes playback is running. Reconcile that on the return instead of leaving the card frozen
+   * with no controls showing — `playing` is true, so the feed's autoplay effect (`!playing`)
+   * would never retry it.
+   *
+   * `resumeBoth` is the right instrument: it re-seeks slot 2 to slot 1's position first, so the
+   * pair comes back in step from wherever playback actually got to rather than from where it was
+   * when the tab was hidden. Nothing resets the playhead and nothing touches the mute preference.
+   *
+   * Only when the viewer had it playing: an explicit pause, a finished debate or a scrub in
+   * progress all mean "leave it alone", which is what `backgroundIntentRef` carries.
+   */
+  const backgroundIntentRef = React.useRef<{ shouldBePlaying: boolean; resumeBoth: () => Promise<void> }>({
+    shouldBePlaying: false,
+    resumeBoth,
+  });
+  React.useEffect(() => {
+    backgroundIntentRef.current = {
+      shouldBePlaying: playing && !userPaused && !isScrubbing && !playbackEnded,
+      resumeBoth,
+    };
+  });
+
+  React.useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const reconcile = () => {
+      if (document.visibilityState !== 'visible') return;
+      const { shouldBePlaying, resumeBoth: resume } = backgroundIntentRef.current;
+      if (!shouldBePlaying) return;
+      const primaryVideo = slot1VideoRef.current;
+      const secondaryVideo = slot2VideoRef.current;
+      if (!primaryVideo || !secondaryVideo) return;
+      // Both still running — the tab was backgrounded and the browser let it be. Nothing to do,
+      // and calling resumeBoth here would seek a pair that is already in step.
+      if (!primaryVideo.paused && !secondaryVideo.paused) return;
+      void resume();
+    };
+    document.addEventListener('visibilitychange', reconcile);
+    return () => document.removeEventListener('visibilitychange', reconcile);
+  }, []);
 
   // Autoplay control for the feed: when a debate scrolls out of view we pause it
   // silently (without flipping userPaused, so it can auto-resume when back in view).

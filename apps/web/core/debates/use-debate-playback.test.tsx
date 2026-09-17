@@ -1,7 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from './api';
+import { useDebatePlayback } from './use-debate-playback';
 
 const mocks = vi.hoisted(() => ({ recordingUrl: vi.fn() }));
 
@@ -11,8 +13,6 @@ vi.mock('./hooks', () => ({
   useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
 }));
-
-import { useDebatePlayback } from './use-debate-playback';
 
 function debateFixture(id = 'debate-1'): Debate {
   return {
@@ -146,8 +146,20 @@ function fakeVideo() {
       video.pending.resolve();
       video.pending = null;
     },
+    /**
+     * The browser stopping the element of its own accord — a backgrounded tab pausing a video
+     * it considers silent. Distinct from pause(): nothing of ours asked for it, and there is no
+     * in-flight play() to interrupt, so the element simply stops.
+     */
+    browserPause() {
+      video.paused = true;
+    },
   };
-  return video as unknown as HTMLVideoElement & { settlePlay: () => void; rejectPlay: () => void };
+  return video as unknown as HTMLVideoElement & {
+    settlePlay: () => void;
+    rejectPlay: () => void;
+    browserPause: () => void;
+  };
 }
 
 describe('useDebatePlayback — an interrupted resume must not report failure (GEO-2895)', () => {
@@ -253,5 +265,143 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
 
     expect(result.current.playing).toBe(true);
     expect(result.current.error).toBeNull();
+  });
+});
+
+/**
+ * GEO-2947. A debate the viewer is listening to has to survive them clicking into another
+ * window. Nothing in the player pauses on blur or on hide — but a backgrounded tab is where a
+ * browser stops a silent <video> of its own accord, and the sync step used to read that split
+ * pair as "the browser stopped playback on us": it paused the half that was still playing (the
+ * audio being listened to) and recorded a *user* pause, which auto-resume then refuses to undo.
+ * Switching windows went silent and stayed silent until the card was clicked.
+ */
+describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)', () => {
+  let visibilityState: DocumentVisibilityState;
+
+  beforeEach(() => {
+    visibilityState = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibilityState);
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Mounted, both elements attached, and actually playing — the state a viewer leaves behind. */
+  async function playing() {
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    result.current.slot1VideoRef.current = slot1;
+    result.current.slot2VideoRef.current = slot2;
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(result.current.playing).toBe(true);
+    return { result, slot1, slot2 };
+  }
+
+  const setVisibility = (next: DocumentVisibilityState) => {
+    visibilityState = next;
+    document.dispatchEvent(new Event('visibilitychange'));
+  };
+
+  /** THE REGRESSION: the audible half must keep running, and it must not become a user pause. */
+  it('leaves the still-playing video alone when the hidden tab splits the pair', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    visibilityState = 'hidden';
+    // What the browser does to a silent background <video>: it stops, with no pause() of ours.
+    slot2.browserPause();
+
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.paused).toBe(false); // the audio the viewer is listening to keeps playing
+    expect(result.current.playing).toBe(true);
+    expect(result.current.userPaused).toBe(false); // nothing to click past on return
+  });
+
+  /**
+   * The control, and the behaviour GEO-2783 added: on screen, a split pair really does mean the
+   * browser refused us (a blocked unmuted speaker), and the viewer needs the controls back.
+   */
+  it('still pauses both and surfaces the pause when the split happens on screen', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    slot2.browserPause(); // visibilityState stays 'visible'
+
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.paused).toBe(true);
+    expect(result.current.playing).toBe(false);
+    expect(result.current.userPaused).toBe(true);
+  });
+
+  it('restarts a pair the browser paused in the background when the tab comes back', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    visibilityState = 'hidden';
+    slot1.browserPause();
+    slot2.browserPause();
+
+    await act(async () => {
+      setVisibility('visible');
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(slot1.paused).toBe(false);
+    expect(slot2.paused).toBe(false);
+    expect(result.current.playing).toBe(true);
+    expect(result.current.error).toBeNull();
+  });
+
+  /** Returning must not restart a debate the viewer had deliberately paused before leaving. */
+  it('leaves a debate the viewer paused alone on return', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    act(() => result.current.togglePlayback()); // the viewer pauses
+    expect(result.current.userPaused).toBe(true);
+
+    visibilityState = 'hidden';
+    await act(async () => {
+      setVisibility('visible');
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(slot1.paused).toBe(true);
+    expect(slot2.paused).toBe(true);
+    expect(result.current.playing).toBe(false);
+  });
+
+  /** A pair the browser let run must not be seeked on return — that is the "no reset" half. */
+  it('does not touch a pair that kept playing while the tab was hidden', async () => {
+    const { result, slot1, slot2 } = await playing();
+    slot1.currentTime = 12;
+    slot2.currentTime = 12;
+
+    visibilityState = 'hidden';
+    await act(async () => {
+      setVisibility('visible');
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(slot1.currentTime).toBe(12);
+    expect(slot2.currentTime).toBe(12);
+    expect(result.current.playing).toBe(true);
   });
 });
