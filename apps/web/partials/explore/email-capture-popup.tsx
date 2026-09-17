@@ -187,19 +187,28 @@ function EmailCapturePopup() {
           cloned or blurred from nearby matched both. The real chip below is positioned over it
           instead and hides it completely.
 
+          `object-right` rather than the default centre, which matters below 382px where the card
+          stops being 350 wide and `object-cover` starts cropping. Centred, it crops evenly and the
+          baked glyph drifts left while the real button stays at `right-4` — 31px apart on a 320px
+          viewport, which uncovers the very glyph the chip is there to hide. Anchored right, the
+          glyph and the button are both measured from the same edge and stay aligned at every width.
+
           The raster is full-bleed on purpose. Figma exported the card's own 12px rounding and its
           1px #dbdbdb border baked in, and a second rounding inside the container's own read as a
           pale fringe along the edge — which is what made this look unclean next to the Figma frame.
           The border is gone and the top corners are filled with the field colour, so the container's
           `rounded-xl` is the only radius in play. Still wants a clean export from design, at 2x. */}
-      <img src="/explore-email-capture.png" alt="" className="block h-[144px] w-full object-cover select-none" />
+      <img src="/explore-email-capture.png" alt="" className="block h-[144px] w-full object-right object-cover select-none" />
 
       {/* The welcome banner's close button, to the class: the two cards sit on the same page, and a
           reader should not have to learn a second dismiss control for the second one. */}
       <button
         type="button"
         onClick={close}
-        aria-label="Dismiss"
+        // Named, not just "Dismiss": the welcome banner sits on this same page with its own
+        // dismiss button, and a list of controls reading "Dismiss" twice says nothing about which
+        // notice either one closes. Matches how the banner names its own.
+        aria-label="Dismiss newsletter signup"
         // `top`/`right` put the 24px chip's centre on (322, 23) — where the artwork's own glyph
         // sits — so it is covered rather than doubled. The rest is the banner's button verbatim.
         className="absolute top-[11px] right-4 z-20 rounded-full border border-white/30 bg-black/40 p-1.5 text-white backdrop-blur-sm transition-colors duration-200 ease-in-out hover:bg-black/60"

@@ -31,6 +31,31 @@ const MAILERLITE_SUBSCRIBERS_URL = 'https://connect.mailerlite.com/api/subscribe
  */
 const MAILERLITE_TIMEOUT_MS = 8_000;
 
+/**
+ * The rate-limit bucket for an address, as a SHA-256 digest rather than the address itself.
+ *
+ * The limiter's identifier becomes part of a Redis key, and with `analytics: true` Upstash keeps
+ * its own records keyed by it too — so passing the address straight through would copy every
+ * subscriber's email into a second system that has no business holding one. Nothing ever needs to
+ * read it back: a bucket only has to be the same for the same address and different for different
+ * ones, which a digest is.
+ *
+ * Not claimed to be irreversible. Addresses are guessable, so anyone with the Redis contents could
+ * test whether a *particular* address subscribed. What it does stop is the wholesale copy — the
+ * list cannot be read off the keys, which is the difference that matters when the store is not
+ * the one we chose to put this data in.
+ *
+ * The IP bucket below is deliberately left as-is. It is equally personal, but unlike the address it
+ * is the thing you need to read when working out who is hammering the endpoint, and `app/api/chat`
+ * keys on it the same way. Hiding it would cost the abuse visibility the ceiling exists for.
+ */
+async function emailBucketKey(normalizedEmail: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalizedEmail));
+  return Array.from(new Uint8Array(digest))
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 function answer(result: NewsletterSubscribeResult, status: number) {
   return NextResponse.json({ result }, { status });
 }
@@ -51,7 +76,7 @@ export async function POST(request: Request) {
 
   try {
     const [perEmail, perIp] = await Promise.all([
-      emailLimit.limit(normalizedEmail),
+      emailLimit.limit(await emailBucketKey(normalizedEmail)),
       ipLimit.limit(getClientIp(request)),
     ]);
 

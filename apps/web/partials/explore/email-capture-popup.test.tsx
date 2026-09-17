@@ -108,7 +108,7 @@ describe('ExploreEmailCapturePopup', () => {
     render(<ExploreEmailCapturePopup />);
     scrollPastTrigger();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss newsletter signup' }));
     expect(popup()).toBeNull();
     expect(window.localStorage.getItem('dismissedNotices')).toContain('exploreEmailCapture');
 
@@ -147,7 +147,7 @@ describe('ExploreEmailCapturePopup', () => {
   it('stays away on a reload that restores a scroll position past the trigger', async () => {
     render(<ExploreEmailCapturePopup />);
     scrollPastTrigger();
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss newsletter signup' }));
 
     const Reloaded = await reload();
     window.scrollY = window.innerHeight * 5;
@@ -287,6 +287,19 @@ describe('ExploreEmailCapturePopup', () => {
     expect(screen.getByRole('button', { name: 'Subscribe' })).not.toBeDisabled();
   });
 
+  // Below 382px the card stops being 350 wide and `object-cover` begins cropping. Centred, it crops
+  // evenly and the artwork's baked-in close glyph drifts left while the real button stays at
+  // `right-4` — 31px apart on a 320px viewport, which uncovers the glyph the chip exists to hide.
+  // Anchored right, both are measured from the same edge at every width.
+  it('anchors the artwork to the right, where the close button is measured from', () => {
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    const artwork = popup()?.querySelector('img');
+    expect(artwork).not.toBeNull();
+    expect(artwork?.className).toContain('object-right');
+  });
+
   // Privy's modal is a sign-in the reader actively started; stacking on it is the worse
   // interruption. It waits rather than competing, and comes back when they close it.
   it('waits while the sign-in modal is open, then returns', () => {
@@ -330,7 +343,7 @@ describe('ExploreEmailCapturePopup', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
     expect(await screen.findByText('You are on the list.')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss newsletter signup' }));
 
     expect(popup()).toBeNull();
   });

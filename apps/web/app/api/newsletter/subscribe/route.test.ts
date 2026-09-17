@@ -82,9 +82,31 @@ describe('POST /api/newsletter/subscribe', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('buckets the rate limit by the normalized address, not the raw one', async () => {
+  // The identifier becomes part of a Redis key, and `analytics: true` has Upstash keep its own
+  // records against it — so the address itself would be copied into a second store that has no
+  // business holding subscriber emails. Nothing reads it back; a bucket only has to be stable.
+  it('never puts the address itself in the rate-limit key', async () => {
     await subscribe({ email: '  Reader@Example.COM ' });
-    expect(emailLimitMock).toHaveBeenCalledWith('reader@example.com');
+
+    const [bucket] = emailLimitMock.mock.calls[0];
+    expect(bucket).not.toContain('Reader');
+    expect(bucket).not.toContain('reader@example.com');
+    expect(bucket).not.toContain('@');
+    expect(bucket).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('gives one address one bucket however it was typed, and different addresses different ones', async () => {
+    await subscribe({ email: '  Reader@Example.COM ' });
+    await subscribe({ email: 'reader@example.com' });
+    await subscribe({ email: 'someone.else@example.com' });
+
+    const [first] = emailLimitMock.mock.calls[0];
+    const [second] = emailLimitMock.mock.calls[1];
+    const [third] = emailLimitMock.mock.calls[2];
+
+    // Same address, so the limit actually accumulates rather than resetting on capitalisation.
+    expect(first).toBe(second);
+    expect(third).not.toBe(first);
   });
 
   it('buckets the ip limit by the forwarded client address', async () => {
