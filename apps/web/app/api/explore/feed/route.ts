@@ -43,6 +43,8 @@ export async function GET(request: Request) {
   const spaceIdsParam = searchParams.get('spaceIds') ?? searchParams.get('spaceId');
   const cursor = searchParams.get('cursor');
   const typeIds = parseExploreTypeIdsParam(searchParams.get('typeIds'));
+  const topicIdsParam = searchParams.get('topicIds');
+  const topicIds = topicIdsParam ? topicIdsParam.split(',').map(normId).filter(Boolean) : [];
 
   if (typeIds.length === 0) {
     return NextResponse.json({ items: [], nextCursor: null });
@@ -105,6 +107,7 @@ export async function GET(request: Request) {
       walletAddress: cookieWallet ?? null,
       memberOrEditorSpaceIds,
       typeIds,
+      topicIds: topicIds.length > 0 ? topicIds : undefined,
       requireName: true,
       // GEO-2835. A restriction on the feed rather than on the selection, unlike the types filter:
       // ticking Claim asks for the claims Explore has, and an untagged one is not among them.
