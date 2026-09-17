@@ -402,6 +402,42 @@ describe('ExploreEmailCapturePopup', () => {
     await waitFor(() => expect(popup()).toBeInTheDocument());
   });
 
+  // Both headlines, not just the one that was reported: they share the styling, so a fix applied
+  // to one is a fix half-applied. The design's 17px leading sits under the 28px glyphs and only
+  // works unwrapped; below 382px the card narrows and these wrap into each other.
+  it('gives both headlines a leading that survives wrapping on a narrow card', async () => {
+    const view = render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    const heading = screen.getByText('Geo Network launching soon!');
+    expect(heading.className).toContain('max-[382px]:leading-[30px]');
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reader@example.com' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+    });
+    view.rerender(<ExploreEmailCapturePopup />);
+
+    expect(screen.getByText('You are on the list.').className).toContain('max-[382px]:leading-[30px]');
+  });
+
+  // The observer covers the whole body on a page holding an infinite feed, so leaving it running
+  // after the card can no longer appear means a document scan per appended card, to answer a
+  // question with no consequence.
+  it('stops watching for modals once it has been dismissed', async () => {
+    const disconnect = vi.spyOn(MutationObserver.prototype, 'disconnect');
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    const before = disconnect.mock.calls.length;
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss newsletter signup' }));
+    });
+
+    expect(disconnect.mock.calls.length).toBeGreaterThan(before);
+    disconnect.mockRestore();
+  });
+
   // Privy's modal is a sign-in the reader actively started; stacking on it is the worse
   // interruption. It waits rather than competing, and comes back when they close it.
   it('waits while the sign-in modal is open, then returns', () => {

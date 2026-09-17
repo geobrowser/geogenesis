@@ -32,10 +32,20 @@ import * as React from 'react';
 const OPEN_MODAL_SELECTOR =
   '[role="dialog"][data-state="open"], [role="dialog"][aria-modal="true"], [role="alertdialog"][data-state="open"], [role="alertdialog"][aria-modal="true"]';
 
+/**
+ * Layout effect on the client, plain effect on the server.
+ *
+ * The first read has to happen before paint: a passive effect runs after, so enabling this while a
+ * dialog is already open — a reader returning to a restored scroll position with search open — lets
+ * the caller paint over that dialog for a frame, which is the exact precedence this exists to keep.
+ * The server has no layout phase and React warns if you ask for one, hence the swap.
+ */
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect;
+
 export function useAnyModalOpen(enabled: boolean): boolean {
   const [isOpen, setIsOpen] = React.useState(false);
 
-  React.useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (!enabled) {
       setIsOpen(false);
       return;

@@ -76,9 +76,14 @@ function EmailCapturePopup() {
   // two are different acts: one remembers, one closes.
   const [closed, setClosed] = React.useState(false);
 
-  // Only watched once the reader is past the trigger: before that the answer cannot matter, and
-  // this observes a page holding an infinite feed.
-  const isAnyModalOpen = useAnyModalOpen(scrolledEnough);
+  // Watched only while the popup could still appear. The observer covers the whole body on a page
+  // holding an infinite feed, so leaving it on after the card is dismissed, closed, or made moot by
+  // signing in would keep scanning the document for every card the feed appends, to answer a
+  // question that can no longer change anything. `status === 'done'` keeps it on through the
+  // confirmation, which is still on screen and still owes the same precedence.
+  const couldStillShow =
+    scrolledEnough && !closed && ready && !authenticated && (!dismissed || status === 'done');
+  const isAnyModalOpen = useAnyModalOpen(couldStillShow);
 
   // Anything the reader deliberately opened owns the screen until they close it, and this waits
   // rather than competing. Not a z-index rule: each of these is a surface someone chose to open,
@@ -256,7 +261,9 @@ function EmailCapturePopup() {
           // failure path has had `role="alert"` all along; this is the same courtesy for the case
           // that actually worked.
           <div role="status">
-            <p className="text-[28px] leading-[17px] font-medium tracking-[-0.84px] text-[#151515]">
+            {/* Same leading, same reason. Shorter copy, but at 28px in 248px it is close enough
+                to the edge that leaving it out would be relying on the string never changing. */}
+            <p className="text-[28px] leading-[17px] font-medium tracking-[-0.84px] text-[#151515] max-[382px]:leading-[30px]">
               You are on the list.
             </p>
             <p className="mt-[8px] text-[16px] leading-[19px] tracking-[-0.48px] text-[rgba(21,21,21,0.7)]">
@@ -271,7 +278,15 @@ function EmailCapturePopup() {
           // `inputMode` and `autoComplete` keep the phone keyboard and the autofill that
           // `type="email"` was there for.
           <form onSubmit={submit} noValidate>
-            <p className="text-[28px] leading-[17px] font-medium tracking-[-0.84px] text-[#151515]">
+            {/* 17px leading under a 28px glyph is a single-line leading — it is the design's
+                cap-height trim, and it only holds while the line does not wrap. Below 382px the
+                card stops being 350 wide (350 + 2rem of viewport margin), leaving 248px inside the
+                padding, and this headline wraps — at which point 17px puts the second baseline
+                inside the first line's glyphs. 30px is the smallest leading that clears them.
+                Confirmed the variant actually compiles rather than trusting the class name: the
+                build emits `@media not all and (min-width:382px){…line-height:30px}`. Above the
+                threshold nothing changes, so the design is untouched where the design applies. */}
+            <p className="text-[28px] leading-[17px] font-medium tracking-[-0.84px] text-[#151515] max-[382px]:leading-[30px]">
               Geo Network launching soon!
             </p>
             {/* One line, as in the design. It fits because the app renders Calibre too — the same
