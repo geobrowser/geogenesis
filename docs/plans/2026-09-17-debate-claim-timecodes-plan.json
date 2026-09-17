@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-17T23:51:49.456Z",
+  "generatedAt": "2026-09-17T23:58:02.465Z",
   "api": "https://api-testnet.geobrowser.io/graphql",
-  "floor": 0.55,
+  "floor": 0.7,
   "constants": {
     "TYPES_PROPERTY": "8f151ba4de204e3c9cb499ddf96f48f1",
     "SELECTOR_TYPE": "813ca865db9b486490dec6764febaab3",
@@ -14,9 +14,9 @@
   },
   "totals": {
     "claims": 854,
-    "writes": 309,
+    "writes": 140,
     "alreadyPublished": 13,
-    "belowFloor": 308,
+    "belowFloor": 477,
     "noMatch": 224
   },
   "debates": [
@@ -54,15 +54,6 @@
           "source": "segment"
         },
         {
-          "entityId": "303f684b175246248a586f4ad20f71d1",
-          "claimId": "8401b74c42f24c80814192bcb526a696",
-          "claimText": "Open AI models help protect user privacy.",
-          "startMs": 24880,
-          "endMs": 29390,
-          "confidence": 0.611,
-          "source": "segment"
-        },
-        {
           "entityId": "4a6b703766dd4226ac464f1c223644a4",
           "claimId": "5daaa5952f2443be99cc3d58c5a6e24a",
           "claimText": "Openness in AI models makes them easier to audit.",
@@ -70,29 +61,11 @@
           "endMs": 27310,
           "confidence": 0.958,
           "source": "segment"
-        },
-        {
-          "entityId": "387b452a61e948e5ae1a30b1a473632a",
-          "claimId": "f9d193e93a6a41d59e54ceee7fd69ebc",
-          "claimText": "Restricting open-source AI models would concentrate AI products within a few corporations.",
-          "startMs": 5970,
-          "endMs": 20180,
-          "confidence": 0.591,
-          "source": "segment"
-        },
-        {
-          "entityId": "b8bfb98629844807a2977da2c3cf7aaa",
-          "claimId": "66fa36cd98a24ee2ba01d8b80f753d3c",
-          "claimText": "It is possible to regulate open-source AI within a certain scope, even though it is not easy.",
-          "startMs": 169690,
-          "endMs": 179000,
-          "confidence": 0.611,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 6,
+        "belowFloor": 9,
         "noMatch": 3
       }
     },
@@ -112,15 +85,6 @@
           "source": "segment"
         },
         {
-          "entityId": "d094a4f2098749d1af1dff6762609e10",
-          "claimId": "035979a33ec24ff991d6dca2024866cd",
-          "claimText": "Governments should regulate AI through broad standards applicable to everyone, not by pausing specific models on arbitrary grounds.",
-          "startMs": 46000,
-          "endMs": 60000,
-          "confidence": 0.589,
-          "source": "segment"
-        },
-        {
           "entityId": "5568b48b017144eeaf04602baa56788a",
           "claimId": "169a77cbfffe4e1d8dea6c2e46e41fa6",
           "claimText": "The activities of companies should not be directly regulated by the government, especially the executive branch.",
@@ -132,7 +96,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 5,
+        "belowFloor": 6,
         "noMatch": 0
       }
     },
@@ -150,38 +114,11 @@
           "endMs": 115600,
           "confidence": 0.733,
           "source": "segment"
-        },
-        {
-          "entityId": "c9e8a13940804bdea7ab032049fa4655",
-          "claimId": "f9f61880dd0c41ae864bff41654268a2",
-          "claimText": "The parents of Dreamers may be deported.",
-          "startMs": 107160,
-          "endMs": 111440,
-          "confidence": 0.611,
-          "source": "segment"
-        },
-        {
-          "entityId": "b9a9220797e74ac1bb1816782ddf0573",
-          "claimId": "ca0117f4ac014631a145fe197999520a",
-          "claimText": "Providing citizenship to people brought to the US illegally as children incentivizes more families to bring children into the country illegally.",
-          "startMs": 42850,
-          "endMs": 48920,
-          "confidence": 0.6,
-          "source": "segment"
-        },
-        {
-          "entityId": "b48571956a6340bca5ee29c762004cd2",
-          "claimId": "abd36ddc95464796acdcf8fab9f5030a",
-          "claimText": "Children brought to the US illegally did not break any moral rules.",
-          "startMs": 26700,
-          "endMs": 30880,
-          "confidence": 0.667,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 5,
+        "belowFloor": 8,
         "noMatch": 1
       }
     },
@@ -191,15 +128,6 @@
       "spaceId": "89bd89bf28ff8a0963faf92a8c905e20",
       "claimCount": 9,
       "writes": [
-        {
-          "entityId": "a381c51cc7a9469c843e32f6a9e8b0d6",
-          "claimId": "cfcb1a9310414797af5319577d1ea712",
-          "claimText": "Iran cut communications with international organizations, including the International Energy Agency.",
-          "startMs": 186530,
-          "endMs": 195040,
-          "confidence": 0.625,
-          "source": "segment"
-        },
         {
           "entityId": "4cbb57b0fa244a69b2387b835ec08ea9",
           "claimId": "ffa0962a4bfc4f0f954c6aef00d0da56",
@@ -230,66 +158,8 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 2,
+        "belowFloor": 3,
         "noMatch": 3
-      }
-    },
-    {
-      "debateEntityId": "019fa540ac497fa0a6e62db3487880a7",
-      "debateName": "Dan Cordie vs. Arturas Vil on AI chatbots are an effective tool for mental health support",
-      "spaceId": "52c7ae149838b6d47ce0f3b2a5974546",
-      "claimCount": 17,
-      "writes": [
-        {
-          "entityId": "3f429fdda243463db2611ce84d2c2487",
-          "claimId": "4ac6b08fa51e463fbe51235c6020a3e6",
-          "claimText": "Market solutions like open-source models with advanced voice setups might address privacy concerns with AI chatbots.",
-          "startMs": 188770,
-          "endMs": 201200,
-          "confidence": 0.611,
-          "source": "segment"
-        },
-        {
-          "entityId": "dc4ee90cd356446f9e71cc4b8f6cacef",
-          "claimId": "00e7fe6178b84fc0b02ec6abf813c0ac",
-          "claimText": "Many people cannot afford traditional mental health support such as therapists.",
-          "startMs": 92000,
-          "endMs": 98410,
-          "confidence": 0.688,
-          "source": "segment"
-        },
-        {
-          "entityId": "1c1141fecc2c45a3b8703752bcd15a74",
-          "claimId": "1bb2918d161c4341904d15c0b5897f2f",
-          "claimText": "Using AI chatbots for mental health support requires careful implementation.",
-          "startMs": 60000,
-          "endMs": 68060,
-          "confidence": 0.58,
-          "source": "segment"
-        },
-        {
-          "entityId": "d0fc6b7d1f4a4f48ba7b4f9c74ed96f1",
-          "claimId": "fb9ba46f493b43998ef3010229d9a928",
-          "claimText": "The risks of sharing personal mental health data with AI chatbots are currently high.",
-          "startMs": 144090,
-          "endMs": 154970,
-          "confidence": 0.6,
-          "source": "segment"
-        },
-        {
-          "entityId": "aaad9f2d28ed42ffa5497ad2527fa65a",
-          "claimId": "35e665fd025a48d09cdf789f0cb7e5b0",
-          "claimText": "There is insufficient data to support the use of AI chatbots for mental health.",
-          "startMs": 6730,
-          "endMs": 16390,
-          "confidence": 0.611,
-          "source": "segment"
-        }
-      ],
-      "skipped": {
-        "alreadyPublished": 0,
-        "belowFloor": 8,
-        "noMatch": 4
       }
     },
     {
@@ -308,30 +178,12 @@
           "source": "segment"
         },
         {
-          "entityId": "5bd2e60761a745ca80640aa0a97b75a6",
-          "claimId": "26cca640b7d145cda33d52c4dc74073a",
-          "claimText": "Sanctuary city policies are a net negative for the cities that enact them.",
-          "startMs": 32920,
-          "endMs": 51070,
-          "confidence": 0.61,
-          "source": "segment"
-        },
-        {
           "entityId": "249eac95372742248a4d8474f296ad9e",
           "claimId": "b5ef770770a14a839c18fa1d9acba622",
           "claimText": "Sanctuary city policies can restrict cooperation between local authorities and federal immigration enforcement.",
           "startMs": 13480,
           "endMs": 22160,
           "confidence": 0.818,
-          "source": "segment"
-        },
-        {
-          "entityId": "17bdb1a031a54cbfb8738b9a402a980b",
-          "claimId": "f6e5660aa50f4007b312d3ba3bae1cb9",
-          "claimText": "Sanctuary city policies can allow individuals who pose a public safety risk to remain in communities.",
-          "startMs": 22160,
-          "endMs": 32920,
-          "confidence": 0.691,
           "source": "segment"
         },
         {
@@ -350,15 +202,6 @@
           "startMs": 142760,
           "endMs": 152840,
           "confidence": 0.714,
-          "source": "segment"
-        },
-        {
-          "entityId": "840832aaf290417491369dbd2e99f804",
-          "claimId": "3f791b5d825f4950b34c4a0a654f1147",
-          "claimText": "Sanctuary policies ensure that victims and witnesses can report crimes without fearing deportation.",
-          "startMs": 89000,
-          "endMs": 105000,
-          "confidence": 0.627,
           "source": "segment"
         },
         {
@@ -400,7 +243,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 1,
+        "belowFloor": 4,
         "noMatch": 0
       }
     },
@@ -410,15 +253,6 @@
       "spaceId": "52c7ae149838b6d47ce0f3b2a5974546",
       "claimCount": 12,
       "writes": [
-        {
-          "entityId": "f6d406d881994169969a6a87b875dd47",
-          "claimId": "09cf0ee20c774edeb7b5388757025d83",
-          "claimText": "Humans are social animals who are evolutionarily wired for social interaction with other humans.",
-          "startMs": 67000,
-          "endMs": 79000,
-          "confidence": 0.611,
-          "source": "segment"
-        },
         {
           "entityId": "e4e4f3b829b840998cc8d47dd37cc5ef",
           "claimId": "b33c7d202fdf43ed9be90f50f78bd12f",
@@ -431,7 +265,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 10,
+        "belowFloor": 11,
         "noMatch": 0
       }
     },
@@ -441,24 +275,6 @@
       "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
       "claimCount": 11,
       "writes": [
-        {
-          "entityId": "be5a881afac24b13ae7a8d777e06947f",
-          "claimId": "ca8de613ebc245688d2dd385ebace212",
-          "claimText": "The process for pausing AI models should be regulated and fair, but not heavily regulated.",
-          "startMs": 120000,
-          "endMs": 131390,
-          "confidence": 0.667,
-          "source": "segment"
-        },
-        {
-          "entityId": "ff7e3c910a5e4a5ebdea79a8ee9d6278",
-          "claimId": "bb80c8ed492947ceb39f3d8e0e8a93b9",
-          "claimText": "The rights of the free market should not be ended due to major national or global events.",
-          "startMs": 180090,
-          "endMs": 191400,
-          "confidence": 0.625,
-          "source": "segment"
-        },
         {
           "entityId": "8c932477097d4bdb9e69f74463e268fe",
           "claimId": "626eadd40c9b465f8d0732a5d224976c",
@@ -480,7 +296,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 5,
+        "belowFloor": 7,
         "noMatch": 2
       }
     },
@@ -491,30 +307,12 @@
       "claimCount": 13,
       "writes": [
         {
-          "entityId": "c8cd9d31089b41e3bf7a93bfe9654075",
-          "claimId": "15ac113550ba4a30977627bdc5c03ca3",
-          "claimText": "The Trump administration tariffs change where companies choose to invest and produce.",
-          "startMs": 165000,
-          "endMs": 185280,
-          "confidence": 0.633,
-          "source": "segment"
-        },
-        {
           "entityId": "329d27aa8b754d1eab59c53f058bed56",
           "claimId": "a22d32db67f6414b948c9cc48506cf18",
           "claimText": "When imported goods lose a price advantage due to tariffs, businesses have a stronger incentive to source and manufacture in the U.S.",
           "startMs": 185280,
           "endMs": 195320,
           "confidence": 0.814,
-          "source": "segment"
-        },
-        {
-          "entityId": "77cf004334264d7a9fb74b852bf1c7c1",
-          "claimId": "3113395779fe426b9f1cbba853f34264",
-          "claimText": "The Trump administration tariffs have failed to shrink the total U.S. trade deficit.",
-          "startMs": 143010,
-          "endMs": 154180,
-          "confidence": 0.566,
           "source": "segment"
         },
         {
@@ -543,38 +341,11 @@
           "endMs": 114160,
           "confidence": 0.769,
           "source": "segment"
-        },
-        {
-          "entityId": "c056617f08a24ebc9266f511ca4aadbc",
-          "claimId": "70b10f3e572040a28c82a3fd55af4056",
-          "claimText": "The Trump administration tariffs make imported goods less artificially competitive, giving U.S. producers a reason to expand production domestically.",
-          "startMs": 78800,
-          "endMs": 87320,
-          "confidence": 0.698,
-          "source": "segment"
-        },
-        {
-          "entityId": "0ce83589a64447c99dbd55081a9674e4",
-          "claimId": "d08387dc65f9495f92cf9fdce8dd4f20",
-          "claimText": "The Trump administration tariffs act as a direct tax on American consumers.",
-          "startMs": 25340,
-          "endMs": 37230,
-          "confidence": 0.58,
-          "source": "segment"
-        },
-        {
-          "entityId": "2d4e28abc534458a962637507d39c013",
-          "claimId": "a1f89d4ac1904a8ba699dce2b4be121e",
-          "claimText": "The Trump administration tariffs cost the average U.S. household $921,000 annually in higher costs for basic necessities.",
-          "startMs": 33640,
-          "endMs": 50840,
-          "confidence": 0.63,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 4,
+        "belowFloor": 9,
         "noMatch": 0
       }
     },
@@ -591,15 +362,6 @@
           "startMs": 173310,
           "endMs": 182680,
           "confidence": 0.729,
-          "source": "segment"
-        },
-        {
-          "entityId": "493a85981d24420aaf767e8ff0609e2f",
-          "claimId": "60c5876b984844838530ff4d5e5614eb",
-          "claimText": "Artificial intelligence can be aware of its internal thoughts and its own programming",
-          "startMs": 139800,
-          "endMs": 144120,
-          "confidence": 0.667,
           "source": "segment"
         },
         {
@@ -628,38 +390,11 @@
           "endMs": 147400,
           "confidence": 1,
           "source": "segment"
-        },
-        {
-          "entityId": "afd0c03a3e8c4d35817386608bf30aea",
-          "claimId": "48cb3638ba924e67a108f1ddaa9ced14",
-          "claimText": "The human brain is described as having a billion trillion particles, memory, and an intricate system for thought",
-          "startMs": 97340,
-          "endMs": 106140,
-          "confidence": 0.601,
-          "source": "segment"
-        },
-        {
-          "entityId": "b5ceeae46ffb4c1789466471105cc962",
-          "claimId": "c05cc462071a44cd99349576ba1c7442",
-          "claimText": "Arturas Vil asserts there is no real argument that consciousness must be biological",
-          "startMs": 113020,
-          "endMs": 116680,
-          "confidence": 0.571,
-          "source": "segment"
-        },
-        {
-          "entityId": "32d108ecc62f4326bbba8fa5716923ef",
-          "claimId": "abef2453c7904c7d9d02deb536e06d11",
-          "claimText": "Preston Mantel defines artificial consciousness as involving emotions, decision-making, and desires that can change over time",
-          "startMs": 20620,
-          "endMs": 32340,
-          "confidence": 0.551,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 2,
+        "belowFloor": 6,
         "noMatch": 2
       }
     },
@@ -677,20 +412,11 @@
           "endMs": 100240,
           "confidence": 0.826,
           "source": "segment"
-        },
-        {
-          "entityId": "75407cc7e08a48c9a464ca2bc8c41e4b",
-          "claimId": "78dda68b01074e81ba8bb195820407a4",
-          "claimText": "An AI companion's agreeableness is not necessarily equivalent to exploiting human emotional vulnerability.",
-          "startMs": 120000,
-          "endMs": 131120,
-          "confidence": 0.556,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 2,
+        "belowFloor": 3,
         "noMatch": 7
       }
     },
@@ -700,24 +426,6 @@
       "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
       "claimCount": 14,
       "writes": [
-        {
-          "entityId": "ebb411bc174048228d15d1dcdfa4437a",
-          "claimId": "ff8574c55661461e99e3aa00f9a088ad",
-          "claimText": "The business model of platforms like Jio outsourcing licensing rights to expert publishing companies is growing in importance",
-          "startMs": 123480,
-          "endMs": 133390,
-          "confidence": 0.692,
-          "source": "segment"
-        },
-        {
-          "entityId": "a1e36f880e2a413f935d14052cf9b935",
-          "claimId": "a276ee58228748eeba8f68f5ed1f76b5",
-          "claimText": "Access to expert publications for AI training is gated for both the public and AI companies",
-          "startMs": 141490,
-          "endMs": 151040,
-          "confidence": 0.625,
-          "source": "segment"
-        },
         {
           "entityId": "414153ecc1684dcb95641c6dacb4c16d",
           "claimId": "fe277c2d04a449a0b942e21be0cec113",
@@ -730,7 +438,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 6,
+        "belowFloor": 8,
         "noMatch": 5
       }
     },
@@ -759,24 +467,6 @@
           "source": "segment"
         },
         {
-          "entityId": "80b345fa2cc3442998acd945d8968c84",
-          "claimId": "df2d4707df77481fa446bb9b14470470",
-          "claimText": "Sex may not be truly consensual if a woman does not want to participate or is not initially in the mood",
-          "startMs": 55440,
-          "endMs": 57680,
-          "confidence": 0.571,
-          "source": "segment"
-        },
-        {
-          "entityId": "0dab0c1595b844639a53e3d7515562e5",
-          "claimId": "341c2277dc3e428a8491d1525056175d",
-          "claimText": "The concept of a man's duty to sexually please his wife is not a common societal expectation",
-          "startMs": 34390,
-          "endMs": 39360,
-          "confidence": 0.611,
-          "source": "segment"
-        },
-        {
           "entityId": "8d3ff443a6c740c2a6d813a3eef7155a",
           "claimId": "33d5581aaf0242758e336e01ab62cb4d",
           "claimText": "A marital obligation includes participating in sex that is beneficial for both the husband and wife",
@@ -788,7 +478,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 5,
+        "belowFloor": 7,
         "noMatch": 5
       }
     },
@@ -799,66 +489,12 @@
       "claimCount": 13,
       "writes": [
         {
-          "entityId": "07445f1074c9469bade442f326e20ea9",
-          "claimId": "aecd5d285dc1499eb6206be6e4fe0d58",
-          "claimText": "The burden of obtaining a voter ID could be decreased by enabling more digital and mail-in voting options",
-          "startMs": 139460,
-          "endMs": 151120,
-          "confidence": 0.611,
-          "source": "segment"
-        },
-        {
-          "entityId": "38576914b2254e04a576e8bd985c61b7",
-          "claimId": "ea0cb05279a2474fa580bc972558d7d8",
-          "claimText": "Attempts to vote by people who are illegal immigrants or otherwise ineligible are very rare",
-          "startMs": 75670,
-          "endMs": 83440,
-          "confidence": 0.566,
-          "source": "segment"
-        },
-        {
           "entityId": "25524c6eb1154eb6905c59aff542cda8",
           "claimId": "bbceb74854d74df9a3aec4bff74379e6",
           "claimText": "There is significant evidence that voter ID laws suppress voting",
           "startMs": 90920,
           "endMs": 96400,
           "confidence": 0.755,
-          "source": "segment"
-        },
-        {
-          "entityId": "48e6485ceb6f4c989ab26c5f25ff93ba",
-          "claimId": "fc90754ff7b4433f85611eeba439b06c",
-          "claimText": "Voter ID laws can suppress voting because some people do not have the requested ID, do not carry it with them, or forget it on election day",
-          "startMs": 92980,
-          "endMs": 102430,
-          "confidence": 0.627,
-          "source": "segment"
-        },
-        {
-          "entityId": "26faa68b962b4d44919fcac1a5776cd4",
-          "claimId": "70d38ef732194221baad4c6a7cca666f",
-          "claimText": "Voter ID laws are most likely to suppress voting among poor people in rural areas",
-          "startMs": 104840,
-          "endMs": 113400,
-          "confidence": 0.636,
-          "source": "segment"
-        },
-        {
-          "entityId": "3a2c7fddc06d4f91bd9256e7c495fc2c",
-          "claimId": "862221842c8a42a5b218e7e9f3d0938e",
-          "claimText": "There is no evidence that voting by ineligible people has ever been a significant factor in an election or changed an election's results",
-          "startMs": 85160,
-          "endMs": 90350,
-          "confidence": 0.616,
-          "source": "segment"
-        },
-        {
-          "entityId": "084b993d53e64e47a9649f2f4fde2168",
-          "claimId": "bacc096907b04ca58d11c3fc16c9d8d9",
-          "claimText": "The problems voter ID laws are intended to solve include double-counted votes and voting by people who do not have the right to vote",
-          "startMs": 24300,
-          "endMs": 37570,
-          "confidence": 0.564,
           "source": "segment"
         },
         {
@@ -873,7 +509,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 4,
+        "belowFloor": 10,
         "noMatch": 1
       }
     },
@@ -893,24 +529,6 @@
           "source": "segment"
         },
         {
-          "entityId": "ecbf95beef484d088b4b307695717035",
-          "claimId": "e935a862b2ee41c78b272f3c5b9a312c",
-          "claimText": "NATO was founded to contain the Soviet Union",
-          "startMs": 68100,
-          "endMs": 69560,
-          "confidence": 0.6,
-          "source": "segment"
-        },
-        {
-          "entityId": "6caa088bfc1e418c9aa92bac9a870b99",
-          "claimId": "db20399f45e64f0eb89ea3ba9e4d866d",
-          "claimText": "NATO is an obsolete alliance",
-          "startMs": 63240,
-          "endMs": 66800,
-          "confidence": 0.611,
-          "source": "segment"
-        },
-        {
           "entityId": "7780e5f5c7d14725b116e92484a5e2f7",
           "claimId": "44b18c24b9fe4fc684366acea8c6eec5",
           "claimText": "Europe needs to take control of its own destiny",
@@ -918,60 +536,11 @@
           "endMs": 116520,
           "confidence": 0.958,
           "source": "segment"
-        },
-        {
-          "entityId": "4dce4e758e484e76bea5b3573bc3b610",
-          "claimId": "f325a25bea4240718c4d27e104daade0",
-          "claimText": "In the past, no European NATO allies met the 2% of GDP defense spending target",
-          "startMs": 13550,
-          "endMs": 25890,
-          "confidence": 0.643,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 12,
-        "noMatch": 4
-      }
-    },
-    {
-      "debateEntityId": "01a0791f2d9e72708b1bfcfdd16082bd",
-      "debateName": "Bertrand Armando vs. Kevin on The United States should leave NATO",
-      "spaceId": "89bd89bf28ff8a0963faf92a8c905e20",
-      "claimCount": 14,
-      "writes": [
-        {
-          "entityId": "c31dabab21464161894a430c15082082",
-          "claimId": "cecb74365a78452a8e91af1a0d615baa",
-          "claimText": "France deployed troops to Mali approximately nine years ago to counter terrorist advancement without assistance from NATO or other allies",
-          "startMs": 22560,
-          "endMs": 36380,
-          "confidence": 0.554,
-          "source": "segment"
-        },
-        {
-          "entityId": "ff226330cf6b4bce95dc66bcafb3f62b",
-          "claimId": "fc637bef46c54b45a4887f0975514392",
-          "claimText": "The United States is the only NATO member to have ever invoked Article 5, which it did after the 9/11 attacks",
-          "startMs": 126500,
-          "endMs": 136250,
-          "confidence": 0.665,
-          "source": "segment"
-        },
-        {
-          "entityId": "8f245f6fd90e4cbdb30b292eb012f34c",
-          "claimId": "7133bb3a806848f082c8d1ae2bb4e730",
-          "claimText": "A 5% NATO spending target is not being met by allies, and the deadline for it has been pushed back by ten years",
-          "startMs": 99000,
-          "endMs": 103720,
-          "confidence": 0.579,
-          "source": "segment"
-        }
-      ],
-      "skipped": {
-        "alreadyPublished": 0,
-        "belowFloor": 7,
+        "belowFloor": 15,
         "noMatch": 4
       }
     },
@@ -991,15 +560,6 @@
           "source": "segment"
         },
         {
-          "entityId": "68605368b0e1406a94751deb8f67f433",
-          "claimId": "2ba3a4e0cbbf407c98b4abc487d02338",
-          "claimText": "The qualities that make an asset serious include liquidity, long-term economic relevance, and utility",
-          "startMs": 34400,
-          "endMs": 48960,
-          "confidence": 0.647,
-          "source": "segment"
-        },
-        {
           "entityId": "f489a78d55f5471984f22b9fa90807e6",
           "claimId": "04d8602cd2c24e369aeeb3bbc8e41d79",
           "claimText": "Bitcoin operates on a decentralized network, has a fixed maximum supply, and can be transferred globally without a central authority",
@@ -1016,20 +576,11 @@
           "endMs": 160680,
           "confidence": 0.798,
           "source": "segment"
-        },
-        {
-          "entityId": "7faf1db0929e4aed92dc802b58c2a9ec",
-          "claimId": "57b3f7ebda554725b9409513ed0a06aa",
-          "claimText": "Bitcoin may not be the best asset for every investor",
-          "startMs": 51430,
-          "endMs": 135930,
-          "confidence": 0.625,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 0,
+        "belowFloor": 2,
         "noMatch": 0
       }
     },
@@ -1046,24 +597,6 @@
           "startMs": 67050,
           "endMs": 76440,
           "confidence": 0.76,
-          "source": "segment"
-        },
-        {
-          "entityId": "1eedbf9770c74a5eb380e98800efa553",
-          "claimId": "2b3a7468f3f047a1a063e18871734c2b",
-          "claimText": "The Chinese government would not agree to prioritize AI regulation over competitiveness",
-          "startMs": 5320,
-          "endMs": 15000,
-          "confidence": 0.583,
-          "source": "segment"
-        },
-        {
-          "entityId": "e8fba71566624bba8f5721c95f39fb2e",
-          "claimId": "cb185e49e41d4eaeb8ab03208d1f43f4",
-          "claimText": "The Chinese government seeks open-source models to improve its AI development effectiveness",
-          "startMs": 9000,
-          "endMs": 22000,
-          "confidence": 0.697,
           "source": "segment"
         },
         {
@@ -1087,7 +620,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 1,
+        "belowFloor": 3,
         "noMatch": 4
       }
     },
@@ -1097,15 +630,6 @@
       "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
       "claimCount": 18,
       "writes": [
-        {
-          "entityId": "1ad0f8b7691e455fb2ce609c89a5d656",
-          "claimId": "d99ea4290f9e43ed904795566a7e0875",
-          "claimText": "Cooperation is the best approach for moving forward with AI management",
-          "startMs": 206450,
-          "endMs": 209440,
-          "confidence": 0.633,
-          "source": "segment"
-        },
         {
           "entityId": "44e7a514768143bd807889eda2004926",
           "claimId": "1831c32928e54420851f6529a6689f7c",
@@ -1134,33 +658,6 @@
           "source": "segment"
         },
         {
-          "entityId": "f944e5dc82e3436e862180a0d6a2d980",
-          "claimId": "1bd76edc60c8487492e1d00df13222ef",
-          "claimText": "Cooperation between governments on the pervasive issue of AI will be necessary",
-          "startMs": 73000,
-          "endMs": 84480,
-          "confidence": 0.633,
-          "source": "segment"
-        },
-        {
-          "entityId": "af2bd51f374c4886843759a75c0fc752",
-          "claimId": "dc9fbb6051274050b79c25a64bf22d19",
-          "claimText": "The possession of nuclear bombs by multiple countries has led to a state of mutually assured destruction",
-          "startMs": 84480,
-          "endMs": 91780,
-          "confidence": 0.579,
-          "source": "segment"
-        },
-        {
-          "entityId": "120dfc3aed5043f4a96c884fdce6d126",
-          "claimId": "e58b8a6dfc2945afa34950e3e3c06881",
-          "claimText": "European countries tend to show more concern for the environmental harms of data centers",
-          "startMs": 102520,
-          "endMs": 110560,
-          "confidence": 0.6,
-          "source": "segment"
-        },
-        {
           "entityId": "e7d9b809742443f8a326ea4e9863724d",
           "claimId": "841c2169c8b04cbcac69e7920d1b57d7",
           "claimText": "Cooperation on AI could potentially balance out harmful competition between countries",
@@ -1168,20 +665,11 @@
           "endMs": 120000,
           "confidence": 0.786,
           "source": "segment"
-        },
-        {
-          "entityId": "ec6c7039d3494b2d809b2b4ad2501d89",
-          "claimId": "c8dd6cd35b1b4e2d8db1a89c65dafade",
-          "claimText": "The most significant harms associated with AI are larger than individual countries",
-          "startMs": 120600,
-          "endMs": 129580,
-          "confidence": 0.633,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 5,
+        "belowFloor": 10,
         "noMatch": 4
       }
     },
@@ -1210,15 +698,6 @@
           "source": "segment"
         },
         {
-          "entityId": "ba6165a2eef2431a93dc1dac9865d953",
-          "claimId": "64e82c2fb1414857b57168c1683320ec",
-          "claimText": "The design of AI chatbots to maximize engagement results in interactions that lack the friction of real human connection",
-          "startMs": 172200,
-          "endMs": 185120,
-          "confidence": 0.667,
-          "source": "segment"
-        },
-        {
           "entityId": "5785660fa4b6449d9513ae2f1b54337b",
           "claimId": "9f8d2b988d824bda9beee5f33136e1e5",
           "claimText": "AI chatbots may increase emotional dependence and social isolation in people who overuse them or do not know how to use them correctly",
@@ -1239,7 +718,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 8,
+        "belowFloor": 9,
         "noMatch": 0
       }
     },
@@ -1281,15 +760,6 @@
       "claimCount": 11,
       "writes": [
         {
-          "entityId": "697e4d9e1f204cb28bf211781dc6f266",
-          "claimId": "95e9546a1a854af08fa2160f037ae2fe",
-          "claimText": "Dating apps can harm mental health and relationship quality",
-          "startMs": 2510,
-          "endMs": 5680,
-          "confidence": 0.571,
-          "source": "segment"
-        },
-        {
           "entityId": "c8c215d99bf54e4992727d29f5f375d8",
           "claimId": "00c0815dddac4c1bb3d721de4720236c",
           "claimText": "The illusion of infinite choice on dating apps makes committing to a partner more difficult",
@@ -1301,7 +771,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 7,
+        "belowFloor": 8,
         "noMatch": 2
       }
     },
@@ -1330,48 +800,12 @@
           "source": "segment"
         },
         {
-          "entityId": "5c9c435796594b2bbedbef9a5af715e6",
-          "claimId": "058424883aff4d39bd6264881450d4f6",
-          "claimText": "A therapist provides a service that can be replaced, rather than a human relationship",
-          "startMs": 165000,
-          "endMs": 174000,
-          "confidence": 0.663,
-          "source": "segment"
-        },
-        {
-          "entityId": "452f5977a12c4f7984233fe2ba3c4683",
-          "claimId": "63519f3138d845a39028213b2919ff65",
-          "claimText": "Some AI therapists may currently be better than some human therapists",
-          "startMs": 178750,
-          "endMs": 187100,
-          "confidence": 0.643,
-          "source": "segment"
-        },
-        {
-          "entityId": "00291fe23754409f962037213a1eaabe",
-          "claimId": "45e95686d1ba41b89660ea0aa3ca9d8f",
-          "claimText": "Friendships and romantic relationships cannot be replaced by AI companions",
-          "startMs": 192000,
-          "endMs": 199770,
-          "confidence": 0.595,
-          "source": "segment"
-        },
-        {
           "entityId": "c45d29f642af43f48da505f489212473",
           "claimId": "44ea946c160b40d683aa15e7f7521e98",
           "claimText": "A person cannot have a fulfilled and happy life by replacing their human relationships with AI companions",
           "startMs": 79000,
           "endMs": 91000,
           "confidence": 0.707,
-          "source": "segment"
-        },
-        {
-          "entityId": "47fd251976644c559373db81cc83e47d",
-          "claimId": "1f76fbaf0572452b834170d2222f197f",
-          "claimText": "AI companions can supplement human relationships and help fill gaps in a person's social life",
-          "startMs": 81290,
-          "endMs": 91000,
-          "confidence": 0.661,
           "source": "segment"
         },
         {
@@ -1393,15 +827,6 @@
           "source": "segment"
         },
         {
-          "entityId": "053647e0f1674ea3a4cc3bf2b8d2bf3b",
-          "claimId": "a1939074ad9a4652926bafd1ec58759b",
-          "claimText": "For isolated, elderly, or disabled people, AI companions may be a better option than available human relationships",
-          "startMs": 40200,
-          "endMs": 48960,
-          "confidence": 0.647,
-          "source": "segment"
-        },
-        {
           "entityId": "ad1e66f4fc7d401ca41984f6aa702074",
           "claimId": "a370ea6596d044d6afc4b3c76a374645",
           "claimText": "Some human relationships, such as with therapists or long-distance partners, are mediated, asymmetric, or conducted online",
@@ -1413,48 +838,8 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 3,
+        "belowFloor": 8,
         "noMatch": 1
-      }
-    },
-    {
-      "debateEntityId": "01a087443be67330ab37e90404d91c3f",
-      "debateName": "Scot Loyd vs. Arturas Vil on Voter ID laws solve a problem that is too rare to justify the burden",
-      "spaceId": "4582fbbee28a16589154f7e36f1ee3c5",
-      "claimCount": 12,
-      "writes": [
-        {
-          "entityId": "03bbcb2f2e1843a8a994f4de803048e8",
-          "claimId": "0669cc05cb9f42979cd901ebdc154195",
-          "claimText": "A lack of public trust in elections is a real problem",
-          "startMs": 186530,
-          "endMs": 191000,
-          "confidence": 0.633,
-          "source": "segment"
-        },
-        {
-          "entityId": "41ba92a3565a49038bdca646bffd7e7f",
-          "claimId": "d5d8f77c049b4d66951b2708b350ceda",
-          "claimText": "Implementing voter ID laws would help increase public trust in elections",
-          "startMs": 186530,
-          "endMs": 194000,
-          "confidence": 0.556,
-          "source": "segment"
-        },
-        {
-          "entityId": "36f565e04a3143009dd0cd09c7c862e2",
-          "claimId": "223f8deae98d4bc48ad204fb3429aa0f",
-          "claimText": "The United States has a history of policies, including Jim Crow and segregation laws, that were designed to discourage Black Americans from voting",
-          "startMs": 26680,
-          "endMs": 39700,
-          "confidence": 0.673,
-          "source": "segment"
-        }
-      ],
-      "skipped": {
-        "alreadyPublished": 0,
-        "belowFloor": 5,
-        "noMatch": 4
       }
     },
     {
@@ -1464,30 +849,12 @@
       "claimCount": 7,
       "writes": [
         {
-          "entityId": "6f7582041a37468caad7a8a6d4767879",
-          "claimId": "24a45f9e1dbc4d1eb2f1d95914d64c29",
-          "claimText": "A country's sovereignty may end when its territory is used to prepare hostile actions against another nation",
-          "startMs": 172520,
-          "endMs": 180520,
-          "confidence": 0.579,
-          "source": "segment"
-        },
-        {
           "entityId": "3c5f16adb9a94b57b020decf67c47a70",
           "claimId": "f0c61c9a5a03412d978f4c4f556c3f61",
           "claimText": "It is in the United States' self-interest to intervene militarily to protect its social, economic, political, and health interests",
           "startMs": 97120,
           "endMs": 111520,
           "confidence": 0.799,
-          "source": "segment"
-        },
-        {
-          "entityId": "4a55282e1e834c208aa1bddbd8ffbce1",
-          "claimId": "4f7ad49da50443da9b789e15cdf03023",
-          "claimText": "Crossing the Mexican border to counter a threat to the health and welfare of U.S. citizens can be justified",
-          "startMs": 60000,
-          "endMs": 79240,
-          "confidence": 0.697,
           "source": "segment"
         },
         {
@@ -1520,7 +887,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 0,
+        "belowFloor": 2,
         "noMatch": 1
       }
     },
@@ -1549,15 +916,6 @@
           "source": "segment"
         },
         {
-          "entityId": "00192151007a49b2b232df9e2406b07c",
-          "claimId": "66fc6ef98b044d91a625d54fc7038993",
-          "claimText": "The potential irreversible consequence of an AI chatbot suggesting self-harm is not worth the risk, even if it occurs rarely",
-          "startMs": 26330,
-          "endMs": 38320,
-          "confidence": 0.563,
-          "source": "segment"
-        },
-        {
           "entityId": "800995e8873c4453b992e63ea12c843a",
           "claimId": "582aaa49ac0a4d069b7a563bbf9f3905",
           "claimText": "AI chatbots have suggested to individuals that they commit suicide or take other rash, detrimental actions",
@@ -1574,20 +932,11 @@
           "endMs": 188440,
           "confidence": 0.809,
           "source": "segment"
-        },
-        {
-          "entityId": "e322731fb2904c53ad39c2e36ff0c2dc",
-          "claimId": "dc9218b166864ad5b2c7b64fb3e42bf7",
-          "claimText": "An AI chatbot could be designed to refer an individual back to a human therapist if it detects a risk of self-harm",
-          "startMs": 174090,
-          "endMs": 193800,
-          "confidence": 0.667,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 4,
+        "belowFloor": 6,
         "noMatch": 1
       }
     },
@@ -1598,39 +947,12 @@
       "claimCount": 11,
       "writes": [
         {
-          "entityId": "442ab4388bf7400aa8f2aa2dcc28f03c",
-          "claimId": "cb0823e9fd1546fc9b42288c47e43e33",
-          "claimText": "A proper voter ID law would ensure every citizen automatically has an ID",
-          "startMs": 89560,
-          "endMs": 93200,
-          "confidence": 0.611,
-          "source": "segment"
-        },
-        {
-          "entityId": "2e4f0ac99cd34dce8ddb596fb92942ac",
-          "claimId": "08039ddc0bf84472b1ff13cfefaa57a2",
-          "claimText": "Since becoming a democracy, Romania has always required a voter ID for elections",
-          "startMs": 65440,
-          "endMs": 74740,
-          "confidence": 0.566,
-          "source": "segment"
-        },
-        {
           "entityId": "0f04952cfa434a3796184ed4f920aaa2",
           "claimId": "9b334548ae7247139adef02ef305adbd",
           "claimText": "Voter ID laws suppress voter turnout in the United States due to the country's history of systemic racism",
           "startMs": 0,
           "endMs": 12480,
           "confidence": 0.767,
-          "source": "segment"
-        },
-        {
-          "entityId": "67e068318bc9495db5d19cf944fa871f",
-          "claimId": "973f585564234d61b7d6cbb2aad5856c",
-          "claimText": "People who are told they must show an ID to vote are less likely to participate in elections",
-          "startMs": 42160,
-          "endMs": 51180,
-          "confidence": 0.566,
           "source": "segment"
         },
         {
@@ -1663,7 +985,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 3,
+        "belowFloor": 6,
         "noMatch": 1
       }
     },
@@ -1673,33 +995,6 @@
       "spaceId": "224406e0de3c48d78ef12774111b8b2f",
       "claimCount": 22,
       "writes": [
-        {
-          "entityId": "8e74224e2937474591ebad90429eccf3",
-          "claimId": "817061e06213442eaf0b2c01c84b0c07",
-          "claimText": "Achieving a successful long-term emotional partnership is more difficult in forms of partnership other than marriage",
-          "startMs": 152390,
-          "endMs": 177000,
-          "confidence": 0.591,
-          "source": "segment"
-        },
-        {
-          "entityId": "3cf15f43ef9d49f9a2f36f35e2c1f77d",
-          "claimId": "292bf9cf898d4cf9bbe9b1092683284a",
-          "claimText": "For women in patriarchal societies, remaining unmarried can provide more independence, access, and security",
-          "startMs": 29760,
-          "endMs": 40720,
-          "confidence": 0.625,
-          "source": "segment"
-        },
-        {
-          "entityId": "0b21b0632e804c4eae884139579dd5e6",
-          "claimId": "5be9202401c744019211ce383f918892",
-          "claimText": "Success, economic security, and personal happiness can be pursued independently of marriage",
-          "startMs": 15760,
-          "endMs": 26780,
-          "confidence": 0.688,
-          "source": "segment"
-        },
         {
           "entityId": "aaba0c91ce9b44e49c1ed8d798c1c37e",
           "claimId": "1e4f645b9ac64330a2f1f1cc52e17865",
@@ -1716,15 +1011,6 @@
           "startMs": 133630,
           "endMs": 143280,
           "confidence": 0.733,
-          "source": "segment"
-        },
-        {
-          "entityId": "1015905e5b1641878f9c558e6e50ebdf",
-          "claimId": "36dd5237727e4806a15573786536f582",
-          "claimText": "Marriage provides a means to pool resources, save costs, and make better investments",
-          "startMs": 69780,
-          "endMs": 88760,
-          "confidence": 0.674,
           "source": "segment"
         },
         {
@@ -1755,33 +1041,6 @@
           "source": "segment"
         },
         {
-          "entityId": "c53f2c251fbe47469a8038e29d904521",
-          "claimId": "a3ec088f294d435a910e7fb924aad3f3",
-          "claimText": "Marriage provides a means to pool resources, save costs, and make better investments",
-          "startMs": 69780,
-          "endMs": 88760,
-          "confidence": 0.674,
-          "source": "segment"
-        },
-        {
-          "entityId": "9673d44395054aed8a819fef91a99ab0",
-          "claimId": "64529de15570430da64f2967119e28d2",
-          "claimText": "For women in patriarchal societies, remaining unmarried can provide more independence, access, and security",
-          "startMs": 29760,
-          "endMs": 40720,
-          "confidence": 0.625,
-          "source": "segment"
-        },
-        {
-          "entityId": "8e2e08129b004a6290015fc280053e25",
-          "claimId": "53c7ab1144c448faa1d029bfae133d18",
-          "claimText": "Success, economic security, and personal happiness can be pursued independently of marriage",
-          "startMs": 15760,
-          "endMs": 26780,
-          "confidence": 0.688,
-          "source": "segment"
-        },
-        {
           "entityId": "5f5b369f20f24df09a3ffbe00e59ca13",
           "claimId": "f0646be0dd3b449e92c020d3867ebd77",
           "claimText": "Individuals are in a better position to benefit themselves and others within the institution of marriage",
@@ -1789,20 +1048,11 @@
           "endMs": 236000,
           "confidence": 0.753,
           "source": "segment"
-        },
-        {
-          "entityId": "0b9e47acb9b744b9a28501bb9a3b0e48",
-          "claimId": "f2011ec77c2e4a199321e4f15fe4751e",
-          "claimText": "Achieving a successful long-term emotional partnership is more difficult in forms of partnership other than marriage",
-          "startMs": 152390,
-          "endMs": 177000,
-          "confidence": 0.591,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 6,
+        "belowFloor": 14,
         "noMatch": 2
       }
     },
@@ -1812,15 +1062,6 @@
       "spaceId": "224406e0de3c48d78ef12774111b8b2f",
       "claimCount": 10,
       "writes": [
-        {
-          "entityId": "c217ec728bbd4ffc89e70bc0b54d223c",
-          "claimId": "476d39aeab9a4fc48d041641cd83d431",
-          "claimText": "For some individuals, being single is the best path to economic security and personal happiness",
-          "startMs": 44200,
-          "endMs": 51360,
-          "confidence": 0.556,
-          "source": "segment"
-        },
         {
           "entityId": "699180f5fdf648519a76add83b2649a3",
           "claimId": "5da818d6d7e4488ba9cc44665b7782c5",
@@ -1833,29 +1074,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 4,
-        "noMatch": 4
-      }
-    },
-    {
-      "debateEntityId": "01a08c4e41807290a59320ca46963604",
-      "debateName": "Nico Lagan vs. Susan Winter on Once a spouse is no longer willing to honor their vows, ending the marriage quickly is better than prolonging it",
-      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
-      "claimCount": 12,
-      "writes": [
-        {
-          "entityId": "eae52a8164144b08808b1b1183b1fb8f",
-          "claimId": "531d7874f0a642fe8c66895b5032d370",
-          "claimText": "Divorce can become vicious and negatively impact children",
-          "startMs": 204220,
-          "endMs": 209520,
-          "confidence": 0.611,
-          "source": "segment"
-        }
-      ],
-      "skipped": {
-        "alreadyPublished": 0,
-        "belowFloor": 7,
+        "belowFloor": 5,
         "noMatch": 4
       }
     },
@@ -1875,15 +1094,6 @@
           "source": "segment"
         },
         {
-          "entityId": "384b1ddcb260447983f1dd0204afa4c4",
-          "claimId": "b6222f2754f0424a895e6c80b5700d40",
-          "claimText": "The concept of a \"failed marriage\" carries significant societal weight",
-          "startMs": 16510,
-          "endMs": 23640,
-          "confidence": 0.685,
-          "source": "segment"
-        },
-        {
           "entityId": "cc3063cc60f84a0a899f11cd56c1143c",
           "claimId": "2bc2be40ea2e4f788bd59bf509435941",
           "claimText": "Happiness is a state of mind that a person can choose to have",
@@ -1891,20 +1101,11 @@
           "endMs": 183680,
           "confidence": 0.7,
           "source": "segment"
-        },
-        {
-          "entityId": "4a132a711d904038afe9999da1c7d334",
-          "claimId": "2ffa9b8ca62f4558b4f8f597b213a005",
-          "claimText": "A marriage that ends should not be considered a failure, but as something that worked for as long as it did",
-          "startMs": 215460,
-          "endMs": 221300,
-          "confidence": 0.635,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 4,
+        "belowFloor": 6,
         "noMatch": 6
       }
     },
@@ -1924,30 +1125,12 @@
           "source": "segment"
         },
         {
-          "entityId": "e6849abebc7a4553b4310efee14215f5",
-          "claimId": "256b58b4cc06481ca3761f3b5d6abd0d",
-          "claimText": "A real relationship is an engagement between two conscious beings involving friction and synergy",
-          "startMs": 29560,
-          "endMs": 44000,
-          "confidence": 0.697,
-          "source": "segment"
-        },
-        {
           "entityId": "5efce89b721f4f4c9dd4c5c3b8153482",
           "claimId": "921a523685ec4c70bfefd957aa013ecc",
           "claimText": "AI companions can be useful, helpful, and have real positive effects on a person",
           "startMs": 12200,
           "endMs": 24520,
           "confidence": 0.969,
-          "source": "segment"
-        },
-        {
-          "entityId": "ed0453645e6e4554aaedd7f9c2cf0532",
-          "claimId": "64b6eb0a39c249c0abd742482dca920b",
-          "claimText": "Classifying an AI as a real relationship is analogous to classifying a relationship with a car as a real relationship",
-          "startMs": 51840,
-          "endMs": 53630,
-          "confidence": 0.6,
           "source": "segment"
         },
         {
@@ -1971,7 +1154,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 3,
+        "belowFloor": 5,
         "noMatch": 2
       }
     },
@@ -1995,126 +1178,6 @@
         "alreadyPublished": 0,
         "belowFloor": 4,
         "noMatch": 2
-      }
-    },
-    {
-      "debateEntityId": "01a08c6b393a7780aeb78ad0cd7bfdb1",
-      "debateName": "Urban vs. Arturas Vil on Men are supposed to lead",
-      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
-      "claimCount": 10,
-      "writes": [
-        {
-          "entityId": "ac8d6d64a19c43339bc7edb489abcf57",
-          "claimId": "ed675d950e7345dca289db3cafd4fb88",
-          "claimText": "A man may not lead because he was not taught how to be a leader",
-          "startMs": 140340,
-          "endMs": 151800,
-          "confidence": 0.609,
-          "source": "segment"
-        },
-        {
-          "entityId": "5e16d9c523414f55849752fee0541260",
-          "claimId": "b68ad92291714828838318bcadc3a25f",
-          "claimText": "Men are supposed to lead in a relationship, and this is an absolute duty regardless of outliers",
-          "startMs": 147740,
-          "endMs": 154100,
-          "confidence": 0.58,
-          "source": "segment"
-        },
-        {
-          "entityId": "8afd41eec5df413d86987a8866a2092c",
-          "claimId": "905432d09ca541c6a14467b0c61145e8",
-          "claimText": "Men have a duty to provide for and protect their families",
-          "startMs": 19580,
-          "endMs": 30360,
-          "confidence": 0.673,
-          "source": "segment"
-        },
-        {
-          "entityId": "68e8179f135e47cfb07aaf2d55b3a33a",
-          "claimId": "57d7aa5177b14de6a928d072eacc42b7",
-          "claimText": "A relationship is very likely to fail due to a lack of leadership if a man does not lead",
-          "startMs": 41770,
-          "endMs": 45240,
-          "confidence": 0.599,
-          "source": "segment"
-        }
-      ],
-      "skipped": {
-        "alreadyPublished": 0,
-        "belowFloor": 2,
-        "noMatch": 4
-      }
-    },
-    {
-      "debateEntityId": "01a08c739e1575b3b85d9a84622e6765",
-      "debateName": "Adam Fischer vs. Nico Lagan on A woman's sexual history is relevant when assessing long-term compatibility",
-      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
-      "claimCount": 13,
-      "writes": [
-        {
-          "entityId": "ed8c7873c04a4ff58c669caac30ce64a",
-          "claimId": "e1c3241365b248bc9063bfb8bbe1bdaa",
-          "claimText": "There is a correlation between promiscuity in women and the lack of a father figure during their upbringing",
-          "startMs": 110000,
-          "endMs": 118000,
-          "confidence": 0.667,
-          "source": "segment"
-        }
-      ],
-      "skipped": {
-        "alreadyPublished": 0,
-        "belowFloor": 8,
-        "noMatch": 4
-      }
-    },
-    {
-      "debateEntityId": "01a08c7824327431ac5ec27e7aa14f36",
-      "debateName": "Dovile Sv vs. Susan Winter on AI-generated relationship coaches exploit people who are vulnerable and looking for love",
-      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
-      "claimCount": 10,
-      "writes": [
-        {
-          "entityId": "d4ec8d853ee54c869b77d2f2efd2c8a6",
-          "claimId": "b14533e781f84a6ab1b5567330d9be0e",
-          "claimText": "AI-generated relationship coaches could be a training system for people who lack confidence due to their social skills",
-          "startMs": 6430,
-          "endMs": 19200,
-          "confidence": 0.589,
-          "source": "segment"
-        },
-        {
-          "entityId": "bb5d6cc49ca34f16bf8956c07f6ce2a9",
-          "claimId": "61318560d1b94ac8aa451722af82e53c",
-          "claimText": "People who cannot access a relationship coach due to their circumstances could use an AI-generated one",
-          "startMs": 25200,
-          "endMs": 32400,
-          "confidence": 0.599,
-          "source": "segment"
-        },
-        {
-          "entityId": "5e31fb05e3784a089004f3728ab0e785",
-          "claimId": "02eb2235a49344459b46d5c2b5078d2f",
-          "claimText": "Unethical companies with no coaching knowledge may enter the AI relationship coach field",
-          "startMs": 210320,
-          "endMs": 217040,
-          "confidence": 0.566,
-          "source": "segment"
-        },
-        {
-          "entityId": "178a9ceb02e44ac987a9c863c2d2e699",
-          "claimId": "1e9ef1bb9c344922a1c4a0071a9c4df1",
-          "claimText": "Most people are able to detect when they are being taken advantage of or abused",
-          "startMs": 145600,
-          "endMs": 151680,
-          "confidence": 0.595,
-          "source": "segment"
-        }
-      ],
-      "skipped": {
-        "alreadyPublished": 0,
-        "belowFloor": 5,
-        "noMatch": 1
       }
     },
     {
@@ -2155,15 +1218,6 @@
           "source": "segment"
         },
         {
-          "entityId": "ba796bf2b6894fefa69cf61b7a05ef2e",
-          "claimId": "36122b7ec8fb49b1adfd050f54694d0c",
-          "claimText": "Holding Bitcoin on a sidechain changes its trust model compared to the mainchain",
-          "startMs": 4080,
-          "endMs": 19290,
-          "confidence": 0.58,
-          "source": "segment"
-        },
-        {
           "entityId": "6890f19c23484152a4dc872892f722ce",
           "claimId": "6fce5772bf5b47f8b398d858bea01e78",
           "claimText": "The mistake is assuming Bitcoin on a sidechain has the same security guarantees as native Bitcoin, not the act of using a sidechain",
@@ -2171,20 +1225,11 @@
           "endMs": 90000,
           "confidence": 0.844,
           "source": "segment"
-        },
-        {
-          "entityId": "12ef63cfd4804f7c942750552cd347b1",
-          "claimId": "1f6a72e9ca8e467fbeaef31dc67b815f",
-          "claimText": "Holding Bitcoin on a sidechain is reasonable if its added functionality justifies the different security and trust assumptions",
-          "startMs": 44523,
-          "endMs": 63000,
-          "confidence": 0.649,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 4,
+        "belowFloor": 6,
         "noMatch": 1
       }
     },
@@ -2195,30 +1240,12 @@
       "claimCount": 12,
       "writes": [
         {
-          "entityId": "5905abba3e494bd7b25600b561f410d0",
-          "claimId": "afd7b34e0d5540c999d06bf8bb4013d7",
-          "claimText": "The presence of sex in a cult introduces power dynamics that have further implications",
-          "startMs": 215560,
-          "endMs": 221600,
-          "confidence": 0.599,
-          "source": "segment"
-        },
-        {
           "entityId": "abce8655455440c797a32c68201b8e76",
           "claimId": "0bf836ed71684825868c02ad4e653181",
           "claimText": "A cult is not necessarily wrong in itself",
           "startMs": 206090,
           "endMs": 215560,
           "confidence": 0.75,
-          "source": "segment"
-        },
-        {
-          "entityId": "08682f998b274ad48df663c45e741d0e",
-          "claimId": "c16f9512d3fc4ac08570fb287df2ee1f",
-          "claimText": "A cult that is functioning properly and not harming people is not inherently problematic",
-          "startMs": 193050,
-          "endMs": 198640,
-          "confidence": 0.685,
           "source": "segment"
         },
         {
@@ -2242,7 +1269,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 4,
+        "belowFloor": 6,
         "noMatch": 3
       }
     },
@@ -2311,24 +1338,6 @@
           "source": "segment"
         },
         {
-          "entityId": "889c0a928766457d85c2c64ae8ad59ec",
-          "claimId": "9ae2762637024c80b85b2c5afb4145e3",
-          "claimText": "Having an AI girlfriend can make a person a worse partner because it accustoms them to being agreed with all the time",
-          "startMs": 70480,
-          "endMs": 86320,
-          "confidence": 0.688,
-          "source": "segment"
-        },
-        {
-          "entityId": "f5088956efb74c30b472b43bb99c46d9",
-          "claimId": "b38d5d52e2334f6d8468d0931a2db4b3",
-          "claimText": "For people who cannot get a romantic partner, it is better to have an AI companion than to have nothing in their life",
-          "startMs": 39860,
-          "endMs": 48320,
-          "confidence": 0.556,
-          "source": "segment"
-        },
-        {
           "entityId": "f97074f73f6f4bdb8e41db098662fce9",
           "claimId": "bc162ac098d94d0ea4b2c9301cab31b4",
           "claimText": "Loneliness can be very damaging to a person's health, and an AI companion may help that person have a better outlook",
@@ -2345,20 +1354,11 @@
           "endMs": 20830,
           "confidence": 1,
           "source": "segment"
-        },
-        {
-          "entityId": "53504e775b4843d7bfa3c505ed28ed0c",
-          "claimId": "18e3b00ba67e4385b18a6b794393c7a7",
-          "claimText": "Some people will never have a partner due to personal issues",
-          "startMs": 116800,
-          "endMs": 122190,
-          "confidence": 0.633,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 7,
+        "belowFloor": 10,
         "noMatch": 0
       }
     },
@@ -2378,48 +1378,12 @@
           "source": "segment"
         },
         {
-          "entityId": "8f42e3ace7af47dda727aa44e5f2664d",
-          "claimId": "65bf2a7887734d6e949a60df9e21a9d8",
-          "claimText": "AI companies do not consistently follow existing regulations and laws",
-          "startMs": 108770,
-          "endMs": 114280,
-          "confidence": 0.611,
-          "source": "segment"
-        },
-        {
-          "entityId": "133bd5a1e2ef46459134ae0cec10ba92",
-          "claimId": "3e254067124f49a88f11bbf4979615cf",
-          "claimText": "The most powerful AI models require additional oversight and care",
-          "startMs": 184520,
-          "endMs": 192470,
-          "confidence": 0.556,
-          "source": "segment"
-        },
-        {
           "entityId": "bf48a334d52d4f6dbada53b5c5765b80",
           "claimId": "6554e11627374ea8b62652b321979ea0",
           "claimText": "Multiple companies, including Google, OpenAI, and Anthropic, create frontier AI models",
           "startMs": 163520,
           "endMs": 169320,
           "confidence": 0.753,
-          "source": "segment"
-        },
-        {
-          "entityId": "8c748a1da4284ef4a92e66d45fe1feb7",
-          "claimId": "93cafd009e0c418091b3b570c4a62af6",
-          "claimText": "The most powerful AI models have the potential to cause the most damage",
-          "startMs": 239250,
-          "endMs": 243240,
-          "confidence": 0.6,
-          "source": "segment"
-        },
-        {
-          "entityId": "7dfc7bc515ed4a17948ecd3183beab90",
-          "claimId": "03bdd6a076e24b4283c8a569b885d9f5",
-          "claimText": "The AI industry currently lacks transparency",
-          "startMs": 31600,
-          "endMs": 34600,
-          "confidence": 0.675,
           "source": "segment"
         },
         {
@@ -2441,15 +1405,6 @@
           "source": "segment"
         },
         {
-          "entityId": "13663112ba6c46e3b8ffeb45f23cf663",
-          "claimId": "1df9543f0ea4444597b5fd1f99bad110",
-          "claimText": "AI is the most powerful technology created to date",
-          "startMs": 53600,
-          "endMs": 61600,
-          "confidence": 0.675,
-          "source": "segment"
-        },
-        {
           "entityId": "9f6b6cac06014b53ad7f3172b873911e",
           "claimId": "d4f63cd74a294a9b8bce44373822a4e6",
           "claimText": "AI technology can be weaponized to create viruses and attack people",
@@ -2461,7 +1416,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 6,
+        "belowFloor": 11,
         "noMatch": 1
       }
     },
@@ -2488,37 +1443,6 @@
       }
     },
     {
-      "debateEntityId": "01a09109a9d87fa3b9df330ab6d63a87",
-      "debateName": "Dahmmy Hilfigger vs. Nico Lagan on Voter ID should be required nationwide",
-      "spaceId": "4582fbbee28a16589154f7e36f1ee3c5",
-      "claimCount": 10,
-      "writes": [
-        {
-          "entityId": "af9c900b77e24289ab94feb7aea7f442",
-          "claimId": "75f2b8a2d29147fcb2228982d3f6eabf",
-          "claimText": "Digital IDs should not be implemented",
-          "startMs": 267080,
-          "endMs": 268990,
-          "confidence": 0.611,
-          "source": "segment"
-        },
-        {
-          "entityId": "f68c3e914efe48f5afbf87912d3fd3d3",
-          "claimId": "232557b31d1044339b2be4923974a8c8",
-          "claimText": "Research by the Heritage Foundation found fewer than 100 instances of voter fraud",
-          "startMs": 8700,
-          "endMs": 16580,
-          "confidence": 0.625,
-          "source": "segment"
-        }
-      ],
-      "skipped": {
-        "alreadyPublished": 0,
-        "belowFloor": 5,
-        "noMatch": 3
-      }
-    },
-    {
       "debateEntityId": "01a09121fdce7b93b18bfdc6fcbfe218",
       "debateName": "Nico Lagan vs. Dahmmy Hilfigger on AI companions can never replace human relationships",
       "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
@@ -2532,20 +1456,11 @@
           "endMs": 200720,
           "confidence": 0.9,
           "source": "segment"
-        },
-        {
-          "entityId": "99e5460abf9d4e09a59fe31bcf534ea5",
-          "claimId": "6e625979dbc541d0abe1f9bd6aa4174f",
-          "claimText": "AI robots manufactured in China are becoming increasingly realistic",
-          "startMs": 22660,
-          "endMs": 30850,
-          "confidence": 0.574,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 3,
+        "belowFloor": 4,
         "noMatch": 5
       }
     },
@@ -2562,15 +1477,6 @@
           "startMs": 39280,
           "endMs": 45690,
           "confidence": 0.798,
-          "source": "segment"
-        },
-        {
-          "entityId": "4783e8e7827f4ea0a6a113cb0678d333",
-          "claimId": "01e072ba55ab4dabacf41edb9accd32f",
-          "claimText": "Zohran Mamdani refused to condemn the phrase \"globalize the Intifada\" on Meet the Press three separate times",
-          "startMs": 5800,
-          "endMs": 16220,
-          "confidence": 0.675,
           "source": "segment"
         },
         {
@@ -2592,42 +1498,6 @@
           "source": "segment"
         },
         {
-          "entityId": "4834998a805744bd8b64272f28582494",
-          "claimId": "d334f810f3ae42dca755c684f2677b5f",
-          "claimText": "Zohran Mamdani skipped the Israel Day Parade, the first New York City mayor to do so in 60 years",
-          "startMs": 150460,
-          "endMs": 155840,
-          "confidence": 0.583,
-          "source": "segment"
-        },
-        {
-          "entityId": "130d01b744394ed0b0ecec6c09183307",
-          "claimId": "2357c0a0b5634cf38cf33c6a6b6071de",
-          "claimText": "Zohran Mamdani is the mayor of New York City",
-          "startMs": 120000,
-          "endMs": 130240,
-          "confidence": 0.667,
-          "source": "segment"
-        },
-        {
-          "entityId": "afcc68e8ba1140cd83a6f47dd9e12a3f",
-          "claimId": "08c44874b64544e5a89778ada001d776",
-          "claimText": "Zohran Mamdani skipped the Veterans Day Parade",
-          "startMs": 143670,
-          "endMs": 147440,
-          "confidence": 0.611,
-          "source": "segment"
-        },
-        {
-          "entityId": "5f320e8928fd4940945030cf9cd9a9cc",
-          "claimId": "5723880d876f4c3193f76621825c70e4",
-          "claimText": "As mayor, Zohran Mamdani represents the city of New York at the 9/11 ceremony, not himself or a specific community",
-          "startMs": 247080,
-          "endMs": 254640,
-          "confidence": 0.579,
-          "source": "segment"
-        },
-        {
           "entityId": "96283b25673d4e48af15afb33c8fb2ca",
           "claimId": "c63e5d3b0eb240e1a579459697b0f264",
           "claimText": "It would be difficult for the mayor of New York City to not attend the 9/11 ceremony",
@@ -2639,7 +1509,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 9,
+        "belowFloor": 14,
         "noMatch": 4
       }
     },
@@ -2656,15 +1526,6 @@
           "startMs": 227160,
           "endMs": 230240,
           "confidence": 0.833,
-          "source": "segment"
-        },
-        {
-          "entityId": "cd6cefbd4e4f4ac5bb6977b477ccc15a",
-          "claimId": "bf11ffcc95e646fb9f3db9580fa55160",
-          "claimText": "In 2024, Kamala Harris proposed incentives including $25,000 for new house down payments and $6,000 per newborn",
-          "startMs": 42430,
-          "endMs": 52480,
-          "confidence": 0.583,
           "source": "segment"
         },
         {
@@ -2688,7 +1549,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 8,
+        "belowFloor": 9,
         "noMatch": 9
       }
     },
@@ -2698,51 +1559,6 @@
       "spaceId": "224406e0de3c48d78ef12774111b8b2f",
       "claimCount": 12,
       "writes": [
-        {
-          "entityId": "03325b609abd4a0288c45036d6e69d05",
-          "claimId": "7c40dd21b1574432941fcc7f497f480e",
-          "claimText": "AI companions are not good tools for building social skills because they tend to be sycophantic mirrors that tell users what they want to hear",
-          "startMs": 241510,
-          "endMs": 250740,
-          "confidence": 0.595,
-          "source": "segment"
-        },
-        {
-          "entityId": "0623b30af37641e0b41106b8d9834f13",
-          "claimId": "21290eb232ce460a801dd4b2ad738fdc",
-          "claimText": "AI models are rewarded by predicting the next token in a way they believe the user wants to hear",
-          "startMs": 250740,
-          "endMs": 257320,
-          "confidence": 0.625,
-          "source": "segment"
-        },
-        {
-          "entityId": "57fe225677894efaa6fab8f63585677e",
-          "claimId": "9c5318129873449c9cb54f7a8059f638",
-          "claimText": "Interaction with AI companions lacks the entropy and benefits of real human interactions",
-          "startMs": 263580,
-          "endMs": 267520,
-          "confidence": 0.599,
-          "source": "segment"
-        },
-        {
-          "entityId": "8f16c31f44ef4246a5d6e8c2aaa9e3ca",
-          "claimId": "d78ceb9560974fa7a56176738e80450f",
-          "claimText": "For a person who is trying but unable to find a romantic partner, an AI companion is a valuable alternative",
-          "startMs": 136680,
-          "endMs": 148960,
-          "confidence": 0.6,
-          "source": "segment"
-        },
-        {
-          "entityId": "cc207aedfad444af9bfb2849a90767a8",
-          "claimId": "a5493198825c486ea1286b4c4c728b84",
-          "claimText": "Using AI as a surrogate for human relationships may disincentivize people from trying as hard in real social situations",
-          "startMs": 83600,
-          "endMs": 91120,
-          "confidence": 0.57,
-          "source": "segment"
-        },
         {
           "entityId": "e5c33b7949dd423b977044adbd0f0ee3",
           "claimId": "97f8b4a80f0643249884cccd4031874b",
@@ -2755,39 +1571,8 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 5,
+        "belowFloor": 10,
         "noMatch": 1
-      }
-    },
-    {
-      "debateEntityId": "01a0ab344a4177618978229b795a9d49",
-      "debateName": "Deeney Abdulmuiz Anifowose vs. Kevin on Remote work improves mental health by eliminating commutes and giving workers flexibility",
-      "spaceId": "52c7ae149838b6d47ce0f3b2a5974546",
-      "claimCount": 14,
-      "writes": [
-        {
-          "entityId": "b14290018fa547908aca1303778a61aa",
-          "claimId": "3f43c148276f4dc6a7f854e6a6d5503d",
-          "claimText": "Remote work can blur work-life boundaries",
-          "startMs": 49880,
-          "endMs": 54520,
-          "confidence": 0.563,
-          "source": "segment"
-        },
-        {
-          "entityId": "a2c9ec2248a64e24bff623cd9dc46bab",
-          "claimId": "b9af1a8c0e9c4080b08dec95bfd2ecf3",
-          "claimText": "Having a comfortable and well-equipped home office setup helps improve work-life balance",
-          "startMs": 194750,
-          "endMs": 204600,
-          "confidence": 0.57,
-          "source": "segment"
-        }
-      ],
-      "skipped": {
-        "alreadyPublished": 0,
-        "belowFloor": 6,
-        "noMatch": 6
       }
     },
     {
@@ -2796,42 +1581,6 @@
       "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
       "claimCount": 13,
       "writes": [
-        {
-          "entityId": "3b7856f329244a4eabc908bc6a5db82e",
-          "claimId": "6fc63d7fa49e40d5a81f4727e1f06d93",
-          "claimText": "An entry-level painter can use AI for assistance with touch-ups and brush-ups to become a better painter",
-          "startMs": 136440,
-          "endMs": 145740,
-          "confidence": 0.643,
-          "source": "segment"
-        },
-        {
-          "entityId": "313cbf6ff9544a5880b4a1a0f5891216",
-          "claimId": "01125eb41c4047f0b7079652f75f4d15",
-          "claimText": "The corporate system adapts to change more slowly than the technological systems it relies on",
-          "startMs": 95730,
-          "endMs": 102600,
-          "confidence": 0.566,
-          "source": "segment"
-        },
-        {
-          "entityId": "e65b1c29e4f643b98d701f6675c1b936",
-          "claimId": "817792a0452b4f0ba8dda124e90fd0ad",
-          "claimText": "New tools tend to relocate expertise rather than eliminate it",
-          "startMs": 39000,
-          "endMs": 41960,
-          "confidence": 0.685,
-          "source": "segment"
-        },
-        {
-          "entityId": "9b1c163c77d04ea7978ea5e42539880b",
-          "claimId": "5d10e73c230c45148b4f42188118bdf0",
-          "claimText": "Markets and institutions adapt to new tools and methods",
-          "startMs": 39000,
-          "endMs": 44440,
-          "confidence": 0.574,
-          "source": "segment"
-        },
         {
           "entityId": "b09195272f9c4de48c4abc20abba6522",
           "claimId": "d47eb5cf321a4b629ce57daade077b5e",
@@ -2844,7 +1593,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 6,
+        "belowFloor": 10,
         "noMatch": 2
       }
     },
@@ -2854,15 +1603,6 @@
       "spaceId": "224406e0de3c48d78ef12774111b8b2f",
       "claimCount": 13,
       "writes": [
-        {
-          "entityId": "661cbb9277d54042a615dd05f72f3008",
-          "claimId": "81ffb4c02b3742e3bd9e0b89b46e30bd",
-          "claimText": "A study by the Institute for Family Studies found that women with more than 10 sexual partners have a higher rate of divorce",
-          "startMs": 64350,
-          "endMs": 75200,
-          "confidence": 0.563,
-          "source": "segment"
-        },
         {
           "entityId": "a48408930ec14de2bce90a30094ed7cc",
           "claimId": "1def220d208e438c8785e6d963079320",
@@ -2884,7 +1624,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 5,
+        "belowFloor": 6,
         "noMatch": 5
       }
     },
@@ -2913,39 +1653,12 @@
           "source": "segment"
         },
         {
-          "entityId": "23c83ab205a84f90b95dfc013538db3d",
-          "claimId": "1b908c2a510541f29011db7a85feff35",
-          "claimText": "Learning to use AI programs can make work more efficient and life easier by providing new skill sets",
-          "startMs": 175000,
-          "endMs": 189360,
-          "confidence": 0.636,
-          "source": "segment"
-        },
-        {
-          "entityId": "25d5c35c38594c9cad7b140204f81352",
-          "claimId": "5afade541f4744be8ff34ae5d6d69d5a",
-          "claimText": "The combined workforce of San Francisco and New York City is larger than the total workforce of Norway, Finland, and Denmark",
-          "startMs": 256280,
-          "endMs": 262080,
-          "confidence": 0.551,
-          "source": "segment"
-        },
-        {
           "entityId": "0e28e34291284f4a8db242e65979eae0",
           "claimId": "8ede996f187a4097a32a64cb9ffe141b",
           "claimText": "The educational systems in Norway, Finland, and Denmark have reached their worst levels in decades",
           "startMs": 214180,
           "endMs": 222880,
           "confidence": 0.864,
-          "source": "segment"
-        },
-        {
-          "entityId": "979e0a514fbe4c4bb0fa57e0f7eed885",
-          "claimId": "22b87a6a75f94cd2b2cfe2b2a971e624",
-          "claimText": "Some sector-specific training programs run by employers have demonstrated better outcomes than broader programs",
-          "startMs": 111640,
-          "endMs": 115840,
-          "confidence": 0.563,
           "source": "segment"
         },
         {
@@ -2956,20 +1669,11 @@
           "endMs": 84560,
           "confidence": 0.719,
           "source": "segment"
-        },
-        {
-          "entityId": "8351fcc5bdd5452a9b8586a07782ecf0",
-          "claimId": "e8dc8a4a19e54822a11a2c79192ef165",
-          "claimText": "Displaced workers, particularly older and mid-career individuals, tend to experience persistent losses in earnings even after completing retraining",
-          "startMs": 94920,
-          "endMs": 101080,
-          "confidence": 0.603,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 7,
+        "belowFloor": 11,
         "noMatch": 6
       }
     },
@@ -2980,42 +1684,6 @@
       "claimCount": 14,
       "writes": [
         {
-          "entityId": "d118158a425b4f349de9605d1782be4f",
-          "claimId": "b625e6c30f8442e89d5879cf3e3e6ba7",
-          "claimText": "An individual's vaccination status does not prevent other people from catching a disease",
-          "startMs": 21860,
-          "endMs": 26000,
-          "confidence": 0.571,
-          "source": "segment"
-        },
-        {
-          "entityId": "730984b529b543e2a500fd5c2b6343b2",
-          "claimId": "0c3b92dc503a4557b48a9c301102483a",
-          "claimText": "Healthy people did not die from COVID-19; deaths occurred among those with comorbidities",
-          "startMs": 126000,
-          "endMs": 144000,
-          "confidence": 0.58,
-          "source": "segment"
-        },
-        {
-          "entityId": "89da3d430bd24a408be1a5376d1bef3e",
-          "claimId": "e9dc144158e747cbb206c1c2ff68513a",
-          "claimText": "Many people cannot control their health status, as some are born with immune diseases or other issues",
-          "startMs": 180430,
-          "endMs": 184720,
-          "confidence": 0.556,
-          "source": "segment"
-        },
-        {
-          "entityId": "aea0caaaf4c14c60aef9f8d49b7a24d2",
-          "claimId": "13d2efd5bfe74c5ea0f6a9245a7c28f4",
-          "claimText": "A public health approach that does not protect the vulnerable is a dangerous \"natural selectionist\" approach",
-          "startMs": 189200,
-          "endMs": 195280,
-          "confidence": 0.688,
-          "source": "segment"
-        },
-        {
           "entityId": "50ba02d147a5459b81ec3326d18aeb6e",
           "claimId": "d6721b4896684f3893d59d89d2e14615",
           "claimText": "The concept of herd immunity has been proven over time",
@@ -3023,20 +1691,11 @@
           "endMs": 97280,
           "confidence": 0.8,
           "source": "segment"
-        },
-        {
-          "entityId": "d768c3c37346410bb180d3ac9cb5d58d",
-          "claimId": "2394714378fc4961993f29d2066d5675",
-          "claimText": "In the United States, the CDC director is appointed by the elected president",
-          "startMs": 73920,
-          "endMs": 78490,
-          "confidence": 0.663,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 3,
+        "belowFloor": 8,
         "noMatch": 5
       }
     },
@@ -3047,15 +1706,6 @@
       "claimCount": 13,
       "writes": [
         {
-          "entityId": "a6ec13b907fb4b3a84ce02caef4933ba",
-          "claimId": "b942d3eb082747fbb5d97540be76b1bf",
-          "claimText": "Some people are innately unfaithful and will not remain faithful even in marriage",
-          "startMs": 138080,
-          "endMs": 144360,
-          "confidence": 0.574,
-          "source": "segment"
-        },
-        {
           "entityId": "5e430f06c18f4941b790d3054ca94086",
           "claimId": "65a49280a26d454e96c625feada79655",
           "claimText": "Monogamy is a good societal default",
@@ -3063,29 +1713,11 @@
           "endMs": 110960,
           "confidence": 0.861,
           "source": "segment"
-        },
-        {
-          "entityId": "80034c73bebd495181690f7ff465015d",
-          "claimId": "8767fc1827144a04811742288ccb1854",
-          "claimText": "Societal standards are necessary to differentiate good from evil",
-          "startMs": 206760,
-          "endMs": 209080,
-          "confidence": 0.633,
-          "source": "segment"
-        },
-        {
-          "entityId": "00e5b0be1a0d45579d02f569f00f4d86",
-          "claimId": "3ba785462d5942209fc10a97c74e517a",
-          "claimText": "The fact that some people break the expectation of monogamy proves that the expectation itself exists",
-          "startMs": 183200,
-          "endMs": 190760,
-          "confidence": 0.58,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 1,
+        "belowFloor": 4,
         "noMatch": 8
       }
     },
@@ -3096,48 +1728,12 @@
       "claimCount": 24,
       "writes": [
         {
-          "entityId": "1410c68dc2ff47e4b83156d377bc6159",
-          "claimId": "af104daa43b647d99320af0b6b2892be",
-          "claimText": "In corporate scandals like Enron and WorldCom, executives and board members have claimed ignorance",
-          "startMs": 181910,
-          "endMs": 190160,
-          "confidence": 0.611,
-          "source": "segment"
-        },
-        {
           "entityId": "e2652c541c304c519a8daab809d99962",
           "claimId": "91c430f6942d434993834fff0ad063c1",
           "claimText": "According to a Zumo report, 44% of C-suite executives trust AI enough to override their own decisions",
           "startMs": 219040,
           "endMs": 225470,
           "confidence": 0.753,
-          "source": "segment"
-        },
-        {
-          "entityId": "938eaa174ea74444a0da8c2e565e3335",
-          "claimId": "f7efac9bf7204e71853e5f4f8ae2e325",
-          "claimText": "There is currently no data showing AI replacing board executives",
-          "startMs": 210000,
-          "endMs": 218840,
-          "confidence": 0.583,
-          "source": "segment"
-        },
-        {
-          "entityId": "62cdd1af12f546b1a65cb1a52f204ec6",
-          "claimId": "e786368b001b4c80908733f0a1767635",
-          "claimText": "62% of non-executive directors with AI skills were appointed in early 2022",
-          "startMs": 229410,
-          "endMs": 234810,
-          "confidence": 0.635,
-          "source": "segment"
-        },
-        {
-          "entityId": "8eebbd7c1dbb4704918c756edba0ad46",
-          "claimId": "b856ae18ca4f4c9ebd942b00835c4cd1",
-          "claimText": "According to a Zumo report, 38% of C-suite executives fully delegate decisions to their AI systems",
-          "startMs": 220910,
-          "endMs": 227760,
-          "confidence": 0.6,
           "source": "segment"
         },
         {
@@ -3159,33 +1755,6 @@
           "source": "segment"
         },
         {
-          "entityId": "3b1c177d89c744f58bb21582ee98016b",
-          "claimId": "67ebb353eec948729207b61f2a996543",
-          "claimText": "A machine cannot be fully accountable because it lacks emotion",
-          "startMs": 39120,
-          "endMs": 43230,
-          "confidence": 0.611,
-          "source": "segment"
-        },
-        {
-          "entityId": "b2bd39f80e094bd087927af6e113f4a5",
-          "claimId": "3d368920832547a9930917f65494c244",
-          "claimText": "Corporate boards exist in part to provide legitimacy and stakeholder trust",
-          "startMs": 31040,
-          "endMs": 39120,
-          "confidence": 0.656,
-          "source": "segment"
-        },
-        {
-          "entityId": "a98fff55137e4c5dab3dd67bb3bf0d37",
-          "claimId": "dd5f09519a2143208ba4343dae33932a",
-          "claimText": "Full automation of executive roles creates a liability vacuum",
-          "startMs": 14910,
-          "endMs": 20350,
-          "confidence": 0.635,
-          "source": "segment"
-        },
-        {
           "entityId": "39ead1c66fe14dd992068e72c19a7fb9",
           "claimId": "40ddc7e305cb4dd0952d6cd40c80753a",
           "claimText": "Executive roles involve negotiation, culture, and empathy, unlike many lower-level tasks suitable for automation",
@@ -3193,29 +1762,11 @@
           "endMs": 50380,
           "confidence": 0.716,
           "source": "segment"
-        },
-        {
-          "entityId": "e5e128a731674e9dbdc89e7c2ef2bb05",
-          "claimId": "45a83800d8a5415ea2274eed0e115140",
-          "claimText": "There is considerable space for AI to serve on corporate boards alongside humans",
-          "startMs": 75320,
-          "endMs": 84120,
-          "confidence": 0.685,
-          "source": "segment"
-        },
-        {
-          "entityId": "5ee5ab32a8be438d89a5bd390e2bfbe6",
-          "claimId": "43a3c478dc6842c2aed88b21cb1caff2",
-          "claimText": "The idea of automating executive roles is part of an \"AI doomsday narrative\" that is not currently happening",
-          "startMs": 141580,
-          "endMs": 148700,
-          "confidence": 0.6,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 4,
+        "belowFloor": 13,
         "noMatch": 7
       }
     },
@@ -3235,33 +1786,6 @@
           "source": "segment"
         },
         {
-          "entityId": "601064851dbd4319a065e9987b26b4be",
-          "claimId": "1602b5f6217d4b1baa50bc872d274252",
-          "claimText": "Honesty and transparency are essential for dating if the goal is a healthy, functional relationship",
-          "startMs": 9900,
-          "endMs": 19540,
-          "confidence": 0.688,
-          "source": "segment"
-        },
-        {
-          "entityId": "81d7a301acd243a984fc351d790f2648",
-          "claimId": "4d3a8117bc3442d2b640e9a763ef6c72",
-          "claimText": "Stating what you are looking for in a relationship saves time",
-          "startMs": 223680,
-          "endMs": 228680,
-          "confidence": 0.563,
-          "source": "segment"
-        },
-        {
-          "entityId": "1c74d28ce6f648c898af640e00642a32",
-          "claimId": "17a3d5ab163243e18501c8d5c058fe18",
-          "claimText": "In the beginning of dating, mystery and transparency hold equal value",
-          "startMs": 81880,
-          "endMs": 89000,
-          "confidence": 0.663,
-          "source": "segment"
-        },
-        {
           "entityId": "4f0196eaa8d14426a7a6b3e77259e235",
           "claimId": "6a99d645756543239c5ce473d088805c",
           "claimText": "Honesty is essential in dating",
@@ -3269,92 +1793,12 @@
           "endMs": 72900,
           "confidence": 0.818,
           "source": "segment"
-        },
-        {
-          "entityId": "69b26e1775d04db29e144b43a9c908cf",
-          "claimId": "97fb68df0b2248bfaff4135f161b7124",
-          "claimText": "As a relationship progresses, transparency should increase while mystery decreases",
-          "startMs": 89000,
-          "endMs": 94000,
-          "confidence": 0.611,
-          "source": "segment"
-        }
-      ],
-      "skipped": {
-        "alreadyPublished": 0,
-        "belowFloor": 2,
-        "noMatch": 8
-      }
-    },
-    {
-      "debateEntityId": "01a0b0687dc87813a4d8fb13d12eca4c",
-      "debateName": "Dahmmy Hilfigger vs. Nico Lagan on Severe mental illness should reduce punishment, never eliminate criminal responsibility",
-      "spaceId": "4582fbbee28a16589154f7e36f1ee3c5",
-      "claimCount": 9,
-      "writes": [
-        {
-          "entityId": "d26ebc5cadea490c8316d146be0e5f84",
-          "claimId": "49a038be5085473ab384817b8f945853",
-          "claimText": "Psychologists are not allowed to question a child who expresses a transgender identity",
-          "startMs": 202090,
-          "endMs": 209320,
-          "confidence": 0.647,
-          "source": "segment"
-        },
-        {
-          "entityId": "3e8bf9d8fae54768bdc5075fd066f15e",
-          "claimId": "5c00981e7b4d46d1a4e003f1d7575f3d",
-          "claimText": "Psychologists are now required to reinforce what their patients say rather than question them",
-          "startMs": 194660,
-          "endMs": 202090,
-          "confidence": 0.595,
-          "source": "segment"
-        }
-      ],
-      "skipped": {
-        "alreadyPublished": 0,
-        "belowFloor": 3,
-        "noMatch": 4
-      }
-    },
-    {
-      "debateEntityId": "01a0b0739df074239292cff2bcf89fb7",
-      "debateName": "Susan Winter vs. Adam Fischer on A wife's marital duties can include consensual sex with her husband even when she is not initially in the mood",
-      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
-      "claimCount": 16,
-      "writes": [
-        {
-          "entityId": "9c6797ec633b40b0901adc75aa5538cc",
-          "claimId": "c52b52c2d75c4716aebf274799579311",
-          "claimText": "Bodily autonomy and personal desire likely limit the extent of any sexual obligation within a relationship",
-          "startMs": 191040,
-          "endMs": 199700,
-          "confidence": 0.589,
-          "source": "segment"
-        },
-        {
-          "entityId": "d1411b6564374c8ebeca6e74ad3a3c9b",
-          "claimId": "9a54737271bf4313be93a0ca0fbf90a2",
-          "claimText": "Marriage creates obligations of care, including communication, affection, fidelity, and effort",
-          "startMs": 71900,
-          "endMs": 81600,
-          "confidence": 0.591,
-          "source": "segment"
-        },
-        {
-          "entityId": "f3d17dbb7f4d45efba1e0e5ff6dfe926",
-          "claimId": "ac26d2a8118b4319b8264076f8099b0b",
-          "claimText": "Men are sometimes not in the mood for sex and may not want to have it with their female partner if they are not feeling good about themselves",
-          "startMs": 156400,
-          "endMs": 162720,
-          "confidence": 0.577,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
         "belowFloor": 6,
-        "noMatch": 7
+        "noMatch": 8
       }
     },
     {
@@ -3400,15 +1844,6 @@
           "source": "segment"
         },
         {
-          "entityId": "f9af7babd31641fb85231c37b153a3b8",
-          "claimId": "74c8506af6654892ba90384505b567a4",
-          "claimText": "States with very strict laws, sometimes due to religious influence, have higher rates of teen pregnancy",
-          "startMs": 133900,
-          "endMs": 142400,
-          "confidence": 0.579,
-          "source": "segment"
-        },
-        {
           "entityId": "0c97751b2435401782e7bb1d57666caf",
           "claimId": "b559973e07304204a398716a07eabbe0",
           "claimText": "The foster care system can be a step into the school-to-prison pipeline",
@@ -3420,7 +1855,7 @@
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 1,
+        "belowFloor": 2,
         "noMatch": 3
       }
     },
@@ -3431,48 +1866,12 @@
       "claimCount": 17,
       "writes": [
         {
-          "entityId": "98d3b5a312164b0f966d1849c12c3751",
-          "claimId": "ac0e0e0d854d46d5951dc1bf01d1b8e3",
-          "claimText": "The most powerful AI models with effective context management systems are advancing very quickly",
-          "startMs": 50160,
-          "endMs": 55560,
-          "confidence": 0.599,
-          "source": "segment"
-        },
-        {
           "entityId": "8d6265d9f66a4f9a8e78e0e2d0d7de17",
           "claimId": "4119e477de384c82b0cec2226674ede8",
           "claimText": "AGI can be defined as an agent that meets the same standards as an average remote worker",
           "startMs": 9480,
           "endMs": 17280,
           "confidence": 0.826,
-          "source": "segment"
-        },
-        {
-          "entityId": "e84f240d97fc4b429fca04698905d72b",
-          "claimId": "0a9b2be786f743cb9a49396a4312c94f",
-          "claimText": "Current AI agents can perform design, coding, writing, and project management, covering the main areas of white-collar jobs",
-          "startMs": 226730,
-          "endMs": 236400,
-          "confidence": 0.614,
-          "source": "segment"
-        },
-        {
-          "entityId": "5d7deefb340841fd834e017d70aea2fc",
-          "claimId": "27f83e4a1a814a2faef5a0a53b809165",
-          "claimText": "Making practical decisions with real-world impact requires engaging with philosophy and ethics",
-          "startMs": 258440,
-          "endMs": 266560,
-          "confidence": 0.636,
-          "source": "segment"
-        },
-        {
-          "entityId": "498b858241c1498b9d4b991ffeb5d77c",
-          "claimId": "71bb16f9af7f45809c9a69f38feedda7",
-          "claimText": "Computer science has become a form of philosophy due to its real-world implications",
-          "startMs": 250740,
-          "endMs": 258440,
-          "confidence": 0.625,
           "source": "segment"
         },
         {
@@ -3492,61 +1891,12 @@
           "endMs": 175200,
           "confidence": 0.799,
           "source": "segment"
-        },
-        {
-          "entityId": "2c3c1d49f43a4ce7830277224a9109ab",
-          "claimId": "fef13d45e8474e39878db1065a6982bd",
-          "claimText": "Current AI systems possess only narrow intelligence limited to specific intellectual white-collar tasks",
-          "startMs": 178350,
-          "endMs": 186400,
-          "confidence": 0.589,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 3,
+        "belowFloor": 8,
         "noMatch": 6
-      }
-    },
-    {
-      "debateEntityId": "01a0b0809a147c71887bd65ea3df4706",
-      "debateName": "Adam Fischer vs. Susan Winter on A high body count is a red flag, regardless of gender",
-      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
-      "claimCount": 16,
-      "writes": [
-        {
-          "entityId": "11353c1318a74edd9b4517f2740d1f5b",
-          "claimId": "5a7b6c7ad74144c1b2e5906cd37a2a4b",
-          "claimText": "Many people, particularly younger individuals, may not want to be in a monogamous relationship",
-          "startMs": 129960,
-          "endMs": 136750,
-          "confidence": 0.611,
-          "source": "segment"
-        },
-        {
-          "entityId": "d0417837189b4733947c07baad3d4f8b",
-          "claimId": "ad515d37e3ed44688c4135505a742446",
-          "claimText": "A high body count can be a 'green flag' as it may correlate with being attractive, smart, interesting, and funny",
-          "startMs": 32560,
-          "endMs": 44210,
-          "confidence": 0.627,
-          "source": "segment"
-        },
-        {
-          "entityId": "13a055996ec04c52bbc2941a13e8f61a",
-          "claimId": "ff1a13e744ee482a879c6e141a09d49d",
-          "claimText": "A high body count can be a positive trait, indicating a person is more adventurous and open-minded",
-          "startMs": 0,
-          "endMs": 15560,
-          "confidence": 0.694,
-          "source": "segment"
-        }
-      ],
-      "skipped": {
-        "alreadyPublished": 0,
-        "belowFloor": 9,
-        "noMatch": 4
       }
     },
     {
@@ -3572,38 +1922,11 @@
           "endMs": 225160,
           "confidence": 0.733,
           "source": "segment"
-        },
-        {
-          "entityId": "abf7cab75a554b65977d5f9d9763a1eb",
-          "claimId": "15ca5f860dd64b1596e0c8246fc5062d",
-          "claimText": "A common understanding of AGI is an AI that understands across domains, is equal in value to an average person, and has flexibility and contextual understanding",
-          "startMs": 98140,
-          "endMs": 107120,
-          "confidence": 0.551,
-          "source": "segment"
-        },
-        {
-          "entityId": "9c19b8421e714379830a85019c88cda5",
-          "claimId": "1564c761f39644c78dbf1f74e770b9fd",
-          "claimText": "Among over 300 AI experts interviewed on Nikola Danaylov's podcast, no two have agreed on a definition for artificial intelligence",
-          "startMs": 18510,
-          "endMs": 28960,
-          "confidence": 0.579,
-          "source": "segment"
-        },
-        {
-          "entityId": "25e75d6c1f2647ea825086e7ba826a66",
-          "claimId": "c49915028e834e2599087910e5c0f81c",
-          "claimText": "The Webster dictionary defines AGI as the potential capability of computer systems or algorithms to match or exceed human cognitive abilities like reasoning or learning",
-          "startMs": 181300,
-          "endMs": 187720,
-          "confidence": 0.688,
-          "source": "segment"
         }
       ],
       "skipped": {
         "alreadyPublished": 0,
-        "belowFloor": 2,
+        "belowFloor": 5,
         "noMatch": 7
       }
     }
