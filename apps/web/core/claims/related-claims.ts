@@ -19,14 +19,19 @@ import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from './ontology';
  * something each caller infers.
  *
  * The claim itself matches this clause — it carries its own topics — so it comes back in its own
- * related list, and as the *only* row when it has no neighbours. Every caller must drop it, and
- * before drawing any conclusion from how many rows came back: the picker counts them to decide
- * whether to offer Related claims at all, so counting the claim itself makes "no neighbours" look
- * like "one neighbour" (GEO-2758).
+ * related list, and as the *only* row when it has no neighbours. Every caller has to account for
+ * it, and before drawing any conclusion from how many rows came back: the picker counts them to
+ * decide whether to offer Related claims at all, so counting the claim itself makes "no neighbours"
+ * look like "one neighbour" (GEO-2758).
  *
- * Left to the caller rather than folded in here because the clause is also the shape the two
- * surfaces are compared on, and because neither caller can pass an id the other would want
- * excluded — the page has `claimId`, the picker has the source debate's.
+ * Where that happens depends on whether the caller pages. `excludeClaimId` takes it out of the
+ * query, which is what a paged surface needs: dropping a row from a fetched page makes the page
+ * size a ceiling, so asking for four returns four and shows three. The claim page's gallery passes
+ * it for that reason.
+ *
+ * The picker still drops it in the caller. It does not page, so it can over-fetch and absorb the
+ * loss, and it reads the rows for more than one purpose. Moving it onto `excludeClaimId` would be a
+ * simplification rather than a fix, and is not one this clause should assume has happened.
  *
  * `topicIds` empty means there is nothing to be related *by*, and the clause would otherwise match
  * no relation at all and quietly return the space's entire claim list. Callers must not run the
@@ -36,6 +41,7 @@ export function relatedClaimsWhere({
   spaceId,
   topicIds,
   requireTagId,
+  excludeClaimId,
 }: {
   spaceId: string;
   topicIds: string[];
@@ -51,8 +57,11 @@ export function relatedClaimsWhere({
    * the picker can see that its list is narrower without having to know this module's internals.
    */
   requireTagId?: string;
+  /** Leave this claim out of its own related list (in the query, so pages stay full). */
+  excludeClaimId?: string;
 }): WhereCondition {
   return {
+    ...(excludeClaimId ? { NOT: { id: { equals: excludeClaimId } } } : {}),
     types: [{ id: { equals: CLAIM_TYPE_ID } }],
     // Entity membership, which is the weaker of the two space tests here and is kept for what it
     // says: the claim is named in this space at all. It is *not* what ties either relation below to
