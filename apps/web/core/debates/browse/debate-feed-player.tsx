@@ -5,7 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
-import { DebateTileChip, tileChipSurface } from '~/core/debates/debate-video-tile';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
@@ -20,10 +19,8 @@ import { Text } from '~/design-system/text';
 
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateScorecard } from './debate-scorecard';
-import { Play, Speaker, SpeakerMuted } from './icons';
-import { WinnerVoteButton } from './winner-vote-button';
-import type { ClaimMarker, StackedCard } from '~/core/debates/claim-ticker';
-import type { DebateTicker } from './debate-claim-ticker';
+import { Pause, Play, Speaker, SpeakerMuted } from './icons';
+import type { ClaimMarker } from '~/core/debates/claim-ticker';
 
 type DebateFeedPlayerProps = {
   debate: Debate;
@@ -63,7 +60,6 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     playheadSeconds,
     timelineSeconds,
     turnState,
-    activeSlot,
     subtitle,
     onPlaybackTick,
     togglePlayback: togglePlaybackRaw,
@@ -104,49 +100,47 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   const ticker = useDebateClaimTicker(debate, playheadSeconds * 1000, active || preload);
 
   const showControls = ready && (userPaused || (playbackEnded && !hasVoted));
-  // End of an unvoted debate offers a replay; a user pause shows the paused glyph.
-  const showReplay = ready && playbackEnded && !hasVoted;
-  const showPausedGlyph = ready && userPaused && !playbackEnded;
+  // The two overlay controls sit at full strength whenever the debate is not running, and recede to
+  // hover-only while it is. Feed debates autoplay muted, so the mute control is the exception: it
+  // stays up during playback while muted, because otherwise there is no way to find the audio.
+  const recede = 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100';
+  const idle = !playing || playbackEnded;
 
   return (
-    <div ref={measurement.elementRef} className="group relative flex flex-col gap-2">
+    // No gap and one radius on the outside: the two tiles are a single surface in the Figma frame,
+    // which is what lets the subtitle straddle the seam instead of sitting inside one of them.
+    <div ref={measurement.elementRef} className="group relative flex flex-col overflow-hidden rounded-xl">
       <DebaterVideo
         participant={slot1Participant}
         src={urls.slot1}
         videoRef={slot1VideoRef}
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
-        subtitle={activeSlot === 1 ? subtitle : null}
-        claims={playbackEnded ? [] : (ticker.stacks.get(1) ?? [])}
-        ticker={ticker}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
         onToggle={togglePlayback}
-        votes={votes}
         topLeft={
-          showReplay ? (
-            <ControlCircle ariaLabel="Replay debate" onClick={playFromStart}>
-              <RetrySmall />
-            </ControlCircle>
-          ) : ready ? (
-            // Feed debates autoplay muted, so the unmute control stays visible during
-            // playback — otherwise there's no way to hear audio. Once unmuted it recedes
-            // to hover-only.
-            <ControlCircle
-              ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
-              onClick={() => {
-                measurement.control(mutedByUser ? 'unmute' : 'mute');
-                setMutedByUser(current => !current);
-              }}
-              className={
-                mutedByUser
-                  ? undefined
-                  : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100'
-              }
-            >
-              {mutedByUser ? <SpeakerMuted /> : <Speaker />}
-            </ControlCircle>
+          ready ? (
+            <>
+              <ControlCircle
+                ariaLabel={playing ? 'Pause debate' : playbackEnded ? 'Replay debate' : 'Play debate'}
+                onClick={playbackEnded ? playFromStart : togglePlayback}
+                className={idle ? undefined : recede}
+              >
+                {playing ? <Pause size={15} /> : playbackEnded ? <RetrySmall /> : <Play size={15} />}
+              </ControlCircle>
+              <ControlCircle
+                ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
+                onClick={() => {
+                  measurement.control(mutedByUser ? 'unmute' : 'mute');
+                  setMutedByUser(current => !current);
+                }}
+                className={mutedByUser || idle ? undefined : recede}
+              >
+                {mutedByUser ? <SpeakerMuted size={20} /> : <Speaker size={20} />}
+              </ControlCircle>
+            </>
           ) : null
         }
       />
@@ -156,14 +150,12 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         videoRef={slot2VideoRef}
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
-        subtitle={activeSlot === 2 ? subtitle : null}
-        claims={playbackEnded ? [] : (ticker.stacks.get(2) ?? [])}
-        ticker={ticker}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
         onToggle={togglePlayback}
-        votes={votes}
+        // Taller than the top tile's, per the frame: this is the half the claim stack sits over.
+        scrimClassName="h-[4.625rem]"
         scrubber={
           ready ? (
             // Always available so the viewer can seek. During playback it recedes to
@@ -189,23 +181,39 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         }
       />
 
+      {/* One stack for the whole player, in the bottom-left corner, whoever is speaking. The card
+          names its own speaker now, so it does not have to be parked over their tile to attribute —
+          and a fixed corner means a claim does not jump between halves mid-sentence.
+
+          Capped at the 209px the frame draws it at. The explore card is 484px wide, where 43% comes
+          out at exactly that; the fullscreen player is far wider, and letting the card scale with it
+          would hold a paragraph and stop being a glance. */}
+      {!playbackEnded && ticker.cards.length > 0 && (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-10 w-[43%] max-w-[13.0625rem]">
+          <DebateClaimTickerStack
+            cards={ticker.cards}
+            participantByClaimId={ticker.participantByClaimId}
+            rowsByClaimId={ticker.rowsByClaimId}
+            entitiesByClaimId={ticker.entitiesByClaimId}
+            onAnswered={ticker.onAnswered}
+          />
+        </div>
+      )}
+
+      {/* Straddling the seam between the tiles, which is the one strip of the player that is never
+          a face — and the one place it cannot land on top of the claim stack. */}
+      {subtitle && (
+        <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1 text-center text-[1rem] leading-tight text-white">
+          {subtitle}
+        </span>
+      )}
+
       {/* Dimmed behind, so the card reads as the moment the debate arrives at rather than a note
           stuck over two frozen faces. */}
       {ready && playbackEnded && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/55 px-3">
           <DebateScorecard debate={debate} ticker={ticker} votes={votes} onReplay={playFromStart} />
         </div>
-      )}
-
-      {showPausedGlyph && (
-        <button
-          type="button"
-          aria-label="Resume debate"
-          onClick={togglePlayback}
-          className="absolute top-1/2 left-1/2 z-20 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card"
-        >
-          <Play />
-        </button>
       )}
 
       {error && (
@@ -223,38 +231,29 @@ function DebaterVideo({
   videoRef,
   audible,
   countdown,
-  subtitle,
-  claims,
-  ticker,
   mutedByUser,
   isResuming,
   onPlaybackTick,
   onToggle,
-  votes,
   topLeft,
   scrubber,
+  scrimClassName = 'h-14',
 }: {
   participant: DebateParticipant | null;
   src: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   audible: boolean;
   countdown: TurnState;
-  subtitle: string | null;
-  /** The claims this debater is making right now, oldest first. */
-  claims: StackedCard[];
-  ticker: DebateTicker;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
   onToggle: () => void;
-  votes: DebateVotesResult;
   topLeft?: React.ReactNode;
   scrubber?: React.ReactNode;
+  scrimClassName?: string;
 }) {
   const { openSidePanel } = useEntitySidePanel();
   const name = participant ? speakerLabel(participant) : 'Debater';
-  const identityRef = React.useRef<HTMLButtonElement | null>(null);
-  const claimWidth = useIdentityRowWidth(identityRef);
 
   const muted = !audible || mutedByUser;
 
@@ -308,7 +307,7 @@ function DebaterVideo({
   };
 
   return (
-    <div className="relative aspect-480/289 w-full overflow-hidden rounded-lg bg-grey-01">
+    <div className="relative aspect-480/289 w-full overflow-hidden bg-grey-01">
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button type="button" aria-label="Pause or play" onClick={onToggle} className="absolute inset-0 z-0">
         {src ? (
@@ -331,95 +330,35 @@ function DebaterVideo({
         )}
       </button>
 
-      {/* Bottom gradient scrim for legibility of the overlaid controls. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-1 h-14 bg-linear-to-b from-black/0 to-black/70" />
+      {/* Bottom gradient scrim for legibility of the overlaid controls. All the way to black, per
+          the frame — the name that sits on it is regular weight and carries no text shadow. */}
+      <div
+        className={cx(
+          'pointer-events-none absolute inset-x-0 bottom-0 z-1 bg-linear-to-b from-black/0 to-black',
+          scrimClassName
+        )}
+      />
 
-      {topLeft && <div className="absolute top-3 left-3 z-10">{topLeft}</div>}
+      {topLeft && <div className="absolute top-3 left-3 z-10 flex items-center gap-2">{topLeft}</div>}
 
       {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
 
-      {/* Claims and the subtitle share one bottom-anchored column so they cannot land on top of
-          each other — they did, because both wanted the strip above the debater's name. The
-          subtitle stays pinned at the bottom of the column and the claims rise above it. */}
-      {(subtitle || claims.length > 0) && (
-        <div className="pointer-events-none absolute inset-x-4 bottom-11 z-10 flex flex-col items-start gap-1.5">
-          {/* Capped at the width of the name row below, so a claim never runs out past the
-              debater's position chip. Measured rather than guessed: the row is as wide as the
-              name, and names vary. */}
-          <DebateClaimTickerStack
-            cards={claims}
-            maxWidth={claimWidth}
-            rowsByClaimId={ticker.rowsByClaimId}
-            entitiesByClaimId={ticker.entitiesByClaimId}
-            onAnswered={ticker.onAnswered}
-          />
-          {subtitle && (
-            <span className="max-w-[70%] self-center rounded-sm bg-black/78 px-1.5 py-1 text-center text-[1rem] leading-tight text-white">
-              {subtitle}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Debater identity: avatar + name + position, opens their personal space in the side panel. */}
+      {/* Debater identity, opens their personal space in the side panel. On the right, because the
+          left of the bottom band is where the claim stack now lives. */}
       <button
-        ref={identityRef}
         type="button"
         onClick={openProfile}
-        className="absolute bottom-3 left-4 z-10 flex items-center gap-2 text-left"
+        className="absolute right-4 bottom-3 z-10 flex max-w-[55%] items-center gap-2 text-left"
       >
         <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
           <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
         </span>
-        <span className="truncate text-[1rem] font-medium text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55)]">
-          {name}
-        </span>
-        {participant && (
-          <DebateTileChip className={cx('shrink-0 text-text', tileChipSurface)}>
-            {participant.position_label}
-          </DebateTileChip>
-        )}
+        <span className="truncate text-[1rem] tracking-[-0.35px] text-white">{name}</span>
       </button>
-
-      {participant && (
-        <WinnerVoteButton
-          className="absolute right-4 bottom-3 z-10"
-          debaterName={name}
-          sharePercent={votes.sharePercentFor(participant)}
-          isMyPick={votes.isMyPick(participant)}
-          disabled={votes.isVoting}
-          onVote={() => votes.castVote(participant)}
-        />
-      )}
 
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}
     </div>
   );
-}
-
-/**
- * The rendered width of the debater's name row, so the claim lines above it can stop where it
- * stops.
- *
- * There is no CSS way to say "no wider than that sibling" when the sibling is absolutely
- * positioned and its width comes from its own content. Returns null until measured, and on any
- * renderer without `ResizeObserver`, in which case the lines fall back to their own max width.
- */
-function useIdentityRowWidth(ref: React.RefObject<HTMLElement | null>): number | null {
-  const [width, setWidth] = React.useState<number | null>(null);
-
-  React.useEffect(() => {
-    const element = ref.current;
-    if (!element || typeof ResizeObserver === 'undefined') return;
-
-    const observer = new ResizeObserver(entries => {
-      for (const entry of entries) setWidth(entry.contentRect.width);
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [ref]);
-
-  return width;
 }
 
 function CountdownBadge({ seconds, progress }: { seconds: number; progress: number }) {
@@ -427,11 +366,21 @@ function CountdownBadge({ seconds, progress }: { seconds: number; progress: numb
   const remaining = 1 - Math.max(0, Math.min(1, progress));
   const degrees = remaining * 360;
   return (
-    <div
-      className="absolute top-3 right-3 z-10 grid size-8 place-items-center rounded-full text-white"
-      style={{ backgroundImage: `conic-gradient(#ffffff ${degrees}deg, rgba(255,255,255,0.28) 0deg)` }}
-    >
-      <span className="grid size-7 place-items-center rounded-full bg-text/70 text-button">{Math.ceil(seconds)}</span>
+    <div className="absolute top-3 right-3 z-10 grid size-8 place-items-center rounded-full bg-linear-to-b from-black/50 to-black/25">
+      <span
+        className="col-start-1 row-start-1 size-7 rounded-full"
+        style={{
+          backgroundImage: `conic-gradient(#ffffff ${degrees}deg, rgba(255,255,255,0.3) 0deg)`,
+          // Hollowed into a 2px ring so the badge's own translucent backing shows through the
+          // middle. The frame draws a stroked circle; a filled disc would print the number on a
+          // grey plate the design does not have.
+          maskImage: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))',
+          WebkitMaskImage: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))',
+        }}
+      />
+      <span className="col-start-1 row-start-1 grid place-items-center text-[1.0625rem] leading-none font-medium text-white tabular-nums">
+        {Math.ceil(seconds)}
+      </span>
     </div>
   );
 }
@@ -455,7 +404,7 @@ function ControlCircle({
         event.stopPropagation();
         onClick();
       }}
-      className={cx('grid size-8 place-items-center rounded-full bg-white text-text shadow-light', className)}
+      className={cx('grid size-10 place-items-center rounded-full bg-white text-text shadow-light', className)}
     >
       {children}
     </button>
