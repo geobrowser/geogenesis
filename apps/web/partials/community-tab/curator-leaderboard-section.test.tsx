@@ -91,6 +91,16 @@ function board(
 }
 
 /** The curator named in each body row, in order — the header row dropped. */
+/** The numbered page buttons, in order. */
+const pageNumbers = () =>
+  screen
+    .getAllByRole('button')
+    .map(button => button.textContent ?? '')
+    .filter(label => /^\d+$/.test(label));
+
+const next = () => screen.getByRole('button', { name: 'Next page' });
+const previous = () => screen.getByRole('button', { name: 'Previous page' });
+
 const namesOnPage = () =>
   screen
     .getAllByRole('row')
@@ -105,34 +115,42 @@ describe('CuratorLeaderboardSection — paging', () => {
 
     expect(namesOnPage()).toEqual(['Curator 1', 'Curator 2', 'Curator 3', 'Curator 4', 'Curator 5']);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(next());
     expect(namesOnPage()).toEqual(['Curator 6', 'Curator 7', 'Curator 8', 'Curator 9', 'Curator 10']);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(next());
     expect(namesOnPage()).toEqual(['Curator 11', 'Curator 12']);
   });
 
-  it('says how far through the board the viewer is', () => {
+  // The shape every other paged table here uses: a number per page, not two arrows and a count.
+  it('offers a numbered page for each page of the board', () => {
     renderSection(result(board(12)));
 
-    expect(screen.getByText('Page 1 of 3')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(screen.getByText('Page 2 of 3')).toBeTruthy();
+    expect(pageNumbers()).toEqual(['1', '2', '3']);
+  });
+
+  // Which is the point of numbering them — three pages on is one press, not three.
+  it('jumps straight to a page by its number', () => {
+    renderSection(result(board(12)));
+
+    fireEvent.click(screen.getByRole('button', { name: '3' }));
+
+    expect(namesOnPage()).toEqual(['Curator 11', 'Curator 12']);
   });
 
   it('cannot be paged off either end', () => {
     renderSection(result(board(7)));
 
-    expect((screen.getByRole('button', { name: 'Previous' }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((previous() as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(next());
+    expect((next() as HTMLButtonElement).disabled).toBe(true);
   });
 
   // A board that fits on one page is not a paged board, and controls for it are noise.
   it('draws no controls for a board that fits', () => {
     renderSection(result(board(5)));
 
-    expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Next page' })).toBeNull();
   });
 });
 
@@ -154,15 +172,15 @@ describe('CuratorLeaderboardSection — the viewer’s own row', () => {
       'You', // pinned: rank 11 is two pages away
     ]);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(next());
     expect(namesOnPage()).toEqual(['Curator 6', 'Curator 7', 'Curator 8', 'Curator 9', 'Curator 10', 'You']);
   });
 
   it('does not repeat them on the page they are actually on', () => {
     renderSection(result(board(12, index => (index === 10 ? { isCurrentUser: true, name: 'Me' } : {}))));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(next());
+    fireEvent.click(next());
 
     // Rank 11 is the viewer, so the last page is their row in place, plus rank 12 — and not a
     // second copy pinned below it.
@@ -176,8 +194,68 @@ describe('CuratorLeaderboardSection — the viewer’s own row', () => {
     renderSection(result(board(7), row({ curatorSpaceId: VIEWER_SPACE_ID, isCurrentUser: true, rank: 8 })));
 
     expect(namesOnPage().at(-1)).toBe('You');
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(next());
     expect(namesOnPage().at(-1)).toBe('You');
+  });
+});
+
+describe('CuratorLeaderboardSection — full screen', () => {
+  const expand = () => screen.getByRole('button', { name: 'View leaderboard full screen' });
+
+  /**
+   * Paging exists because the tab has room for five rows. Full screen is the case where that
+   * constraint is lifted, so it shows the board rather than a page of it — opening onto page 1 of 3
+   * again would be the same view with more whitespace.
+   */
+  it('shows the whole board, not the page the tab was on', () => {
+    renderSection(result(board(12)));
+
+    expect(namesOnPage()).toHaveLength(5);
+
+    fireEvent.click(expand());
+
+    const dialog = within(screen.getByRole('dialog'));
+    expect(dialog.getAllByRole('row').slice(1)).toHaveLength(12);
+  });
+
+  // It is what the board is *of*. Left behind, full screen becomes a view of a window the viewer
+  // can no longer change.
+  it('brings the time window with it', () => {
+    renderSection(result(board(12)));
+    fireEvent.click(expand());
+
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: /Last week/ })).toBeTruthy();
+  });
+
+  it('closes', () => {
+    renderSection(result(board(12)));
+    fireEvent.click(expand());
+    expect(screen.queryByRole('dialog')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close full screen' }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  // Nothing has no full-screen version of itself.
+  it('is not offered for a board with nothing on it', () => {
+    renderSection(result([]));
+
+    expect(screen.queryByRole('button', { name: 'View leaderboard full screen' })).toBeNull();
+  });
+
+  /**
+   * A viewer with no activity is on no page of the board, so they are pinned in the tab. Full screen
+   * shows every row and still does not contain them — the pin is the only thing that answers "where
+   * am I" for somebody who is nowhere.
+   */
+  it('still pins a viewer who is not on the board', () => {
+    renderSection(result(board(7), row({ curatorSpaceId: VIEWER_SPACE_ID, isCurrentUser: true, rank: 8 })));
+    fireEvent.click(expand());
+
+    const rows = within(screen.getByRole('dialog')).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(8);
+    expect(within(rows[7]).getAllByRole('cell')[1]?.textContent).toBe('You');
   });
 });
 
@@ -190,8 +268,8 @@ describe('CuratorLeaderboardSection — the time window', () => {
   it('returns to the first page when the period changes', () => {
     renderSection(result(board(12)));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(screen.getByText('Page 2 of 3')).toBeTruthy();
+    fireEvent.click(next());
+    expect(namesOnPage()).toEqual(['Curator 6', 'Curator 7', 'Curator 8', 'Curator 9', 'Curator 10']);
 
     fireEvent.click(screen.getByRole('button', { name: /Last week/ }));
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Last month' }));
@@ -201,7 +279,7 @@ describe('CuratorLeaderboardSection — the time window', () => {
     fireEvent.click(screen.getByRole('button', { name: /Last month/ }));
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Last week' }));
 
-    expect(screen.getByText('Page 1 of 3')).toBeTruthy();
+    expect(namesOnPage()).toEqual(['Curator 1', 'Curator 2', 'Curator 3', 'Curator 4', 'Curator 5']);
   });
 });
 

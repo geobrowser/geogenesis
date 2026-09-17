@@ -1,5 +1,6 @@
 'use client';
 
+import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -17,11 +18,18 @@ import {
   CURATOR_LEADERBOARD_PERIOD_OPTIONS,
 } from '~/core/community/curator-leaderboard-types';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, PagesPaginationPlaceholder, getPaginationPages } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { IconButton, SquareButton } from '~/design-system/button';
+import { Close } from '~/design-system/icons/close';
+import { Fullscreen } from '~/design-system/icons/full-screen';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
+import { Spacer } from '~/design-system/spacer';
+import { PageNumberContainer } from '~/design-system/table/styles';
+import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
+import { Text } from '~/design-system/text';
 
 import { FILTER_PILL_CLASS, SingleSelectPill } from './community-filter-pill';
 
@@ -197,30 +205,33 @@ function LeaderboardPager({
 }) {
   if (pageCount <= 1) return null;
 
+  let skipCounter = 0;
+
   return (
-    <div className="flex items-center justify-end gap-3">
-      <span className="text-[16px] leading-[20px] text-grey-04 tabular-nums">
-        Page {page + 1} of {pageCount}
-      </span>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onChange(page - 1)}
-          disabled={page === 0}
-          className={cx(FILTER_PILL_CLASS, page === 0 && 'pointer-events-none opacity-50')}
-        >
-          Previous
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange(page + 1)}
-          disabled={page >= pageCount - 1}
-          className={cx(FILTER_PILL_CLASS, page >= pageCount - 1 && 'pointer-events-none opacity-50')}
-        >
-          Next
-        </button>
-      </div>
-    </div>
+    <PageNumberContainer>
+      {getPaginationPages(pageCount, page + 1).map(entry =>
+        entry === PagesPaginationPlaceholder.skip ? (
+          <Text
+            key={`ellipsis-${skipCounter++}`}
+            color="grey-03"
+            variant="metadataMedium"
+            className="flex justify-center"
+          >
+            ...
+          </Text>
+        ) : (
+          <PageNumber
+            key={`page-${entry}`}
+            number={entry}
+            isActive={entry === page + 1}
+            onClick={() => onChange(entry - 1)}
+          />
+        )
+      )}
+      <Spacer width={8} />
+      <PreviousButton isDisabled={page === 0} onClick={() => onChange(page - 1)} />
+      <NextButton isDisabled={page >= pageCount - 1} onClick={() => onChange(page + 1)} />
+    </PageNumberContainer>
   );
 }
 
@@ -241,9 +252,68 @@ function IncompleteCountsNotice() {
   return <p className="text-[16px] leading-[20px] text-grey-04">Some activity was not included in these counts.</p>;
 }
 
+function LeaderboardFullScreen({
+  open,
+  onOpenChange,
+  period,
+  onPeriodChange,
+  rows,
+  viewerRow,
+  truncated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  period: CuratorLeaderboardPeriod;
+  onPeriodChange: (period: CuratorLeaderboardPeriod) => void;
+  rows: CuratorLeaderboardRow[];
+  viewerRow: CuratorLeaderboardRow | null;
+  truncated: boolean;
+}) {
+  return (
+    <Root open={open} onOpenChange={onOpenChange}>
+      <Portal>
+        <Overlay className="fixed inset-0 z-100 bg-text/20" />
+
+        <Content className="fixed inset-0 z-1000 flex items-start justify-center p-4 focus:outline-hidden sm:p-8">
+          <div className="flex max-h-full w-full max-w-[1200px] flex-col gap-4 overflow-hidden rounded-lg bg-white p-6">
+            <div className="flex shrink-0 items-center justify-between gap-4">
+              <Title asChild>
+                <h2 className={cx('text-[24px] leading-[29px] font-semibold tracking-[-0.75px]', INK)}>
+                  Curator leaderboard
+                </h2>
+              </Title>
+
+              <div className="flex items-center gap-3">
+                <SingleSelectPill
+                  value={period}
+                  options={CURATOR_LEADERBOARD_PERIOD_OPTIONS}
+                  onChange={onPeriodChange}
+                  contentClassName="max-w-[180px]"
+                />
+                <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} aria-label="Close full screen" />
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <LeaderboardTable rows={rows} viewerRow={viewerRow} isLoading={false} />
+            </div>
+
+            {truncated ? (
+              <div className="shrink-0">
+                <IncompleteCountsNotice />
+              </div>
+            ) : null}
+          </div>
+        </Content>
+      </Portal>
+    </Root>
+  );
+}
+
 export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
   const [period, setPeriodState] = React.useState<CuratorLeaderboardPeriod>(initialData?.period ?? DEFAULT_PERIOD);
   const [page, setPage] = React.useState(0);
+  const [fullScreen, setFullScreen] = React.useState(false);
   const { personalSpaceId } = usePersonalSpaceId();
 
   const setPeriod = React.useCallback((next: CuratorLeaderboardPeriod) => {
@@ -290,12 +360,22 @@ export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
     <section className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
         <h2 className={cx('text-[24px] leading-[29px] font-semibold tracking-[-0.75px]', INK)}>Curator leaderboard</h2>
-        <SingleSelectPill
-          value={period}
-          options={CURATOR_LEADERBOARD_PERIOD_OPTIONS}
-          onChange={setPeriod}
-          contentClassName="max-w-[180px]"
-        />
+        <div className="flex items-center gap-3">
+          <SingleSelectPill
+            value={period}
+            options={CURATOR_LEADERBOARD_PERIOD_OPTIONS}
+            onChange={setPeriod}
+            contentClassName="max-w-[180px]"
+          />
+          {rows.length > 0 ? (
+            <IconButton
+              onClick={() => setFullScreen(true)}
+              icon={<Fullscreen color="grey-04" />}
+              color="grey-04"
+              aria-label="View leaderboard full screen"
+            />
+          ) : null}
+        </div>
       </div>
 
       {isError ? (
@@ -309,6 +389,16 @@ export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
           <LeaderboardPager page={safePage} pageCount={pageCount} onChange={setPage} />
 
           {truncated && !isLoading ? <IncompleteCountsNotice /> : null}
+
+          <LeaderboardFullScreen
+            open={fullScreen}
+            onOpenChange={setFullScreen}
+            period={period}
+            onPeriodChange={setPeriod}
+            rows={rows}
+            viewerRow={viewerRow}
+            truncated={truncated}
+          />
         </>
       )}
     </section>
