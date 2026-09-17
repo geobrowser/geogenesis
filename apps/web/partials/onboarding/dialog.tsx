@@ -157,8 +157,8 @@ export const OnboardingDialog = () => {
 
   // Fetch featured spaces for the 'interested-in' step. This is the same featured-space
   // traversal the Browse sidebar uses. `featuredError` distinguishes a failed fetch from a
-  // genuinely empty result, so the step can offer a retry instead of dead-ending on an empty
-  // card (Create profile requires a pick, and onboarding can't be dismissed.
+  // genuinely empty result, so a failed load offers a retry instead of showing an empty step;
+  // a genuinely empty result just lets the user continue, since the step is skippable.
   const loadFeaturedSpaces = React.useCallback(() => {
     setFeaturedStatus('loading');
     fetchBrowseSidebarData(undefined)
@@ -745,7 +745,7 @@ function StepInterestedIn({
 }) {
   const isLoading = status === 'loading';
   const isError = status === 'error';
-  const canCreateProfile = featuredSpaces.length > 0 ? selectedTopicIds.length > 0 : true;
+  const primaryLabel = selectedTopicIds.length > 0 || featuredSpaces.length === 0 ? 'Create profile' : 'Skip for now';
 
   return (
     <div className="flex h-full flex-col justify-between">
@@ -807,13 +807,13 @@ function StepInterestedIn({
       ) : (
         <Button
           onClick={onCompleteOnboard}
-          disabled={isLoading || !canCreateProfile}
+          disabled={isLoading}
           className={cx(
             'min-h-6 w-full rounded-md pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal',
-            !isLoading && canCreateProfile && 'bg-ctaHover'
+            !isLoading && 'bg-ctaHover'
           )}
         >
-          Create profile
+          {primaryLabel}
         </Button>
       )}
     </div>
