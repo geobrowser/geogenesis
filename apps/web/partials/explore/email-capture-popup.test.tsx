@@ -23,19 +23,24 @@ const mocks = vi.hoisted(() => ({
   loginWithCode: vi.fn(),
   otpState: { status: 'initial' } as { status: string; error?: Error | null },
   openPrivyModal: vi.fn(),
+  prepareOnboarding: vi.fn(),
+  useGeoLoginWithEmail: vi.fn(),
 }));
 
 vi.mock('@geogenesis/auth', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: mocks.isModalOpen }),
-  useLoginWithEmail: () => ({
-    sendCode: mocks.sendCode,
-    loginWithCode: mocks.loginWithCode,
-    state: mocks.otpState,
-  }),
+  useGeoLoginWithEmail: () => {
+    mocks.useGeoLoginWithEmail();
+    return { sendCode: mocks.sendCode, loginWithCode: mocks.loginWithCode, state: mocks.otpState };
+  },
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: () => mocks.openPrivyModal,
+}));
+
+vi.mock('~/core/hooks/use-prepare-onboarding', () => ({
+  usePrepareOnboarding: () => mocks.prepareOnboarding,
 }));
 
 // `ClientOnly` renders nothing until mounted, which is right in a browser and only noise here.
@@ -67,6 +72,8 @@ beforeEach(() => {
   mocks.sendCode.mockReset().mockResolvedValue(undefined);
   mocks.loginWithCode.mockReset().mockResolvedValue(undefined);
   mocks.openPrivyModal.mockReset();
+  mocks.prepareOnboarding.mockReset();
+  mocks.useGeoLoginWithEmail.mockReset();
   mocks.otpState = { status: 'initial' };
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ json: async () => ({ result: 'subscribed' }) });
@@ -491,6 +498,42 @@ describe('ExploreEmailCapturePopup', () => {
       // No second email field anywhere in the card.
       expect(screen.queryByRole('textbox', { name: 'Email address' })).toBeNull();
       expect(screen.getByRole('textbox', { name: 'Verification code' })).toBeInTheDocument();
+    });
+
+    // Reported from the browser: the code verified, the session existed, and then nothing — no
+    // wallet, no onboarding, a page carrying on as though nobody had signed in. The cause was
+    // reaching for Privy's raw `useLoginWithEmail`, which fires its own callbacks and so skips the
+    // `setActiveWallet` that `useGeoLogin` performs. Without a wallet in wagmi's context
+    // `useWalletClient` is empty, `useSmartAccount` resolves no address, and `usePersonalSpaceId`
+    // never runs the query whose result decides a new account needs onboarding.
+    //
+    // The wrapper lives in `packages/auth`, which has no test harness, so this guards the call
+    // site: swapping back to the raw hook leaves this spy uncalled and the import undefined.
+    it('logs in through the wrapper that puts the wallet into wagmi, not the raw Privy hook', async () => {
+      await subscribeSuccessfully();
+
+      expect(mocks.useGeoLoginWithEmail).toHaveBeenCalled();
+    });
+
+    // Onboarding's step and field atoms are persisted, so a run abandoned in this browser is still
+    // sitting there. Without this a new account resumes a stranger's half-filled profile and
+    // finishes on whichever page it was abandoned on.
+    it('clears any half-finished onboarding before starting the account', async () => {
+      await subscribeSuccessfully();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+
+      expect(mocks.prepareOnboarding).toHaveBeenCalled();
+    });
+
+    it('asks in the confirmation copy, using the address already given', async () => {
+      await subscribeSuccessfully();
+
+      expect(
+        screen.getByText('While we are here, do you want to create an account with the same email address?')
+      ).toBeInTheDocument();
     });
 
     it('skip does what dismissing always did, and does not ask Privy for anything', async () => {

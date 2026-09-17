@@ -4,14 +4,10 @@ import { useGeoLogin } from '@geogenesis/auth';
 
 import * as React from 'react';
 
-import { useSetAtom } from 'jotai';
-import { usePathname, useSearchParams } from 'next/navigation';
 
 import { type AnalyticsProperties, trackPrivyAuth } from '~/core/analytics';
 
-import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
-
-import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
+import { usePrepareOnboarding } from './use-prepare-onboarding';
 
 type UsePrivySignInOptions = {
   /**
@@ -39,14 +35,7 @@ type UsePrivySignInOptions = {
  * back on the page they left rather than being bounced to explore.
  */
 export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignInOptions) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
-  const setName = useSetAtom(nameAtom);
-  const setTopicId = useSetAtom(topicIdAtom);
-  const setAvatar = useSetAtom(avatarAtom);
-  const setSpaceId = useSetAtom(spaceIdAtom);
-  const setStep = useSetAtom(stepAtom);
+  const prepareOnboarding = usePrepareOnboarding();
 
   // Held in a ref so callers can pass an inline closure without re-creating the returned callback
   // on every render — `castVote` and the feed's button handler both depend on its identity.
@@ -93,17 +82,11 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   });
 
   return React.useCallback(() => {
-    const search = searchParams?.toString();
-    setPostOnboardingRedirect(optionsRef.current?.redirectTo ?? `${pathname}${search ? `?${search}` : ''}`);
-    setName('');
-    setTopicId('');
-    setAvatar('');
-    setSpaceId('');
-    setStep('start');
+    prepareOnboarding(optionsRef.current?.redirectTo);
     requestedRef.current = true;
     // Copied rather than referenced, so a caller rebuilding the object cannot rewrite an
     // attempt that is already in flight.
     requestedAnalyticsRef.current = optionsRef.current?.analytics ? { ...optionsRef.current.analytics } : undefined;
     login();
-  }, [login, pathname, searchParams, setAvatar, setName, setPostOnboardingRedirect, setSpaceId, setStep, setTopicId]);
+  }, [login, prepareOnboarding]);
 }

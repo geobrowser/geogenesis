@@ -1,6 +1,6 @@
 'use client';
 
-import { type UseLoginWithEmail, useLoginWithEmail, usePrivy } from '@geogenesis/auth';
+import { type UseLoginWithEmail, useGeoLoginWithEmail, usePrivy } from '@geogenesis/auth';
 
 import * as React from 'react';
 
@@ -10,6 +10,7 @@ import { useAtomValue } from 'jotai';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
+import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
 import { timeoutSignal } from '~/core/timeout-signal';
@@ -84,7 +85,11 @@ function EmailCapturePopup() {
   // the modal's first step -- asking for it again -- is the one thing worth removing. `state` is
   // Privy's own flow state ('sending-code' | 'awaiting-code-input' | 'submitting-code' | 'error' |
   // 'done'), which is more trustworthy than a second copy of the same machine kept here.
-  const { sendCode, loginWithCode, state: otpState } = useLoginWithEmail();
+  const { sendCode, loginWithCode, state: otpState } = useGeoLoginWithEmail();
+  // The same preparation `usePrivySignIn` does before the modal opens. Onboarding's step and field
+  // atoms are persisted, so without this a new account resumes whatever half-finished run was left
+  // in this browser, and finishes onboarding on whichever page it was abandoned on.
+  const prepareOnboarding = usePrepareOnboarding();
   const [wantsAccount, setWantsAccount] = React.useState(false);
   const [code, setCode] = React.useState('');
   // The address as accepted, so the account is created against what was actually subscribed rather
@@ -158,6 +163,7 @@ function EmailCapturePopup() {
    */
   const startAccount = React.useCallback(async () => {
     setWantsAccount(true);
+    prepareOnboarding();
     try {
       await sendCode({ email: subscribedEmail });
     } catch {
@@ -167,7 +173,7 @@ function EmailCapturePopup() {
       close();
       openPrivyModal();
     }
-  }, [sendCode, subscribedEmail, close, openPrivyModal]);
+  }, [sendCode, subscribedEmail, close, openPrivyModal, prepareOnboarding]);
 
   const submitCode = React.useCallback(
     async (event: React.FormEvent) => {
@@ -348,7 +354,7 @@ function EmailCapturePopup() {
             ) : (
               <>
                 <p className="mt-[8px] text-[16px] leading-[19px] tracking-[-0.48px] text-[rgba(21,21,21,0.7)]">
-                  Want an account? We can use the email you just gave us.
+                  While we are here, do you want to create an account with the same email address?
                 </p>
 
                 {/* The confirmation used to be a dead end whose only action was dismissing it, and

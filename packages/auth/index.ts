@@ -1,10 +1,6 @@
 export {
   usePrivy,
   useLogout,
-  // Privy's headless email login: `sendCode`/`loginWithCode` against an address we already hold,
-  // so a reader who has just typed their email into something else is not asked for it twice
-  // (GEO-2948). The modal flow via `useGeoLogin` stays the default everywhere else.
-  useLoginWithEmail,
   type UseLoginWithEmail,
   useIdentityToken,
   getIdentityToken,
@@ -17,3 +13,9 @@ export { WagmiProvider } from '@privy-io/wagmi';
 export { useAccountEffect, useWalletClient } from 'wagmi';
 export { getGeoChain } from './src/chain.js';
 export { useGeoLogin } from './src/use-login.js';
+// Privy's headless email login — `sendCode`/`loginWithCode` against an address already in hand, so
+// someone who has just typed their email into another form is not asked for it twice (GEO-2948).
+// Wrapped rather than re-exported raw: the bare hook skips the wallet activation `useGeoLogin`
+// does, which leaves the account signed in with nothing in wagmi's context. The modal flow stays
+// the default everywhere else.
+export { useGeoLoginWithEmail } from './src/use-login-with-email.js';
