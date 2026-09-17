@@ -20,6 +20,14 @@ export type PersonProposal = {
   name: string | null;
   type: ProposalType;
   status: ProposalStatus;
+  /**
+   * Voting is over, it was not executed, and its execute window is still open.
+   *
+   * The status chip reads an ended `PROPOSED` row with this false as *Rejected*,
+   * so without it every unresolved proposal is reported as a failed one however
+   * carefully `status` was derived.
+   */
+  isAwaitingExecution: boolean;
   /** Unix seconds. Zero means the indexer has not stamped one. */
   createdAt: number;
   /** Unix seconds. Zero until the first vote opens the window — see `proposalTimestampSeconds`. */
@@ -46,6 +54,8 @@ type ProposalNode = {
   /** Set once a proposal can no longer be executed. The signal that separates
    *  "rejected" from "passed and waiting". */
   unexecutableAt: string | null;
+  /** The deadline for executing a passed proposal. Past it, the outcome is settled. */
+  executeBy: string | null;
   startTime: string | null;
   endTime: string | null;
   yesCount: string | null;
@@ -76,29 +86,43 @@ interface ActionsResult {
 }
 
 /**
- * A proposal's outcome, from `proposals_current`.
+ * A proposal's outcome, from `proposals_current`, **without counting votes.**
  *
- * Not `deriveProposalStatus`, which this used at first. That helper takes
- * `(executedAt, endTime)` and cannot do better than it does with them: with no
- * execution and the window closed it must guess, and it guesses REJECTED. So a
- * proposal that **passed and is waiting to be executed** reads as one that
- * failed — the state the REST API models explicitly as `EXECUTABLE` and maps to
- * `PROPOSED` (`mapProposalStatus`).
+ * Two earlier versions of this got it wrong in opposite directions, and the
+ * second mistake is the instructive one.
  *
- * This view carries the signal that settles it: `unexecutableAt`, set when a
- * proposal can no longer be executed. With that plus the tally there is nothing
- * left to guess.
+ * `deriveProposalStatus` takes `(executedAt, endTime)` and so must guess on an
+ * ended, unexecuted proposal; it guesses REJECTED, which mislabels one that
+ * passed and is waiting to be executed. Replacing it with a **simple majority**
+ * of the tally fixed that case and introduced a worse assumption: there is no
+ * one majority rule. `getApiProposalCanExecute` spells out why — SLOW proposals
+ * need a percentage quorum *and* a support threshold, while FAST ones clear on
+ * `flatSupportThreshold`, which a single editor's vote can satisfy. Of this
+ * account's 771 proposals, 690 are FAST. Reproducing that here would mean
+ * reimplementing consensus rules against undocumented fixed-point thresholds
+ * (`510000`, `5000000`) from a view that was never meant to answer it.
  *
- * Rare, and real: 2 of 20,000 proposals scanned across the graph are ended,
- * passed and unexecuted, and 23 carry `unexecutableAt`. Rare is the reason it
- * survived review, not a reason to leave it — the rows it gets wrong are a
- * governance record stating that somebody's accepted proposal was rejected.
+ * So this does not try. `executeBy` makes the vote arithmetic unnecessary:
+ * every ended proposal has a window in which it may still be executed, and once
+ * that window closes the question is settled whatever the votes said. Measured
+ * on the 54 of this account's proposals that are ended and unexecuted, **52 are
+ * already past `executeBy`** and 2 are still inside it.
  *
- * `fetch-proposals-by-user.ts` has the same limitation and is untouched here: it
- * is pre-existing, and its query does not select `unexecutableAt` either.
+ * What each branch therefore claims, and nothing more:
+ *
+ * - executed → it happened.
+ * - `unexecutableAt` → the graph says it can no longer happen.
+ * - voting still open → still being voted on.
+ * - ended, execute window closed → it did not happen and now cannot.
+ * - ended, execute window open → **not yet resolved.** Not "it passed" — that
+ *   is the question this view cannot answer, and the chip says "Pending
+ *   execution" rather than asserting an outcome.
+ *
+ * `fetch-proposals-by-user.ts` shares the old limitation and is untouched here:
+ * it is pre-existing, and its query selects neither column.
  */
 export function proposalStatusFromCurrent(
-  node: Pick<ProposalNode, 'executedAt' | 'unexecutableAt' | 'endTime' | 'yesCount' | 'noCount' | 'abstainCount'>,
+  node: Pick<ProposalNode, 'executedAt' | 'unexecutableAt' | 'endTime' | 'executeBy'>,
   now = Math.floor(Date.now() / 1000)
 ): ProposalStatus {
   if (node.executedAt) return 'ACCEPTED';
@@ -110,12 +134,30 @@ export function proposalStatusFromCurrent(
   // fresh proposal as rejected.
   if (endTime === 0 || endTime >= now) return 'PROPOSED';
 
-  const yes = Number(node.yesCount ?? 0);
-  const total = yes + Number(node.noCount ?? 0) + Number(node.abstainCount ?? 0);
+  return isAwaitingExecution(node, now) ? 'PROPOSED' : 'REJECTED';
+}
 
-  // Ended with a majority and nothing saying it cannot be executed: awaiting
-  // execution, which is `PROPOSED` here exactly as `EXECUTABLE` is upstream.
-  return total > 0 && yes * 2 > total ? 'PROPOSED' : 'REJECTED';
+/**
+ * Whether this proposal could still be executed.
+ *
+ * Drives the status chip, which otherwise reads an ended `PROPOSED` row with
+ * `canExecute: false` as **Rejected** — undoing the distinction above for every
+ * row it applies to. The chip takes executability and the Execute *button*
+ * separately (`executeIn`), so a read-only record can be honest about the first
+ * without offering the second.
+ */
+export function isAwaitingExecution(
+  node: Pick<ProposalNode, 'executedAt' | 'unexecutableAt' | 'endTime' | 'executeBy'>,
+  now = Math.floor(Date.now() / 1000)
+): boolean {
+  if (node.executedAt || node.unexecutableAt) return false;
+
+  const endTime = Number(node.endTime ?? 0);
+  if (endTime === 0 || endTime >= now) return false;
+
+  const executeBy = Number(node.executeBy ?? 0);
+
+  return executeBy > 0 && executeBy >= now;
 }
 
 /**
@@ -164,6 +206,7 @@ function personProposalsQuery(
         createdAt
         executedAt
         unexecutableAt
+        executeBy
         startTime
         endTime
         yesCount
@@ -299,6 +342,7 @@ export function usePersonProposals({
             name: node.name,
             type: node.name !== null ? 'ADD_EDIT' : (actionTypes.get(ID.uuidToHex(node.id)) ?? 'ADD_EDIT'),
             status: proposalStatusFromCurrent(node),
+            isAwaitingExecution: isAwaitingExecution(node),
             createdAt: Number(node.createdAt ?? 0),
             startTime: Number(node.startTime ?? 0),
             endTime,

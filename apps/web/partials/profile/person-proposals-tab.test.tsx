@@ -98,6 +98,7 @@ function proposal(overrides: Partial<PersonProposal> = {}): PersonProposal {
     name: 'Import universities into Academia (3/3)',
     type: 'ADD_EDIT',
     status: 'ACCEPTED',
+    isAwaitingExecution: false,
     createdAt: 1789254358,
     startTime: 1789254363,
     endTime: 1789340763,

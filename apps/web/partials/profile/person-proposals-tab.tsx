@@ -246,9 +246,18 @@ function ProposalRow({
         noPercentage={percentageFromCounts(proposal.no, total)}
         status={proposal.status}
         endTime={proposal.endTime}
-        // A record is read, not acted on, and the chip's Execute button would be
-        // a control nested inside this row's link.
-        canExecute={false}
+        /*
+         * Truthful, not `false`. The chip reads an ended `PROPOSED` row with
+         * this false as **Rejected**, which threw away the distinction
+         * `proposalStatusFromCurrent` exists to make — every unresolved proposal
+         * reported as a failed one.
+         *
+         * A record is still read rather than acted on: `executeIn` is what
+         * offers the Execute button, and omitting it leaves the chip saying
+         * "Pending execution" as a plain label, with no control nested inside
+         * this row's full-bleed link.
+         */
+        canExecute={proposal.isAwaitingExecution}
         bylineLead={
           <Link
             href={NavUtils.toSpace(proposal.spaceId)}

@@ -38,7 +38,7 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
   const spaces = useRecordSelection();
   const topics = useRecordSelection();
 
-  const { index, isLoading: isLoadingIndex } = usePersonPositionIndex({ spaceId });
+  const { index, isLoading: isLoadingIndex, isError: isIndexError } = usePersonPositionIndex({ spaceId });
 
   const selection = React.useMemo(
     () => ({ spaceIds: spaces.values, topicIds: topics.values }),
@@ -102,33 +102,50 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
     <div className="flex flex-col gap-4">
       <RecordFilterRow
         sort={{ value: sort, options: SORT_OPTIONS, onChange: value => setSort(value as PositionSort) }}
-        dimensions={[
-          {
-            key: 'spaces',
-            options: spaceOptions,
-            values: spaces.values,
-            onToggle: spaces.toggle,
-            onClear: spaces.clear,
-            anyLabel: 'Any space',
-            noun: ['space', 'spaces'],
-            isPending: isLoadingIndex,
-          },
-          {
-            key: 'topics',
-            options: topicOptions,
-            values: topics.values,
-            onToggle: topics.toggle,
-            onClear: topics.clear,
-            anyLabel: 'Any topic',
-            noun: ['topic', 'topics'],
-            isPending: isLoadingIndex,
-          },
-        ]}
+        /*
+         * Dropped rather than drawn empty when the index could not be read.
+         *
+         * Both menus are built from it, and the order query they sit above is a
+         * separate request — so the index can fail while the claims arrive
+         * perfectly well, leaving two menus offering nothing but "Any space" and
+         * "Any topic". That reads as a person whose 208 claims are in no space
+         * and carry no topic, rather than as a lookup that failed.
+         *
+         * The same call the Proposals tab makes for its own facets.
+         */
+        dimensions={
+          isIndexError
+            ? []
+            : [
+                {
+                  key: 'spaces',
+                  options: spaceOptions,
+                  values: spaces.values,
+                  onToggle: spaces.toggle,
+                  onClear: spaces.clear,
+                  anyLabel: 'Any space',
+                  noun: ['space', 'spaces'],
+                  isPending: isLoadingIndex,
+                },
+                {
+                  key: 'topics',
+                  options: topicOptions,
+                  values: topics.values,
+                  onToggle: topics.toggle,
+                  onClear: topics.clear,
+                  anyLabel: 'Any topic',
+                  noun: ['topic', 'topics'],
+                  isPending: isLoadingIndex,
+                },
+              ]
+        }
       />
 
       <PersonRecordFeed
         rows={rows}
-        isLoading={isLoading || isLoadingIndex}
+        // Not blocked on the index: it only feeds the menus, and the claims
+        // themselves come from a different request that may well have arrived.
+        isLoading={isLoading || (isLoadingIndex && !isIndexError)}
         isError={isError}
         isFetchingNextPage={isFetchingNextPage}
         hasNextPage={hasNextPage}
