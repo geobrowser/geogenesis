@@ -82,10 +82,15 @@ export function usePersonProposalSpaces({ spaceId, enabled = true }: { spaceId: 
         );
 
         if (Either.isLeft(result)) {
-          // The menu is an accessory to a list that renders without it, so a
-          // failure here leaves the list alone rather than taking the tab down.
+          // All or nothing, not the pages that made it. Breaking out here left
+          // the counts understated — 770 proposals across 30 spaces reported as
+          // whatever the first page happened to hold — and a wrong number in a
+          // menu is worse than no menu, because the reader cannot tell.
+          //
+          // Thrown rather than answered empty so `isError` is true and the
+          // caller can drop the dimension instead of drawing an empty one.
           console.error(`[proposal-spaces] failed for ${spaceId}:`, result.left);
-          break;
+          throw result.left;
         }
 
         const connection: SpacesResult['proposalsCurrentsConnection'] = result.right.proposalsCurrentsConnection;
@@ -97,6 +102,13 @@ export function usePersonProposalSpaces({ spaceId, enabled = true }: { spaceId: 
 
         if (!connection?.pageInfo?.hasNextPage || !connection.pageInfo.endCursor) break;
         after = connection.pageInfo.endCursor;
+
+        // The ceiling is 10,000 proposals, fifteen times the busiest account.
+        // Reaching it would understate the counts the same way a failed page
+        // does, so it is an error rather than a quiet truncation.
+        if (page === SPACE_FACET_MAX_PAGES - 1) {
+          throw new Error(`[proposal-spaces] ${spaceId} exceeds ${SPACE_FACET_MAX_PAGES} pages`);
+        }
       }
 
       return [...counts.entries()]

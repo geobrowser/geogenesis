@@ -52,7 +52,11 @@ export function PersonProposalsTab({ spaceId, proposer }: { spaceId: string; pro
 
   // Over the whole record, not the pages in hand: 770 proposals across 30
   // spaces, where the first page touches three of them.
-  const { spaces: spaceFacets, isLoading: isLoadingSpaces } = usePersonProposalSpaces({ spaceId });
+  const {
+    spaces: spaceFacets,
+    isLoading: isLoadingSpaces,
+    isError: isSpacesError,
+  } = usePersonProposalSpaces({ spaceId });
 
   // Looked up once for the page. These are routinely spaces the viewer has never
   // opened, which the browse sidebar cannot name.
@@ -78,18 +82,24 @@ export function PersonProposalsTab({ spaceId, proposer }: { spaceId: string; pro
   const controls = (
     <RecordFilterRow
       sort={{ value: sort, options: SORT_OPTIONS, onChange: value => setSort(value as ProposalSort) }}
-      dimensions={[
-        {
-          key: 'spaces',
-          options: spaceOptions,
-          values: spaces.values,
-          onToggle: spaces.toggle,
-          onClear: spaces.clear,
-          anyLabel: 'Any space',
-          noun: ['space', 'spaces'],
-          isPending: isLoadingSpaces,
-        },
-      ]}
+      // Dropped rather than drawn empty when the facets could not be read: a
+      // menu with no options looks like a person who proposed into one space.
+      dimensions={
+        isSpacesError
+          ? []
+          : [
+              {
+                key: 'spaces',
+                options: spaceOptions,
+                values: spaces.values,
+                onToggle: spaces.toggle,
+                onClear: spaces.clear,
+                anyLabel: 'Any space',
+                noun: ['space', 'spaces'],
+                isPending: isLoadingSpaces,
+              },
+            ]
+      }
     />
   );
 
@@ -203,18 +213,20 @@ function ProposalRow({
   return (
     // The same per-row rule the governance list draws, so the two lists read
     // as one kind of thing.
-    <div className="relative border-b border-grey-01">
-      {/*
-       * `from` and `returnSpaceId` are what bring the reader back here rather
-       * than stranding them in the governance tab of a space they were never
-       * in — see `useCloseProposal`.
-       */}
-      <Link
-        href={`/space/${proposal.spaceId}/governance?proposalId=${proposal.id}&from=profile&returnSpaceId=${returnSpaceId}`}
-        className="absolute inset-0 z-0"
-        aria-label={title}
-      />
+    <div className="border-b border-grey-01">
       <GovernanceProposalRow
+        overlay={
+          /*
+           * `from` and `returnSpaceId` are what bring the reader back here
+           * rather than stranding them in the governance tab of a space they
+           * were never in — see `useCloseProposal`.
+           */
+          <Link
+            href={`/space/${proposal.spaceId}/governance?proposalId=${proposal.id}&from=profile&returnSpaceId=${returnSpaceId}`}
+            className="absolute inset-0"
+            aria-label={title}
+          />
+        }
         title={title}
         profile={proposer}
         timestampSeconds={proposalTimestampSeconds({

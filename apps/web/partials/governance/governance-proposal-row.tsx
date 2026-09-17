@@ -38,6 +38,21 @@ type Props = {
   bylineLead?: React.ReactNode;
   /** Rendered beside the title, e.g. the reopen menu. */
   titleAccessory?: React.ReactNode;
+  /**
+   * The whole-row link, drawn behind the content.
+   *
+   * **It has to live inside this component**, which is the mistake the
+   * extraction made. Both callers had it as a preceding sibling of the row
+   * instead, and the row's own root is `position: relative` — so the row's box
+   * painted over an `absolute inset-0 z-0` anchor and swallowed its clicks.
+   * Only the controls that carry `z-10` stayed live, which is why the byline
+   * links kept working and the title stopped.
+   *
+   * Inside the relative root it is a sibling of the content again, the
+   * arrangement that worked before: the anchor covers the row, and the handful
+   * of real controls sit above it on `z-10`.
+   */
+  overlay?: React.ReactNode;
 };
 
 /** A share of the vote, floored. Nobody voting is 0 rather than a division by it. */
@@ -56,6 +71,7 @@ export function percentageFromCounts(count: number, total: number): number {
  * a record lists them newest first.
  */
 export function GovernanceProposalRow({
+  overlay,
   title,
   profile,
   timestampSeconds,
@@ -83,6 +99,7 @@ export function GovernanceProposalRow({
 
   return (
     <div className="relative flex w-full flex-col gap-3 py-4">
+      {overlay}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
           <h3 className="min-w-0 flex-1 text-smallTitle">{title}</h3>

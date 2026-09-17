@@ -85,9 +85,24 @@ export function usePersonPositions({
 
   const orderedIds = React.useMemo(() => applyFilter(order.data, matchingIds), [order.data, matchingIds]);
 
-  // The ids the page fetcher closes over. Without them in the key, changing a
-  // filter would serve the previous selection's pages straight from cache.
-  const filterKey = matchingIds === null ? 'all' : `${matchingIds.length}:${orderedIds.length}`;
+  // The ids the page fetcher closes over — identified, not counted.
+  //
+  // Two counts is not an identity: any two selections leaving the same number of
+  // claims collide, and with a 30-second stale time react-query then answers the
+  // new filter with the old filter's cards rather than calling the closure at
+  // all. Pick one topic matching ten, swap it for another matching ten, and the
+  // list does not change.
+  //
+  // The ids themselves rather than a digest of them: this is exact by
+  // construction, where a hash is exact only probabilistically, and the cost is
+  // a ~7KB key for the largest record that exists against a handful of live
+  // selections. Worth revisiting if a record ever gets big enough for the key to
+  // matter, which is the same point at which the whole complete-list approach
+  // needs rethinking anyway.
+  const filterKey = React.useMemo(
+    () => (matchingIds === null ? 'all' : orderedIds.join(',')),
+    [matchingIds, orderedIds]
+  );
 
   const {
     data,

@@ -147,13 +147,15 @@ export async function GovernanceProposalsList({
 
           return (
             <ProposalListItem key={p.id} proposalId={p.id} baseOrder={baseOrder} canSink={p.bucket !== 'completed'}>
-              <div className="relative">
-                <Link
-                  href={`/space/${spaceId}/governance?proposalId=${p.id}${filterSuffix ? `&${filterSuffix}` : ''}`}
-                  className="absolute inset-0 z-0"
-                  aria-label={proposalTitle}
-                />
+              <div>
                 <GovernanceProposalRow
+                  overlay={
+                    <Link
+                      href={`/space/${spaceId}/governance?proposalId=${p.id}${filterSuffix ? `&${filterSuffix}` : ''}`}
+                      className="absolute inset-0"
+                      aria-label={proposalTitle}
+                    />
+                  }
                   title={proposalTitle}
                   profile={displayProfile}
                   timestampSeconds={timestampSeconds}

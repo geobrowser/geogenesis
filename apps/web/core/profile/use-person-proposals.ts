@@ -11,7 +11,6 @@ import { ID } from '~/core/id';
 import { mapActionTypeToProposalType } from '~/core/io/rest/schemas/proposal';
 import { graphql } from '~/core/io/subgraph/graphql';
 import type { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
-import { deriveProposalStatus } from '~/core/utils/utils';
 
 /** One proposal this person made, wherever they made it. */
 export type PersonProposal = {
@@ -44,6 +43,9 @@ type ProposalNode = {
   name: string | null;
   createdAt: string | null;
   executedAt: string | null;
+  /** Set once a proposal can no longer be executed. The signal that separates
+   *  "rejected" from "passed and waiting". */
+  unexecutableAt: string | null;
   startTime: string | null;
   endTime: string | null;
   yesCount: string | null;
@@ -71,6 +73,49 @@ export type ProposalSort = 'new' | 'old';
 
 interface ActionsResult {
   proposalActionsConnection: { nodes: { proposalId: string; actionType: string }[] } | null;
+}
+
+/**
+ * A proposal's outcome, from `proposals_current`.
+ *
+ * Not `deriveProposalStatus`, which this used at first. That helper takes
+ * `(executedAt, endTime)` and cannot do better than it does with them: with no
+ * execution and the window closed it must guess, and it guesses REJECTED. So a
+ * proposal that **passed and is waiting to be executed** reads as one that
+ * failed — the state the REST API models explicitly as `EXECUTABLE` and maps to
+ * `PROPOSED` (`mapProposalStatus`).
+ *
+ * This view carries the signal that settles it: `unexecutableAt`, set when a
+ * proposal can no longer be executed. With that plus the tally there is nothing
+ * left to guess.
+ *
+ * Rare, and real: 2 of 20,000 proposals scanned across the graph are ended,
+ * passed and unexecuted, and 23 carry `unexecutableAt`. Rare is the reason it
+ * survived review, not a reason to leave it — the rows it gets wrong are a
+ * governance record stating that somebody's accepted proposal was rejected.
+ *
+ * `fetch-proposals-by-user.ts` has the same limitation and is untouched here: it
+ * is pre-existing, and its query does not select `unexecutableAt` either.
+ */
+export function proposalStatusFromCurrent(
+  node: Pick<ProposalNode, 'executedAt' | 'unexecutableAt' | 'endTime' | 'yesCount' | 'noCount' | 'abstainCount'>,
+  now = Math.floor(Date.now() / 1000)
+): ProposalStatus {
+  if (node.executedAt) return 'ACCEPTED';
+  if (node.unexecutableAt) return 'REJECTED';
+
+  const endTime = Number(node.endTime ?? 0);
+  // v2 contracts open the window on the first vote, so a zero `endTime` is "not
+  // started" rather than "long over" — reading it the other way reported every
+  // fresh proposal as rejected.
+  if (endTime === 0 || endTime >= now) return 'PROPOSED';
+
+  const yes = Number(node.yesCount ?? 0);
+  const total = yes + Number(node.noCount ?? 0) + Number(node.abstainCount ?? 0);
+
+  // Ended with a majority and nothing saying it cannot be executed: awaiting
+  // execution, which is `PROPOSED` here exactly as `EXECUTABLE` is upstream.
+  return total > 0 && yes * 2 > total ? 'PROPOSED' : 'REJECTED';
 }
 
 /**
@@ -118,6 +163,7 @@ function personProposalsQuery(
         name
         createdAt
         executedAt
+        unexecutableAt
         startTime
         endTime
         yesCount
@@ -166,8 +212,13 @@ async function fetchActionTypes(proposalIds: string[], signal?: AbortSignal): Pr
   );
 
   if (Either.isLeft(result)) {
+    // Thrown rather than answered empty. For an unnamed proposal the action
+    // *is* the title — `getProposalName` has nothing else to work from — so an
+    // empty map does not degrade the row, it relabels it: every membership
+    // change becomes "ADD_EDIT" and renders as a raw uuid. A tab that says it
+    // could not load is the honest version of that.
     console.error('[person-proposals] failed to fetch proposal action types:', result.left);
-    return byId;
+    throw result.left;
   }
 
   // A proposal can carry several actions; the first stands for the proposal, the
@@ -235,7 +286,7 @@ export function usePersonProposals({
             spaceId: ID.uuidToHex(node.spaceId),
             name: node.name,
             type: node.name !== null ? 'ADD_EDIT' : (actionTypes.get(ID.uuidToHex(node.id)) ?? 'ADD_EDIT'),
-            status: deriveProposalStatus(node.executedAt, endTime),
+            status: proposalStatusFromCurrent(node),
             createdAt: Number(node.createdAt ?? 0),
             startTime: Number(node.startTime ?? 0),
             endTime,

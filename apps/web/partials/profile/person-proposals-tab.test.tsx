@@ -67,6 +67,9 @@ vi.mock('~/partials/governance/governance-proposal-row', () => ({
     mocks.rowProps.push(props);
     return (
       <div data-testid="governance-row">
+        {/* The whole-row link lives inside the real row, so the stand-in has to
+            render it too — it is what makes the row clickable at all. */}
+        {props.overlay as React.ReactNode}
         {props.bylineLead as React.ReactNode}
         <h3>{props.title as string}</h3>
       </div>

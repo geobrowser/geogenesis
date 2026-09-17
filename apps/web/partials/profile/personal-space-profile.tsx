@@ -111,7 +111,7 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
 function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personEntityId: string }) {
   const debates = usePersonDebates(spaceId, true);
   const positions = usePersonPositions({ spaceId });
-  const { facts, isLoading: isLoadingFacts } = useProfileFacts({ spaceId, personEntityId });
+  const { facts, isLoading: isLoadingFacts, isError: isFactsError } = useProfileFacts({ spaceId, personEntityId });
 
   const kinds: ActivityKind[] = [
     {
@@ -119,9 +119,12 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       label: 'Debates',
       rows: debates.rows,
       total: facts.debates,
-      // The count and the rows are separate requests. Without the facts half,
-      // rows that arrived first rendered under a confident 0.
+      // The count and the rows are separate requests, so both halves of the
+      // facts query's state have to reach the card: without `isLoading` the
+      // rows rendered under a confident 0 while the count was still out, and
+      // without `isError` they render under one forever if it failed.
       isLoading: debates.isLoading || isLoadingFacts,
+      isCountUnavailable: isFactsError,
       href: `/space/${spaceId}/debates`,
       seeAllLabel: 'See all debates',
     },
@@ -132,6 +135,7 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       stanceByClaimId: positions.stanceByClaimId,
       total: facts.positions,
       isLoading: positions.isLoading || isLoadingFacts,
+      isCountUnavailable: isFactsError,
       href: `/space/${spaceId}/positions`,
       seeAllLabel: 'See all claims',
     },

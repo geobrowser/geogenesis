@@ -35,6 +35,15 @@ export type ActivityKind = {
    */
   total: number;
   isLoading: boolean;
+  /**
+   * The count could not be read. Distinct from it being zero.
+   *
+   * The rows and the count are separate requests, so the card can hold real
+   * debates beside a count that failed. It draws a dash there rather than a
+   * confident 0 — the same thing the rail's `Fact` rows do, and for the same
+   * reason: "0 debates" is a claim about a person.
+   */
+  isCountUnavailable?: boolean;
   /** The tab holding the rest. */
   href: string;
   seeAllLabel: string;
@@ -98,7 +107,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
                 >
                   {kind.label}
                   <span className={cx('tabular-nums', isSelected ? 'text-white/70' : 'text-grey-03')}>
-                    {kind.total.toLocaleString()}
+                    {kind.isCountUnavailable ? '—' : kind.total.toLocaleString()}
                   </span>
                 </button>
               );

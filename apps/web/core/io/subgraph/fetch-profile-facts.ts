@@ -7,14 +7,21 @@ import { normId } from '~/core/utils/norm-id';
 
 import { graphql } from './graphql';
 
+/** A space, named the way `SpaceDto` names one: topic first, then page. */
+type NamedSpace = {
+  type?: string;
+  topic: { name: string | null } | null;
+  page: { name: string | null } | null;
+} | null;
+
 type SpaceNode = {
   spaceId: string;
-  space: { topic: { name: string | null } | null } | null;
+  space: NamedSpace;
 };
 
 type VerifierNode = {
   parentSpaceId: string;
-  parentSpace: { type: string; topic: { name: string | null } | null } | null;
+  parentSpace: NamedSpace;
 };
 
 interface NetworkResult {
@@ -57,6 +64,26 @@ function debateSide(typeId: string, sp: string) {
   ) { nodes { fromEntity { id } } }`;
 }
 
+/**
+ * What to call a space, from `topic` then `page`.
+ *
+ * `SpaceDto` builds a space's entity as `topic ?? page` and every other surface
+ * therefore gets this for free; these three queries hand-select their columns
+ * and so have to do it themselves. Reading `topic.name` alone is the same
+ * mistake `isPersonProfileSpace` exists to correct, one layer down.
+ *
+ * Measured on the reference account: 4 of its 33 memberships are named only by
+ * `page` — "EE Solutions", "Baseball", "Cincinnati", "Geo<>Factorylabs" — and
+ * one of its three verifiers is a personal space with no topic at all, whose
+ * person is called Nate. All five rendered unnamed.
+ *
+ * Worth noting the four are **DAO** spaces, not personal ones. A missing topic
+ * is not only the personal-space case it was first found as, so the fallback
+ * belongs on every one of these reads rather than the ones that look like
+ * people.
+ */
+const spaceName = (space: NamedSpace): string | null => space?.topic?.name ?? space?.page?.name ?? null;
+
 /** Distinct non-null values, which is what every count on this rail means. */
 function distinctCount<T>(nodes: T[], key: (node: T) => string | null | undefined): number {
   const seen = new Set<string>();
@@ -86,10 +113,10 @@ function profileFactsQuery(spaceId: string, personEntityId: string | null) {
 
   return `query {
     members: membersConnection(filter: { memberSpaceId: { is: ${sp} } }, first: 200) {
-      nodes { spaceId space { topic { name } } }
+      nodes { spaceId space { topic { name } page { name } } }
     }
     editors: editorsConnection(filter: { memberSpaceId: { is: ${sp} } }, first: 200) {
-      nodes { spaceId space { topic { name } } }
+      nodes { spaceId space { topic { name } page { name } } }
     }
     proposals: proposalsConnection(filter: { proposedBy: { is: ${sp} } }) { totalCount }
     positions: entitiesConnection(votedBy: ${sp}, votedByKinds: ${POSITION_KINDS}) { totalCount }
@@ -98,7 +125,7 @@ function profileFactsQuery(spaceId: string, personEntityId: string | null) {
     verifiedBy: subspacesConnection(
       filter: { childSpaceId: { is: ${sp} }, type: { is: VERIFIED } }, first: 60
     ) {
-      nodes { parentSpaceId parentSpace { type topic { name } } }
+      nodes { parentSpaceId parentSpace { type topic { name } page { name } } }
     }
     ${person ? `person: entity(id: ${person}) { createdAt }` : ''}
   }`;
@@ -137,7 +164,7 @@ export async function fetchProfileFacts(spaceId: string, personEntityId: string 
   for (const node of data.members?.nodes ?? []) {
     byId.set(node.spaceId, {
       id: node.spaceId,
-      name: node.space?.topic?.name ?? null,
+      name: spaceName(node.space),
       isEditor: false,
     });
   }
@@ -146,14 +173,14 @@ export async function fetchProfileFacts(spaceId: string, personEntityId: string 
     const existing = byId.get(node.spaceId);
     byId.set(node.spaceId, {
       id: node.spaceId,
-      name: existing?.name ?? node.space?.topic?.name ?? null,
+      name: existing?.name ?? spaceName(node.space),
       isEditor: true,
     });
   }
 
   const verifiedBy: Verifier[] = (data.verifiedBy?.nodes ?? []).map(node => ({
     spaceId: node.parentSpaceId,
-    name: node.parentSpace?.topic?.name ?? null,
+    name: spaceName(node.parentSpace),
     // Avatars need a second read per verifier; the stack renders initials until
     // that is worth doing.
     avatarUrl: null,

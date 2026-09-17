@@ -117,8 +117,12 @@ export function formatJoined(joinedAt: number | null): string | null {
  * sidebar open beside this list, and two orderings of the same 33 spaces read
  * as a bug in one of them.
  *
- * Nine of the reference account's 33 have no name at all. They are labelled and
+ * Five of the reference account's 33 have no name at all. They are labelled and
  * sorted last rather than dropped: they are real memberships.
+ *
+ * It read nine here until the rail's own query started reading `page` as well as
+ * `topic` — four of those nine were named all along, on the half it was not
+ * selecting. See `spaceName` in `fetch-profile-facts`.
  */
 export function orderSpaces(spaces: ProfileSpace[]): ProfileSpace[] {
   const sorted = sortSpaceListByRankNameId(
