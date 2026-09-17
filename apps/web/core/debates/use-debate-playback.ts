@@ -5,7 +5,7 @@ import * as React from 'react';
 import { atom, useAtom } from 'jotai';
 
 import type { Debate } from './api';
-import { useDebateTranscript, useRecordingUrl } from './hooks';
+import { useDebateMedia, useDebateTranscript, useRecordingUrl } from './hooks';
 import {
   type TurnState,
   clampSeconds,
@@ -13,8 +13,11 @@ import {
   participantForSlot,
   playBothWithMutedFallback,
   recordingWindowOffsetsSeconds,
+  sortTurnSegments,
   timelineSecondsFor,
+  timelineSecondsForSegments,
   turnStateForTime,
+  turnStateFromSegments,
 } from './playback-utils';
 
 type PlaybackUrls = {
@@ -101,7 +104,32 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     () => normalizeTurnDurationsMs(debate.turn_durations_ms),
     [debate.turn_durations_ms]
   );
-  const timelineSeconds = React.useMemo(() => timelineSecondsFor(turnDurations), [turnDurations]);
+
+  // GEO-2949. `turn_durations_ms` is the format's allowance, not what the render cut. Debaters
+  // end turns early, so switching the audible panel on the allowance runs late on every turn.
+  // The media query is the same one the feed card already issues, so this is a cache read rather
+  // than a second request; `turn_segments` is absent on older API replicas and on a debate whose
+  // media job has not finished, and the allowance remains the fallback for both.
+  const mediaQuery = useDebateMedia(debate.id, enabled);
+  const turnSegments = React.useMemo(
+    () => sortTurnSegments(mediaQuery.data?.turn_segments ?? []),
+    [mediaQuery.data?.turn_segments]
+  );
+  const turnStateAt = React.useCallback(
+    (seconds: number): TurnState =>
+      turnSegments.length > 0
+        ? turnStateFromSegments(turnSegments, seconds)
+        : turnStateForTime(debate.first_participant_slot, turnDurations, seconds),
+    [debate.first_participant_slot, turnDurations, turnSegments]
+  );
+
+  // The rendered video is shorter than the allowance by every early yield — 5.59s on the debate
+  // this was measured against — so taking the total from the allowance leaves the scrubber
+  // running past the end of both recordings.
+  const timelineSeconds = React.useMemo(
+    () => (turnSegments.length > 0 ? timelineSecondsForSegments(turnSegments) : timelineSecondsFor(turnDurations)),
+    [turnDurations, turnSegments]
+  );
   const slot1Participant = participantForSlot(debate, 1);
   const slot2Participant = participantForSlot(debate, 2);
   const slot1Recording = debate.recordings.find(recording => recording.participant_slot === 1) ?? null;
@@ -120,10 +148,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
 
   // The slot whose turn it is at the current playhead — stable across pause, so
   // the speaker stays in colour (and keeps subtitles) when the viewer pauses.
-  const activeSlot = React.useMemo(
-    () => turnStateForTime(debate.first_participant_slot, turnDurations, playheadSeconds)?.slot ?? null,
-    [debate.first_participant_slot, playheadSeconds, turnDurations]
-  );
+  const activeSlot = React.useMemo(() => turnStateAt(playheadSeconds)?.slot ?? null, [playheadSeconds, turnStateAt]);
 
   const transcriptQuery = useDebateTranscript(debate.id, 'json', enabled);
   const transcriptSegments = transcriptQuery.data?.segments ?? [];
@@ -321,8 +346,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       return;
     }
 
-    setTurnState(turnStateForTime(debate.first_participant_slot, turnDurations, playhead));
-  }, [debate.first_participant_slot, offsets.slot1, offsets.slot2, seekVideosTo, timelineSeconds, turnDurations]);
+    setTurnState(turnStateAt(playhead));
+  }, [offsets.slot1, offsets.slot2, seekVideosTo, timelineSeconds, turnStateAt]);
 
   const pauseBoth = React.useCallback(() => {
     // Supersede any resume still confirming, so it cannot un-pause the viewer.
@@ -389,10 +414,10 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       pendingSeekSecondsRef.current = nextTime;
       if (seekVideosTo(nextTime)) pendingSeekSecondsRef.current = null;
       setPlayheadSeconds(nextTime);
-      setTurnState(turnStateForTime(debate.first_participant_slot, turnDurations, nextTime));
+      setTurnState(turnStateAt(nextTime));
       window.requestAnimationFrame(updateTurnState);
     },
-    [debate.first_participant_slot, seekVideosTo, timelineSeconds, turnDurations, updateTurnState]
+    [seekVideosTo, timelineSeconds, turnStateAt, updateTurnState]
   );
 
   const ready = Boolean(urls.slot1 && urls.slot2);
