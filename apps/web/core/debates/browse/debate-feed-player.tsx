@@ -99,9 +99,10 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   const ticker = useDebateClaimTicker(debate, playheadSeconds * 1000, active || preload);
 
   const showControls = ready && (userPaused || (playbackEnded && !hasVoted));
-  // The two overlay controls sit at full strength whenever the debate is not running, and recede to
-  // hover-only while it is. Feed debates autoplay muted, so the mute control is the exception: it
-  // stays up during playback while muted, because otherwise there is no way to find the audio.
+  // Play/pause is always up. It is the control a viewer reaches for without looking, and hiding it
+  // until hover meant there was no visible way to stop a video that had already started. Mute
+  // recedes once the viewer has turned the sound on and has no more use for it; while muted it
+  // stays, because feed debates autoplay silent and it is the only way to find the audio.
   const recede = 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100';
   const idle = !playing || playbackEnded;
 
@@ -125,7 +126,6 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
               <ControlCircle
                 ariaLabel={playing ? 'Pause debate' : playbackEnded ? 'Replay debate' : 'Play debate'}
                 onClick={playbackEnded ? playFromStart : togglePlayback}
-                className={idle ? undefined : recede}
               >
                 {playing ? <Pause size={15} /> : playbackEnded ? <RetrySmall /> : <Play size={15} />}
               </ControlCircle>
@@ -184,13 +184,18 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
           names its own speaker now, so it does not have to be parked over their tile to attribute —
           and a fixed corner means a claim does not jump between halves mid-sentence.
 
+          `inset-y-*` rather than a bare `bottom`: the stack opens on hover into everything said so
+          far, and a percentage max-height inside it needs a containing block with a height to be a
+          percentage *of*. Anchored to the bottom by `justify-end` instead.
+
           Capped at the 209px the frame draws it at. The explore card is 484px wide, where 43% comes
           out at exactly that; the fullscreen player is far wider, and letting the card scale with it
           would hold a paragraph and stop being a glance. */}
       {!playbackEnded && ticker.cards.length > 0 && (
-        <div className="pointer-events-none absolute bottom-3 left-3 z-10 w-[43%] max-w-[13.0625rem]">
+        <div className="pointer-events-none absolute inset-y-3 left-3 z-10 flex w-[43%] max-w-[13.0625rem] flex-col justify-end">
           <DebateClaimTickerStack
             cards={ticker.cards}
+            history={ticker.history}
             participantByClaimId={ticker.participantByClaimId}
             rowsByClaimId={ticker.rowsByClaimId}
             entitiesByClaimId={ticker.entitiesByClaimId}
@@ -200,9 +205,15 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
       )}
 
       {/* Straddling the seam between the tiles, which is the one strip of the player that is never
-          a face — and the one place it cannot land on top of the claim stack. */}
+          a face — and the one place it cannot land on top of the claim stack.
+
+          `text-box` trims the line box to the cap-height band, which is what makes the *glyphs*
+          centre on the seam rather than the box that contains them. Calibre's metrics are
+          asymmetric, so a plainly-centred pill puts the type about 2px low — visible on a rule the
+          eye is already using the seam as. Figma's own frame specifies the same trim. Browsers
+          without it fall back to the box being centred, which is where this started. */}
       {subtitle && (
-        <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1 text-center text-[1rem] leading-tight text-white">
+        <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic]">
           {subtitle}
         </span>
       )}
