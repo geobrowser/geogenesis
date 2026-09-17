@@ -12,9 +12,15 @@ import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-d
 import { useCachedBrowseSidebarData } from '~/core/browse/use-browse-sidebar-cache';
 import { keepSelectableSpaces } from '~/core/debates/claim-space-allowlist';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
-import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
+import {
+  keepSelectableTopics,
+  keepSelectedVisible,
+  orderFacetOptions,
+  toggleId,
+} from '~/core/debates/matchmaking/topic-facets';
 import { type ExplorePageSort, PUBLIC_FEED_PARAM } from '~/core/explore/explore-feed-params';
 import type { ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
+import { useExploreTopicFacet } from '~/core/explore/use-explore-topic-facet';
 import { composeSeenPages } from '~/core/explore/seen-demotion/hide-seen';
 import { readSeenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
 import { seenStore } from '~/core/explore/seen-demotion/seen-store';
@@ -345,6 +351,37 @@ export function EntityFeed({
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => `${key}:${value}`)
     .join('|');
+  // One condition behind both the dropdown and the request, so what the viewer can see and what
+  // the feed is filtered by cannot drift apart. `time` state is left alone while hidden, so
+  // returning to Top restores the range the viewer last picked rather than resetting it.
+  const timeRangeApplies = showTimeFilter && SORTS_WITH_TIME_RANGE.includes(sort);
+  const requestedTime = timeRangeApplies ? time : undefined;
+
+  // Read off the browse sidebar's cache, which `BrowseSidebar` fills on every page, so the menu
+  // costs no request of its own.
+  const browseSidebar = useCachedBrowseSidebarData();
+  const spaceOptions = React.useMemo<HubFilterOption<string>[]>(
+    () =>
+      browseSidebar ? browseSidebarVisibleSpaces(browseSidebar).map(row => ({ value: row.id, label: row.name })) : [],
+    [browseSidebar]
+  );
+
+  // Two sources for the topic facet. A contextual feed names a `topicFacetEndpoint` and gets its
+  // counts over REST. Explore has none; it reads co-occurrence counts straight from the graph over
+  // the same population the feed filters to, so each topic's count equals what picking it would
+  // leave. The hook is disabled when an endpoint is given, so only one of the two ever runs.
+  const facetSpaceIds = React.useMemo(
+    () => (requestedSpaceIds.length > 0 ? requestedSpaceIds : spaceOptions.map(option => option.value)).map(normId),
+    [requestedSpaceIds, spaceOptions]
+  );
+  const exploreTopicFacet = useExploreTopicFacet({
+    spaceIds: facetSpaceIds,
+    typeIds,
+    time: requestedTime ?? 'all',
+    topicIds: selectedTopicIds,
+    enabled: showTopicFilter && !topicFacetEndpoint,
+  });
+
   const topicFacets = useQuery({
     queryKey: ['entity-feed-topic-facets', topicFacetEndpoint ?? null, topicIdsKey, typeIdsKey, fixedParamsKey],
     enabled: Boolean(topicFacetEndpoint),
@@ -358,27 +395,45 @@ export function EntityFeed({
       }),
     staleTime: 60_000,
   });
-  const topicCountsPending = Boolean(topicFacetEndpoint) && (topicFacets.isLoading || topicFacets.isPlaceholderData);
+  const topicCountsPending = topicFacetEndpoint
+    ? topicFacets.isLoading || topicFacets.isPlaceholderData
+    : showTopicFilter
+      ? exploreTopicFacet.countsPending
+      : false;
   const availableTopicOptions = React.useMemo<HubFilterOption<string>[]>(() => {
-    const options = topicFacetEndpoint
-      ? orderFacetOptions(topicFacets.data?.topics ?? [], selectedTopicIds).map(topic => ({
-          value: topic.id,
-          label: topic.name?.trim() || 'Topic',
-          count: topic.count,
-        }))
-      : topicOptions;
-    return options;
-  }, [selectedTopicIds, topicFacetEndpoint, topicFacets.data?.topics, topicOptions]);
+    if (topicFacetEndpoint) {
+      return orderFacetOptions(topicFacets.data?.topics ?? [], selectedTopicIds).map(topic => ({
+        value: topic.id,
+        label: topic.name?.trim() || 'Topic',
+        count: topic.count,
+      }));
+    }
+    if (showTopicFilter) {
+      return orderFacetOptions(keepSelectedVisible(exploreTopicFacet.topics, selectedTopicIds), selectedTopicIds).map(
+        option => ({
+          value: option.id,
+          label: option.name ?? 'Topic',
+          // The count is in before the name resolves; draw a skeleton rather than "Topic".
+          pending: option.name === null && option.count > 0,
+          count: option.count,
+        })
+      );
+    }
+    return topicOptions;
+  }, [topicFacetEndpoint, topicFacets.data?.topics, showTopicFilter, exploreTopicFacet.topics, selectedTopicIds, topicOptions]);
 
+  // A contextual feed prunes its selection against the settled REST payload; Explore prunes against
+  // the settled graph facet. Either way a topic that drops to zero and is not selected leaves the
+  // menu, and a still-loading facet keeps the selection rather than discarding it mid-flight.
   React.useEffect(() => {
     if (!topicFacetEndpoint || topicFacets.isPlaceholderData || topicFacets.error || !topicFacets.data) return;
     setSelectedTopicIds(current => keepSelectableTopics(current, topicFacets.data.topics, true));
   }, [topicFacetEndpoint, topicFacets.data, topicFacets.error, topicFacets.isPlaceholderData]);
-  // One condition behind both the dropdown and the request, so what the viewer can see and what
-  // the feed is filtered by cannot drift apart. `time` state is left alone while hidden, so
-  // returning to Top restores the range the viewer last picked rather than resetting it.
-  const timeRangeApplies = showTimeFilter && SORTS_WITH_TIME_RANGE.includes(sort);
-  const requestedTime = timeRangeApplies ? time : undefined;
+  React.useEffect(() => {
+    if (!showTopicFilter || topicFacetEndpoint) return;
+    setSelectedTopicIds(current => keepSelectableTopics(current, exploreTopicFacet.topics, exploreTopicFacet.settled));
+  }, [showTopicFilter, topicFacetEndpoint, exploreTopicFacet.topics, exploreTopicFacet.settled]);
+
   const topicFilterVisible = showTopicFilter || availableTopicOptions.length > 0;
   const showFilterRow = showSortFilter || timeRangeApplies || typeFilterVisible || topicFilterVisible;
 
@@ -391,15 +446,6 @@ export function EntityFeed({
     }
     setMoreFiltersOpen(!moreFiltersOpen);
   }, [initialTypeIds, moreFiltersOpen, setMoreFiltersOpen]);
-
-  // Read off the browse sidebar's cache, which `BrowseSidebar` fills on every page, so the menu
-  // costs no request of its own.
-  const browseSidebar = useCachedBrowseSidebarData();
-  const spaceOptions = React.useMemo<HubFilterOption<string>[]>(
-    () =>
-      browseSidebar ? browseSidebarVisibleSpaces(browseSidebar).map(row => ({ value: row.id, label: row.name })) : [],
-    [browseSidebar]
-  );
 
   const toggleSpace = React.useCallback((spaceId: string) => {
     setSelectedSpaceIds(current => toggleId(current, spaceId));

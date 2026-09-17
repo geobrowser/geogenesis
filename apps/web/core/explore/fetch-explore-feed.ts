@@ -49,6 +49,7 @@ import { FOR_YOU_FEED, composeForYouPage } from './explore-for-you-mix';
 import type { ExploreCompleteIndexNode } from './explore-index-selection';
 import { exploreRelationIndexDocument } from './explore-relation-index-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
+import { topicFilterClauses } from './explore-topic-filter';
 import { entityMatchesExploreTypeIds } from './explore-type-filter';
 import {
   type ExploreForYouCursor,
@@ -268,6 +269,7 @@ async function fetchBestEntitiesByTypePage(args: {
   limit: number;
   offset: number;
   typeIds: readonly string[];
+  topicIds?: readonly string[];
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
 }): Promise<ExploreEntitiesPageResponse> {
@@ -290,7 +292,7 @@ async function fetchBestEntitiesByTypePage(args: {
         maxPerType: args.offset + args.limit,
         createdAfter: t != null ? String(t) : undefined,
         filter: combineEntityFilters(
-          args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
+          mergeBestFilter(args.spaceIds, args.requireDebateTagOnClaims, args.topicIds),
           args.entityFilter
         ),
         spaceIdsForLists: args.spaceIds,
@@ -379,10 +381,27 @@ async function fetchForYouStreamPage(args: {
   );
 }
 
+/**
+ * The `filter` the two Best paths send: the debate-tag gate and the topic AND clauses,
+ * or `undefined` when neither applies so the ranked walk keeps its no-filter fast path.
+ */
+function mergeBestFilter(
+  spaceIds: string[],
+  requireDebateTagOnClaims: boolean | undefined,
+  topicIds: readonly string[] | undefined
+): EntityFilter | undefined {
+  const filter: EntityFilter = {
+    ...(requireDebateTagOnClaims ? claimsRequireDebateTagFilter(spaceIds) : {}),
+    ...topicFilterClauses(topicIds),
+  };
+  return Object.keys(filter).length > 0 ? filter : undefined;
+}
+
 export function buildExploreFeedFilter(args: {
   spaceIds: string[];
   time: ExploreTime;
   typeIds?: readonly string[];
+  topicIds?: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   includeEntityScopeInFilter?: boolean;
@@ -392,6 +411,7 @@ export function buildExploreFeedFilter(args: {
   const base: EntityFilter = {
     ...FEED_EXCLUDED_RELATIONS_FILTER,
     ...(args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : {}),
+    ...topicFilterClauses(args.topicIds),
     ...(args.includeEntityScopeInFilter
       ? {
           spaceIds: { overlaps: [...args.spaceIds] },
@@ -421,6 +441,7 @@ async function fetchExploreEntitiesPage(args: {
   after: string | null;
   orderBy: EntitiesOrderBy[];
   typeIds?: readonly string[];
+  topicIds?: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
@@ -867,6 +888,7 @@ async function fetchTopEntitiesPage(args: {
   limit: number;
   after: string | null;
   typeIds?: readonly string[];
+  topicIds?: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
@@ -919,6 +941,7 @@ async function fetchBestEntitiesPage(args: {
   time: ExploreTime;
   limit: number;
   after: string | null;
+  topicIds?: readonly string[];
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
 }): Promise<ExploreEntitiesPageResponse> {
@@ -943,10 +966,10 @@ async function fetchBestEntitiesPage(args: {
         // are 1.7x and 2.3x slower with the argument rather than 135x, and they have no
         // equivalent cliff, so New and Top keep filtering server-side where it is exact.
         createdAfter: t != null ? String(t) : undefined,
-        // Left undefined when the caller does not ask for the tag gate, so the sort keeps its
+        // Left undefined when there is neither a tag gate nor a topic pick, so the sort keeps its
         // no-filter fast path unless there is a clause the connection genuinely does not know.
         filter: combineEntityFilters(
-          args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
+          mergeBestFilter(args.spaceIds, args.requireDebateTagOnClaims, args.topicIds),
           args.entityFilter
         ),
         spaceIdsForLists: args.spaceIds,
@@ -1002,6 +1025,7 @@ export async function fetchExploreFeed(args: {
    * the ranked queries is the kind of change GEO-2793 measured turning 43ms into seconds.
    */
   excludeTypeIds?: readonly string[];
+  topicIds?: readonly string[];
   /** If true (default), filter out entities with null or empty `name`. */
   requireName?: boolean;
   /**
@@ -1155,6 +1179,7 @@ export async function fetchExploreFeed(args: {
             // `decodeExploreWindowCursor` already documents.
             offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
             typeIds: args.typeIds ?? [],
+            topicIds: args.topicIds,
             requireDebateTagOnClaims: args.requireDebateTagOnClaims,
             entityFilter: args.entityFilter,
           })
@@ -1164,6 +1189,7 @@ export async function fetchExploreFeed(args: {
               time: args.time,
               limit: windowSize,
               after: windowAfter,
+              topicIds: args.topicIds,
               requireDebateTagOnClaims: args.requireDebateTagOnClaims,
               entityFilter: args.entityFilter,
             })
@@ -1174,6 +1200,7 @@ export async function fetchExploreFeed(args: {
                 limit: windowSize,
                 after: windowAfter,
                 typeIds: args.typeIds,
+                topicIds: args.topicIds,
                 requireName: args.requireName,
                 requireDebateTagOnClaims: args.requireDebateTagOnClaims,
                 entityFilter: args.entityFilter,
@@ -1185,6 +1212,7 @@ export async function fetchExploreFeed(args: {
                 after: windowAfter,
                 orderBy: [EntitiesOrderBy.CreatedAtDesc],
                 typeIds: args.typeIds,
+                topicIds: args.topicIds,
                 requireName: args.requireName,
                 requireDebateTagOnClaims: args.requireDebateTagOnClaims,
                 entityFilter: args.entityFilter,
