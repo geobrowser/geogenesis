@@ -22,6 +22,17 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 const mocks = vi.hoisted(() => ({
   debateQuery: { data: undefined as Debate | undefined, isError: false },
   mediaQuery: { data: undefined as { artifacts: { kind: string }[] } | undefined, isError: false },
+  hubOpen: vi.fn(),
+  hubClose: vi.fn(),
+  /** Whether the debates hub is already showing. */
+  hubIsOpen: false,
+  openPrivySignIn: vi.fn(),
+  /** What the button asked to happen once Privy finishes. */
+  privyOnComplete: undefined as undefined | (() => void),
+  /** Privy's answer, which is the authority on whether anyone is signed in. */
+  authenticated: true,
+  /** False while Privy is still restoring the session. */
+  authReady: true,
 }));
 
 type ObserverRecord = {
@@ -37,6 +48,28 @@ vi.mock('~/core/state/feature-flags', () => ({}));
 vi.mock('~/core/debates/hooks', () => ({
   useDebate: () => mocks.debateQuery,
   useDebateMedia: () => mocks.mediaQuery,
+  useGeoChatAuth: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated, accountKey: 'user-a' }),
+}));
+
+// What "Join a debate" reaches for. Stood up the same way the full-screen feed's suite stands them
+// up, so both surfaces' copies of these assertions are asking the same questions of the same seams.
+vi.mock('~/core/debates/matchmaking/use-debates-hub', () => ({
+  useDebatesHub: () => ({
+    isOpen: mocks.hubIsOpen,
+    activeTab: 'lobby' as const,
+    open: mocks.hubOpen,
+    close: mocks.hubClose,
+    toggle: vi.fn(),
+    setTab: vi.fn(),
+  }),
+}));
+
+// Reaches for next-navigation and Privy context these tests do not stand up.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: (onComplete?: () => void) => {
+    mocks.privyOnComplete = onComplete;
+    return mocks.openPrivySignIn;
+  },
 }));
 
 vi.mock('~/core/debates/use-debate-votes', () => ({
@@ -65,7 +98,9 @@ vi.mock('~/core/debates/browse/share-dialog', () => ({
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
   useDebateTranscriptClaims: () => ({
-    claims: { byAuthorSpaceId: new Map(), unattributed: [], totalCount: 3 },
+    // Deliberately not the item's `commentCount`: equal counts would let the comment and claims
+    // wirings be swapped without a test noticing.
+    claims: { byAuthorSpaceId: new Map(), unattributed: [], totalCount: 18 },
     isLoading: false,
     error: null,
   }),
@@ -81,20 +116,40 @@ vi.mock('~/core/debates/browse/debate-claims-panel', () => ({
   ),
 }));
 
+// Forwards the anchor props it is given rather than only `href`: the title's click handling —
+// which is what decides between a panel and a navigation — arrives as `onClick`, and a mock that
+// drops it would let a broken title pass.
 vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  PrefetchLink: ({
+    children,
+    entityId: _entityId,
+    spaceId: _spaceId,
+    ...props
+  }: React.ComponentPropsWithoutRef<'a'> & { entityId?: string; spaceId?: string }) => <a {...props}>{children}</a>,
 }));
 
 vi.mock('~/design-system/fallback-image', () => ({
   FallbackImage: () => <div data-testid="image" />,
 }));
 
-vi.mock('~/partials/entity-page/entity-row-actions', () => ({
-  EntityRowActions: ({ children }: { children: React.ReactNode }) => <div data-testid="row-actions">{children}</div>,
+// The card renders the real `DebateInteractionBar` — sharing it with the full-screen feed is the
+// point of these assertions — so only its vote control is stood in for. The real one reaches the
+// sync store, Privy and the onboarding atoms, none of which this card's behavior depends on.
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  EntityVoteButtons: ({ entityId, presentation }: { entityId: string; presentation?: string }) => (
+    <div data-testid="vote-buttons" data-entity={entityId} data-presentation={presentation} />
+  ),
 }));
 
 vi.mock('./explore-join-space-button', () => ({
   ExploreJoinSpaceButton: () => <button type="button" data-testid="join-button" />,
+}));
+
+// `ExploreCardEntityLink` renders for real — it carries the title's modifier-click and panel rules,
+// which is the behavior under test — so only its side-panel sink is stood in for.
+const openSidePanel = vi.fn();
+vi.mock('~/core/hooks/use-entity-side-panel', () => ({
+  useEntitySidePanel: () => ({ openSidePanel, closeSidePanel: vi.fn(), sidePanelTarget: null }),
 }));
 
 const item: ExploreFeedItem = {
@@ -116,14 +171,17 @@ const item: ExploreFeedItem = {
 
 function watchableDebate(): Debate {
   return {
-    id: 'fd51f935-2063-4617-8039-7b672b23364c',
+    // Plain hex, like every id geo-chat actually answers with — it takes either spelling on the
+    // way in and returns the unhyphenated form, so a dashed fixture would describe a response
+    // shape that does not exist and invite fixes for a mismatch that isn't there.
+    id: 'fd51f9352063461780397b672b23364c',
     status: 'complete',
     // The card reads `claim.space_id` to scope its transcript-claims lookup to the space the
     // debate was published to, so the fixture carries the claim the type has always required.
     claim: {
       id: 'claim-summary-1',
       space_id: '52c7ae149838b6d47ce0f3b2a5974546',
-      claim_entity_id: 'claim-entity-1',
+      claim_entity_id: '9b2a1f304d5c4a8e9f1177c0a2b3d4e5',
       claim: 'Waking up early improves health and productivity',
       description: null,
     },
@@ -137,6 +195,11 @@ beforeEach(() => {
   observers = [];
   mocks.debateQuery = { data: undefined, isError: false };
   mocks.mediaQuery = { data: undefined, isError: false };
+  // Not mock fns, so `clearAllMocks` does not restore them.
+  mocks.hubIsOpen = false;
+  mocks.authenticated = true;
+  mocks.authReady = true;
+  mocks.privyOnComplete = undefined;
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -196,9 +259,102 @@ describe('DebateExploreFeedCard', () => {
   it('shows the card chrome with video placeholders while the debate loads', () => {
     renderCard();
     expect(screen.getByText('Fast fashion should be discouraged with higher taxation')).toBeDefined();
-    expect(screen.getByText('View all')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Join a debate' })).toBeDefined();
     expect(screen.queryByTestId('player')).toBeNull();
     expect(screen.queryByTestId('fallback')).toBeNull();
+  });
+
+  /**
+   * The card carries the full-screen header's own "Join a debate", which replaced a "View all"
+   * link into the space's debates. It is the shared `JoinDebateButton`, so these check the card is
+   * wired to it rather than re-deciding anything — the decisions themselves are the same code the
+   * full-screen feed's suite covers.
+   */
+  describe('Join a debate', () => {
+    it('opens the debates hub on Lobby', () => {
+      renderCard();
+      fireEvent.click(screen.getByRole('button', { name: 'Join a debate' }));
+      expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
+    });
+
+    it('sends a signed-out viewer to sign in, then opens the hub without a second press', () => {
+      mocks.authenticated = false;
+      renderCard();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Join a debate' }));
+      expect(mocks.openPrivySignIn).toHaveBeenCalledOnce();
+      expect(mocks.hubOpen).not.toHaveBeenCalled();
+
+      act(() => mocks.privyOnComplete?.());
+      expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
+    });
+
+    it('does nothing until Privy has restored the session', () => {
+      mocks.authReady = false;
+      mocks.authenticated = false;
+      renderCard();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Join a debate' }));
+      expect(mocks.openPrivySignIn).not.toHaveBeenCalled();
+      expect(mocks.hubOpen).not.toHaveBeenCalled();
+    });
+
+    it('closes the hub when pressed a second time', () => {
+      mocks.hubIsOpen = true;
+      renderCard();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Join a debate' }));
+      expect(mocks.hubClose).toHaveBeenCalledOnce();
+      expect(mocks.hubOpen).not.toHaveBeenCalled();
+    });
+
+    // The hub dismisses itself on outside pointerdown and exempts anything marked as an opener.
+    it('marks the button as a hub opener so the panel does not dismiss on pointerdown', () => {
+      renderCard();
+      expect(screen.getByRole('button', { name: 'Join a debate' }).hasAttribute('data-debates-hub-opener')).toBe(true);
+    });
+  });
+
+  /**
+   * GEO-2879. The Debate entity's name is `"<A> vs. <B> on <claim>"`; full screen titles the
+   * debate with the claim alone, and so does the card.
+   */
+  it('titles the card with the claim once the debate resolves', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+
+    expect(screen.getByRole('heading').textContent).toBe('Waking up early improves health and productivity');
+    expect(screen.queryByText('Fast fashion should be discouraged with higher taxation')).toBeNull();
+  });
+
+  it('points the title at the claim entity in the claim’s own space, with ids normalized', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+
+    // A real href on a real anchor, so cmd-click still opens the claim in a new tab (GEO-2701).
+    expect(screen.getByRole('link', { name: /Waking up early/ }).getAttribute('href')).toBe(
+      '/space/52c7ae149838b6d47ce0f3b2a5974546/9b2a1f304d5c4a8e9f1177c0a2b3d4e5'
+    );
+  });
+
+  it('opens the claim in the side panel on an unmodified click when Explore asks for it', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    render(<DebateExploreFeedCard item={item} titleOpensSidePanel fallback={<div />} />);
+
+    fireEvent.click(screen.getByRole('link', { name: /Waking up early/ }));
+    expect(openSidePanel).toHaveBeenCalledWith(
+      '9b2a1f304d5c4a8e9f1177c0a2b3d4e5',
+      '52c7ae149838b6d47ce0f3b2a5974546',
+      false
+    );
+  });
+
+  it('leaves the entity name as the title until the claim is known', () => {
+    renderCard();
+    expect(screen.getByRole('heading').textContent).toBe('Fast fashion should be discouraged with higher taxation');
   });
 
   it('renders the fallback when the debate is not watchable', () => {
@@ -261,6 +417,32 @@ describe('DebateExploreFeedCard', () => {
     // And it does still give way once the card has genuinely left.
     intersectAll(0.4);
     expect(isActive()).toBe('false');
+  });
+
+  it("renders the same interaction bar the full-screen feed does, with the card's own counts", () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+
+    // The shared bar in its horizontal arrangement, beneath the videos — not the inline arrows the
+    // other explore cards use.
+    expect(screen.getByTestId('vote-buttons').getAttribute('data-presentation')).toBe('debate-horizontal');
+
+    // Counts come from what the card already has: the feed's comment count and the shared
+    // transcript-claims query, rather than a thread fetch per card.
+    const comments = screen.getByRole('button', { name: 'Comments' });
+    expect(comments.textContent).toBe('3');
+    expect(screen.getByRole('button', { name: 'Claims' }).textContent).toBe('18');
+
+    // Marked as an opener so pressing it while the global comments panel is open switches the
+    // panel to this debate instead of reading as an outside click that dismisses it.
+    expect(comments.hasAttribute('data-entity-comments-opener')).toBe(true);
+  });
+
+  it('keeps votes and comments while the debate is still loading', () => {
+    renderCard();
+    expect(screen.getByTestId('vote-buttons')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Comments' })).toBeDefined();
   });
 
   it('shows Claims and Share actions once the debate is ready, opening the claims panel on demand', () => {

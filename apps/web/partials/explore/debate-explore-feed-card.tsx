@@ -5,6 +5,8 @@ import * as React from 'react';
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
+import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
+import { JoinDebateButton } from '~/core/debates/browse/join-debate-button';
 import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
@@ -13,24 +15,46 @@ import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
-import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
-
 import { ExploreCardEntityLink } from './explore-card-entity-link';
-import { ExploreClaimsIcon } from './explore-claims-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
-import { ExploreShareIcon } from './explore-share-icon';
 import { SpaceThumb } from './space-thumb';
 
 /** Visible fraction at which a card takes over playback, and the one it must fall back to
  * before it gives it up. Strictly between them the card keeps whatever state it had. */
 const ACTIVATE_RATIO = 0.6;
 const DEACTIVATE_RATIO = 0.4;
+
+/**
+ * How wide the card's column — meta row, title, media and bar — is allowed to get.
+ *
+ * Width is what sets height here, so this is really a height budget. The two tiles are
+ * `aspect-480/289` with an 8px gap between them, so the media alone is `1.2042 × width + 8`, and
+ * the rest of the card measures a flat 163px: 32px of `py-4`, a 28px meta row, a two-line 46px
+ * title, a 32px bar with its margin, 24px of column gaps and the 1px rule. A card is therefore
+ * `1.2042 × width + 171` tall, and fitting that under the viewport less the 44px app header gives
+ * `width ≤ 0.83 × dvh − 178px` — which is where `calc(83dvh - 178px)` comes from.
+ *
+ * So the column tracks the viewport rather than sitting at a fixed 480px — 486px at an 800px
+ * viewport, 403px at 700px — up to the 560px cap, which the budget clears from about an 890px
+ * viewport and which is there so a tall display gets a wider card and not a different design.
+ * The 320px floor gives the promise up below roughly a 600px viewport, where honouring it would
+ * mean a video too small to read a face in.
+ *
+ * The same trick, and the same reason, as `--debate-feed-column-width` on the full-screen feed:
+ * `dvh` there too, because the media has to fit the viewport it is being watched in.
+ *
+ * Keep the arithmetic and the layout together — a change to `py-4`, the title clamp, the bar or
+ * the media gap moves the 178px, and nothing else will notice.
+ */
+const DEBATE_CARD_COLUMN_STYLE = {
+  '--debate-card-column-width': 'clamp(320px, calc(83dvh - 178px), 560px)',
+} as React.CSSProperties;
 
 type DebateExploreFeedCardProps = {
   item: ExploreFeedItem;
@@ -50,8 +74,13 @@ type DebateExploreFeedCardProps = {
 
 /**
  * The explore-feed rendition of a published Debate: the same two synchronized debater videos as
- * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting), framed
- * in the explore card chrome — meta row, claim title, and the standard entity actions.
+ * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting) over the
+ * same interaction bar, framed in the explore card chrome — meta row, title, and the media capped
+ * to the card's width.
+ *
+ * Both renditions render `DebateFeedPlayer` and `DebateInteractionBar`, in the same arrangement —
+ * the claim over the videos, the bar as a rail down their right — so everything inside the debate
+ * itself is one component in both places rather than two that look alike (GEO-2912).
  */
 export function DebateExploreFeedCard({
   item,
@@ -130,58 +159,96 @@ export function DebateExploreFeedCard({
     mediaQuery.isError ||
     (mediaQuery.data != null && !processed);
 
+  const readyDebate = debate != null && watchable && processed ? debate : null;
+
+  // The interaction state lives on the card rather than inside the bar: the bar is shared with the
+  // full-screen feed and stays presentational, so what a control opens — the claims overlay, the
+  // share dialog, the app's comments panel — is the card's to own and to render once. Same
+  // arrangement, same reason, as `DebateFeedItem` on the full-screen feed.
+  const [claimsOpen, setClaimsOpen] = React.useState(false);
+  const share = useDebateShareAction();
+  const { commentsTarget, openComments } = useEntityCommentsPanel();
+  // Null until the debate resolves, which the hook reads as "not enabled". Shares a cache entry
+  // with the Claims panel, so opening the panel doesn't refetch what this count already loaded.
+  const { claims } = useDebateTranscriptClaims(readyDebate?.id ?? null, readyDebate?.claim.space_id ?? null);
+
+  // Runs after every hook so the early return never skips one.
   if (notWatchable) {
     return <>{fallback}</>;
   }
 
-  const readyDebate = debate != null && watchable && processed ? debate : null;
   const timeAgo = formatExploreRelativeTime(item.createdAtSec);
+
+  /**
+   * Comments and counts differ from the full-screen feed only in where they come from and where
+   * they lead, never in how they look:
+   *  - Comments open the app's global panel, as they do from every other explore card, instead of
+   *    the feed's own side rail.
+   *  - The comment count is the one the explore feed already resolved for the card, so a page of
+   *    debates doesn't fetch a thread apiece to render a number.
+   *  - Claims and Share stand down until the debate resolves — votes and comments need no debate,
+   *    those two do — so the footer is present from the first paint and doesn't shift the card
+   *    under the reader when the geo-chat lookups land.
+   */
+  const interactionProps = {
+    entityId: item.entityId,
+    spaceId: item.spaceId,
+    commentCount: item.commentCount,
+    commentsPanelOpen: commentsTarget?.entityId === item.entityId,
+    onComment: () => openComments(item.entityId, item.spaceId),
+    claimsCount: claims.totalCount,
+    onClaims: readyDebate ? () => setClaimsOpen(true) : undefined,
+    onShare: readyDebate ? share.onOpen : undefined,
+    shareOpen: share.open,
+  };
 
   return (
     <article ref={setContainer} className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          {!hideSpaceLink ? (
-            <Link
-              href={NavUtils.toSpace(item.spaceId)}
-              className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
-            >
-              <SpaceThumb image={item.spaceImage} name={item.spaceName} />
-              <span className="min-w-0 truncate">{item.spaceName}</span>
-            </Link>
-          ) : null}
-          {!hideJoinButton && !item.isMemberOrEditor ? (
-            // The design puts the join CTA as a compact chip beside the space name (the right
-            // side holds "View all"), unlike the generic card's right-aligned button.
-            <ExploreJoinSpaceButton
-              spaceId={item.spaceId}
-              hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
-              variant="pill"
-              label="Join"
-            />
-          ) : null}
-          <span className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
-            Debate
-          </span>
-          <span className="text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">{timeAgo}</span>
+      {/* Meta, title, media and the interaction bar share one column, capped so the whole card
+          fits the viewport it is watched in — see {@link DEBATE_CARD_COLUMN_STYLE}. A cap rather
+          than the full column width because feed columns, especially data blocks, can be much
+          wider and a full-bleed video dwarfs the card. Capping the column rather than the media
+          alone is what lines "Join a debate" up with the videos' right edge instead of the card's,
+          and what keeps the bar beneath the videos the same width as them. */}
+      <div
+        className="flex w-full max-w-[var(--debate-card-column-width)] min-w-0 flex-col gap-2"
+        style={DEBATE_CARD_COLUMN_STYLE}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            {!hideSpaceLink ? (
+              <Link
+                href={NavUtils.toSpace(item.spaceId)}
+                className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
+              >
+                <SpaceThumb image={item.spaceImage} name={item.spaceName} />
+                <span className="min-w-0 truncate">{item.spaceName}</span>
+              </Link>
+            ) : null}
+            {!hideJoinButton && !item.isMemberOrEditor ? (
+              // The design puts the join CTA as a compact chip beside the space name, unlike the
+              // generic card's right-aligned button — the right side holds the debate CTA.
+              <ExploreJoinSpaceButton
+                spaceId={item.spaceId}
+                hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
+                variant="pill"
+                label="Join"
+              />
+            ) : null}
+            <span className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
+              Debate
+            </span>
+            <span className="text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">{timeAgo}</span>
+          </div>
+          {/* The same control the full-screen header carries, at the card's own type scale. It
+              replaced a "View all" link into this space's debates: the card is already a debate
+              you can watch, so the CTA worth the corner is the one that puts you in one rather
+              than one that lists more. */}
+          <JoinDebateButton className="!text-[14px]" />
         </div>
-        <Link
-          href={`/space/${item.spaceId}/debates`}
-          className="flex h-7 shrink-0 items-center rounded-full border border-grey-02 px-[11px] text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:border-text"
-        >
-          View all
-        </Link>
-      </div>
 
-      <ExploreCardEntityLink item={item} opensSidePanel={titleOpensSidePanel}>
-        <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
-          {item.title}
-        </h2>
-      </ExploreCardEntityLink>
+        <DebateCardTitle item={item} debate={readyDebate} opensSidePanel={titleOpensSidePanel} />
 
-      {/* Cap the media at the width the designs (and the full-screen feed) use — feed columns,
-          especially data blocks, can be much wider and full-bleed videos dwarf the card. */}
-      <div className="w-full max-w-[480px]">
         {readyDebate ? (
           // `nearViewport` is the same 800px-margin gate the geo-chat lookups already use, so
           // the recordings resolve while the card is still approaching rather than on arrival.
@@ -189,67 +256,118 @@ export function DebateExploreFeedCard({
         ) : (
           <DebateVideoSkeleton />
         )}
+
+        {/* Beneath the videos, the same width as them. Full screen carries this bar in a rail down
+            the media's right at desktop widths and moves it here at narrow ones; a card is short
+            and wide where full screen is tall, so it takes the horizontal arrangement at every
+            width. Same component, same controls, same counts — only the axis differs, and that is
+            a difference full screen already makes with itself. Wrapper carries the margin so it
+            doesn't collide with the bar's own `flex`. */}
+        <div className="mt-1">
+          <DebateInteractionBar orientation="horizontal" {...interactionProps} />
+        </div>
       </div>
 
-      <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
-        <EntityCommentsButton entityId={item.entityId} spaceId={item.spaceId} count={item.commentCount} />
-        {readyDebate ? <DebateCardExtras debate={readyDebate} spaceId={item.spaceId} /> : null}
-      </EntityRowActions>
+      {readyDebate ? (
+        <>
+          <DebateShareDialog
+            open={share.open}
+            onOpenChange={share.onOpenChange}
+            debate={readyDebate}
+            spaceId={item.spaceId}
+            openerRef={share.openerRef}
+          />
+          {/* A right-hand overlay rather than the feed's side rail, since the explore feed has no
+              rail to put it in. The panel itself is the same component. */}
+          {claimsOpen ? (
+            <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
+              <DebateClaimsPanel debate={readyDebate} onClose={() => setClaimsOpen(false)} />
+            </div>
+          ) : null}
+        </>
+      ) : null}
     </article>
   );
 }
 
 /**
- * The Claims and Share actions from the full-screen feed's interaction bar, restyled to sit in the
- * explore card's footer. Claims opens the same DebateClaimsPanel (as a right-hand overlay, since
- * the explore feed has no side rail); Share opens the same DebateShareDialog.
+ * The card's title: the claim being debated, linked to the claim entity (GEO-2879).
+ *
+ * The Debate entity's own name is `"<A> vs. <B> on <claim>"` — the claim with a preamble — so a
+ * card titled with it said the same thing as full screen, at twice the length and in a different
+ * voice. Until the geo-chat lookup lands there is no claim to show, and the entity name stands in
+ * rather than the title arriving a beat after the card.
+ *
+ * Reuses `ExploreCardEntityLink` rather than hand-rolling a second anchor: it carries the
+ * modifier-click rules that keep cmd-click opening a new tab (GEO-2701) and the
+ * `data-entity-side-panel-opener` marking that stops a panel switch from reading as an outside
+ * click. Its props are a structural identity — entity, space, types — so handing it the claim's is
+ * exactly what it asks for. Empty `types` on purpose: that component refuses the panel to debates,
+ * because a full-screen video experience is a poor fit for one (GEO-2794), and this is the claim,
+ * which a panel serves well. That is the whole reason GEO-2879 can have what GEO-2794 refused.
  */
-function DebateCardExtras({ debate, spaceId }: { debate: Debate; spaceId: string }) {
-  const [claimsOpen, setClaimsOpen] = React.useState(false);
-  const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
-  const share = useDebateShareAction();
+function DebateCardTitle({
+  item,
+  debate,
+  opensSidePanel,
+}: {
+  item: ExploreFeedItem;
+  debate: Debate | null;
+  opensSidePanel: boolean;
+}) {
+  const text = debate ? debate.claim.claim : item.title;
+  const heading = (
+    // Two lines, as the full-screen header clamps the same claim to. Also what the card's height
+    // budget is calculated against (see `DEBATE_CARD_COLUMN_STYLE`): a third line is 23px the
+    // viewport was not promised. `title` so the whole claim is still readable when it is cut.
+    <h2
+      title={text}
+      className="mt-0! line-clamp-2 text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline"
+    >
+      {text}
+    </h2>
+  );
+
+  if (!debate) {
+    return (
+      <ExploreCardEntityLink item={item} opensSidePanel={opensSidePanel}>
+        {heading}
+      </ExploreCardEntityLink>
+    );
+  }
+
+  // The claim's own space, not the card's. They are the same space today — a debate is published
+  // to the space its claim lives in, which is why the transcript-claims lookup above scopes by
+  // this same field — but the claim is what the link resolves, so it answers for its own home.
+  //
+  // Normalized because these ids cross a boundary, not because geo-chat gets them wrong: it
+  // returns plain hex today (it accepts either spelling on the way in and answers in hex), and
+  // `uuidToHex` is a no-op on that. What it guards is the hex-keyed side — routes, the sync store
+  // `PrefetchLink` prefetches from, and the side-panel target — which a dashed id would miss
+  // silently. Same guard, same reason, as `useDebateTranscriptClaims`.
+  const claimIdentity = {
+    entityId: ID.uuidToHex(debate.claim.claim_entity_id),
+    spaceId: ID.uuidToHex(debate.claim.space_id),
+    types: [],
+  };
 
   return (
-    <>
-      <button
-        type="button"
-        aria-label="Claims"
-        onClick={() => setClaimsOpen(true)}
-        className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
-      >
-        <ExploreClaimsIcon />
-        <span className="text-[14px] font-normal tabular-nums">{claims.totalCount}</span>
-      </button>
-      <button
-        type="button"
-        aria-label="Share debate"
-        aria-haspopup="dialog"
-        aria-expanded={share.open}
-        onClick={share.onOpen}
-        className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
-      >
-        <ExploreShareIcon />
-        <span className="text-[14px] font-normal">Share</span>
-      </button>
-      <DebateShareDialog
-        open={share.open}
-        onOpenChange={share.onOpenChange}
-        debate={debate}
-        spaceId={spaceId}
-        openerRef={share.openerRef}
-      />
-      {claimsOpen ? (
-        <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
-          <DebateClaimsPanel debate={debate} onClose={() => setClaimsOpen(false)} />
-        </div>
-      ) : null}
-    </>
+    <ExploreCardEntityLink item={claimIdentity} opensSidePanel={opensSidePanel}>
+      {heading}
+    </ExploreCardEntityLink>
   );
 }
 
 // Separate component so useDebateVotes (which queries as soon as it mounts) only runs once the
 // debate is loaded and known to be watchable.
-function DebateCardVideos({
+//
+// Memoized because the card above it subscribes to the global comments-panel atom — it has to, to
+// tell the bar whether the panel is open on this debate — so opening comments anywhere re-renders
+// every debate card in the feed. `debate` is a stable react-query object and the two flags are
+// booleans, so on a change that is only about the panel this skips the player and its playback
+// hooks entirely. (A re-render never interrupted playback — the <video> keeps its identity — but
+// there is no reason to re-run the whole subtree for a flag it does not read.)
+const DebateCardVideos = React.memo(function DebateCardVideos({
   debate,
   active,
   preload,
@@ -260,7 +378,7 @@ function DebateCardVideos({
 }) {
   const votes = useDebateVotes(debate);
   return <DebateFeedPlayer debate={debate} active={active} preload={preload} votes={votes} />;
-}
+});
 
 function DebateVideoSkeleton() {
   return (
