@@ -348,12 +348,110 @@ describe('DebateClaimTickerStack', () => {
     expect(screen.queryByRole('button', { name: /Hide the claims/ })).not.toBeInTheDocument();
   });
 
-  // The open list dissolves into the tile's edge rather than being cut off square — but only when
-  // something is actually scrolled above it. jsdom never scrolls, which is the short-backlog case.
-  it('does not dissolve its top edge when nothing is scrolled above', () => {
-    const { container } = renderStack({ open: true });
+  // The corner used to draw the chip only when no card was live, so it blinked out every time a
+  // claim was said — the one fixed thing in the corner was the thing that moved most.
+  it('keeps the chip up while a claim is live', () => {
+    renderStack({ onTogglePinned: vi.fn() });
 
-    expect((container.firstElementChild as HTMLElement).style.maskImage).toBe('');
+    expect(screen.getByText(/Supreme Court/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Show the 2 claims/ })).toBeInTheDocument();
+  });
+
+  /**
+   * The open list dissolves into the tile's edge rather than being cut off square, and it may not
+   * do that with a mask.
+   *
+   * A `mask-image` makes its element a Backdrop Root, which leaves `backdrop-filter` on anything
+   * inside with nothing to sample — masking this box flattened the glass on every card in the list
+   * until it was scrolled back to the very top, where the mask came off again.
+   */
+  it('dissolves its top edge without masking the box the glass cards sit in', () => {
+    const { container } = renderStack({ open: true });
+    const list = container.firstElementChild!.firstElementChild as HTMLElement;
+
+    expect(list.style.maskImage).toBe('');
+    expect(list.style.webkitMaskImage).toBe('');
+  });
+
+  // The gaps between cards are holes in the list, and the video behind is one big play/pause
+  // button. A thumb aiming at a card and missing by a few px should not stop the debate.
+  it('does not toggle playback when a gap between cards is clicked', () => {
+    const onToggle = vi.fn();
+    const { container } = render(
+      <div onClick={onToggle}>
+        <DebateClaimTickerStack
+          cards={resting}
+          history={history}
+          open
+          participantByClaimId={new Map([['claim-1', SPEAKER]])}
+          rowsByClaimId={new Map()}
+          entitiesByClaimId={new Map()}
+          onAnswered={vi.fn()}
+        />
+      </div>
+    );
+
+    // The scrolling list itself — the element the cards sit in, and the only part of the corner
+    // that takes pointer events across the gaps between them.
+    fireEvent.click(container.firstElementChild!.firstElementChild!.firstElementChild!);
+
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A reader who has scrolled back is reading. The debate keeps talking while they do, and the list
+   * used to jump to the newest claim every time one arrived — which took the sentence they were
+   * halfway through off the screen and read as the list closing and starting over.
+   */
+  it('leaves a reader where they are when a new claim arrives', () => {
+    const { container, rerender } = renderStack({ open: true });
+    const list = container.firstElementChild!.firstElementChild as HTMLElement;
+
+    // jsdom lays nothing out, so the scroll geometry is stated outright: a list twice its own
+    // height, scrolled to the top of it.
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 400 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 200 });
+    fireEvent.scroll(list, { target: { scrollTop: 0 } });
+
+    rerender(
+      <DebateClaimTickerStack
+        cards={resting}
+        history={[...history, { window: window({ id: 'newest', text: 'And one more thing' }), opacity: 1 }]}
+        open
+        participantByClaimId={new Map([['claim-1', SPEAKER]])}
+        rowsByClaimId={new Map()}
+        entitiesByClaimId={new Map()}
+        onAnswered={vi.fn()}
+      />
+    );
+
+    expect(list.scrollTop).toBe(0);
+    // Still added, and at the bottom — it is only the view that stays put.
+    expect(screen.getByText(/And one more thing/)).toBeInTheDocument();
+  });
+
+  // The other half of the same bargain: someone watching the newest claim keeps watching it.
+  it('follows the newest claim for a reader already at the bottom', () => {
+    const { container, rerender } = renderStack({ open: true });
+    const list = container.firstElementChild!.firstElementChild as HTMLElement;
+
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 400 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 200 });
+    fireEvent.scroll(list, { target: { scrollTop: 200 } });
+
+    rerender(
+      <DebateClaimTickerStack
+        cards={resting}
+        history={[...history, { window: window({ id: 'newest', text: 'And one more thing' }), opacity: 1 }]}
+        open
+        participantByClaimId={new Map([['claim-1', SPEAKER]])}
+        rowsByClaimId={new Map()}
+        entitiesByClaimId={new Map()}
+        onAnswered={vi.fn()}
+      />
+    );
+
+    expect(list.scrollTop).toBe(400);
   });
 
   // Hover is not available to a keyboard, and the backlog is content rather than decoration, so
