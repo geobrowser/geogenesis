@@ -52,25 +52,35 @@ const SORT_OPTIONS_UNRANKED = SORT_OPTIONS.filter(option => !RANKED_SORTS.includ
 const isRanked = (sort: DebateSort) => sort === 'top' || sort === 'best';
 
 export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
-  const [sort, setSort] = React.useState<DebateSort>('new');
+  /*
+   * Best by default, which is the ranking Explore opens on too.
+   *
+   * A record read by a visitor is not a changelog — the question it answers is
+   * "what has this person argued", not "what did they argue most recently", and
+   * the relation order that New gives is only incidentally meaningful anyway
+   * (it is the order the side relations came back in, not a date).
+   *
+   * Positions keeps New, and there it means something this sort cannot: the
+   * order *that person* answered, off the vote table.
+   */
+  const [sort, setSort] = React.useState<DebateSort>('best');
   const spaces = useRecordSelection();
 
   const { rows, isLoading, isError } = usePersonDebates(spaceId, true);
 
   const facets = React.useMemo(() => spaceFacetsFromRows(rows), [rows]);
 
-  // Only asked for when Top is showing. The card carries no score of its own —
-  // Explore ranks by ordering rows server-side rather than decorating them — so
-  // a list already complete in memory has to look them up to rank itself.
+  // Only asked for when a ranked sort is showing, which by default it is. The
+  // card carries neither number — Explore ranks by ordering rows server-side
+  // rather than decorating them — so a list already complete in memory has to
+  // look them up to rank itself.
   const debateIds = React.useMemo(() => rows.map(row => row.entityId), [rows]);
   const {
     scores,
     rankings,
+    isLoading: isLoadingRanks,
     isError: isScoresError,
-  } = useEntityScores({
-    ids: debateIds,
-    enabled: isRanked(sort),
-  });
+  } = useEntityScores({ ids: debateIds, enabled: isRanked(sort) });
 
   // The order the menu is claiming. With the ranked sorts withdrawn, that is New
   // — not Top quietly behaving like New.
@@ -137,7 +147,16 @@ export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
 
       <PersonRecordFeed
         rows={shown}
-        isLoading={isLoading}
+        /*
+         * The ranks are part of loading now that a ranked sort is the default.
+         *
+         * `sortRows` reads an absent rank as "keep the incoming order", so
+         * without this the list paints in relation order and visibly reshuffles
+         * a moment later — on every load rather than on a click, which is what
+         * made it worth the extra beat. The lookup is one request for at most
+         * eleven ids and only runs once the rows it needs have arrived.
+         */
+        isLoading={isLoading || (isRanked(effectiveSort) && isLoadingRanks)}
         isError={isError}
         loadingLabel="Loading debates…"
         // Said here rather than by the browse feed, which offers "Start one from

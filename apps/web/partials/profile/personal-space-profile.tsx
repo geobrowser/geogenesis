@@ -9,6 +9,8 @@ import { useProfileHistory } from '~/core/hooks/use-profile-history';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
 import { collectSkills, currentRoles } from '~/core/profile/profile-summary';
+import { sortRows } from '~/core/profile/record-client-filter';
+import { useEntityScores } from '~/core/profile/use-entity-scores';
 import { heldPositionsCount, usePersonPositions, usePersonResponses } from '~/core/profile/use-person-positions';
 
 import { EditRecordDialog } from './edit-record-dialog';
@@ -111,6 +113,18 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
  */
 function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personEntityId: string }) {
   const debates = usePersonDebates(spaceId, true);
+
+  /*
+   * Ranked the way the Debates tab opens, so "See all debates" leads to the
+   * same six in the same order.
+   *
+   * The gallery shows the first six of whatever it is handed, so an unsorted
+   * gallery beside a Best-sorted tab is two different answers to one question
+   * with a link between them.
+   */
+  const debateIds = React.useMemo(() => debates.rows.map(row => row.entityId), [debates.rows]);
+  const { rankings, isLoading: isLoadingRanks, isError: isRanksError } = useEntityScores({ ids: debateIds });
+  const rankedDebates = React.useMemo(() => sortRows(debates.rows, 'best', { rankings }), [debates.rows, rankings]);
   const positions = usePersonPositions({ spaceId });
   const { facts, isLoading: isLoadingFacts, isError: isFactsError } = useProfileFacts({ spaceId, personEntityId });
 
@@ -131,13 +145,17 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
     {
       key: 'debates',
       label: 'Debates',
-      rows: debates.rows,
+      rows: rankedDebates,
       total: facts.debates,
       // The count and the rows are separate requests, so both halves of the
       // facts query's state have to reach the card: without `isLoading` the
       // rows rendered under a confident 0 while the count was still out, and
       // without `isError` they render under one forever if it failed.
-      isLoading: debates.isLoading || isLoadingFacts,
+      // The ranks too, or the row reshuffles under the reader — see the tab.
+      // Not when the lookup *failed*, which would hold a loading state forever
+      // over rows that arrived perfectly well; those simply keep their incoming
+      // order, which is what `sortRows` does with no ranks.
+      isLoading: debates.isLoading || isLoadingFacts || (isLoadingRanks && !isRanksError),
       isCountUnavailable: isFactsError,
       isError: debates.isError,
       href: `/space/${spaceId}/debates`,
