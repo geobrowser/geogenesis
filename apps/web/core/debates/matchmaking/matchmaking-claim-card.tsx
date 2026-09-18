@@ -1037,8 +1037,15 @@ export function PositionRow({
         {/* The note shares its button's grid cell rather than sitting in one of
             its own, which is what keeps the two arrangements honest: stacked, it
             follows the button it belongs to instead of both buttons; side by
-            side, it sits in that button's column. */}
-        <div>
+            side, it sits in that button's column.
+
+            `flex flex-col` and not a bare `div`: a grid item stretches to its
+            column, but a *block* child of one does not pass that width on, and
+            the pill sizes itself from its content — so wrapping it collapsed
+            both buttons to their icons, the label truncating to nothing inside
+            `min-w-0`. A flex column stretches its children by default, which is
+            the width the pill had as a grid item. */}
+        <div className="flex flex-col">
           <PositionButton
             // Server labels win when a side has responders; otherwise fall back to the vocabulary for
             // this response kind — Agree/Disagree, or Verify/Dispute for a factual claim.
@@ -1052,7 +1059,7 @@ export function PositionRow({
           />
           {noteFor?.(true)}
         </div>
-        <div>
+        <div className="flex flex-col">
           <PositionButton
             label={againstSide?.position_label ?? copy.negativeAction}
             summary={againstSide}
