@@ -8,6 +8,8 @@
  * `Accounts` is not among them. That is the wallet address, which the About row
  * shows separately and which nobody would describe as a social link.
  */
+import { normId } from '~/core/utils/norm-id';
+
 export const X_PROPERTY = '0d6259784b3c4b57a86fde45c997c73c';
 export const GITHUB_PROPERTY = '9eedefa860ae4ac19a04805054a4b094';
 export const LINKEDIN_PROPERTY = 'cdf139bce610446cac42d57cd7967478';
@@ -43,13 +45,18 @@ const FORMATS: { propertyId: string; label: string; url: (handle: string) => str
 export function profileLinks(values: { property: { id: string }; value: string }[]): ProfileLink[] {
   const byProperty = new Map<string, string>();
 
+  // Keyed normalised, like every other id comparison on the profile. The
+  // constants below are undashed hex and the values arrive that way today, so
+  // this is insurance rather than a repair — but a dashed or upper-case spelling
+  // would miss the map and drop the link with nothing to show for it, which is
+  // the quietest possible failure.
   for (const value of values) {
     const handle = value.value.trim();
-    if (handle !== '') byProperty.set(value.property.id, handle);
+    if (handle !== '') byProperty.set(normId(value.property.id), handle);
   }
 
   return FORMATS.flatMap(({ propertyId, label, url }) => {
-    const handle = byProperty.get(propertyId);
+    const handle = byProperty.get(normId(propertyId));
     if (handle === undefined) return [];
 
     const isUrl = /^https?:\/\//i.test(handle);

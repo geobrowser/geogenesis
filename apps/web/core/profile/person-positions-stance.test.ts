@@ -53,6 +53,47 @@ describe('the stance on a claim', () => {
 
     expect(order.stanceByClaimId).toEqual({ claim1: 'disagree' });
   });
+
+  /**
+   * Retracting a position is a vote, not the absence of one.
+   *
+   * `voteType` 2 is "neither", and it carries no side — so a decode that only
+   * recorded sides skipped straight past it and let the *older* agree or
+   * disagree fill the gap, badging the claim with a position its owner had
+   * already taken back. The newest stance row settles the claim whether or not
+   * it has a side to give.
+   */
+  it('lets a neutral vote clear a side recorded earlier', () => {
+    const order = decodeVoteOrder([
+      vote({ objectId: 'claim1', voteType: 2 }),
+      vote({ objectId: 'claim1', voteType: 0 }),
+    ]);
+
+    expect(order.stanceByClaimId).toEqual({});
+    // Still one of their positions — they answered it, they just answered
+    // "neither".
+    expect(order.entityIds).toEqual(['claim1']);
+  });
+
+  it('does not let an older neutral vote clear the current side', () => {
+    const order = decodeVoteOrder([
+      vote({ objectId: 'claim1', voteType: 0 }),
+      vote({ objectId: 'claim1', voteType: 2 }),
+    ]);
+
+    expect(order.stanceByClaimId).toEqual({ claim1: 'agree' });
+  });
+
+  it('leaves a veracity vote out of settling the stance', () => {
+    // Kind 2 answers a different question, so it neither sets a side nor stops
+    // the stance vote behind it from being read.
+    const order = decodeVoteOrder([
+      vote({ objectId: 'claim1', voteKind: 2, voteType: 1 }),
+      vote({ objectId: 'claim1', voteKind: 1, voteType: 0 }),
+    ]);
+
+    expect(order.stanceByClaimId).toEqual({ claim1: 'agree' });
+  });
 });
 
 /**

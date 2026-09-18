@@ -136,20 +136,31 @@ export function stanceOf(node: VoteNode): Stance | null {
  * whether the claim is *true*, which is a different question from whether they
  * agree with it — so a claim rated only for veracity carries no side at all,
  * which is the honest answer rather than a missing one.
+ *
+ * The newest stance vote settles the claim **even when it carries no side.**
+ * `voteType` 2 is "neither", and it is how somebody retracts a position — so
+ * skipping over it let an older agree or disagree fill the gap and badge a claim
+ * with a side its owner had already taken back. 115 neutral stance votes exist
+ * in the graph; no one has yet retracted a side they had recorded, so this was
+ * waiting rather than visible.
  */
 export function decodeVoteOrder(nodes: readonly (VoteNode | null)[]): PositionOrder {
   const seen = new Set<string>();
   const entityIds: string[] = [];
   const stanceByClaimId: Record<string, Stance> = {};
+  // Claims whose newest stance vote has been read. Kept apart from
+  // `stanceByClaimId`, which cannot record "answered, with no side".
+  const settled = new Set<string>();
 
   for (const node of nodes) {
     const id = node?.objectId;
     if (!id) continue;
     const key = normId(id);
 
-    if (node.voteKind === 1) {
+    if (node.voteKind === 1 && !settled.has(key)) {
+      settled.add(key);
       const stance = stanceOf(node);
-      if (stance && !(key in stanceByClaimId)) stanceByClaimId[key] = stance;
+      if (stance) stanceByClaimId[key] = stance;
     }
 
     if (seen.has(key)) continue;

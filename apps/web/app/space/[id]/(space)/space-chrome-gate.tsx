@@ -12,6 +12,17 @@ import { spaceSidebarHasContentAtom } from '~/atoms';
 const FULL_BLEED_ROUTE = /^(\/space\/[^/]+|\/root)\/debates(\/|$)/;
 
 /**
+ * The debates *index*, and nothing under it.
+ *
+ * `keepChrome` exists for a profile's Debates tab, which is a list read beside
+ * the rest of a profile. Everything nested below it — a debate room, a
+ * recording, a rematch — is still the full-screen surface the gate was written
+ * for, and handing those the profile header and rail would frame a
+ * viewport-filling player inside a page about a person.
+ */
+const DEBATES_INDEX_ROUTE = /^(\/space\/[^/]+|\/root)\/debates\/?$/;
+
+/**
  * The debates surface is full-screen and edge-to-edge (TikTok-style feed): no
  * space header, metadata, or tabs. This gate hides that chrome on any
  * `/space/<id>/debates...` (or `/root/debates...`) route while keeping it everywhere else.
@@ -23,8 +34,10 @@ const FULL_BLEED_ROUTE = /^(\/space\/[^/]+|\/root)\/debates(\/|$)/;
 export function SpaceChromeGate({ children, keepChrome = false }: { children: React.ReactNode; keepChrome?: boolean }) {
   const pathname = usePathname();
   const isFullBleedRoute = pathname != null && FULL_BLEED_ROUTE.test(pathname);
+  // The exception is the tab, not everything beneath it.
+  const keepsChromeHere = keepChrome && pathname != null && DEBATES_INDEX_ROUTE.test(pathname);
 
-  if (isFullBleedRoute && !keepChrome) return null;
+  if (isFullBleedRoute && !keepsChromeHere) return null;
 
   // `Main` drops its own vertical padding on this route, for the feed that
   // normally fills it. A profile keeping its chrome has to put the top of that

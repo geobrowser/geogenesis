@@ -1,6 +1,28 @@
 import type { EducationCard, EmploymentCard, HistoryCard, HistoryEntry, NamedRef } from './normalize-history';
 import { isOngoing } from './normalize-history';
 
+/**
+ * Whether this row belongs in the headline.
+ *
+ * `isOngoing` is broader on purpose: it answers "has this ended", and a row with
+ * no status at all counts as open. That is right for sorting and wrong here,
+ * because **most history in the graph is undated** — 1,739 of 1,906 employment
+ * rows carry no date at all — so admitting every status-less undated row would
+ * put a person's entire back catalogue under their name as things they are
+ * doing now.
+ *
+ * Requiring a start date kept those out and took the explicitly-marked rows with
+ * them: somebody whose role says `current` but carries no date is making a
+ * statement, and the headline promises "every current role and degree". So the
+ * rule is the explicit signal *or* a start date — never the ambiguous pair of
+ * neither.
+ */
+function isCurrent(entry: { startDate: string | null; endDate: string | null; status?: string | null }): boolean {
+  if (!isOngoing(entry)) return false;
+
+  return entry.startDate !== null || entry.status === 'current' || entry.status === 'studying';
+}
+
 /** One thing a person is doing now, for the headline under their name. */
 export type CurrentRole = {
   /** Distinguishes a job from a degree; they read differently and link differently. */
@@ -27,7 +49,7 @@ export function currentRoles(employment: EmploymentCard[], education: EducationC
   const from = (cards: HistoryCard<HistoryEntry>[], kind: CurrentRole['kind']): CurrentRole[] =>
     cards.flatMap(card =>
       card.entries
-        .filter(entry => entry.startDate !== null && isOngoing(entry))
+        .filter(entry => isCurrent(entry))
         .map(entry => ({
           kind,
           subject: entry.subject.name ?? 'Untitled',

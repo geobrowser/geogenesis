@@ -79,6 +79,49 @@ describe('currentRoles', () => {
     ]);
   });
 
+  /**
+   * Undated history is the norm, not the exception.
+   *
+   * 1,739 of the graph's 1,906 employment rows carry no date at all, and
+   * `isOngoing` counts a row with no status as open — so admitting every undated
+   * row would put a person's whole back catalogue under their name as things
+   * they are doing now. Requiring a start date kept those out, and took with it
+   * the rows that *say* they are current. Those are a statement, and the
+   * headline promises "every current role and degree".
+   */
+  it('keeps an undated role that says it is current', () => {
+    const card = employmentCard('Geo', [{ name: 'Head of Product' }]);
+    card.entries[0].startDate = null;
+
+    expect(currentRoles([card], [])).toHaveLength(1);
+  });
+
+  it('keeps an undated degree that says it is being studied', () => {
+    const card = educationCard('Cincinnati', { name: 'Doctor of Philosophy', status: 'studying' });
+    card.entries[0].startDate = null;
+
+    expect(currentRoles([], [card])).toHaveLength(1);
+  });
+
+  it('leaves out a row that is undated and says nothing', () => {
+    // Open by `isOngoing`, but only because nothing contradicts it. That is not
+    // evidence of anything current, and there are 1,739 of them.
+    const card = employmentCard('Geo', [{ name: 'Head of Product' }]);
+    card.entries[0].startDate = null;
+    card.entries[0].status = null;
+
+    expect(currentRoles([card], [])).toEqual([]);
+  });
+
+  it('leaves out an undated row that has ended', () => {
+    const card = employmentCard('Geo', [{ name: 'Head of Product', status: 'former' }]);
+    card.entries[0].startDate = null;
+    card.entries[0].endDate = null;
+
+    // `former` is an explicit end even with no date to go with it.
+    expect(currentRoles([card], [])).toEqual([]);
+  });
+
   it('leaves out anything that has ended', () => {
     const roles = currentRoles(
       [
