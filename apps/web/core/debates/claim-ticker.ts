@@ -146,15 +146,21 @@ export type ClaimMarker = { id: string; text: string; atMs: number; fraction: nu
  * second — otherwise every marker was stretched rightwards by the difference. Measured across live
  * debates that reached 11%, roughly 20 seconds out on a 210-second debate.
  *
- * Every claim with a known moment gets a marker, not just the confident ones: a marker is an offer
- * to jump, and landing a second or two off costs the viewer nothing. Whole-turn fallbacks are
- * excluded — a marker at the end of a 30s window points at nothing in particular.
+ * Same bar as the card, {@link isAssertableMoment}. Markers used to take any match at all, on the
+ * reasoning that a marker is only an offer to jump and landing a second or two off costs nothing.
+ * That was wrong in a way a real debate showed plainly: "A man should always pay for the first
+ * date" matched all twelve of its claims between 0.37 and 0.52, so the scrubber drew eight hashes
+ * and not one of them ever produced a card. A hash is a promise that something is there, and eight
+ * broken promises read as the feature being broken rather than as the matcher being unsure.
+ *
+ * The cost is that a debate we cannot place confidently now shows no hashes, which is the honest
+ * answer — its claims are still in the panel, where a list makes no claim about when.
  */
 export function claimMarkers(claims: TimedClaim[], timelineMs: number): ClaimMarker[] {
   if (timelineMs <= 0) return [];
 
   return claims
-    .filter(claim => claim.timing !== null && claim.timing.source !== 'block')
+    .filter(claim => isAssertableMoment(claim.timing))
     .map(claim => {
       const timing = claim.timing as NonNullable<TimedClaim['timing']>;
       return {
