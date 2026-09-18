@@ -5,7 +5,7 @@ import { QueuedSendTimeoutError, enqueueFor, withSubmissionRetry } from './smart
 const reportError = vi.hoisted(() => vi.fn());
 vi.mock('~/core/telemetry/logger', () => ({ reportError }));
 
-const deferred = <T,>() => {
+const deferred = <T>() => {
   let resolve!: (value: T) => void;
   let reject!: (error: unknown) => void;
   const promise = new Promise<T>((res, rej) => {
@@ -72,6 +72,56 @@ describe('smart-account send queue', () => {
     blocker.resolve('unblock');
   });
 
+  it('never submits a cancelled queued transaction and lets the next send proceed', async () => {
+    const address = nextAddress();
+    const blocker = deferred<string>();
+    const controller = new AbortController();
+    const submit = vi.fn(async () => 'membership');
+    const holding = enqueueFor(address, () => blocker.promise);
+    const cancelled = enqueueFor(address, submit, { signal: controller.signal });
+    const assertion = expect(cancelled).rejects.toMatchObject({ name: 'AbortError' });
+    const next = enqueueFor(address, async () => 'next');
+
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort();
+    blocker.resolve('published');
+
+    await holding;
+    await assertion;
+    expect(submit).not.toHaveBeenCalled();
+    await expect(next).resolves.toBe('next');
+  });
+
+  it('stops submission retries when cancelled during the backoff', async () => {
+    const controller = new AbortController();
+    const retryableError = Object.assign(new Error('nonce rejected'), { name: 'InvalidAccountNonceError' });
+    const submit = vi.fn().mockRejectedValueOnce(retryableError).mockResolvedValue('should-not-submit');
+    const pending = withSubmissionRetry(submit, controller.signal);
+    const assertion = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort();
+    await vi.runAllTimersAsync();
+
+    await assertion;
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  it('preserves the result of a transaction that was already submitted when cancelled', async () => {
+    const controller = new AbortController();
+    const receipt = deferred<string>();
+    const submit = vi.fn(() => receipt.promise);
+    const pending = enqueueFor(nextAddress(), () => withSubmissionRetry(submit, controller.signal), {
+      signal: controller.signal,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(submit).toHaveBeenCalledTimes(1);
+    controller.abort();
+    receipt.resolve('confirmed');
+    await expect(pending).resolves.toBe('confirmed');
+  });
+
   it('a failed send does not block the next one', async () => {
     const address = nextAddress();
 
@@ -97,6 +147,7 @@ describe('smart-account send queue', () => {
     await vi.advanceTimersByTimeAsync(46_000);
     slow.resolve('finally');
 
+    await holding;
     await abandonedAssertion;
     // The invariant useSmartAccountTransaction's timeout relies on: an abandoned send
     // must never submit later, otherwise a user retry double-submits.
