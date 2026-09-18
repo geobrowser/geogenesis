@@ -257,13 +257,32 @@ describe('DebateExploreFeedCard', () => {
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
     renderCard();
 
-    const player = screen.getByTestId('player');
-    expect(player.getAttribute('data-active')).toBe('false');
+    // Ready query data alone does not retain media outside the bounded viewport window.
+    expect(screen.queryByTestId('player')).toBeNull();
 
     intersectAll(0.7);
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('true');
 
     intersectAll(0.4);
+    expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
+  });
+
+  it('evicts the player outside the media window and remounts it on reverse scroll', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+
+    intersectAll(0.7);
+    expect(screen.getByTestId('player')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Claims' })).toBeDefined();
+
+    // A row stays in the infinite feed, but its media/query subtree does not.
+    intersectAll(0);
+    expect(screen.queryByTestId('player')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Claims' })).toBeNull();
+
+    // Re-entering the look-ahead band restores a warm, inactive player before it is visible.
+    intersectAll(0.1);
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
   });
 
@@ -305,6 +324,7 @@ describe('DebateExploreFeedCard', () => {
     mocks.debateQuery = { data: watchableDebate(), isError: false };
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
     renderCard();
+    intersectAll(0.1);
 
     expect(screen.getByRole('button', { name: 'Share debate' })).toBeDefined();
 

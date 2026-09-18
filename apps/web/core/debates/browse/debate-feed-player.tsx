@@ -12,6 +12,7 @@ import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
+import { releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
@@ -251,6 +252,21 @@ function DebaterVideo({
     if (!video || isResuming) return;
     video.muted = muted;
   }, [isResuming, muted, src, videoRef]);
+
+  /**
+   * Pausing is not enough to return a media decoder or its buffered data on mobile browsers.
+   * Detach the source and force the element back to its empty resource state whenever this tile
+   * is evicted. The setup repairs the source too because React Strict Mode deliberately exercises
+   * an effect cleanup/setup cycle without removing the DOM node in development (GEO-2963).
+   */
+  React.useLayoutEffect(() => {
+    const video = videoRef.current;
+    if (!video || !src) return;
+
+    if (video.getAttribute('src') !== src) video.setAttribute('src', src);
+
+    return () => releaseVideo(video);
+  }, [src, videoRef]);
 
   // A personal space's own id resolves to its "system entity" (an ugly technical
   // record). The space's page entity is the real profile, so open that once it's
