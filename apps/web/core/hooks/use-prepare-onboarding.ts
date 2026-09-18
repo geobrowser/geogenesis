@@ -31,10 +31,18 @@ export function usePrepareOnboarding() {
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
 
+  /**
+   * `redirectTo` omitted sends them back to the page they pressed on, which is right for a control
+   * in the page. Pass an explicit destination to override it, or `null` for the entry points that
+   * deliberately clear it — the navbar's button is a sign-in from anywhere, not a return to
+   * anywhere, and leaving a stale path there would send the next person somewhere they never were.
+   */
   return React.useCallback(
-    (redirectTo?: string) => {
+    (redirectTo?: string | null) => {
       const search = searchParams?.toString();
-      setPostOnboardingRedirect(redirectTo ?? `${pathname}${search ? `?${search}` : ''}`);
+      setPostOnboardingRedirect(
+        redirectTo === null ? null : (redirectTo ?? `${pathname}${search ? `?${search}` : ''}`)
+      );
       setName('');
       setTopicId('');
       setAvatar('');

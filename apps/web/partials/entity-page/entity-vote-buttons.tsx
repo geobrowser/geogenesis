@@ -8,11 +8,10 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { Effect } from 'effect';
-import { useSetAtom } from 'jotai';
-import { usePathname, useSearchParams } from 'next/navigation';
 
 import { trackPrivyAuth } from '~/core/analytics';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
+import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import {
   type EntityResponder,
@@ -49,9 +48,6 @@ import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
 import { VOTE_BUTTON_CLASS, VOTE_CHEVRON_SELECTED_CLASS } from '~/partials/entity-page/vote-button-styles';
-import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
-
-import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 const ENTITY_RESPONSE_OBJECT_TYPE = 0;
 
@@ -72,6 +68,7 @@ export function EntityVoteButtons({
   claimResponderAvatarsPosition = 'leading',
   presentation = 'inline',
 }: EntityVoteButtonsProps) {
+  const prepareOnboarding = usePrepareOnboarding();
   const responseBatch = useClaimResponseBatchState();
   // Deliberately unscoped by space. `store.getEntity` filters `relations` to the space asked for
   // but derives `types` from all of them, so a claim collected into another space — a data block
@@ -125,15 +122,6 @@ export function EntityVoteButtons({
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
-
-  const setName = useSetAtom(nameAtom);
-  const setTopicId = useSetAtom(topicIdAtom);
-  const setAvatar = useSetAtom(avatarAtom);
-  const setSpaceId = useSetAtom(spaceIdAtom);
-  const setStep = useSetAtom(stepAtom);
-  const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const enqueuePendingAction = useEnqueuePendingAction();
 
   // A vote cast before the personal space is ready is queued and replayed by PendingActionsRunner
@@ -212,13 +200,7 @@ export function EntityVoteButtons({
 
   function openPrivySignIn() {
     // Stay on this page after onboarding instead of bouncing to the explore page.
-    const search = searchParams?.toString();
-    setPostOnboardingRedirect(`${pathname}${search ? `?${search}` : ''}`);
-    setName('');
-    setTopicId('');
-    setAvatar('');
-    setSpaceId('');
-    setStep('start');
+    prepareOnboarding();
     login();
   }
 
