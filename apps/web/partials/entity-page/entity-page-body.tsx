@@ -272,13 +272,19 @@ export function EntityPageBody(props: EntityPageBodyProps) {
    *
    * That route builds it out of three pieces in three places — layout header,
    * rail, page body — so the side panel and the `(entity)` full-page route, which
-   * share neither the layout nor the rail, both showed the generic value sheet
-   * for somebody's profile. Dispatching it here is what lets one component serve
-   * both, the same way a claim and a topic are served.
+   * share neither the layout nor the rail, showed the generic value sheet for
+   * somebody's profile. Handling it here is what lets one component serve both,
+   * the same way a claim and a topic are served.
+   *
+   * Unlike those two it is a *body*, not a whole page, and returning early like
+   * they do was a mistake worth recording: it threw away the cover, the avatar,
+   * the name and the bio that both variants draw below, so the panel opened on a
+   * bare Activity card with nothing above it saying whose record it was. What it
+   * replaces is only what follows the header — the entity's authored tabs and
+   * the editor/properties footer — because the profile has its own tabs and its
+   * own idea of what belongs under each.
    */
-  if (customView === 'person') {
-    return <PersonProfileView entityId={entityId} spaceId={spaceId} />;
-  }
+  const personProfile = customView === 'person' ? <PersonProfileView entityId={entityId} spaceId={spaceId} /> : null;
 
   const tabsSection = (
     <EntityTabsSection
@@ -313,21 +319,25 @@ export function EntityPageBody(props: EntityPageBodyProps) {
               </div>
             </div>
             <Spacer height={40} />
-            {tabsSection}
-            {notice ? (
+            {personProfile ?? (
               <>
-                <Spacer height={24} />
-                {notice}
+                {tabsSection}
+                {notice ? (
+                  <>
+                    <Spacer height={24} />
+                    {notice}
+                  </>
+                ) : null}
+                <Spacer height={40} />
+                <EditorFooter
+                  entityId={entityId}
+                  spaceId={spaceId}
+                  variant="sidePanel"
+                  belowBodySlot={belowBodySlot}
+                  hideProperties={hideProperties}
+                />
               </>
-            ) : null}
-            <Spacer height={40} />
-            <EditorFooter
-              entityId={entityId}
-              spaceId={spaceId}
-              variant="sidePanel"
-              belowBodySlot={belowBodySlot}
-              hideProperties={hideProperties}
-            />
+            )}
           </div>
         </EntityPageContentContainer>
       </div>
@@ -360,17 +370,21 @@ export function EntityPageBody(props: EntityPageBodyProps) {
         <Spacer height={24} />
         <TypeSchemaInline entityId={entityId} spaceId={spaceId} />
         <Spacer height={16} />
-        {tabsSection}
-        {notice ? <Spacer height={24} /> : null}
-        {notice}
-        {(showSpacer || !!notice) && <Spacer height={40} />}
-        <EditorFooter
-          entityId={entityId}
-          spaceId={spaceId}
-          variant="route"
-          belowBodySlot={belowBodySlot}
-          hideProperties={hideProperties}
-        />
+        {personProfile ?? (
+          <>
+            {tabsSection}
+            {notice ? <Spacer height={24} /> : null}
+            {notice}
+            {(showSpacer || !!notice) && <Spacer height={40} />}
+            <EditorFooter
+              entityId={entityId}
+              spaceId={spaceId}
+              variant="route"
+              belowBodySlot={belowBodySlot}
+              hideProperties={hideProperties}
+            />
+          </>
+        )}
       </EntityPageContentContainer>
     </>
   );
