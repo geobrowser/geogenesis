@@ -9,7 +9,7 @@ const queries = {
 
 vi.mock('~/core/io/queries', () => queries);
 
-const { getEditorSpaceIdsForSpace, getSpaceAccess, getSpaceRoles } = await import('./space-access');
+const { getSpaceAccess, getSpaceRoles } = await import('./space-access');
 
 describe('space-access', () => {
   beforeEach(() => {
@@ -118,7 +118,7 @@ describe('space-access', () => {
     });
   });
 
-  it('resolves editor badges from a server-filtered role lookup', async () => {
+  it('separates editors from members in one answer', async () => {
     queries.getSpaceRolesForParticipants.mockReturnValue(
       Effect.succeed({
         editorSpaceIds: ['4cd9cca5530b69056aead853c8088e7e'],
@@ -126,14 +126,18 @@ describe('space-access', () => {
       })
     );
 
-    const editorIds = await Effect.runPromise(
-      getEditorSpaceIdsForSpace('d4bee092-8fb5-405b-aba3-b1513f085835', [
+    const roles = await Effect.runPromise(
+      getSpaceRoles('d4bee092-8fb5-405b-aba3-b1513f085835', [
         '4cd9cca5-530b-6905-6aea-d853c8088e7e',
         'cc0bf85a-27c2-17d7-5993-bc785a15b198',
       ])
     );
 
-    expect(editorIds).toEqual(new Set(['4cd9cca5530b69056aead853c8088e7e']));
+    // Editorship does not imply membership or the reverse — the caller reads whichever it needs.
+    expect(roles.editorSpaceIds).toEqual(new Set(['4cd9cca5530b69056aead853c8088e7e']));
+    expect(roles.memberSpaceIds).toEqual(
+      new Set(['4cd9cca5530b69056aead853c8088e7e', 'cc0bf85a27c217d75993bc785a15b198'])
+    );
   });
 
   /**

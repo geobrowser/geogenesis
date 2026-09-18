@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
@@ -33,14 +33,13 @@ export function useSpaceRoles(spaceId: string, memberSpaceIds: string[]) {
     queryKey: ['space-roles', normalizedSpaceId, normalizedMemberSpaceIds],
     queryFn: ({ signal }) => Effect.runPromise(getSpaceRoles(normalizedSpaceId, normalizedMemberSpaceIds, signal)),
     enabled: Boolean(normalizedSpaceId && normalizedMemberSpaceIds.length > 0),
+    // The key holds the people being asked about, so publishing a comment mints a new one — and without
+    // this, `isLoading` flips back to true and every badge in the thread blanks and returns. That is the
+    // "page correcting itself about a person" flicker the caller's hold exists to prevent, triggered by
+    // the ordinary act of commenting. The previous answer stays up instead; the new author simply has no
+    // badge until their roles land, which is the honest state for someone just asked about.
+    placeholderData: keepPreviousData,
   });
 
   return { ...data, isLoading, isError };
-}
-
-/** The editors half, for callers that only ask about editorship. */
-export function useSpaceEditorIds(spaceId: string, memberSpaceIds: string[]) {
-  const { editorSpaceIds, isLoading, isError } = useSpaceRoles(spaceId, memberSpaceIds);
-
-  return { editorSpaceIds, isLoading, isError };
 }

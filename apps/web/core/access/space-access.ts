@@ -166,11 +166,3 @@ export function getSpaceRoles(
     return { editorSpaceIds, memberSpaceIds };
   });
 }
-
-export function getEditorSpaceIdsForSpace(
-  spaceId: string,
-  memberSpaceIds: string[],
-  signal?: AbortController['signal']
-) {
-  return Effect.map(getSpaceRoles(spaceId, memberSpaceIds, signal), roles => roles.editorSpaceIds);
-}

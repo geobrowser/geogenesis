@@ -26,6 +26,31 @@ import type { CommentEntity } from '~/partials/comments/types';
  * cannot: it was written after the number was handed to us, or it holds rows that have not been
  * published yet.
  */
+/**
+ * When each entity's current server count reached the client.
+ *
+ * Deliberately not component state. The seed answers "was the cached list fetched after this count was
+ * produced", and a component that remounts — an explore card scrolling out of view and back — would
+ * otherwise mint a fresh timestamp for a count it has had all along, then disown a list it had already
+ * fetched and revert its pill to the server's older number. One entry per entity, replaced when the
+ * count changes, so it stays the same size as the set of entities on screen.
+ */
+const seeds = new Map<string, { count: number; at: number }>();
+
+function seedFor(entityId: string, serverCount: number): number {
+  const seen = seeds.get(entityId);
+  if (seen && seen.count === serverCount) return seen.at;
+
+  const at = Date.now();
+  seeds.set(entityId, { count: serverCount, at });
+  return at;
+}
+
+/** Test seam: the seeds outlive components by design, so a suite has to be able to start clean. */
+export function resetCommentCountSeeds() {
+  seeds.clear();
+}
+
 export function useCommentCount(entityId: string, serverCount: number): number {
   // Whether the list has ever been fetched, rather than merely written to. Same disabled-subscription
   // shape as the list below, for the same reason: this reads what another hook owns.
@@ -42,52 +67,33 @@ export function useCommentCount(entityId: string, serverCount: number): number {
     enabled: false,
   });
 
-  // When this server count reached us, as closely as a client can tell: a different value means a
-  // different server render. Held in state rather than recomputed, because a later timestamp would
-  // move the comparison below and could drop a live count that had already won it.
-  //
-  // Keyed on the entity as well as the count. This hook is rendered on surfaces that swap which
-  // entity they are about without remounting, and two entities can easily have the same number of
-  // comments — so a seed keyed on the count alone would keep the previous entity's timestamp, and a
-  // stale list for the new entity could then look newer than it and outrank a fresh server count.
-  const [seed, setSeed] = React.useState(() => ({ entityId, count: serverCount, at: Date.now() }));
-  if (seed.entityId !== entityId || seed.count !== serverCount) {
-    setSeed({ entityId, count: serverCount, at: Date.now() });
-  }
+  const seededAt = seedFor(entityId, serverCount);
 
   if (!data) return serverCount;
 
-  // Rows added locally and not yet seen coming back from the server. The flag is not a claim that the
-  // server lacks them — it means "keep this row through refetches", and it stays set after publishing
-  // until `mergePendingWithServer` sees the indexer return the comment — so it cannot be added to a
-  // server count on its own without double counting one that has caught up.
-  const optimisticRows = data.filter(comment => comment.isPendingPublish === true).length;
-  const serverRows = data.length - optimisticRows;
-
-  if (dataUpdatedAt > seed.at) {
-    // Rows the list fetched are proof the fetch happened, and `mergePendingWithServer` guarantees what
-    // it leaves behind is the server's rows plus whatever is still only local — so the length is the
-    // whole count, whether or not the server's own number has caught up.
+  if (dataUpdatedAt > seededAt) {
+    // Once the list has answered it *is* the count — `mergePendingWithServer` guarantees what it leaves
+    // behind is the server's rows plus whatever is still only local, so its length already includes any
+    // pending row and needs no arithmetic. That holds for an empty answer too: the list filters what the
+    // count merely counted (the count is backlink ids, the list drops any whose relations do not come
+    // back), so it can legitimately say none where the count said five, and a pill reading five beside a
+    // visibly empty panel is the worse of those two wrongs.
     //
-    // An empty list counts as an answer too, but only from the list. It filters what the count merely
-    // counted — the count is backlink ids, the list drops any whose relations do not come back — so it
-    // can legitimately answer none where the count said five, and a pill reading five beside a visibly
-    // empty panel is the worse of those two wrongs.
-    //
-    // An empty array is not always the list speaking, though: a publish that fails before the list has
-    // loaded filters its own optimistic row back out and leaves `[]` behind, which would otherwise read
-    // as an authoritative none and take a five-comment thread to zero.
-    if (serverRows > 0 || (data.length === 0 && hasFetchedList === true)) return data.length;
+    // Asking whether the list was *fetched*, rather than whether it holds any server-looking rows, is
+    // what keeps those two apart: a publish that fails before the list loads filters its own optimistic
+    // row back out and leaves `[]` behind, which is not the list speaking — and a post on top of an
+    // authoritatively empty list leaves only a pending row, which is.
+    if (hasFetchedList === true) return data.length;
 
-    // Nothing from the server in here, so this entry holds only what was written into it:
-    // `useCreateComment` seeds it with `(old = [])`, and posting before the list has loaded — or after
-    // that query failed — leaves nothing but the new comment. Its length would read 1 where the server
-    // knows 5, so the server count is the base those local rows are added to.
+    // Never fetched, so this entry holds only what was written into it: `useCreateComment` seeds it with
+    // `(old = [])`. Its length would read 1 where the server knows 5, so the count is the base those
+    // local rows are added to. The flag is not a claim the server lacks them — it means "keep this row
+    // through refetches" and outlives publishing — but nothing here has heard from the server at all.
+    const optimisticRows = data.filter(comment => comment.isPendingPublish === true).length;
     return serverCount + optimisticRows;
   }
 
   // The cache predates this server count, so the count is the better record — including where a row in
-  // it is still flagged. That flag outlives publishing, so adding it to a count that has already
-  // caught up would report the same comment twice.
+  // it is still flagged, since adding one to a count that has already caught up reports it twice.
   return serverCount;
 }

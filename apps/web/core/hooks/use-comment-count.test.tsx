@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CommentEntity } from '~/partials/comments/types';
 
-import { useCommentCount } from './use-comment-count';
+import { resetCommentCountSeeds, useCommentCount } from './use-comment-count';
 
 const ENTITY_ID = 'a3f1c2d4e5b6478899aabbccddeeff00';
 
@@ -30,6 +30,15 @@ function comment(id: string, overrides: Partial<CommentEntity> = {}): CommentEnt
   } as CommentEntity;
 }
 
+/**
+ * Writes what the list query writes: the rows, and the record that a fetch answered. Nothing in the app
+ * produces server rows without that marker, so a test that omits it is testing an impossible state.
+ */
+function writeFetchedList(rows: CommentEntity[]) {
+  client.setQueryData(['comments-fetched', ENTITY_ID], true);
+  client.setQueryData<CommentEntity[]>(['comments', ENTITY_ID], rows);
+}
+
 function wrapper({ children }: { children: React.ReactNode }) {
   // The client is built outside the render body on purpose: a fresh one per render would drop the
   // cache writes these tests make, and the hook would look correct for the wrong reason.
@@ -38,6 +47,8 @@ function wrapper({ children }: { children: React.ReactNode }) {
 
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // The seeds outlive components on purpose — see the hook — so each test starts from none.
+  resetCommentCountSeeds();
   // The hook compares when the cache was written against when the server count arrived, so the clock
   // is driven explicitly rather than left to land two writes in the same millisecond.
   vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -60,14 +71,14 @@ describe('useCommentCount', () => {
 
     vi.setSystemTime(2_000);
     act(() => {
-      client.setQueryData<CommentEntity[]>(['comments', ENTITY_ID], [comment('1'), comment('2'), comment('3')]);
+      writeFetchedList([comment('1'), comment('2'), comment('3')]);
     });
 
     await waitFor(() => expect(result.current).toBe(3));
   });
 
   it('follows a comment being added, which is the whole point', async () => {
-    client.setQueryData<CommentEntity[]>(['comments', ENTITY_ID], [comment('1')]);
+    writeFetchedList([comment('1')]);
     vi.setSystemTime(2_000);
     const { result } = renderHook(() => useCommentCount(ENTITY_ID, 1), { wrapper });
 
@@ -87,7 +98,7 @@ describe('useCommentCount', () => {
    * keep the count behind for as long as that surface lived.
    */
   it('prefers a freshly rendered server count over a list left from an earlier visit', () => {
-    client.setQueryData<CommentEntity[]>(['comments', ENTITY_ID], [comment('1'), comment('2')]);
+    writeFetchedList([comment('1'), comment('2')]);
 
     vi.setSystemTime(60_000);
     const { result } = renderHook(() => useCommentCount(ENTITY_ID, 7), { wrapper });
@@ -106,7 +117,7 @@ describe('useCommentCount', () => {
 
     vi.setSystemTime(2_000);
     act(() => {
-      client.setQueryData<CommentEntity[]>(['comments', ENTITY_ID], [comment('1'), comment('2')]);
+      writeFetchedList([comment('1'), comment('2')]);
     });
     await waitFor(() => expect(result.current).toBe(2));
 
@@ -125,17 +136,14 @@ describe('useCommentCount', () => {
    */
   it('does not add a still-flagged row to a server count that already includes it', () => {
     // Five from the server plus one that published but has not come back from the indexer yet.
-    client.setQueryData<CommentEntity[]>(
-      ['comments', ENTITY_ID],
-      [
-        comment('1'),
-        comment('2'),
-        comment('3'),
-        comment('4'),
-        comment('5'),
-        comment('new', { isPendingPublish: true } as Partial<CommentEntity>),
-      ]
-    );
+    writeFetchedList([
+      comment('1'),
+      comment('2'),
+      comment('3'),
+      comment('4'),
+      comment('5'),
+      comment('new', { isPendingPublish: true } as Partial<CommentEntity>),
+    ]);
 
     // A later navigation renders six — the indexer has caught up, even though the row is still flagged.
     vi.setSystemTime(90_000);
@@ -160,9 +168,10 @@ describe('useCommentCount', () => {
     // This entity's own list is written after its seed, so it legitimately wins.
     vi.setSystemTime(3_000);
     act(() => {
-      client.setQueryData<CommentEntity[]>(['comments', ENTITY_ID], [comment('a')]);
+      writeFetchedList([comment('a')]);
       // And a list for the entity we are about to switch to, written at the same moment: newer than
       // the seed taken above, which is the seed a count-keyed hook would still be holding.
+      client.setQueryData(['comments-fetched', 'other-entity'], true);
       client.setQueryData<CommentEntity[]>(['comments', 'other-entity'], [comment('1'), comment('2'), comment('3')]);
     });
     await waitFor(() => expect(result.current).toBe(1));
@@ -190,9 +199,7 @@ describe('useCommentCount', () => {
 
     vi.setSystemTime(2_000);
     act(() => {
-      // As the list itself writes it: the fetch records that it answered.
-      client.setQueryData(['comments-fetched', ENTITY_ID], true);
-      client.setQueryData<CommentEntity[]>(['comments', ENTITY_ID], []);
+      writeFetchedList([]);
     });
 
     await waitFor(() => expect(result.current).toBe(0));
@@ -250,10 +257,11 @@ describe('useCommentCount', () => {
 
     vi.setSystemTime(2_000);
     act(() => {
-      client.setQueryData<CommentEntity[]>(
-        ['comments', ENTITY_ID],
-        [comment('1'), comment('2'), comment('new', { isPendingPublish: true } as Partial<CommentEntity>)]
-      );
+      writeFetchedList([
+        comment('1'),
+        comment('2'),
+        comment('new', { isPendingPublish: true } as Partial<CommentEntity>),
+      ]);
     });
 
     await waitFor(() => expect(result.current).toBe(3));
@@ -274,6 +282,54 @@ describe('useCommentCount', () => {
     });
 
     await waitFor(() => expect(result.current).toBe(7));
+  });
+
+  /**
+   * The list can legitimately answer none where the count said five, and then the reader posts. The
+   * answer is one — the list plus their comment — not six: once the list has answered, it is the count,
+   * and the server's number is not a base to add to.
+   */
+  it('counts a post on top of an authoritatively empty list as one', async () => {
+    const { result } = renderHook(() => useCommentCount(ENTITY_ID, 5), { wrapper });
+
+    vi.setSystemTime(2_000);
+    act(() => {
+      writeFetchedList([]);
+    });
+    await waitFor(() => expect(result.current).toBe(0));
+
+    vi.setSystemTime(3_000);
+    act(() => {
+      client.setQueryData<CommentEntity[]>(
+        ['comments', ENTITY_ID],
+        [comment('new', { isPendingPublish: true } as Partial<CommentEntity>)]
+      );
+    });
+
+    await waitFor(() => expect(result.current).toBe(1));
+  });
+
+  /**
+   * `EntityCommentsButton` sits on explore cards that unmount behind an IntersectionObserver fallback,
+   * so scrolling one out of view and back remounts it with the same server count. A seed taken at mount
+   * would be newer than the list it had already fetched, and the pill would revert to the server's
+   * older number while the panel still showed the list.
+   */
+  it('keeps a fetched count across a remount at the same server count', async () => {
+    const first = renderHook(() => useCommentCount(ENTITY_ID, 5), { wrapper });
+
+    vi.setSystemTime(2_000);
+    act(() => {
+      writeFetchedList([comment('1'), comment('2'), comment('3'), comment('4'), comment('5'), comment('6')]);
+    });
+    await waitFor(() => expect(first.result.current).toBe(6));
+    first.unmount();
+
+    // Scrolled back into view much later, with the same count the server rendered.
+    vi.setSystemTime(90_000);
+    const second = renderHook(() => useCommentCount(ENTITY_ID, 5), { wrapper });
+
+    expect(second.result.current).toBe(6);
   });
 
   it('never fetches — no queryFn is configured, so an enabled query would throw', async () => {

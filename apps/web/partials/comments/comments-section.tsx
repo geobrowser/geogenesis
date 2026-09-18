@@ -616,7 +616,8 @@ function TopLevelCommentInput({
   );
 }
 
-function CommentInput({
+/** Exported for the Escape test: this composer renders inside the proposal review sheet. */
+export function CommentInput({
   onSubmit,
   placeholder,
   autoFocus = false,
@@ -655,6 +656,13 @@ function CommentInput({
       handleSubmit();
     }
     if (e.key === 'Escape' && onCancel) {
+      // Marked handled, like the submit branch above. This composer renders inside the proposal review
+      // sheet, whose window listener closes it on any Escape it sees undefaulted — so without this,
+      // cancelling a draft also navigated off the proposal, taking the draft with it. Every layer above
+      // (the comments panel, the entity side panel, the sheet) already respects `defaultPrevented`; this
+      // is the one handler that acted without saying so.
+      e.preventDefault();
+      e.stopPropagation();
       onCancel();
     }
   };

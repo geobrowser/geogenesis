@@ -58,6 +58,10 @@ export function EntityCommentsPanel({
       // in the background is a change the reader cannot see happen. An overlay over a sheet is the
       // top layer and does answer.
       if (presentation !== 'overlay' && slideUpOpenCount > 0) return;
+      // Marked handled, as the entity side panel above already does, so no ancestor acts on the same
+      // press. Today the sheet defers to this panel by other means; this makes that independent of
+      // which listener happened to register first.
+      event.preventDefault();
       onClose();
     };
     window.addEventListener('keydown', onKeyDown);
