@@ -435,11 +435,15 @@ function DebaterVideo({
 
           Capped at the 209px the frame draws it at. The explore card is 484px wide, where 43% comes
           out at exactly that; the fullscreen player is far wider, and letting the card scale with it
-          would hold a paragraph and stop being a glance. */}
+          would hold a paragraph and stop being a glance.
+
+          `items-start` because that cap is a cap, not a width. A flex column stretches its children
+          by default, which drew the little claims chip as a 209px bar with two words adrift in it.
+          The cards ask for the full width themselves; everything else here should be its own size. */}
       {claims && (
         <div
           className={cx(
-            'pointer-events-none absolute bottom-3 left-3 z-10 flex max-h-[60%] w-[43%] max-w-[13.0625rem] flex-col justify-end transition-[padding-bottom] duration-150',
+            'pointer-events-none absolute bottom-3 left-3 z-10 flex max-h-[60%] w-[43%] max-w-[13.0625rem] flex-col items-start justify-end transition-[padding-bottom] duration-150',
             // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling
             // is written out because Tailwind generates classes by scanning this source text, so a
             // composed `group-hover:${…}` would produce a rule that does not exist.

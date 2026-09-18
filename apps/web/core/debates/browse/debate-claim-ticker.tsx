@@ -213,17 +213,18 @@ export function useDebateClaimTicker(
 const OLDER_CARD_FADE = 'linear-gradient(to top, #000 0, #000 1rem, transparent 3.25rem)';
 
 /**
- * The same dissolve on the top edge of the open list.
+ * How far above the open list's top edge a card is completely gone, in px — the 4.25rem the edge
+ * gradient used to ramp over.
  *
- * Without it the backlog is cut off square at the tile's edge — a half a card with a hard line
- * through it, which reads as broken rather than as more-above. Applied to the scroll box rather
- * than to a card, so it stays put at the edge while the list moves under it, and the card crossing
- * it fades on the way out exactly as the live stack's does.
- *
- * Only while something is actually scrolled above. A short backlog sits wholly inside the box with
- * nothing cut off, and fading its first card then would be dimming the top of a list for no reason.
+ * The dissolve is per card now, not a mask on the scroll box, and that is a correctness fix rather
+ * than a refactor. A `mask-image` makes its element a Backdrop Root, so `backdrop-filter` on
+ * anything inside it has nothing left to sample: masking the scroll box silently flattened the
+ * glass on every card in the open list, and the glass came back only at scrollTop 0, where the mask
+ * was dropped. Fading each card by its own opacity leaves the backdrop root alone — an element's
+ * own mask or opacity does not blind its own backdrop-filter, only its descendants' — which is why
+ * the live stack's `OLDER_CARD_FADE` was never affected.
  */
-const HISTORY_EDGE_FADE = 'linear-gradient(to bottom, transparent 0, #000 4.25rem)';
+const HISTORY_EDGE_FADE_PX = 68;
 
 /**
  * The claim card that rises over the video as it is said.
@@ -264,7 +265,9 @@ export function DebateClaimTickerCard({
       // also toggle playback.
       onClick={event => event.stopPropagation()}
       style={{
-        opacity,
+        // Left off entirely at full strength, so the open list's edge fade — which writes this
+        // property straight to the node on scroll — is not overwritten on the next render.
+        ...(opacity === 1 ? null : { opacity }),
         ...(fading ? { maskImage: OLDER_CARD_FADE, WebkitMaskImage: OLDER_CARD_FADE } : null),
       }}
       className="pointer-events-auto flex w-full flex-col gap-1.5 rounded-lg bg-[#151515]/30 p-3 backdrop-blur-md"
@@ -385,48 +388,87 @@ export function DebateClaimTickerStack({
   onAnswered: (claimId: string, position: boolean) => void;
 }) {
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
-  /** Whether anything is scrolled off the top, which is the only time the edge needs dissolving. */
-  const [scrolledDown, setScrolledDown] = React.useState(false);
 
   const shown = open ? (history ?? cards) : cards;
-
-  const syncScrolled = React.useCallback(() => {
-    const element = scrollRef.current;
-    setScrolledDown(element !== null && element.scrollTop > 1);
-  }, []);
-
-  // Opened at the bottom, on the most recent claim — scrolling *up* from there is the "go back
-  // through it" this exists for. Re-run as the history grows so a claim arriving while the list is
-  // open does not leave the view stranded mid-list.
-  React.useEffect(() => {
-    const element = scrollRef.current;
-    if (!open || !element) {
-      setScrolledDown(false);
-      return;
-    }
-    element.scrollTop = element.scrollHeight;
-    syncScrolled();
-  }, [open, shown.length, syncScrolled]);
-
   const backlog = history ?? cards;
 
-  // Closed with nothing live — which is most of a debate. The chip is the only thing on screen
-  // saying the backlog exists at all, and on a touch screen it is the only way to reach it: there
-  // is no hover, and the video behind is one large play/pause button, so the corner cannot quietly
-  // swallow a tap to mean something else.
-  if (shown.length === 0) {
-    if (open || backlog.length === 0 || !onTogglePinned) return null;
-    return <ClaimBacklogChip count={backlog.length} expanded={false} onClick={onTogglePinned} />;
-  }
+  /**
+   * Whether the list is sitting at its newest claim, and so should follow the next one down.
+   *
+   * A ref rather than state: it is read inside effects and never drawn, so tracking it in state
+   * would re-render the list on every scroll frame to change nothing on screen.
+   */
+  const followingLatest = React.useRef(true);
+
+  /**
+   * Dissolve each card as it crosses the top edge — see {@link HISTORY_EDGE_FADE_PX}.
+   *
+   * Written straight to the node instead of through state, because this runs on every scroll frame
+   * and re-rendering a list of cards to change one number on a couple of them is work the browser
+   * should not be asked to do while a finger is moving. Nothing else writes these cards' opacity in
+   * the open list — {@link claimHistory} leaves them all at 1, and the card omits the inline style
+   * at 1 — so there is no tug of war with React over the same property.
+   */
+  const paintEdgeFade = React.useCallback(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    for (const card of Array.from(element.children) as HTMLElement[]) {
+      const belowEdge = card.offsetTop + card.offsetHeight - element.scrollTop;
+      const opacity = Math.max(0, Math.min(1, belowEdge / HISTORY_EDGE_FADE_PX));
+      card.style.opacity = opacity === 1 ? '' : String(opacity);
+    }
+  }, []);
+
+  const onScroll = React.useCallback(() => {
+    const element = scrollRef.current;
+    if (element) {
+      // A few px of slack: a list scrolled to the end is often a fraction of a pixel short of it.
+      followingLatest.current = element.scrollHeight - element.scrollTop - element.clientHeight < 8;
+    }
+    paintEdgeFade();
+  }, [paintEdgeFade]);
+
+  // Opens on the most recent claim — scrolling *up* from there is the "go back through it" this
+  // exists for.
+  React.useEffect(() => {
+    const element = scrollRef.current;
+    if (!open || !element) return;
+    followingLatest.current = true;
+    element.scrollTop = element.scrollHeight;
+    paintEdgeFade();
+  }, [open, paintEdgeFade]);
+
+  // A claim arriving while the list is open lands at the bottom, and the list follows it only if
+  // the reader was already down there. They open this to read back through what was said, and a
+  // debate keeps talking while they do: yanking the view to the newest card took the sentence they
+  // were halfway through off the screen, which read as the list closing and starting over.
+  React.useEffect(() => {
+    const element = scrollRef.current;
+    if (!open || !element) return;
+    if (followingLatest.current) element.scrollTop = element.scrollHeight;
+    paintEdgeFade();
+  }, [open, shown.length, paintEdgeFade]);
+
+  // The chip is the only thing on screen saying the backlog exists at all, and on a touch screen it
+  // is the only way to reach it: there is no hover, and the video behind is one large play/pause
+  // button, so the corner cannot quietly swallow a tap to mean something else.
+  //
+  // It stays up for the whole debate once there is anything to show. It used to be drawn only when
+  // no card was live, so it blinked out every time a claim was said and came back seconds later —
+  // the one fixed thing in the corner was the thing that moved most, and on a touch screen the way
+  // in disappeared exactly when the corner was worth opening.
+  const showChip = backlog.length > 0 && onTogglePinned !== undefined;
+  if (shown.length === 0 && !showChip) return null;
 
   return (
     <div className="flex min-h-0 w-full flex-col items-start gap-1.5">
       <div
         ref={scrollRef}
-        onScroll={syncScrolled}
-        style={
-          open && scrolledDown ? { maskImage: HISTORY_EDGE_FADE, WebkitMaskImage: HISTORY_EDGE_FADE } : undefined
-        }
+        onScroll={onScroll}
+        // The video behind is one big play/pause button, and the gaps between cards are holes in
+        // this list that a thumb aiming at a card can find. The cards stop their own clicks; this
+        // catches the misses.
+        onClick={event => event.stopPropagation()}
         onFocus={() => onFocusChange?.(true)}
         // Only when focus leaves the stack entirely — moving between two cards inside it must not
         // collapse the list out from under the keyboard.
@@ -435,6 +477,9 @@ export function DebateClaimTickerStack({
         }}
         className={cx(
           'pointer-events-auto flex w-full flex-col gap-1.5',
+          // Nothing live and nothing open: the chip is on its own, and an empty box between it and
+          // the tile edge would still take its gap.
+          shown.length === 0 && 'hidden',
           // The host caps the height — see the note on it — so this only has to be allowed to
           // shrink inside that cap and scroll what does not fit.
           open && 'no-scrollbar min-h-0 overflow-y-auto'
@@ -456,10 +501,11 @@ export function DebateClaimTickerStack({
         ))}
       </div>
 
-      {/* Only where the chip is what opened it. A pointer closes by leaving the tile; a tap has
-          nowhere to go, so the way in has to double as the way out. */}
-      {open && pinned && onTogglePinned && (
-        <ClaimBacklogChip count={backlog.length} expanded onClick={onTogglePinned} />
+      {/* `expanded` only where the chip is what is holding it open. A pointer closes the list by
+          leaving the tile, so a chip offering to Hide it would be describing something it cannot
+          do; a tap has nowhere to go, and there the way in has to double as the way out. */}
+      {showChip && onTogglePinned && (
+        <ClaimBacklogChip count={backlog.length} expanded={open && pinned} onClick={onTogglePinned} />
       )}
     </div>
   );
