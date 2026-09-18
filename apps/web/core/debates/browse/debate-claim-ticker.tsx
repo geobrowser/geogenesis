@@ -37,20 +37,20 @@ import { useLineClampOverflow } from './line-clamp-overflow';
 
 export type DebateTicker = {
   /**
-   * The cards to draw over the video right now, oldest first.
+   * The cards to draw right now, oldest first, keyed by the participant slot that said them.
    *
-   * One stack for the whole player rather than one per debater. The card carries the speaker's
-   * avatar and name itself now, so it no longer has to sit over their tile to say who is talking —
-   * which frees it to live in a single fixed corner and read as a feed of what is being said.
+   * One corner per debater rather than one for the player. A viewer watching a debate is looking at
+   * whoever is talking, so that is where their claims should appear — a single shared corner asks
+   * the eye to leave the speaker to read what the speaker is saying.
    */
-  cards: StackedCard[];
+  cardsBySlot: Map<number, StackedCard[]>;
   /**
-   * Every claim said so far, oldest first — what the resting stack opens into on hover.
+   * Every claim each debater has said so far, oldest first — what their corner opens into.
    *
    * Bounded by the playhead, so it is a record of what has been said rather than a table of
    * contents for what is coming.
    */
-  history: StackedCard[];
+  historyBySlot: Map<number, StackedCard[]>;
   /** Every precisely-placed claim, for the scrubber. */
   markers: ClaimMarker[];
   /** Claims in the order they were said, for the card at the end. */
@@ -162,27 +162,37 @@ export function useDebateClaimTicker(debate: Debate, playheadMs: number, enabled
     return { speakerByClaimId: labels, participantByClaimId: speakers };
   }, [claims.all, claims.blocks, debate]);
 
-  // One stack for the whole player. A claim whose speaker could not be resolved — attribution and
-  // the participant list can disagree — is left out rather than drawn anonymously: the card now
-  // puts a name and a face against the sentence, and putting the wrong one there is the misquote
-  // this whole layer is careful about.
-  const attributed = React.useMemo(
-    () => windows.filter(window => participantByClaimId.has(window.claim.id)),
-    [windows, participantByClaimId]
-  );
+  // One stack per debater, over their own tile. A claim whose speaker could not be resolved —
+  // attribution and the participant list can disagree — is left out rather than parked over
+  // whichever half: putting a claim over the wrong face is the misquote this whole layer is
+  // careful about, and now that the corner itself attributes, getting it wrong is louder.
+  const windowsBySlot = React.useMemo(() => {
+    const bySlot = new Map<number, TickerWindow[]>();
+    if (!enabled) return bySlot;
 
-  const cards = React.useMemo(
-    () => (enabled ? tickerStack(attributed, playheadMs) : []),
-    [enabled, attributed, playheadMs]
-  );
-  const history = React.useMemo(
-    () => (enabled ? claimHistory(attributed, playheadMs) : []),
-    [enabled, attributed, playheadMs]
-  );
+    for (const window of windows) {
+      const slot = participantByClaimId.get(window.claim.id)?.participant_slot;
+      if (slot === undefined) continue;
+      const existing = bySlot.get(slot);
+      if (existing) existing.push(window);
+      else bySlot.set(slot, [window]);
+    }
+    return bySlot;
+  }, [enabled, windows, participantByClaimId]);
+
+  const { cardsBySlot, historyBySlot } = React.useMemo(() => {
+    const cards = new Map<number, StackedCard[]>();
+    const history = new Map<number, StackedCard[]>();
+    for (const [slot, slotWindows] of windowsBySlot) {
+      cards.set(slot, tickerStack(slotWindows, playheadMs));
+      history.set(slot, claimHistory(slotWindows, playheadMs));
+    }
+    return { cardsBySlot: cards, historyBySlot: history };
+  }, [windowsBySlot, playheadMs]);
 
   return {
-    cards,
-    history,
+    cardsBySlot,
+    historyBySlot,
     markers,
     claims: timedClaims,
     answered,
@@ -394,9 +404,9 @@ export function DebateClaimTickerStack({
       }}
       className={cx(
         'pointer-events-auto flex w-full flex-col gap-1.5',
-        // Capped to the lower half so the open list never reaches over the other debater's face,
-        // and scrollable inside that.
-        open && 'no-scrollbar max-h-[calc(50%-1.5rem)] overflow-y-auto'
+        // Filling the host, which is one debater's tile inset from its edges — so the open list
+        // reaches at most to the top of their own half and never over the other debater's face.
+        open && 'no-scrollbar max-h-full overflow-y-auto'
       )}
     >
       {shown.map((card, index) => (
