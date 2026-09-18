@@ -148,13 +148,13 @@ describe('the space a position was taken in', () => {
   it('records the space of the vote', () => {
     const order = decodeVoteOrder([vote({ objectId: 'a', spaceId: 'relationships' })]);
 
-    expect(order.spaceByClaimId).toEqual({ a: 'relationships' });
+    expect(order.spacesByClaimId).toEqual({ a: ['relationships'] });
   });
 
   it('normalises it, as the card ids are', () => {
     const order = decodeVoteOrder([vote({ objectId: 'a', spaceId: 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA' })]);
 
-    expect(order.spaceByClaimId.a).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    expect(order.spacesByClaimId.a).toEqual(['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']);
   });
 
   it('takes the space of the answer that stands, not of a retraction beside it', () => {
@@ -163,13 +163,40 @@ describe('the space a position was taken in', () => {
       vote({ objectId: 'a', voteKind: 2, voteType: 0, spaceId: 'held' }),
     ]);
 
-    expect(order.spaceByClaimId).toEqual({ a: 'held' });
+    expect(order.spacesByClaimId).toEqual({ a: ['held'] });
   });
 
   it('says nothing for a vote with no space on it', () => {
     const order = decodeVoteOrder([{ objectId: 'a', voteType: 0, voteKind: 1 }]);
 
-    expect(order.spaceByClaimId).toEqual({});
+    expect(order.spacesByClaimId).toEqual({});
+  });
+
+  /**
+   * Somebody can answer the same claim in two spaces — 1 of the reference
+   * account's 59 — and the two versions are not interchangeable: one of them
+   * carried no Claim type, so picking it rendered a claim card with no response
+   * controls on it at all.
+   *
+   * Both candidates go through, newest first, and `pickDisplaySpaceId` chooses
+   * between them by where the entity is actually typed.
+   */
+  it('keeps every space a claim was answered in, newest first', () => {
+    const order = decodeVoteOrder([
+      vote({ objectId: 'a', spaceId: 'personal' }),
+      vote({ objectId: 'a', voteKind: 2, spaceId: 'relationships' }),
+    ]);
+
+    expect(order.spacesByClaimId).toEqual({ a: ['personal', 'relationships'] });
+  });
+
+  it('lists a space once however many answers were given in it', () => {
+    const order = decodeVoteOrder([
+      vote({ objectId: 'a', voteKind: 1, spaceId: 'relationships' }),
+      vote({ objectId: 'a', voteKind: 2, spaceId: 'relationships' }),
+    ]);
+
+    expect(order.spacesByClaimId).toEqual({ a: ['relationships'] });
   });
 });
 
@@ -219,7 +246,7 @@ describe('the claim order', () => {
  * intersection, and only correctly if both lists are whole.
  */
 describe('applyFilter', () => {
-  const order = { entityIds: ['a', 'b', 'c'], responseByClaimId: {}, spaceByClaimId: {} };
+  const order = { entityIds: ['a', 'b', 'c'], responseByClaimId: {}, spacesByClaimId: {} };
 
   it('keeps the whole list when no filter is applied', () => {
     expect(applyFilter(order, null)).toEqual(['a', 'b', 'c']);
@@ -236,7 +263,7 @@ describe('applyFilter', () => {
   });
 
   it('matches ids however they are spelled', () => {
-    const dashed = { entityIds: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'], responseByClaimId: {}, spaceByClaimId: {} };
+    const dashed = { entityIds: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'], responseByClaimId: {}, spacesByClaimId: {} };
 
     expect(applyFilter(dashed, ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'])).toHaveLength(1);
   });

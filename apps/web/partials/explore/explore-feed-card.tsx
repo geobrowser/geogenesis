@@ -36,7 +36,7 @@ type ExploreFeedCardProps = {
    */
   titleOpensSidePanel?: boolean;
   /** See `ClaimExploreFeedCard`. Only a claim can carry one. */
-  responseNote?: (responseKind: 'stance' | 'veracity') => React.ReactNode;
+  responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
 };
 
 function ExploreFeedCommentLink({ href, count }: { href: string; count: number }) {

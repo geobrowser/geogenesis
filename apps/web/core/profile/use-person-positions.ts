@@ -38,7 +38,7 @@ export type { ClaimResponse, PositionSort, Stance };
 const PAGE_SIZE = 20;
 
 const EMPTY_RESPONSES: Record<string, ClaimResponse> = {};
-const EMPTY_SPACES: Record<string, string> = {};
+const EMPTY_SPACES: Record<string, string[]> = {};
 
 /**
  * The vote table, read once for the whole tab (GEO-2859).
@@ -63,7 +63,7 @@ export function usePersonResponses({ spaceId, enabled = true }: { spaceId: strin
 
   return {
     responseByClaimId: data?.responseByClaimId ?? EMPTY_RESPONSES,
-    spaceByClaimId: data?.spaceByClaimId ?? EMPTY_SPACES,
+    spacesByClaimId: data?.spacesByClaimId ?? EMPTY_SPACES,
     /**
      * The claims still answered, or undefined while the read is out.
      *
@@ -168,20 +168,21 @@ export function usePersonPositions({
   );
 
   /**
-   * Where to render each claim: the reader's filter first, then their answer.
+   * Where to render each claim: the reader's filter first, then their answers.
    *
-   * The filter wins because it is a request — narrow to a space and the card has
-   * to land in the space asked for. Absent one, the space they voted in is the
-   * space they were reading the claim in, which beats the first of an entity's
+   * The filter wins outright because it is a request — narrow to a space and the
+   * card has to land in the space asked for, so it replaces the candidates
+   * rather than joining them. Absent one, the spaces they voted in are the
+   * spaces they were reading the claim in, which beats the first of an entity's
    * `spaceIds`: that ordering put two claims on the reference account's first
    * screen into somebody's personal space rather than the topic space they are
    * argued in.
    */
   const preferredSpaces = React.useMemo(() => {
-    const merged = new Map(Object.entries(responses.spaceByClaimId));
-    if (preferredSpaceById) for (const [id, space] of preferredSpaceById) merged.set(id, space);
+    const merged = new Map(Object.entries(responses.spacesByClaimId));
+    if (preferredSpaceById) for (const [id, space] of preferredSpaceById) merged.set(id, [space]);
     return merged;
-  }, [preferredSpaceById, responses.spaceByClaimId]);
+  }, [preferredSpaceById, responses.spacesByClaimId]);
 
   // The ids the page fetcher closes over — identified, not counted.
   //
@@ -204,7 +205,7 @@ export function usePersonPositions({
     // label them differently. Without this the second selection is served the
     // first one's cards, pointing at the space the reader just navigated away
     // from — the same collision as above, one field over.
-    const preferred = orderedIds.map(id => preferredSpaces.get(id) ?? '').join(',');
+    const preferred = orderedIds.map(id => (preferredSpaces.get(id) ?? []).join('+')).join(',');
     return `${ids}|${preferred}`;
   }, [matchingIds, orderedIds, preferredSpaces]);
 

@@ -93,18 +93,21 @@ export function GalleryClaimCard({
           onRequireSignIn={promptSignIn}
           // Which side *this person* took — the thing you opened their profile
           // to find out, and not something the card says on its own, since its
-          // pills speak for the viewer. In the card's own footer rather than
-          // above it: a badge in the row's flow pushed every card carrying one
-          // out of line with every card that did not.
+          // pills speak for the viewer. Under the pill that matches, which is
+          // where the feed's card puts it too, so one claim reads the same way
+          // in both places.
           // Held back until the kind is known: labelling a factual claim
-          // "agreed" and then correcting it to "verified" is worse than a beat
+          // "agrees" and then correcting it to "verifies" is worse than a beat
           // with no tag.
-          footer={
+          noteFor={position =>
             isResponseKindResolved ? (
-              <div className="px-3 pb-3">
-                <ClaimResponseTag response={response} responseKind={responseKind} personName={personName} />
-              </div>
-            ) : undefined
+              <ClaimResponseTag
+                response={response}
+                responseKind={responseKind}
+                personName={personName}
+                forPosition={position}
+              />
+            ) : null
           }
         />
       ) : (

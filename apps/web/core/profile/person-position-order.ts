@@ -131,17 +131,23 @@ export type PositionOrder = {
   /** Absent for a sort that cannot say — only the vote table carries responses. */
   responseByClaimId: Record<string, ClaimResponse>;
   /**
-   * The space each answer was cast in, by claim id.
+   * The spaces each answer was cast in, by claim id, newest first.
    *
    * A claim can live in several spaces, and the explore card renders whichever
    * the entity happens to list first — which for two of the claims on the
    * reference account's first screen was somebody's personal space rather than
-   * the topic space the claim is actually discussed in. The vote says exactly
-   * which one this person was looking at, so the card can be shown there.
+   * the topic space the claim is actually discussed in. The vote says which ones
+   * this person was actually looking at.
+   *
+   * A list rather than one space, because somebody can answer the same claim in
+   * two spaces: 1 of the reference account's 59. Taking the newest picked the
+   * personal-space copy, which carries no Claim type and so rendered as a
+   * generic card with no response controls at all. All the candidates go to
+   * `pickDisplaySpaceId`, which prefers the one the claim is really a claim in.
    *
    * Empty for a sort that cannot say.
    */
-  spaceByClaimId: Record<string, string>;
+  spacesByClaimId: Record<string, string[]>;
 };
 
 type VoteNode = {
@@ -195,7 +201,7 @@ export function decodeVoteOrder(nodes: readonly (VoteNode | null)[]): PositionOr
   const seen = new Set<string>();
   const order: string[] = [];
   const responseByClaimId: Record<string, ClaimResponse> = {};
-  const spaceByClaimId: Record<string, string> = {};
+  const spacesByClaimId: Record<string, string[]> = {};
   // Per claim *and kind*: which of the two questions has had its newest answer
   // read. Kept apart from the response itself, which cannot record "answered,
   // with no side".
@@ -213,10 +219,15 @@ export function decodeVoteOrder(nodes: readonly (VoteNode | null)[]): PositionOr
 
       if (side) {
         responseByClaimId[key] = { ...responseByClaimId[key], [field]: side };
-        // From the answer that counts, not from a retraction beside it: somebody
-        // who took a stance back in one space and holds one in another should be
-        // read in the space they still hold it in.
-        if (!spaceByClaimId[key] && node.spaceId) spaceByClaimId[key] = normId(node.spaceId);
+
+        // From the answers that count, not from a retraction beside them:
+        // somebody who took a stance back in one space and holds one in another
+        // should be read in the space they still hold it in.
+        if (node.spaceId) {
+          const space = normId(node.spaceId);
+          const spaces = (spacesByClaimId[key] ??= []);
+          if (!spaces.includes(space)) spaces.push(space);
+        }
       }
     }
 
@@ -230,7 +241,7 @@ export function decodeVoteOrder(nodes: readonly (VoteNode | null)[]): PositionOr
   // — so whether it is still answered is only known once every row is in.
   const entityIds = order.filter(id => responseByClaimId[id] !== undefined);
 
-  return { entityIds, responseByClaimId, spaceByClaimId };
+  return { entityIds, responseByClaimId, spacesByClaimId };
 }
 
 type Page = { nodes: unknown[]; hasNextPage: boolean; endCursor: string | null };
@@ -315,5 +326,5 @@ export async function fetchPositionOrder(
   // Score order says nothing about how anyone answered — including whether the
   // answer still stands. The tab reads both from the vote order, which it holds
   // whichever sort is showing, and narrows this list to it.
-  return { entityIds, responseByClaimId: {}, spaceByClaimId: {} };
+  return { entityIds, responseByClaimId: {}, spacesByClaimId: {} };
 }

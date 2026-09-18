@@ -129,11 +129,12 @@ export function PersonRecordFeed({
             // the tag is worded from the question actually asked.
             responseNote={
               responseByClaimId
-                ? responseKind => (
+                ? (responseKind, position) => (
                     <ClaimResponseTag
                       response={responseByClaimId[normId(item.entityId)]}
                       responseKind={responseKind}
                       personName={personName}
+                      forPosition={position}
                     />
                   )
                 : undefined

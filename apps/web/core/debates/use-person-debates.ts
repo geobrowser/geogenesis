@@ -34,7 +34,7 @@ export function usePersonDebates(spaceId: string, enabled: boolean) {
       const spaceByDebateId = new Map(
         listed
           .filter((debate): debate is typeof debate & { spaceId: string } => debate.spaceId !== null)
-          .map(debate => [ID.uuidToHex(debate.id), debate.spaceId])
+          .map(debate => [ID.uuidToHex(debate.id), [debate.spaceId]])
       );
 
       return {

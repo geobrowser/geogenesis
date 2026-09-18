@@ -81,7 +81,7 @@ export function ClaimExploreFeedCard({
    * only this card knows. Absent everywhere else, which is every surface where
    * the only answer worth reporting is the reader's own.
    */
-  responseNote?: (responseKind: 'stance' | 'veracity') => React.ReactNode;
+  responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
 }) {
   // The feed pre-mounts cards thousands of pixels below the fold, so the counts and the geo-chat
   // row are gated on proximity rather than on mount — otherwise every claim in every loaded page
@@ -155,23 +155,25 @@ export function ClaimExploreFeedCard({
   );
 
   /*
-   * Under the response controls rather than in the meta row.
+   * Under the button it agrees with, rather than in the meta row.
    *
    * It went beside the type and the age first, on the reasoning that it is
    * another fact about the claim in a row that already holds facts about it. On
-   * a real record that row is rarely as empty as it looks here: the space chip,
-   * the type, the age, Controversial and the debate offer are already competing
-   * for it, and a sixth segment wrapped the line.
+   * a real record that row is rarely as empty as it looks in isolation: the
+   * space chip, the type, the age, Controversial and the debate offer are
+   * already competing for it, and a sixth segment wrapped the line.
    *
-   * Below the pills it has a line of its own, and it sits directly under the
-   * thing it is about — the Agree/Disagree the *viewer* is being offered, with
-   * the owner's answer to the same question underneath. The pills hold the card's
-   * own row, so nothing else moves.
+   * Under the matching pill it needs no words to say which side it means —
+   * "Susan agrees" beneath Agree. The pills hold the card's own grid row, so
+   * nothing else moves.
    *
    * Held back until the response kind is known, or a factual claim reads
-   * "agreed" for a beat and then corrects itself.
+   * "agrees" for a beat and then corrects itself to "verifies".
    */
-  const responseNoteContent = isResponseKindResolved ? responseNote?.(responseKind) : null;
+  const noteFor = React.useCallback(
+    (position: boolean) => (isResponseKindResolved ? responseNote?.(responseKind, position) : null),
+    [isResponseKindResolved, responseKind, responseNote]
+  );
 
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
 
@@ -277,8 +279,8 @@ export function ClaimExploreFeedCard({
             onRespond={control.respond}
             disabled={!control.canRespond}
             titleFor={control.actionTitle}
+            noteFor={responseNote ? noteFor : undefined}
           />
-          {responseNoteContent}
           {control.responseError ? (
             <div role="alert" className="mt-2">
               <Text as="p" variant="footnote" color="red-01">

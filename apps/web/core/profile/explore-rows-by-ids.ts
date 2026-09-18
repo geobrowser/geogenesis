@@ -73,14 +73,19 @@ export async function fetchExploreRowsByIds(
   ids: string[],
   signal?: AbortSignal,
   /**
-   * The space each id should be read in, where the caller knows.
+   * The spaces each id may be read in, where the caller knows.
    *
-   * A debate's side relation names the space the debate lives in, and without
-   * that `pickDisplaySpaceId` takes the first of the entity's own spaces that
-   * is allowed — so a debate carried in more than one resolved its label, its
-   * claims and its link against whichever happened to come first.
+   * A debate's side relation names the space the debate lives in, and a vote
+   * names the space the claim was answered in. Without either,
+   * `pickDisplaySpaceId` takes the first of the entity's own spaces — so a
+   * record carried in more than one resolved its label, its claims and its link
+   * against whichever happened to come first.
+   *
+   * Several per id, because a caller can know several: the same claim answered
+   * in two spaces gives two, and `pickDisplaySpaceId` picks between them by
+   * where the entity is actually typed rather than by which answer was newest.
    */
-  preferredSpaceById?: Map<string, string>
+  preferredSpaceById?: Map<string, string[]>
 ): Promise<ExploreFeedRow[]> {
   if (ids.length === 0) return [];
 
@@ -122,9 +127,9 @@ export async function fetchExploreRowsByIds(
   // No membership context either way, so the cards render with their Join
   // button hidden rather than in a state this query cannot determine.
   return ordered.flatMap(entity => {
-    const preferred = preferredSpaceById?.get(normId(entity.id));
-    const allowed = preferred
-      ? new Set([normId(preferred)])
+    const preferred = preferredSpaceById?.get(normId(entity.id))?.filter(validateSpaceId) ?? [];
+    const allowed = preferred.length
+      ? new Set(preferred.map(normId))
       : new Set(entity.spaces.filter(validateSpaceId).map(normId));
 
     return buildExploreFeedRows([entity], allowed, new Set());

@@ -142,10 +142,40 @@ export function debateClaimFromEntity(
   return null;
 }
 
+/**
+ * Which space's version of an entity a card renders.
+ *
+ * **A space where the entity is typed wins.** The same entity can sit in several
+ * spaces and be a real, typed record in only one of them: a personal space
+ * routinely carries a copy with a name and nothing else, and `entity.spaces`
+ * lists that copy first often enough to matter. Picking it renders a claim with
+ * no Claim type — which on the feed means no Agree/Disagree, because the card
+ * dispatcher reads the types of the space it was given. That is a claim card
+ * silently downgraded to a generic one.
+ *
+ * `types` is already derived from the display space's own relations a few lines
+ * below, so this is asking the same question earlier: show the version that has
+ * something to show.
+ *
+ * Both loops run in `entity.spaces` order, so where two candidates are equally
+ * typed the graph's own ordering still decides.
+ */
 function pickDisplaySpaceId(entity: Entity, allowed: Set<string>): string | null {
+  const typesRelationIdNorm = normId(SystemIds.TYPES_PROPERTY);
+  const typedSpaces = new Set(
+    entity.relations.filter(r => normId(r.type.id) === typesRelationIdNorm).map(r => normId(r.spaceId))
+  );
+
+  for (const sid of entity.spaces) {
+    if (allowed.has(normId(sid)) && typedSpaces.has(normId(sid))) return sid;
+  }
+
+  // Nothing typed among them — an untyped copy is still better than a card for
+  // a space the caller ruled out.
   for (const sid of entity.spaces) {
     if (allowed.has(normId(sid))) return sid;
   }
+
   return entity.spaces[0] ?? null;
 }
 
