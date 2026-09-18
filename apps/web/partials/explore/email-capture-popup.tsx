@@ -236,12 +236,18 @@ function EmailCapturePopup() {
         // dismiss button, and a list of controls reading "Dismiss" twice says nothing about which
         // notice either one closes. Matches how the banner names its own.
         aria-label="Dismiss newsletter signup"
-        // `grey-04` rather than the frame's `grey-03`: the glyph is the only thing identifying this
-        // control, and `grey-03` (#b6b6b6) on white is 2.03:1, under the 3:1 WCAG 1.4.11 asks of a
-        // control's visual boundary. `grey-04` (#606060) is 6.29:1 and reads as the same weight of
-        // grey at 12px. The old chip passed by sitting on a dark fill; this glyph has nothing
-        // behind it, and hover cannot rescue it on touch, where there is no hover.
-        className="absolute top-[7px] right-[7px] z-20 p-1 text-grey-04 transition-colors duration-200 ease-in-out hover:text-text sm:top-[-5px] sm:right-[-5px] sm:p-4"
+        // Darker than the frame's `grey-03`, and darker again on the phone sheet, because the glyph
+        // is the only thing identifying this control and 1.4.11 wants 3:1 for that. The old chip
+        // got there by sitting on its own dark fill; a bare line icon has to get there from
+        // whatever happens to be behind it.
+        //
+        // On the desktop card that is white, where `grey-03` (#b6b6b6) is 2.03:1 and `grey-04`
+        // (#606060) is 6.29:1. On the phone sheet it is *not* white: `MobileArtwork` centres a
+        // 637px composition in a narrower viewport, so on common phones (412-480px) the blurred
+        // Culture card slides under the glyph — measured 2.06-2.93:1 against `grey-04` at 480px.
+        // `text` (#202020) is 5.34:1 or better across that range, and hover cannot make up the
+        // difference on touch, where there is no hover.
+        className="absolute top-[7px] right-[7px] z-20 p-1 text-grey-04 transition-colors duration-200 ease-in-out hover:text-text sm:top-[-5px] sm:right-[-5px] sm:p-4 sm:text-text"
       >
         <CloseSmall />
       </button>
