@@ -56,10 +56,15 @@ export function useCommentCount(entityId: string, serverCount: number): number {
   const serverRows = data.length - optimisticRows;
 
   if (dataUpdatedAt > seed.at) {
-    // A row the list fetched is proof the fetch happened, and `mergePendingWithServer` guarantees what
+    // Rows the list fetched are proof the fetch happened, and `mergePendingWithServer` guarantees what
     // it leaves behind is the server's rows plus whatever is still only local — so the length is the
     // whole count, whether or not the server's own number has caught up.
-    if (serverRows > 0) return data.length;
+    //
+    // An empty list counts as an answer too. The list filters what the count merely counted — the count
+    // is backlink ids, the list drops any whose relations do not come back — so it can legitimately
+    // answer none where the count said five, and a pill reading five beside a visibly empty panel is
+    // the worse of the two wrongs.
+    if (serverRows > 0 || data.length === 0) return data.length;
 
     // Nothing from the server in here, so this entry holds only what was written into it:
     // `useCreateComment` seeds it with `(old = [])`, and posting before the list has loaded — or after

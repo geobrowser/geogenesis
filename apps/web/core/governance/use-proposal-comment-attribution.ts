@@ -82,6 +82,15 @@ export function useProposalCommentAttribution({
   // So it is retired the first time the record agrees with it. Until then the reader sees their own
   // vote; after that the record speaks for itself, including when it has moved on. Changing the vote
   // is a new choice, so it arms again.
+  //
+  // Known gap, deliberately left: agreement is value equality, and a record can agree with a choice it
+  // predates. Change a vote ACCEPT → REJECT → ACCEPT inside the indexer's lag and the third choice is
+  // confirmed on the spot by the first record, so when the REJECT finally lands the badge shows it
+  // until the last transaction indexes too. Distinguishing that needs a generation from the vote path —
+  // the optimistic store is keyed by proposal and choice, with nothing to say which write is newer —
+  // and every purely local rule tried here trades this narrow case for a wider one: confirming only on
+  // a *transition* to the value instead leaves a vote changed in another tab masked indefinitely.
+  // Self-corrects on the next index, and needs two changes of mind in a few seconds to reach.
   const optimisticKey = optimisticVote ? `${normalizeSpaceId(entityId ?? '')}:${optimisticVote}` : null;
   const [confirmedKey, setConfirmedKey] = React.useState<string | null>(null);
 

@@ -180,6 +180,22 @@ describe('useCommentCount', () => {
    * after that query failed — leaves the cache holding nothing but the new comment. Its length is then
    * a count of one, and the server's five is the better half of the answer.
    */
+  /**
+   * The list filters what the count merely counted — the count is backlink ids, the list drops any
+   * whose relations do not come back — so an empty list beside a count of five is a real answer, not a
+   * cache that has not loaded. A pill saying five next to a visibly empty panel is the worse wrong.
+   */
+  it('reports zero when the list answers empty, even against a nonzero server count', async () => {
+    const { result } = renderHook(() => useCommentCount(ENTITY_ID, 5), { wrapper });
+
+    vi.setSystemTime(2_000);
+    act(() => {
+      client.setQueryData<CommentEntity[]>(['comments', ENTITY_ID], []);
+    });
+
+    await waitFor(() => expect(result.current).toBe(0));
+  });
+
   it('adds a pending row to the server count when the cache holds only that row', async () => {
     const { result } = renderHook(() => useCommentCount(ENTITY_ID, 5), { wrapper });
 
