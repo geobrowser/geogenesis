@@ -42,18 +42,35 @@ export interface ProfileHistory {
  * Row ids and their spaces come back alongside the content because removing a
  * row has to delete what hangs off it: a relation id cannot be reconstructed the
  * way a value id can, and a row in another space is not ours to delete.
+ *
+ * **Scoped at every level, not just the outer edge.** A stint is its own entity,
+ * so another space can write a role or a tenure onto the same one — the outer
+ * filter would not stop that reaching the page, which leaves the boundary this
+ * file states only half true. Nothing in the graph does it today (0 of 1,906
+ * employment edges and 0 of 538 education ones carry a row from another space),
+ * so this closes the hole rather than fixing a visible bug.
+ *
+ * What is deliberately *not* scoped: `toEntity`, and the values hanging off it.
+ * A role's name, a skill's name and an organisation's avatar belong to that
+ * entity and are authored in its own space — filtering those to the profile's
+ * space would blank the name of every company somebody has ever worked for.
+ * The rule is that assertions *about this person* are scoped; the things those
+ * assertions point at are not.
  */
-const nested = `
-  valuesList { id spaceId property { id } date text decimal }
-  relationsList {
+const nested = (spaceId: string) => {
+  const ours = `filter: { spaceId: { is: ${JSON.stringify(spaceId)} } }`;
+
+  return `
+  valuesList(${ours}) { id spaceId property { id } date text decimal }
+  relationsList(${ours}) {
     id
     entityId
     spaceId
     type { id }
     toEntity { id name }
     entity {
-      valuesList { id spaceId property { id } date text decimal }
-      relationsList {
+      valuesList(${ours}) { id spaceId property { id } date text decimal }
+      relationsList(${ours}) {
         id
         entityId
         spaceId
@@ -64,6 +81,7 @@ const nested = `
     }
   }
 `;
+};
 
 /**
  * The organisation's own picture, two hops down: the relation points at an image
@@ -103,7 +121,7 @@ const profileHistoryQuery = (entityId: string, spaceId: string) => `
         entityId
         spaceId
         toEntity { id name ${orgAvatar} }
-        entity { ${nested} }
+        entity { ${nested(spaceId)} }
       }
       education: relationsList(filter: {
         typeId: { is: ${JSON.stringify(EDUCATION_PROPERTY)} }
@@ -113,7 +131,7 @@ const profileHistoryQuery = (entityId: string, spaceId: string) => `
         entityId
         spaceId
         toEntity { id name ${orgAvatar} }
-        entity { ${nested} }
+        entity { ${nested(spaceId)} }
       }
     }
   }
