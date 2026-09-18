@@ -252,6 +252,25 @@ function DebaterVideo({
     video.muted = muted;
   }, [isResuming, muted, src, videoRef]);
 
+  /**
+   * Pausing is not enough to return a media decoder or its buffered data on mobile browsers.
+   * Detach the source and force the element back to its empty resource state whenever this tile
+   * is evicted. The setup repairs the source too because React Strict Mode deliberately exercises
+   * an effect cleanup/setup cycle without removing the DOM node in development (GEO-2963).
+   */
+  React.useLayoutEffect(() => {
+    const video = videoRef.current;
+    if (!video || !src) return;
+
+    if (video.getAttribute('src') !== src) video.setAttribute('src', src);
+
+    return () => {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    };
+  }, [src, videoRef]);
+
   // A personal space's own id resolves to its "system entity" (an ugly technical
   // record). The space's page entity is the real profile, so open that once it's
   // loaded and fall back to the space id while it's still fetching.

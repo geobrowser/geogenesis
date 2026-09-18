@@ -32,6 +32,11 @@ import { SpaceThumb } from './space-thumb';
  * before it gives it up. Strictly between them the card keeps whatever state it had. */
 const ACTIVATE_RATIO = 0.6;
 const DEACTIVATE_RATIO = 0.4;
+/**
+ * Keep at most the debates immediately around the viewport warm. Unlike the old sticky preload
+ * flag, leaving this window evicts the player and its two sourced video elements.
+ */
+const MEDIA_WINDOW_MARGIN = '800px';
 
 type DebateExploreFeedCardProps = {
   item: ExploreFeedItem;
@@ -66,21 +71,24 @@ export function DebateExploreFeedCard({
 
   const [container, setContainer] = React.useState<HTMLElement | null>(null);
 
-  // The feed mounts items far below the fold (its pagination sentinel uses a huge rootMargin), so
-  // gate the geo-chat lookups on proximity to the viewport instead of on mount — otherwise every
-  // debate in every loaded page fires its requests at once. Sticky: once fetched, stay fetched.
+  // The feed retains every fetched row, so proximity has to govern the lifetime of the expensive
+  // subtree, not just its first request. Once this card leaves the window, unmounting the player
+  // releases both video elements and unsubscribes its playback/vote/transcript consumers. Query
+  // data remains in TanStack's cache, so reverse scrolling can rebuild without turning every old
+  // card into a permanently live media player (GEO-2963).
   const [nearViewport, setNearViewport] = React.useState(false);
   React.useEffect(() => {
-    if (!container || nearViewport) return;
+    if (!container) return;
     const observer = new IntersectionObserver(
       entries => {
-        if (entries.some(entry => entry.isIntersecting)) setNearViewport(true);
+        const entry = entries[0];
+        if (entry) setNearViewport(entry.isIntersecting);
       },
-      { rootMargin: '800px' }
+      { rootMargin: MEDIA_WINDOW_MARGIN }
     );
     observer.observe(container);
     return () => observer.disconnect();
-  }, [container, nearViewport]);
+  }, [container]);
 
   // Autoplay while mostly in view, pause when scrolled past — same activation ratio as the
   // full-screen feed. Playback is muted by default so multiple visible cards can't clash.
@@ -185,10 +193,10 @@ export function DebateExploreFeedCard({
       {/* Cap the media at the width the designs (and the full-screen feed) use — feed columns,
           especially data blocks, can be much wider and full-bleed videos dwarf the card. */}
       <div className="w-full max-w-[480px]">
-        {readyDebate ? (
-          // `nearViewport` is the same 800px-margin gate the geo-chat lookups already use, so
-          // the recordings resolve while the card is still approaching rather than on arrival.
-          <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} preload={nearViewport} />
+        {readyDebate && nearViewport ? (
+          // The recordings resolve while the card is still approaching. Crossing back out of
+          // that same window unmounts this subtree instead of retaining two paused videos forever.
+          <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} />
         ) : (
           <DebateVideoSkeleton />
         )}
@@ -196,7 +204,7 @@ export function DebateExploreFeedCard({
 
       <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
         <EntityCommentsButton entityId={item.entityId} spaceId={item.spaceId} count={item.commentCount} />
-        {readyDebate ? <DebateCardExtras debate={readyDebate} spaceId={item.spaceId} /> : null}
+        {readyDebate && nearViewport ? <DebateCardExtras debate={readyDebate} spaceId={item.spaceId} /> : null}
       </EntityRowActions>
     </article>
   );
@@ -252,9 +260,9 @@ function DebateCardExtras({ debate, spaceId }: { debate: Debate; spaceId: string
 
 // Separate component so useDebateVotes (which queries as soon as it mounts) only runs once the
 // debate is loaded and known to be watchable.
-function DebateCardVideos({ debate, active, preload }: { debate: Debate; active: boolean; preload: boolean }) {
+function DebateCardVideos({ debate, active }: { debate: Debate; active: boolean }) {
   const votes = useDebateVotes(debate);
-  return <DebateFeedPlayer debate={debate} active={active} preload={preload} votes={votes} />;
+  return <DebateFeedPlayer debate={debate} active={active} preload votes={votes} />;
 }
 
 function DebateVideoSkeleton() {

@@ -27,6 +27,23 @@ accumulated. Without a browser memory trace or crash log it does not, by itself,
 immediate kill came from memory, a decoder ceiling, or both; the unbounded retention path below
 remains the leading cause.
 
+## Fix implemented in this PR
+
+The P0 media-lifetime fix now ships alongside this investigation:
+
+- The 800 px media look-ahead is no longer sticky. A debate player and its debate-only action/query
+  subtree mount as the card approaches and unmount after it leaves the same bounded window.
+- Evicting a player explicitly pauses both video elements, removes both `src` attributes, and calls
+  `load()` so mobile browsers can return decoder and buffer resources immediately.
+- Reverse scrolling remounts the cached debate as a preloading, inactive player before the card is
+  visible.
+- Component regression tests cover eviction/remount, both-element source release, and React Strict
+  Mode's cleanup/setup rehearsal.
+
+This bounds live media resources with viewport proximity even though lightweight feed rows still
+accumulate. Physical-device long-scroll validation remains required; whole-row virtualization and a
+central exact preload budget remain follow-up hardening rather than prerequisites for this fix.
+
 ## Confirmed path
 
 ### 1. The feed appends forever and does not virtualize
@@ -117,7 +134,7 @@ degrades monotonically with the number of debate players already passed.
 
 ## Recommended fixes
 
-### P0: window the heavy debate subtree
+### P0 (implemented): window the heavy debate subtree
 
 Keep the lightweight card shell if preserving mixed-height scroll geometry is useful, but mount
 `DebateCardVideos` and the debate-only action/query subtree only inside a bounded viewport window.
@@ -138,7 +155,7 @@ Expected impact: video element, decoder, buffer, playback-hook, and media-query 
 constant with scroll depth. This is the highest-confidence crash fix and can be implemented without
 first solving variable-height whole-list virtualization.
 
-### P0: explicitly release media on eviction and unmount
+### P0 (implemented): explicitly release media on eviction and unmount
 
 Add one cleanup helper for each player element:
 

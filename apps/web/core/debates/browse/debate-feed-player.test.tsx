@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
@@ -76,15 +76,20 @@ function controllerFixture(overrides: { mutedByUser: boolean; turnSlot: 1 | 2; i
   };
 }
 
-function renderPlayer(overrides: { mutedByUser: boolean; turnSlot: 1 | 2; isResuming?: boolean }) {
+function renderPlayer(
+  overrides: { mutedByUser: boolean; turnSlot: 1 | 2; isResuming?: boolean },
+  reactStrictMode = false
+) {
   mocks.controller = controllerFixture(overrides);
-  const { container, rerender } = render(
-    <DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active votes={votes} />
+  const { container, rerender, unmount } = render(
+    <DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active votes={votes} />,
+    { reactStrictMode }
   );
   const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
   return {
     slot1,
     slot2,
+    unmount,
     /** Re-render with a new controller state, as the hook's own state changes would. */
     update(next: { mutedByUser: boolean; turnSlot: 1 | 2; isResuming?: boolean }) {
       mocks.controller = controllerFixture(next);
@@ -93,6 +98,14 @@ function renderPlayer(overrides: { mutedByUser: boolean; turnSlot: 1 | 2; isResu
   };
 }
 
+beforeEach(() => {
+  mocks.controller = null;
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+  vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+});
+
+afterEach(() => vi.restoreAllMocks());
+
 /**
  * Per-turn audio is the `muted` flag: only the debater whose turn it is is audible, and the
  * viewer's own mute wins over both. Unchanged from master — an attempt to move this gate onto
@@ -100,10 +113,6 @@ function renderPlayer(overrides: { mutedByUser: boolean; turnSlot: 1 | 2; isResu
  * element at volume 0 is exactly as stoppable off screen as a muted one.
  */
 describe('DebateFeedPlayer audio gating (GEO-2947)', () => {
-  beforeEach(() => {
-    mocks.controller = null;
-  });
-
   it('leaves only the speaking debater audible once the viewer un-mutes', () => {
     const { slot1, slot2 } = renderPlayer({ mutedByUser: false, turnSlot: 1 });
 
@@ -160,5 +169,30 @@ describe('DebateFeedPlayer repairs a mute made behind React (GEO-2947)', () => {
 
     expect(slot1.muted).toBe(true);
     expect(slot2.muted).toBe(true);
+  });
+});
+
+describe('DebateFeedPlayer media release (GEO-2963)', () => {
+  it('restores both sources after the Strict Mode cleanup rehearsal', () => {
+    const { slot1, slot2 } = renderPlayer({ mutedByUser: true, turnSlot: 1 }, true);
+
+    expect(slot1.getAttribute('src')).toBe('https://cdn.test/slot1.webm');
+    expect(slot2.getAttribute('src')).toBe('https://cdn.test/slot2.webm');
+  });
+
+  it('pauses, detaches, and resets both video elements on unmount', () => {
+    const pause = vi.mocked(HTMLMediaElement.prototype.pause);
+    const load = vi.mocked(HTMLMediaElement.prototype.load);
+    const { slot1, slot2, unmount } = renderPlayer({ mutedByUser: true, turnSlot: 1 });
+
+    expect(slot1.getAttribute('src')).toBe('https://cdn.test/slot1.webm');
+    expect(slot2.getAttribute('src')).toBe('https://cdn.test/slot2.webm');
+
+    unmount();
+
+    expect(pause).toHaveBeenCalledTimes(2);
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(slot1.hasAttribute('src')).toBe(false);
+    expect(slot2.hasAttribute('src')).toBe(false);
   });
 });
