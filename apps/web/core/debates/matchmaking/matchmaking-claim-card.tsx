@@ -44,6 +44,13 @@ import type {
 import { useGeoChatAuth } from '../hooks';
 import { hubCardMotion } from './hub-motion';
 
+export type MatchmakingClaimRecordPerson = {
+  profileSpaceId: string;
+  displayName: string | null;
+  avatarCid: string | null;
+  heldPositions: boolean[];
+};
+
 type Props = {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -89,6 +96,14 @@ type Props = {
   answersMayComeFromIndex?: boolean;
   /** Why responding is refused outright — an unpublished edit to the claim's own vocabulary. */
   responseBlockedReason?: string | null;
+  /**
+   * Pin the avatar stacks to one known person and ignore geo-chat presence.
+   */
+  recordPerson?: MatchmakingClaimRecordPerson;
+  /**
+   * Shared host gate for every optional query owned by the card.
+   */
+  queriesEnabled?: boolean;
   /** Rendered under the summary, for hosts with something extra to say. */
   footer?: React.ReactNode;
   /**
@@ -169,6 +184,8 @@ export function MatchmakingClaimCard({
   answersReady,
   answersMayComeFromIndex,
   responseBlockedReason,
+  recordPerson,
+  queriesEnabled,
   footer,
   onOpenClaim,
   viewerIdentityPending,
@@ -198,18 +215,18 @@ export function MatchmakingClaimCard({
   // holding the hook back would mask the primed cache the batch exists to serve, drawing an empty
   // split instead of the batch's.
   const responseBatch = useClaimResponseBatchState();
-  const readResponses = nearViewport || responseBatch.managed;
+  const readResponses = queriesEnabled ?? (nearViewport || responseBatch.managed);
 
   // The host's ref and the observer's, on the one element. The Matches tab hangs its infinite
   // scroll sentinel off the former and popLayout measures the exiting row through it, so it cannot
   // simply be replaced.
   const setCardRef = React.useCallback(
     (node: HTMLElement | null) => {
-      viewportRef(node);
+      if (queriesEnabled === undefined) viewportRef(node);
       if (typeof ref === 'function') ref(node);
       else if (ref) (ref as React.RefObject<HTMLElement | null>).current = node;
     },
-    [ref, viewportRef]
+    [queriesEnabled, ref, viewportRef]
   );
 
   return (
@@ -229,6 +246,8 @@ export function MatchmakingClaimCard({
           answersReady={answersReady}
           answersMayComeFromIndex={answersMayComeFromIndex}
           responseBlockedReason={responseBlockedReason}
+          recordPerson={recordPerson}
+          queriesEnabled={readResponses}
           readResponses={readResponses}
           onOpenClaim={onOpenClaim}
           viewerIdentityPending={viewerIdentityPending}
@@ -248,6 +267,8 @@ export function MatchmakingClaimCard({
           onOpenClaim={onOpenClaim}
           hideEndSlot={hideEndSlot}
           endSlot={endSlot}
+          recordPerson={recordPerson}
+          queriesEnabled={readResponses}
         />
       )}
 
@@ -274,6 +295,7 @@ function ClaimHeader({
   endSlot,
   isControversial,
   onOpenClaim,
+  compactTitle = false,
 }: {
   claim: DebateClaimSummary;
   isOnGraph: boolean;
@@ -281,8 +303,12 @@ function ClaimHeader({
   /** Flagged beside the space chip — what kind of claim this is, which is the row's own question. */
   isControversial?: boolean;
   onOpenClaim?: () => void;
+  compactTitle?: boolean;
 }) {
-  const claimTextClassName = 'mb-3 block text-metadataMedium leading-snug text-pretty line-clamp-3';
+  const claimTextClassName = cx(
+    'mb-3 block text-metadataMedium leading-snug text-pretty',
+    compactTitle ? 'line-clamp-2 min-h-[calc(1.375em*2)]' : 'line-clamp-3'
+  );
 
   const openable = isOnGraph ? (
     onOpenClaim ? (
@@ -337,6 +363,8 @@ export function useClaimPositionControl({
   viewerResponseUnknown,
   onRequireSignIn,
   offersDebate = true,
+  recordPerson,
+  queriesEnabled = true,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -413,6 +441,8 @@ export function useClaimPositionControl({
    * lookup, which that surface has no other use for.
    */
   offersDebate?: boolean;
+  recordPerson?: MatchmakingClaimRecordPerson;
+  queriesEnabled?: boolean;
 }) {
   const target = {
     entityId: claim.claim_entity_id,
@@ -429,19 +459,21 @@ export function useClaimPositionControl({
   const copy = ENTITY_RESPONSE_COPY[readiness.response_kind];
   const [responseError, setResponseError] = React.useState<string | null>(null);
 
+  const mergeMatchFaces = offersDebate && !recordPerson;
+
   // The offer and the faces it implies, from one fact. Same shared query the end slot reads, so this
   // costs nothing beyond the merge.
   const { match } = useClaimMatchup({
     claimId: claim.claim_entity_id,
     spaceId: claim.space_id,
-    enabled: offersDebate && isResolvableClaim(claim),
+    enabled: queriesEnabled && mergeMatchFaces && isResolvableClaim(claim),
   });
   // One gate, on the lookup. `useClaimMatchup` masks a disabled match to null rather than serving
   // the shared cache another host primed, so a second check here would be unreachable — and an
   // unreachable guard is the kind that gets trusted and then quietly stops matching the real one.
   const positionsWithOpponents = React.useMemo(
-    () => withMatchParticipants(positions, match?.positions),
-    [match?.positions, positions]
+    () => (mergeMatchFaces ? withMatchParticipants(positions, match?.positions) : positions),
+    [match?.positions, mergeMatchFaces, positions]
   );
 
   // The client knows its own response long before geo-chat does — publishing, indexing, and then
@@ -460,33 +492,35 @@ export function useClaimPositionControl({
   const { profilesBySpaceId } = useProfilesBySpaceIds(viewerSpaceIds);
   const viewerProfile = personalSpaceId ? profilesBySpaceId.get(personalSpaceId) : undefined;
 
-  const optimisticPositions = React.useMemo(
-    () =>
-      viewerIdentityPending
-        ? positionsWithOpponents
-        : withViewerPosition({
-            positions: positionsWithOpponents,
-            responseKind: readiness.response_kind,
-            // `undefined` where the host cannot say, which is not the same as "no position" — see
-            // `viewerResponseUnknown`.
-            serverPosition: viewerResponseUnknown ? undefined : (readiness.viewer_response?.position ?? null),
-            viewerPosition,
-            viewerSpaceId: personalSpaceId,
-            viewerName: viewerProfile?.name ?? null,
-            viewerAvatarUrl: viewerProfile?.avatarUrl ?? null,
-          }),
-    [
-      personalSpaceId,
-      positionsWithOpponents,
-      readiness.response_kind,
-      readiness.viewer_response?.position,
-      viewerIdentityPending,
-      viewerPosition,
-      viewerResponseUnknown,
-      viewerProfile?.avatarUrl,
-      viewerProfile?.name,
-    ]
-  );
+  const optimisticPositions = React.useMemo(() => {
+    if (recordPerson) return withRecordPersonFaces(positions, recordPerson);
+
+    return viewerIdentityPending
+      ? positionsWithOpponents
+      : withViewerPosition({
+          positions: positionsWithOpponents,
+          responseKind: readiness.response_kind,
+          // `undefined` where the host cannot say, which is not the same as "no position" — see
+          // `viewerResponseUnknown`.
+          serverPosition: viewerResponseUnknown ? undefined : (readiness.viewer_response?.position ?? null),
+          viewerPosition,
+          viewerSpaceId: personalSpaceId,
+          viewerName: viewerProfile?.name ?? null,
+          viewerAvatarUrl: viewerProfile?.avatarUrl ?? null,
+        });
+  }, [
+    personalSpaceId,
+    positions,
+    positionsWithOpponents,
+    readiness.response_kind,
+    readiness.viewer_response?.position,
+    recordPerson,
+    viewerIdentityPending,
+    viewerPosition,
+    viewerResponseUnknown,
+    viewerProfile?.avatarUrl,
+    viewerProfile?.name,
+  ]);
 
   // Hand back to the server's copy only once it actually agrees, so there is no window where
   // neither side reports the response.
@@ -557,6 +591,8 @@ function RespondableControls({
   answersReady = true,
   answersMayComeFromIndex = false,
   responseBlockedReason = null,
+  recordPerson,
+  queriesEnabled = true,
   readResponses = true,
   onOpenClaim,
   viewerIdentityPending,
@@ -583,6 +619,8 @@ function RespondableControls({
   /** See {@link Props.answersMayComeFromIndex}. */
   answersMayComeFromIndex?: boolean;
   responseBlockedReason?: string | null;
+  recordPerson?: MatchmakingClaimRecordPerson;
+  queriesEnabled?: boolean;
   /** False while the card is still far enough below the fold that its reads are not worth making. */
   readResponses?: boolean;
   onOpenClaim?: () => void;
@@ -717,6 +755,9 @@ function RespondableControls({
       // The faces the match implies belong with the offer the match makes. Where the slot is hidden
       // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`.
       offersDebate: !hideEndSlot,
+      // Record mode skips the merge too, and says so once, inside the hook.
+      recordPerson,
+      queriesEnabled,
     });
 
   return (
@@ -726,6 +767,7 @@ function RespondableControls({
         isOnGraph
         onOpenClaim={onOpenClaim}
         isControversial={summary.isControversial}
+        compactTitle={Boolean(recordPerson)}
         endSlot={
           endSlot ??
           (hideEndSlot ? null : (
@@ -736,6 +778,7 @@ function RespondableControls({
               // `undefined` until the reads have landed, so a card that cannot yet say which side
               // the viewer holds does not read as saying they hold none.
               viewerPosition={sideKnown ? viewerPosition : undefined}
+              enabled={queriesEnabled}
             />
           ))
         }
@@ -915,6 +958,28 @@ export function withViewerPosition({
   return adjusted;
 }
 
+/**
+ * Pin every side's avatar stack to one known person — used on a personal Debates record.
+ */
+export function withRecordPersonFaces(
+  positions: DebateClaimPositionSummary[],
+  person: MatchmakingClaimRecordPerson
+): DebateClaimPositionSummary[] {
+  const held = new Set(person.heldPositions);
+  const participant: DebateParticipantSummary = {
+    user_id: person.profileSpaceId,
+    profile_space_id: person.profileSpaceId,
+    display_name: person.displayName,
+    avatar_cid: person.avatarCid,
+  };
+
+  return positions.map(side =>
+    held.has(side.position)
+      ? { ...side, available_now_count: 0, present_count: 1, participants: [participant] }
+      : { ...side, available_now_count: 0, present_count: 0, participants: [] }
+  );
+}
+
 /** The graph can't resolve this claim, so the sides are read-only and there's nothing to respond to. */
 function UnresolvableControls({
   claim,
@@ -924,6 +989,8 @@ function UnresolvableControls({
   onOpenClaim,
   hideEndSlot,
   endSlot,
+  recordPerson,
+  queriesEnabled = true,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -932,13 +999,21 @@ function UnresolvableControls({
   onOpenClaim?: () => void;
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
+  recordPerson?: MatchmakingClaimRecordPerson;
+  queriesEnabled?: boolean;
 }) {
+  const displayPositions = React.useMemo(
+    () => (recordPerson ? withRecordPersonFaces(positions, recordPerson) : positions),
+    [positions, recordPerson]
+  );
+
   return (
     <>
       <ClaimHeader
         claim={claim}
         isOnGraph={false}
         onOpenClaim={onOpenClaim}
+        compactTitle={Boolean(recordPerson)}
         endSlot={
           /* The slot stays live even though the graph cannot resolve this claim, because nothing in
              it needs the graph. Both the match and the debate are geo-chat state, and the request is
@@ -962,12 +1037,13 @@ function UnresolvableControls({
               // *is* the match, and reading silence as "holds none" would contradict the match's own
               // side and take the offer off the one tab where every card is a match by definition.
               viewerPosition={readiness.viewer_response?.position}
+              enabled={queriesEnabled}
             />
           ))
         }
       />
       <PositionRow
-        positions={positions}
+        positions={displayPositions}
         responseKind={readiness.response_kind}
         viewerPosition={readiness.viewer_response?.position ?? null}
       />

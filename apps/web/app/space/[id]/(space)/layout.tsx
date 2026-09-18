@@ -57,6 +57,7 @@ export default async function Layout(props0: LayoutProps) {
   ]);
 
   const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
+  const isPersonSpace = typeIds.includes(SystemIds.PERSON_TYPE);
 
   return (
     <EntityStoreProvider id={props.id} spaceId={spaceId}>
@@ -68,7 +69,7 @@ export default async function Layout(props0: LayoutProps) {
         initialTabs={props.tabs}
         initialCollectionItems={props.initialCollectionItems}
       >
-        <SpaceChromeGate>
+        <SpaceChromeGate isPersonSpace={isPersonSpace}>
           <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
           <SpaceHeaderContentGate serverHasSidebar={hasSidebar} isExternalTopic={isExternalTopic}>
             <div className="space-y-2">

@@ -296,6 +296,8 @@ export function DebateRow({
   winnerShare,
   keyframeUrl,
   responseKind,
+  highlightedSpaceId,
+  claimTitle,
 }: {
   debate: Entity;
   spaceId: string;
@@ -304,6 +306,8 @@ export function DebateRow({
   winnerShare: WinnerShare | null;
   keyframeUrl: string | null;
   responseKind: 'stance' | 'veracity';
+  highlightedSpaceId?: string;
+  claimTitle?: string | null;
 }) {
   const nameFor = (participantSpaceId: string) => profilesBySpaceId.get(participantSpaceId)?.name ?? 'Unnamed debater';
 
@@ -322,35 +326,54 @@ export function DebateRow({
         {keyframeUrl && <GeoImage value={keyframeUrl} alt="" fill sizes="56px" className="object-cover" />}
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
+        {claimTitle ? (
+          <Text as="span" variant="bodySemibold" color="text" className="line-clamp-2">
+            {claimTitle}
+          </Text>
+        ) : null}
         {sides.length > 0 ? (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            {sides.map((side, index) => (
-              <React.Fragment key={`${side.spaceId}-${String(side.position)}`}>
-                {index > 0 && (
-                  <Text as="span" variant="metadata" color="grey-03">
-                    vs
-                  </Text>
-                )}
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-grey-02">
-                    <Avatar avatarUrl={profilesBySpaceId.get(side.spaceId)?.avatarUrl} value={side.spaceId} size={20} />
-                  </span>
-                  <Text as="span" variant="metadataMedium" color="text" className="truncate">
-                    {nameFor(side.spaceId)}
-                  </Text>
+            {sides.map((side, index) => {
+              const isHighlighted = highlightedSpaceId != null && ID.equals(side.spaceId, highlightedSpaceId);
+
+              return (
+                <React.Fragment key={`${side.spaceId}-${String(side.position)}`}>
+                  {index > 0 && (
+                    <Text as="span" variant="metadata" color="grey-03">
+                      vs
+                    </Text>
+                  )}
                   <span
                     className={cx(
-                      'shrink-0 rounded-xs px-1 py-px text-[0.6875rem] font-medium',
-                      side.position ? 'bg-successTertiary text-text' : 'bg-errorTertiary text-text'
+                      'flex min-w-0 items-center gap-1.5',
+                      isHighlighted && '-mx-1 rounded-sm bg-grey-01 px-1 py-0.5'
                     )}
+                    aria-current={isHighlighted ? 'true' : undefined}
                   >
-                    {responsePositionLabel(responseKind, side.position)}
+                    <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-grey-02">
+                      <Avatar
+                        avatarUrl={profilesBySpaceId.get(side.spaceId)?.avatarUrl}
+                        value={side.spaceId}
+                        size={20}
+                      />
+                    </span>
+                    <Text as="span" variant="metadataMedium" color="text" className="truncate">
+                      {nameFor(side.spaceId)}
+                    </Text>
+                    <span
+                      className={cx(
+                        'shrink-0 rounded-xs px-1 py-px text-[0.6875rem] font-medium',
+                        side.position ? 'bg-successTertiary text-text' : 'bg-errorTertiary text-text'
+                      )}
+                    >
+                      {responsePositionLabel(responseKind, side.position)}
+                    </span>
                   </span>
-                </span>
-              </React.Fragment>
-            ))}
+                </React.Fragment>
+              );
+            })}
           </div>
-        ) : (
+        ) : claimTitle ? null : (
           <Text as="span" variant="metadataMedium" color="text" className="truncate">
             {debate.name ?? 'Debate'}
           </Text>
