@@ -301,7 +301,15 @@ export function EntityPageBody(props: EntityPageBodyProps) {
 
     return (
       <div className="px-4 pt-6 pb-12 sm:px-5">
-        <EntityPageCover avatarUrl={avatarUrl} coverUrl={props.coverUrl} fitImage />
+        {/* A profile brings its avatar: it is the person's face, and the panel
+            opened on a cover with nobody in it. Everything else keeps the
+            cover-only header — see `EditableCoverAvatarHeader`. */}
+        <EntityPageCover
+          avatarUrl={avatarUrl}
+          coverUrl={props.coverUrl}
+          fitImage
+          withAvatar={customView === 'person'}
+        />
         <EntityPageContentContainer>
           <div>
             <div className="space-y-2">
