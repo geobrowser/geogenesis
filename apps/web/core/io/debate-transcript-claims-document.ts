@@ -59,6 +59,10 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
               }
               claims: relationsList(filter: { typeId: { is: $claimsPropertyId }, spaceId: { is: $spaceId } }) {
                 position
+                # The id of the relation entity below, which is what a publisher writes timecodes
+                # onto. The app only reads them, so nothing here needs it — the backfill scripts do,
+                # and carrying it means they read this traversal rather than re-walking their own.
+                entityId
                 # The relation's own entity, which is where the claim's timecodes live — not on the
                 # claim, because one claim can be stated in two turns and each statement has its
                 # own moment. Empty for every debate published before timecodes existed, which is
@@ -98,6 +102,8 @@ type RelationNode<T> = { position?: string | null; toEntity: T | null } | null;
 /** A block → claim relation, which carries the claim's timecodes on its own entity. */
 type ClaimRelationNode = {
   position?: string | null;
+  /** The relation entity's id — where a claim's timecodes are published. */
+  entityId?: string | null;
   /** Integer values arrive as strings, the way the API serialises them. */
   entity?: { valuesList?: Array<{ propertyId: string; integer?: string | null } | null> | null } | null;
   toEntity: ClaimEntity | null;

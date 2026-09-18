@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate, DebateClaim, DebateParticipant } from '~/core/debates/api';
 import {
   type ClaimMarker,
@@ -17,11 +16,9 @@ import {
 } from '~/core/debates/claim-ticker';
 import { type TimedClaim, claimsInSpokenOrder } from '~/core/debates/claim-timing';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
-import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { uuidToHex } from '~/core/id/normalize';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -35,6 +32,7 @@ import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
 
 import { useLineClampOverflow } from './line-clamp-overflow';
+import { useDebateClaimResponse } from './use-debate-claim-response';
 
 export type DebateTicker = {
   /**
@@ -547,29 +545,7 @@ function TickerClaimHeader({
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean) => void;
 }) {
-  const promptSignIn = usePrivySignIn();
-  const {
-    responseKind,
-    isResponseKindResolved,
-    isViewerResponseResolved,
-    responseBlockedReason,
-    claim,
-    positions,
-    readiness,
-    summary,
-  } = useClaimResponseState({ claimId, spaceId, row, entity });
-
-  const control = useClaimPositionControl({
-    claim,
-    positions,
-    readiness,
-    answersReady: isResponseKindResolved && isViewerResponseResolved,
-    responseBlockedReason,
-    onRequireSignIn: promptSignIn,
-    // Same reason the panel passes false: the viewer is already watching this debate, so offering
-    // them another one is the wrong invitation at the wrong moment.
-    offersDebate: false,
-  });
+  const { responseKind, summary, control } = useDebateClaimResponse({ claimId, spaceId, row, entity });
 
   const position = control.viewerPosition;
 
@@ -647,15 +623,13 @@ function TickerClaimHeader({
  * already draws: agreeing with a position and verifying a fact are different acts, and a thumb on
  * "the SEC sued Coinbase" reads as approval rather than confirmation.
  */
-export function ClaimIconButton({
+function ClaimIconButton({
   responseKind,
   position,
   label,
   selected,
   disabled,
   title,
-  surface = 'video',
-  size = 'sm',
   onClick,
 }: {
   responseKind: 'stance' | 'veracity' | 'curation';
@@ -664,9 +638,6 @@ export function ClaimIconButton({
   selected: boolean;
   disabled: boolean;
   title: string;
-  /** `video` sits on the dark scrim over a frame; `card` on white. */
-  surface?: 'video' | 'card';
-  size?: 'sm' | 'md';
   onClick?: () => void;
 }) {
   const Icon = responseKind === 'veracity' ? (position ? ChevronUp : ChevronDown) : position ? ThumbUp : ThumbDown;
@@ -686,21 +657,14 @@ export function ClaimIconButton({
         })
       }
       className={cx(
-        'grid place-items-center rounded-sm transition-colors disabled:cursor-default',
-        size === 'md' ? 'size-8' : 'size-5',
+        'grid size-5 place-items-center rounded-sm transition-colors disabled:cursor-default',
         // Recessive until it matters: dim at rest, brighter on hover, and unmistakable once the
         // reader has actually taken a side.
-        surface === 'video'
-          ? selected
-            ? position
-              ? 'bg-white/15 text-green'
-              : 'bg-white/15 text-red-01'
-            : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
-          : selected
-            ? position
-              ? 'bg-successTertiary text-green'
-              : 'bg-errorTertiary text-red-01'
-            : 'text-grey-04 hover:bg-grey-01 hover:text-text disabled:hover:bg-transparent disabled:hover:text-grey-04'
+        selected
+          ? position
+            ? 'bg-white/15 text-green'
+            : 'bg-white/15 text-red-01'
+          : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
       )}
     >
       <Icon filled={selected} />

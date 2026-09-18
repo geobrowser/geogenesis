@@ -76,7 +76,15 @@ const BLOCK_TEXT =
 const BLOCK: TranscriptBlock = { id: 'block-1', authorSpaceId: 'author-1', text: BLOCK_TEXT };
 
 function claim(id: string, text: string, overrides: Partial<TranscriptClaim> = {}): TranscriptClaim {
-  return { id, text, spaceId: 'space-1', blockId: 'block-1', publishedTiming: null, ...overrides };
+  return {
+    id,
+    text,
+    spaceId: 'space-1',
+    blockId: 'block-1',
+    publishedTiming: null,
+    relationEntityId: null,
+    ...overrides,
+  };
 }
 
 const SUPREME_COURT = claim(

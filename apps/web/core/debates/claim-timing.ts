@@ -64,7 +64,7 @@ export function isAssertableMoment(timing: ClaimTiming | null): timing is ClaimT
  * extractor's paraphrase shares almost no vocabulary with the turn — at which point the whole turn
  * is a more honest answer than a confidently wrong five seconds.
  */
-export const USABLE_TIMING_CONFIDENCE = 0.35;
+const USABLE_TIMING_CONFIDENCE = 0.35;
 
 /** How many consecutive segments a claim may span. Whisper segments here run 1–3 seconds. */
 const MAX_WINDOW_SEGMENTS = 6;
