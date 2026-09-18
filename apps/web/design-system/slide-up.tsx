@@ -5,11 +5,17 @@ import * as React from 'react';
 import cx from 'classnames';
 import { AnimatePresence, type AnimationDefinition, motion } from 'framer-motion';
 import { useAtomValue, useSetAtom } from 'jotai';
+import { createPortal } from 'react-dom';
 import { RemoveScroll } from 'react-remove-scroll';
 
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
-import { commentsPanelHostElementAtom, entitySidePanelHostElementAtom, slideUpOpenCountAtom } from '~/atoms';
+import {
+  commentsPanelHostElementAtom,
+  entitySidePanelHostElementAtom,
+  slideUpOpenCountAtom,
+  slideUpPopoverContainerAtom,
+} from '~/atoms';
 
 type SlideUpProps = {
   isOpen: boolean;
@@ -28,11 +34,30 @@ export const SlideUp = ({
 }: SlideUpProps) => {
   const entitySidePanelHost = useAtomValue(entitySidePanelHostElementAtom);
   const commentsPanelHost = useAtomValue(commentsPanelHostElementAtom);
+
+  // A body-level home for popovers opened from inside this sheet — a comment's responder list, for
+  // one. They portal to the body, which puts them outside the lock below, so one taller than its own
+  // max-height could be read and not scrolled. Sharding this container exempts whatever lands in it,
+  // and keeping it on the body leaves the popover's positioning exactly where it already works.
+  const [popoverContainer, setPopoverContainer] = React.useState<HTMLElement | null>(null);
+  const setSlideUpPopoverContainer = useSetAtom(slideUpPopoverContainerAtom);
+  React.useEffect(() => {
+    // No `isOpen` check: closing unmounts the portal below, which calls the ref with null, so this
+    // already follows the sheet. Releases only its own container on unmount, because more than one
+    // sheet can be open and the other one's must outlive this one closing.
+    setSlideUpPopoverContainer(popoverContainer);
+    return () => setSlideUpPopoverContainer(current => (current === popoverContainer ? null : current));
+  }, [popoverContainer, setSlideUpPopoverContainer]);
+
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+
   // Every overlay that can be opened from inside a slide-up has to be exempt from its scroll lock,
   // or it draws above the sheet and then refuses to scroll.
   const removeScrollShards = React.useMemo(
-    () => [entitySidePanelHost, commentsPanelHost].filter((node): node is HTMLElement => node !== null),
-    [entitySidePanelHost, commentsPanelHost]
+    () =>
+      [entitySidePanelHost, commentsPanelHost, popoverContainer].filter((node): node is HTMLElement => node !== null),
+    [entitySidePanelHost, commentsPanelHost, popoverContainer]
   );
 
   // Published so those overlays know they have a sheet to clear. Counted, so two open sheets do not
@@ -67,36 +92,41 @@ export const SlideUp = ({
   }, [isOpen, setIsOpen, deferEscapeClose, raisedPanelOpen]);
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          key="slide-up-root"
-          className={cx('fixed inset-0', Z_LAYER_CLASS.slideUp)}
-          initial={{ opacity: 1 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-        >
-          {/* Opaque layer so underlying route (e.g. space governance) never flashes before the sheet animates */}
-          <div className="absolute inset-0 bg-white" aria-hidden />
+    <>
+      {/* Outside `AnimatePresence`, which owns the presence of what it wraps — this container is not
+          animated and should exist for exactly as long as the sheet is open. */}
+      {mounted && isOpen && createPortal(<div ref={setPopoverContainer} data-slide-up-popover-host />, document.body)}
+      <AnimatePresence>
+        {isOpen && (
           <motion.div
-            variants={variants}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
-            transition={transition}
-            onAnimationComplete={onEnterAnimationComplete}
-            className="absolute inset-0 flex h-full w-full flex-col overflow-hidden"
+            key="slide-up-root"
+            className={cx('fixed inset-0', Z_LAYER_CLASS.slideUp)}
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
           >
-            <RemoveScroll className="h-full w-full" shards={removeScrollShards}>
-              <div data-app-scroll-surface className="h-full overflow-y-auto overscroll-contain bg-white">
-                {children}
-              </div>
-            </RemoveScroll>
+            {/* Opaque layer so underlying route (e.g. space governance) never flashes before the sheet animates */}
+            <div className="absolute inset-0 bg-white" aria-hidden />
+            <motion.div
+              variants={variants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              transition={transition}
+              onAnimationComplete={onEnterAnimationComplete}
+              className="absolute inset-0 flex h-full w-full flex-col overflow-hidden"
+            >
+              <RemoveScroll className="h-full w-full" shards={removeScrollShards}>
+                <div data-app-scroll-surface className="h-full overflow-y-auto overscroll-contain bg-white">
+                  {children}
+                </div>
+              </RemoveScroll>
+            </motion.div>
           </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        )}
+      </AnimatePresence>
+    </>
   );
 };
 

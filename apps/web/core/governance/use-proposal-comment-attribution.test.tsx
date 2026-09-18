@@ -16,18 +16,6 @@ const OTHER_EDITOR_SPACE_ID = 'b7e3a1d95c2f48e0a6d31f7c8b04e592';
 
 const fetchProposalVotes = vi.fn();
 
-// The app runs these under wagmi and jotai providers; here they are the two inputs being varied.
-let personalSpaceId: string | null = EDITOR_SPACE_ID;
-let optimisticVote: 'ACCEPT' | 'REJECT' | 'ABSTAIN' | undefined;
-
-vi.mock('~/core/hooks/use-personal-space-id', () => ({
-  usePersonalSpaceId: () => ({ personalSpaceId, isLoading: false }),
-}));
-
-vi.mock('~/partials/governance/optimistic-voted-atom', () => ({
-  useOptimisticVoteChoice: () => optimisticVote,
-}));
-
 vi.mock('~/core/io/subgraph/fetch-proposal', () => ({
   fetchProposalVotes: (options: { id: string }) => fetchProposalVotes(options),
 }));
@@ -65,8 +53,6 @@ function render(overrides: Partial<Parameters<typeof useProposalCommentAttributi
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   fetchProposalVotes.mockReset();
-  personalSpaceId = EDITOR_SPACE_ID;
-  optimisticVote = undefined;
 });
 
 describe('useProposalCommentAttribution', () => {
@@ -143,84 +129,6 @@ describe('useProposalCommentAttribution', () => {
     rerender({ isLoadingRoles: true });
 
     expect(result.current.size).toBe(0);
-  });
-
-  /**
-   * A vote is a round trip through the chain and the indexer away from being readable back, and the
-   * reader is looking at their own comment when they cast it.
-   */
-  it('shows the vote the reader just cast, before it can be read back', async () => {
-    fetchProposalVotes.mockResolvedValue(proposal());
-    optimisticVote = 'ACCEPT';
-
-    const { result } = render();
-
-    await waitFor(() => expect(result.current.get(EDITOR_SPACE_ID)).toEqual({ role: 'editor', vote: 'ACCEPT' }));
-  });
-
-  it("leaves another editor's recorded vote alone when the reader votes", async () => {
-    fetchProposalVotes.mockResolvedValue({
-      spaceId: SPACE_ID,
-      votes: [{ voterSpaceId: OTHER_EDITOR_SPACE_ID, vote: 'REJECT' }],
-    });
-    optimisticVote = 'ACCEPT';
-
-    const { result } = render({ editorSpaceIds: new Set([EDITOR_SPACE_ID, OTHER_EDITOR_SPACE_ID]) });
-
-    await waitFor(() => expect(result.current.get(EDITOR_SPACE_ID)).toEqual({ role: 'editor', vote: 'ACCEPT' }));
-    // The overlay replaces the reader's own vote, not the whole record.
-    expect(result.current.get(OTHER_EDITOR_SPACE_ID)).toEqual({ role: 'editor', vote: 'REJECT' });
-  });
-
-  /**
-   * The optimistic record is deliberately never cleared once a vote lands, because the governance
-   * list reads it to keep a voted card sunk. Treated as authoritative here it would mask every later
-   * change — vote in this tab, change it in another, and the refetched record loses to this session's
-   * stale choice until a reload.
-   */
-  it('lets a newer record win once the optimistic vote has been confirmed', async () => {
-    // The record already agrees with what the reader cast, so the overlay has done its job.
-    fetchProposalVotes.mockResolvedValue({
-      spaceId: SPACE_ID,
-      votes: [{ voterSpaceId: EDITOR_SPACE_ID, vote: 'ACCEPT' }],
-    });
-    optimisticVote = 'ACCEPT';
-
-    const { result } = render();
-
-    await waitFor(() => expect(result.current.get(EDITOR_SPACE_ID)).toEqual({ role: 'editor', vote: 'ACCEPT' }));
-
-    // The vote is changed elsewhere and the record is refetched — the same invalidation
-    // `AcceptOrReject` fires on success.
-    fetchProposalVotes.mockResolvedValue({
-      spaceId: SPACE_ID,
-      votes: [{ voterSpaceId: EDITOR_SPACE_ID, vote: 'REJECT' }],
-    });
-    await act(async () => {
-      await client.invalidateQueries({ queryKey: ['proposal-comment-votes', PROPOSAL_ID] });
-    });
-
-    await waitFor(() => expect(result.current.get(EDITOR_SPACE_ID)).toEqual({ role: 'editor', vote: 'REJECT' }));
-  });
-
-  /** Changing the vote is a new choice, so it is the reader's own again until the record catches up. */
-  it('shows a changed vote again after the previous one was confirmed', async () => {
-    fetchProposalVotes.mockResolvedValue({
-      spaceId: SPACE_ID,
-      votes: [{ voterSpaceId: EDITOR_SPACE_ID, vote: 'ACCEPT' }],
-    });
-    optimisticVote = 'ACCEPT';
-
-    const { result, rerender } = render();
-
-    await waitFor(() => expect(result.current.get(EDITOR_SPACE_ID)).toEqual({ role: 'editor', vote: 'ACCEPT' }));
-
-    // The reader switches to reject. The record still says ACCEPT — the indexer is behind — and their
-    // own choice has to win again.
-    optimisticVote = 'REJECT';
-    rerender();
-
-    await waitFor(() => expect(result.current.get(EDITOR_SPACE_ID)).toEqual({ role: 'editor', vote: 'REJECT' }));
   });
 
   /**

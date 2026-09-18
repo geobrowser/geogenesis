@@ -23,6 +23,17 @@ export const entitySidePanelHostElementAtom = atom<HTMLElement | null>(null);
 export const commentsPanelHostElementAtom = atom<HTMLElement | null>(null);
 
 /**
+ * A body-level container an open slide-up offers to popovers that portal out of it.
+ *
+ * Raising such a popover above the sheet is only half of what it needs: the sheet locks scrolling
+ * everywhere outside its own subtree, and a popover on the body is outside it — so a list taller than
+ * its own max-height could be seen and not scrolled. Living in a container the sheet registers as a
+ * scroll shard fixes that without moving the popover out of the body, which is where its positioning
+ * already works.
+ */
+export const slideUpPopoverContainerAtom = atom<HTMLElement | null>(null);
+
+/**
  * How many slide-ups are open. A count rather than a flag because closing one while another is open
  * must not report "none" — and because the answer is read by overlays deciding whether they have to
  * clear one.

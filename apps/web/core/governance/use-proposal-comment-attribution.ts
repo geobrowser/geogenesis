@@ -5,11 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { proposalCommentVotesQueryKey } from '~/core/io/query-keys';
 import { fetchProposalVotes } from '~/core/io/subgraph/fetch-proposal';
-
-import { useOptimisticVoteChoice } from '~/partials/governance/optimistic-voted-atom';
 
 import { type ProposalCommentAttribution, proposalCommentAttribution } from './proposal-comment-attribution';
 
@@ -60,47 +57,17 @@ export function useProposalCommentAttribution({
     queryFn: ({ signal }) => fetchProposalVotes({ id: entityId!, signal }),
   });
 
-  // The vote the reader just cast, before the chain and the indexer have caught up. `AcceptOrReject`
-  // invalidates the query above on success, but that is a round trip away; this is the same
-  // optimistic record the governance list uses to sink a card the moment it is voted on.
-  const optimisticVote = useOptimisticVoteChoice(entityId ?? '');
-  const { personalSpaceId } = usePersonalSpaceId();
-
-  /** What the fetched record says about the reader, which is what the optimistic choice is racing. */
-  const recordedOwnVote = React.useMemo(() => {
-    if (!proposal || !personalSpaceId) return null;
-    const own = proposal.votes.find(v => normalizeSpaceId(v.voterSpaceId) === normalizeSpaceId(personalSpaceId));
-    return own?.vote ?? null;
-  }, [proposal, personalSpaceId]);
-
-  // That optimistic record is deliberately never cleared once the vote lands — the governance list
-  // reads it to keep a voted card sunk, because the API's own sort gate is disabled (see
-  // `accept-or-reject.tsx`) — so it cannot stay authoritative here. Left to win forever it would mask
-  // every later change: vote in this tab, change the vote in another, and the refetched record would
-  // be overwritten by this session's stale choice until a reload.
+  // No optimistic overlay of the reader's own vote here, deliberately. The store that holds it
+  // (`optimistic-voted-atom`) is keyed by proposal alone, so it cannot say which account cast the
+  // choice it carries or which of several is newest — and this badge makes a statement about a named
+  // person, which is the one place those gaps are not survivable: switch accounts before the record
+  // confirms and the previous account's vote gets painted onto the new one's comments.
   //
-  // So it is retired the first time the record agrees with it. Until then the reader sees their own
-  // vote; after that the record speaks for itself, including when it has moved on. Changing the vote
-  // is a new choice, so it arms again.
-  //
-  // Known gap, deliberately left: agreement is value equality, and a record can agree with a choice it
-  // predates. Change a vote ACCEPT → REJECT → ACCEPT inside the indexer's lag and the third choice is
-  // confirmed on the spot by the first record, so when the REJECT finally lands the badge shows it
-  // until the last transaction indexes too. Distinguishing that needs a generation from the vote path —
-  // the optimistic store is keyed by proposal and choice, with nothing to say which write is newer —
-  // and every purely local rule tried here trades this narrow case for a wider one: confirming only on
-  // a *transition* to the value instead leaves a vote changed in another tab masked indefinitely.
-  // Self-corrects on the next index, and needs two changes of mind in a few seconds to reach.
-  const optimisticKey = optimisticVote ? `${normalizeSpaceId(entityId ?? '')}:${optimisticVote}` : null;
-  const [confirmedKey, setConfirmedKey] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (optimisticKey && recordedOwnVote === optimisticVote) {
-      setConfirmedKey(optimisticKey);
-    }
-  }, [optimisticKey, optimisticVote, recordedOwnVote]);
-
-  const ownVoteToShow = optimisticKey && confirmedKey !== optimisticKey ? optimisticVote : null;
+  // Both the Accept/Reject control and the vote row do overlay it, and are welcome to: they describe
+  // the reader to themselves, where being a beat ahead is the point and mistaking whose vote it is has
+  // no victim. Here the record is the only thing that speaks. `AcceptOrReject` invalidates this query
+  // on a stagger starting 800ms after the vote lands, so the badge follows within a beat, and the
+  // reader already has immediate confirmation in the control they just pressed.
 
   // Both role sets were gathered against the caller's space. For a proposal entity that is the
   // proposal's own space, which is the premise this feature rests on — but if the two ever disagree,
@@ -122,30 +89,13 @@ export function useProposalCommentAttribution({
     // declining to state anything.
     if (isLoadingRoles || isRolesError) return EMPTY_ATTRIBUTION;
 
-    const votes =
-      ownVoteToShow && personalSpaceId
-        ? [
-            ...proposal.votes.filter(v => normalizeSpaceId(v.voterSpaceId) !== normalizeSpaceId(personalSpaceId)),
-            { voterSpaceId: personalSpaceId, vote: ownVoteToShow },
-          ]
-        : proposal.votes;
-
     return proposalCommentAttribution({
-      votes,
+      votes: proposal.votes,
       editorSpaceIds: rolesMatchProposalSpace ? editorSpaceIds : [],
       memberSpaceIds: rolesMatchProposalSpace ? memberSpaceIds : [],
       // The reader reports whether it saw every vote. Where it did not, an editor's silence is not
       // established, so the badge says nothing about it instead of claiming they did not vote.
       votesComplete: proposal.complete,
     });
-  }, [
-    proposal,
-    rolesMatchProposalSpace,
-    editorSpaceIds,
-    memberSpaceIds,
-    isLoadingRoles,
-    isRolesError,
-    ownVoteToShow,
-    personalSpaceId,
-  ]);
+  }, [proposal, rolesMatchProposalSpace, editorSpaceIds, memberSpaceIds, isLoadingRoles, isRolesError]);
 }
