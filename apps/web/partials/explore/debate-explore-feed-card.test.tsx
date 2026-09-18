@@ -339,45 +339,31 @@ describe('DebateExploreFeedCard', () => {
   });
 
   /**
-   * The card is headed by the motion, the way the full-screen `/debates` feed heads it — a Debate
-   * entity is named "<debater> vs. <debater> on <claim>", which reads as a matchup rather than as
-   * something to have an opinion about, and buries the claim at the end of a long line.
+   * The heading itself — claim vs. debate name, and what a click on it does — is
+   * `ExploreCardTitle`'s, and is covered against every surface in its own suite. What belongs here
+   * is that this card is wired to it, and that the wiring survives the one thing this card does
+   * that no other does: paint before its geo-chat lookups have resolved.
    */
-  describe('claim title', () => {
-    it('titles the card with the claim rather than the debate entity name', () => {
+  describe('claim heading', () => {
+    it('heads the card with the claim rather than the debate entity name', () => {
       renderCard();
 
       expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(CLAIM_NAME);
       expect(screen.queryByText(item.title)).toBeNull();
-    });
-
-    it('points the title at the claim entity, not at the debate', () => {
-      renderCard();
-
       expect(screen.getByRole('link', { name: CLAIM_NAME })).toHaveAttribute(
         'href',
         NavUtils.toEntity('space-1', 'claim-entity-1')
       );
     });
 
-    // The title is present from first paint — the debate's own name never flashes in its place —
-    // because it comes off the entity's Claims relation rather than out of the geo-chat lookups,
-    // which this test leaves unresolved exactly as an off-screen card would.
-    it('titles the card before any geo-chat request has resolved', () => {
+    // The claim comes off the entity's own Claims relation, not out of geo-chat, so it is there on
+    // first paint — while this card is still showing video skeletons and, further down the feed,
+    // has not requested anything at all.
+    it('heads the card before any geo-chat request has resolved', () => {
       renderCard();
 
       expect(mocks.debateQuery.data).toBeUndefined();
       expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(CLAIM_NAME);
-    });
-
-    it('falls back to the debate entity name when the relation is missing', () => {
-      renderCard({ item: { ...item, debateClaim: null } });
-
-      expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(item.title);
-      expect(screen.getByRole('link', { name: item.title })).toHaveAttribute(
-        'href',
-        NavUtils.toEntity('space-1', item.entityId)
-      );
     });
 
     it('opens the claim in the side panel on a surface that has opted in', () => {
@@ -389,46 +375,10 @@ describe('DebateExploreFeedCard', () => {
       expect(event.defaultPrevented).toBe(true);
     });
 
-    // A claim is exactly what the panel is for, so the title has to be marked as an opener — that
-    // attribute is what stops an already-open panel tearing down on pointerdown and rebuilding.
-    // The debate exception in `ExploreCardEntityLink` must not reach it just because the card it
-    // sits on is a debate's.
-    it('marks the title as a side-panel opener', () => {
-      renderCard({ titleOpensSidePanel: true });
+    it('falls back to the debate entity name when the relation is missing', () => {
+      renderCard({ item: { ...item, debateClaim: null } });
 
-      expect(screen.getByRole('link', { name: CLAIM_NAME })).toHaveAttribute('data-entity-side-panel-opener');
-    });
-
-    it('leaves a modified click to the browser so the claim can open in a new tab', () => {
-      renderCard({ titleOpensSidePanel: true });
-
-      const event = clickTitle({ metaKey: true });
-
-      expect(screen.getByTestId('panel')).toHaveTextContent('closed');
-      expect(event.defaultPrevented).toBe(false);
-    });
-
-    // The card is also the row for a data block's explore view, which has not opted in.
-    it('navigates to the claim on a surface that has not opted in', () => {
-      renderCard();
-
-      const event = clickTitle();
-
-      expect(screen.getByTestId('panel')).toHaveTextContent('closed');
-      expect(event.defaultPrevented).toBe(false);
-    });
-
-    // Falling back to the debate's own name means falling back to the debate as the target, and a
-    // debate is a full-screen video the panel would serve badly (GEO-2794).
-    it('still navigates when the title is the debate entity name', () => {
-      renderCard({ item: { ...item, debateClaim: null }, titleOpensSidePanel: true });
-
-      const anchor = screen.getByRole('link', { name: item.title });
-      const event = createEvent.click(anchor);
-      fireEvent(anchor, event);
-
-      expect(screen.getByTestId('panel')).toHaveTextContent('closed');
-      expect(event.defaultPrevented).toBe(false);
+      expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(item.title);
     });
   });
 });

@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
@@ -22,7 +21,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
-import { ExploreCardEntityLink } from './explore-card-entity-link';
+import { ExploreCardTitle } from './explore-card-title';
 import { ExploreClaimsIcon } from './explore-claims-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
 import { ExploreShareIcon } from './explore-share-icon';
@@ -63,27 +62,6 @@ export function DebateExploreFeedCard({
 }: DebateExploreFeedCardProps) {
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
   const debateId = ID.hexToUuid(item.entityId);
-
-  // The card is titled by the claim that was argued, not by the debate entity's own name — which
-  // is generated as "<debater> vs. <debater> on <claim>" and so buries the motion behind the
-  // debaters. Same header the full-screen `/debates` feed shows, and the same thing its title
-  // points at: the Claim entity.
-  //
-  // From the graph relation rather than from geo-chat's `debate.claim`: the geo-chat lookups below
-  // are viewport-gated and land long after the card paints, so a title read from them would swap
-  // under the reader mid-scroll. Falls back to the debate's own name if the relation is missing.
-  const claim = item.debateClaim;
-  const titleTarget = React.useMemo(
-    () =>
-      claim
-        ? // Typed as a Claim, which is what it is — and what keeps `ExploreCardEntityLink`'s
-          // debates-always-navigate exception (GEO-2794) off it. That exception exists because a
-          // debate is a full-screen video the side panel serves badly; a claim is exactly the kind
-          // of entity the panel is for.
-          { entityId: claim.entityId, spaceId: item.spaceId, types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }] }
-        : item,
-    [claim, item]
-  );
 
   const [container, setContainer] = React.useState<HTMLElement | null>(null);
 
@@ -195,11 +173,7 @@ export function DebateExploreFeedCard({
         </Link>
       </div>
 
-      <ExploreCardEntityLink item={titleTarget} opensSidePanel={titleOpensSidePanel}>
-        <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
-          {claim?.name ?? item.title}
-        </h2>
-      </ExploreCardEntityLink>
+      <ExploreCardTitle item={item} opensSidePanel={titleOpensSidePanel} />
 
       {/* Cap the media at the width the designs (and the full-screen feed) use — feed columns,
           especially data blocks, can be much wider and full-bleed videos dwarf the card. */}
