@@ -48,6 +48,7 @@ const VOTE_ORDER_SOURCE = /* GraphQL */ `
         objectId
         voteType
         voteKind
+        spaceId
       }
     }
   }
@@ -120,13 +121,35 @@ export type ClaimResponse = {
 };
 
 export type PositionOrder = {
-  /** Claim ids, deduped, in the order this sort puts them. Normalised. */
+  /**
+   * Claim ids, deduped, in the order this sort puts them. Normalised.
+   *
+   * Claims this person *currently* answers — a retracted one is not in here. See
+   * `decodeVoteOrder`.
+   */
   entityIds: string[];
   /** Absent for a sort that cannot say — only the vote table carries responses. */
   responseByClaimId: Record<string, ClaimResponse>;
+  /**
+   * The space each answer was cast in, by claim id.
+   *
+   * A claim can live in several spaces, and the explore card renders whichever
+   * the entity happens to list first — which for two of the claims on the
+   * reference account's first screen was somebody's personal space rather than
+   * the topic space the claim is actually discussed in. The vote says exactly
+   * which one this person was looking at, so the card can be shown there.
+   *
+   * Empty for a sort that cannot say.
+   */
+  spaceByClaimId: Record<string, string>;
 };
 
-type VoteNode = { objectId?: string | null; voteType?: number | null; voteKind?: number | null };
+type VoteNode = {
+  objectId?: string | null;
+  voteType?: number | null;
+  voteKind?: number | null;
+  spaceId?: string | null;
+};
 
 /**
  * `voteType` 0 is agree and 1 is disagree; 2 is neither and carries no side.
@@ -154,17 +177,24 @@ export function stanceOf(node: VoteNode): Stance | null {
  * see. Keeping only the stance is what left a claim answered Verify or Dispute
  * with no indicator at all.
  *
- * The newest vote of each kind settles that kind **even when it carries no
- * side.** `voteType` 2 is "neither", and it is how somebody retracts — so
- * skipping over it let an older answer fill the gap and badge a claim with a
- * position its owner had already taken back. 115 neutral stance votes exist in
- * the graph; nobody has yet retracted a recorded side, so this was waiting
- * rather than visible.
+ * **A retracted claim is not listed at all.** `voteType` 2 is "neither", and it
+ * is not something anybody chooses: the controls offer two sides, and
+ * `userVotes` is unique per (user, claim, object type, space, kind), so taking a
+ * side back rewrites the row rather than deleting it. The row is what
+ * `entitiesConnection(votedBy:)` counts, which is why the tab listed claims with
+ * no position on them and the rail counted them — 17 of one account's 211, 12 of
+ * another's 34. There is no server-side way to exclude them (`votedByTypes` does
+ * not exist), so the vote table is the only source that can tell the difference,
+ * and every part of the tab narrows to what it says.
+ *
+ * The newest vote of each kind settles that kind even when it carries no side,
+ * so a retraction cannot be skipped over and let an older answer fill the gap.
  */
 export function decodeVoteOrder(nodes: readonly (VoteNode | null)[]): PositionOrder {
   const seen = new Set<string>();
-  const entityIds: string[] = [];
+  const order: string[] = [];
   const responseByClaimId: Record<string, ClaimResponse> = {};
+  const spaceByClaimId: Record<string, string> = {};
   // Per claim *and kind*: which of the two questions has had its newest answer
   // read. Kept apart from the response itself, which cannot record "answered,
   // with no side".
@@ -179,15 +209,27 @@ export function decodeVoteOrder(nodes: readonly (VoteNode | null)[]): PositionOr
     if (field && !settled.has(`${key}:${field}`)) {
       settled.add(`${key}:${field}`);
       const side = stanceOf(node);
-      if (side) responseByClaimId[key] = { ...responseByClaimId[key], [field]: side };
+
+      if (side) {
+        responseByClaimId[key] = { ...responseByClaimId[key], [field]: side };
+        // From the answer that counts, not from a retraction beside it: somebody
+        // who took a stance back in one space and holds one in another should be
+        // read in the space they still hold it in.
+        if (!spaceByClaimId[key] && node.spaceId) spaceByClaimId[key] = normId(node.spaceId);
+      }
     }
 
     if (seen.has(key)) continue;
     seen.add(key);
-    entityIds.push(key);
+    order.push(key);
   }
 
-  return { entityIds, responseByClaimId };
+  // Filtered at the end rather than skipped in the loop: a claim can be answered
+  // in one space and retracted in another, and the row order is the vote order
+  // — so whether it is still answered is only known once every row is in.
+  const entityIds = order.filter(id => responseByClaimId[id] !== undefined);
+
+  return { entityIds, responseByClaimId, spaceByClaimId };
 }
 
 type Page = { nodes: unknown[]; hasNextPage: boolean; endCursor: string | null };
@@ -269,7 +311,8 @@ export async function fetchPositionOrder(
     entityIds.push(key);
   }
 
-  // Score order says nothing about how anyone answered. The tab reads responses
-  // from the vote order, which it holds whichever sort is showing.
-  return { entityIds, responseByClaimId: {} };
+  // Score order says nothing about how anyone answered — including whether the
+  // answer still stands. The tab reads both from the vote order, which it holds
+  // whichever sort is showing, and narrows this list to it.
+  return { entityIds, responseByClaimId: {}, spaceByClaimId: {} };
 }

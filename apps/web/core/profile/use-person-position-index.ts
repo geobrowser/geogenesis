@@ -3,6 +3,8 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { useQuery } from '@tanstack/react-query';
 
+import * as React from 'react';
+
 import { Effect } from 'effect';
 import { parse } from 'graphql';
 
@@ -403,14 +405,34 @@ export function personPositionIndexQueryKey(spaceId: string) {
   return ['person-position-index', ID.uuidToHex(spaceId)] as const;
 }
 
-export function usePersonPositionIndex({ spaceId, enabled = true }: { spaceId: string; enabled?: boolean }) {
+export function usePersonPositionIndex({
+  spaceId,
+  enabled = true,
+  answeredIds,
+}: {
+  spaceId: string;
+  enabled?: boolean;
+  /**
+   * The claims this person still answers, from the vote table.
+   *
+   * `votedBy` counts a retraction as a vote — it is a row rewritten to
+   * "neither", not a row removed — so without this the menus offer topics and
+   * spaces whose counts include claims the list below them does not show. On one
+   * account that is 17 of 211, and a topic carried only by a retracted claim
+   * offered a count of 1 over an empty list.
+   *
+   * Undefined means "not known yet", which narrows nothing — the alternative
+   * empties the menus while the vote read is out.
+   */
+  answeredIds?: ReadonlySet<string>;
+}) {
   const { data, isLoading, isError } = useQuery({
     queryKey: personPositionIndexQueryKey(spaceId),
     enabled: enabled && spaceId !== '',
     // Held longer than the list. The record's shape changes when this person
     // votes, which is not something the reader of somebody else's profile does.
     staleTime: 5 * 60_000,
-    queryFn: async ({ signal }): Promise<PersonPositionIndex> => {
+    queryFn: async ({ signal }): Promise<{ entries: PositionIndexEntry[]; names: Map<string, string | null> }> => {
       const entries: PositionIndexEntry[] = [];
       const names = new Map<string, string | null>();
       let after: string | null = null;
@@ -444,15 +466,32 @@ export function usePersonPositionIndex({ spaceId, enabled = true }: { spaceId: s
         after = page.endCursor;
       }
 
-      return {
-        entries,
-        topics: facetsFrom(entries, entry => entry.topicIds, names),
-        // Spaces are counted here and named by the caller, which already looks
-        // space names up for the rows and would otherwise ask twice.
-        spaces: facetsFrom(entries, entry => entry.spaceIds, new Map()),
-      };
+      return { entries, names };
     },
   });
 
-  return { index: data ?? EMPTY_POSITION_INDEX, isLoading, isError };
+  /*
+   * Counted here rather than in the fetch, because what is counted depends on
+   * something the fetch cannot see.
+   *
+   * `answeredIds` arrives from a different request and changes without the index
+   * changing, so folding it into the query key would refetch the whole record
+   * every time the vote read settled. The entries are a few hundred at most and
+   * the facet pass is linear over them.
+   */
+  const index = React.useMemo((): PersonPositionIndex => {
+    if (!data) return EMPTY_POSITION_INDEX;
+
+    const entries = answeredIds ? data.entries.filter(entry => answeredIds.has(entry.entityId)) : data.entries;
+
+    return {
+      entries,
+      topics: facetsFrom(entries, entry => entry.topicIds, data.names),
+      // Spaces are counted here and named by the caller, which already looks
+      // space names up for the rows and would otherwise ask twice.
+      spaces: facetsFrom(entries, entry => entry.spaceIds, new Map()),
+    };
+  }, [answeredIds, data]);
+
+  return { index, isLoading, isError };
 }

@@ -6,9 +6,10 @@ import { usePersonDebates } from '~/core/debates/use-person-debates';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useProfileFacts } from '~/core/hooks/use-profile-facts';
 import { useProfileHistory } from '~/core/hooks/use-profile-history';
+import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
 import { collectSkills, currentRoles } from '~/core/profile/profile-summary';
-import { usePersonPositions } from '~/core/profile/use-person-positions';
+import { heldPositionsCount, usePersonPositions, usePersonResponses } from '~/core/profile/use-person-positions';
 
 import { EditRecordDialog } from './edit-record-dialog';
 import { type ActivityKind, ProfileActivitySection } from './profile-activity-section';
@@ -113,6 +114,19 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
   const positions = usePersonPositions({ spaceId });
   const { facts, isLoading: isLoadingFacts, isError: isFactsError } = useProfileFacts({ spaceId, personEntityId });
 
+  // The rail's own source, so the card and the number beside it cannot disagree
+  // — and neither counts a position that has been taken back. Same query key as
+  // `positions` above, so no extra request.
+  const responses = usePersonResponses({ spaceId });
+  const positionsCount = heldPositionsCount(responses, facts.positions);
+
+  // A personal space is named by its Person entity, which is where the response
+  // tags get "Susan agreed" from. The same lookup the gallery already makes for
+  // its space chips, so it costs nothing.
+  const selfSpace = React.useMemo(() => [spaceId], [spaceId]);
+  const { labelsById } = useSpaceLabels(selfSpace);
+  const personName = spaceLabel(labelsById, spaceId)?.name ?? null;
+
   const kinds: ActivityKind[] = [
     {
       key: 'debates',
@@ -134,9 +148,12 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       label: 'Claims',
       rows: positions.rows,
       responseByClaimId: positions.responseByClaimId,
-      total: facts.positions,
-      isLoading: positions.isLoading || isLoadingFacts,
-      isCountUnavailable: isFactsError,
+      personName,
+      total: positionsCount ?? 0,
+      isLoading: positions.isLoading || isLoadingFacts || positionsCount === null,
+      // Both sources have to fail before the count is gone: the vote table can
+      // answer it on its own, and does.
+      isCountUnavailable: isFactsError && responses.isError,
       isError: positions.isError,
       href: `/space/${spaceId}/positions`,
       seeAllLabel: 'See all claims',

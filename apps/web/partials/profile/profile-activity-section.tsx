@@ -27,6 +27,8 @@ export type ActivityKind = {
   rows: ExploreFeedRow[];
   /** How this person answered, by claim id. Claims only; a debate has no response. */
   responseByClaimId?: Record<string, ClaimResponse>;
+  /** Whose record this is, so the response tag can name them: "Susan agreed". */
+  personName?: string | null;
   /**
    * How many there are in total.
    *
@@ -136,7 +138,11 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
          */
         <p className="px-4 py-6 text-metadata text-grey-04">Couldn’t load {selected.label.toLowerCase()}.</p>
       ) : (
-        <ActivityGallery rows={selected.rows} responseByClaimId={selected.responseByClaimId} />
+        <ActivityGallery
+          rows={selected.rows}
+          responseByClaimId={selected.responseByClaimId}
+          personName={selected.personName}
+        />
       )}
 
       <Link
@@ -153,9 +159,11 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
 function ActivityGallery({
   rows,
   responseByClaimId,
+  personName,
 }: {
   rows: ExploreFeedRow[];
   responseByClaimId?: Record<string, ClaimResponse>;
+  personName?: string | null;
 }) {
   const shown = React.useMemo(() => rows.slice(0, SHOWN), [rows]);
 
@@ -192,6 +200,7 @@ function ActivityGallery({
             row={row}
             label={spaceLabel(labelsById, row.spaceId)}
             response={responseByClaimId?.[normId(row.entityId)]}
+            personName={personName}
           />
         ))}
         <span aria-hidden className="w-0 shrink-0 pr-4" />
@@ -281,10 +290,12 @@ function GalleryCard({
   row,
   label,
   response,
+  personName,
 }: {
   row: ExploreFeedRow;
   label: SpaceLabel | undefined;
   response: ClaimResponse | undefined;
+  personName?: string | null;
 }) {
   // A claim gets the debates panel's own card, and everything else the feed's.
   //
@@ -307,7 +318,7 @@ function GalleryCard({
       )}
     >
       {isClaim ? (
-        <GalleryClaimCard row={row} response={response} />
+        <GalleryClaimCard row={row} response={response} personName={personName} />
       ) : (
         // The Join button is hidden: this is a record being read, not a place to
         // be recruited into.

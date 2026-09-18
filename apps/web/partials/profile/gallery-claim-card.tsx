@@ -32,7 +32,16 @@ import { ClaimResponseTag } from './claim-response-tag';
  * and `readiness` all come out of `useClaimResponseState`. Only the body below
  * differs.
  */
-export function GalleryClaimCard({ row, response }: { row: ExploreFeedRow; response?: ClaimResponse }) {
+export function GalleryClaimCard({
+  row,
+  response,
+  personName,
+}: {
+  row: ExploreFeedRow;
+  response?: ClaimResponse;
+  /** Whose record this is, for the tag in the footer: "Susan agreed". */
+  personName?: string | null;
+}) {
   // Gated on proximity, as the feed's card is: a gallery mounts six of these and
   // a horizontal row puts several off to the side, so the geo-chat and graph
   // reads wait until one is actually near. Sticky — once fetched, stay fetched.
@@ -93,7 +102,7 @@ export function GalleryClaimCard({ row, response }: { row: ExploreFeedRow; respo
           footer={
             isResponseKindResolved ? (
               <div className="px-3 pb-3">
-                <ClaimResponseTag response={response} responseKind={responseKind} />
+                <ClaimResponseTag response={response} responseKind={responseKind} personName={personName} />
               </div>
             ) : undefined
           }

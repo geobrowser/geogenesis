@@ -39,6 +39,7 @@ export function PersonRecordFeed({
   errorLabel,
   noun,
   responseByClaimId,
+  personName,
 }: {
   rows: ExploreFeedRow[];
   isLoading: boolean;
@@ -70,6 +71,13 @@ export function PersonRecordFeed({
    * than responses.
    */
   responseByClaimId?: Record<string, ClaimResponse>;
+  /**
+   * Whose record this is, for the response tag: "Susan agreed".
+   *
+   * The cards carry response controls for the *viewer*, so an unnamed verdict
+   * beside them says nothing about which of the two people it describes.
+   */
+  personName?: string | null;
 }) {
   // Looked up once for the page. These are routinely spaces the viewer has never
   // opened, which the browse sidebar cannot name.
@@ -122,7 +130,11 @@ export function PersonRecordFeed({
             responseNote={
               responseByClaimId
                 ? responseKind => (
-                    <ClaimResponseTag response={responseByClaimId[normId(item.entityId)]} responseKind={responseKind} />
+                    <ClaimResponseTag
+                      response={responseByClaimId[normId(item.entityId)]}
+                      responseKind={responseKind}
+                      personName={personName}
+                    />
                   )
                 : undefined
             }

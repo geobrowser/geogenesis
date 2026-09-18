@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { ClaimResponseTag } from './claim-response-tag';
+import { ClaimResponseTag, firstName } from './claim-response-tag';
 
 /**
  * How the person whose record this is answered a claim (GEO-2859).
@@ -70,9 +70,50 @@ describe('ClaimResponseTag', () => {
 
   it('says nothing when they answered "neither"', () => {
     // Which reaches here as no side at all — a greyed tag would imply a verdict
-    // that was never given.
+    // that was never given. In practice the tab filters these claims out before
+    // they reach a card at all, since "neither" is a retraction rather than an
+    // answer; this is the rendering of last resort.
     const { container } = render(<ClaimResponseTag response={{}} responseKind="stance" />);
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  /**
+   * Named, because the card is about two people at once.
+   *
+   * Its Agree/Disagree pills are the *viewer's* — they publish the viewer's own
+   * position — so a verdict sitting under them saying "They agreed" leaves the
+   * reader to work out which of the two it means.
+   */
+  it('names the person whose record it is', () => {
+    render(<ClaimResponseTag response={{ stance: 'agree' }} responseKind="stance" personName="Susan Winter" />);
+
+    expect(screen.getByText(/Susan/)).toBeInTheDocument();
+    expect(screen.queryByText(/Winter/)).not.toBeInTheDocument();
+  });
+
+  it('falls back to "They" before the name has loaded', () => {
+    render(<ClaimResponseTag response={{ stance: 'agree' }} responseKind="stance" />);
+
+    expect(screen.getByText(/They/)).toBeInTheDocument();
+  });
+});
+
+describe('firstName', () => {
+  it('takes the first word', () => {
+    expect(firstName('Susan Winter')).toBe('Susan');
+  });
+
+  it('returns a mononym unchanged', () => {
+    expect(firstName('Bourached')).toBe('Bourached');
+  });
+
+  it('ignores the whitespace a freely-typed name arrives with', () => {
+    expect(firstName('  Nico   Lagan ')).toBe('Nico');
+  });
+
+  it('has nothing for a name that is missing or blank', () => {
+    expect(firstName(null)).toBeNull();
+    expect(firstName('   ')).toBeNull();
   });
 });

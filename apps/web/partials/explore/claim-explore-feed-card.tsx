@@ -149,21 +149,29 @@ export function ClaimExploreFeedCard({
   // without a baseline it reports no counts and zeroes the split — but this column states the rule
   // it depends on rather than inheriting it, the same as the claim page's verdict and the shared
   // summary. A verdict drawn from a failed read is the one thing all three must never draw.
-  // Beside the type and the age rather than below the card: this is another
-  // fact about the claim in a row that already holds facts about it, and a band
-  // of its own under the body pushed the response controls out of line with the
-  // rows either side.
-  const extraSegments = React.useMemo(() => {
-    const segments: React.ReactNode[] = [];
-    if (summary.isControversial) segments.push(<ControversialTag key="controversial" />);
+  const extraSegments = React.useMemo(
+    () => (summary.isControversial ? [<ControversialTag key="controversial" />] : undefined),
+    [summary.isControversial]
+  );
 
-    // Held back until the kind is known, or a factual claim reads "agreed" for a
-    // beat and then corrects itself.
-    const note = isResponseKindResolved ? responseNote?.(responseKind) : null;
-    if (note) segments.push(<React.Fragment key="response">{note}</React.Fragment>);
-
-    return segments.length > 0 ? segments : undefined;
-  }, [isResponseKindResolved, responseKind, responseNote, summary.isControversial]);
+  /*
+   * Under the response controls rather than in the meta row.
+   *
+   * It went beside the type and the age first, on the reasoning that it is
+   * another fact about the claim in a row that already holds facts about it. On
+   * a real record that row is rarely as empty as it looks here: the space chip,
+   * the type, the age, Controversial and the debate offer are already competing
+   * for it, and a sixth segment wrapped the line.
+   *
+   * Below the pills it has a line of its own, and it sits directly under the
+   * thing it is about — the Agree/Disagree the *viewer* is being offered, with
+   * the owner's answer to the same question underneath. The pills hold the card's
+   * own row, so nothing else moves.
+   *
+   * Held back until the response kind is known, or a factual claim reads
+   * "agreed" for a beat and then corrects itself.
+   */
+  const responseNoteContent = isResponseKindResolved ? responseNote?.(responseKind) : null;
 
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
 
@@ -270,6 +278,7 @@ export function ClaimExploreFeedCard({
             disabled={!control.canRespond}
             titleFor={control.actionTitle}
           />
+          {responseNoteContent}
           {control.responseError ? (
             <div role="alert" className="mt-2">
               <Text as="p" variant="footnote" color="red-01">

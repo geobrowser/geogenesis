@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { decodeVoteOrder } from './person-position-order';
-import { applyFilter } from './use-person-positions';
+import { applyFilter, heldPositionsCount } from './use-person-positions';
 
 /**
  * How a person answered each claim, read off their votes (GEO-2859).
@@ -17,10 +17,11 @@ import { applyFilter } from './use-person-positions';
  * claim *in a space*, which this decode cannot see. Keeping only the stance left
  * 18 of that account's 208 positions with no indicator anywhere.
  */
-const vote = (over: Partial<{ objectId: string; voteType: number; voteKind: number }> = {}) => ({
+const vote = (over: Partial<{ objectId: string; voteType: number; voteKind: number; spaceId: string }> = {}) => ({
   objectId: 'claim-1',
   voteType: 0,
   voteKind: 1,
+  spaceId: 'space-1',
   ...over,
 });
 
@@ -84,7 +85,34 @@ describe('how a claim was answered', () => {
     ]);
 
     expect(order.responseByClaimId).toEqual({});
-    expect(order.entityIds).toEqual(['claim1']);
+  });
+
+  /**
+   * And a retracted claim leaves the record rather than sitting in it blank.
+   *
+   * "Neither" is not something the controls offer — pressing your own side again
+   * rewrites the row rather than deleting it — so a listed claim with no
+   * indicator was a claim this person holds no position on, in a tab that exists
+   * to list the ones they do. 17 of one reference account's 211, 12 of another's
+   * 34.
+   */
+  it('drops a claim whose position was taken back', () => {
+    const order = decodeVoteOrder([
+      vote({ objectId: 'kept', voteType: 0 }),
+      vote({ objectId: 'taken-back', voteType: 2 }),
+    ]);
+
+    expect(order.entityIds).toEqual(['kept']);
+  });
+
+  it('keeps a claim retracted for one question but answered for the other', () => {
+    const order = decodeVoteOrder([
+      vote({ objectId: 'a', voteKind: 1, voteType: 2 }),
+      vote({ objectId: 'a', voteKind: 2, voteType: 0 }),
+    ]);
+
+    expect(order.entityIds).toEqual(['a']);
+    expect(order.responseByClaimId).toEqual({ a: { veracity: 'agree' } });
   });
 
   it('does not let an older neutral vote clear the current side', () => {
@@ -105,6 +133,43 @@ describe('how a claim was answered', () => {
     ]);
 
     expect(order.responseByClaimId).toEqual({ claim1: { stance: 'agree' } });
+  });
+});
+
+/**
+ * Which space to show a claim in: the one they answered in.
+ *
+ * A claim can live in several spaces, and the card otherwise renders the first
+ * one the entity lists — which put two claims on the reference account's first
+ * screen into a stranger's personal space rather than the topic space they are
+ * argued in. The vote says exactly which one this person was reading.
+ */
+describe('the space a position was taken in', () => {
+  it('records the space of the vote', () => {
+    const order = decodeVoteOrder([vote({ objectId: 'a', spaceId: 'relationships' })]);
+
+    expect(order.spaceByClaimId).toEqual({ a: 'relationships' });
+  });
+
+  it('normalises it, as the card ids are', () => {
+    const order = decodeVoteOrder([vote({ objectId: 'a', spaceId: 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA' })]);
+
+    expect(order.spaceByClaimId.a).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+  });
+
+  it('takes the space of the answer that stands, not of a retraction beside it', () => {
+    const order = decodeVoteOrder([
+      vote({ objectId: 'a', voteKind: 1, voteType: 2, spaceId: 'withdrawn' }),
+      vote({ objectId: 'a', voteKind: 2, voteType: 0, spaceId: 'held' }),
+    ]);
+
+    expect(order.spaceByClaimId).toEqual({ a: 'held' });
+  });
+
+  it('says nothing for a vote with no space on it', () => {
+    const order = decodeVoteOrder([{ objectId: 'a', voteType: 0, voteKind: 1 }]);
+
+    expect(order.spaceByClaimId).toEqual({});
   });
 });
 
@@ -154,7 +219,7 @@ describe('the claim order', () => {
  * intersection, and only correctly if both lists are whole.
  */
 describe('applyFilter', () => {
-  const order = { entityIds: ['a', 'b', 'c'], responseByClaimId: {} };
+  const order = { entityIds: ['a', 'b', 'c'], responseByClaimId: {}, spaceByClaimId: {} };
 
   it('keeps the whole list when no filter is applied', () => {
     expect(applyFilter(order, null)).toEqual(['a', 'b', 'c']);
@@ -171,12 +236,53 @@ describe('applyFilter', () => {
   });
 
   it('matches ids however they are spelled', () => {
-    const dashed = { entityIds: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'], responseByClaimId: {} };
+    const dashed = { entityIds: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'], responseByClaimId: {}, spaceByClaimId: {} };
 
     expect(applyFilter(dashed, ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'])).toHaveLength(1);
   });
 
+  /*
+   * Top's order arrives from a connection that cannot tell a held position from
+   * a retracted one, so the vote table narrows it. The `new` order is already
+   * narrowed, which is why this is a second argument rather than a property of
+   * the order.
+   */
+  it('drops claims the vote table no longer counts as answered', () => {
+    expect(applyFilter(order, null, new Set(['a', 'c']))).toEqual(['a', 'c']);
+  });
+
+  it('applies the filter and the answered set together', () => {
+    expect(applyFilter(order, ['b', 'c'], new Set(['a', 'b']))).toEqual(['b']);
+  });
+
   it('has nothing to give before the order arrives', () => {
     expect(applyFilter(undefined, null)).toEqual([]);
+  });
+});
+
+/**
+ * The number above the list counts the same claims the list shows.
+ *
+ * `entitiesConnection(votedBy:)` counts a retracted vote, because the row is
+ * still there — 211 against 194 on one account. There is no server-side way to
+ * ask it not to, so the vote table is what the number comes from.
+ */
+describe('heldPositionsCount', () => {
+  it('prefers the vote table, which can tell the difference', () => {
+    expect(heldPositionsCount({ total: 194, isError: false }, 211)).toBe(194);
+  });
+
+  it('counts an empty record as zero rather than falling through', () => {
+    expect(heldPositionsCount({ total: 0, isError: false }, 3)).toBe(0);
+  });
+
+  it('says nothing while the vote table is still out', () => {
+    // Rather than printing the server's number and correcting it a beat later.
+    expect(heldPositionsCount({ total: null, isError: false }, 211)).toBeNull();
+  });
+
+  it('falls back to the server count when the vote read failed', () => {
+    // Overstated, and better than a headline number that never arrives.
+    expect(heldPositionsCount({ total: null, isError: true }, 211)).toBe(211);
   });
 });

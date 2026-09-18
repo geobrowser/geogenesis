@@ -17,6 +17,7 @@ import { ID } from '~/core/id';
 import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-facts';
 import { changedLinkFields, profileLinkFields } from '~/core/profile/profile-link-fields';
 import { type ProfileLink } from '~/core/profile/profile-links';
+import { heldPositionsCount, usePersonResponses } from '~/core/profile/use-person-positions';
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -85,6 +86,11 @@ export function ProfileRailSections({
 }: ProfileRailProps) {
   const { facts, isLoading, isError } = useProfileFacts({ spaceId, personEntityId });
 
+  // Shares its query key with the Positions tab and the Activity gallery, so
+  // this is the same request they make rather than a third one.
+  const responses = usePersonResponses({ spaceId });
+  const positionsCount = isLoading && responses.total === null ? null : heldPositionsCount(responses, facts.positions);
+
   return (
     <div className="flex flex-col gap-4">
       {facts.spaces.length > 0 && <SpacesSection spaces={facts.spaces} />}
@@ -99,6 +105,7 @@ export function ProfileRailSections({
         facts={facts}
         isLoading={isLoading}
         isError={isError}
+        positionsCount={positionsCount}
         types={types}
         spaceId={spaceId}
         systemEntityId={systemEntityId}
@@ -321,6 +328,7 @@ function AboutSection({
   facts,
   isLoading,
   isError,
+  positionsCount,
   types,
   spaceId,
   systemEntityId,
@@ -331,6 +339,8 @@ function AboutSection({
   isLoading: boolean;
   /** The counts could not be read. Distinct from all three being zero. */
   isError: boolean;
+  /** Positions actually held, or null while the vote table is still out. */
+  positionsCount: number | null;
   types: ProfileRailProps['types'];
   spaceId: string;
   systemEntityId: string;
@@ -388,10 +398,13 @@ function AboutSection({
           value={isLoading ? null : facts.debates.toLocaleString()}
           href={`/space/${spaceId}/debates`}
         />
+        {/* Not `facts.positions`: the server counts a retracted vote as a
+            position, and this number sits above the list that does not show
+            them. See `heldPositionsCount`. */}
         <Fact
           label="Positions"
-          isUnavailable={isError}
-          value={isLoading ? null : facts.positions.toLocaleString()}
+          isUnavailable={isError && positionsCount === null}
+          value={positionsCount === null ? null : positionsCount.toLocaleString()}
           href={`/space/${spaceId}/positions`}
         />
         <Fact
