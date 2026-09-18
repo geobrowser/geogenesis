@@ -164,6 +164,55 @@ describe('useCommentCount', () => {
     expect(result.current).toBe(4);
   });
 
+  /**
+   * `useCreateComment` seeds this entry with `(old = [])`, so posting before the list has loaded — or
+   * after that query failed — leaves the cache holding nothing but the new comment. Its length is then
+   * a count of one, and the server's five is the better half of the answer.
+   */
+  it('adds a pending row to the server count when the cache holds only that row', () => {
+    client.setQueryData<CommentEntity[]>(
+      ['comments', ENTITY_ID],
+      [comment('new', { isPendingPublish: true } as Partial<CommentEntity>)]
+    );
+
+    vi.setSystemTime(2_000);
+    const { result } = renderHook(() => useCommentCount(ENTITY_ID, 5), { wrapper });
+
+    expect(result.current).toBe(6);
+  });
+
+  /**
+   * The other half of the pair. Here the cache is the fuller record: the server count was rendered at
+   * one, the list then loaded and found two already indexed, and the reader has since added a third.
+   * `serverCount + pending` would say two and undercount what is plainly on screen.
+   */
+  it('keeps the cache length when it is ahead of the server count and a row is pending', () => {
+    client.setQueryData<CommentEntity[]>(
+      ['comments', ENTITY_ID],
+      [comment('1'), comment('2'), comment('new', { isPendingPublish: true } as Partial<CommentEntity>)]
+    );
+
+    vi.setSystemTime(2_000);
+    const { result } = renderHook(() => useCommentCount(ENTITY_ID, 1), { wrapper });
+
+    expect(result.current).toBe(3);
+  });
+
+  it('counts two pending rows over a partial cache', () => {
+    client.setQueryData<CommentEntity[]>(
+      ['comments', ENTITY_ID],
+      [
+        comment('new-1', { isPendingPublish: true } as Partial<CommentEntity>),
+        comment('new-2', { isPendingPublish: true } as Partial<CommentEntity>),
+      ]
+    );
+
+    vi.setSystemTime(2_000);
+    const { result } = renderHook(() => useCommentCount(ENTITY_ID, 5), { wrapper });
+
+    expect(result.current).toBe(7);
+  });
+
   it('never fetches — no queryFn is configured, so an enabled query would throw', async () => {
     const { result } = renderHook(() => useCommentCount(ENTITY_ID, 2), { wrapper });
 

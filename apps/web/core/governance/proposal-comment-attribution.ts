@@ -19,6 +19,14 @@ export type ProposalCommentAttribution = {
    * record.
    */
   vote: 'ACCEPT' | 'REJECT' | 'ABSTAIN' | null;
+  /**
+   * Set where `vote: null` means "no vote was in the records we were given" rather than "no vote was
+   * cast" — the two are the same thing only when the vote list is known to be complete. Nothing is
+   * said about an editor's silence in that case, because their vote may simply be in a part of the
+   * record we never saw, and "Not voted" about a person who voted is the one thing this badge must
+   * not do.
+   */
+  voteUnknown?: boolean;
 };
 
 /**
@@ -43,11 +51,14 @@ export function proposalCommentAttribution({
   votes,
   editorSpaceIds,
   memberSpaceIds,
+  votesComplete = true,
 }: {
   /** Every vote on the proposal. `voterSpaceId` is the voter's personal space. */
   votes: ReadonlyArray<{ voterSpaceId: string; vote: 'ACCEPT' | 'REJECT' | 'ABSTAIN' }>;
   editorSpaceIds: Iterable<string>;
   memberSpaceIds: Iterable<string>;
+  /** Whether `votes` is all of them — see `voteUnknown`. */
+  votesComplete?: boolean;
 }): Map<string, ProposalCommentAttribution> {
   const voteBySpaceId = new Map<string, ProposalCommentAttribution['vote']>();
   for (const { voterSpaceId, vote } of votes) {
@@ -65,7 +76,11 @@ export function proposalCommentAttribution({
 
   for (const spaceId of editorSpaceIds) {
     const key = normId(spaceId);
-    attribution.set(key, { role: 'editor', vote: voteBySpaceId.get(key) ?? null });
+    const vote = voteBySpaceId.get(key) ?? null;
+    attribution.set(
+      key,
+      vote === null && !votesComplete ? { role: 'editor', vote, voteUnknown: true } : { role: 'editor', vote }
+    );
   }
 
   // Every recorded vote lands on its voter's entry, whatever role they hold now. Editorship can be
@@ -108,7 +123,10 @@ export function proposalAttributionLabel(attribution: ProposalCommentAttribution
 
   // No vote. Only an editor can still cast one, so only an editor's silence is worth reporting:
   // "Member · Not voted" would describe something that cannot happen.
-  if (attribution.role === 'editor') return 'Editor · Not voted';
+  //
+  // And only where the silence is real: with an incomplete vote list, "Not voted" would be a claim
+  // about a person the records cannot support.
+  if (attribution.role === 'editor') return attribution.voteUnknown ? 'Editor' : 'Editor · Not voted';
 
   return role;
 }

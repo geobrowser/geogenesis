@@ -117,6 +117,27 @@ describe('who is speaking', () => {
     expect(proposalAttributionLabel(map.get(OTHER_HEX))).toBeNull();
   });
 
+  /**
+   * "Not voted" is the one claim that rests on a vote being *absent*, so it needs the record to be
+   * whole. Given a partial one, the badge says what it knows — that they are an editor — and stops.
+   */
+  it('does not call an editor unvoted when the vote records are incomplete', () => {
+    const map = attribution({ editorSpaceIds: [EDITOR_HEX], votesComplete: false });
+
+    expect(map.get(EDITOR_HEX)).toEqual({ role: 'editor', vote: null, voteUnknown: true });
+    expect(proposalAttributionLabel(map.get(EDITOR_HEX))).toBe('Editor');
+  });
+
+  it('still reports a vote it did see from an incomplete record', () => {
+    const map = attribution({
+      editorSpaceIds: [EDITOR_HEX],
+      votes: [{ voterSpaceId: EDITOR_HEX, vote: 'REJECT' }],
+      votesComplete: false,
+    });
+
+    expect(proposalAttributionLabel(map.get(EDITOR_HEX))).toBe('Editor · Rejected');
+  });
+
   // Abstaining is a deliberate act and not silence, so it is not folded in with "not voted".
   it('distinguishes abstaining from not having voted', () => {
     const map = attribution({

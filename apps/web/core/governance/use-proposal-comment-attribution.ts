@@ -125,6 +125,9 @@ export function useProposalCommentAttribution({
       votes,
       editorSpaceIds: rolesMatchProposalSpace ? editorSpaceIds : [],
       memberSpaceIds: rolesMatchProposalSpace ? memberSpaceIds : [],
+      // The reader reports whether it saw every vote. Where it did not, an editor's silence is not
+      // established, so the badge says nothing about it instead of claiming they did not vote.
+      votesComplete: proposal.complete,
     });
   }, [
     proposal,

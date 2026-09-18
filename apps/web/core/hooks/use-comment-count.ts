@@ -48,9 +48,21 @@ export function useCommentCount(entityId: string, serverCount: number): number {
 
   if (!data) return serverCount;
 
-  // A row still being published is local knowledge the server provably does not have yet, whatever
+  // Rows still being published are local knowledge the server provably does not have yet, whatever
   // the timestamps say — the indexer is behind by design.
-  const hasUnpublishedRows = data.some(comment => comment.isPendingPublish === true);
+  const unpublishedRows = data.filter(comment => comment.isPendingPublish === true).length;
 
-  return hasUnpublishedRows || dataUpdatedAt > seed.at ? data.length : serverCount;
+  if (unpublishedRows > 0) {
+    // A pending row proves the server count is short by at least that many. It does not prove the
+    // cache holds every server row: `useCreateComment` seeds this entry with `(old = [])`, so posting
+    // before the list has loaded — or after that query failed — leaves it holding nothing but the new
+    // comment, and trusting its length would drop a count of 5 to 1.
+    //
+    // Both numbers are lower bounds on the truth, so the larger one is the better answer. It can
+    // over-report only where a deletion has already shrunk the cache below a server count that has
+    // not caught up, which is the same staleness the branch below already prefers the server for.
+    return Math.max(data.length, serverCount + unpublishedRows);
+  }
+
+  return dataUpdatedAt > seed.at ? data.length : serverCount;
 }

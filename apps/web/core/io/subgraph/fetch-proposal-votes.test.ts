@@ -73,6 +73,7 @@ describe('fetchProposalVotes', () => {
         { voterSpaceId: 'voter-b', vote: 'REJECT' },
         { voterSpaceId: 'voter-c', vote: 'ABSTAIN' },
       ],
+      complete: true,
     });
   });
 
@@ -103,6 +104,23 @@ describe('fetchProposalVotes', () => {
     const result = await fetchProposalVotes({ id: 'proposal-1' });
 
     expect(result?.spaceId).toBe('owning-space');
+  });
+
+  /**
+   * The payload reports a tally beside the list, so a list shorter than the tally is detectable. It
+   * matters because anything reading meaning into a *missing* vote — "Editor · Not voted" — would be
+   * making a claim about a person the records cannot support.
+   */
+  it('reports an incomplete list when the payload says there are more votes than it returned', async () => {
+    const payload = apiProposal([{ voterId: 'voter-a', vote: 'YES' }]);
+    payload.votes.total = 4;
+    restFetchMock.mockReturnValue(Effect.succeed(payload));
+
+    const result = await fetchProposalVotes({ id: 'proposal-1' });
+
+    expect(result?.complete).toBe(false);
+    // What it did see is still reported — a vote in hand is a fact either way.
+    expect(result?.votes).toEqual([{ voterSpaceId: 'voter-a', vote: 'ACCEPT' }]);
   });
 
   it('answers null for an id with no proposal behind it', async () => {

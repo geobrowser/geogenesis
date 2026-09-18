@@ -85,6 +85,15 @@ export type ProposalVotes = {
   spaceId: string;
   /** Keyed by personal space id, in the internal vocabulary rather than the wire's YES/NO. */
   votes: { voterSpaceId: string; vote: 'ACCEPT' | 'REJECT' | 'ABSTAIN' }[];
+  /**
+   * Whether `votes` accounts for every vote the payload says exists.
+   *
+   * The payload reports a tally alongside the list, so a short list is detectable — and it matters to
+   * anything that reads meaning into a *missing* vote. Every proposal on testnet has at most one vote,
+   * so whether the list can ever be a page is not something local data can settle; this reports what
+   * the payload itself says rather than assuming.
+   */
+  complete: boolean;
 };
 
 /**
@@ -100,9 +109,12 @@ export async function fetchProposalVotes(options: FetchProposalOptions): Promise
   const apiProposal = await fetchApiProposalStatus(options);
   if (!apiProposal) return null;
 
+  const votes = apiProposal.votes.voters.map(v => ({ voterSpaceId: v.voterId, vote: convertVoteOption(v.vote) }));
+
   return {
     spaceId: apiProposal.spaceId,
-    votes: apiProposal.votes.voters.map(v => ({ voterSpaceId: v.voterId, vote: convertVoteOption(v.vote) })),
+    votes,
+    complete: votes.length >= apiProposal.votes.total,
   };
 }
 
