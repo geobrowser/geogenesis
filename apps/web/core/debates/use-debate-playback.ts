@@ -189,12 +189,23 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     [debate.started_at, slot1StartedAtMs, slot2StartedAtMs]
   );
 
+  /**
+   * Whose turn it is at a given debate-timeline position.
+   *
+   * Every caller binds the same two pieces of debate metadata, and this is one function rather
+   * than four call sites because they have already drifted apart once: the background recovery
+   * published a new playhead without deriving the turn from it, which left the audio assigned to
+   * whoever was speaking before the tab was hidden (GEO-2947). Anywhere the playhead moves, the
+   * turn moves with it, and that is easier to keep true with a single derivation.
+   */
+  const turnAt = React.useCallback(
+    (seconds: number) => turnStateForTime(debate.first_participant_slot, turnDurations, seconds),
+    [debate.first_participant_slot, turnDurations]
+  );
+
   // The slot whose turn it is at the current playhead — stable across pause, so
   // the speaker stays in colour (and keeps subtitles) when the viewer pauses.
-  const activeSlot = React.useMemo(
-    () => turnStateForTime(debate.first_participant_slot, turnDurations, playheadSeconds)?.slot ?? null,
-    [debate.first_participant_slot, playheadSeconds, turnDurations]
-  );
+  const activeSlot = React.useMemo(() => turnAt(playheadSeconds)?.slot ?? null, [playheadSeconds, turnAt]);
 
   const transcriptQuery = useDebateTranscript(debate.id, 'json', enabled);
   const transcriptSegments = transcriptQuery.data?.segments ?? [];
@@ -448,7 +459,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       return;
     }
 
-    const turn = turnStateForTime(debate.first_participant_slot, turnDurations, playhead);
+    const turn = turnAt(playhead);
     setTurnState(turn);
 
     // The turn moving to an element the browser stopped off screen is the one case where a
@@ -589,7 +600,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       pendingSeekSecondsRef.current = nextTime;
       if (seekVideosTo(nextTime)) pendingSeekSecondsRef.current = null;
       setPlayheadSeconds(nextTime);
-      setTurnState(turnStateForTime(debate.first_participant_slot, turnDurations, nextTime));
+      setTurnState(turnAt(nextTime));
       window.requestAnimationFrame(updateTurnState);
     },
     [debate.first_participant_slot, seekVideosTo, timelineSeconds, turnDurations, updateTurnState]
@@ -664,7 +675,14 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // active speaker, and `playbackEnded`.
     setPlayheadSeconds(recovered);
 
-    if (recovered < timelineSeconds - PLAYBACK_END_EPSILON_SECONDS) return false;
+    if (recovered < timelineSeconds - PLAYBACK_END_EPSILON_SECONDS) {
+      // The turn moves with the playhead. It is separate state rather than derived, and it is
+      // what `audible` reads — so a pair that kept playing across a turn boundary while hidden
+      // would otherwise come back with the volume still on the debater who had stopped speaking,
+      // until the next media tick happened to correct it.
+      setTurnState(turnAt(recovered));
+      return false;
+    }
 
     // The debate finished while the tab was away. Resuming here would be wrong twice over: there
     // is nothing left to play, and `play()` on an element sitting at its end is defined to start
@@ -674,7 +692,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     setPlaying(false);
     setTurnState(null);
     return true;
-  }, [offsets, timelineSeconds]);
+  }, [offsets, timelineSeconds, turnAt]);
 
   const backgroundIntentRef = React.useRef<{
     shouldBePlaying: boolean;

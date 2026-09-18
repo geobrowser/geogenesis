@@ -757,6 +757,36 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
     expect(result.current.playbackEnded).toBe(false);
   });
 
+  /**
+   * The case where nothing needed resuming at all: the browser let both videos run while the tab
+   * was hidden, and they crossed a turn boundary in there. `turnState` is separate state that
+   * only ticks maintain, and it is what `audible` reads — so without deriving it from the
+   * recovered playhead the pair comes back with the volume still on the debater who stopped
+   * speaking, until some later media tick happens to correct it.
+   */
+  it('moves the turn to the new speaker when a boundary passed while the tab was hidden', async () => {
+    const { result, slot1, slot2 } = await playing();
+    act(() => result.current.onPlaybackTick()); // establishes slot 1's turn, as a live tick would
+    expect(result.current.turnState?.slot).toBe(1);
+
+    visibilityState = 'hidden';
+    // Both keep playing, straight through the 30s boundary into slot 2's turn.
+    slot1.currentTime = 40;
+    slot2.currentTime = 40;
+
+    await act(async () => {
+      setVisibility('visible');
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(result.current.turnState?.slot).toBe(2);
+    expect(result.current.activeSlot).toBe(2);
+    // Nothing was stopped, so nothing should have been restarted or seeked.
+    expect(slot1.paused).toBe(false);
+    expect(slot2.paused).toBe(false);
+    expect(slot1.currentTime).toBeCloseTo(40, 1);
+  });
+
   /** A pair the browser let run must not be seeked on return — that is the "no reset" half. */
   it('does not touch a pair that kept playing while the tab was hidden', async () => {
     const { result, slot1, slot2 } = await playing();
