@@ -96,7 +96,11 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
 
   // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
   // it belongs to is spoken, rather than appearing a beat late on the first one.
-  const ticker = useDebateClaimTicker(debate, playheadSeconds * 1000, active || preload);
+  const ticker = useDebateClaimTicker(debate, {
+    playheadMs: playheadSeconds * 1000,
+    timelineMs: timelineSeconds * 1000,
+    enabled: active || preload,
+  });
 
   const showControls = ready && (userPaused || (playbackEnded && !hasVoted));
   // Play/pause is always up. It is the control a viewer reaches for without looking, and hiding it
@@ -412,10 +416,15 @@ function DebaterVideo({
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks
           the eye to leave the speaker in order to read what the speaker is saying.
 
-          `inset-y-*` rather than a bare `bottom`: the corner opens into everything they have said,
-          and a percentage max-height inside it needs a containing block with a height to be a
-          percentage *of*. Anchored to the bottom by `justify-end` instead, which also caps the open
-          list at this debater's own tile — it can never reach over the other one's face.
+          The height cap is on this box rather than on the list inside it. A percentage max-height
+          resolves against the parent's height, and the list's parent is content-sized — so capping
+          the list made it 63% of a box it had itself defined, and the whole stack ended up pinned to
+          the top of the tile instead of the bottom. Here the percentage is of the tile, which the
+          aspect ratio makes definite, and `bottom-3` keeps it anchored where it belongs.
+
+          60% is roughly the 168px of a 291px tile the frame gives the stack. Left to fill the tile
+          the open list climbed to the debater's chin — more of their face than it needs, and
+          further than the edge fade can dissolve.
 
           Capped at the 209px the frame draws it at. The explore card is 484px wide, where 43% comes
           out at exactly that; the fullscreen player is far wider, and letting the card scale with it
@@ -423,7 +432,7 @@ function DebaterVideo({
       {claims && (
         <div
           className={cx(
-            'pointer-events-none absolute inset-y-3 left-3 z-10 flex w-[43%] max-w-[13.0625rem] flex-col justify-end transition-[padding-bottom] duration-150',
+            'pointer-events-none absolute bottom-3 left-3 z-10 flex max-h-[60%] w-[43%] max-w-[13.0625rem] flex-col justify-end transition-[padding-bottom] duration-150',
             // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling
             // is written out because Tailwind generates classes by scanning this source text, so a
             // composed `group-hover:${…}` would produce a rule that does not exist.
