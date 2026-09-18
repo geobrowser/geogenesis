@@ -227,54 +227,30 @@ function DebaterVideo({
   const { openSidePanel } = useEntitySidePanel();
   const name = participant ? speakerLabel(participant) : 'Debater';
 
-  /**
-   * Whose turn it is decides the *volume*, not the `muted` flag (GEO-2947) — where the platform
-   * lets us, which is not everywhere.
-   *
-   * `muted` carries only the viewer's own mute now; putting the per-turn gate on it too gave the
-   * element two different notions of "muted" written from two places. And a browser is
-   * entitled to stop a <video> it considers silent once the tab is off screen, so muting the
-   * listening debater for the length of a turn is what made one of the pair look stoppable.
-   * Volume 0 is the same silence to a listener without being a mute.
-   *
-   * iOS Safari does not allow it. `volume` is read-only there: the write is accepted and ignored,
-   * and the property stays at 1. Since this component also stopped muting the listening element,
-   * that would put *both* debaters on air at once the moment the viewer un-mutes — which is why
-   * the assignment is read back rather than assumed. Where it doesn't stick we mute the listener
-   * exactly as before. Mobile is out of scope for background playback anyway (iOS stops inline
-   * <video> on backgrounding regardless), so falling back costs it nothing it had.
-   *
-   * Once is enough: it is a platform fact, not a per-turn one, and the first write happens on
-   * mount while the feed is still muted by default — so the fallback is already in place well
-   * before there is any audio to get wrong.
-   *
-   * Note the speaking element cannot detect it — it asks for volume 1 and reads back 1, which is
-   * indistinguishable from the write having worked. That is exactly right: it is the *listening*
-   * element that needs silencing, and it is the one whose write visibly fails. Each detects it
-   * the first time it has something to lose, and the turn it becomes the listener is that time.
-   */
-  const [volumeIsWritable, setVolumeIsWritable] = React.useState(true);
-  const muted = mutedByUser || (!volumeIsWritable && !audible);
+  const muted = !audible || mutedByUser;
 
+  /**
+   * Re-assert the rendered mute after a resume (GEO-2947).
+   *
+   * `playBothWithMutedFallback` mutes both elements to retry a blocked play and cannot put them
+   * back: it does not know what this component renders `muted` from, and anything it captured is
+   * a confirm window out of date by the time it could write it. React will not repair that either
+   * — it writes a DOM property only when its *own* previous value differs, and a mute it never
+   * made is invisible to it — so the element would play audibly under a UI showing muted.
+   *
+   * Not while a resume is confirming: the retry depends on the mute it just made, and writing over
+   * it mid-attempt would block the play this is trying to let happen. `isResuming` falling is
+   * itself what runs this effect again, so the repair lands the moment the attempt is over.
+   *
+   * This is why `playFromStart` no longer writes `muted` either. The value it has (`mutedByUser`)
+   * is not the value rendered here, so repairing from the hook moved the divergence rather than
+   * closing it. `muted` has one owner: this render.
+   */
   React.useLayoutEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
-    const wanted = audible ? 1 : 0;
-    video.volume = wanted;
-    if (Math.abs(video.volume - wanted) > 0.01) setVolumeIsWritable(false);
-
-    // `muted` is a rendered prop, but `playBothWithMutedFallback` mutes both elements to retry a
-    // blocked play and cannot put them back (it neither knows what this renders `muted` from nor
-    // holds a value still current after its await). React will not repair that itself — it only
-    // writes a DOM property when its *own* previous value differs, and a mute it never made is
-    // invisible to it — so the element would play audibly under a UI showing muted. Re-assert it
-    // here, where the rendered truth actually lives.
-    //
-    // Not while a resume is confirming: the retry depends on the mute it just made, and writing
-    // over it mid-attempt would block the play this is trying to let happen. `isResuming` falling
-    // is itself what runs this effect again, so the repair lands the moment the attempt is over.
-    if (!isResuming) video.muted = muted;
-  }, [audible, isResuming, muted, src, videoRef]);
+    if (!video || isResuming) return;
+    video.muted = muted;
+  }, [isResuming, muted, src, videoRef]);
 
   // A personal space's own id resolves to its "system entity" (an ugly technical
   // record). The space's page entity is the real profile, so open that once it's

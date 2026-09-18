@@ -194,17 +194,35 @@ export function pairPlayhead(
   lastRunningSeconds: number | null = null,
   trustSecondary = false
 ): PairPlayhead {
-  if (primary && !primary.paused) return { seconds: primary.currentTime + offsets.slot1, live: true };
-  if (trustSecondary && secondary && !secondary.paused) {
-    return { seconds: secondary.currentTime + offsets.slot2, live: true };
+  const primarySeconds = (primary?.currentTime ?? 0) + offsets.slot1;
+  const primaryRunning = Boolean(primary && !primary.paused);
+
+  if (!trustSecondary) {
+    // Slot 1 is the clock and a running slot 1 is the whole answer: the record is only there to
+    // raise a *frozen* one. Anything else would drag a scrub backwards forward again.
+    if (primaryRunning) return { seconds: primarySeconds, live: true };
+    return {
+      seconds: lastRunningSeconds === null ? primarySeconds : Math.max(primarySeconds, lastRunningSeconds),
+      live: false,
+    };
   }
 
-  const candidates = [(primary?.currentTime ?? 0) + offsets.slot1];
-  if (trustSecondary && secondary && secondary.currentTime > 0) {
-    candidates.push(secondary.currentTime + offsets.slot2);
-  }
+  // Off screen no clock is authoritative, *including a running one*. A browser that stopped slot 1
+  // at debate-time 100 while slot 2 ran on to 130 can hand slot 1 back un-paused at its frozen 100
+  // — un-suspended, or un-paused-but-stalled, which `paused === false` cannot tell apart and which
+  // is slot 1's documented failure mode (GEO-2828). Returning that 100 as "live" would walk the
+  // recovered position backwards over half a minute the viewer had already heard, and drag slot 2
+  // back with it on the resume. So every piece of evidence is weighed and the furthest wins.
+  const candidates = [primarySeconds];
+  // Slot 2 counts once its clock shows the recording has played: one that starts after the debate
+  // window has a positive offset, so an untouched slot 2 would otherwise report being that far in.
+  if (secondary && secondary.currentTime > 0) candidates.push(secondary.currentTime + offsets.slot2);
   if (lastRunningSeconds !== null) candidates.push(lastRunningSeconds);
-  return { seconds: Math.max(...candidates), live: false };
+
+  return {
+    seconds: Math.max(...candidates),
+    live: primaryRunning || Boolean(secondary && !secondary.paused),
+  };
 }
 
 export function participantForSlot(debate: Debate, slot: ParticipantSlot) {

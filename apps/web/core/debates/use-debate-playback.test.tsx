@@ -163,12 +163,21 @@ function fakeVideo() {
     browserPause() {
       video.paused = true;
     },
+    /**
+     * The mirror of `browserPause`: an element the browser hands back running, of its own accord
+     * and at whatever position it stopped it. Distinct from `settlePlay`, which resolves a
+     * `play()` we asked for — nobody asked for this one.
+     */
+    browserResume() {
+      video.paused = false;
+    },
   };
   return video as unknown as HTMLVideoElement & {
     plays: number;
     settlePlay: () => void;
     rejectPlay: () => void;
     browserPause: () => void;
+    browserResume: () => void;
   };
 }
 
@@ -897,6 +906,58 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
     expect(slot1.paused).toBe(false);
     expect(slot2.paused).toBe(false);
     expect(slot1.currentTime).toBeCloseTo(40, 1);
+  });
+
+  /**
+   * The hook-level shape of the ratchet: the recovered position must never walk backwards over a
+   * slot 1 the browser hands back un-paused at the instant it stopped it.
+   */
+  it('does not rewind to a stopped slot 1 that comes back un-paused behind slot 2', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    visibilityState = 'hidden';
+    slot1.browserPause(); // frozen at 0
+    slot2.currentTime = 40;
+    act(() => result.current.onPlaybackTick()); // the record reaches 40 off the running slot 2
+    slot2.browserPause();
+    // ...and now slot 1 reports itself running again, still at 0.
+    slot1.browserResume();
+    act(() => result.current.onPlaybackTick());
+
+    await act(async () => {
+      setVisibility('visible');
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(slot1.currentTime).toBeCloseTo(40, 1);
+    expect(slot2.currentTime).toBeCloseTo(40, 1);
+  });
+
+  /**
+   * A browser that declines to start a <video> off screen would otherwise be asked every two
+   * seconds for as long as the viewer is away — each attempt a `currentTime` write, which on these
+   * cue-less files is a demuxer parse walk (GEO-2828). The budget bounds it.
+   */
+  it('gives up restarting an element the browser keeps refusing', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    visibilityState = 'hidden';
+    slot2.browserPause(); // the listening element, which the turn will hand over to
+    slot1.currentTime = 35; // slot 2's turn, so slot 2 is the one to restart
+    const playsBefore = slot2.plays;
+
+    // Far more ticks than the budget, each past the 2s floor.
+    for (let tick = 0; tick < 20; tick++) {
+      act(() => {
+        vi.setSystemTime(Date.now() + 3_000);
+        result.current.onPlaybackTick();
+      });
+    }
+
+    expect(slot2.plays - playsBefore).toBeLessThanOrEqual(5);
   });
 
   /** A pair the browser let run must not be seeked on return — that is the "no reset" half. */

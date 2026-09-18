@@ -53,6 +53,18 @@ const MIN_SYNC_SEEK_INTERVAL_MS = 2_000;
  * Same reasoning as the seek floor: a browser that re-stops it must not cost a seek per tick.
  */
 const MIN_BACKGROUND_RESTART_INTERVAL_MS = 2_000;
+/**
+ * How many consecutive refusals before the off-screen restart gives up.
+ *
+ * The floor above paces the attempts but does not end them, and the ticks that drive them do not
+ * stop coming: the element still running emits `timeupdate` for as long as it plays. On a browser
+ * that simply declines to start a <video> off screen, that is an attempt every two seconds for as
+ * long as the viewer leaves the tab — twenty minutes of it is about six hundred `currentTime`
+ * writes, each a demuxer parse walk on these cue-less files (GEO-2828), on an element that is
+ * never going to start. Five refusals is enough to tell a slow start from a policy, and the return
+ * path resumes the pair anyway.
+ */
+const MAX_BACKGROUND_RESTART_ATTEMPTS = 5;
 /** No forward progress for this long, while unpaused, counts as stalled rather than slow. */
 const STALL_AFTER_MS = 500;
 /** Progress smaller than this is float noise on `currentTime`, not playback. */
@@ -114,6 +126,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const lastSyncSeekAtRef = React.useRef(0);
   /** See MIN_BACKGROUND_RESTART_INTERVAL_MS. */
   const lastBackgroundRestartAtRef = React.useRef(0);
+  /** Consecutive refusals of the off-screen restart. See MAX_BACKGROUND_RESTART_ATTEMPTS. */
+  const backgroundRestartAttemptsRef = React.useRef(0);
   /**
    * Debate-time of the last tick where an element was actually running.
    *
@@ -357,8 +371,11 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     const playhead = clampSeconds(position.seconds, timelineSeconds);
     // Off screen, record it whether or not it came off a running element: this tick may be the
     // `pause` event of the last element still going, and its final position is not observable
-    // anywhere else. `playhead` already folds the previous record in, so this cannot go backwards.
-    if (position.live || hidden) lastRunningPlayheadRef.current = playhead;
+    // anywhere else. Clamped rather than assigned, because the invariant this used to assert —
+    // that `playhead` already folds the previous record in — is the helper's to keep, not this
+    // line's to assume. It is kept under `trustSecondary`; the clamp makes it local and cheap.
+    if (hidden) lastRunningPlayheadRef.current = Math.max(lastRunningPlayheadRef.current ?? 0, playhead);
+    else if (position.live) lastRunningPlayheadRef.current = playhead;
     setPlayheadSeconds(playhead);
 
     // Lock slot 2 to slot 1, offset by the gap between when the two recordings started, so
@@ -505,13 +522,19 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       const speaking = turn.slot === 1 ? primaryVideo : secondaryVideo;
       const listening = turn.slot === 1 ? secondaryVideo : primaryVideo;
       const speakingOffset = turn.slot === 1 ? offsets.slot1 : offsets.slot2;
+      // Running, so the last attempt took (or it was never stopped): the budget is for a run of
+      // refusals, not a lifetime total, and a turn that hands over to a healthy element resets it.
+      if (speaking && !speaking.paused) backgroundRestartAttemptsRef.current = 0;
+
       if (
         speaking?.paused &&
         listening &&
         !listening.paused &&
+        backgroundRestartAttemptsRef.current < MAX_BACKGROUND_RESTART_ATTEMPTS &&
         now - lastBackgroundRestartAtRef.current > MIN_BACKGROUND_RESTART_INTERVAL_MS
       ) {
         lastBackgroundRestartAtRef.current = now;
+        backgroundRestartAttemptsRef.current += 1;
         speaking.currentTime = Math.max(0, playhead - speakingOffset);
         void speaking.play().catch(() => {
           /* The browser is entitled to refuse an off-screen start; the return path retries. */
@@ -529,74 +552,78 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     setTurnState(null);
   }, [videos]);
 
-  const resumeBoth = React.useCallback(async () => {
-    const primaryVideo = slot1VideoRef.current;
-    const secondaryVideo = slot2VideoRef.current;
-    if (!primaryVideo || !secondaryVideo) return;
-    // Claim this attempt. Bumping on entry also supersedes an earlier resume that is still
-    // awaiting, so two overlapping activations cannot both write state.
-    const generation = ++resumeGenerationRef.current;
-    setError(null);
-    // Realign the pair so a resume can't leave the recordings drifting. Off the *running*
-    // element's clock, not slot 1's unconditionally: a resume on return from a backgrounded tab
-    // is exactly the case where slot 1 may be the one the browser stopped, and seeking to its
-    // frozen position would rewind the debate over everything just heard (GEO-2947).
-    // No `trustSecondary` here: this runs in the foreground (the reconcile fires on the way back
-    // *to* visible), where slot 1 is canonical. Anything learnt while the tab was away is already
-    // in `lastRunningPlayheadRef`, put there by the ticks that ran while it was hidden.
-    seekVideosTo(
-      clampSeconds(
-        pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current).seconds,
-        timelineSeconds
-      )
-    );
-    // allSettled never rejects, so a failed play() (e.g. blocked by autoplay
-    // policy) leaves the video paused rather than throwing — check both the
-    // settled results and the paused state, and surface the error inline.
-    //
-    // Counted across the await, not just marked: overlapping attempts are normal here (see
-    // `resumeGenerationRef`), and a flag would be cleared by the first to finish while the
-    // other was still starting its elements.
-    resumesInFlightRef.current++;
-    setIsResuming(true);
-    let outcome: PlayBothOutcome;
-    try {
-      outcome = await playBothWithMutedFallback(primaryVideo, secondaryVideo, {
-        // The helper spends most of its runtime asleep confirming, and a pause, a scrub or a
-        // scroll-away lands in that window routinely. Bumping the generation is how all of those
-        // say "these elements are mine now", so it is the cancellation signal — checked inside,
-        // before the muted retry, because by the time this returns the retry's `play()` has
-        // already happened and no state check here can take it back.
-        isCancelled: () => resumeGenerationRef.current !== generation,
-      });
-    } finally {
-      resumesInFlightRef.current--;
-      // Only the last one out: overlapping attempts are normal here, and the renderer must not
-      // repair `muted` while another retry is still relying on it.
-      if (resumesInFlightRef.current === 0) setIsResuming(false);
-    }
-    // Superseded while we waited — something else owns these elements now. Every write below
-    // would describe a playback attempt that no longer exists, including the 'blocked' error,
-    // which at this point only means "someone paused us mid-confirm". 'cancelled' is the same
-    // thing noticed from inside, and is spelled out rather than left to the generation check so
-    // that a future caller cannot accidentally read it as a successful start.
-    if (outcome === 'cancelled') return;
-    if (resumeGenerationRef.current !== generation) return;
-    if (outcome === 'blocked') {
-      primaryVideo.pause();
-      secondaryVideo.pause();
-      setPlaying(false);
-      setTurnState(null);
-      setError('Could not play both videos. Try Play again.');
-      return;
-    }
-    // The browser only allowed it muted (GEO-2783) — record that so the unmute control is honest
-    // and later autoplays stop being blocked the same way. The viewer's next tap is a gesture and
-    // will be allowed.
-    if (outcome === 'playing-muted') setMutedByUser(true);
-    setPlaying(true);
-    setUserPaused(false);
-  }, [offsets, seekVideosTo, setMutedByUser, timelineSeconds]);
+  const resumeBoth = React.useCallback(
+    async (fromSeconds?: number) => {
+      const primaryVideo = slot1VideoRef.current;
+      const secondaryVideo = slot2VideoRef.current;
+      if (!primaryVideo || !secondaryVideo) return;
+      // Claim this attempt. Bumping on entry also supersedes an earlier resume that is still
+      // awaiting, so two overlapping activations cannot both write state.
+      const generation = ++resumeGenerationRef.current;
+      setError(null);
+      // Realign the pair so a resume can't leave the recordings drifting. Off the *running*
+      // element's clock, not slot 1's unconditionally: a resume on return from a backgrounded tab
+      // is exactly the case where slot 1 may be the one the browser stopped, and seeking to its
+      // frozen position would rewind the debate over everything just heard (GEO-2947).
+      // Where to resume from. Normally the pair's own position, read the foreground way: slot 1 is
+      // canonical, and a running slot 1 is the whole answer.
+      //
+      // `fromSeconds` is for the one caller that knows better — the reconcile on the way back from a
+      // hidden tab, where slot 1 can be running at the instant the browser stopped it rather than at
+      // where the debate got to. It has already worked that out; re-deriving it here would read the
+      // stale clock and rewind the pair over audio the viewer heard while away.
+      const resumeFrom =
+        fromSeconds ?? pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current).seconds;
+      seekVideosTo(clampSeconds(resumeFrom, timelineSeconds));
+      // allSettled never rejects, so a failed play() (e.g. blocked by autoplay
+      // policy) leaves the video paused rather than throwing — check both the
+      // settled results and the paused state, and surface the error inline.
+      //
+      // Counted across the await, not just marked: overlapping attempts are normal here (see
+      // `resumeGenerationRef`), and a flag would be cleared by the first to finish while the
+      // other was still starting its elements.
+      resumesInFlightRef.current++;
+      setIsResuming(true);
+      let outcome: PlayBothOutcome;
+      try {
+        outcome = await playBothWithMutedFallback(primaryVideo, secondaryVideo, {
+          // The helper spends most of its runtime asleep confirming, and a pause, a scrub or a
+          // scroll-away lands in that window routinely. Bumping the generation is how all of those
+          // say "these elements are mine now", so it is the cancellation signal — checked inside,
+          // before the muted retry, because by the time this returns the retry's `play()` has
+          // already happened and no state check here can take it back.
+          isCancelled: () => resumeGenerationRef.current !== generation,
+        });
+      } finally {
+        resumesInFlightRef.current--;
+        // Only the last one out: overlapping attempts are normal here, and the renderer must not
+        // repair `muted` while another retry is still relying on it.
+        if (resumesInFlightRef.current === 0) setIsResuming(false);
+      }
+      // Superseded while we waited — something else owns these elements now. Every write below
+      // would describe a playback attempt that no longer exists, including the 'blocked' error,
+      // which at this point only means "someone paused us mid-confirm". 'cancelled' is the same
+      // thing noticed from inside, and is spelled out rather than left to the generation check so
+      // that a future caller cannot accidentally read it as a successful start.
+      if (outcome === 'cancelled') return;
+      if (resumeGenerationRef.current !== generation) return;
+      if (outcome === 'blocked') {
+        primaryVideo.pause();
+        secondaryVideo.pause();
+        setPlaying(false);
+        setTurnState(null);
+        setError('Could not play both videos. Try Play again.');
+        return;
+      }
+      // The browser only allowed it muted (GEO-2783) — record that so the unmute control is honest
+      // and later autoplays stop being blocked the same way. The viewer's next tap is a gesture and
+      // will be allowed.
+      if (outcome === 'playing-muted') setMutedByUser(true);
+      setPlaying(true);
+      setUserPaused(false);
+    },
+    [offsets, seekVideosTo, setMutedByUser, timelineSeconds]
+  );
 
   const playFromStart = React.useCallback(async () => {
     const primaryVideo = slot1VideoRef.current;
@@ -685,13 +712,15 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
    * element fires `pause`, and that is wired to `onPlaybackTick`). This does not depend on their
    * having done so.
    */
-  const recoverBackgroundPlayhead = React.useCallback(() => {
+  const recoverBackgroundPlayhead = React.useCallback((): number | null => {
     const primaryVideo = slot1VideoRef.current;
     const secondaryVideo = slot2VideoRef.current;
-    if (!primaryVideo || !secondaryVideo) return false;
+    if (!primaryVideo || !secondaryVideo) return null;
     const position = pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current, true);
     const recovered = clampSeconds(position.seconds, timelineSeconds);
     lastRunningPlayheadRef.current = recovered;
+    // Back on screen: whatever the browser refused off screen, it is not refusing now.
+    backgroundRestartAttemptsRef.current = 0;
 
     // Publish it, not just remember it. `playheadSeconds` is React state that only ticks maintain,
     // and ticks are exactly what a background tab throttles — so on the way back it can be a
@@ -699,13 +728,16 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // active speaker, and `playbackEnded`.
     setPlayheadSeconds(recovered);
 
-    if (recovered < timelineSeconds - PLAYBACK_END_EPSILON_SECONDS) {
+    // `timelineSeconds > 0` mirrors `playbackEnded` exactly — the point of sharing the epsilon was
+    // that the two cannot disagree about whether a debate has finished, and a zero-length timeline
+    // is the one input where they still could.
+    if (timelineSeconds <= 0 || recovered < timelineSeconds - PLAYBACK_END_EPSILON_SECONDS) {
       // The turn moves with the playhead. It is separate state rather than derived, and it is
       // what `audible` reads — so a pair that kept playing across a turn boundary while hidden
       // would otherwise come back with the volume still on the debater who had stopped speaking,
       // until the next media tick happened to correct it.
       setTurnState(turnStateAt(recovered));
-      return false;
+      return recovered;
     }
 
     // The debate finished while the tab was away. Resuming here would be wrong twice over: there
@@ -715,14 +747,14 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // the one the ticks would have reached had they been allowed to run.
     setPlaying(false);
     setTurnState(null);
-    return true;
+    return null;
   }, [offsets, timelineSeconds, turnStateAt]);
 
   const backgroundIntentRef = React.useRef<{
     shouldBePlaying: boolean;
-    resumeBoth: () => Promise<void>;
-    /** @returns true when the debate finished while the tab was away — nothing to resume. */
-    recoverBackgroundPlayhead: () => boolean;
+    resumeBoth: (fromSeconds?: number) => Promise<void>;
+    /** @returns the position to resume from, or null when the debate finished while away. */
+    recoverBackgroundPlayhead: () => number | null;
   }>({
     shouldBePlaying: false,
     resumeBoth,
@@ -748,11 +780,14 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       // Settle where the debate got to *first*, and unconditionally: the state this reads from
       // is maintained by ticks, and a throttled background tab is precisely where ticks did not
       // run. That includes the case the resume must not happen at all.
-      if (recover()) return;
+      const recovered = recover();
+      if (recovered === null) return;
       // Both still running — the tab was backgrounded and the browser let it be. Nothing to do,
       // and calling resumeBoth here would seek a pair that is already in step.
       if (!primaryVideo.paused && !secondaryVideo.paused) return;
-      void resume();
+      // Hand the position over rather than letting the resume re-derive it: slot 1 may be running
+      // again at the instant the browser stopped it, and that is not where the debate got to.
+      void resume(recovered);
     };
     document.addEventListener('visibilitychange', reconcile);
     return () => document.removeEventListener('visibilitychange', reconcile);

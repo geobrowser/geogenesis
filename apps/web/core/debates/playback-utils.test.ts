@@ -307,6 +307,27 @@ describe('pairPlayhead (GEO-2947)', () => {
       });
     });
 
+    /**
+     * THE RATCHET. A browser that stopped slot 1 at debate-time 100 while slot 2 ran on to 130 can
+     * hand slot 1 back un-paused at its frozen 100 — un-suspended, or un-paused-but-stalled, which
+     * `paused === false` cannot tell apart. Reading that as "live, we are at 100" walks the
+     * recovered position backwards over half a minute the viewer already heard, and the resume
+     * drags slot 2 back with it.
+     */
+    it('does not let a running slot 1 walk the position back over a record ahead of it', () => {
+      const slot1 = video(false, 99); // running, frozen behind: debate-time 100
+      const slot2 = video(true, 127); // stopped at debate-time 130
+      expect(pairPlayhead(slot1, slot2, offsets, 130, true)).toEqual({ seconds: 130, live: true });
+    });
+
+    /** Nor over the other element's clock, when there is no record to fall back on. */
+    it('does not let a running slot 1 walk the position back over a stopped slot 2', () => {
+      expect(pairPlayhead(video(false, 99), video(true, 127), offsets, null, true)).toEqual({
+        seconds: 130,
+        live: true,
+      });
+    });
+
     it('keeps the frozen clock when it is ahead of the remembered position', () => {
       expect(pairPlayhead(video(true, 40), video(true, 5), offsets, 12, true)).toEqual({
         seconds: 41,
@@ -315,9 +336,9 @@ describe('pairPlayhead (GEO-2947)', () => {
     });
   });
 
-  /** A running slot 1 always wins over the record — that is what keeps a scrub honest. */
+  /** In the foreground a running slot 1 always wins over the record — that keeps a scrub honest. */
   it('ignores the remembered position while slot 1 is running', () => {
-    expect(pairPlayhead(video(false, 5), video(true, 20), offsets, 90, true)).toEqual({ seconds: 6, live: true });
+    expect(pairPlayhead(video(false, 5), video(true, 20), offsets, 90)).toEqual({ seconds: 6, live: true });
   });
 
   it('survives an element that is not mounted yet', () => {
