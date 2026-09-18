@@ -26,8 +26,6 @@ const mocks = vi.hoisted(() => ({
   cancelPending: false,
   cancelError: null as Error | null,
   records: new Map<string, unknown>(),
-  /** Which spaces each listed person is in, keyed by profile space id (GEO-2944). */
-  personSpaces: new Map<string, string[]>(),
   memberSpaceIds: null as ReadonlySet<string> | null,
   publishableSpaceIds: null as Set<string> | null,
   spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
@@ -75,12 +73,6 @@ vi.mock('./hooks', () => ({
 // without a client, and the row's own behaviour is what they are about.
 vi.mock('./use-person-records', () => ({
   usePersonRecords: () => mocks.records,
-}));
-
-// Same arrangement, for the same reason: one react-query batch for the whole list, mocked so these
-// tests keep rendering the tab without a client.
-vi.mock('./use-person-spaces', () => ({
-  usePersonSpaces: () => mocks.personSpaces,
 }));
 
 vi.mock('../use-claim-space-allowlist', () => ({
@@ -175,7 +167,6 @@ beforeEach(() => {
   mocks.cancelPending = false;
   mocks.cancelError = null;
   mocks.records = new Map();
-  mocks.personSpaces = new Map();
   mocks.memberSpaceIds = null;
   mocks.publishableSpaceIds = null;
   mocks.spaceLabels = new Map();
@@ -588,9 +579,29 @@ describe('PeopleTab filters', () => {
       ['spacea', { name: 'Crypto', image: null }],
       ['spaceb', { name: 'Health', image: null }],
     ]);
-    mocks.personSpaces = new Map([
-      [PROFILE_THEM, ['spacea']],
-      [PROFILE_OTHER, ['spaceb']],
+    mocks.records = new Map([
+      [
+        PROFILE_THEM,
+        {
+          positions: 1,
+          debatesArgued: null,
+          claimsBySpace: new Map([['spacea', 1]]),
+          debatesBySpace: new Map(),
+          winRate: null,
+          joinedAt: null,
+        },
+      ],
+      [
+        PROFILE_OTHER,
+        {
+          positions: 1,
+          debatesArgued: null,
+          claimsBySpace: new Map([['spaceb', 1]]),
+          debatesBySpace: new Map(),
+          winRate: null,
+          joinedAt: null,
+        },
+      ],
     ]);
   });
 
@@ -608,7 +619,31 @@ describe('PeopleTab filters', () => {
     expect(screen.queryByText('Vytautas')).not.toBeInTheDocument();
   });
 
-  // A space filter alone can never empty the list — a facet only offers spaces somebody is in — so
+  it('never offers or keeps a space where nobody has activity', async () => {
+    mocks.spaceLabels.set('spacec', { name: 'Dormant', image: null });
+    mocks.records.set(PROFILE_THEM, {
+      positions: 1,
+      debatesArgued: null,
+      claimsBySpace: new Map([
+        ['spacea', 1],
+        ['spacec', 0],
+      ]),
+      debatesBySpace: new Map([['spacec', 0]]),
+      winRate: null,
+      joinedAt: null,
+    });
+    const store = createStore();
+    store.set(debatesHubPeopleSpaceIdsAtom, ['spacec']);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+    await waitFor(() => expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual([]));
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    expect(await screen.findByRole('button', { name: /Crypto/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Dormant/ })).not.toBeInTheDocument();
+  });
+
+  // A space filter alone can never empty the list — a facet only offers spaces somebody is active in — so
   // the case this wording exists for is a space plus something else.
   //
   // The selection is seeded into the store rather than picked through the menu: the menu is covered
@@ -644,7 +679,21 @@ describe('PeopleTab filters', () => {
   });
 
   it('caps the space icons on a row and counts the rest', () => {
-    mocks.personSpaces = new Map([[PROFILE_THEM, ['spacea', 'spaceb', 'spacec', 'spaced', 'spacee']]]);
+    mocks.records = new Map([
+      [
+        PROFILE_THEM,
+        {
+          positions: 5,
+          debatesArgued: null,
+          claimsBySpace: new Map(
+            ['spacea', 'spaceb', 'spacec', 'spaced', 'spacee'].map(spaceId => [spaceId, 1] as const)
+          ),
+          debatesBySpace: new Map(),
+          winRate: null,
+          joinedAt: null,
+        },
+      ],
+    ]);
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
@@ -655,13 +704,17 @@ describe('PeopleTab filters', () => {
 
   it('puts Active in above the join date and opens the complete space list', async () => {
     mocks.people = [person('user-them', 'Arturas')];
-    mocks.personSpaces = new Map([[PROFILE_THEM, ['spacea', 'spaceb']]]);
     mocks.records = new Map([
       [
         PROFILE_THEM,
         {
           positions: null,
           debatesArgued: null,
+          claimsBySpace: new Map([
+            ['spacea', 1],
+            ['spaceb', 1],
+          ]),
+          debatesBySpace: new Map(),
           winRate: null,
           joinedAt: new Date(Date.UTC(2026, 0, 29)),
         },
@@ -685,19 +738,20 @@ describe('PeopleTab filters', () => {
     await closeActiveSpacesPopover(trigger);
   });
 
-  it('orders active spaces by recorded debates, then by canonical space rank', async () => {
+  it('shows only spaces with activity and orders them by debates, then canonical rank', async () => {
     const root = 'a19c345ab9866679b001d7d2138d88a1';
     const crypto = 'c9f267dcb0d270718c2a3c45a64afd32';
     const ai = '41e851610e13a19441c4d980f2f2ce6b';
     const unranked = 'ffffffffffffffffffffffffffffffff';
+    const inactive = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 
     mocks.people = [person('user-them', 'Arturas')];
-    mocks.personSpaces = new Map([[PROFILE_THEM, [root, crypto, ai, unranked]]]);
     mocks.spaceLabels = new Map([
       [root, { name: 'Root', image: null }],
       [crypto, { name: 'Crypto', image: null }],
       [ai, { name: 'AI', image: null }],
       [unranked, { name: 'Unranked', image: null }],
+      [inactive, { name: 'Inactive', image: null }],
     ]);
     mocks.records = new Map([
       [
@@ -707,13 +761,15 @@ describe('PeopleTab filters', () => {
           debatesArgued: 4,
           claimsBySpace: new Map([
             [ai, 12],
-            [unranked, 2],
-            [root, 0],
+            [unranked, 0],
+            [root, 2],
             [crypto, 1],
+            [inactive, 0],
           ]),
           debatesBySpace: new Map([
             [ai, 3],
             [unranked, 1],
+            [inactive, 0],
           ]),
           winRate: null,
           joinedAt: new Date(Date.UTC(2026, 0, 29)),
@@ -732,9 +788,10 @@ describe('PeopleTab filters', () => {
       [ai, unranked, root, crypto].map(NavUtils.toSpace)
     );
     expect(within(options[0]).getByText('12 claims · 3 debates')).toBeInTheDocument();
-    expect(within(options[1]).getByText('2 claims · 1 debate')).toBeInTheDocument();
-    expect(within(options[2]).getByText('0 claims · 0 debates')).toBeInTheDocument();
+    expect(within(options[1]).getByText('0 claims · 1 debate')).toBeInTheDocument();
+    expect(within(options[2]).getByText('2 claims · 0 debates')).toBeInTheDocument();
     expect(within(options[3]).getByText('1 claim · 0 debates')).toBeInTheDocument();
+    expect(within(list).queryByText('Inactive')).not.toBeInTheDocument();
 
     await closeActiveSpacesPopover(trigger);
   });
@@ -745,7 +802,7 @@ describe('PeopleTab filters', () => {
     const row = screen.getByText('Vytautas').closest('li') as HTMLElement;
     expect(within(row).getAllByTestId('person-space-icon')).toHaveLength(1);
 
-    mocks.personSpaces = new Map();
+    mocks.records = new Map();
     cleanup();
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 

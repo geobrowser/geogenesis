@@ -116,13 +116,6 @@ vi.mock('./use-person-records', () => ({
   usePersonRecords: () => new Map(),
 }));
 
-// Same arrangement as the record batch above, and for the same reason: PeopleTab reads every listed
-// person's spaces and the viewer's own memberships through react-query (GEO-2944), and this panel
-// test renders without a client because it is about tab switching rather than the rows.
-vi.mock('./use-person-spaces', () => ({
-  usePersonSpaces: () => new Map(),
-}));
-
 vi.mock('../use-claim-space-allowlist', () => ({
   useClaimSpaceAllowlist: () => ({
     allowlist: null,
