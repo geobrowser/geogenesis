@@ -145,9 +145,16 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
 
       <PersonRecordFeed
         rows={rows}
-        // Not blocked on the index: it only feeds the menus, and the claims
-        // themselves come from a different request that may well have arrived.
-        isLoading={isLoading || (isLoadingIndex && !isIndexError)}
+        /*
+         * The positions query alone. The index only feeds the menus — the claims
+         * come from a different request, and `matchingIds` stays null until a
+         * filter exists, which it cannot before the menus are drawn.
+         *
+         * This said as much in a comment while still ORing the index's loading
+         * state in, so the first cards waited behind the slowest request on the
+         * page: a complete scan of the record.
+         */
+        isLoading={isLoading}
         isError={isError}
         isFetchingNextPage={isFetchingNextPage}
         hasNextPage={hasNextPage}

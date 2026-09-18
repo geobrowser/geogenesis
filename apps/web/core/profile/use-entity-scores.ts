@@ -41,8 +41,17 @@ const SCORES_SOURCE = /* GraphQL */ `
 
 export const entityScoresDocument = parse(SCORES_SOURCE) as TypedDocumentNode<any, any>;
 
-/** How many ids one request covers. Above this the caller wants a server-ordered list. */
-const MAX_IDS = 100;
+/**
+ * Ids per request. A longer list is chunked, not cut.
+ *
+ * It used to slice, which is the same silent truncation
+ * `fetchExploreRowsByIds` had — and it came from the same list. The debate ids
+ * flow to *two* places, and chunking only the one this review pointed at left
+ * the other one scoring the first hundred and calling the rest unscored, which
+ * `sortRows` then pushes behind every scored row. So Top would have put a
+ * profile's 101st debate last regardless of how high it scored.
+ */
+const ID_BATCH_SIZE = 100;
 
 type ScoresResponse = {
   entitiesConnection?: {
@@ -74,21 +83,30 @@ export function entityScoresQueryKey(ids: readonly string[]) {
 const NO_SCORES = new Map<string, number>();
 
 export function useEntityScores({ ids, enabled = true }: { ids: readonly string[]; enabled?: boolean }) {
-  const capped = ids.slice(0, MAX_IDS);
-
   const { data, isLoading, isError } = useQuery({
-    queryKey: entityScoresQueryKey(capped),
-    enabled: enabled && capped.length > 0,
+    queryKey: entityScoresQueryKey(ids),
+    enabled: enabled && ids.length > 0,
     staleTime: 5 * 60_000,
-    queryFn: ({ signal }) =>
-      Effect.runPromise(
-        graphql({
-          query: entityScoresDocument,
-          decoder: decodeScores,
-          variables: { ids: capped, propertyId: SCORE_SYSTEM_PROPERTY },
-          signal,
-        })
-      ),
+    queryFn: async ({ signal }) => {
+      const scores = new Map<string, number>();
+
+      for (let start = 0; start < ids.length; start += ID_BATCH_SIZE) {
+        const chunk = ids.slice(start, start + ID_BATCH_SIZE);
+
+        const page = await Effect.runPromise(
+          graphql({
+            query: entityScoresDocument,
+            decoder: decodeScores,
+            variables: { ids: chunk, propertyId: SCORE_SYSTEM_PROPERTY },
+            signal,
+          })
+        );
+
+        for (const [id, score] of page) scores.set(id, score);
+      }
+
+      return scores;
+    },
   });
 
   // `isError` matters because the empty map is indistinguishable from the
