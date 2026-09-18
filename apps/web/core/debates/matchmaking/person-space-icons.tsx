@@ -61,16 +61,15 @@ export function PersonSpaceIcons({
 
   const shown = orderedSpaceIds.slice(0, PERSON_SPACE_ICON_CAP);
   const overflow = orderedSpaceIds.length - shown.length;
-  const spaceLabelText = orderedSpaceIds.length === 1 ? 'space' : 'spaces';
 
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-footnote text-grey-04">
-      <span className="shrink-0">Active in…</span>
+      <span className="shrink-0">Active in</span>
       <Popover.Root>
         <Popover.Trigger asChild>
           <button
             type="button"
-            aria-label={`View ${orderedSpaceIds.length} active ${spaceLabelText}`}
+            aria-label={`View ${orderedSpaceIds.length} active ${orderedSpaceIds.length === 1 ? 'space' : 'spaces'}`}
             className="inline-flex shrink-0 items-center rounded-sm transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ctaPrimary"
           >
             <span aria-hidden="true" className="flex items-center -space-x-2">
@@ -79,7 +78,7 @@ export function PersonSpaceIcons({
               ))}
               {overflow > 0 ? (
                 <span
-                  className="relative box-content flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[9px] leading-4 text-grey-04 tabular-nums"
+                  className="relative box-content flex h-3 min-w-3 shrink-0 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[9px] leading-3 text-grey-04 tabular-nums"
                   data-testid="person-space-overflow"
                 >
                   +{overflow}
@@ -97,14 +96,12 @@ export function PersonSpaceIcons({
               collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
               hideWhenDetached
               onOpenAutoFocus={event => event.preventDefault()}
-              className="z-100 w-[248px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+              className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
             >
-              <p className="border-b border-grey-02 p-2 text-smallButton text-text">
-                Active in {orderedSpaceIds.length} {spaceLabelText}
-              </p>
+              <p className="px-3 pt-2.5 pb-1.5 text-footnoteMedium text-grey-04">Active in</p>
               <ul
                 aria-label="Active spaces"
-                className="m-0 max-h-[265px] list-none overflow-y-auto overscroll-contain p-0"
+                className="m-0 max-h-[356px] list-none overflow-y-auto overscroll-contain p-0"
               >
                 {orderedSpaceIds.map(spaceId => {
                   const label = spaceLabel(labelsById, spaceId);
@@ -112,10 +109,10 @@ export function PersonSpaceIcons({
                   const debateCount = debatesBySpace.get(normId(spaceId)) ?? debatesBySpace.get(spaceId) ?? 0;
 
                   return (
-                    <li key={spaceId} className="border-b border-grey-02 last:border-b-0">
+                    <li key={spaceId}>
                       <Link
                         href={NavUtils.toSpace(spaceId)}
-                        className="flex min-w-0 items-center gap-2 p-2 transition-colors hover:bg-grey-01"
+                        className="flex min-w-0 items-center gap-2 px-3 py-1.5 transition-colors duration-75 hover:bg-grey-01"
                         data-testid="person-space-option"
                       >
                         <SpaceListIcon spaceId={spaceId} labelsById={labelsById} />
@@ -145,7 +142,7 @@ function StackedSpaceIcon({ spaceId, labelsById }: { spaceId: string; labelsById
   return (
     <span
       title={name}
-      className="relative box-content flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-[5px] border-2 border-white bg-grey-01 text-[9px] font-medium text-grey-04"
+      className="relative box-content flex h-3 w-3 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-grey-01 text-[8px] font-medium text-grey-04"
       data-testid="person-space-icon"
     >
       {label?.image ? <ThumbGeoImage value={label.image} alt="" /> : spaceInitial(name)}
@@ -160,7 +157,7 @@ function SpaceListIcon({ spaceId, labelsById }: { spaceId: string; labelsById: M
   return (
     <span
       aria-hidden="true"
-      className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-grey-01 text-button font-medium text-grey-04"
+      className="relative flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-grey-01 text-footnoteMedium font-medium text-grey-04"
     >
       {label?.image ? <ThumbGeoImage value={label.image} alt="" /> : spaceInitial(name)}
     </span>

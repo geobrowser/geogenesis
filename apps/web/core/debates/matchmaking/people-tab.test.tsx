@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render as renderWithoutStore, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderWithoutStore, screen, waitFor, within } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   /** Which spaces each listed person is in, keyed by profile space id (GEO-2944). */
   personSpaces: new Map<string, string[]>(),
   memberSpaceIds: null as ReadonlySet<string> | null,
+  publishableSpaceIds: null as Set<string> | null,
   spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */
   linkProps: [] as Record<string, unknown>[],
@@ -90,6 +91,17 @@ vi.mock('../use-claim-space-allowlist', () => ({
     isSettlingMemberships: false,
   }),
 }));
+
+vi.mock('../use-debate-publishable-spaces', async importOriginal => {
+  const actual = await importOriginal<typeof import('../use-debate-publishable-spaces')>();
+  return {
+    ...actual,
+    useDebatePublishableSpaces: () => ({
+      publishableSpaceIds: mocks.publishableSpaceIds,
+      isLoading: false,
+    }),
+  };
+});
 
 // Names and thumbnails come from the browse sidebar's cache, which these tests do not mount.
 vi.mock('~/core/hooks/use-space-labels', async importOriginal => {
@@ -165,6 +177,7 @@ beforeEach(() => {
   mocks.records = new Map();
   mocks.personSpaces = new Map();
   mocks.memberSpaceIds = null;
+  mocks.publishableSpaceIds = null;
   mocks.spaceLabels = new Map();
   mocks.linkProps = [];
   // "Online only" is a stored preference, so it outlives both the store and the run — the suite's
@@ -182,6 +195,18 @@ beforeEach(() => {
  */
 function render(ui: React.ReactElement, store: ReturnType<typeof createStore> = createStore()) {
   return renderWithoutStore(<Provider store={store}>{ui}</Provider>);
+}
+
+/**
+ * Radix defers a FocusScope's unmount event by one timer tick. Let it finish inside this test's
+ * jsdom window; otherwise the full parallel suite can replace `CustomEvent` before the old popup
+ * dispatches its cleanup event and report an unhandled cross-window Event error after every
+ * assertion has passed.
+ */
+async function closeActiveSpacesPopover(trigger: HTMLElement) {
+  fireEvent.click(trigger);
+  await waitFor(() => expect(screen.queryByRole('list', { name: 'Active spaces' })).not.toBeInTheDocument());
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
 }
 
 // Radix's menu measures its content; jsdom has no observer to measure with.
@@ -680,14 +705,18 @@ describe('PeopleTab filters', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     const row = screen.getByText('Arturas').closest('li') as HTMLElement;
-    expect(row.textContent!.indexOf('Active in…')).toBeLessThan(row.textContent!.indexOf('On Geo since Jan 2026'));
+    expect(row.textContent!.indexOf('Active in')).toBeLessThan(row.textContent!.indexOf('On Geo since Jan 2026'));
+    expect(row).not.toHaveTextContent('Active in…');
 
-    fireEvent.click(within(row).getByRole('button', { name: 'View 2 active spaces' }));
+    const trigger = within(row).getByRole('button', { name: 'View 2 active spaces' });
+    fireEvent.click(trigger);
 
     const list = await screen.findByRole('list', { name: 'Active spaces' });
     const options = within(list).getAllByTestId('person-space-option');
     expect(options[0]).toHaveAttribute('href', NavUtils.toSpace('spacea'));
     expect(options[1]).toHaveAttribute('href', NavUtils.toSpace('spaceb'));
+
+    await closeActiveSpacesPopover(trigger);
   });
 
   it('orders active spaces by recorded debates, then by canonical space rank', async () => {
@@ -722,7 +751,8 @@ describe('PeopleTab filters', () => {
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'View 4 active spaces' }));
+    const trigger = screen.getByRole('button', { name: 'View 4 active spaces' });
+    fireEvent.click(trigger);
     const list = await screen.findByRole('list', { name: 'Active spaces' });
     const options = within(list).getAllByTestId('person-space-option');
 
@@ -731,6 +761,8 @@ describe('PeopleTab filters', () => {
     );
     expect(within(options[0]).getByText('3 debates')).toBeInTheDocument();
     expect(within(options[1]).getByText('1 debate')).toBeInTheDocument();
+
+    await closeActiveSpacesPopover(trigger);
   });
 
   it('draws nothing at all for somebody in no spaces', () => {
@@ -746,5 +778,33 @@ describe('PeopleTab filters', () => {
     const bare = screen.getByText('Vytautas').closest('li') as HTMLElement;
     expect(within(bare).queryByTestId('person-space-icon')).not.toBeInTheDocument();
     expect(within(bare).queryByTestId('person-space-overflow')).not.toBeInTheDocument();
+  });
+
+  it('shows only spaces where debate publishing is enabled', async () => {
+    mocks.publishableSpaceIds = new Set(['spacea']);
+    const store = createStore();
+    // A remembered selection must not smuggle a disabled space back into `keepSelectedVisible`.
+    store.set(debatesHubPeopleSpaceIdsAtom, ['spaceb']);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+    await waitFor(() => expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual([]));
+
+    const activeRow = (await screen.findByText('Arturas')).closest('li') as HTMLElement;
+    const inactiveRow = screen.getByText('Vytautas').closest('li') as HTMLElement;
+    expect(within(activeRow).getAllByTestId('person-space-icon')).toHaveLength(1);
+    expect(within(inactiveRow).queryByTestId('person-space-icon')).not.toBeInTheDocument();
+
+    const trigger = within(activeRow).getByRole('button', { name: 'View 1 active space' });
+    fireEvent.click(trigger);
+    const list = await screen.findByRole('list', { name: 'Active spaces' });
+    expect(within(list).getByText('Crypto')).toBeInTheDocument();
+    expect(within(list).queryByText('Health')).not.toBeInTheDocument();
+
+    await closeActiveSpacesPopover(trigger);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    expect(await screen.findByRole('button', { name: /Crypto/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Health/ })).not.toBeInTheDocument();
   });
 });

@@ -22,6 +22,7 @@ import { useCreateDebateChallenge, useDebateActivity, useGeoChatAuth } from '../
 import { speakerLabel } from '../playback-utils';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
@@ -93,6 +94,35 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const spacesByPerson = usePersonSpaces(personIds);
 
   const { memberSpaceIds, isLoading: allowlistLoading, isSettlingMemberships } = useClaimSpaceAllowlist();
+  const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces();
+  const publishableSpacesPending = publishableSpaceIds === null && publishableSpacesLoading;
+
+  // "Active in" is about the spaces where this person can actually debate, not every space whose
+  // membership happens to mention them. Use the same authoritative acceptor-editor set as the
+  // claim picker: a public space with no debate publisher is no more useful here than a personal
+  // space. Unknown deliberately fails open, matching `isSpaceDebatePublishable` everywhere else,
+  // so a transient lookup failure does not erase every person's spaces.
+  const debateSpacesByPerson = React.useMemo(() => {
+    if (publishableSpaceIds === null) return spacesByPerson;
+
+    return new Map(
+      [...spacesByPerson].map(([personId, ids]) => [
+        personId,
+        ids.filter(spaceId => isSpaceDebatePublishable(spaceId, publishableSpaceIds)),
+      ])
+    );
+  }, [publishableSpaceIds, spacesByPerson]);
+
+  // A remembered selection can outlive the panel and the publishable set can change underneath
+  // it. Reconcile against the gate itself, as the claim tabs do, so `keepSelectedVisible` cannot
+  // put a now-disabled space back into this dropdown merely because it was selected last time.
+  React.useEffect(() => {
+    if (publishableSpacesPending) return;
+    setSpaceIds(current => {
+      const kept = current.filter(spaceId => isSpaceDebatePublishable(spaceId, publishableSpaceIds));
+      return kept.length === current.length ? current : kept;
+    });
+  }, [publishableSpaceIds, publishableSpacesPending, setSpaceIds]);
 
   // Filtered here rather than through the query: this endpoint takes no parameters at all and
   // returns whoever is available right now in one unpaginated list, so there is nothing to page
@@ -123,9 +153,9 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     if (spaceIds.length === 0) return searchedPeople;
     const wanted = new Set(spaceIds.map(normId));
     return searchedPeople.filter(person =>
-      (spacesByPerson.get(person.profile_space_id) ?? []).some(spaceId => wanted.has(spaceId))
+      (debateSpacesByPerson.get(person.profile_space_id) ?? []).some(spaceId => wanted.has(spaceId))
     );
-  }, [searchedPeople, spaceIds, spacesByPerson]);
+  }, [debateSpacesByPerson, searchedPeople, spaceIds]);
 
   // Counted over everything the *other* filters leave, which is what a facet count means here as it
   // does on the claim tabs: the number beside a space is what picking it would give you, so it
@@ -133,12 +163,12 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const offeredSpaces = React.useMemo(() => {
     const counts = new Map<string, number>();
     for (const person of searchedPeople) {
-      for (const spaceId of spacesByPerson.get(person.profile_space_id) ?? []) {
+      for (const spaceId of debateSpacesByPerson.get(person.profile_space_id) ?? []) {
         counts.set(spaceId, (counts.get(spaceId) ?? 0) + 1);
       }
     }
     return [...counts].map(([id, count]) => ({ id, name: null, count }));
-  }, [searchedPeople, spacesByPerson]);
+  }, [debateSpacesByPerson, searchedPeople]);
 
   // The same menu the claim tabs draw, defaulted the same way (GEO-2789) and held until the options
   // have finished arriving as well as the gates. The seed fires once, so taking it against a
@@ -150,7 +180,11 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     setSpaceIds,
     memberSpaceIds,
     pending:
-      peopleQuery.isLoading || allowlistLoading || isSettlingMemberships || spacesPending(allPeople, spacesByPerson),
+      peopleQuery.isLoading ||
+      allowlistLoading ||
+      publishableSpacesPending ||
+      isSettlingMemberships ||
+      spacesPending(allPeople, spacesByPerson),
     seedSpent: spaceSeedSpent,
     onSeedSpend: () => setSpaceSeedSpent(true),
   });
@@ -296,7 +330,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                   key={person.user_id}
                   person={person}
                   record={records.get(person.profile_space_id) ?? null}
-                  spaceIds={spacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
+                  spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
                   labelsById={labelsById}
                   popoverPortal={spacesPopoverPortal}
                   disabled={buttonsDisabled}
@@ -390,7 +424,7 @@ function PersonRow({
             {speakerLabel(person)}
           </Text>
         )}
-        {/* Deliberately three lines: stats, active spaces, then the join date. Keeping "Active in…"
+        {/* Deliberately three lines: stats, active spaces, then the join date. Keeping "Active in"
             immediately above "On Geo since" makes both read as profile context, while the popup
             gives the compact avatar stack somewhere to reveal its full answer. */}
         {record || spaceIds.length > 0 ? (

@@ -132,6 +132,11 @@ vi.mock('../use-claim-space-allowlist', () => ({
   }),
 }));
 
+vi.mock('../use-debate-publishable-spaces', async importOriginal => ({
+  ...(await importOriginal<typeof import('../use-debate-publishable-spaces')>()),
+  useDebatePublishableSpaces: () => ({ publishableSpaceIds: null, isLoading: false }),
+}));
+
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: () => mocks.promptSignIn,
 }));
