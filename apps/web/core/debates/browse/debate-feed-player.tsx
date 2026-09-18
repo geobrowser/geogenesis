@@ -117,10 +117,25 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   const [timelineFocused, setTimelineFocused] = React.useState(false);
   const scrubberShown = showControls || timelineFocused;
 
+  // Whether the claim corner is showing the backlog rather than the live cards.
+  //
+  // Pointer state is tracked here rather than on the stack itself because the backlog has to open
+  // from anywhere over the video. A claim card is on screen for a few seconds at a time, so a
+  // hover target made of the cards is a target that is usually not there — and "hover to see what
+  // was said" has to work in the silences, which is most of a debate.
+  const [pointerOverPlayer, setPointerOverPlayer] = React.useState(false);
+  const [claimsFocused, setClaimsFocused] = React.useState(false);
+  const claimsOpen = pointerOverPlayer || claimsFocused;
+
   return (
     // No gap and one radius on the outside: the two tiles are a single surface in the Figma frame,
     // which is what lets the subtitle straddle the seam instead of sitting inside one of them.
-    <div ref={measurement.elementRef} className="group relative flex flex-col overflow-hidden rounded-xl">
+    <div
+      ref={measurement.elementRef}
+      onMouseEnter={() => setPointerOverPlayer(true)}
+      onMouseLeave={() => setPointerOverPlayer(false)}
+      className="group relative flex flex-col overflow-hidden rounded-xl"
+    >
       <DebaterVideo
         participant={slot1Participant}
         src={urls.slot1}
@@ -201,8 +216,12 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
           names its own speaker now, so it does not have to be parked over their tile to attribute —
           and a fixed corner means a claim does not jump between halves mid-sentence.
 
-          `inset-y-*` rather than a bare `bottom`: the stack opens on hover into everything said so
-          far, and a percentage max-height inside it needs a containing block with a height to be a
+          Rendered whenever there is a live card *or* the pointer is over the video with something
+          behind the playhead to show, so the backlog can open in the silences between claims —
+          which is most of a debate, and exactly when someone would go looking for it.
+
+          `inset-y-*` rather than a bare `bottom`: the stack opens into everything said so far, and
+          a percentage max-height inside it needs a containing block with a height to be a
           percentage *of*. Anchored to the bottom by `justify-end` instead.
 
           Capped at the 209px the frame draws it at. The explore card is 484px wide, where 43% comes
@@ -213,7 +232,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
           the newest card is never the thing the progress bar is drawn through. It lands 12px above
           the bar — the same gap it keeps from the bottom edge when the bar is hidden — and eases,
           because the bar it is making room for fades rather than appears. */}
-      {!playbackEnded && ticker.cards.length > 0 && (
+      {!playbackEnded && (ticker.cards.length > 0 || (claimsOpen && ticker.history.length > 0)) && (
         <div
           className={cx(
             'pointer-events-none absolute inset-y-3 left-3 z-10 flex w-[43%] max-w-[13.0625rem] flex-col justify-end transition-[padding-bottom] duration-150',
@@ -226,6 +245,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
           <DebateClaimTickerStack
             cards={ticker.cards}
             history={ticker.history}
+            open={claimsOpen}
+            onFocusChange={setClaimsFocused}
             participantByClaimId={ticker.participantByClaimId}
             rowsByClaimId={ticker.rowsByClaimId}
             entitiesByClaimId={ticker.entitiesByClaimId}
