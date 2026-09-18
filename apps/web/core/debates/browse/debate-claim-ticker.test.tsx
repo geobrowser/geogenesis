@@ -312,10 +312,39 @@ describe('DebateClaimTickerStack', () => {
     expect(screen.getByText(/Congress has ceded/)).toBeInTheDocument();
   });
 
-  it('draws nothing at all when closed and no card is live', () => {
+  // A caller that gives it no way to be pressed is hover-only, and an empty corner is correct there.
+  it('draws nothing at all when closed, nothing live, and there is no chip to press', () => {
     const { container } = renderStack({ cards: [] });
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  // The corner is empty most of a debate, so without the chip nothing on screen says the backlog
+  // exists — and on a touch screen there is no hover to discover it with.
+  it('rests on a chip naming how many claims are behind the playhead', () => {
+    renderStack({ cards: [], onTogglePinned: vi.fn() });
+
+    expect(screen.getByRole('button', { name: 'Show the 2 claims said so far' })).toHaveTextContent('2 claims');
+  });
+
+  it('presses through to the caller, which owns whether the corner is open', () => {
+    const onTogglePinned = vi.fn();
+    renderStack({ cards: [], onTogglePinned });
+
+    fireEvent.click(screen.getByRole('button', { name: /Show the 2 claims/ }));
+
+    expect(onTogglePinned).toHaveBeenCalledOnce();
+  });
+
+  // A pointer closes the corner by leaving the tile. A tap has nowhere to go, so the way in has to
+  // double as the way out — and only in that case, or a mouse user gets a control they never need.
+  it('offers a way back out only when the chip is what opened it', () => {
+    renderStack({ open: true, pinned: true, onTogglePinned: vi.fn() });
+    expect(screen.getByRole('button', { name: 'Hide the claims said so far' })).toBeInTheDocument();
+
+    cleanup();
+    renderStack({ open: true, onTogglePinned: vi.fn() });
+    expect(screen.queryByRole('button', { name: /Hide the claims/ })).not.toBeInTheDocument();
   });
 
   // The open list dissolves into the tile's edge rather than being cut off square — but only when
@@ -330,13 +359,15 @@ describe('DebateClaimTickerStack', () => {
   // focus reaching the stack has to open it the way the pointer does.
   it('reports focus entering and leaving so the player can open it', () => {
     const onFocusChange = vi.fn();
-    const { container } = renderStack({ onFocusChange });
-    const stack = container.firstElementChild as HTMLElement;
+    renderStack({ onFocusChange });
+    // Focus lands on a control inside a card — tabbing to a thumb is how a keyboard reaches this —
+    // and React's onFocus bubbles from there to the list.
+    const thumb = screen.getByLabelText('Agree');
 
-    fireEvent.focus(stack);
+    fireEvent.focus(thumb);
     expect(onFocusChange).toHaveBeenLastCalledWith(true);
 
-    fireEvent.blur(stack);
+    fireEvent.blur(thumb);
     expect(onFocusChange).toHaveBeenLastCalledWith(false);
   });
 });
