@@ -101,7 +101,10 @@ export function AddEducationSheet({ spaceId, school, initial, onCancel, onSave }
    * grandfathered on an undated one.
    */
   const startedUndated = initial !== undefined && initial.startDate == null;
-  const hasStart = start !== null || startedUndated;
+  // Grandfather a legacy undated row only while it remains undated. A finished
+  // row with an end date needs the start that `formatDateRange` anchors on;
+  // otherwise the newly entered end date is saved but invisible on the card.
+  const hasStart = start !== null || (startedUndated && (status === 'studying' || end === null));
   const canSave = pickedSchool !== null && degree !== null && isOrdered && hasStart;
 
   const save = () => {

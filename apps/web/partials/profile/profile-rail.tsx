@@ -15,7 +15,7 @@ import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { ID } from '~/core/id';
 import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-facts';
-import { changedLinkFields, profileLinkFields } from '~/core/profile/profile-link-fields';
+import { type ProfileLinkField, changedLinkFields, profileLinkFields } from '~/core/profile/profile-link-fields';
 import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
 import { heldPositionsCount, usePersonResponses } from '~/core/profile/use-person-positions';
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
@@ -203,7 +203,7 @@ function SpacesSection({ spaces }: { spaces: ReturnType<typeof useProfileFacts>[
  * The fields come from the Person type's "Links" property group, so what can be
  * set here is whatever the type says belongs here — see `profileLinkFields`.
  */
-function LinksSection({
+export function LinksSection({
   links,
   spaceId,
   personEntityId,
@@ -217,6 +217,10 @@ function LinksSection({
 
   const [isEditing, setIsEditing] = React.useState(false);
   const [draft, setDraft] = React.useState<Record<string, string>>({});
+  // Frozen for one editing session. Publishing writes optimistically into the
+  // entity store, but that local write must not become the baseline before the
+  // proposal succeeds — a failed save still needs a meaningful Retry.
+  const [editingFields, setEditingFields] = React.useState<readonly ProfileLinkField[]>([]);
 
   const { propertyGroups, schema } = useEntitySchemaWithGroups(personEntityId, spaceId);
   const entity = useEntity({ id: personEntityId, spaceId });
@@ -256,18 +260,36 @@ function LinksSection({
     return values.length > 0 ? profileLinks(values) : links;
   }, [entity.values, links]);
 
-  const { canEdit, current, publish, status } = useEditProfile({ isOpen: isEditing });
+  const { canEdit, current, publish, status, errorMessage, reset } = useEditProfile({ isOpen: isEditing });
   const isPublishing = status === 'publishing';
+  const activeFields = isEditing ? editingFields : fields;
 
-  const changed = React.useMemo(() => changedLinkFields(fields, draft), [draft, fields]);
+  const changed = React.useMemo(() => changedLinkFields(activeFields, draft), [activeFields, draft]);
 
-  const cancel = () => {
+  const beginEditing = () => {
+    setEditingFields(fields);
     setDraft({});
-    setIsEditing(false);
+    setIsEditing(true);
   };
 
+  const cancel = React.useCallback(() => {
+    reset();
+    setDraft({});
+    setEditingFields([]);
+    setIsEditing(false);
+  }, [reset]);
+
+  React.useEffect(() => {
+    if (status !== 'published') return;
+    cancel();
+  }, [cancel, status]);
+
   const save = () => {
-    if (changed.length === 0) {
+    // A failed publish has already updated the local store, so comparing against
+    // live fields can read as unchanged. The frozen fields above preserve the
+    // draft, and the explicit error case keeps Retry available even if the value
+    // happens to match after trimming.
+    if (changed.length === 0 && status !== 'error') {
       cancel();
       return;
     }
@@ -279,7 +301,7 @@ function LinksSection({
       { name: current.name, description: current.description, banner: UNCHANGED, avatar: UNCHANGED },
       {
         values: linkValueRows({
-          fields,
+          fields: activeFields,
           draft,
           entityId: personEntityId,
           entityName: entity.name ?? null,
@@ -288,8 +310,6 @@ function LinksSection({
         relations: [],
       }
     );
-
-    cancel();
   };
 
   // Hidden entirely from a visitor when there is nothing to show; an owner keeps
@@ -307,22 +327,29 @@ function LinksSection({
                 Cancel
               </SmallButton>
               <SmallButton variant="secondary" onClick={save} disabled={isPublishing}>
-                Save
+                {status === 'error' ? 'Retry' : 'Save'}
               </SmallButton>
             </div>
           ) : (
-            <SquareButton onClick={() => setIsEditing(true)} icon={<EditSmall />} aria-label="Edit links" />
+            <SquareButton onClick={beginEditing} icon={<EditSmall />} aria-label="Edit links" />
           )
         ) : null
       }
     >
       {isEditing ? (
-        <ProfileLinksEditor
-          fields={fields}
-          draft={draft}
-          onChange={(propertyId, value) => setDraft(current => ({ ...current, [propertyId]: value }))}
-          isDisabled={isPublishing}
-        />
+        <div className="flex flex-col gap-2">
+          <ProfileLinksEditor
+            fields={activeFields}
+            draft={draft}
+            onChange={(propertyId, value) => setDraft(current => ({ ...current, [propertyId]: value }))}
+            isDisabled={isPublishing}
+          />
+          {status === 'error' && errorMessage ? (
+            <p role="alert" className="text-metadata text-red-01">
+              {errorMessage}
+            </p>
+          ) : null}
+        </div>
       ) : shownLinks.length === 0 ? (
         <p className="text-metadata text-grey-04">No links yet.</p>
       ) : (

@@ -54,17 +54,6 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
     [history.employment, history.education]
   );
 
-  // A read that failed is not an account with nothing on it. Showing empty
-  // sections on a failure would invite the owner to add a company that is
-  // already there, which is how a second Employment edge gets written.
-  if (history.isUnavailable) {
-    return (
-      <p className="rounded-lg border border-dashed border-grey-02 px-3 py-4 text-center text-metadata text-grey-04">
-        We couldn’t load this profile. Try reloading the page.
-      </p>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-6">
       {/*
@@ -78,28 +67,39 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
        */}
       <ProfileActivity spaceId={spaceId} personEntityId={personEntityId} />
 
-      <ProfileRecordSection
-        kind="employment"
-        cards={history.employment}
-        isOwner={isOwner}
-        onEdit={() => openEditor('employment')}
-        spaceId={spaceId}
-      />
-      <ProfileRecordSection
-        kind="education"
-        cards={history.education}
-        isOwner={isOwner}
-        onEdit={() => openEditor('education')}
-        spaceId={spaceId}
-      />
-      <ProfileSkillsSection skills={skills} spaceId={spaceId} />
+      {/* A failed history read is not an empty account. Keep its own sections
+          unavailable so the owner cannot accidentally duplicate a hidden edge,
+          without taking down the independently loaded activity above it. */}
+      {history.isUnavailable ? (
+        <p className="rounded-lg border border-dashed border-grey-02 px-3 py-4 text-center text-metadata text-grey-04">
+          We couldn’t load this profile. Try reloading the page.
+        </p>
+      ) : (
+        <>
+          <ProfileRecordSection
+            kind="employment"
+            cards={history.employment}
+            isOwner={isOwner}
+            onEdit={() => openEditor('employment')}
+            spaceId={spaceId}
+          />
+          <ProfileRecordSection
+            kind="education"
+            cards={history.education}
+            isOwner={isOwner}
+            onEdit={() => openEditor('education')}
+            spaceId={spaceId}
+          />
+          <ProfileSkillsSection skills={skills} spaceId={spaceId} />
 
-      <EditRecordDialog
-        kind={editing}
-        onOpenChange={open => setEditing(open ? lastEdited.current : null)}
-        entityId={personEntityId}
-        spaceId={spaceId}
-      />
+          <EditRecordDialog
+            kind={editing}
+            onOpenChange={open => setEditing(open ? lastEdited.current : null)}
+            entityId={personEntityId}
+            spaceId={spaceId}
+          />
+        </>
+      )}
     </div>
   );
 }

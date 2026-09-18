@@ -28,6 +28,10 @@ export type PersonProposal = {
    * carefully `status` was derived.
    */
   isAwaitingExecution: boolean;
+  /** Raw lifecycle fields retained so cached rows can cross time boundaries locally. */
+  executedAt?: string | null;
+  unexecutableAt?: string | null;
+  executeBy?: number;
   /** Unix seconds. Zero means the indexer has not stamped one. */
   createdAt: number;
   /** Unix seconds. Zero until the first vote opens the window — see `proposalTimestampSeconds`. */
@@ -61,6 +65,13 @@ type ProposalNode = {
   yesCount: string | null;
   noCount: string | null;
   abstainCount: string | null;
+};
+
+type ProposalStatusSource = {
+  executedAt?: string | number | null;
+  unexecutableAt?: string | number | null;
+  endTime?: string | number | null;
+  executeBy?: string | number | null;
 };
 
 interface NetworkResult {
@@ -125,7 +136,7 @@ interface ActionsResult {
  * it is pre-existing, and its query selects neither column.
  */
 export function proposalStatusFromCurrent(
-  node: Pick<ProposalNode, 'executedAt' | 'unexecutableAt' | 'endTime' | 'executeBy'>,
+  node: ProposalStatusSource,
   now = Math.floor(Date.now() / 1000)
 ): ProposalStatus {
   if (node.executedAt) return 'ACCEPTED';
@@ -149,10 +160,7 @@ export function proposalStatusFromCurrent(
  * separately (`executeIn`), so a read-only record can be honest about the first
  * without offering the second.
  */
-export function isAwaitingExecution(
-  node: Pick<ProposalNode, 'executedAt' | 'unexecutableAt' | 'endTime' | 'executeBy'>,
-  now = Math.floor(Date.now() / 1000)
-): boolean {
+export function isAwaitingExecution(node: ProposalStatusSource, now = Math.floor(Date.now() / 1000)): boolean {
   if (node.executedAt || node.unexecutableAt) return false;
 
   const endTime = Number(node.endTime ?? 0);
@@ -161,6 +169,30 @@ export function isAwaitingExecution(
   const executeBy = Number(node.executeBy ?? 0);
 
   return executeBy > 0 && executeBy >= now;
+}
+
+/**
+ * The next second at which a cached proposal can change its displayed state.
+ * Status uses inclusive deadlines, so the transition happens one second after
+ * `endTime` or `executeBy`, not at the timestamp itself.
+ */
+export function nextProposalStatusBoundary(
+  proposals: readonly Pick<PersonProposal, 'executedAt' | 'unexecutableAt' | 'endTime' | 'executeBy'>[],
+  now = Math.floor(Date.now() / 1000)
+): number | null {
+  let next: number | null = null;
+
+  for (const proposal of proposals) {
+    if (proposal.executedAt || proposal.unexecutableAt) continue;
+
+    for (const deadline of [proposal.endTime, proposal.executeBy ?? 0]) {
+      const boundary = Number(deadline) + 1;
+      if (deadline <= 0 || boundary <= now) continue;
+      if (next === null || boundary < next) next = boundary;
+    }
+  }
+
+  return next;
 }
 
 /**
@@ -398,6 +430,9 @@ export function usePersonProposals({
             type: node.name !== null ? 'ADD_EDIT' : (actionTypes.get(ID.uuidToHex(node.id)) ?? 'ADD_EDIT'),
             status: proposalStatusFromCurrent(node),
             isAwaitingExecution: isAwaitingExecution(node),
+            executedAt: node.executedAt,
+            unexecutableAt: node.unexecutableAt,
+            executeBy: Number(node.executeBy ?? 0),
             createdAt: Number(node.createdAt ?? 0),
             startTime: Number(node.startTime ?? 0),
             endTime,
@@ -414,7 +449,34 @@ export function usePersonProposals({
     staleTime: 30_000,
   });
 
-  const proposals = React.useMemo(() => (data?.pages ?? []).flatMap(page => page.proposals), [data]);
+  const cachedProposals = React.useMemo(() => (data?.pages ?? []).flatMap(page => page.proposals), [data]);
+
+  // React Query's stale time controls when another request is allowed; it does
+  // not cause a render when an end or execution deadline passes. Schedule the
+  // exact next local boundary so the cached rows stay truthful without polling
+  // the network. Very distant deadlines are capped to the browser timeout limit
+  // and rescheduled when that wake-up arrives.
+  const [, tick] = React.useReducer(count => count + 1, 0);
+  const now = Math.floor(Date.now() / 1000);
+  const nextBoundary = nextProposalStatusBoundary(cachedProposals, now);
+
+  React.useEffect(() => {
+    if (nextBoundary === null) return;
+
+    const untilBoundary = Math.max(0, nextBoundary * 1000 - Date.now() + 10);
+    const timer = window.setTimeout(tick, Math.min(untilBoundary, 2_147_000_000));
+    return () => window.clearTimeout(timer);
+  }, [nextBoundary]);
+
+  const proposals = React.useMemo(
+    () =>
+      cachedProposals.map(proposal => ({
+        ...proposal,
+        status: proposalStatusFromCurrent(proposal, now),
+        isAwaitingExecution: isAwaitingExecution(proposal, now),
+      })),
+    [cachedProposals, now]
+  );
 
   return { proposals, isLoading, isError, isFetchingNextPage, hasNextPage: Boolean(hasNextPage), fetchNextPage };
 }

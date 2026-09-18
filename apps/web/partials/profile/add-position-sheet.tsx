@@ -136,7 +136,10 @@ export function AddPositionSheet({ spaceId, company, initial, onCancel, onSave }
    * grandfathered on an undated one.
    */
   const startedUndated = initial !== undefined && initial.startDate == null;
-  const hasStart = start !== null || startedUndated;
+  // Grandfather a legacy undated row only while it remains undated. Once an end
+  // is supplied, its date range needs the start that `formatDateRange` anchors
+  // on; otherwise the newly entered end date is saved but invisible on the card.
+  const hasStart = start !== null || (startedUndated && (isCurrent || end === null));
   const canSave = pickedCompany !== null && title !== null && isOrdered && hasStart;
 
   const save = () => {

@@ -377,4 +377,14 @@ describe('AddEducationSheet — a row that was already undated', () => {
 
     expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
   });
+
+  it('requires a start before adding an end to an undated row', async () => {
+    renderSheet({ initial: undated });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Completed' }));
+    await userEvent.selectOptions(screen.getByLabelText('End month'), '3');
+    await userEvent.selectOptions(screen.getByLabelText('End year'), '2024');
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  });
 });

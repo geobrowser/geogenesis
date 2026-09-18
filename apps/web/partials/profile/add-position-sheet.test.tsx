@@ -598,4 +598,23 @@ describe('AddPositionSheet — a row that was already undated', () => {
 
     expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
   });
+
+  it('requires a start before adding an end to an undated row', async () => {
+    renderSheet({
+      initial: {
+        company: { id: 'org-1', name: 'Geo' },
+        title: { id: 'role-1', name: 'Head of Product' },
+        startDate: null,
+        endDate: null,
+        status: 'current',
+        skills: [],
+      } as never,
+    });
+
+    await userEvent.click(screen.getByRole('checkbox'));
+    await userEvent.selectOptions(screen.getByLabelText('End month'), '3');
+    await userEvent.selectOptions(screen.getByLabelText('End year'), '2024');
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  });
 });

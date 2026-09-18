@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isAwaitingExecution, proposalStatusFromCurrent } from './use-person-proposals';
+import { isAwaitingExecution, nextProposalStatusBoundary, proposalStatusFromCurrent } from './use-person-proposals';
 
 /**
  * A proposal's outcome, from `proposals_current`, without counting a single vote.
@@ -109,5 +109,29 @@ describe('isAwaitingExecution', () => {
       const row = node({ executeBy });
       expect(isAwaitingExecution(row, NOW)).toBe(proposalStatusFromCurrent(row, NOW) === 'PROPOSED');
     }
+  });
+});
+
+describe('nextProposalStatusBoundary', () => {
+  it('wakes just after the nearest inclusive deadline', () => {
+    expect(
+      nextProposalStatusBoundary(
+        [
+          { endTime: NOW + 20, executeBy: NOW + 100 },
+          { endTime: NOW + 10, executeBy: NOW + 90 },
+        ],
+        NOW
+      )
+    ).toBe(NOW + 11);
+  });
+
+  it('moves from voting end to execution expiry without a refetch', () => {
+    const proposals = [{ endTime: NOW - 10, executeBy: NOW + 30 }];
+    expect(nextProposalStatusBoundary(proposals, NOW)).toBe(NOW + 31);
+    expect(nextProposalStatusBoundary(proposals, NOW + 31)).toBeNull();
+  });
+
+  it('ignores proposals whose outcome is already settled', () => {
+    expect(nextProposalStatusBoundary([{ endTime: NOW + 10, executeBy: NOW + 30, executedAt: '1' }], NOW)).toBeNull();
   });
 });
