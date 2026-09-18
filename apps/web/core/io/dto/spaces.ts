@@ -1,6 +1,7 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { PLACEHOLDER_SPACE_IMAGE, ROOT_SPACE, ROOT_SPACE_IMAGE } from '~/core/constants';
-import { SpaceGovernanceType } from '~/core/types';
-import { SpaceEntity } from '~/core/types';
+import type { Relation, SpaceEntity, SpaceGovernanceType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { type Address, RemoteEntity, RemoteSpace } from '../schema';
@@ -49,11 +50,18 @@ export function SpaceEntityDto(spaceId: string, remoteEntity: RemoteEntity | nul
   let entity = null;
 
   if (maybeEntity) {
+    const relations = maybeEntity.relations.filter(relation => relation.spaceId === spaceId);
+
     entity = {
       ...maybeEntity,
       // Filter to space scope (API should do this automatically in future)
       values: maybeEntity.values.filter(triple => triple.spaceId === spaceId),
-      relations: maybeEntity.relations.filter(relation => relation.spaceId === spaceId),
+      relations,
+      // `entity.types` is an aggregate across every space that typed the entity.
+      // Derive it from this space's Types relations just like values and
+      // relations above, or a person typed in two spaces renders every chip
+      // twice (and leaks types that belong only to the other space).
+      types: spaceScopedTypes(maybeEntity.relations, spaceId),
     };
   }
 
@@ -83,4 +91,18 @@ export function SpaceEntityDto(spaceId: string, remoteEntity: RemoteEntity | nul
       };
 
   return spaceConfigWithImage;
+}
+
+/** Types asserted in the requested space, once per type id. */
+export function spaceScopedTypes(relations: readonly Relation[], spaceId: string): SpaceEntity['types'] {
+  const byId = new Map<string, SpaceEntity['types'][number]>();
+
+  for (const relation of relations) {
+    if (relation.spaceId !== spaceId || relation.isDeleted || relation.type.id !== SystemIds.TYPES_PROPERTY) continue;
+    if (!byId.has(relation.toEntity.id)) {
+      byId.set(relation.toEntity.id, { id: relation.toEntity.id, name: relation.toEntity.name });
+    }
+  }
+
+  return [...byId.values()];
 }

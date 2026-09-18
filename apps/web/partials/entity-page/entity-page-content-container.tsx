@@ -4,21 +4,12 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import {
-  ENTITY_PAGE_CONTENT_MAX_WIDTH,
-  ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH,
-  type EntityPageContentVariant,
-} from './entity-page-layout';
+import { ENTITY_PAGE_WIDTH_VARIABLES, type EntityPageContentVariant } from './entity-page-layout';
 
 type Props = {
   children: React.ReactNode;
   variant?: EntityPageContentVariant;
 };
-
-const widthVariables = {
-  '--entity-page-content-max-width': `${ENTITY_PAGE_CONTENT_MAX_WIDTH}px`,
-  '--entity-page-with-sidebar-max-width': `${ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH}px`,
-} as React.CSSProperties;
 
 const variantClassName: Record<EntityPageContentVariant, string> = {
   content: 'max-w-[var(--entity-page-content-max-width)]',
@@ -32,7 +23,7 @@ export function EntityPageContentContainer({ children, variant = 'content' }: Pr
     <div
       className={cx('mx-auto w-full', variantClassName[variant])}
       data-entity-page-content-variant={variant}
-      style={widthVariables}
+      style={ENTITY_PAGE_WIDTH_VARIABLES}
     >
       {children}
     </div>

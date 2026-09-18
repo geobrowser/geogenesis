@@ -7,6 +7,7 @@ import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
+import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
@@ -115,6 +116,12 @@ export function DebateExploreFeedCard({
     return () => observer.disconnect();
   }, [container]);
 
+  // A veto, not a replacement: where a surface holds playback to one debate —
+  // a row of cards, all of them fully on screen at once — this says whether it
+  // is this one's turn. A card that is allowed but scrolled away still stops,
+  // because its own judgement above is unchanged.
+  const playbackAllowed = useDebatePlaybackAllowed(debateId);
+
   const debateQuery = useDebate(debateId, nearViewport);
   const debate = debateQuery.data;
   const watchable = debate != null && isWatchableDebate(debate);
@@ -181,7 +188,7 @@ export function DebateExploreFeedCard({
         {readyDebate ? (
           // `nearViewport` is the same 800px-margin gate the geo-chat lookups already use, so
           // the recordings resolve while the card is still approaching rather than on arrival.
-          <DebateCardVideos debate={readyDebate} active={active} preload={nearViewport} />
+          <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} preload={nearViewport} />
         ) : (
           <DebateVideoSkeleton />
         )}

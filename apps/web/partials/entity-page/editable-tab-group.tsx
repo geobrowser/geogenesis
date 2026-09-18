@@ -57,6 +57,16 @@ function isEntityTabHrefActive(
 export type SystemTab = {
   label: string;
   href: string;
+  /**
+   * Only shown where the side rail is not.
+   *
+   * Desktop-first breakpoints, so `lg:` applies at 1023px and below —
+   * `StickySideRail` drops itself at exactly that width. A tab whose page only
+   * repeats the rail has to disappear when the rail comes back, in edit mode as
+   * well as out of it: `about/page.tsx` hides its body on a wide screen, so
+   * leaving the tab there is a link to an empty column.
+   */
+  onlyWhenNarrow?: boolean;
 };
 
 export type EditableTab = {
@@ -317,6 +327,7 @@ export function EditableTabGroup({
                 key={tab.href}
                 href={tab.href}
                 label={tab.label}
+                onlyWhenNarrow={tab.onlyWhenNarrow}
                 active={isEntityTabHrefActive(tab.href, activeTabId, Boolean(sidePanelTab), fullPath)}
                 onSelect={
                   sidePanelTab ? () => sidePanelTab.setActiveTabId(tabIdFromEntityTabHref(tab.href)) : undefined
@@ -347,6 +358,7 @@ export function EditableTabGroup({
                 key={tab.href}
                 href={tab.href}
                 label={tab.label}
+                onlyWhenNarrow={tab.onlyWhenNarrow}
                 active={isEntityTabHrefActive(tab.href, activeTabId, Boolean(sidePanelTab), fullPath)}
                 onSelect={
                   sidePanelTab ? () => sidePanelTab.setActiveTabId(tabIdFromEntityTabHref(tab.href)) : undefined
@@ -386,14 +398,20 @@ function StaticTab({
   label,
   active,
   onSelect,
+  onlyWhenNarrow,
 }: {
   href: string;
   label: string;
   active: boolean;
   onSelect?: () => void;
+  onlyWhenNarrow?: boolean;
 }) {
+  // `contents` rather than `block`, so the wrapper does not become a flex item
+  // between the tabs and pull them apart. The same shape `TabGroup` uses.
+  const wrap = (tab: React.ReactNode) => (onlyWhenNarrow ? <span className="hidden lg:contents">{tab}</span> : tab);
+
   if (onSelect) {
-    return (
+    return wrap(
       <button type="button" className={tabStyles({ active })} onClick={onSelect}>
         {label}
         {active && <div className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text" />}
@@ -401,7 +419,7 @@ function StaticTab({
     );
   }
 
-  return (
+  return wrap(
     <Link className={tabStyles({ active })} href={href} prefetch>
       {label}
       {active && <div className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text" />}

@@ -35,6 +35,8 @@ type ExploreFeedCardProps = {
    * Explore turns this on; the other surfaces this card serves keep navigating.
    */
   titleOpensSidePanel?: boolean;
+  /** See `ClaimExploreFeedCard`. Only a claim can carry one. */
+  responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
 };
 
 function ExploreFeedCommentLink({ href, count }: { href: string; count: number }) {
@@ -139,6 +141,7 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
   if (isClaim) {
     return (
       <ClaimExploreFeedCard
+        responseNote={props.responseNote}
         item={props.item}
         hideSpaceLink={props.hideSpaceLink}
         hideJoinButton={props.hideJoinButton}
