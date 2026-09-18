@@ -308,12 +308,21 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       pendingSeekSecondsRef.current = null;
     }
 
-    // Slot 1 is the clock — except when it is the element a hidden tab stopped, in which case
-    // its clock is frozen and slot 2 is carrying the debate, and except when both have been
-    // stopped, where only our own memory of the position is left. See `pairPlayhead`.
-    const position = pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current);
+    // Hoisted above the playhead read, which depends on it: off screen, which element's clock
+    // counts as the debate's is a different question than it is in the foreground.
+    const hidden = documentIsHidden();
+
+    // Slot 1 is the clock. Off screen it may not be — the browser stops whichever element it
+    // considers silent, freezing that clock while the other carries on — so there, and only
+    // there, slot 2 and the remembered position are evidence too. In the foreground slot 2 is
+    // deliberately allowed to run ahead (the drift nudge, and further still while slot 1 stalls),
+    // so trusting it would resume past audio the viewer never heard. See `pairPlayhead`.
+    const position = pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current, hidden);
     const playhead = clampSeconds(position.seconds, timelineSeconds);
-    if (position.live) lastRunningPlayheadRef.current = playhead;
+    // Off screen, record it whether or not it came off a running element: this tick may be the
+    // `pause` event of the last element still going, and its final position is not observable
+    // anywhere else. `playhead` already folds the previous record in, so this cannot go backwards.
+    if (position.live || hidden) lastRunningPlayheadRef.current = playhead;
     setPlayheadSeconds(playhead);
 
     // Lock slot 2 to slot 1, offset by the gap between when the two recordings started, so
@@ -338,7 +347,6 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // kept for a gap too large to close that way.
     const syncDelta = offsets.slot2 - offsets.slot1;
     const now = Date.now();
-    const hidden = documentIsHidden();
     // Both corrections below assume the pair's play/pause states are the settled result of a
     // decision — ours or the viewer's. Two situations break that assumption, and in both the
     // right move is to leave the elements alone rather than to "fix" them: a hidden tab, where
@@ -493,6 +501,9 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // element's clock, not slot 1's unconditionally: a resume on return from a backgrounded tab
     // is exactly the case where slot 1 may be the one the browser stopped, and seeking to its
     // frozen position would rewind the debate over everything just heard (GEO-2947).
+    // No `trustSecondary` here: this runs in the foreground (the reconcile fires on the way back
+    // *to* visible), where slot 1 is canonical. Anything learnt while the tab was away is already
+    // in `lastRunningPlayheadRef`, put there by the ticks that ran while it was hidden.
     seekVideosTo(
       clampSeconds(
         pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current).seconds,
@@ -609,22 +620,50 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
    * too. Accepted deliberately: the ticket is about background listening, the feed autoplays
    * muted, and the alternative is to keep a debate stopped for the far commoner reason.
    */
-  const backgroundIntentRef = React.useRef<{ shouldBePlaying: boolean; resumeBoth: () => Promise<void> }>({
+  /**
+   * Work out where the debate actually got to while the tab was away, and record it.
+   *
+   * Reads with `trustSecondary`, which nothing else in the foreground does. This is the one moment
+   * where it is right: the pair has just come back from being stopped by the browser rather than
+   * by us, so a frozen slot 1 is evidence of nothing but the instant it was stopped, and slot 2's
+   * clock may be the only record of the last seconds played. An ordinary pause or scroll-away must
+   * never reach this — there slot 2 is ahead on purpose and resuming from it would skip audio —
+   * which is exactly why it lives here rather than inside `resumeBoth`.
+   *
+   * The ticks that ran while hidden will usually have recorded this already (a browser pausing an
+   * element fires `pause`, and that is wired to `onPlaybackTick`). This does not depend on their
+   * having done so.
+   */
+  const recoverBackgroundPlayhead = React.useCallback(() => {
+    const primaryVideo = slot1VideoRef.current;
+    const secondaryVideo = slot2VideoRef.current;
+    if (!primaryVideo || !secondaryVideo) return;
+    const position = pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current, true);
+    lastRunningPlayheadRef.current = clampSeconds(position.seconds, timelineSeconds);
+  }, [offsets, timelineSeconds]);
+
+  const backgroundIntentRef = React.useRef<{
+    shouldBePlaying: boolean;
+    resumeBoth: () => Promise<void>;
+    recoverBackgroundPlayhead: () => void;
+  }>({
     shouldBePlaying: false,
     resumeBoth,
+    recoverBackgroundPlayhead,
   });
   React.useEffect(() => {
     backgroundIntentRef.current = {
       shouldBePlaying: playing && !userPaused && !isScrubbing && !playbackEnded,
       resumeBoth,
+      recoverBackgroundPlayhead,
     };
-  }, [isScrubbing, playbackEnded, playing, resumeBoth, userPaused]);
+  }, [isScrubbing, playbackEnded, playing, recoverBackgroundPlayhead, resumeBoth, userPaused]);
 
   React.useEffect(() => {
     if (typeof document === 'undefined') return;
     const reconcile = () => {
       if (documentIsHidden()) return;
-      const { shouldBePlaying, resumeBoth: resume } = backgroundIntentRef.current;
+      const { shouldBePlaying, resumeBoth: resume, recoverBackgroundPlayhead: recover } = backgroundIntentRef.current;
       if (!shouldBePlaying) return;
       const primaryVideo = slot1VideoRef.current;
       const secondaryVideo = slot2VideoRef.current;
@@ -632,6 +671,9 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       // Both still running — the tab was backgrounded and the browser let it be. Nothing to do,
       // and calling resumeBoth here would seek a pair that is already in step.
       if (!primaryVideo.paused && !secondaryVideo.paused) return;
+      // Where the debate got to has to be settled while the stopped clocks can still be read; the
+      // resume then realigns to it like any other.
+      recover();
       void resume();
     };
     document.addEventListener('visibilitychange', reconcile);

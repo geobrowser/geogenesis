@@ -571,6 +571,56 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
   });
 
   /**
+   * Copilot's catch, and the foreground half of it. Slot 2 is *deliberately* allowed to run ahead
+   * — the drift nudge puts it there, and a stalled slot 1 leaves it much further ahead (GEO-2828)
+   * — so an ordinary pause must resume from slot 1's canonical clock. Recovering the furthest
+   * position is for a pair the browser stopped off screen, and must not leak into this.
+   */
+  it('resumes a deliberate pause from slot 1, not from a slot 2 that ran ahead', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    slot1.currentTime = 20;
+    slot2.currentTime = 26; // nudged ahead, or running on through a slot 1 stall
+    act(() => result.current.onPlaybackTick());
+
+    act(() => result.current.togglePlayback()); // the viewer pauses
+    expect(result.current.userPaused).toBe(true);
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(slot1.currentTime).toBeCloseTo(20, 1);
+    expect(slot2.currentTime).toBeCloseTo(20, 1); // dragged back into step, not left ahead
+  });
+
+  /** Same for a card scrolled out of view and back — `suspend` is not a browser stop either. */
+  it('resumes a scrolled-away card from slot 1, not from a slot 2 that ran ahead', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    slot1.currentTime = 20;
+    slot2.currentTime = 26;
+    act(() => result.current.onPlaybackTick());
+
+    act(() => result.current.suspend());
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(slot1.currentTime).toBeCloseTo(20, 1);
+    expect(slot2.currentTime).toBeCloseTo(20, 1);
+  });
+
+  /**
    * The counterweight to that memory: it must never drag a deliberate move forward. A scrub back
    * to 10s after playing to 25s has to stay at 10s, not be "corrected" to the furthest point.
    */

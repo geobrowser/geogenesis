@@ -106,47 +106,49 @@ export type PairPlayhead = {
 /**
  * Where the debate is, in debate-timeline seconds, given the two recordings' own clocks.
  *
- * Slot 1 is the clock. The pair is kept in lockstep, so its position plus its recording offset
- * is the debate's position, and every seek is expressed that way.
+ * Slot 1 is the clock, always, in the foreground. The pair is kept in lockstep, so its position
+ * plus its recording offset is the debate's position, and every seek is expressed that way. Slot 2
+ * is *not* interchangeable with it: it is deliberately allowed to run ahead — the drift nudge puts
+ * it there on purpose, and a stalled slot 1 can leave it far ahead (GEO-2828) — so treating its
+ * clock as the debate's would skip whatever it had got through but the viewer had not heard.
  *
- * The exception is a pair that has been split without anyone deciding to — a browser stopping
- * the element it considers silent once the tab is off screen (GEO-2947). If slot 1 is the one
- * that got stopped, its clock is frozen at wherever it stopped while slot 2 carries on, and
- * reading the debate off it is wrong twice over: the turn never advances, so audio never moves
- * to the next speaker, and the resume on return seeks the pair back to the frozen position,
- * replaying everything the viewer heard in the background.
+ * `trustSecondary` is what turns that off, and it means one specific thing: the pair was stopped
+ * by the browser rather than by us, which happens when the tab is off screen (GEO-2947). There,
+ * slot 1's clock is not canonical at all — it is frozen at whatever instant the browser stopped
+ * the element it considered silent, while slot 2 carried the debate on — so the position has to
+ * be recovered from whatever evidence there is:
  *
- * So: whichever element is actually running is the clock, slot 1 first.
+ *  - whichever element is still running, slot 1 first;
+ *  - then the furthest frozen clock, since a browser does not stop both at the same instant;
+ *  - and `lastRunningSeconds`, the caller's own record, which covers the case where an element
+ *    stopped between the throttled `timeupdate` ticks of a background tab.
  *
- * With neither running there is no clock left to read, and the frozen one can be arbitrarily
- * stale — slot 1 stops, slot 2 plays on for a minute, then slot 2 stops too (or reaches `ended`,
- * which also reads as paused). That is what `lastRunningSeconds` is for: the caller's memory of
- * where the debate had actually got to, which wins over a frozen clock behind it. Callers must
- * reset that memory on a deliberate seek and when the recordings change, or a scrub backwards
- * would be dragged forward by it — `useDebatePlayback` does both.
+ * Slot 2's frozen clock counts only once its `currentTime` shows the recording has played: one
+ * that starts after the debate window has a positive offset, so an untouched slot 2 would
+ * otherwise report being that far into the debate before a frame of it had been shown.
  *
- * The memory alone is not enough either. It is refreshed on ticks, and `timeupdate` is throttled
- * in a background tab — so an element that stops between ticks stops somewhere the memory never
- * saw, and its own `pause` event arrives too late to help (it already reads as paused). Both
- * frozen clocks are therefore weighed alongside it, and the furthest wins.
+ * The caller must reset its record on a deliberate seek and when the recordings change, or a
+ * scrub backwards would be dragged forward by it — `useDebatePlayback` does both.
  *
- * Slot 2's is weighed only once its `currentTime` shows the recording has actually played.
- * A recording that starts after the debate window has a positive offset, so an untouched slot 2
- * would otherwise read as being that far into the debate before a frame of it has been shown.
- *
- * `live` says whether the answer came off a running element, so a caller can keep its memory
+ * `live` says whether the answer came off a running element, so a caller can keep its record
  * current without re-deriving "is either element running" for itself.
  */
 export function pairPlayhead(
   primary: ClockVideo | null,
   secondary: ClockVideo | null,
   offsets: { slot1: number; slot2: number },
-  lastRunningSeconds: number | null = null
+  lastRunningSeconds: number | null = null,
+  trustSecondary = false
 ): PairPlayhead {
   if (primary && !primary.paused) return { seconds: primary.currentTime + offsets.slot1, live: true };
-  if (secondary && !secondary.paused) return { seconds: secondary.currentTime + offsets.slot2, live: true };
+  if (trustSecondary && secondary && !secondary.paused) {
+    return { seconds: secondary.currentTime + offsets.slot2, live: true };
+  }
+
   const candidates = [(primary?.currentTime ?? 0) + offsets.slot1];
-  if (secondary && secondary.currentTime > 0) candidates.push(secondary.currentTime + offsets.slot2);
+  if (trustSecondary && secondary && secondary.currentTime > 0) {
+    candidates.push(secondary.currentTime + offsets.slot2);
+  }
   if (lastRunningSeconds !== null) candidates.push(lastRunningSeconds);
   return { seconds: Math.max(...candidates), live: false };
 }

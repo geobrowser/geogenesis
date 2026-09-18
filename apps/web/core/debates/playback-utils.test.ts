@@ -152,57 +152,79 @@ describe('pairPlayhead (GEO-2947)', () => {
   });
 
   /**
-   * A hidden tab stops the element it considers silent. If that is slot 1, its clock freezes
-   * where it stopped while slot 2 carries the debate on — so trusting slot 1 both freezes the
-   * turn (audio never reaches the next speaker) and rewinds the pair on return, replaying
-   * everything heard in the background.
+   * In the foreground slot 1 is canonical, full stop. Slot 2 is *deliberately* allowed to run
+   * ahead — the drift nudge puts it there, and a stalled slot 1 leaves it much further ahead
+   * (GEO-2828) — so an ordinary pause or a scroll-away must not resume from it, or playback skips
+   * audio the viewer never heard.
    */
-  it('reads the element still running when slot 1 is the one that stopped', () => {
-    // Slot 1 frozen at 10 (debate 11) while slot 2 has reached 20 (debate 23).
-    expect(pairPlayhead(video(true, 10), video(false, 20), offsets)).toEqual({ seconds: 23, live: true });
+  describe('without trustSecondary (the foreground)', () => {
+    it('ignores a slot 2 that has run ahead of a paused slot 1', () => {
+      expect(pairPlayhead(video(true, 10), video(true, 30), offsets)).toEqual({ seconds: 11, live: false });
+    });
+
+    it('ignores a running slot 2 while slot 1 is paused', () => {
+      expect(pairPlayhead(video(true, 10), video(false, 30), offsets)).toEqual({ seconds: 11, live: false });
+    });
+
+    it('still lets the remembered position raise a frozen slot 1', () => {
+      expect(pairPlayhead(video(true, 10), video(true, 30), offsets, 20)).toEqual({ seconds: 20, live: false });
+    });
   });
 
   /**
-   * THE SEQUENCE Copilot asked for: slot 1 stops, slot 2 plays on, slot 2 stops too. Now every
-   * clock on the page is behind where the debate got to, and the caller's memory is the only
-   * record of it. `ended` reads as paused, so it arrives here the same way.
+   * Off screen the picture inverts: the browser stops whichever element it considers silent, so
+   * slot 1's clock can be frozen at an arbitrary past instant while slot 2 carries the debate on.
    */
-  it('prefers the remembered position once neither element is running', () => {
-    expect(pairPlayhead(video(true, 10), video(true, 20), offsets, 23)).toEqual({ seconds: 23, live: false });
+  describe('with trustSecondary (a backgrounded tab)', () => {
+    it('reads the element still running when slot 1 is the one that stopped', () => {
+      // Slot 1 frozen at 10 (debate 11) while slot 2 has reached 20 (debate 23).
+      expect(pairPlayhead(video(true, 10), video(false, 20), offsets, null, true)).toEqual({
+        seconds: 23,
+        live: true,
+      });
+    });
+
+    /**
+     * The sequence with no tick in between: slot 1 stops, slot 2 plays on, slot 2 stops too.
+     * `timeupdate` is throttled in a background tab, so slot 2 stops somewhere the record never
+     * saw, and its own `pause` arrives when it already reads as paused. Its frozen clock is the
+     * only evidence left.
+     */
+    it('weighs slot 2 frozen clock when it stopped past the last position recorded', () => {
+      expect(pairPlayhead(video(true, 10), video(true, 30), offsets, 23, true)).toEqual({
+        seconds: 33,
+        live: false,
+      });
+    });
+
+    /**
+     * ...but only once slot 2 has actually played. A recording that starts after the debate
+     * window has a positive offset, so an untouched slot 2 would otherwise read as being that far
+     * into the debate.
+     */
+    it('ignores a slot 2 that has never played, offset and all', () => {
+      expect(pairPlayhead(video(true, 0), video(true, 0), offsets, null, true)).toEqual({
+        seconds: 1,
+        live: false,
+      });
+    });
+
+    it('keeps the frozen clock when it is ahead of the remembered position', () => {
+      expect(pairPlayhead(video(true, 40), video(true, 5), offsets, 12, true)).toEqual({
+        seconds: 41,
+        live: false,
+      });
+    });
   });
 
-  /**
-   * The memory is refreshed on ticks, and `timeupdate` is throttled in a background tab — so an
-   * element that stops between ticks stops somewhere the memory never saw. Its own `pause` event
-   * arrives too late to help: by then it already reads as paused. Slot 2's frozen clock is the
-   * only record of those last seconds.
-   */
-  it('weighs slot 2 frozen clock when it stopped past the last tick observed', () => {
-    // Memory says 23 (the last tick), but slot 2 actually ran on to 30 (debate 33).
-    expect(pairPlayhead(video(true, 10), video(true, 30), offsets, 23)).toEqual({ seconds: 33, live: false });
-  });
-
-  /**
-   * ...but only once slot 2 has actually played. A recording that starts after the debate window
-   * has a positive offset, so an untouched slot 2 would otherwise read as being that far in.
-   */
-  it('ignores a slot 2 that has never played, offset and all', () => {
-    expect(pairPlayhead(video(true, 0), video(true, 0), offsets)).toEqual({ seconds: 1, live: false });
-  });
-
-  /** Never backwards: a memory behind the frozen clock is the stale one. */
-  it('keeps the frozen clock when it is ahead of the remembered position', () => {
-    expect(pairPlayhead(video(true, 40), video(true, 5), offsets, 12)).toEqual({ seconds: 41, live: false });
-  });
-
-  /** A running element always wins over the memory — that is what keeps a scrub honest. */
-  it('ignores the remembered position while something is running', () => {
-    expect(pairPlayhead(video(false, 5), video(true, 20), offsets, 90)).toEqual({ seconds: 6, live: true });
+  /** A running slot 1 always wins over the record — that is what keeps a scrub honest. */
+  it('ignores the remembered position while slot 1 is running', () => {
+    expect(pairPlayhead(video(false, 5), video(true, 20), offsets, 90, true)).toEqual({ seconds: 6, live: true });
   });
 
   it('survives an element that is not mounted yet', () => {
     expect(pairPlayhead(null, null, offsets)).toEqual({ seconds: 1, live: false });
-    expect(pairPlayhead(null, video(false, 20), offsets)).toEqual({ seconds: 23, live: true });
+    expect(pairPlayhead(null, video(false, 20), offsets, null, true)).toEqual({ seconds: 23, live: true });
   });
 });
 
