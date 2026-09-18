@@ -1,5 +1,7 @@
 'use client';
 
+import { usePrivy } from '@geogenesis/auth';
+
 import * as React from 'react';
 
 import { useSetAtom } from 'jotai';
@@ -35,6 +37,7 @@ import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
  * anyone would notice until they resumed a stranger's onboarding.
  */
 export function usePrepareOnboarding() {
+  const { authenticated } = usePrivy();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
@@ -63,6 +66,20 @@ export function usePrepareOnboarding() {
         setPostOnboardingRedirect(returnTo === null ? null : (returnTo ?? `${pathname}${search ? `?${search}` : ''}`));
       }
 
+      // Nothing is cleared for somebody already signed in, and that is the point of the check.
+      //
+      // The leak this reset exists to stop needs a *different* person arriving on a browser where
+      // the last one abandoned onboarding — which means not authenticated. Two callers here
+      // (`use-ranking-compose-access.ts`, `sign-in-prompt.tsx`) gate on `!smartAccount` rather than
+      // `!authenticated`, and a brand-new account from the email capture is authenticated with no
+      // smart account for as long as wallet creation and activation take. Clearing in that window
+      // wipes the interests somebody is part-way through picking, and
+      // `PendingPersonalSpaceRunner` then submits no membership proposals for choices they made.
+      //
+      // For a signed-in user this whole reset is damage: `login()` is a no-op for them anyway, so
+      // there is no sign-in about to start that the cleared state belongs to.
+      if (authenticated) return;
+
       setName('');
       setTopicId('');
       setAvatar('');
@@ -71,6 +88,7 @@ export function usePrepareOnboarding() {
       setSelectedTopicIds([]);
     },
     [
+      authenticated,
       pathname,
       searchParams,
       setAvatar,

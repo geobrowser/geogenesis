@@ -60,11 +60,27 @@ export function useEnsureEmbeddedWallet() {
   setActiveWalletRef.current = setActiveWallet;
 
   const embeddedWallet = wallets.find(wallet => wallet.walletClientType === EMBEDDED_WALLET_TYPE);
+
+  // Whether the *account* has an embedded wallet, which is a different question from whether one is
+  // connected yet. `linkedAccounts` arrives with the user object, so it is true the moment login
+  // completes -- before the connected list has caught up, and before Privy's own `createOnLogin`
+  // provisioning has landed.
+  //
+  // `walletsReady` alone was not enough. It closes the page-load window, where the list has not
+  // hydrated; it says nothing about a fresh login, where the list is genuinely ready and genuinely
+  // empty because the wallet Privy is creating does not exist yet. Asking again in that window
+  // means either a rejected duplicate on every single login, or -- worse -- a second wallet with
+  // the same `walletClientType`, which `useSmartAccount` picks between with `.find()`. It could
+  // then choose the one the account's smart account and personal space were never derived from.
+  const accountHasEmbeddedWallet = (user?.linkedAccounts ?? []).some(
+    account => account.type === 'wallet' && account.walletClientType === EMBEDDED_WALLET_TYPE
+  );
   const linkedWalletAddress = user?.wallet?.address;
   const walletToActivate =
     embeddedWallet ?? (linkedWalletAddress ? wallets.find(w => w.address === linkedWalletAddress) : undefined);
 
   const [createAttempts, setCreateAttempts] = useState(0);
+  const createInFlightRef = useRef(false);
   const activatedAddressRef = useRef<string | null>(null);
 
   // Attempts are counted per address, not per session, and the effect below is keyed by address
@@ -88,27 +104,38 @@ export function useEnsureEmbeddedWallet() {
     // there is a window where the list is empty and the user looks wallet-less. Asking then means
     // `createWallet` rejecting -- Privy errors when one already exists -- and if hydration outlasts
     // the retry delay, an existing account can burn all three attempts before its wallet appears.
-    if (!authenticated || !walletsReady || embeddedWallet || createAttempts >= MAX_ATTEMPTS) return;
+    if (!authenticated || !walletsReady || embeddedWallet || accountHasEmbeddedWallet) return;
+    if (createAttempts >= MAX_ATTEMPTS || createInFlightRef.current) return;
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    void createWalletRef.current().catch((error: unknown) => {
-      // Either something else created it first — in which case `embeddedWallet` is about to appear
-      // and the guard above stops us — or it genuinely failed and we try again.
-      if (cancelled) return;
-      // Logged, because the whole reason this file exists is that its failures were invisible: the
-      // symptom was onboarding never appearing, with nothing in the app pointing at why. Matches
-      // how `useSmartAccount` reports its own init failures.
-      console.error('[embedded-wallet] could not create a wallet', error);
-      timer = setTimeout(() => setCreateAttempts(attempts => attempts + 1), RETRY_DELAY_MS);
-    });
+    // `cancelled` silences the handler; it does not stop the request. Without a flag that outlives
+    // the effect, any dependency change while a create is open -- the wallet list refreshing, say --
+    // starts a second concurrent one with `createAttempts` still at zero.
+    createInFlightRef.current = true;
+
+    void createWalletRef
+      .current()
+      .catch((error: unknown) => {
+        // Either something else created it first — in which case `embeddedWallet` is about to appear
+        // and the guard above stops us — or it genuinely failed and we try again.
+        if (cancelled) return;
+        // Logged, because the whole reason this file exists is that its failures were invisible: the
+        // symptom was onboarding never appearing, with nothing in the app pointing at why. Matches
+        // how `useSmartAccount` reports its own init failures.
+        console.error('[embedded-wallet] could not create a wallet', error);
+        timer = setTimeout(() => setCreateAttempts(attempts => attempts + 1), RETRY_DELAY_MS);
+      })
+      .finally(() => {
+        createInFlightRef.current = false;
+      });
 
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [authenticated, walletsReady, embeddedWallet, createAttempts]);
+  }, [authenticated, walletsReady, embeddedWallet, accountHasEmbeddedWallet, createAttempts]);
 
   // `walletToActivate` is read through a ref so that a new object for the same address does not
   // re-run this; the address is the dependency.

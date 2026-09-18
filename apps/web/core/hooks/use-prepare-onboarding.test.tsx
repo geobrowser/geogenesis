@@ -2,6 +2,12 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const mocks = vi.hoisted(() => ({ authenticated: false }));
+
+vi.mock('@geogenesis/auth', () => ({
+  usePrivy: () => ({ authenticated: mocks.authenticated }),
+}));
+
 vi.mock('next/navigation', () => ({
   usePathname: () => '/space/space-1/debates',
   useSearchParams: () => new URLSearchParams('tab=open&sort=best'),
@@ -25,6 +31,7 @@ import { usePrepareOnboarding } from './use-prepare-onboarding';
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  mocks.authenticated = false;
 });
 
 /** Renders the hook alongside everything it is supposed to touch. */
@@ -93,6 +100,32 @@ describe('usePrepareOnboarding', () => {
     });
 
     expect(result.current.selectedTopicIds).toEqual([]);
+  });
+
+  // Reported in review: two callers gate on `!smartAccount` rather than `!authenticated`, and a
+  // brand-new account from the email capture is authenticated with no smart account for as long as
+  // wallet creation and activation take. Clearing in that window wipes interests somebody is
+  // part-way through picking, and `PendingPersonalSpaceRunner` then submits no membership proposals
+  // for choices they actually made.
+  it('clears nothing for someone already signed in', () => {
+    const { result, rerender } = setup();
+    act(() => {
+      result.current.setName('Half-finished');
+      result.current.setSelectedTopicIds(['topic-a']);
+      result.current.setStep('interested-in');
+    });
+
+    // Re-rendered, not just flipped: the returned callback closes over the value from its render.
+    mocks.authenticated = true;
+    rerender();
+
+    act(() => {
+      result.current.prepare();
+    });
+
+    expect(result.current.name).toBe('Half-finished');
+    expect(result.current.selectedTopicIds).toEqual(['topic-a']);
+    expect(result.current.step).toBe('interested-in');
   });
 
   describe('the redirect', () => {

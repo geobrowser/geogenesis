@@ -3,8 +3,13 @@ export {
   useLogout,
   // Privy's headless email login — `sendCode`/`loginWithCode` against an address already in hand,
   // so someone who has just typed their email into another form is not asked for it twice
-  // (GEO-2948). The wallet wiring a modal login performs is handled app-wide by
-  // `useEnsureEmbeddedWallet` rather than by whoever calls this.
+  // (GEO-2948).
+  //
+  // Re-exported unchanged, and deliberately so: unlike `useGeoLogin`, which wraps `useLogin` with
+  // `setActiveWallet`, this adds nothing. A headless login creates no embedded wallet and activates
+  // nothing, and none of that is fixed here — `useEnsureEmbeddedWallet`, mounted app-wide in
+  // `core/providers.tsx`, is the only thing making an authenticated session end up with a usable
+  // wallet. Deleting it does not fall back to something; it reinstates the bug this was opened for.
   useLoginWithEmail,
   type UseLoginWithEmail,
   useIdentityToken,

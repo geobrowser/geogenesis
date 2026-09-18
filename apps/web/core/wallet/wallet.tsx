@@ -48,12 +48,27 @@ function PrivyConnectButton() {
   // would wipe the user's in-progress onboarding state if Privy fires
   // onComplete on session restoration (e.g. when opening a new tab), which
   // then syncs the cleared atoms back to the original tab via localStorage.
+  // Armed, the way `usePrivySignIn` arms its own. Privy fires `onComplete` on session restoration
+  // too — opening a second tab is enough — so tracking unconditionally reported every restore as a
+  // manual login. It also meant this button was the *only* thing recording logins started
+  // elsewhere, which hid a real gap: whenever `navbar-actions.tsx` is showing its loading skeleton
+  // instead of this button, nothing recorded them at all.
+  const requestedRef = React.useRef(false);
+
   const { login } = useGeoLogin({
-    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
+    onComplete: args => {
+      if (!requestedRef.current) return;
+      requestedRef.current = false;
+      trackPrivyAuth(args, { auth_flow: 'manual_login' });
+    },
+    onError: () => {
+      requestedRef.current = false;
+    },
   });
 
   const onLogin = () => {
     prepareOnboarding({ returnTo: null });
+    requestedRef.current = true;
     login();
   };
 

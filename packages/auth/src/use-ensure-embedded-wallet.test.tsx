@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   authenticated: true,
   userWallet: undefined as { address: string } | undefined,
+  linkedAccounts: [] as Array<{ type: string; walletClientType?: string }>,
   walletsReady: true,
   wallets: [] as Array<{ address: string; walletClientType: string }>,
   createWallet: vi.fn(),
@@ -12,7 +13,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@privy-io/react-auth', () => ({
-  usePrivy: () => ({ authenticated: mocks.authenticated, user: { wallet: mocks.userWallet } }),
+  usePrivy: () => ({
+    authenticated: mocks.authenticated,
+    user: { wallet: mocks.userWallet, linkedAccounts: mocks.linkedAccounts },
+  }),
   useWallets: () => ({ wallets: mocks.wallets, ready: mocks.walletsReady }),
   useCreateWallet: () => ({ createWallet: mocks.createWallet }),
 }));
@@ -28,6 +32,7 @@ const embedded = { address: '0xabc', walletClientType: 'privy' };
 beforeEach(() => {
   mocks.authenticated = true;
   mocks.userWallet = undefined;
+  mocks.linkedAccounts = [];
   mocks.walletsReady = true;
   mocks.wallets = [];
   mocks.createWallet.mockReset().mockResolvedValue(undefined);
@@ -81,6 +86,50 @@ describe('useEnsureEmbeddedWallet', () => {
 
     await waitFor(() => expect(mocks.setActiveWallet).toHaveBeenCalledWith(embedded));
     expect(mocks.createWallet).not.toHaveBeenCalled();
+  });
+
+  // The window `walletsReady` does not cover. On a fresh login the list is genuinely ready and
+  // genuinely empty, because the wallet Privy's own `createOnLogin` is provisioning has not landed.
+  // Asking again there means a rejected duplicate on every login at best, and at worst a second
+  // wallet with the same `walletClientType` -- which `useSmartAccount` picks between with `.find()`,
+  // so it can choose the one the account's smart account was never derived from.
+  it('does not ask for a wallet the account already has but has not connected yet', async () => {
+    mocks.linkedAccounts = [{ type: 'wallet', walletClientType: 'privy' }];
+    mocks.wallets = [];
+
+    renderHook(() => useEnsureEmbeddedWallet());
+    await new Promise(resolve => setTimeout(resolve, 30));
+
+    expect(mocks.createWallet).not.toHaveBeenCalled();
+  });
+
+  it('still creates one when the account genuinely has none linked', async () => {
+    mocks.linkedAccounts = [{ type: 'email' }];
+
+    renderHook(() => useEnsureEmbeddedWallet());
+
+    await waitFor(() => expect(mocks.createWallet).toHaveBeenCalledTimes(1));
+  });
+
+  // `cancelled` silences the handler but does not stop the request, so without a flag that outlives
+  // the effect a dependency change mid-create starts a second concurrent one.
+  it('does not start a second create while one is still open', async () => {
+    let settle: () => void = () => {};
+    mocks.createWallet.mockImplementation(() => new Promise<void>(resolve => (settle = resolve)));
+
+    const { rerender } = renderHook(() => useEnsureEmbeddedWallet());
+    await waitFor(() => expect(mocks.createWallet).toHaveBeenCalledTimes(1));
+
+    // Something refreshes the wallet list while the create is still in flight.
+    mocks.wallets = [];
+    mocks.walletsReady = false;
+    rerender();
+    mocks.walletsReady = true;
+    rerender();
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    expect(mocks.createWallet).toHaveBeenCalledTimes(1);
+    settle();
   });
 
   it('does not create a second wallet when the session already has one', async () => {

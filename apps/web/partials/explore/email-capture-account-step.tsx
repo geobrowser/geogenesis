@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { trackPrivyAuth } from '~/core/analytics';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 
 import { SUBTEXT_CLASS } from './email-capture-styles';
@@ -30,18 +31,18 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   // unmounted by the card's own visibility rule the instant `authenticated` turns true, which is
   // the exact render in which the wallet becomes creatable. `useEnsureEmbeddedWallet`, mounted for
   // the life of the app in `core/providers.tsx`, does it instead.
-  // Deliberately not tracking here, which is a correction rather than an omission.
-  //
-  // `useLoginWithEmail` and `useLogin` subscribe to the same Privy `login` event, and the navbar
-  // renders `GeoConnectButton` for every logged-out reader (`navbar-actions.tsx`, `if (!address)`)
-  // whose `useGeoLogin` tracks unconditionally — unlike `usePrivySignIn`, which arms on a ref. So a
-  // completion here already emits one `manual_login`; adding a second reported every signup from
-  // this flow twice, inflating exactly the number the flow exists to move.
-  //
-  // The `link_source` attribution that would tell this apart is not worth a double count. Getting
-  // it honestly means the navbar arming its own tracking the way `usePrivySignIn` does, which
-  // changes the path every existing user signs in through and belongs on its own.
-  const { sendCode, loginWithCode, state: otpState } = useLoginWithEmail();
+  // Reports its own sign-in, which is safe now that the navbar arms its tracker rather than firing
+  // on every completion. Leaving it to the navbar looked tidy and was not: that button is replaced
+  // by a loading skeleton whenever `isUserLoading` is true — which flips back mid-session on a tab
+  // refocus or a Privy re-init — so a completion landing in that window was recorded by nobody at
+  // all. Silent under-counting of exactly the signups this flow exists to produce.
+  const {
+    sendCode,
+    loginWithCode,
+    state: otpState,
+  } = useLoginWithEmail({
+    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login', link_source: 'explore_email_capture' }),
+  });
   // Here for the same reason as the hook above, and it is the one that matters more: this registers
   // a second `useLogin` beside the navbar's own, and the navbar's is the login button people
   // actually press. Mounted in the parent it would do that on every Explore visit.

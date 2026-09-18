@@ -20,6 +20,7 @@ import { CloseSmall } from '~/design-system/icons/close-small';
 
 import { AccountStep } from './email-capture-account-step';
 import { HEADING_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
+import { clearPendingSignup, readPendingSignup, writePendingSignup } from './pending-signup';
 import { entitySidePanelAtom } from '~/atoms';
 
 /**
@@ -70,9 +71,15 @@ function EmailCapturePopup() {
   const { isOpen: isDebatesHubOpen } = useDebatesHub();
   const entitySidePanelTarget = useAtomValue(entitySidePanelAtom);
   const { dismissed, remember: rememberDismissed } = useDismissedNotice(EMAIL_CAPTURE_ID);
-  const [scrolledEnough, setScrolledEnough] = React.useState(false);
+  // Read once, at mount. An attempt left mid-flight by a navigation comes back into the code step
+  // rather than vanishing: `dismissed` is already true by then, and the `status === 'done'`
+  // exception that would otherwise keep the card up is component state a navigation destroyed.
+  const [resumed] = React.useState(() => readPendingSignup());
+
+  // A resumed attempt does not ask anybody to scroll two screens again to get back to it.
+  const [scrolledEnough, setScrolledEnough] = React.useState(() => resumed !== null);
   const [email, setEmail] = React.useState('');
-  const [status, setStatus] = React.useState<Status>('idle');
+  const [status, setStatus] = React.useState<Status>(() => (resumed ? 'done' : 'idle'));
   // Separate from the persisted notice below. Subscribing *records* the dismissal so the popup does
   // not return next visit, but it must not close the card out from under the confirmation — so the
   // two are different acts: one remembers, one closes.
@@ -86,10 +93,10 @@ function EmailCapturePopup() {
   // atoms are persisted, so without this a new account resumes whatever half-finished run was left
   // in this browser, and finishes onboarding on whichever page it was abandoned on.
   const prepareOnboarding = usePrepareOnboarding();
-  const [wantsAccount, setWantsAccount] = React.useState(false);
+  const [wantsAccount, setWantsAccount] = React.useState(() => resumed !== null);
   // The address as accepted, so the account is created against what was actually subscribed rather
   // than whatever is in the field if they keep typing.
-  const [subscribedEmail, setSubscribedEmail] = React.useState('');
+  const [subscribedEmail, setSubscribedEmail] = React.useState(() => resumed?.email ?? '');
 
   // Watched only while the popup could still appear. The observer covers the whole body on a page
   // holding an infinite feed, so leaving it on after the card is dismissed, closed, or made moot by
@@ -150,10 +157,13 @@ function EmailCapturePopup() {
    */
   const startAccount = React.useCallback(() => {
     prepareOnboarding();
+    writePendingSignup(subscribedEmail);
     setWantsAccount(true);
-  }, [prepareOnboarding]);
+  }, [prepareOnboarding, subscribedEmail]);
 
   const close = React.useCallback(() => {
+    // Closing is a decision, so the attempt should not follow them to the next page.
+    clearPendingSignup();
     rememberDismissed();
     setClosed(true);
   }, [rememberDismissed]);
@@ -204,6 +214,9 @@ function EmailCapturePopup() {
   // signed-in reader returning to a restored scroll position is briefly indistinguishable from an
   // anonymous one — long enough to be shown a signup card and to start typing into it before it
   // vanishes under them. `core/auth/use-sign-in-deep-link.ts` gates on `ready` for the same reason.
+  // Signing in is what the attempt was for, so there is nothing left to resume.
+  if (authenticated) clearPendingSignup();
+
   if (closed || !ready || authenticated || !scrolledEnough) return null;
 
   // An overlay normally takes the card off the screen entirely. Not once a code has been sent:

@@ -75,6 +75,8 @@ function scrollPastTrigger() {
 
 beforeEach(() => {
   window.localStorage.clear();
+  // A pending account attempt is session-scoped; left behind it resumes into the next test.
+  window.sessionStorage.clear();
   mocks.ready = true;
   mocks.authenticated = false;
   mocks.isModalOpen = false;
@@ -753,15 +755,76 @@ describe('ExploreEmailCapturePopup', () => {
       );
     });
 
-    // The navbar's `GeoConnectButton` tracks every login unconditionally, and both hooks listen to
-    // the same Privy event — so a tracker here reported each signup from this flow twice.
-    it('does not register a second login tracker of its own', async () => {
+    // Reported in review: the dismissal is recorded at subscribe, and the `status === 'done'`
+    // exception that keeps the card up is component state. A navigation destroys it, so a reader who
+    // clicked a link while waiting for the code came back holding a valid code with nowhere to type
+    // it and no way to ask for the field again.
+    it('comes back into the code step after a navigation away', async () => {
+      const view = await subscribeSuccessfully('reader@example.com');
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      expect(mocks.sendCode).toHaveBeenCalledTimes(1);
+
+      // They follow a link. The popup unmounts with the page.
+      view.unmount();
+      mocks.sendCode.mockClear();
+      mocks.otpState = { status: 'awaiting-code-input' };
+
+      // Back on Explore, with the dismissal already recorded from the subscribe.
+      render(<ExploreEmailCapturePopup />);
+
+      expect(screen.getByRole('textbox', { name: 'Verification code' })).toBeInTheDocument();
+      expect(screen.getByText('reader@example.com')).toBeInTheDocument();
+    });
+
+    it('does not come back once they have closed it', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss newsletter signup' }));
+      view.unmount();
+
+      render(<ExploreEmailCapturePopup />);
+      scrollPastTrigger();
+
+      expect(popup()).toBeNull();
+    });
+
+    // Nothing to resume into: the field would be offered for a code that no longer works.
+    it('does not resume an attempt older than the code it was waiting for', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      view.unmount();
+
+      const stale = JSON.parse(window.sessionStorage.getItem('exploreEmailCapturePendingSignup') ?? '{}');
+      window.sessionStorage.setItem(
+        'exploreEmailCapturePendingSignup',
+        JSON.stringify({ ...stale, startedAt: Date.now() - 11 * 60 * 1000 })
+      );
+
+      render(<ExploreEmailCapturePopup />);
+      scrollPastTrigger();
+
+      expect(screen.queryByRole('textbox', { name: 'Verification code' })).toBeNull();
+    });
+
+    // Reports its own sign-in. Leaving it to the navbar looked tidy and was not: that button is
+    // replaced by a loading skeleton whenever `isUserLoading` is true — which flips back mid-session
+    // on a tab refocus — so a completion landing in that window was recorded by nobody. The navbar
+    // arms its tracker now, so this one cannot double-count.
+    it('reports the sign-in it started, attributed to this flow', async () => {
       await subscribeSuccessfully();
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
       });
 
-      expect(mocks.useLoginWithEmailArgs).toBeUndefined();
+      const args = mocks.useLoginWithEmailArgs as { onComplete?: (a: unknown) => void } | undefined;
+      expect(typeof args?.onComplete).toBe('function');
     });
 
     // Both resend controls used to stay live while a verification was in flight, so pressing one
