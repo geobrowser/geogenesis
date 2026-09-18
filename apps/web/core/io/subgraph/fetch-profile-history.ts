@@ -57,8 +57,25 @@ export interface ProfileHistory {
  * The rule is that assertions *about this person* are scoped; the things those
  * assertions point at are not.
  */
+/**
+ * Every list here says how much it wants.
+ *
+ * A connection asked without `first` does not return everything — it returns
+ * **100** and says nothing about it. Verified against an entity with 118
+ * relations: unbounded gives 100, `first: 1000` gives 118. So a query with no
+ * limit has a limit anyway, just an invisible one that no reader of this file
+ * would know to check.
+ *
+ * Nothing here is near it. The worst case across the whole graph is 14 edges on
+ * one person, 5 values on one stint, 4 relations on one stint and 4 values on
+ * one role — so 200 is a guard rather than a cap, and the point of writing it
+ * down is that it is now a decision with a number beside it instead of a default
+ * nobody chose.
+ */
+const HISTORY_LIST_LIMIT = 200;
+
 const nested = (spaceId: string) => {
-  const ours = `filter: { spaceId: { is: ${JSON.stringify(spaceId)} } }`;
+  const ours = `first: ${HISTORY_LIST_LIMIT}, filter: { spaceId: { is: ${JSON.stringify(spaceId)} } }`;
 
   return `
   valuesList(${ours}) { id spaceId property { id } date text decimal }
@@ -76,7 +93,7 @@ const nested = (spaceId: string) => {
         spaceId
         type { id }
         toEntity { id name }
-        entity { valuesList { property { id } date text } }
+        entity { valuesList(first: ${HISTORY_LIST_LIMIT}) { property { id } date text } }
       }
     }
   }
@@ -93,11 +110,11 @@ const nested = (spaceId: string) => {
  * for first so it wins where both exist; see `readAvatar`.
  */
 const orgAvatar = `
-  avatar: relationsList(filter: { typeId: { is: ${JSON.stringify(AVATAR_PROPERTY)} } }) {
-    toEntity { valuesList { property { id } text } }
+  avatar: relationsList(first: ${HISTORY_LIST_LIMIT}, filter: { typeId: { is: ${JSON.stringify(AVATAR_PROPERTY)} } }) {
+    toEntity { valuesList(first: ${HISTORY_LIST_LIMIT}) { property { id } text } }
   }
-  cover: relationsList(filter: { typeId: { is: ${JSON.stringify(COVER_PROPERTY)} } }) {
-    toEntity { valuesList { property { id } text } }
+  cover: relationsList(first: ${HISTORY_LIST_LIMIT}, filter: { typeId: { is: ${JSON.stringify(COVER_PROPERTY)} } }) {
+    toEntity { valuesList(first: ${HISTORY_LIST_LIMIT}) { property { id } text } }
   }
 `;
 
@@ -113,7 +130,7 @@ const orgAvatar = `
 const profileHistoryQuery = (entityId: string, spaceId: string) => `
   {
     entity(id: ${JSON.stringify(entityId)}) {
-      employment: relationsList(filter: {
+      employment: relationsList(first: ${HISTORY_LIST_LIMIT}, filter: {
         typeId: { is: ${JSON.stringify(EMPLOYMENT_PROPERTY)} }
         spaceId: { is: ${JSON.stringify(spaceId)} }
       }) {
@@ -123,7 +140,7 @@ const profileHistoryQuery = (entityId: string, spaceId: string) => `
         toEntity { id name ${orgAvatar} }
         entity { ${nested(spaceId)} }
       }
-      education: relationsList(filter: {
+      education: relationsList(first: ${HISTORY_LIST_LIMIT}, filter: {
         typeId: { is: ${JSON.stringify(EDUCATION_PROPERTY)} }
         spaceId: { is: ${JSON.stringify(spaceId)} }
       }) {

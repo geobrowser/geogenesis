@@ -9,7 +9,6 @@ import { Effect } from 'effect';
 import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { Environment } from '~/core/environment';
 import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
 import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import {
