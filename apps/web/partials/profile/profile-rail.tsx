@@ -7,19 +7,32 @@ import * as React from 'react';
 import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useEntity } from '~/core/database/entities';
+import { useEditProfile } from '~/core/hooks/use-edit-profile';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useProfileFacts } from '~/core/hooks/use-profile-facts';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { ID } from '~/core/id';
 import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-facts';
+import { changedLinkFields, profileLinkFields } from '~/core/profile/profile-link-fields';
 import { type ProfileLink } from '~/core/profile/profile-links';
+import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils } from '~/core/utils/utils';
 
+import { SmallButton, SquareButton } from '~/design-system/button';
 import { LinkableChip } from '~/design-system/chip';
 import { FallbackImage } from '~/design-system/fallback-image';
+import { EditSmall } from '~/design-system/icons/edit-small';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 import { StickySideRail } from '~/partials/entity-page/sticky-side-rail';
+
+import { ProfileLinksEditor, linkValueRows } from './profile-links-editor';
+
+/** The profile modal's "leave this field alone" sentinel, as the record dialog uses it. */
+const UNCHANGED = { kind: 'unchanged' } as const;
 
 export type ProfileRailProps = {
   /** The personal space being viewed. */
@@ -75,7 +88,13 @@ export function ProfileRailSections({
   return (
     <div className="flex flex-col gap-4">
       {facts.spaces.length > 0 && <SpacesSection spaces={facts.spaces} />}
-      {links.length > 0 && <LinksSection links={links} />}
+      {personEntityId ? (
+        <LinksSection links={links} spaceId={spaceId} personEntityId={personEntityId} />
+      ) : (
+        // No person to write to, so no card: a space with no topic entity has
+        // nowhere to put a link even for its owner.
+        links.length > 0 && <LinksSection links={links} spaceId={spaceId} personEntityId={''} />
+      )}
       <AboutSection
         facts={facts}
         isLoading={isLoading}
@@ -166,24 +185,134 @@ function SpacesSection({ spaces }: { spaces: ReturnType<typeof useProfileFacts>[
   );
 }
 
-function LinksSection({ links }: { links: ProfileLink[] }) {
+/**
+ * The handles a person publishes, and — on their own profile — the way to set them.
+ *
+ * Editing happens **in the card** rather than in a dialog, unlike Experience and
+ * Education. Those edit a list of records with their own sheets; this is three
+ * text fields, and sending somebody to a modal to type one of them would be more
+ * ceremony than the edit deserves.
+ *
+ * The fields come from the Person type's "Links" property group, so what can be
+ * set here is whatever the type says belongs here — see `profileLinkFields`.
+ */
+function LinksSection({
+  links,
+  spaceId,
+  personEntityId,
+}: {
+  links: ProfileLink[];
+  spaceId: string;
+  personEntityId: string;
+}) {
+  const { personalSpaceId } = usePersonalSpaceId();
+  const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
+
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState<Record<string, string>>({});
+
+  const { propertyGroups, schema } = useEntitySchemaWithGroups(personEntityId, spaceId);
+  const entity = useEntity({ id: personEntityId, spaceId });
+
+  const fields = React.useMemo(
+    () =>
+      profileLinkFields({
+        propertyGroups,
+        schema,
+        values: (entity.values ?? []).map((value: { property: { id: string }; value: string }) => ({
+          property: { id: value.property.id },
+          value: value.value,
+        })),
+      }),
+    [entity.values, propertyGroups, schema]
+  );
+
+  const { canEdit, current, publish, status } = useEditProfile({ isOpen: isEditing });
+  const isPublishing = status === 'publishing';
+
+  const changed = React.useMemo(() => changedLinkFields(fields, draft), [draft, fields]);
+
+  const cancel = () => {
+    setDraft({});
+    setIsEditing(false);
+  };
+
+  const save = () => {
+    if (changed.length === 0) {
+      cancel();
+      return;
+    }
+
+    // Through the profile modal's own publish, so a links edit joins the queue
+    // everything else on this page writes through — one status bar, one proposal
+    // shape, and the name and description carried untouched.
+    void publish(
+      { name: current.name, description: current.description, banner: UNCHANGED, avatar: UNCHANGED },
+      {
+        values: linkValueRows({
+          fields,
+          draft,
+          entityId: personEntityId,
+          entityName: entity.name ?? null,
+          spaceId,
+        }),
+        relations: [],
+      }
+    );
+
+    cancel();
+  };
+
+  // Hidden entirely from a visitor when there is nothing to show; an owner keeps
+  // it, because an empty card is how they find the pen.
+  if (links.length === 0 && !(isOwner && canEdit)) return null;
+
   return (
-    <RailCard title="Links">
-      <ul className="flex flex-col gap-1">
-        {links.map(link => (
-          <li key={link.propertyId} className="flex items-center gap-2">
-            <span className="w-20 shrink-0 text-metadata text-grey-04">{link.label}</span>
-            <a
-              href={link.href}
-              target="_blank"
-              rel="noreferrer"
-              className="min-w-0 flex-1 truncate text-right text-metadata text-text hover:underline"
-            >
-              {link.handle}
-            </a>
-          </li>
-        ))}
-      </ul>
+    <RailCard
+      title="Links"
+      action={
+        isOwner && canEdit ? (
+          isEditing ? (
+            <div className="flex items-center gap-1.5">
+              <SmallButton onClick={cancel} disabled={isPublishing}>
+                Cancel
+              </SmallButton>
+              <SmallButton variant="secondary" onClick={save} disabled={isPublishing}>
+                Save
+              </SmallButton>
+            </div>
+          ) : (
+            <SquareButton onClick={() => setIsEditing(true)} icon={<EditSmall />} aria-label="Edit links" />
+          )
+        ) : null
+      }
+    >
+      {isEditing ? (
+        <ProfileLinksEditor
+          fields={fields}
+          draft={draft}
+          onChange={(propertyId, value) => setDraft(current => ({ ...current, [propertyId]: value }))}
+          isDisabled={isPublishing}
+        />
+      ) : links.length === 0 ? (
+        <p className="text-metadata text-grey-04">No links yet.</p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {links.map(link => (
+            <li key={link.propertyId} className="flex items-center gap-2">
+              <span className="w-20 shrink-0 text-metadata text-grey-04">{link.label}</span>
+              <a
+                href={link.href}
+                target="_blank"
+                rel="noreferrer"
+                className="min-w-0 flex-1 truncate text-right text-metadata text-text hover:underline"
+              >
+                {link.handle}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
     </RailCard>
   );
 }
