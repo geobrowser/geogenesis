@@ -244,3 +244,75 @@ describe('topics are space-scoped', () => {
     expect(topics.find(topic => topic.id === 'ai')?.count).toBe(1);
   });
 });
+
+/**
+ * A count is a promise, and the menu has to keep it.
+ *
+ * Every option says how many claims ticking it would leave. Two earlier versions
+ * of `narrowedFacets` broke that by filtering once and tallying what survived:
+ * the space menu counted every space of a claim that had matched in only one of
+ * them, and the topic menu unioned a claim's topics across spaces that were
+ * never candidates together. Both advertised a positive number on an option that
+ * emptied the list when ticked — which is the one thing these counts exist to
+ * prevent.
+ *
+ * So the invariant is checked directly: for every option, the number shown and
+ * the number of rows that follow have to be the same.
+ */
+describe('facet counts are what ticking the option gives you', () => {
+  const split = indexOf(
+    [
+      spacedEntry('claim-split', { crypto: [], academia: ['ai'] }),
+      spacedEntry('claim-scattered', { crypto: ['ai'], academia: ['society'] }),
+      entry('claim-plain', ['crypto'], ['ai']),
+    ],
+    { ai: 'AI systems', society: 'Society' }
+  );
+
+  const selections = [
+    { spaceIds: [], topicIds: [] },
+    { spaceIds: ['crypto'], topicIds: [] },
+    { spaceIds: ['academia'], topicIds: [] },
+    { spaceIds: [], topicIds: ['ai'] },
+    { spaceIds: [], topicIds: ['society'] },
+    { spaceIds: ['crypto'], topicIds: ['ai'] },
+    { spaceIds: ['academia'], topicIds: ['ai'] },
+  ];
+
+  it.each(selections)('holds for spaces=$spaceIds topics=$topicIds', selection => {
+    const { spaces, topics } = narrowedFacets(split, selection);
+
+    for (const facet of spaces) {
+      // Spaces are OR: the option replaces the space selection rather than adding to it.
+      const after = matchingEntityIds(split, { spaceIds: [facet.id], topicIds: selection.topicIds });
+      expect(facet.count).toBe(after.length);
+    }
+
+    for (const facet of topics) {
+      // Topics are AND: the option is added to what is already picked.
+      const after = matchingEntityIds(split, {
+        spaceIds: selection.spaceIds,
+        topicIds: [...selection.topicIds, facet.id],
+      });
+      expect(facet.count).toBe(after.length);
+    }
+  });
+
+  // The specific shape that was wrong: a claim matching in one space only.
+  it('does not credit a space the claim did not match in', () => {
+    const { spaces } = narrowedFacets(split, { spaceIds: [], topicIds: ['ai'] });
+
+    // `claim-split` carries AI in academia alone, so Crypto must not count it.
+    // Crypto still holds `claim-scattered` and `claim-plain`, which carry AI there.
+    expect(spaces.find(space => space.id === 'crypto')?.count).toBe(2);
+    expect(spaces.find(space => space.id === 'academia')?.count).toBe(1);
+  });
+
+  it('does not offer a topic that cannot co-occur in one space', () => {
+    // `claim-scattered` has AI in crypto and Society in academia. With AI picked,
+    // Society is unreachable — and must say so rather than counting the claim.
+    const { topics } = narrowedFacets(split, { spaceIds: [], topicIds: ['ai'] });
+
+    expect(topics.find(topic => topic.id === 'society')?.count).toBe(0);
+  });
+});

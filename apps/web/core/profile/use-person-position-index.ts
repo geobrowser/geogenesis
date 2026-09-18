@@ -290,62 +290,51 @@ export function satisfyingSpace(
  *
  * Computed here rather than asked for, because the index is the whole record.
  * The hub needs a server round trip for this; a complete set in hand does not.
+ *
+ * **Each count is the size of the list that option would produce**, obtained by
+ * asking the matching rule with the option added — not by filtering once and
+ * then tallying what survived. The tallying shape cannot express this and got it
+ * wrong twice in the same file: it counted every space of a claim that matched
+ * in only one of them, and unioned a claim's topics across spaces that were
+ * never candidates together. Both advertised a positive number on an option
+ * that, when ticked, emptied the list — the exact failure these counts exist to
+ * prevent.
+ *
+ * It is ~75,000 predicate calls for the largest record that exists (208 claims
+ * against 13 spaces and 349 topics), each of them a couple of set lookups, and
+ * it is memoised on the selection.
  */
 export function narrowedFacets(
   index: PersonPositionIndex,
   selection: { spaceIds: readonly string[]; topicIds: readonly string[] }
 ): { spaces: PositionFacet[]; topics: PositionFacet[] } {
-  const names = new Map(index.topics.map(topic => [topic.id, topic.name]));
-
-  const topicsOnly = index.entries.filter(
-    entry => satisfyingSpace(entry, { spaceIds: [], topicIds: selection.topicIds }) !== null
-  );
-  const everything = index.entries.filter(entry => satisfyingSpace(entry, selection) !== null);
-
   return {
-    spaces: withZeroes(
-      index.spaces,
-      facetsFrom(topicsOnly, entry => entry.spaceIds, new Map())
-    ),
-    // Counted over the topics *of the space each claim matched in*, not over its
-    // pooled ones — otherwise ticking a space leaves the topic menu offering
-    // topics that belong to the claim's other space and lead nowhere.
-    topics: withZeroes(
-      index.topics,
-      facetsFrom(everything, entry => topicsIn(entry, selection), names)
-    ),
+    // Spaces are OR, so this one *instead of* the current space selection: a
+    // second space can only add, and its count must not assume the first.
+    spaces: index.spaces.map(facet => ({
+      ...facet,
+      count: countMatching(index, { spaceIds: [facet.id], topicIds: selection.topicIds }),
+    })),
+    // Topics are AND, so this one *on top of* everything already picked.
+    topics: index.topics.map(facet => ({
+      ...facet,
+      count: countMatching(index, { spaceIds: selection.spaceIds, topicIds: [...selection.topicIds, facet.id] }),
+    })),
   };
 }
 
-/** The topics of this claim that count, given where the reader is looking. */
-function topicsIn(
-  entry: PositionIndexEntry,
+/** How many claims a selection leaves. */
+function countMatching(
+  index: PersonPositionIndex,
   selection: { spaceIds: readonly string[]; topicIds: readonly string[] }
-): readonly string[] {
-  if (selection.spaceIds.length === 0) return entry.topicIds;
+): number {
+  let count = 0;
 
-  const picked = selection.spaceIds.map(normId);
-  const seen = new Set<string>();
-
-  for (const spaceId of entry.spaceIds) {
-    if (!picked.includes(spaceId)) continue;
-    for (const topic of entry.topicsBySpace.get(spaceId) ?? []) seen.add(topic);
+  for (const entry of index.entries) {
+    if (satisfyingSpace(entry, selection) !== null) count += 1;
   }
 
-  return [...seen];
-}
-
-/**
- * Every option the record has, in the record's order, carrying its narrowed count.
- *
- * Options are not dropped when they fall to zero. A menu that removes rows as
- * you tick them reorders under the cursor and hides the fact that a pick led
- * nowhere — and the row you just selected would be the first to vanish.
- */
-function withZeroes(all: readonly PositionFacet[], narrowed: readonly PositionFacet[]): PositionFacet[] {
-  const counts = new Map(narrowed.map(facet => [facet.id, facet.count]));
-
-  return all.map(facet => ({ ...facet, count: counts.get(facet.id) ?? 0 }));
+  return count;
 }
 
 /**

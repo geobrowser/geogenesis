@@ -13,7 +13,7 @@ import { NavUtils, sortRelations } from '~/core/utils/utils';
 
 import { TabGroup } from '~/design-system/tab-group';
 
-import { EditableTabGroup } from '~/partials/entity-page/editable-tab-group';
+import { EditableTabGroup, type SystemTab } from '~/partials/entity-page/editable-tab-group';
 
 type SpaceTabsProps = {
   spaceId: string;
@@ -37,6 +37,20 @@ type BuiltSpaceTab = {
 
 /** The record routes on a profile. Reachable only by their own tab — see the dedupe below. */
 const PERSON_TAB_LABELS = ['Debates', 'Positions', 'Proposals', 'About'] as const;
+
+/**
+ * The About tab, defined once for both paths that draw it.
+ *
+ * The read-only path builds its tabs through `buildSpaceTabs`; the editable one
+ * assembles its own. They each used to spell this out, and they drifted — the
+ * editable copy lost `onlyWhenNarrow`, so an owner in edit mode on a wide screen
+ * could click About and land on an empty column, because `about/page.tsx` hides
+ * its body wherever the rail is showing. Three places have to agree about this
+ * tab's width rule; one of them can at least be one value.
+ */
+function aboutTab(spaceId: string) {
+  return { label: 'About', href: `/space/${spaceId}/about`, onlyWhenNarrow: true } as const;
+}
 
 type BuildSpaceTabsParams = {
   spaceId: string;
@@ -159,7 +173,7 @@ export function buildSpaceTabs({
     // Last, and only where the rail is not. Below 1024px `StickySideRail` drops
     // itself rather than render something too narrow to read, and without this
     // the spaces, links and counts are simply unreachable on a phone.
-    tabs.push({ label: 'About', href: `/space/${spaceId}/about`, priority: 7, onlyWhenNarrow: true });
+    tabs.push({ ...aboutTab(spaceId), priority: 7 });
   }
 
   if (!isPerson) tabs.push(ACTIVITY_TAB);
@@ -218,10 +232,10 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
   const showCommunity = typeIds.includes(SystemIds.SPACE_TYPE) && !isPersonSpace;
   // System tabs bracket the custom (dynamic) tabs: Overview + our Community lead,
   // Governance + Activity trail.
-  const systemTabsBefore: Array<{ label: string; href: string }> = [{ label: 'Overview', href: overviewHref }];
+  const systemTabsBefore: SystemTab[] = [{ label: 'Overview', href: overviewHref }];
   if (showCommunity) systemTabsBefore.push({ label: 'Community', href: `/space/${spaceId}/community` });
 
-  const systemTabsAfter: Array<{ label: string; href: string }> = [];
+  const systemTabsAfter: SystemTab[] = [];
 
   if (isDebugDebatesPageEnabled) {
     systemTabsAfter.push({ label: 'Debug debates', href: `/space/${spaceId}/debug-debates` });
@@ -238,7 +252,7 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
       { label: 'Positions', href: `/space/${spaceId}/positions` },
       { label: 'Proposals', href: `/space/${spaceId}/proposals` }
     );
-    systemTabsAfter.push({ label: 'About', href: `/space/${spaceId}/about` });
+    systemTabsAfter.push(aboutTab(spaceId));
   } else {
     systemTabsAfter.push({ label: 'Activity', href: `/space/${spaceId}/activity` });
   }
