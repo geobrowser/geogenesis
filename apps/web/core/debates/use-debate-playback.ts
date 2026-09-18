@@ -521,7 +521,14 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     setIsResuming(true);
     let outcome: PlayBothOutcome;
     try {
-      outcome = await playBothWithMutedFallback(primaryVideo, secondaryVideo);
+      outcome = await playBothWithMutedFallback(primaryVideo, secondaryVideo, {
+        // The helper spends most of its runtime asleep confirming, and a pause, a scrub or a
+        // scroll-away lands in that window routinely. Bumping the generation is how all of those
+        // say "these elements are mine now", so it is the cancellation signal — checked inside,
+        // before the muted retry, because by the time this returns the retry's `play()` has
+        // already happened and no state check here can take it back.
+        isCancelled: () => resumeGenerationRef.current !== generation,
+      });
     } finally {
       resumesInFlightRef.current--;
       // Only the last one out: overlapping attempts are normal here, and the renderer must not
@@ -530,7 +537,10 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     }
     // Superseded while we waited — something else owns these elements now. Every write below
     // would describe a playback attempt that no longer exists, including the 'blocked' error,
-    // which at this point only means "someone paused us mid-confirm".
+    // which at this point only means "someone paused us mid-confirm". 'cancelled' is the same
+    // thing noticed from inside, and is spelled out rather than left to the generation check so
+    // that a future caller cannot accidentally read it as a successful start.
+    if (outcome === 'cancelled') return;
     if (resumeGenerationRef.current !== generation) return;
     if (outcome === 'blocked') {
       primaryVideo.pause();

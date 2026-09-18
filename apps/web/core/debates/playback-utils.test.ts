@@ -280,7 +280,7 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
       b.tick();
     };
 
-    expect(await playBothWithMutedFallback(a, b, wait)).toBe('playing');
+    expect(await playBothWithMutedFallback(a, b, { wait })).toBe('playing');
     // The point of the fix: no muted retry, because it was never actually blocked.
     expect([a.plays, b.plays]).toEqual([1, 1]);
   });
@@ -294,7 +294,7 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
     };
 
     // Both already muted, so there is no fallback to try — this must not be reported as playing.
-    expect(await playBothWithMutedFallback(a, b, wait)).toBe('blocked');
+    expect(await playBothWithMutedFallback(a, b, { wait })).toBe('blocked');
   });
 
   it('plays straight away when the browser allows it', async () => {
@@ -378,6 +378,36 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
 
     expect(a.muted).toBe(true);
     expect(b.muted).toBe(true);
+  });
+
+  /**
+   * The retry is the only point where this function starts something it did not start, and it is
+   * reached after a confirm window it spent asleep — so a pause or a scroll-away routinely lands
+   * in between. A caller that checks ownership only once this returns is too late: `play()` has
+   * already been called, and no state check can take it back.
+   */
+  it('does not retry when the attempt was cancelled while confirming', async () => {
+    const a = fakeVideo({ muted: false });
+    const b = fakeVideo({ muted: false });
+
+    expect(await playBothWithMutedFallback(a, b, { isCancelled: () => true })).toBe('cancelled');
+
+    expect(a.plays).toBe(1); // the first attempt only — no restart behind the viewer's pause
+    expect(b.plays).toBe(1);
+    expect(a.paused).toBe(true);
+    expect(b.paused).toBe(true);
+    expect(a.muted).toBe(false); // and nothing was force-muted for a retry that never ran
+  });
+
+  /** The control: an attempt nobody superseded still retries muted and reports it. */
+  it('still retries when nothing cancelled it', async () => {
+    const a = fakeVideo({ muted: false });
+    const b = fakeVideo({ muted: false });
+
+    expect(await playBothWithMutedFallback(a, b, { isCancelled: () => false })).toBe('playing-muted');
+
+    expect(a.plays).toBe(2);
+    expect(a.muted).toBe(true);
   });
 
   it('keeps sound when the play is gesture-driven', async () => {

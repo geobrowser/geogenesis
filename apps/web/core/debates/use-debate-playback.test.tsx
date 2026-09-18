@@ -121,7 +121,14 @@ function fakeVideo() {
     currentTime: 0,
     playbackRate: 1,
     pending: null as null | { resolve: () => void; reject: (reason: unknown) => void },
+    /**
+     * How many times playback has been asked for. The interesting question for a cancelled
+     * attempt is not whether the element ends up paused — a pause that lands after the restart
+     * leaves it paused either way — but whether anything asked it to start again at all.
+     */
+    plays: 0,
     play() {
+      video.plays += 1;
       return new Promise<void>((resolve, reject) => {
         video.pending = { resolve, reject };
       });
@@ -156,6 +163,7 @@ function fakeVideo() {
     },
   };
   return video as unknown as HTMLVideoElement & {
+    plays: number;
     settlePlay: () => void;
     rejectPlay: () => void;
     browserPause: () => void;
@@ -222,6 +230,54 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
 
     expect(result.current.playing).toBe(true);
     expect(result.current.error).toBeNull();
+  });
+
+  /**
+   * The generation check suppresses state writes, but it runs after the helper returns — and by
+   * then the helper's muted retry has already called `play()` on both elements. A viewer who
+   * paused mid-confirm got the videos back a moment later, muted, under a UI showing paused
+   * (GEO-2947). Cancellation has to reach inside the helper, not just guard what comes after it.
+   */
+  it('does not restart the videos when the viewer grabs the scrubber mid-resume', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    // Unmuted, so the helper would otherwise take its force-mute-and-retry path.
+    slot1.muted = false;
+    slot2.muted = false;
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      result.current.beginScrub(); // the viewer grabs the scrubber, mid-confirm
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    // One `play()` each — the attempt that was already under way. The muted retry must not have
+    // asked for a second, because nothing after it can take that back.
+    expect(slot1.plays).toBe(1);
+    expect(slot2.plays).toBe(1);
+    expect(slot1.paused).toBe(true);
+    expect(slot2.paused).toBe(true);
+    expect(result.current.error).toBeNull();
+  });
+
+  /** Same for a card scrolled off screen mid-confirm — `suspend` takes ownership too. */
+  it('does not restart the videos when the card is scrolled away mid-resume', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    slot1.muted = false;
+    slot2.muted = false;
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      result.current.suspend();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(slot1.plays).toBe(1);
+    expect(slot2.plays).toBe(1);
+    expect(slot1.paused).toBe(true);
+    expect(slot2.paused).toBe(true);
+    expect(result.current.playing).toBe(false);
   });
 
   /** And the guard must not swallow a real block — the autoplay-policy error still surfaces. */

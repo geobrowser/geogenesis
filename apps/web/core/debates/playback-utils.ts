@@ -168,7 +168,23 @@ export function speakerLabel(participant: Pick<DebateParticipant, 'display_name'
 /** The two elements this helper needs, so tests do not have to build a whole `HTMLVideoElement`. */
 export type PlayableVideo = Pick<HTMLVideoElement, 'muted' | 'paused'> & { play: () => Promise<void> };
 
-export type PlayBothOutcome = 'playing' | 'playing-muted' | 'blocked';
+export type PlayBothOutcome = 'playing' | 'playing-muted' | 'blocked' | 'cancelled';
+
+export type PlayBothOptions = {
+  /** Injectable so tests do not wait on real timers. */
+  wait?: (ms: number) => Promise<void>;
+  /**
+   * Has something else taken ownership of these elements since the attempt began?
+   *
+   * This function confirms a start by polling, so it is *asleep* for most of its runtime, and a
+   * pause or a scroll-away lands there routinely. A caller that only checks ownership once this
+   * returns is too late: the retry below would have called `play()` on both elements in the
+   * meantime, leaving a pair the viewer had paused running in the DOM under a UI showing paused
+   * (GEO-2947). Checked before the retry, which is the only point where this function restarts
+   * something it did not start.
+   */
+  isCancelled?: () => boolean;
+};
 
 /**
  * Start both recordings, falling back to muted when the browser blocks unmuted autoplay
@@ -215,8 +231,7 @@ async function bothRunning(
 export async function playBothWithMutedFallback(
   primary: PlayableVideo,
   secondary: PlayableVideo,
-  /** Injectable so tests do not wait on real timers. */
-  wait: (ms: number) => Promise<void> = defaultWait
+  { wait = defaultWait, isCancelled }: PlayBothOptions = {}
 ): Promise<PlayBothOutcome> {
   const attempt = async () => {
     await Promise.allSettled([primary.play(), secondary.play()]);
@@ -224,6 +239,11 @@ export async function playBothWithMutedFallback(
   };
 
   if (await attempt()) return 'playing';
+
+  // Someone paused these, or scrolled them off screen, while the confirm above was polling. The
+  // retry would start them again — and the caller checking ownership after this returns cannot
+  // undo a `play()` that has already happened.
+  if (isCancelled?.()) return 'cancelled';
 
   // Nothing to retry if audio was already off — the block is not the autoplay policy.
   if (primary.muted && secondary.muted) return 'blocked';
