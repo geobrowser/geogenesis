@@ -1,79 +1,172 @@
 'use client';
 
+import * as Popover from '@radix-ui/react-popover';
+
 import * as React from 'react';
 
 import { type SpaceLabel, spaceLabel } from '~/core/hooks/use-space-labels';
+import { normId } from '~/core/utils/norm-id';
+import { getSpaceRank } from '~/core/utils/space/space-ranking';
+import { NavUtils } from '~/core/utils/utils';
 
 import { ThumbGeoImage } from '~/design-system/geo-image';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-/**
- * How many space icons a row draws before the rest become a count.
- *
- * Three, because the row they sit on is already a grid of avatar, name and a button inside a panel
- * narrow enough that GEO-2774 exists about it. The icons are an at-a-glance "where is this person"
- * rather than a list — anyone wanting the list has their profile a click away — so the cap is set
- * by what the row can spare, not by what a person might plausibly join.
- */
+/** The same three-face cap used by the app's other compact avatar stacks. */
 export const PERSON_SPACE_ICON_CAP = 3;
 
 /**
- * The spaces a person is in, as icons, capped with an overflow count.
- *
- * Shares `HubFilterMenu`'s option-row treatment — same 5px-radius thumb, same lettered fallback for
- * a space with no image — so a space recognised in the filter menu is recognisable here.
- *
- * Renders nothing at all when the person is in no spaces, rather than an empty slot: the row is a
- * grid, and an always-present element would indent every name by the width of icons half the list
- * does not have.
+ * Debate activity wins first, then the app's canonical space rank. The id tie-break keeps the
+ * unranked tail stable even when GraphQL returns memberships in a different order.
+ */
+export function orderPersonSpaces(
+  spaceIds: string[],
+  debatesBySpace: ReadonlyMap<string, number> = new Map()
+): string[] {
+  const normalizedDebateCounts = new Map(
+    [...debatesBySpace].map(([spaceId, count]) => [normId(spaceId), count] as const)
+  );
+
+  return [...spaceIds].sort((left, right) => {
+    const leftCount = normalizedDebateCounts.get(normId(left)) ?? 0;
+    const rightCount = normalizedDebateCounts.get(normId(right)) ?? 0;
+    if (leftCount !== rightCount) return rightCount - leftCount;
+
+    const rankDifference = getSpaceRank(left) - getSpaceRank(right);
+    if (rankDifference !== 0) return rankDifference;
+
+    return normId(left).localeCompare(normId(right));
+  });
+}
+
+/**
+ * A person's active spaces, using the app's overlapping avatar + overflow pattern. The stack is a
+ * button because its full answer is useful: opening it lists every space in the same order, with
+ * recorded-debate counts explaining why an active space leads the list.
  */
 export function PersonSpaceIcons({
   spaceIds,
   labelsById,
+  debatesBySpace = new Map(),
+  popoverPortal,
 }: {
   spaceIds: string[];
   labelsById: Map<string, SpaceLabel>;
+  debatesBySpace?: ReadonlyMap<string, number>;
+  popoverPortal: HTMLElement | null;
 }) {
-  if (spaceIds.length === 0) return null;
+  const orderedSpaceIds = React.useMemo(() => orderPersonSpaces(spaceIds, debatesBySpace), [spaceIds, debatesBySpace]);
 
-  const shown = spaceIds.slice(0, PERSON_SPACE_ICON_CAP);
-  const overflow = spaceIds.length - shown.length;
+  if (orderedSpaceIds.length === 0) return null;
+
+  const shown = orderedSpaceIds.slice(0, PERSON_SPACE_ICON_CAP);
+  const overflow = orderedSpaceIds.length - shown.length;
+  const spaceLabelText = orderedSpaceIds.length === 1 ? 'space' : 'spaces';
 
   return (
-    // `title` on each icon rather than visible names: the names are what the filter menu is for,
-    // and three of them would not fit beside a button in this panel.
-    <span className="flex min-w-0 items-center gap-1">
-      {shown.map(spaceId => {
-        const label = spaceLabel(labelsById, spaceId);
-        const name = label?.name?.trim() || 'Space';
+    <div className="flex min-w-0 items-center gap-1.5 text-footnote text-grey-04">
+      <span className="shrink-0">Active in…</span>
+      <Popover.Root>
+        <Popover.Trigger asChild>
+          <button
+            type="button"
+            aria-label={`View ${orderedSpaceIds.length} active ${spaceLabelText}`}
+            className="inline-flex shrink-0 items-center rounded-sm transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ctaPrimary"
+          >
+            <span aria-hidden="true" className="flex items-center -space-x-2">
+              {shown.map(spaceId => (
+                <StackedSpaceIcon key={spaceId} spaceId={spaceId} labelsById={labelsById} />
+              ))}
+              {overflow > 0 ? (
+                <span
+                  className="relative box-content flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[9px] leading-4 text-grey-04 tabular-nums"
+                  data-testid="person-space-overflow"
+                >
+                  +{overflow}
+                </span>
+              ) : null}
+            </span>
+          </button>
+        </Popover.Trigger>
+        {popoverPortal ? (
+          <Popover.Portal container={popoverPortal}>
+            <Popover.Content
+              side="bottom"
+              align="start"
+              sideOffset={8}
+              collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
+              hideWhenDetached
+              onOpenAutoFocus={event => event.preventDefault()}
+              className="z-100 w-[248px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+            >
+              <p className="border-b border-grey-02 p-2 text-smallButton text-text">
+                Active in {orderedSpaceIds.length} {spaceLabelText}
+              </p>
+              <ul
+                aria-label="Active spaces"
+                className="m-0 max-h-[265px] list-none overflow-y-auto overscroll-contain p-0"
+              >
+                {orderedSpaceIds.map(spaceId => {
+                  const label = spaceLabel(labelsById, spaceId);
+                  const name = label?.name?.trim() || 'Space';
+                  const debateCount = debatesBySpace.get(normId(spaceId)) ?? debatesBySpace.get(spaceId) ?? 0;
 
-        return label?.image ? (
-          <span
-            key={spaceId}
-            title={name}
-            className="relative h-4 w-4 shrink-0 overflow-hidden rounded-[5px]"
-            data-testid="person-space-icon"
-          >
-            <ThumbGeoImage value={label.image} alt="" />
-          </span>
-        ) : (
-          <span
-            key={spaceId}
-            title={name}
-            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] bg-grey-01 text-[9px] font-medium text-grey-04"
-            data-testid="person-space-icon"
-          >
-            {(name.slice(0, 1).toUpperCase() || '?').replace(/[^A-Z0-9?]/g, '?')}
-          </span>
-        );
-      })}
-      {overflow > 0 ? (
-        <span
-          className="shrink-0 text-[10px] leading-none text-grey-04 tabular-nums"
-          data-testid="person-space-overflow"
-        >
-          +{overflow}
-        </span>
-      ) : null}
+                  return (
+                    <li key={spaceId} className="border-b border-grey-02 last:border-b-0">
+                      <Link
+                        href={NavUtils.toSpace(spaceId)}
+                        className="flex min-w-0 items-center gap-2 p-2 transition-colors hover:bg-grey-01"
+                        data-testid="person-space-option"
+                      >
+                        <SpaceListIcon spaceId={spaceId} labelsById={labelsById} />
+                        <span className="min-w-0 flex-1 truncate text-metadataMedium text-text">{name}</span>
+                        {debateCount > 0 ? (
+                          <span className="shrink-0 text-footnote text-grey-04 tabular-nums">
+                            {debateCount} {debateCount === 1 ? 'debate' : 'debates'}
+                          </span>
+                        ) : null}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Popover.Content>
+          </Popover.Portal>
+        ) : null}
+      </Popover.Root>
+    </div>
+  );
+}
+
+function StackedSpaceIcon({ spaceId, labelsById }: { spaceId: string; labelsById: Map<string, SpaceLabel> }) {
+  const label = spaceLabel(labelsById, spaceId);
+  const name = label?.name?.trim() || 'Space';
+
+  return (
+    <span
+      title={name}
+      className="relative box-content flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-[5px] border-2 border-white bg-grey-01 text-[9px] font-medium text-grey-04"
+      data-testid="person-space-icon"
+    >
+      {label?.image ? <ThumbGeoImage value={label.image} alt="" /> : spaceInitial(name)}
     </span>
   );
+}
+
+function SpaceListIcon({ spaceId, labelsById }: { spaceId: string; labelsById: Map<string, SpaceLabel> }) {
+  const label = spaceLabel(labelsById, spaceId);
+  const name = label?.name?.trim() || 'Space';
+
+  return (
+    <span
+      aria-hidden="true"
+      className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-grey-01 text-button font-medium text-grey-04"
+    >
+      {label?.image ? <ThumbGeoImage value={label.image} alt="" /> : spaceInitial(name)}
+    </span>
+  );
+}
+
+function spaceInitial(name: string): string {
+  return (name.slice(0, 1).toUpperCase() || '?').replace(/[^A-Z0-9?]/g, '?');
 }

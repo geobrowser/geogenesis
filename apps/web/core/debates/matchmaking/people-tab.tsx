@@ -14,6 +14,7 @@ import { Input } from '~/design-system/input';
 import { OnlineDot } from '~/design-system/online-dot';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { activeDebate } from '../activity-state';
 import type { DebatePerson } from '../api';
@@ -72,6 +73,9 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
   const currentUserId = useCurrentGeoChatUserId();
+  // One elevated portal for every row's space list. A portal per person would append a matching
+  // number of containers to the body, while a plain Radix portal sits behind this z-200 panel.
+  const spacesPopoverPortal = useElevatedPopoverPortal();
   const allPeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
 
   // Held outside this component so they survive it, exactly as the claim tabs' filters are: the hub
@@ -294,6 +298,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                   record={records.get(person.profile_space_id) ?? null}
                   spaceIds={spacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
                   labelsById={labelsById}
+                  popoverPortal={spacesPopoverPortal}
                   disabled={buttonsDisabled}
                   disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
                   onRequireSignIn={onRequireSignIn}
@@ -312,6 +317,7 @@ function PersonRow({
   record,
   spaceIds,
   labelsById,
+  popoverPortal,
   disabled,
   disabledReason,
   onRequireSignIn,
@@ -323,6 +329,8 @@ function PersonRow({
   spaceIds: string[];
   /** Resolved once for the tab, so the menu and these icons draw the same space the same way. */
   labelsById: Map<string, SpaceLabel>;
+  /** Shared across the list so every row's popup clears the debates panel without one portal each. */
+  popoverPortal: HTMLElement | null;
   disabled: boolean;
   /** Only surfaced on hover, so it explains the greyed-out button without repeating the card. */
   disabledReason: string;
@@ -334,6 +342,15 @@ function PersonRow({
 }) {
   const createChallenge = useCreateDebateChallenge();
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
+  const activeSpaces =
+    spaceIds.length > 0 ? (
+      <PersonSpaceIcons
+        spaceIds={spaceIds}
+        labelsById={labelsById}
+        debatesBySpace={record?.debatesBySpace}
+        popoverPortal={popoverPortal}
+      />
+    ) : null;
 
   return (
     // Three columns rather than a flex run, so the button sits in its own track instead of sharing a
@@ -373,14 +390,12 @@ function PersonRow({
             {speakerLabel(person)}
           </Text>
         )}
-        {/* Wrapping, and both on one line while there is room: the record and the icons are two
-            pieces of the same "who is this" line, and this panel is narrow enough that GEO-2774
-            exists about it. Given a row too tight for both, the icons drop under the record rather
-            than either one truncating. */}
+        {/* Deliberately three lines: stats, active spaces, then the join date. Keeping "Active in…"
+            immediately above "On Geo since" makes both read as profile context, while the popup
+            gives the compact avatar stack somewhere to reveal its full answer. */}
         {record || spaceIds.length > 0 ? (
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-            {record && <PersonRecordLine record={record} />}
-            <PersonSpaceIcons spaceIds={spaceIds} labelsById={labelsById} />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            {record ? <PersonRecordLine record={record} activeSpaces={activeSpaces} /> : activeSpaces}
           </div>
         ) : null}
       </div>

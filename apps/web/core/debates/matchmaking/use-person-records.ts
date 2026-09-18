@@ -9,6 +9,7 @@ import { Effect } from 'effect';
 import { type WinnerShare, useWinnerSharesWithStatus } from '~/core/claims/browse/claim-debates';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
+import { normId } from '~/core/utils/norm-id';
 
 import { type PersonRecord, canonicalizeWinnerShares, derivePersonRecord } from './person-record';
 import {
@@ -33,6 +34,8 @@ type RawRecord = {
   positions: number;
   positionsTruncated: boolean;
   debateIds: string[];
+  /** Distinct published debates per space; the same debate on both sides still counts once. */
+  debatesBySpace: Map<string, number>;
   truncated: boolean;
   createdAt: string | number | null;
 };
@@ -198,11 +201,9 @@ export function readPersonRecords(response: PersonRecordsQuery, personIds: strin
 
   personIds.forEach((personId, index) => {
     const positions = response[personAlias(index, 'positions')] as
-      | CountedConnection<{ objectId?: string | null }>
-      | undefined;
+      CountedConnection<{ objectId?: string | null }> | undefined;
     const supported = response[personAlias(index, 'supported')] as
-      | CountedConnection<{ fromEntityId?: string | null }>
-      | undefined;
+      CountedConnection<{ fromEntityId?: string | null; spaceId?: string | null }> | undefined;
     const opposed = response[personAlias(index, 'opposed')] as typeof supported;
     const joined = response[personAlias(index, 'joined')] as { createdAt?: string | null } | undefined;
 
@@ -218,6 +219,7 @@ export function readPersonRecords(response: PersonRecordsQuery, personIds: strin
     }
 
     const debateIds = new Set<string>();
+    const debateIdsBySpace = new Map<string, Set<string>>();
     let truncated = false;
     for (const side of [supported, opposed]) {
       let collected = 0;
@@ -225,6 +227,12 @@ export function readPersonRecords(response: PersonRecordsQuery, personIds: strin
         if (!node?.fromEntityId) continue;
         collected += 1;
         debateIds.add(node.fromEntityId);
+        if (node.spaceId) {
+          const spaceId = normId(node.spaceId);
+          const debates = debateIdsBySpace.get(spaceId) ?? new Set<string>();
+          debates.add(uuidToHex(node.fromEntityId));
+          debateIdsBySpace.set(spaceId, debates);
+        }
       }
       // Per side, not over the union: the two sides are paged independently, and a short page on
       // either one makes the record short.
@@ -235,6 +243,7 @@ export function readPersonRecords(response: PersonRecordsQuery, personIds: strin
       positions: positionClaimIds.size,
       positionsTruncated: isShort(positions, positionRows, POSITIONS_PER_PERSON),
       debateIds: [...debateIds],
+      debatesBySpace: new Map([...debateIdsBySpace].map(([spaceId, ids]) => [spaceId, ids.size])),
       truncated,
       createdAt: joined?.createdAt ?? null,
     });

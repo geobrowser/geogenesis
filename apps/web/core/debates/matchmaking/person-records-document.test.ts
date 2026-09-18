@@ -19,6 +19,8 @@ describe('buildPersonRecordsDocument', () => {
     expect(source.match(/relationsConnection/g)).toHaveLength(4);
     expect(source.match(/entity\(/g)).toHaveLength(2);
     expect(source.match(/^query /gm)).toHaveLength(1);
+    // The relation's publication space is the space the recorded debate belongs to.
+    expect(source.match(/fromEntityId\s+spaceId/g)).toHaveLength(4);
   });
 
   // A hex id cannot start a GraphQL name — `07842862…` is not a valid alias — so aliases are
@@ -211,6 +213,35 @@ describe('readPersonRecords', () => {
     expect(records.get(A)?.debateIds).toEqual(['d1']);
   });
 
+  it('groups distinct recorded debates by publication space', () => {
+    const records = readPersonRecords(
+      {
+        p0_positions: positions([]),
+        p0_supported: {
+          nodes: [
+            { fromEntityId: 'd1', spaceId: 'space-one' },
+            { fromEntityId: 'd2', spaceId: 'space-one' },
+          ],
+        },
+        // The repeated d1 models a malformed debate appearing on both sides. It remains one debate
+        // in the same way `debateIds` does, rather than inflating that space's activity.
+        p0_opposed: {
+          nodes: [
+            { fromEntityId: 'd1', spaceId: 'space-one' },
+            { fromEntityId: 'd3', spaceId: 'space-two' },
+          ],
+        },
+        p0_joined: {},
+      },
+      [A]
+    );
+
+    expect([...records.get(A)!.debatesBySpace]).toEqual([
+      ['spaceone', 2],
+      ['spacetwo', 1],
+    ]);
+  });
+
   // The round trip an unusable id used to break: `A` is queried as `p0`, so decoding against the
   // caller's list would have handed `A`'s record to the invalid id and left `A` empty.
   it('keeps each record with the person it belongs to when an id was dropped', () => {
@@ -290,6 +321,7 @@ describe('readPersonRecords', () => {
       positions: 0,
       positionsTruncated: true,
       debateIds: [],
+      debatesBySpace: new Map(),
       truncated: true,
       createdAt: null,
     });

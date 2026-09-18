@@ -40,7 +40,11 @@ vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, ...props }: { children: React.ReactNode } & Record<string, unknown>) => {
     mocks.linkProps.push(props);
     return (
-      <a href={props.href as string} className={props.className as string | undefined}>
+      <a
+        href={props.href as string}
+        className={props.className as string | undefined}
+        data-testid={props['data-testid'] as string | undefined}
+      >
         {children}
       </a>
     );
@@ -656,6 +660,77 @@ describe('PeopleTab filters', () => {
     const row = screen.getByText('Arturas').closest('li') as HTMLElement;
     expect(within(row).getAllByTestId('person-space-icon')).toHaveLength(PERSON_SPACE_ICON_CAP);
     expect(within(row).getByTestId('person-space-overflow')).toHaveTextContent('+2');
+  });
+
+  it('puts Active in above the join date and opens the complete space list', async () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.personSpaces = new Map([[PROFILE_THEM, ['spacea', 'spaceb']]]);
+    mocks.records = new Map([
+      [
+        PROFILE_THEM,
+        {
+          positions: null,
+          debatesArgued: null,
+          winRate: null,
+          joinedAt: new Date(Date.UTC(2026, 0, 29)),
+        },
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const row = screen.getByText('Arturas').closest('li') as HTMLElement;
+    expect(row.textContent!.indexOf('Active in…')).toBeLessThan(row.textContent!.indexOf('On Geo since Jan 2026'));
+
+    fireEvent.click(within(row).getByRole('button', { name: 'View 2 active spaces' }));
+
+    const list = await screen.findByRole('list', { name: 'Active spaces' });
+    const options = within(list).getAllByTestId('person-space-option');
+    expect(options[0]).toHaveAttribute('href', NavUtils.toSpace('spacea'));
+    expect(options[1]).toHaveAttribute('href', NavUtils.toSpace('spaceb'));
+  });
+
+  it('orders active spaces by recorded debates, then by canonical space rank', async () => {
+    const root = 'a19c345ab9866679b001d7d2138d88a1';
+    const crypto = 'c9f267dcb0d270718c2a3c45a64afd32';
+    const ai = '41e851610e13a19441c4d980f2f2ce6b';
+    const unranked = 'ffffffffffffffffffffffffffffffff';
+
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.personSpaces = new Map([[PROFILE_THEM, [root, crypto, ai, unranked]]]);
+    mocks.spaceLabels = new Map([
+      [root, { name: 'Root', image: null }],
+      [crypto, { name: 'Crypto', image: null }],
+      [ai, { name: 'AI', image: null }],
+      [unranked, { name: 'Unranked', image: null }],
+    ]);
+    mocks.records = new Map([
+      [
+        PROFILE_THEM,
+        {
+          positions: 4,
+          debatesArgued: 4,
+          debatesBySpace: new Map([
+            [ai, 3],
+            [unranked, 1],
+          ]),
+          winRate: null,
+          joinedAt: new Date(Date.UTC(2026, 0, 29)),
+        },
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View 4 active spaces' }));
+    const list = await screen.findByRole('list', { name: 'Active spaces' });
+    const options = within(list).getAllByTestId('person-space-option');
+
+    expect(options.map(option => option.getAttribute('href'))).toEqual(
+      [ai, unranked, root, crypto].map(NavUtils.toSpace)
+    );
+    expect(within(options[0]).getByText('3 debates')).toBeInTheDocument();
+    expect(within(options[1]).getByText('1 debate')).toBeInTheDocument();
   });
 
   it('draws nothing at all for somebody in no spaces', () => {

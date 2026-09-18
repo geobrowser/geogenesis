@@ -14,6 +14,11 @@ export type PersonRecord = {
   positions: number | null;
   debatesArgued: number | null;
   /**
+   * Published debates grouped by the space they were recorded in. Used only to order the person's
+   * active-space list; optional so older callers constructing display-only records stay valid.
+   */
+  debatesBySpace?: ReadonlyMap<string, number>;
+  /**
    * `percent` is `wins` over `of`, the debates they argued. `judged` is how many of those anybody
    * has voted on — carried so the row can say what the percentage is actually derived from rather
    * than presenting a lower bound as a settled figure.
@@ -31,6 +36,8 @@ export type PersonRecordInput = {
   positionsTruncated: boolean;
   /** Every debate they argued, either side, already de-duplicated. */
   debateIds: string[];
+  /** Published debates grouped by relation space, already de-duplicated per debate and space. */
+  debatesBySpace?: ReadonlyMap<string, number>;
   /** A side's relations came back short, so `debateIds` is a subset and any count from it is low. */
   truncated: boolean;
   /** Unix seconds — stringified or numeric — or ISO 8601, as `entity.createdAt` may return it. */
@@ -78,6 +85,7 @@ export function derivePersonRecord({
   positions,
   positionsTruncated,
   debateIds,
+  debatesBySpace = new Map(),
   truncated,
   createdAt,
   sharesByDebateId,
@@ -90,7 +98,7 @@ export function derivePersonRecord({
   // A truncated page is an arbitrary subset of someone's debates, so both the count and any rate
   // derived from it would be quietly low. No number is the honest answer; a wrong one is not.
   if (truncated) {
-    return { positions: positionsHeld, debatesArgued: null, winRate: null, joinedAt };
+    return { positions: positionsHeld, debatesArgued: null, debatesBySpace, winRate: null, joinedAt };
   }
 
   const debatesArgued = debateIds.length;
@@ -111,6 +119,7 @@ export function derivePersonRecord({
   return {
     positions: positionsHeld,
     debatesArgued: debatesArgued > 0 ? debatesArgued : null,
+    debatesBySpace,
     winRate:
       debatesArgued > 0 && rateIsHonest
         ? { percent: Math.round((wins / debatesArgued) * 100), wins, of: debatesArgued, judged }
