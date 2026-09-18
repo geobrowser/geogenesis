@@ -350,11 +350,12 @@ describe('DebateClaimTickerStack', () => {
 
   /**
    * The open list dissolves into the tile's edge rather than being cut off square, and it may not
-   * do that with a mask.
+   * do that with a mask on the box.
    *
    * A `mask-image` makes its element a Backdrop Root, which leaves `backdrop-filter` on anything
    * inside with nothing to sample — masking this box flattened the glass on every card in the list
-   * until it was scrolled back to the very top, where the mask came off again.
+   * until it was scrolled back to the very top, where the mask came off again. The ramp goes on the
+   * cards, whose own masks do not blind their own backdrop-filter.
    */
   it('dissolves its top edge without masking the box the glass cards sit in', () => {
     const { container } = renderStack({ open: true });
@@ -362,6 +363,75 @@ describe('DebateClaimTickerStack', () => {
 
     expect(list.style.maskImage).toBe('');
     expect(list.style.webkitMaskImage).toBe('');
+  });
+
+  /** The ramp's two stops, in px. Read off the value rather than the string, which jsdom rewrites. */
+  const rampStops = (card: HTMLElement) =>
+    [...card.style.maskImage.matchAll(/(-?\d+)px/g)].map(match => Number(match[1]));
+
+  /**
+   * One continuous ramp across the list, carried by whichever cards it crosses.
+   *
+   * Each card gets the gradient shifted by its own distance from the top of the list, so the stops
+   * line up with the list's edge and not the card's. jsdom lays nothing out, so the geometry is
+   * stated outright.
+   */
+  it('ramps the cards the top edge crosses and leaves the rest alone', () => {
+    const { container } = renderStack({ open: true });
+    const list = container.firstElementChild!.firstElementChild as HTMLElement;
+    const cards = [...list.children] as HTMLElement[];
+
+    cards.forEach((card, index) =>
+      Object.defineProperty(card, 'offsetTop', { configurable: true, value: index * 100 })
+    );
+    fireEvent.scroll(list, { target: { scrollTop: 0 } });
+
+    // Top card straddles the edge: transparent at the edge, solid 68px down.
+    expect(rampStops(cards[0])).toEqual([0, 68]);
+    // The one below it starts past the ramp, so it carries none of it.
+    expect(cards[1].style.maskImage).toBe('');
+  });
+
+  // Scrolling moves the ramp over the cards rather than with them.
+  it('shifts the ramp as the list scrolls under it', () => {
+    const { container } = renderStack({ open: true });
+    const list = container.firstElementChild!.firstElementChild as HTMLElement;
+    const cards = [...list.children] as HTMLElement[];
+
+    cards.forEach((card, index) =>
+      Object.defineProperty(card, 'offsetTop', { configurable: true, value: index * 100 })
+    );
+    fireEvent.scroll(list, { target: { scrollTop: 100 } });
+
+    // The first card is now wholly above the list, and the second sits against the edge.
+    expect(cards[0].style.maskImage).toBe('');
+    expect(rampStops(cards[1])).toEqual([0, 68]);
+  });
+
+  // The ramp is written to the nodes, and the newest card survives the close.
+  it('takes the ramp off again when the corner closes', () => {
+    const { container, rerender } = renderStack({ open: true });
+    const list = container.firstElementChild!.firstElementChild as HTMLElement;
+    const cards = [...list.children] as HTMLElement[];
+
+    cards.forEach((card, index) =>
+      Object.defineProperty(card, 'offsetTop', { configurable: true, value: index * 100 })
+    );
+    fireEvent.scroll(list, { target: { scrollTop: 0 } });
+    expect(cards[0].style.maskImage).not.toBe('');
+
+    rerender(
+      <DebateClaimTickerStack
+        cards={resting}
+        history={history}
+        participantByClaimId={new Map([['claim-1', SPEAKER]])}
+        rowsByClaimId={new Map()}
+        entitiesByClaimId={new Map()}
+        onAnswered={vi.fn()}
+      />
+    );
+
+    for (const card of [...list.children] as HTMLElement[]) expect(card.style.maskImage).toBe('');
   });
 
   // The gaps between cards are holes in the list, and the video behind is one big play/pause
