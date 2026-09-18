@@ -3393,6 +3393,20 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
   };
 }
 
+/**
+ * Post-roll on the capture window (GEO-2949).
+ *
+ * The window used to close exactly on the final turn's deadline, so the last speaker was cut
+ * mid-sentence — on the debate this was measured against, on "...went back to school, I mean,".
+ * That is the only point in the pipeline where anything is genuinely lost: overrun a *middle*
+ * turn and the recorder is still rolling, so the audio survives in the source file even though
+ * the render drops it at the boundary. At the end there is no source left to go back to.
+ *
+ * Costs nothing to keep. `recording_trim_for_window` already trims to the published window via
+ * `source_start_offset_ms`, so these seconds are captured and then never composed.
+ */
+const RECORDING_POST_ROLL_MS = 5_000;
+
 function recordingWindowForDebate(debate: Debate): DebateRecordingWindow | null {
   const startAtMs = timestampMs(debate.started_at ?? debate.preflight_ends_at);
   if (startAtMs === null || debate.turn_durations_ms.length === 0) return null;
@@ -3410,7 +3424,7 @@ function recordingWindowForDebate(debate: Debate): DebateRecordingWindow | null 
 
   return {
     startAtMs,
-    endAtMs,
+    endAtMs: endAtMs + RECORDING_POST_ROLL_MS,
   };
 }
 

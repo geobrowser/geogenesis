@@ -5,7 +5,7 @@ import * as React from 'react';
 import { atom, useAtom } from 'jotai';
 
 import type { Debate } from './api';
-import { useDebateTranscript, useRecordingUrl } from './hooks';
+import { useDebateMedia, useDebateTranscript, useRecordingUrl } from './hooks';
 import {
   type PlayBothOutcome,
   type TurnState,
@@ -15,8 +15,11 @@ import {
   participantForSlot,
   playBothWithMutedFallback,
   recordingWindowOffsetsSeconds,
+  sortTurnSegments,
   timelineSecondsFor,
+  timelineSecondsForSegments,
   turnStateForTime,
+  turnStateFromSegments,
 } from './playback-utils';
 
 type PlaybackUrls = {
@@ -172,7 +175,32 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     () => normalizeTurnDurationsMs(debate.turn_durations_ms),
     [debate.turn_durations_ms]
   );
-  const timelineSeconds = React.useMemo(() => timelineSecondsFor(turnDurations), [turnDurations]);
+
+  // GEO-2949. `turn_durations_ms` is the format's allowance, not what the render cut. Debaters
+  // end turns early, so switching the audible panel on the allowance runs late on every turn.
+  // The media query is the same one the feed card already issues, so this is a cache read rather
+  // than a second request; `turn_segments` is absent on older API replicas and on a debate whose
+  // media job has not finished, and the allowance remains the fallback for both.
+  const mediaQuery = useDebateMedia(debate.id, enabled);
+  const turnSegments = React.useMemo(
+    () => sortTurnSegments(mediaQuery.data?.turn_segments ?? []),
+    [mediaQuery.data?.turn_segments]
+  );
+  const turnStateAt = React.useCallback(
+    (seconds: number): TurnState =>
+      turnSegments.length > 0
+        ? turnStateFromSegments(turnSegments, seconds)
+        : turnStateForTime(debate.first_participant_slot, turnDurations, seconds),
+    [debate.first_participant_slot, turnDurations, turnSegments]
+  );
+
+  // The rendered video is shorter than the allowance by every early yield — 5.59s on the debate
+  // this was measured against — so taking the total from the allowance leaves the scrubber
+  // running past the end of both recordings.
+  const timelineSeconds = React.useMemo(
+    () => (turnSegments.length > 0 ? timelineSecondsForSegments(turnSegments) : timelineSecondsFor(turnDurations)),
+    [turnDurations, turnSegments]
+  );
   const slot1Participant = participantForSlot(debate, 1);
   const slot2Participant = participantForSlot(debate, 2);
   const slot1Recording = debate.recordings.find(recording => recording.participant_slot === 1) ?? null;
@@ -189,28 +217,15 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     [debate.started_at, slot1StartedAtMs, slot2StartedAtMs]
   );
 
-  /**
-   * Whose turn it is at a given debate-timeline position.
-   *
-   * Every caller binds the same two pieces of debate metadata, and this is one function rather
-   * than four call sites because they have already drifted apart once: the background recovery
-   * published a new playhead without deriving the turn from it, which left the audio assigned to
-   * whoever was speaking before the tab was hidden (GEO-2947). Anywhere the playhead moves, the
-   * turn moves with it, and that is easier to keep true with a single derivation.
-   */
-  const turnAt = React.useCallback(
-    (seconds: number) => turnStateForTime(debate.first_participant_slot, turnDurations, seconds),
-    [debate.first_participant_slot, turnDurations]
-  );
-  // Callers depend on `turnAt` itself, never on the metadata it is built from. Listing its
-  // internals instead happens to work today — it changes identity exactly when they do — but it
-  // is a coincidence that the next dependency added here would break, silently. Worth stating
-  // because nothing checks it: this project's eslint config pulls `eslint-config-next/typescript`
-  // only, so `react-hooks/exhaustive-deps` is not enabled and a stale dependency list lints clean.
+  // Callers depend on `turnStateAt` itself, never on the metadata behind it. Listing its internals
+  // instead would happen to work — it changes identity exactly when they do — but only by
+  // coincidence, and GEO-2949 has just made it one dependency deeper. Worth stating because
+  // nothing checks it: this project's eslint config pulls `eslint-config-next/typescript` only, so
+  // `react-hooks/exhaustive-deps` is not enabled and a stale dependency list lints clean.
 
   // The slot whose turn it is at the current playhead — stable across pause, so
   // the speaker stays in colour (and keeps subtitles) when the viewer pauses.
-  const activeSlot = React.useMemo(() => turnAt(playheadSeconds)?.slot ?? null, [playheadSeconds, turnAt]);
+  const activeSlot = React.useMemo(() => turnStateAt(playheadSeconds)?.slot ?? null, [playheadSeconds, turnStateAt]);
 
   const transcriptQuery = useDebateTranscript(debate.id, 'json', enabled);
   const transcriptSegments = transcriptQuery.data?.segments ?? [];
@@ -468,7 +483,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       return;
     }
 
-    const turn = turnAt(playhead);
+    const turn = turnStateAt(playhead);
     setTurnState(turn);
 
     // The turn moving to an element the browser stopped off screen is the one case where a
@@ -503,7 +518,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
         });
       }
     }
-  }, [offsets, seekVideosTo, timelineSeconds, turnAt]);
+  }, [offsets, seekVideosTo, timelineSeconds, turnStateAt]);
 
   const pauseBoth = React.useCallback(() => {
     // Supersede any resume still confirming, so it cannot un-pause the viewer.
@@ -609,10 +624,10 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       pendingSeekSecondsRef.current = nextTime;
       if (seekVideosTo(nextTime)) pendingSeekSecondsRef.current = null;
       setPlayheadSeconds(nextTime);
-      setTurnState(turnAt(nextTime));
+      setTurnState(turnStateAt(nextTime));
       window.requestAnimationFrame(updateTurnState);
     },
-    [seekVideosTo, timelineSeconds, turnAt, updateTurnState]
+    [seekVideosTo, timelineSeconds, turnStateAt, updateTurnState]
   );
 
   const ready = Boolean(urls.slot1 && urls.slot2);
@@ -689,7 +704,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       // what `audible` reads — so a pair that kept playing across a turn boundary while hidden
       // would otherwise come back with the volume still on the debater who had stopped speaking,
       // until the next media tick happened to correct it.
-      setTurnState(turnAt(recovered));
+      setTurnState(turnStateAt(recovered));
       return false;
     }
 
@@ -701,7 +716,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     setPlaying(false);
     setTurnState(null);
     return true;
-  }, [offsets, timelineSeconds, turnAt]);
+  }, [offsets, timelineSeconds, turnStateAt]);
 
   const backgroundIntentRef = React.useRef<{
     shouldBePlaying: boolean;

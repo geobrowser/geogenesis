@@ -1,4 +1,4 @@
-import type { Debate, DebateMediaResponse, DebateParticipant, ParticipantSlot } from './api';
+import type { Debate, DebateMediaResponse, DebateMediaTurnSegment, DebateParticipant, ParticipantSlot } from './api';
 
 export type TurnState = {
   slot: ParticipantSlot;
@@ -56,6 +56,60 @@ export function turnStateForTime(firstSlot: ParticipantSlot, turnDurationsMs: nu
 
 function turnSlot(firstSlot: ParticipantSlot, index: number): ParticipantSlot {
   return index % 2 === 0 ? firstSlot : firstSlot === 1 ? 2 : 1;
+}
+
+/**
+ * The turn boundaries the render actually used, when the media response has them (GEO-2949).
+ *
+ * `turnStateForTime` walks `turn_durations_ms`, which is the format's *allowance*. Debaters end
+ * turns early, so the allowance is not what got cut: on the debate this was measured against, the
+ * page switched 4.0-10.8s late on every turn and 11.95s of speech played with the wrong panel
+ * unmuted — the audio dropping out mid-sentence and cutting back in. `turn_segments` carries the
+ * boundaries the video was built from, so it is what the audible panel and the subtitles have to
+ * follow.
+ *
+ * Sorted defensively: the caller receives the array straight off the wire, and a binary search
+ * over an unsorted list would silently pick the wrong speaker.
+ */
+export function sortTurnSegments(segments: DebateMediaTurnSegment[]): DebateMediaTurnSegment[] {
+  return [...segments]
+    .filter(segment => Number.isFinite(segment.output_start_ms) && segment.output_end_ms > segment.output_start_ms)
+    .sort((a, b) => a.output_start_ms - b.output_start_ms);
+}
+
+export function timelineSecondsForSegments(segments: DebateMediaTurnSegment[]): number {
+  return segments.reduce((longest, segment) => Math.max(longest, segment.output_end_ms / 1_000), 0);
+}
+
+/**
+ * `turnStateForTime`'s answer, derived from the rendered segments instead of the allowance.
+ *
+ * `progress` runs off `countdown_start_ms` rather than the segment start, so a 60s turn still
+ * renders a 60s ring even though its retained video is 65s long — before the clock starts, the
+ * ring sits at 0 while the speaker is already talking. That is what the debaters saw.
+ */
+export function turnStateFromSegments(segments: DebateMediaTurnSegment[], seconds: number): TurnState {
+  if (segments.length === 0) return null;
+
+  const ms = seconds * 1_000;
+  const active =
+    segments.find(segment => ms >= segment.output_start_ms && ms < segment.output_end_ms) ??
+    // Past the end, hold the final turn rather than blanking the speaker — the playhead sits on
+    // `output_end_ms` for the whole paused tail after playback finishes.
+    (ms >= segments[segments.length - 1].output_end_ms ? segments[segments.length - 1] : null);
+  if (!active) return null;
+
+  const countdownStartMs = Math.min(
+    Math.max(active.countdown_start_ms ?? active.output_start_ms, active.output_start_ms),
+    active.output_end_ms
+  );
+  const clockMs = Math.max(1, active.output_end_ms - countdownStartMs);
+
+  return {
+    slot: active.participant_slot,
+    progress: Math.max(0, Math.min(1, (ms - countdownStartMs) / clockMs)),
+    seconds: Math.max(0, (active.output_end_ms - ms) / 1_000),
+  };
 }
 
 export function clampSeconds(value: number, duration: number) {

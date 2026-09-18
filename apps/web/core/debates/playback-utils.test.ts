@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { DebateMediaArtifactKind, DebateMediaResponse } from './api';
+import type { DebateMediaArtifactKind, DebateMediaResponse, DebateMediaTurnSegment } from './api';
 import {
   clampSeconds,
   hasProcessedVideo,
@@ -8,8 +8,11 @@ import {
   pairPlayhead,
   playBothWithMutedFallback,
   recordingWindowOffsetsSeconds,
+  sortTurnSegments,
   timelineSecondsFor,
+  timelineSecondsForSegments,
   turnStateForTime,
+  turnStateFromSegments,
 } from './playback-utils';
 
 describe('hasProcessedVideo', () => {
@@ -103,6 +106,101 @@ describe('turnStateForTime', () => {
 
   it('clamps to the final turn past the end of the timeline', () => {
     expect(turnStateForTime(1, durations, 2.5)).toEqual({ slot: 2, progress: 1, seconds: 0 });
+  });
+});
+
+describe('turnStateFromSegments (GEO-2949)', () => {
+  // The shape 01a0b054c50f7540b35192ca5a1737d1 actually rendered: a [60s, 60s] allowance where
+  // the first speaker yielded at 50.829s, so the incoming speaker's video starts there while
+  // their own clock only starts after the 5s handoff.
+  const segments: DebateMediaTurnSegment[] = [
+    {
+      turn_index: 0,
+      participant_slot: 1,
+      output_start_ms: 0,
+      output_end_ms: 50_829,
+      duration_ms: 50_829,
+      countdown_start_ms: 0,
+    },
+    {
+      turn_index: 1,
+      participant_slot: 2,
+      output_start_ms: 50_829,
+      output_end_ms: 115_976,
+      duration_ms: 65_147,
+      countdown_start_ms: 55_976,
+    },
+  ];
+
+  it('switches speaker where the render cut, not where the allowance did', () => {
+    // The whole bug in one assertion: the allowance says slot 1 holds the floor until 60s.
+    expect(turnStateForTime(1, [60_000, 60_000], 55)?.slot).toBe(1);
+    expect(turnStateFromSegments(segments, 55)?.slot).toBe(2);
+  });
+
+  it('reports time remaining against the rendered turn end', () => {
+    expect(turnStateFromSegments(segments, 40)?.seconds).toBeCloseTo(10.829, 3);
+  });
+
+  it('holds the ring at zero through the handoff, then runs the speaker own clock', () => {
+    // 50.829s-55.976s is the handoff: slot 2 is talking and audible, but their timer has not
+    // started, so the ring must not have advanced.
+    expect(turnStateFromSegments(segments, 53)?.progress).toBe(0);
+    // Half of the 60s clock, which lands at 85.976s — not at the midpoint of the 65.1s window.
+    expect(turnStateFromSegments(segments, 85.976)?.progress).toBeCloseTo(0.5, 3);
+    expect(turnStateFromSegments(segments, 115.9)?.progress).toBeCloseTo(1, 1);
+  });
+
+  it('falls back to the segment start when the API sends no countdown start', () => {
+    const [first] = segments;
+    const withoutCountdown: DebateMediaTurnSegment[] = [{ ...first, countdown_start_ms: undefined }];
+    expect(turnStateFromSegments(withoutCountdown, 25.4145)?.progress).toBeCloseTo(0.5, 3);
+  });
+
+  it('holds the final speaker past the end rather than blanking them', () => {
+    // The playhead rests on output_end_ms for the whole paused tail after playback finishes.
+    expect(turnStateFromSegments(segments, 115.976)?.slot).toBe(2);
+    expect(turnStateFromSegments(segments, 300)?.slot).toBe(2);
+  });
+
+  it('has no opinion when the render produced no segments', () => {
+    expect(turnStateFromSegments([], 12)).toBeNull();
+  });
+});
+
+describe('sortTurnSegments', () => {
+  it('orders by output start so a binary-search-free lookup cannot pick the wrong speaker', () => {
+    const out = sortTurnSegments([
+      { turn_index: 1, participant_slot: 2, output_start_ms: 50_829, output_end_ms: 115_976, duration_ms: 65_147 },
+      { turn_index: 0, participant_slot: 1, output_start_ms: 0, output_end_ms: 50_829, duration_ms: 50_829 },
+    ]);
+    expect(out.map(segment => segment.turn_index)).toEqual([0, 1]);
+  });
+
+  it('drops empty and malformed segments', () => {
+    const out = sortTurnSegments([
+      { turn_index: 0, participant_slot: 1, output_start_ms: 0, output_end_ms: 0, duration_ms: 0 },
+      { turn_index: 1, participant_slot: 2, output_start_ms: Number.NaN, output_end_ms: 10, duration_ms: 10 },
+    ]);
+    expect(out).toEqual([]);
+  });
+});
+
+describe('timelineSecondsForSegments', () => {
+  it('ends where the video ends, not where the allowance would', () => {
+    // 270s of allowance, 264.412s of rendered video: the difference is what left the scrubber
+    // running past the end of both recordings.
+    expect(timelineSecondsFor([60_000, 60_000, 45_000, 45_000, 30_000, 30_000])).toBe(270);
+    expect(
+      timelineSecondsForSegments([
+        { turn_index: 0, participant_slot: 1, output_start_ms: 0, output_end_ms: 50_829, duration_ms: 50_829 },
+        { turn_index: 5, participant_slot: 2, output_start_ms: 232_049, output_end_ms: 264_412, duration_ms: 32_363 },
+      ])
+    ).toBeCloseTo(264.412, 3);
+  });
+
+  it('is zero without segments, so the caller keeps the allowance', () => {
+    expect(timelineSecondsForSegments([])).toBe(0);
   });
 });
 

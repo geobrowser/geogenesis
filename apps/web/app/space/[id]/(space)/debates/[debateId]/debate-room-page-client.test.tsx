@@ -4319,7 +4319,15 @@ describe('DebateRoomPageClient', () => {
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
+    // GEO-2949. The window now runs RECORDING_POST_ROLL_MS past the final turn's deadline, so
+    // the last speaker is not cut mid-sentence. Still recording one millisecond after the old
+    // cut-off is the whole point of the change.
     vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:01:10.001Z'));
+    mocks.debate = { ...mocks.debate! };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:01:15.001Z'));
     mocks.debate = { ...mocks.debate! };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
