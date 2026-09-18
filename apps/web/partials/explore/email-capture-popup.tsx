@@ -236,7 +236,12 @@ function EmailCapturePopup() {
         // dismiss button, and a list of controls reading "Dismiss" twice says nothing about which
         // notice either one closes. Matches how the banner names its own.
         aria-label="Dismiss newsletter signup"
-        className="absolute top-[7px] right-[7px] z-20 p-1 text-grey-03 transition-colors duration-200 ease-in-out hover:text-text sm:top-[-5px] sm:right-[-5px] sm:p-4"
+        // `grey-04` rather than the frame's `grey-03`: the glyph is the only thing identifying this
+        // control, and `grey-03` (#b6b6b6) on white is 2.03:1, under the 3:1 WCAG 1.4.11 asks of a
+        // control's visual boundary. `grey-04` (#606060) is 6.29:1 and reads as the same weight of
+        // grey at 12px. The old chip passed by sitting on a dark fill; this glyph has nothing
+        // behind it, and hover cannot rescue it on touch, where there is no hover.
+        className="absolute top-[7px] right-[7px] z-20 p-1 text-grey-04 transition-colors duration-200 ease-in-out hover:text-text sm:top-[-5px] sm:right-[-5px] sm:p-4"
       >
         <CloseSmall />
       </button>
