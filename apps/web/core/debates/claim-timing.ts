@@ -33,11 +33,23 @@ export type TimedClaim = TranscriptClaim & { timing: ClaimTiming | null };
 /**
  * The bar a timing has to clear before a surface may state it — see {@link isAssertableMoment}.
  *
- * Measured against the test debate, where every claim above this was placed on the right sentence.
- * Below it the match is usually still in the right region but can start several seconds early, and
- * a card that pops early tells a viewer a debater said something they had not yet said.
+ * 0.40, from reading 59 matched claims across five debates against their transcripts, plus the 13
+ * hand-checked claims `calibrate-match-score.ts` measures. Everything from 0.40 to 0.55 was right
+ * 20 times out of 22 — nine of nine in the 0.40–0.44 band alone — so the 0.55 this started at was
+ * discarding claims placed exactly correctly. Below 0.30 it degrades sharply: windows collapse to
+ * one or two content words and land in an arbitrary part of the turn.
+ *
+ * Worth knowing what the number is actually measuring. The score is containment of the claim's
+ * content words, so it tracks *how closely the extractor echoed the speech*, not how likely the
+ * match is right — a faithful paraphrase of a long sentence scores low for using different words.
+ * That is why it separates so weakly across its middle, and why the one error above this bar is one
+ * no threshold catches: the claim's specifics were not in its turn at all.
+ *
+ * The matcher is the fallback. Where an LLM has read the turn and chosen the span, or the extractor
+ * has published one, that answer is used instead — see
+ * `docs/plans/2026-09-18-debate-claim-timecodes-llm-matching.md` and GEO-2958.
  */
-export const LIVE_TIMING_CONFIDENCE = 0.55;
+export const LIVE_TIMING_CONFIDENCE = 0.4;
 
 /**
  * Whether a timing is firm enough to *state* — "Said at 2:29", a card over the video.

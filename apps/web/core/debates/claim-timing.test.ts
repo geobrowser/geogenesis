@@ -266,7 +266,7 @@ describe('sortClaimsBySpokenOrder', () => {
   // somewhere, and roughly-when beats the turn it happens to sit in.
   it('uses a match too loose to state as a timecode', () => {
     const timings = new Map([
-      ['loose', timing(10_000, 0.4, 'segment')],
+      ['loose', timing(10_000, 0.28, 'segment')],
       ['firm', timing(30_000, 1, 'published')],
     ]);
 
@@ -351,11 +351,19 @@ describe('isAssertableMoment', () => {
     expect(isAssertableMoment(at(0.62, 'segment'))).toBe(true);
   });
 
-  // The bug it exists for: the panel's timecode admitted any match, so a claim the live layer
-  // refused to draw still printed a time to the second, indistinguishable from a published one.
+  // The bar is 0.40, from reading 59 matched claims against their transcripts — the 0.40–0.44 band
+  // was right nine times out of nine, so a claim scoring 0.42 is a claim the old 0.55 threw away.
+  it('admits the band the calibration cleared', () => {
+    expect(isAssertableMoment(at(0.42, 'segment'))).toBe(true);
+    expect(isAssertableMoment(at(0.4, 'segment'))).toBe(true);
+  });
+
+  // Below the bar the windows collapse to a word or two in an arbitrary part of the turn. The
+  // panel's timecode used to admit these, printing a time to the second on evidence the live layer
+  // would not draw at all.
   it('refuses a match too loose for the live layer', () => {
-    expect(isAssertableMoment(at(0.47, 'segment'))).toBe(false);
-    expect(isAssertableMoment(at(0.4, 'segment'))).toBe(false);
+    expect(isAssertableMoment(at(0.34, 'segment'))).toBe(false);
+    expect(isAssertableMoment(at(0.17, 'segment'))).toBe(false);
   });
 
   it('refuses a whole-turn fallback and a claim with no moment', () => {
