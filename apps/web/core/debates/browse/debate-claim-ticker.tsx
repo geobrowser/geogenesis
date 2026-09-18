@@ -226,6 +226,19 @@ export function useDebateClaimTicker(debate: Debate, playheadMs: number, enabled
 const OLDER_CARD_FADE = 'linear-gradient(to top, #000 0, #000 1rem, transparent 3.25rem)';
 
 /**
+ * The same dissolve on the top edge of the open list.
+ *
+ * Without it the backlog is cut off square at the tile's edge — a half a card with a hard line
+ * through it, which reads as broken rather than as more-above. Applied to the scroll box rather
+ * than to a card, so it stays put at the edge while the list moves under it, and the card crossing
+ * it fades on the way out exactly as the live stack's does.
+ *
+ * Only while something is actually scrolled above. A short backlog sits wholly inside the box with
+ * nothing cut off, and fading its first card then would be dimming the top of a list for no reason.
+ */
+const HISTORY_EDGE_FADE = 'linear-gradient(to bottom, transparent 0, #000 3.25rem)';
+
+/**
  * The claim card that rises over the video as it is said.
  *
  * A translucent dark card in the player's bottom-left corner, stacked upward: the newest arrives
@@ -379,23 +392,38 @@ export function DebateClaimTickerStack({
   onAnswered: (claimId: string, position: boolean) => void;
 }) {
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  /** Whether anything is scrolled off the top, which is the only time the edge needs dissolving. */
+  const [scrolledDown, setScrolledDown] = React.useState(false);
 
   const shown = open ? (history ?? cards) : cards;
+
+  const syncScrolled = React.useCallback(() => {
+    const element = scrollRef.current;
+    setScrolledDown(element !== null && element.scrollTop > 1);
+  }, []);
 
   // Opened at the bottom, on the most recent claim — scrolling *up* from there is the "go back
   // through it" this exists for. Re-run as the history grows so a claim arriving while the list is
   // open does not leave the view stranded mid-list.
   React.useEffect(() => {
-    if (!open) return;
     const element = scrollRef.current;
-    if (element) element.scrollTop = element.scrollHeight;
-  }, [open, shown.length]);
+    if (!open || !element) {
+      setScrolledDown(false);
+      return;
+    }
+    element.scrollTop = element.scrollHeight;
+    syncScrolled();
+  }, [open, shown.length, syncScrolled]);
 
   if (shown.length === 0) return null;
 
   return (
     <div
       ref={scrollRef}
+      onScroll={syncScrolled}
+      style={
+        open && scrolledDown ? { maskImage: HISTORY_EDGE_FADE, WebkitMaskImage: HISTORY_EDGE_FADE } : undefined
+      }
       onFocus={() => onFocusChange?.(true)}
       // Only when focus leaves the stack entirely — moving between two cards inside it must not
       // collapse the list out from under the keyboard.

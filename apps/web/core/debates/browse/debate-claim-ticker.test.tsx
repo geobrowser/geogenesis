@@ -318,6 +318,14 @@ describe('DebateClaimTickerStack', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  // The open list dissolves into the tile's edge rather than being cut off square — but only when
+  // something is actually scrolled above it. jsdom never scrolls, which is the short-backlog case.
+  it('does not dissolve its top edge when nothing is scrolled above', () => {
+    const { container } = renderStack({ open: true });
+
+    expect((container.firstElementChild as HTMLElement).style.maskImage).toBe('');
+  });
+
   // Hover is not available to a keyboard, and the backlog is content rather than decoration, so
   // focus reaching the stack has to open it the way the pointer does.
   it('reports focus entering and leaving so the player can open it', () => {
