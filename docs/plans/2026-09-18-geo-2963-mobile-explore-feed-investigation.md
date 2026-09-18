@@ -2,30 +2,40 @@
 
 ## Outcome
 
-The implementation supports the ticket's decoder- and memory-exhaustion hypothesis. Explore keeps
-every fetched card mounted, and a debate permanently keeps two sourced video elements plus its
-playback/query subtree after it first comes within 800 px of the viewport. Scrolling a debate away
-only pauses the elements; it never detaches their sources or calls `load()` to release browser media
-resources. The number of retained video elements therefore grows with scroll depth.
+The pre-fix implementation supports the ticket's decoder- and memory-exhaustion hypothesis. Explore
+kept every fetched card mounted, and a debate permanently kept two sourced video elements plus its
+playback/query subtree after it first came within 800 px of the viewport. Scrolling a debate away
+only paused the elements; it never detached their sources or called `load()` to release browser media
+resources. The number of retained video elements therefore grew with scroll depth.
+
+This PR changes that lifetime: only debate cards currently inside an 800 px viewport margin mount
+their heavy media/query subtree, and eviction explicitly resets both video elements. Because each
+card observes proximity independently, this is a spatial bound rather than an exact global player or
+video count. The count varies with viewport size and local debate-card density, but no longer grows
+merely because the reader passed more debates earlier in the session.
 
 This is a code-path investigation. It does not claim a device memory measurement: final thresholds
-still need to be verified on a physical iPhone and Android device. The code already establishes the
-unbounded lifetime that makes the reported blank panels and tab reloads increasingly likely.
+still need to be verified on a physical iPhone and Android device. The pre-fix code established the
+unbounded lifetime that made the reported blank panels and tab reloads increasingly likely.
 
 ## Field reproduction
 
-On 2026-09-18, the PR's Vercel preview was reproduced in mobile Chrome on a physical mobile device:
+On 2026-09-18, before the media-lifetime implementation was added, commit `e282e7bfd` of this PR was
+tested in mobile Chrome on a physical mobile device. At that point the branch changed documentation
+only, so its Vercel preview exercised the same feed/player path as the `master` baseline:
 
 1. scroll down a few pages of Explore;
 2. stop on a debate and wait for its video to load;
 3. after approximately 30 seconds, the site crashes.
 
-This PR changes documentation only, so its preview exercises the same feed/player implementation as
-the `master` baseline. The result confirms that the scroll-depth crash is still reproducible on a
-real mobile browser and ties the terminal failure to loading a debate after resources have already
-accumulated. Without a browser memory trace or crash log it does not, by itself, prove whether the
-immediate kill came from memory, a decoder ceiling, or both; the unbounded retention path below
-remains the leading cause.
+That baseline result confirmed the scroll-depth crash on a real mobile browser and tied the terminal
+failure to loading a debate after resources had already accumulated. Without a browser memory trace
+or crash log it did not, by itself, prove whether the immediate kill came from memory, a decoder
+ceiling, or both; the unbounded retention path below remained the leading cause.
+
+After the P0 fix was deployed, the same mobile Chrome scroll-and-wait flow was repeated on the fixed
+preview and did not crash. That is a successful field smoke test, not an instrumented long-scroll or
+a measurement of the device's memory/decoder ceiling; the broader validation below remains useful.
 
 ## Fix implemented in this PR
 
@@ -44,7 +54,7 @@ This bounds live media resources with viewport proximity even though lightweight
 accumulate. Physical-device long-scroll validation remains required; whole-row virtualization and a
 central exact preload budget remain follow-up hardening rather than prerequisites for this fix.
 
-## Confirmed path
+## Pre-fix confirmed path
 
 ### 1. The feed appends forever and does not virtualize
 
@@ -78,49 +88,49 @@ Relevant code:
 Expected consequence: the browser's media pressure rises two decoders/resources at a time. A
 one-sided blank panel is consistent with one element obtaining resources while its sibling cannot.
 
-### 3. Proximity is sticky, including preload
+### 3. Proximity was sticky, including preload
 
-The card sets `nearViewport` to `true` the first time it intersects an 800 px root margin and never
-sets it back to `false`. That value gates the debate and media queries, selects the full player over
-the skeleton, and is passed to the player as `preload`.
+The card set `nearViewport` to `true` the first time it intersected an 800 px root margin and never
+set it back to `false`. That value gated the debate and media queries, selected the full player over
+the skeleton, and was passed to the player as `preload`.
 
-`DebateFeedPlayer` calls `useDebatePlayback(debate, active || preload)`. Once a card has approached
-the viewport, `preload` stays true for the lifetime of the feed, so its playback URLs and transcript
-query remain enabled even when the card is many screens behind the reader.
+`DebateFeedPlayer` called `useDebatePlayback(debate, active || preload)`. Once a card had approached
+the viewport, `preload` stayed true for the lifetime of the feed, so its playback URLs and transcript
+query remained enabled even when the card was many screens behind the reader.
 
 Relevant code:
 
-- `apps/web/partials/explore/debate-explore-feed-card.tsx`: the `nearViewport` observer and
-  `preload={nearViewport}`
+- `apps/web/partials/explore/debate-explore-feed-card.tsx`: the former sticky `nearViewport`
+  observer and `preload={nearViewport}` path
 - `apps/web/core/debates/browse/debate-feed-player.tsx`: `active || preload`
 - `apps/web/core/debates/use-debate-playback.ts`: recording URL state and transcript query
 
-Expected consequence: the intended one-card look-ahead becomes a permanent retain flag. Every
-debate the reader passes keeps its media and data subtree live.
+Expected consequence: the intended one-card look-ahead became a permanent retain flag. Every
+debate the reader passed kept its media and data subtree live.
 
-### 4. Scroll-out pauses playback but does not release media
+### 4. Scroll-out paused playback but did not release media
 
-When a card deactivates, the player calls `suspend()`. `suspend()` calls `pause()` and updates React
-state. Neither it nor an unmount cleanup removes the `src` attribute and calls `load()`. The URL is
-also deliberately retained in hook state for smooth re-entry.
+When a card deactivated, the player called `suspend()`. `suspend()` called `pause()` and updated
+React state. Neither it nor an unmount cleanup removed the `src` attribute and called `load()`. The
+URL was also deliberately retained in hook state for smooth re-entry.
 
-That retention fixed re-fetch flicker in GEO-2895, but it is unsafe when combined with an
-unvirtualized infinite list: paused elements can continue holding decoder/demuxer state and buffered
-media.
+Retaining the URL fixed re-fetch flicker in GEO-2895, but the pre-fix combination of URL retention
+and a permanently mounted player was unsafe in an unvirtualized infinite list: paused elements could
+continue holding decoder/demuxer state and buffered media.
 
 Relevant code:
 
 - `apps/web/core/debates/browse/debate-feed-player.tsx`: inactive-player effect
 - `apps/web/core/debates/use-debate-playback.ts`: `suspend()` and retained `urls`
 
-Expected consequence: media memory need not fall when a debate leaves the viewport, so pressure is
-determined by total scroll depth rather than the small number of visible cards.
+Expected consequence: media memory did not need to fall when a debate left the viewport, so pressure
+was determined by total scroll depth rather than the small number of visible cards.
 
-### 5. Retained work is wider than video playback
+### 5. Retained work was wider than video playback
 
-Once a debate becomes ready, its mounted subtree also subscribes to votes, transcript claims,
-playback transcript/media, participant space/profile data, and playback analytics. Pausing the videos
-does not unsubscribe any of those consumers.
+Once a debate became ready, its mounted subtree also subscribed to votes, transcript claims,
+playback transcript/media, participant space/profile data, and playback analytics. Pausing the
+videos did not unsubscribe any of those consumers.
 
 Expected consequence: video resources are the likely crash trigger, while React/query state and
 request fan-out add avoidable memory, CPU, and network pressure during a long scroll.
@@ -140,33 +150,28 @@ Keep the lightweight card shell if preserving mixed-height scroll geometry is us
 `DebateCardVideos` and the debate-only action/query subtree only inside a bounded viewport window.
 Use a non-sticky proximity observer for media, separate from any sticky data-fetch flag.
 
-Initial budget:
+Implemented proximity policy:
 
-- one active debate;
-- at most one approaching debate ahead;
-- optionally one recently active debate behind for smooth reverse scrolling;
-- no more than six `<video>` elements attached at once (three debates times two), with a target of
-  four on mobile.
+- each debate card independently mounts its heavy subtree while intersecting an 800 px viewport
+  margin;
+- leaving that margin unmounts the subtree and releases both video elements;
+- reverse scrolling remounts the cached debate before the card becomes visible;
+- concurrent players and attached videos depend on viewport height and debate-card density; this P0
+  has no exact global count cap and does not promise exactly one active debate.
 
 When a retained shell re-enters the window, remount its player. A short skeleton or poster is safer
 than retaining an unbounded set of live media elements to avoid a brief reload.
 
-Expected impact: video element, decoder, buffer, playback-hook, and media-query counts become
-constant with scroll depth. This is the highest-confidence crash fix and can be implemented without
-first solving variable-height whole-list virtualization.
+Expected impact: video element, decoder, buffer, playback-hook, and media-query counts track the
+current proximity window instead of total scroll depth. This is the highest-confidence crash fix and
+does not require variable-height whole-list virtualization.
 
 ### P0 (implemented): explicitly release media on eviction and unmount
 
-Add one cleanup helper for each player element:
-
-1. cancel/supersede in-flight resume work;
-2. call `pause()`;
-3. remove the `src` attribute (and any nested `<source>` attributes if introduced later);
-4. call `load()`;
-5. clear the element ref and player URL state as appropriate.
-
-Run the helper when a debate leaves the media window and when the player unmounts. Signed HTTP URLs
-do not need `URL.revokeObjectURL`, but any later blob URL would.
+The shared cleanup helper calls `pause()`, removes the `src` attribute, and calls `load()` for each
+video element. Leaving the media window unmounts the player, which runs that cleanup and tears down
+the playback/query subtree. Signed HTTP URLs do not need `URL.revokeObjectURL`, but any later blob
+URL would.
 
 Keep this distinct from the ordinary `suspend()` path: a nearby inactive card may stay warm, while
 an evicted card must release resources.
@@ -216,33 +221,40 @@ In development/test builds, expose counters for:
 - active and preload debate ids;
 - in-flight recording URL/media requests.
 
-Add a browser test that advances through enough mocked pages to render at least 50 debates and
-asserts that attached video elements never exceed the chosen budget. Separately test that eviction
-calls pause, source detach, and load for both elements, and that reverse scrolling can remount and
-play a released debate.
+Add a browser test that advances through enough mocked pages to render at least 50 debates. Under the
+current proximity policy, assert that cards outside the 800 px window have no attached videos and
+that the attached count returns to the local-window high-water mark rather than growing with scroll
+depth. After P1 centralizes ownership, tighten that assertion to the chosen exact budget. Separately
+test that eviction calls pause, source detach, and load for both elements, and that reverse scrolling
+can remount and play a released debate.
 
 Expected impact: turns the mobile-only crash mechanism into a desktop-CI invariant even though CI
 cannot reproduce iOS's decoder ceiling.
 
 ## Device validation and acceptance criteria
 
-Validate the fix with Safari Web Inspector on a physical iPhone and Chrome remote debugging on a
-physical Android device. Desktop emulation is useful for counters and network behavior but is not a
-substitute for the mobile decoder/memory ceiling.
+The fixed preview has passed the same physical-device mobile Chrome smoke flow that crashed the
+baseline preview. For comprehensive validation, use Safari Web Inspector on a physical iPhone and
+Chrome remote debugging on a physical Android device. Desktop emulation is useful for counters and
+network behavior but is not a substitute for the mobile decoder/memory ceiling.
 
 Use a feed/filter combination with enough debates, then scroll past at least 50 debate cards at both
 normal and rapid speed. Record the baseline and peak for the following:
 
-1. The number of mounted and sourced `<video>` elements stays at or below the declared budget,
-   independent of scroll depth.
-2. Only one debate is active; preload never extends beyond the bounded candidates.
+1. Cards outside the 800 px proximity window have no mounted player or sourced `<video>` elements.
+2. Mounted/sourced video counts track the cards inside that window instead of accumulating with
+   total scroll depth; record the observed high-water mark rather than assuming an exact count.
 3. An evicted video is paused, has no `src`, and has received `load()`.
-4. Media/request concurrency is bounded and settles after scrolling stops.
-5. Memory plateaus around the media-window high-water mark and drops after eviction/GC instead of
+4. Media/request concurrency settles after scrolling stops and old offscreen requests do not remain
+   active merely because their feed rows are retained.
+5. Memory plateaus around the proximity-window high-water mark and drops after eviction/GC instead of
    climbing with every page.
 6. Both panels continue loading and playing after 50 debates; no blank white panel, random reload,
    or tab crash occurs.
 7. Reverse scrolling remounts a released player and preserves acceptable UX, including mute state.
+
+After the P1 centralized owner is implemented, add the stronger exact-count criteria: exactly one
+active debate and no more than the chosen number of preload candidates/video elements.
 
 ## Scope boundaries
 
@@ -252,6 +264,6 @@ normal and rapid speed. Record the baseline and peak for the following:
 - GEO-2950 overlaps in playback symptoms. If its failures disappear under the bounded-player test,
   both tickets likely share this root cause; otherwise its restart/control failures need a separate
   trace.
-- This ticket's requested deliverable is the investigation and fix list. Implementation should be
-  split into a P0 media-lifetime change and a later whole-feed virtualization change so the crash
-  fix is small enough to validate independently.
+- This PR intentionally limits implementation to the P0 media-lifetime change. Central exact-budget
+  ownership and whole-feed virtualization remain separate follow-ups so the crash fix stays small
+  enough to validate independently.
