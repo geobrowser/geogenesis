@@ -9,7 +9,7 @@ import cx from 'classnames';
 import { trackPrivyAuth } from '~/core/analytics';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 
-import { SUBTEXT_CLASS } from './email-capture-styles';
+import { CONTROL_HEIGHT_CLASS, CONTROL_LABEL_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
 
 /** Privy's OTP is six digits. */
 const CODE_LENGTH = 6;
@@ -180,14 +180,14 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
           aria-invalid={failed}
           disabled={busy}
           className={cx(
-            'h-7 w-full min-w-0 rounded-full border bg-white px-3 text-center text-[17px] leading-[19px] tracking-[0.2em] text-text outline-hidden transition-colors placeholder:tracking-[0.2em] placeholder:text-[#b6b6b6] disabled:text-grey-03',
+            `${CONTROL_HEIGHT_CLASS} w-full min-w-0 rounded-full border bg-white px-3 text-center text-[17px] leading-[19px] tracking-[0.2em] text-text outline-hidden transition-colors placeholder:tracking-[0.2em] placeholder:text-[#b6b6b6] disabled:text-grey-03`,
             failed ? 'border-red-01' : 'border-grey-02 focus:border-text'
           )}
         />
         <button
           type="submit"
           disabled={busy || code.length !== CODE_LENGTH}
-          className="inline-flex h-7 w-full items-center justify-center rounded-full bg-[#151515] px-2.5 text-[16px] leading-none tracking-[-0.35px] whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+          className={`inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTROL_LABEL_CLASS} w-full items-center justify-center rounded-full bg-[#151515] px-2.5 whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60`}
         >
           {verifying ? 'Verifying…' : 'Continue'}
         </button>

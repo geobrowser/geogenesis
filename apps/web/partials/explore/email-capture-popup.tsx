@@ -20,6 +20,7 @@ import { CloseSmall } from '~/design-system/icons/close-small';
 
 import { AccountStep } from './email-capture-account-step';
 import { HEADING_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
+import { CONTROL_HEIGHT_CLASS, CONTROL_LABEL_CLASS } from './email-capture-styles';
 import { clearPendingSignup, readPendingSignup, writePendingSignup } from './pending-signup';
 import { entitySidePanelAtom } from '~/atoms';
 
@@ -350,14 +351,14 @@ function EmailCapturePopup() {
                   <button
                     type="button"
                     onClick={startAccount}
-                    className="inline-flex h-7 w-full items-center justify-center rounded-full bg-[#151515] px-2.5 text-[16px] leading-none tracking-[-0.35px] whitespace-nowrap text-white transition-opacity hover:opacity-90"
+                    className={`inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTROL_LABEL_CLASS} w-full items-center justify-center rounded-full bg-[#151515] px-2.5 whitespace-nowrap text-white transition-opacity hover:opacity-90`}
                   >
                     Create account
                   </button>
                   <button
                     type="button"
                     onClick={close}
-                    className="inline-flex h-7 w-full items-center justify-center rounded-full border border-grey-02 px-2.5 text-[16px] leading-none tracking-[-0.35px] whitespace-nowrap text-[rgba(21,21,21,0.7)] transition-colors hover:border-text hover:text-text"
+                    className={`inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTROL_LABEL_CLASS} w-full items-center justify-center rounded-full border border-grey-02 px-2.5 whitespace-nowrap text-[rgba(21,21,21,0.7)] transition-colors hover:border-text hover:text-text`}
                   >
                     Skip
                   </button>
@@ -393,7 +394,7 @@ function EmailCapturePopup() {
                 aria-invalid={status === 'invalid-email'}
                 disabled={status === 'submitting'}
                 className={cx(
-                  'h-7 w-full min-w-0 rounded-full border bg-white px-3 text-left text-[17px] leading-[19px] text-text outline-hidden transition-colors placeholder:text-grey-03 disabled:text-grey-03 sm:text-center',
+                  `${CONTROL_HEIGHT_CLASS} w-full min-w-0 rounded-full border bg-white px-3 text-left text-[17px] leading-[19px] text-text outline-hidden transition-colors placeholder:text-grey-03 disabled:text-grey-03 sm:text-center`,
                   status === 'invalid-email' ? 'border-red-01' : 'border-grey-02 focus:border-text'
                 )}
               />
@@ -403,7 +404,7 @@ function EmailCapturePopup() {
               <button
                 type="submit"
                 disabled={status === 'submitting'}
-                className="inline-flex h-7 w-full items-center justify-center rounded-full bg-[#151515] px-2.5 text-[16px] leading-none tracking-[-0.35px] whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                className={`inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTROL_LABEL_CLASS} w-full items-center justify-center rounded-full bg-[#151515] px-2.5 whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60`}
               >
                 {status === 'submitting' ? 'Subscribing…' : 'Subscribe'}
               </button>

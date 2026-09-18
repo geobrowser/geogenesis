@@ -813,6 +813,22 @@ describe('ExploreEmailCapturePopup', () => {
       expect(screen.queryByRole('textbox', { name: 'Verification code' })).toBeNull();
     });
 
+    // 28px is the desktop frame's control height and fine with a cursor. On a phone it is a 28px
+    // touch target against 44pt in Apple's guidance and 48dp in Material, which is what made the
+    // card feel cramped. Pinned because the height is shared between the two rows and has drifted
+    // apart once already.
+    it('gives the code field and button a touch-sized height on the phone', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      expect(screen.getByRole('textbox', { name: 'Verification code' }).className).toContain('sm:h-11');
+      expect(screen.getByRole('button', { name: 'Continue' }).className).toContain('sm:h-11');
+    });
+
     // Reports its own sign-in. Leaving it to the navbar looked tidy and was not: that button is
     // replaced by a loading skeleton whenever `isUserLoading` is true — which flips back mid-session
     // on a tab refocus — so a completion landing in that window was recorded by nobody. The navbar
