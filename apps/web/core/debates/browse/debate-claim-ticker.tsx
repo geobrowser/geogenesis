@@ -483,24 +483,21 @@ export function DebateClaimTickerStack({
 }
 
 /**
- * The corner's resting state, and the only part of this layer that is always there to be found.
+ * The way into the backlog where there is no pointer to open it with.
  *
- * The backlog was reachable by hover alone, which is nothing on a touch screen and close to nothing
- * on a desktop — a viewer only finds an invisible affordance by accident. One small pill fixes both:
- * it says the claims exist, says how many, and is a tap target where there is no pointer.
+ * Drawn only on a device that cannot hover. Everywhere else the corner opens by pointing at the
+ * tile, and a permanent pill duplicating that would be furniture over the video — the Figma frame
+ * has no chip in it, and the resting player is quieter without one.
+ *
+ * `hidden` rather than transparent, so it is out of the tab order on a device that will never show
+ * it. The cost is that a keyboard on a hovering device has no control to press: it reaches the
+ * backlog by tabbing into a live card, which opens the corner the way the pointer does, and cannot
+ * reach it at all while the corner is empty. That is the same place the hover-only design started.
  *
  * Deliberately the same glyph the Claims button in the interaction bar uses, because it opens the
  * same set of claims. Two different icons for one idea would be the harder thing to learn.
  */
-function ClaimBacklogChip({
-  count,
-  expanded,
-  onClick,
-}: {
-  count: number;
-  expanded: boolean;
-  onClick: () => void;
-}) {
+function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expanded: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -511,14 +508,13 @@ function ClaimBacklogChip({
         event.stopPropagation();
         onClick();
       }}
-      className="pointer-events-auto flex shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 py-1.5 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-md transition-colors hover:bg-[#151515]/50"
+      className="pointer-events-auto hidden shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 py-1.5 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-md transition-colors hover:bg-[#151515]/50 no-hover:flex"
     >
       <InfoSmall color="white" />
       <span className="tabular-nums">{expanded ? 'Hide' : `${count} ${count === 1 ? 'claim' : 'claims'}`}</span>
     </button>
   );
 }
-
 
 /**
  * The card's top line: who said it, how the crowd has answered it, and the two ways to answer.

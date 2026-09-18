@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
+import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
@@ -19,7 +20,6 @@ import { Text } from '~/design-system/text';
 
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
-import type { ClaimMarker } from '~/core/debates/claim-ticker';
 
 type DebateFeedPlayerProps = {
   debate: Debate;
@@ -137,8 +137,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   const [pinnedSlot, setPinnedSlot] = React.useState<number | null>(null);
 
   /** The same condition the stack is given, so the corner's box can cap itself only when open. */
-  const claimsOpenFor = (slot: number) =>
-    pointerOverSlot === slot || focusedSlot === slot || pinnedSlot === slot;
+  const claimsOpenFor = (slot: number) => pointerOverSlot === slot || focusedSlot === slot || pinnedSlot === slot;
 
   const claimsFor = (slot: number) => {
     const cards = ticker.cardsBySlot.get(slot) ?? [];
@@ -237,7 +236,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         onClaimsHoverChange={onTileHover(2)}
         // This is the half the scrubber sits in, so its claim corner is the one that has to lift
         // clear of the bar.
-        claimsClearScrubber={scrubberShown ? 'always' : 'on-hover'}
+        clearScrubber={scrubberShown ? 'always' : 'on-hover'}
         // Taller than the top tile's, per the frame.
         scrimClassName="h-[4.625rem]"
         scrubber={
@@ -307,7 +306,7 @@ function DebaterVideo({
   claims,
   claimsOpen = false,
   onClaimsHoverChange,
-  claimsClearScrubber = 'never',
+  clearScrubber = 'never',
   topLeft,
   scrubber,
   scrimClassName = 'h-14',
@@ -328,7 +327,9 @@ function DebaterVideo({
   /** The pointer entering or leaving this tile, which opens their backlog. */
   onClaimsHoverChange?: (event: React.PointerEvent, hovered: boolean) => void;
   /** Whether the claim corner has to sit above the scrubber, which only one tile hosts. */
-  claimsClearScrubber?: 'never' | 'on-hover' | 'always';
+  /** Whether what sits in the bottom band — the claim corner and the debater's name — lifts clear
+   * of the scrubber, and whether it does so always or only while the player is hovered. */
+  clearScrubber?: 'never' | 'on-hover' | 'always';
   topLeft?: React.ReactNode;
   scrubber?: React.ReactNode;
   scrimClassName?: string;
@@ -464,8 +465,8 @@ function DebaterVideo({
             // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling
             // is written out because Tailwind generates classes by scanning this source text, so a
             // composed `group-hover:${…}` would produce a rule that does not exist.
-            claimsClearScrubber === 'always' && 'pb-5',
-            claimsClearScrubber === 'on-hover' && 'group-hover:pb-5'
+            clearScrubber === 'always' && 'pb-5',
+            clearScrubber === 'on-hover' && 'group-hover:pb-5'
           )}
         >
           {claims}
@@ -477,7 +478,15 @@ function DebaterVideo({
       <button
         type="button"
         onClick={openProfile}
-        className="absolute right-4 bottom-3 z-10 flex max-w-[55%] items-center gap-2 text-left"
+        className={cx(
+          'absolute right-4 bottom-3 z-10 flex max-w-[55%] items-center gap-2 text-left transition-[padding-bottom] duration-150',
+          // Lifts with the claim stack, and for the same reason: the name shares the bottom band
+          // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
+          // Padding rather than `bottom`, because the box is pinned by its bottom edge — the
+          // padding grows it upward and carries the content with it.
+          clearScrubber === 'always' && 'pb-5',
+          clearScrubber === 'on-hover' && 'group-hover:pb-5'
+        )}
       >
         <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
           <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />

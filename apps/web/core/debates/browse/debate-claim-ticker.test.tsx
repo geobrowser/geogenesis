@@ -311,8 +311,8 @@ describe('DebateClaimTickerStack', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  // The corner is empty most of a debate, so without the chip nothing on screen says the backlog
-  // exists — and on a touch screen there is no hover to discover it with.
+  // The way in where there is no hover. Whether it is *drawn* is a media query — `no-hover:flex`,
+  // which jsdom does not evaluate — so what is checked here is that it exists and counts correctly.
   it('rests on a chip naming how many claims are behind the playhead', () => {
     renderStack({ cards: [], onTogglePinned: vi.fn() });
 
