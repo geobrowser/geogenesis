@@ -2,8 +2,8 @@
 
 Supersedes the matcher-only backfill in `2026-09-17-debate-claim-timecodes-backfill.md`, which
 published 140 of 617 matched claims and left the rest to a scorer that is wrong about one time in
-twenty-two. This places all 701 remaining claims by reading the turn they were made in, and
-publishes the result through the same writes.
+twenty-two. This places the 701 unplaced claims by reading the turn they were made in, re-reads the
+153 already published, and publishes the result through the same writes.
 
 The word-overlap matcher stays in the app as the fallback, at a 0.40 bar, for anything not published
 here — a debate recorded tomorrow, or a claim this pass declines.
@@ -20,6 +20,11 @@ here — a debate recorded tomorrow, or a claim this pass declines.
 > 3. **Publish** the plan that `build-plan-from-matches.ts` produces, exactly as
 >    `2026-09-17-debate-claim-timecodes-backfill.md` describes under **The writes** and
 >    **Proposals** — same properties, same `Selector` typing, one proposal per space.
+>
+> Claims arrive in two states. Most have no offset and need placing. 153 already carry one and need
+> **confirming or correcting** — answer them exactly the same way, from the transcript, and the build
+> script works out whether your answer agrees with what is live. Do not read the published span first
+> and then look for evidence for it.
 >
 > Everything under **Background** is context, not instructions.
 >
@@ -40,14 +45,13 @@ bun scripts/export-claims-for-matching.ts --out ./claim-matching-tasks
 Read-only. As of this writing:
 
 ```
-wrote 65 task files
-  claims to place: 701
-  claims already carrying offsets (skipped): 153
+wrote 66 task files
+  claims in the task files: 854
+  of which already carry offsets: 153 — confirm or correct these
 ```
 
-Each file is one debate. Claims that already carry offsets are left out — a published timecode is
-either the extractor's or an earlier reader's, and either beats re-deciding it. That also makes the
-whole pass resumable: regenerate and anything already published drops out.
+Each file is one debate. Pass `--skip-published` to leave the 153 out and place only the 701 — useful
+for a second pass, since a confirmed claim is unchanged on disk and will come back again otherwise.
 
 A task file looks like this:
 
@@ -72,6 +76,7 @@ A task file looks like this:
           "claimId": "ad46e41fad9f400f9cff320388751793",
           "relationEntityId": "a4fd8040f3364de7be918b070eeb9fc3",
           "text": "Restrictions on open-source AI could focus on usage, such as preventing fully anonymous use.",
+          "published": null,          // non-null = an offset is already live; confirm or correct it
           "matcherGuess": { "startSegment": 12, "endSegment": 15, "score": 0.33 }
         }
       ]
@@ -95,6 +100,32 @@ One file per task file, **same filename**, in your answers directory:
 
 `startSegment` and `endSegment` are the `i` values from that claim's own turn, inclusive. Nothing
 else is read.
+
+## Claims that already carry an offset
+
+`published` is non-null on 153 of the 854, and carries the live span in both units:
+
+```jsonc
+"published": {
+  "startMs": 96000, "endMs": 105000,
+  "startSegment": 12, "endSegment": 15,
+  "onSegmentBoundaries": true   // false = the span was set by hand and cuts inside a segment
+}
+```
+
+Answer these the same way as any other claim: read the turn, pick the span, ignore what is there.
+The build script compares your answer to `published` and reports it as **confirmed** (no write) or
+**corrected** (a write that replaces the live offset). That comparison is only worth anything if you
+form the answer before you look at the field, so read the transcript first.
+
+Three of the 153 have `onSegmentBoundaries: false` — a person set those by hand to a boundary inside
+a segment. Segments are the only unit you can answer in, so agreeing with one of those would still
+come out as a span rounded outward to the segment edges. Answer them normally; the script will not
+overwrite a hand-set span either way, and prints them for a person instead.
+
+**`notInTurn` on a published claim is not a decline** — it says a live offset is wrong. The script
+will not act on it (removing an offset is a different operation, and the call is a person's); it
+prints those claims for a human. Use it, but mean it.
 
 ## How to choose the span
 
@@ -140,10 +171,20 @@ Read the summary before publishing:
 
 ```
 placed by reading: <n>
+published offsets confirmed as correct: <n>   <- agreed with; no write spent
+published offsets corrected: <n>              <- your span replaces the live one
 declined as not in the turn: <n>
 left unanswered: <n>      <- should be 0; anything here is a claim you skipped
 rejected: <n>             <- should be 0 before you publish
 ```
+
+Two lists print separately and are **not** written — they are a person's call, so hand them over
+rather than acting on them: hand-set offsets you answered differently, and published offsets you
+marked `notInTurn`.
+
+A correction is an overwrite of a live offset, so they are worth a second look before publishing:
+each carries `corrects` in the plan with the span it replaces. If the count is far above a handful,
+something is wrong with the reading, not with 153 published offsets.
 
 Then publish `plan.json` exactly as the previous doc describes: group by `spaceId`, one proposal per
 space, `Start offset` and `End offset` as integer milliseconds on `entityId`, plus the
@@ -180,8 +221,14 @@ segment, which is visible on inspection and bounded by the turn.
 
 *Background, not instructions.*
 
-It fixes the present: 701 claims placed by reading rather than by word overlap, so the cards, the
-timecodes and the scrubber hashes are right on debates already published.
+It fixes the present: 854 claims placed or checked by reading rather than by word overlap, so the
+cards, the timecodes and the scrubber hashes are right on debates already published.
+
+Including the 153 is the part worth defending. 140 of them were written by the matcher alone at a
+0.70 score with nothing reading the transcript behind them, and the app scores a published offset
+1.00 — there is no later gate that can demote one, so an error in one of those is invisible from then
+on. They cost a fifth again on top of the unplaced claims, and this is the only pass that will look
+at them.
 
 It does not replace [GEO-2958](https://linear.app/geobrowser/issue/GEO-2958/publish-claim-startend-offsets-automatically-when-a-debates-claims-are).
 The extractor knows the span it drew each claim from; reading a transcript afterwards to recover

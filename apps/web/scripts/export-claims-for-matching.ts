@@ -30,6 +30,15 @@ const arg = (name: string) => {
 
 const OUT = arg('out') ?? './claim-matching-tasks';
 const LIMIT = arg('limit') ? Number(arg('limit')) : Infinity;
+/**
+ * Claims that already carry offsets come out too, to be confirmed rather than placed.
+ *
+ * 140 of the 153 published so far were written by the matcher alone at a 0.7 score, with nothing
+ * human or otherwise reading the transcript behind them — and a published offset is the app's
+ * definition of certainty, so an error in one is invisible from then on. Reading them costs a fifth
+ * again on top of the unplaced claims and is the only chance to catch one.
+ */
+const SKIP_PUBLISHED = process.argv.includes('--skip-published');
 
 await mkdir(OUT, { recursive: true });
 
@@ -64,12 +73,9 @@ for (const debate of debates) {
 
     const turns = [];
     for (const block of claims.blocks) {
-      // Claims that already carry offsets are left alone: a published timecode is either the
-      // extractor's or a reader's, and either beats re-deciding it.
-      const pending = claims.all.filter(claim => claim.blockId === block.id && claim.publishedTiming === null);
-      alreadyPublished += claims.all.filter(
-        claim => claim.blockId === block.id && claim.publishedTiming !== null
-      ).length;
+      const inTurn = claims.all.filter(claim => claim.blockId === block.id);
+      const pending = inTurn.filter(claim => claim.publishedTiming === null || !SKIP_PUBLISHED);
+      alreadyPublished += inTurn.filter(claim => claim.publishedTiming !== null).length;
       if (pending.length === 0) continue;
 
       // Where the turn sits on the recording. A turn that cannot be located is offered whole —
@@ -90,10 +96,30 @@ for (const debate of debates) {
           const guess = window ? matchClaimWindow(claim.text, segments, window) : null;
           const guessStart = guess ? slice.findIndex(s => s.start_ms === guess.startMs) : -1;
           const guessEnd = guess ? slice.findIndex(s => s.end_ms === guess.endMs) : -1;
+          // A published span, shown in the same units the answer is given in so it can be agreed
+          // with or corrected rather than re-derived. Offsets that do not sit on segment boundaries
+          // are reported as milliseconds and flagged, which is itself worth knowing.
+          const publishedStart = claim.publishedTiming
+            ? slice.findIndex(s => s.start_ms === claim.publishedTiming!.startMs)
+            : -1;
+          const publishedEnd = claim.publishedTiming
+            ? slice.findIndex(s => s.end_ms === claim.publishedTiming!.endMs)
+            : -1;
+
           return {
             claimId: claim.id,
             relationEntityId: claim.relationEntityId,
             text: claim.text,
+            /** Present means confirm or correct it, not place it. */
+            published: claim.publishedTiming
+              ? {
+                  startMs: claim.publishedTiming.startMs,
+                  endMs: claim.publishedTiming.endMs,
+                  startSegment: publishedStart === -1 ? null : publishedStart,
+                  endSegment: publishedEnd === -1 ? null : publishedEnd,
+                  onSegmentBoundaries: publishedStart !== -1 && publishedEnd !== -1,
+                }
+              : null,
             // The matcher's answer, to check rather than to trust. It is right far more often than
             // not, so confirming is quick — but it is the thing being audited, so a low score is a
             // reason to look harder, never a reason to accept.
@@ -119,6 +145,8 @@ for (const debate of debates) {
 }
 
 console.log(`wrote ${written} task files to ${OUT}`);
-console.log(`  claims to place: ${claimsExported}`);
-console.log(`  claims already carrying offsets (skipped): ${alreadyPublished}`);
+console.log(`  claims in the task files: ${claimsExported}`);
+console.log(
+  `  of which already carry offsets: ${SKIP_PUBLISHED ? `0 (${alreadyPublished} skipped)` : alreadyPublished} — confirm or correct these`
+);
 if (noTranscript > 0) console.log(`  debates with no transcript to read: ${noTranscript}`);

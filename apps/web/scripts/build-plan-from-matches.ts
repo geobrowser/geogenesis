@@ -34,7 +34,12 @@ const TARGET_PROPERTY = 'e1788cdf9bae42e987b0d9791de09b31';
 const DEBATE_VIDEOS_PROPERTY = 'c48dc314fa7148aeb967139160456f1d';
 
 type TaskSegment = { i: number; startMs: number; endMs: number; text: string };
-type TaskClaim = { claimId: string; relationEntityId: string | null; text: string };
+type TaskClaim = {
+  claimId: string;
+  relationEntityId: string | null;
+  text: string;
+  published: { startMs: number; endMs: number; onSegmentBoundaries: boolean } | null;
+};
 type Task = {
   debateEntityId: string;
   debateName: string | null;
@@ -48,12 +53,27 @@ const plans: {
   debateEntityId: string;
   debateName: string | null;
   spaceId: string;
-  writes: { entityId: string; claimId: string; claimText: string; startMs: number; endMs: number; source: string }[];
+  writes: {
+    entityId: string;
+    claimId: string;
+    claimText: string;
+    startMs: number;
+    endMs: number;
+    source: string;
+    /** Present when this replaces an offset already published — see the doc on overwriting. */
+    corrects?: { startMs: number; endMs: number };
+  }[];
 }[] = [];
 
 let placed = 0;
 let declined = 0;
 let unanswered = 0;
+let confirmed = 0;
+let corrected = 0;
+/** A published claim the reader says is not in its turn — a wrong offset already live. */
+const disputed: string[] = [];
+/** A hand-set span the reader cannot agree with in segments, only widen. Held back for a person. */
+const handSet: string[] = [];
 
 for (const file of (await readdir(TASKS)).filter(name => name.endsWith('.json'))) {
   const task: Task = JSON.parse(await readFile(join(TASKS, file), 'utf8'));
@@ -81,7 +101,11 @@ for (const file of (await readdir(TASKS)).filter(name => name.endsWith('.json'))
       // A claim whose specifics live in another turn has no right answer here, and saying so is
       // the right answer.
       if (answer.notInTurn) {
-        declined += 1;
+        // On an unpublished claim this is just a decline. On a published one it says a live offset
+        // is wrong, which needs removing rather than rewriting — a different op and a judgement
+        // call, so it is reported rather than acted on.
+        if (claim.published) disputed.push(`${claim.claimId}: published offset disputed — "${claim.text.slice(0, 60)}"`);
+        else declined += 1;
         continue;
       }
 
@@ -104,6 +128,25 @@ for (const file of (await readdir(TASKS)).filter(name => name.endsWith('.json'))
         continue;
       }
 
+      // A published claim the reader agrees with needs no write. Republishing the same numbers
+      // would spend a transaction to change nothing.
+      if (claim.published && claim.published.startMs === start.startMs && claim.published.endMs === end.endMs) {
+        confirmed += 1;
+        continue;
+      }
+
+      // A span someone set by hand to a boundary inside a segment cannot be agreed with in segments,
+      // only widened outward to the segment edges — so a differing answer here does not distinguish
+      // "the reader disagrees" from "the reader agrees and lost precision". Both would overwrite a
+      // human's work, so neither is done automatically.
+      if (claim.published && !claim.published.onSegmentBoundaries) {
+        handSet.push(
+          `${claim.claimId}: hand-set ${claim.published.startMs}–${claim.published.endMs}ms, read as ` +
+            `${start.startMs}–${end.endMs}ms`
+        );
+        continue;
+      }
+
       writes.push({
         entityId: claim.relationEntityId,
         claimId: claim.claimId,
@@ -111,8 +154,10 @@ for (const file of (await readdir(TASKS)).filter(name => name.endsWith('.json'))
         startMs: start.startMs,
         endMs: end.endMs,
         source: 'llm-read',
+        ...(claim.published ? { corrects: claim.published } : null),
       });
-      placed += 1;
+      if (claim.published) corrected += 1;
+      else placed += 1;
     }
   }
 
@@ -132,9 +177,19 @@ for (const file of (await readdir(TASKS)).filter(name => name.endsWith('.json'))
 }
 
 console.log(`placed by reading: ${placed}`);
+console.log(`published offsets confirmed as correct: ${confirmed}`);
+console.log(`published offsets corrected: ${corrected}`);
 console.log(`declined as not in the turn: ${declined}`);
 console.log(`left unanswered: ${unanswered}`);
 console.log(`rejected: ${rejected.length}`);
+if (handSet.length > 0) {
+  console.log(`\nhand-set offsets the reader answered differently — decide these by hand: ${handSet.length}`);
+  for (const line of handSet) console.log(`  ? ${line}`);
+}
+if (disputed.length > 0) {
+  console.log(`\npublished offsets the reader says are wrong — decide these by hand: ${disputed.length}`);
+  for (const line of disputed) console.log(`  ? ${line}`);
+}
 for (const reason of rejected.slice(0, 20)) console.log(`  ! ${reason}`);
 
 const bySpace = new Map<string, number>();
@@ -151,11 +206,21 @@ await writeFile(
       source: 'llm-read',
       constants: { TYPES_PROPERTY, SELECTOR_TYPE, TARGET_PROPERTY, DEBATE_VIDEOS_PROPERTY },
       offsetProperties: { start: CLAIM_START_OFFSET_PROPERTY_ID, end: CLAIM_END_OFFSET_PROPERTY_ID },
-      totals: { placed, declined, unanswered, rejected: rejected.length },
+      totals: {
+        placed,
+        confirmed,
+        corrected,
+        declined,
+        unanswered,
+        rejected: rejected.length,
+        disputed: disputed.length,
+        handSet: handSet.length,
+      },
       debates: plans,
     },
     null,
     2
   )}\n`
 );
-console.log(`\nwrote ${OUT} — ${placed} writes across ${plans.length} debates`);
+const writeCount = plans.reduce((total, plan) => total + plan.writes.length, 0);
+console.log(`\nwrote ${OUT} — ${writeCount} writes across ${plans.length} debates`);
