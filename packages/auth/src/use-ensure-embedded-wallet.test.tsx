@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   authenticated: true,
   userWallet: undefined as { address: string } | undefined,
+  walletsReady: true,
   wallets: [] as Array<{ address: string; walletClientType: string }>,
   createWallet: vi.fn(),
   setActiveWallet: vi.fn(),
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@privy-io/react-auth', () => ({
   usePrivy: () => ({ authenticated: mocks.authenticated, user: { wallet: mocks.userWallet } }),
-  useWallets: () => ({ wallets: mocks.wallets }),
+  useWallets: () => ({ wallets: mocks.wallets, ready: mocks.walletsReady }),
   useCreateWallet: () => ({ createWallet: mocks.createWallet }),
 }));
 
@@ -27,6 +28,7 @@ const embedded = { address: '0xabc', walletClientType: 'privy' };
 beforeEach(() => {
   mocks.authenticated = true;
   mocks.userWallet = undefined;
+  mocks.walletsReady = true;
   mocks.wallets = [];
   mocks.createWallet.mockReset().mockResolvedValue(undefined);
   mocks.setActiveWallet.mockReset().mockResolvedValue(undefined);
@@ -58,6 +60,27 @@ describe('useEnsureEmbeddedWallet', () => {
     renderHook(() => useEnsureEmbeddedWallet());
 
     await waitFor(() => expect(mocks.createWallet).toHaveBeenCalledTimes(1));
+  });
+
+  // The case that hits every existing user on every page load. A restored session flips
+  // `authenticated` before `wallets` has hydrated, so there is a window where the list is empty and
+  // somebody who has had a wallet for months looks wallet-less. Asking Privy then means a rejection
+  // -- it errors when one already exists -- and if hydration outlasts the retry delay, an existing
+  // account can spend its whole budget before its own wallet turns up.
+  it('waits for the wallet list to hydrate before deciding a session has none', async () => {
+    mocks.walletsReady = false;
+    const { rerender } = renderHook(() => useEnsureEmbeddedWallet());
+
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(mocks.createWallet).not.toHaveBeenCalled();
+
+    // Hydration finishes and the wallet was there all along.
+    mocks.walletsReady = true;
+    mocks.wallets = [embedded];
+    rerender();
+
+    await waitFor(() => expect(mocks.setActiveWallet).toHaveBeenCalledWith(embedded));
+    expect(mocks.createWallet).not.toHaveBeenCalled();
   });
 
   it('does not create a second wallet when the session already has one', async () => {

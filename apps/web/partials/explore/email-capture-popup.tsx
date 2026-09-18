@@ -19,6 +19,7 @@ import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
 import { AccountStep } from './email-capture-account-step';
+import { HEADING_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
 import { entitySidePanelAtom } from '~/atoms';
 
 /**
@@ -408,18 +409,6 @@ function EmailCapturePopup() {
     </div>
   );
 }
-
-/**
- * 15px leading under 24px glyphs is the design's cap-height trim, and it only holds while the line
- * does not wrap. On the mobile frame the heading is 26px (16px trimmed) and 277 wide, inside a sheet
- * with 20px gutters, so it wraps below about 318px — a folded Galaxy Fold is 280 — at which point
- * the trimmed leading would put the second line inside the first. 28px clears it.
- */
-export const HEADING_CLASS =
-  'text-[24px] leading-[15px] font-medium tracking-[-0.72px] text-[#151515] sm:text-[26px] sm:leading-[16px] sm:tracking-[-0.78px] sm:max-[319px]:leading-[28px]';
-
-/** 14px on both layouts, the desktop frame's size. The mobile frame sets it at 16px; it was matched to desktop on request. */
-export const SUBTEXT_CLASS = 'mt-2 text-[14px] leading-[17px] tracking-[-0.42px] text-[rgba(21,21,21,0.7)]';
 
 const ASSET = '/explore-email-capture';
 

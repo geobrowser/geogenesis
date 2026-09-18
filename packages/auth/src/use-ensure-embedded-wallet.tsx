@@ -50,7 +50,7 @@ const RETRY_DELAY_MS = 2_000;
  */
 export function useEnsureEmbeddedWallet() {
   const { setActiveWallet } = useSetActiveWallet();
-  const { wallets } = useWallets();
+  const { wallets, ready: walletsReady } = useWallets();
   const { authenticated, user } = usePrivy();
   const { createWallet } = useCreateWallet();
 
@@ -83,15 +83,24 @@ export function useEnsureEmbeddedWallet() {
   const attemptsForAddress = addressToActivate ? (activateAttempts[addressToActivate] ?? 0) : 0;
 
   useEffect(() => {
-    if (!authenticated || embeddedWallet || createAttempts >= MAX_ATTEMPTS) return;
+    // `walletsReady` is the guard that stops this firing at everybody who already has a wallet.
+    // A restored session sets `authenticated` before `wallets` has hydrated, so on every page load
+    // there is a window where the list is empty and the user looks wallet-less. Asking then means
+    // `createWallet` rejecting -- Privy errors when one already exists -- and if hydration outlasts
+    // the retry delay, an existing account can burn all three attempts before its wallet appears.
+    if (!authenticated || !walletsReady || embeddedWallet || createAttempts >= MAX_ATTEMPTS) return;
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    void createWalletRef.current().catch(() => {
+    void createWalletRef.current().catch((error: unknown) => {
       // Either something else created it first — in which case `embeddedWallet` is about to appear
       // and the guard above stops us — or it genuinely failed and we try again.
       if (cancelled) return;
+      // Logged, because the whole reason this file exists is that its failures were invisible: the
+      // symptom was onboarding never appearing, with nothing in the app pointing at why. Matches
+      // how `useSmartAccount` reports its own init failures.
+      console.error('[embedded-wallet] could not create a wallet', error);
       timer = setTimeout(() => setCreateAttempts(attempts => attempts + 1), RETRY_DELAY_MS);
     });
 
@@ -99,7 +108,7 @@ export function useEnsureEmbeddedWallet() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [authenticated, embeddedWallet, createAttempts]);
+  }, [authenticated, walletsReady, embeddedWallet, createAttempts]);
 
   // `walletToActivate` is read through a ref so that a new object for the same address does not
   // re-run this; the address is the dependency.
@@ -124,8 +133,9 @@ export function useEnsureEmbeddedWallet() {
         // the rest of the session.
         if (!cancelled) activatedAddressRef.current = addressToActivate;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (cancelled) return;
+        console.error('[embedded-wallet] could not activate the wallet in wagmi', error);
         timer = setTimeout(
           () =>
             setActivateAttempts(attempts => ({
@@ -141,6 +151,13 @@ export function useEnsureEmbeddedWallet() {
       if (timer) clearTimeout(timer);
     };
   }, [authenticated, addressToActivate, attemptsForAddress]);
+
+  // Giving up is the state that strands a session, so it is the one worth saying out loud.
+  useEffect(() => {
+    if (createAttempts >= MAX_ATTEMPTS) {
+      console.error(`[embedded-wallet] giving up after ${MAX_ATTEMPTS} attempts to create a wallet`);
+    }
+  }, [createAttempts]);
 
   // Cleared on sign-out so the next session is not skipped as a repeat of this one.
   useEffect(() => {

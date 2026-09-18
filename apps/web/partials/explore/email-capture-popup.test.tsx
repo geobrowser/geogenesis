@@ -26,12 +26,14 @@ const mocks = vi.hoisted(() => ({
   prepareOnboarding: vi.fn(),
   useGeoLoginWithEmail: vi.fn(),
   usePrivySignIn: vi.fn(),
+  useLoginWithEmailArgs: undefined as unknown,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: mocks.isModalOpen }),
-  useLoginWithEmail: () => {
+  useLoginWithEmail: (args?: unknown) => {
     mocks.useGeoLoginWithEmail();
+    mocks.useLoginWithEmailArgs = args;
     // Fresh identities per render, as a real hook returns. A stable `vi.fn()` here made an effect
     // keyed on these look like it ran once when it in fact re-runs on every render.
     return {
@@ -85,6 +87,7 @@ beforeEach(() => {
   mocks.prepareOnboarding.mockReset();
   mocks.useGeoLoginWithEmail.mockReset();
   mocks.usePrivySignIn.mockReset();
+  mocks.useLoginWithEmailArgs = undefined;
   mocks.otpState = { status: 'initial' };
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ json: async () => ({ result: 'subscribed' }) });
@@ -731,6 +734,34 @@ describe('ExploreEmailCapturePopup', () => {
       view.rerender(<ExploreEmailCapturePopup />);
 
       expect(screen.getByRole('textbox', { name: 'Verification code' })).not.toHaveAttribute('maxlength');
+    });
+
+    // `autoFocus` could not do this: the field renders enabled for one frame, takes focus, and is
+    // immediately disabled by the send that starts on mount — which blurs it, with nothing putting
+    // it back. The reader was left clicking into the field the step exists to put them in.
+    it('focuses the code field once it is actually usable', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Verification code' }))
+      );
+    });
+
+    // The navbar's `GeoConnectButton` tracks every login unconditionally, and both hooks listen to
+    // the same Privy event — so a tracker here reported each signup from this flow twice.
+    it('does not register a second login tracker of its own', async () => {
+      await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+
+      expect(mocks.useLoginWithEmailArgs).toBeUndefined();
     });
 
     // Both resend controls used to stay live while a verification was in flight, so pressing one

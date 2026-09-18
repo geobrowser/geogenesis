@@ -6,8 +6,9 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { trackPrivyAuth } from '~/core/analytics';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+
+import { SUBTEXT_CLASS } from './email-capture-styles';
 
 /** Privy's OTP is six digits. */
 const CODE_LENGTH = 6;
@@ -29,17 +30,18 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   // unmounted by the card's own visibility rule the instant `authenticated` turns true, which is
   // the exact render in which the wallet becomes creatable. `useEnsureEmbeddedWallet`, mounted for
   // the life of the app in `core/providers.tsx`, does it instead.
-  // Reported like every other way into sign-in. Without this the flow emits nothing at all:
-  // `AnalyticsUserIdentifier` covers session restores rather than the moment somebody signs in, and
-  // the three manual entry points each report their own. `link_source` separates this one from the
-  // modal logins, since the whole point of it is that it starts somewhere they were already.
-  const {
-    sendCode,
-    loginWithCode,
-    state: otpState,
-  } = useLoginWithEmail({
-    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login', link_source: 'explore_email_capture' }),
-  });
+  // Deliberately not tracking here, which is a correction rather than an omission.
+  //
+  // `useLoginWithEmail` and `useLogin` subscribe to the same Privy `login` event, and the navbar
+  // renders `GeoConnectButton` for every logged-out reader (`navbar-actions.tsx`, `if (!address)`)
+  // whose `useGeoLogin` tracks unconditionally — unlike `usePrivySignIn`, which arms on a ref. So a
+  // completion here already emits one `manual_login`; adding a second reported every signup from
+  // this flow twice, inflating exactly the number the flow exists to move.
+  //
+  // The `link_source` attribution that would tell this apart is not worth a double count. Getting
+  // it honestly means the navbar arming its own tracking the way `usePrivySignIn` does, which
+  // changes the path every existing user signs in through and belongs on its own.
+  const { sendCode, loginWithCode, state: otpState } = useLoginWithEmail();
   // Here for the same reason as the hook above, and it is the one that matters more: this registers
   // a second `useLogin` beside the navbar's own, and the navbar's is the login button people
   // actually press. Mounted in the parent it would do that on every Explore visit.
@@ -128,21 +130,36 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
     [code, loginWithCode]
   );
 
+  // `autoFocus` cannot do this job. The field renders enabled for one frame, takes focus, and is
+  // then disabled by the send that starts on mount -- which blurs it, and nothing focuses it again
+  // when the send resolves. The reader is left having to click into the field this step exists to
+  // put them in. Focused when it actually becomes usable instead.
+  const codeInputRef = React.useRef<HTMLInputElement>(null);
+
   const busy = sending || otpState.status === 'sending-code' || otpState.status === 'submitting-code';
   const verifying = otpState.status === 'submitting-code';
   const failed = otpState.status === 'error';
 
+  React.useEffect(() => {
+    if (!busy) codeInputRef.current?.focus();
+  }, [busy]);
+
   return (
     <form onSubmit={submitCode} noValidate>
-      <p className="mt-[8px] text-[16px] leading-[19px] tracking-[-0.48px] text-[rgba(21,21,21,0.7)]">
+      {/* The card's own subtext style, shared from the popup so the two states are one design
+          rather than two that drifted. */}
+      <p className={SUBTEXT_CLASS}>
         {busy && !verifying ? 'Sending a code to ' : 'Enter the code we sent to '}
         <span className="text-[#151515]">{email}</span>
       </p>
 
-      <div className="mt-5 flex h-7 items-center gap-[6px]">
+      {/* The subscribe row's layout after the restyle: a column, same spacing and width, so the
+          card does not change shape when it swaps to this step. */}
+      <div className="mt-[19px] flex flex-col gap-[6px] sm:mx-auto sm:mt-5 sm:max-w-[394px]">
         <input
           // `text` with a numeric `inputMode`, not `type="number"`: a number input drops leading
           // zeros, accepts `e` and `-`, and puts a spinner on a field that is not a quantity.
+          ref={codeInputRef}
           type="text"
           inputMode="numeric"
           autoComplete="one-time-code"
@@ -161,16 +178,15 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
           aria-label="Verification code"
           aria-invalid={failed}
           disabled={busy}
-          autoFocus
           className={cx(
-            'h-7 w-[132px] min-w-0 rounded-full border bg-white px-3 text-[17px] leading-[19px] tracking-[0.2em] text-text outline-hidden transition-colors placeholder:tracking-[0.2em] placeholder:text-[#b6b6b6] disabled:text-grey-03',
+            'h-7 w-full min-w-0 rounded-full border bg-white px-3 text-center text-[17px] leading-[19px] tracking-[0.2em] text-text outline-hidden transition-colors placeholder:tracking-[0.2em] placeholder:text-[#b6b6b6] disabled:text-grey-03',
             failed ? 'border-red-01' : 'border-grey-02 focus:border-text'
           )}
         />
         <button
           type="submit"
           disabled={busy || code.length !== CODE_LENGTH}
-          className="inline-flex h-7 shrink-0 items-center justify-center rounded-full bg-[#151515] px-4 text-[16px] leading-none tracking-[-0.35px] whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="inline-flex h-7 w-full items-center justify-center rounded-full bg-[#151515] px-2.5 text-[16px] leading-none tracking-[-0.35px] whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           {verifying ? 'Verifying…' : 'Continue'}
         </button>
