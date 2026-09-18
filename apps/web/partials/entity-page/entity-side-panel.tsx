@@ -45,6 +45,7 @@ import { BountyDetailHeader, BountyDetailSections } from '~/partials/bounties';
 import { EntityPageBody } from '~/partials/entity-page/entity-page-body';
 import { useEntityPageSurfaceData } from '~/partials/entity-page/hooks/use-entity-page-surface-data';
 import { NavbarBreadcrumb } from '~/partials/navbar/navbar-breadcrumb';
+import { SIDE_PANEL_WIDTH_CLASS } from '~/partials/side-panel-layout';
 
 import {
   createPostFlowAtom,
@@ -555,7 +556,8 @@ export function EntitySidePanel() {
       ref={panelHostRef}
       data-entity-side-panel
       className={cx(
-        'rounded-l-2xl shadow-2xl fixed inset-y-0 right-0 flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden border-l border-grey-02 bg-white',
+        SIDE_PANEL_WIDTH_CLASS,
+        'rounded-l-2xl shadow-2xl fixed inset-y-0 right-0 flex shrink-0 flex-col overflow-hidden border-l border-grey-02 bg-white',
         isReviewOpen ? 'z-[10001]' : 'z-[200]'
       )}
     >
