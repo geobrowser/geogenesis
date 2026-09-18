@@ -7,6 +7,7 @@ import { Effect } from 'effect';
 import { parse } from 'graphql';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { orderFacetOptions } from '~/core/debates/matchmaking/topic-facets';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
 import { normId } from '~/core/utils/norm-id';
@@ -370,6 +371,32 @@ export function preferredSpacesFor(
   }
 
   return preferred;
+}
+
+/**
+ * The topic rows worth offering, in the order the debates hub offers them.
+ *
+ * **Only what leads somewhere.** Topics are AND, claims carry 5.2 of them on
+ * average, and only 19 of the 66 pairs among the commonest twelve ever co-occur
+ * — so most of a 349-row menu is unreachable at any moment. Picking one space
+ * takes 254 of those 349 to zero on the reference account. Showing the dead rows
+ * made a filter that works correctly look broken: a list of topics against a
+ * column of zeroes, with no way to tell which of them would do anything.
+ *
+ * An earlier version kept them on purpose, reasoning that a menu removing rows
+ * as you tick them reorders under the cursor. `orderFacetOptions` answers that
+ * without the zeroes: picked topics pin to the top in the order they were
+ * picked, so the rows being worked with are exactly the ones that hold still.
+ *
+ * Spaces are not filtered this way — see the tab. They are OR and not narrowed
+ * by themselves, so a space reaching zero means a *topic* emptied it, and a
+ * selected one has to stay reachable to be un-picked.
+ */
+export function reachableTopicFacets(topics: readonly PositionFacet[], selected: readonly string[]): PositionFacet[] {
+  return orderFacetOptions(
+    topics.filter(facet => facet.count > 0),
+    [...selected]
+  );
 }
 
 export function personPositionIndexQueryKey(spaceId: string) {

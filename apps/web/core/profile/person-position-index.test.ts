@@ -7,6 +7,7 @@ import {
   matchingEntityIds,
   narrowedFacets,
   preferredSpacesFor,
+  reachableTopicFacets,
 } from './use-person-position-index';
 
 /**
@@ -314,5 +315,53 @@ describe('facet counts are what ticking the option gives you', () => {
     const { topics } = narrowedFacets(split, { spaceIds: [], topicIds: ['ai'] });
 
     expect(topics.find(topic => topic.id === 'society')?.count).toBe(0);
+  });
+});
+
+/**
+ * The topic menu offers only what leads somewhere (GEO-2918).
+ *
+ * Topics are AND, so most of a long menu is unreachable at any moment: picking
+ * one space takes 254 of the reference account's 349 topics to zero. Showing
+ * those rows made a filter that works correctly read as a broken one — a column
+ * of zeroes with no way to tell which row would do anything.
+ *
+ * The reason they were once kept was that a menu removing rows as you tick them
+ * reorders under the cursor. Pinning the picked ones answers that instead.
+ */
+describe('reachableTopicFacets', () => {
+  const facet = (id: string, count: number) => ({ id, name: id.toUpperCase(), count });
+
+  it('drops a topic nothing would be left by', () => {
+    const shown = reachableTopicFacets([facet('ai', 3), facet('dead', 0)], []);
+
+    expect(shown.map(topic => topic.id)).toEqual(['ai']);
+  });
+
+  it('orders the rest by how much they would leave', () => {
+    const shown = reachableTopicFacets([facet('few', 1), facet('many', 9), facet('some', 4)], []);
+
+    expect(shown.map(topic => topic.id)).toEqual(['many', 'some', 'few']);
+  });
+
+  it('pins the picked ones to the top, in the order they were picked', () => {
+    // The rows being worked with are the ones that must hold still: their counts
+    // change on every tick, so ordering them by count reshuffles exactly the
+    // rows the reader is using.
+    const shown = reachableTopicFacets([facet('big', 9), facet('second', 2), facet('first', 1)], ['first', 'second']);
+
+    expect(shown.map(topic => topic.id)).toEqual(['first', 'second', 'big']);
+  });
+
+  it('has nothing to offer when every topic is unreachable', () => {
+    expect(reachableTopicFacets([facet('a', 0), facet('b', 0)], [])).toEqual([]);
+  });
+
+  it('keeps a picked topic that still leads somewhere', () => {
+    // A picked topic's own count is the current result size, so it is only zero
+    // when the whole result is — which is the case `keepSelectableTopics` undoes.
+    const shown = reachableTopicFacets([facet('picked', 2), facet('other', 5)], ['picked']);
+
+    expect(shown.map(topic => topic.id)).toEqual(['picked', 'other']);
   });
 });

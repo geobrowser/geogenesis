@@ -3,11 +3,13 @@
 import * as React from 'react';
 
 import type { HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
+import { keepSelectableTopics } from '~/core/debates/matchmaking/topic-facets';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import {
   matchingEntityIds,
   narrowedFacets,
   preferredSpacesFor,
+  reachableTopicFacets,
   usePersonPositionIndex,
 } from '~/core/profile/use-person-position-index';
 import { type PositionSort, usePersonPositions } from '~/core/profile/use-person-positions';
@@ -79,17 +81,29 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
 
   const spaceOptions = React.useMemo(
     () =>
-      facets.spaces.map(facet => ({
-        value: facet.id,
-        label: spaceLabel(labelsById, facet.id)?.name ?? `Space ${facet.id.slice(0, 6)}`,
-        count: facet.count,
-      })),
-    [facets.spaces, labelsById]
+      facets.spaces
+        // A space the current topics empty is not worth offering — but one the
+        // reader has already picked stays, or the only way to un-pick it is the
+        // menu's blanket "Any space". Spaces are OR and are not narrowed by
+        // themselves, so a selected one reaching zero means a *topic* did it.
+        .filter(facet => facet.count > 0 || spaces.values.includes(facet.id))
+        .map(facet => ({
+          value: facet.id,
+          label: spaceLabel(labelsById, facet.id)?.name ?? `Space ${facet.id.slice(0, 6)}`,
+          count: facet.count,
+        })),
+    [facets.spaces, labelsById, spaces.values]
+  );
+
+  // Only the topics that lead somewhere — see `reachableTopicFacets`.
+  const reachableTopics = React.useMemo(
+    () => reachableTopicFacets(facets.topics, topics.values),
+    [facets.topics, topics.values]
   );
 
   const topicOptions = React.useMemo(
     () =>
-      facets.topics.map(facet => ({
+      reachableTopics.map(facet => ({
         value: facet.id,
         // An unnamed topic is still a real tag on real claims, so it is offered
         // rather than dropped — dropping it would stop the counts in this menu
@@ -97,8 +111,32 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
         label: facet.name ?? 'Unnamed topic',
         count: facet.count,
       })),
-    [facets.topics]
+    [reachableTopics]
   );
+
+  /*
+   * A topic the menu no longer offers is let go, not held invisibly.
+   *
+   * The debates hub takes the same line, and its reasoning carries over exactly:
+   * a topic is the narrower of the two dimensions, so one the current filter has
+   * made unreachable is genuinely gone from the list that offered it — holding
+   * it would leave the reader filtered by a chip they cannot see to un-pick.
+   * `keepSelectableTopics` drops only the most recent pick when everything would
+   * go, so one unlucky choice does not empty the whole selection.
+   *
+   * Spaces go the other way, above: absence there is a reason to show an empty
+   * list, not to revise an input the reader chose.
+   */
+  const replaceTopics = topics.replace;
+
+  React.useEffect(() => {
+    if (isLoadingIndex) return;
+    // `replaceTopics` rather than `topics`: the selection object is rebuilt each
+    // render, so depending on it would re-run this on every one. The callback is
+    // stable, and `replace` keeps the previous array when nothing changed, so
+    // this settles rather than chasing its own output.
+    replaceTopics(current => keepSelectableTopics(current, reachableTopics, true));
+  }, [isLoadingIndex, reachableTopics, replaceTopics]);
 
   return (
     <div className="flex flex-col gap-4">

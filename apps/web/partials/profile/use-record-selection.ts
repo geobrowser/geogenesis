@@ -14,6 +14,14 @@ export type RecordSelection = {
   values: string[];
   toggle: (value: string) => void;
   clear: () => void;
+  /**
+   * Replace the whole selection.
+   *
+   * For reconciling against a menu that has moved: a topic the current filter
+   * has made unreachable is gone from the list that offered it, so holding it
+   * would leave the reader filtered by a chip they cannot see to un-pick.
+   */
+  replace: (next: (current: string[]) => string[]) => void;
 };
 
 export function useRecordSelection(initial: string[] = []): RecordSelection {
@@ -25,5 +33,14 @@ export function useRecordSelection(initial: string[] = []): RecordSelection {
 
   const clear = React.useCallback(() => setValues([]), []);
 
-  return { values, toggle, clear };
+  const replace = React.useCallback((next: (current: string[]) => string[]) => {
+    // Identity-stable when nothing changed, so an effect reconciling against its
+    // own output does not loop.
+    setValues(current => {
+      const updated = next(current);
+      return updated.length === current.length && updated.every((id, i) => id === current[i]) ? current : updated;
+    });
+  }, []);
+
+  return { values, toggle, clear, replace };
 }
