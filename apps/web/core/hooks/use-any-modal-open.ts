@@ -52,12 +52,21 @@ export function useAnyModalOpen(enabled: boolean): boolean {
     }
 
     let frame = 0;
-    const read = () => setIsOpen(document.querySelector(OPEN_MODAL_SELECTOR) !== null);
+    // Teardown removes this component's container from `body`, which is itself a mutation — the
+    // observer can be handed it before `disconnect()` lands, scheduling a frame that fires after
+    // cleanup has already run. Without this flag that callback reads the document and sets state
+    // on an unmounted component, after the test that owned it has finished. It surfaced as
+    // unrelated suites failing at random, which is exactly how this kind of leak presents.
+    let cancelled = false;
+    const read = () => {
+      if (cancelled) return;
+      setIsOpen(document.querySelector(OPEN_MODAL_SELECTOR) !== null);
+    };
 
     // Coalesced to a frame: the observer watches the whole body, and this runs on a page holding an
     // infinite feed, so a re-read per mutation would mean a `querySelector` per appended card.
     const schedule = () => {
-      if (frame) return;
+      if (frame || cancelled) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
         read();
@@ -74,6 +83,7 @@ export function useAnyModalOpen(enabled: boolean): boolean {
     });
 
     return () => {
+      cancelled = true;
       observer.disconnect();
       if (frame) cancelAnimationFrame(frame);
     };

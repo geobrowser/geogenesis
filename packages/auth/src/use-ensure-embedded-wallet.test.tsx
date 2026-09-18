@@ -4,13 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
+  userWallet: undefined as { address: string } | undefined,
   wallets: [] as Array<{ address: string; walletClientType: string }>,
   createWallet: vi.fn(),
   setActiveWallet: vi.fn(),
 }));
 
 vi.mock('@privy-io/react-auth', () => ({
-  usePrivy: () => ({ authenticated: mocks.authenticated, user: {} }),
+  usePrivy: () => ({ authenticated: mocks.authenticated, user: { wallet: mocks.userWallet } }),
   useWallets: () => ({ wallets: mocks.wallets }),
   useCreateWallet: () => ({ createWallet: mocks.createWallet }),
 }));
@@ -25,6 +26,7 @@ const embedded = { address: '0xabc', walletClientType: 'privy' };
 
 beforeEach(() => {
   mocks.authenticated = true;
+  mocks.userWallet = undefined;
   mocks.wallets = [];
   mocks.createWallet.mockReset().mockResolvedValue(undefined);
   mocks.setActiveWallet.mockReset().mockResolvedValue(undefined);
@@ -81,6 +83,63 @@ describe('useEnsureEmbeddedWallet', () => {
     await new Promise(resolve => setTimeout(resolve, 50));
 
     expect(mocks.setActiveWallet).toHaveBeenCalledTimes(1);
+  });
+
+  // Privy hands back new wallet objects for the same address as its state settles. Keyed on the
+  // object, that re-ran the effect, whose cleanup marked the in-flight attempt cancelled — so a
+  // *successful* activation was thrown away as stale while a second one ran for the same wallet.
+  it('does not re-activate when the wallet object changes while activation is still pending', async () => {
+    // Pending on purpose. Once activation has resolved the address guard short-circuits anyway, so
+    // swapping the object afterwards proves nothing — the damage happens mid-flight, where the
+    // effect's cleanup marks the in-flight attempt cancelled and a second one starts.
+    let settle: () => void = () => {};
+    mocks.setActiveWallet.mockImplementation(() => new Promise<void>(resolve => (settle = resolve)));
+    mocks.wallets = [embedded];
+
+    const { rerender } = renderHook(() => useEnsureEmbeddedWallet());
+    await waitFor(() => expect(mocks.setActiveWallet).toHaveBeenCalledTimes(1));
+
+    // Same address, new object, exactly as Privy does it as its state settles.
+    mocks.wallets = [{ ...embedded }];
+    rerender();
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    expect(mocks.setActiveWallet).toHaveBeenCalledTimes(1);
+
+    // And the success still counts: it was not discarded as a cancelled run.
+    await act(async () => {
+      settle();
+    });
+    mocks.wallets = [{ ...embedded }];
+    rerender();
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(mocks.setActiveWallet).toHaveBeenCalledTimes(1);
+  });
+
+  // The attempt budget is per address because the target changes. A linked wallet failing three
+  // times used to exhaust a session-wide count, and the embedded wallet — the only one
+  // `useSmartAccount` can use — then inherited the exhausted budget and was never activated.
+  it('gives a newly created wallet its own attempts after another address used up its own', async () => {
+    vi.useFakeTimers();
+    mocks.userWallet = { address: '0xlinked' };
+    mocks.wallets = [{ address: '0xlinked', walletClientType: 'injected' }];
+    mocks.setActiveWallet.mockRejectedValue(new Error('refused'));
+
+    const { rerender } = renderHook(() => useEnsureEmbeddedWallet());
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+      });
+    }
+    const spentOnLinked = mocks.setActiveWallet.mock.calls.length;
+    expect(spentOnLinked).toBe(3);
+
+    // The embedded wallet finally appears, and this time activation works.
+    mocks.setActiveWallet.mockResolvedValue(undefined);
+    mocks.wallets = [{ address: '0xlinked', walletClientType: 'injected' }, embedded];
+    rerender();
+
+    await vi.waitFor(() => expect(mocks.setActiveWallet).toHaveBeenCalledWith(embedded));
   });
 
   describe('when creation fails', () => {

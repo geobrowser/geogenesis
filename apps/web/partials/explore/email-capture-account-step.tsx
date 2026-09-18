@@ -85,6 +85,13 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
       if (!mountedRef.current) return;
       // Captcha, a Privy outage, an address it will not take. Hand them the dialog that does work
       // rather than a dead end.
+      // Closing this card unmounts the `usePrivySignIn` instance that registered the modal's
+      // completion callback, so this flow's own `link_source` attribution is lost for the fallback.
+      // The sign-in itself is still recorded: the navbar's `GeoConnectButton` is mounted for every
+      // logged-out reader (`navbar-actions.tsx` renders it whenever there is no address) and its
+      // `onComplete` tracks unconditionally. Keeping this mounted behind the modal to reclaim one
+      // attribution field would mean a small state machine in auth code, watching the modal open
+      // and close again, for a branch that only runs when `sendCode` has already failed.
       giveUpRef.current();
       openPrivyModalRef.current();
     } finally {

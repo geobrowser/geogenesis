@@ -65,8 +65,22 @@ export function useEnsureEmbeddedWallet() {
     embeddedWallet ?? (linkedWalletAddress ? wallets.find(w => w.address === linkedWalletAddress) : undefined);
 
   const [createAttempts, setCreateAttempts] = useState(0);
-  const [activateAttempts, setActivateAttempts] = useState(0);
   const activatedAddressRef = useRef<string | null>(null);
+
+  // Attempts are counted per address, not per session, and the effect below is keyed by address
+  // rather than by the wallet object. Both matter, and for different reasons.
+  //
+  // A session-wide count is wrong because the target changes: while the embedded wallet is still
+  // being created, a linked wallet can burn all three attempts, and the embedded wallet then
+  // inherits an exhausted budget and is never activated — leaving `useSmartAccount` without the
+  // one wallet it actually needs.
+  //
+  // Keying on the object is wrong because Privy can hand back a new object for the same address.
+  // That re-runs the effect, whose cleanup marks the in-flight attempt cancelled, so a *successful*
+  // activation is discarded as stale while a second one is already running for the same wallet.
+  const [activateAttempts, setActivateAttempts] = useState<Record<string, number>>({});
+  const addressToActivate = walletToActivate?.address;
+  const attemptsForAddress = addressToActivate ? (activateAttempts[addressToActivate] ?? 0) : 0;
 
   useEffect(() => {
     if (!authenticated || embeddedWallet || createAttempts >= MAX_ATTEMPTS) return;
@@ -87,38 +101,52 @@ export function useEnsureEmbeddedWallet() {
     };
   }, [authenticated, embeddedWallet, createAttempts]);
 
-  useEffect(() => {
-    if (!authenticated || !walletToActivate) return;
-    if (activatedAddressRef.current === walletToActivate.address) return;
-    if (activateAttempts >= MAX_ATTEMPTS) return;
+  // `walletToActivate` is read through a ref so that a new object for the same address does not
+  // re-run this; the address is the dependency.
+  const walletToActivateRef = useRef(walletToActivate);
+  walletToActivateRef.current = walletToActivate;
 
-    const { address } = walletToActivate;
+  useEffect(() => {
+    if (!authenticated || !addressToActivate) return;
+    if (activatedAddressRef.current === addressToActivate) return;
+    if (attemptsForAddress >= MAX_ATTEMPTS) return;
+
+    const wallet = walletToActivateRef.current;
+    if (!wallet) return;
+
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    void Promise.resolve(setActiveWalletRef.current(walletToActivate))
+    void Promise.resolve(setActiveWalletRef.current(wallet))
       .then(() => {
         // Recorded on resolve, never before. Recorded up front, a failed activation was
         // indistinguishable from a successful one to every later render, and wagmi stayed empty for
         // the rest of the session.
-        if (!cancelled) activatedAddressRef.current = address;
+        if (!cancelled) activatedAddressRef.current = addressToActivate;
       })
       .catch(() => {
         if (cancelled) return;
-        timer = setTimeout(() => setActivateAttempts(attempts => attempts + 1), RETRY_DELAY_MS);
+        timer = setTimeout(
+          () =>
+            setActivateAttempts(attempts => ({
+              ...attempts,
+              [addressToActivate]: (attempts[addressToActivate] ?? 0) + 1,
+            })),
+          RETRY_DELAY_MS
+        );
       });
 
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [authenticated, walletToActivate, activateAttempts]);
+  }, [authenticated, addressToActivate, attemptsForAddress]);
 
   // Cleared on sign-out so the next session is not skipped as a repeat of this one.
   useEffect(() => {
     if (authenticated) return;
     activatedAddressRef.current = null;
     setCreateAttempts(0);
-    setActivateAttempts(0);
+    setActivateAttempts({});
   }, [authenticated]);
 }
