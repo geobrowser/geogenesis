@@ -142,13 +142,36 @@ describe('RelationChipSection', () => {
 
     // Expands in place rather than linking away — the section exists to be scanned without
     // leaving the page.
-    it('reveals the rest in place and then has nothing left to offer', () => {
+    it('reveals the rest in place, and offers the way back', () => {
       render(<RelationChipSection label="Topics" relations={relations(11)} spaceId="space-1" />);
 
       fireEvent.click(screen.getByRole('button', { name: EXPANDER_NAME }));
 
       expect(screen.getAllByRole('link')).toHaveLength(11);
-      expect(screen.queryByRole('button')).toBeNull();
+      // This used to assert there was no button left, which is exactly the bug: `+N` set `expanded`
+      // to true, unmounted itself, and left a reader who had opened 108 subtopics with no way to
+      // close them again (GEO-2910).
+      expect(screen.getByRole('button', { name: 'Show fewer in Topics' })).toBeInTheDocument();
+    });
+
+    it('collapses back to the cap, and reports which state it is in', () => {
+      render(<RelationChipSection label="Topics" relations={relations(11)} spaceId="space-1" />);
+
+      const toggle = screen.getByRole('button', { name: EXPANDER_NAME });
+      // Hard-coded `false` was true while this control could only ever expand, and became a lie the
+      // moment the same control could also collapse.
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+      fireEvent.click(toggle);
+
+      // The same button, renamed — which is what keeps focus on it across the change.
+      const collapser = screen.getByRole('button', { name: 'Show fewer in Topics' });
+      expect(collapser).toHaveAttribute('aria-expanded', 'true');
+
+      fireEvent.click(collapser);
+
+      expect(screen.getAllByRole('link')).toHaveLength(8);
+      expect(screen.getByRole('button', { name: EXPANDER_NAME })).toHaveAttribute('aria-expanded', 'false');
     });
   });
 });

@@ -2,11 +2,11 @@
 
 import * as React from 'react';
 
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { CURATED_TOPIC_TAG_ID, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID } from '~/core/constants';
+import { useComments } from '~/core/hooks/use-comments';
 import { ID } from '~/core/id';
 import { useQueryEntity } from '~/core/sync/use-store';
-import type { Relation } from '~/core/types';
+import type { Relation, TabEntity } from '~/core/types';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -16,15 +16,21 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
+import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
+import { Editor } from '~/partials/editor/editor';
+import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
+import { useEntityTabEntities } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS, RelationChipSection } from '~/partials/entity-page/relation-chip-section';
 
 import { UNNAMED_SUBTOPIC_PROPERTY_ID } from '../ontology';
+import { useTopicSpaceScope } from '../use-topic-space-scope';
 import { TopicClaims } from './topic-claims';
-import { TopicComposition } from './topic-composition';
 import { TopicCoverage } from './topic-coverage';
 import { TopicDebates } from './topic-debates';
+import { type TopicBuiltInTab, TopicTabs, TopicViewAll, useTopicActiveTab } from './topic-tabs';
 import { useTopicAncestors } from './use-topic-ancestors';
+import { useTopicTabCounts } from './use-topic-tab-counts';
 
 /**
  * The browse-mode read view for a Topic.
@@ -39,14 +45,46 @@ import { useTopicAncestors } from './use-topic-ancestors';
  * space (`useTopicSpaceScope`), which keeps the gathering while keeping out spaces nobody curated.
  * Each row is still linked into the space it actually lives in, which is routinely not the route's.
  *
+ * ## Tabs, since GEO-2910
+ *
+ * This was one column of every section at once, four claims at a time behind a pager — 118 pages of
+ * Previous and Next on a topic like `Iran War`. It is now a header and a tab bar: Overview keeps a
+ * few of each as the curated read, and Claims, Debates and Coverage are where volume lives. The
+ * editorial tabs the entity itself carries sit in the same bar behind a divider, because 163 topics
+ * carry tabs and no space page to draw them on, and one of them carries fifteen.
+ *
+ * The header holds what stays true whichever tab is open: the cover (drawn above this by
+ * `EntityPageBody`, which is where the early return that used to swallow it lived), the title and
+ * description, the votes, the comment count, and the subtopics. Subtopics sit *above* the bar
+ * rather than inside Overview because they answer the question the tabs answer — where can I go
+ * from here — and a subtopic is no less relevant while you are reading Claims.
+ *
  * One column at every width, laid out against a container query rather than the viewport, so the
  * route, the entity side panel and a phone are three widths of one page. Same as the claim page.
- *
- * Sections render only when they have something to show, and the order is fixed — the composition
- * strip carries the variation between topics instead, so every topic is structurally the same page.
  */
-export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId: string }) {
+export function TopicPageView({
+  entityId,
+  spaceId,
+  initialTabRelations = [],
+  tabEntities = [],
+}: {
+  entityId: string;
+  spaceId: string;
+  /** The entity's own `Tabs` relations, threaded from `EntityPageBody`. Empty is a topic with none. */
+  initialTabRelations?: Relation[];
+  tabEntities?: TabEntity[];
+}) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
+  const spaceIds = useTopicSpaceScope(spaceId);
+  const { counts, isReady: countsReady } = useTopicTabCounts(entityId, spaceIds);
+  const { totalCount: commentCount } = useComments({ entityId, spaceId });
+
+  // The panel's half of the tab state. The route keeps both halves in `?tabId=`; the panel cannot,
+  // because the context that owns its entity tab rejects anything that is not an entity id — see
+  // `useTopicActiveTab`.
+  const [panelBuiltInTab, setPanelBuiltInTab] = React.useState<TopicBuiltInTab>('overview');
+  const activeTab = useTopicActiveTab(panelBuiltInTab);
+  const { entities: entityTabs } = useEntityTabEntities({ entityId, spaceId, initialTabRelations, tabEntities });
 
   const subtopics = React.useMemo(() => {
     // Both hierarchy properties, merged and deduplicated. The named `Subtopics` and the unnamed
@@ -90,6 +128,18 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
   }
 
   if (!entity) return null;
+
+  const { builtIn, entityTabId } = activeTab;
+
+  const viewAllFor = (tab: Exclude<TopicBuiltInTab, 'overview'>, count: number) => (
+    <TopicViewAll
+      entityId={entityId}
+      spaceId={spaceId}
+      tab={tab}
+      count={countsReady ? count : undefined}
+      onSelect={setPanelBuiltInTab}
+    />
+  );
 
   return (
     <div className="@container">
@@ -149,23 +199,77 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
             />
           )}
 
+          {/* What the topic *is* on the left, what people have made of it on the right. The votes
+              and the comment count are judgements about the topic, so they sit beside the type and
+              curation chips and above the navigation — which is where the generic page and the
+              space header already put them (GEO-2910). Real votes have been landing here the whole
+              time with nothing to show them: `Iran War` is +7/−1. */}
           <div className="flex flex-wrap items-center gap-1.5">
             <span className={`${META_CHIP_CLASS} text-grey-04`}>Topic</span>
             {isCurated && <span className={`${META_CHIP_CLASS} text-grey-04`}>Curated</span>}
+            <div className="ml-auto flex items-center gap-4">
+              {/* Comments stay inline at the bottom of Overview, which is the topic's own page. On
+                  every other tab the reader is looking at other people's entities, so this count
+                  opens the global panel instead — the rule `EntityCommentsButton` already states,
+                  and the reason it is not a tab of its own (one commenter across 2,000 topics). */}
+              <EntityCommentsButton entityId={entityId} spaceId={spaceId} count={commentCount} />
+              <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />
+            </div>
           </div>
         </header>
 
-        <TopicComposition topicId={entityId} spaceId={spaceId} />
-
         <RelationChipSection label="Subtopics" relations={subtopics} spaceId={spaceId} />
 
-        <TopicDebates topicId={entityId} spaceId={spaceId} />
+        <TopicTabs
+          entityId={entityId}
+          spaceId={spaceId}
+          activeTab={activeTab}
+          onSelectBuiltIn={setPanelBuiltInTab}
+          onSelectEntityTab={() => setPanelBuiltInTab('overview')}
+          counts={counts}
+          countsReady={countsReady}
+          entityTabs={entityTabs}
+        />
 
-        <TopicClaims topicId={entityId} spaceId={spaceId} />
-
-        <TopicCoverage topicId={entityId} spaceId={spaceId} />
-
-        <CommentSection entityId={entityId} spaceId={spaceId} />
+        {/* An editorial tab's content is that tab entity's own blocks, which is what `Editor`
+            renders — the same call the generic page's footer makes. Both surfaces already sit
+            inside an editor provider (`RouteEditorProvider` on the route, `SidePanelEditorProvider`
+            in the panel), so the tab it resolves is the one selected above without anything being
+            threaded through this component. */}
+        {entityTabId ? (
+          <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+        ) : builtIn === 'overview' ? (
+          <>
+            <TopicDebates
+              topicId={entityId}
+              spaceId={spaceId}
+              mode="preview"
+              viewAllSlot={viewAllFor('debates', counts.debates)}
+            />
+            <TopicClaims
+              topicId={entityId}
+              spaceId={spaceId}
+              mode="preview"
+              viewAllSlot={viewAllFor('claims', counts.claims)}
+            />
+            <TopicCoverage
+              topicId={entityId}
+              spaceId={spaceId}
+              mode="preview"
+              viewAllSlot={viewAllFor('coverage', counts.coverage)}
+            />
+            {/* Comments stay here rather than becoming a tab: one commenter across 2,000 topics.
+                Overview is the topic's own page, which is the surface `EntityCommentsButton`'s own
+                rule says renders them inline. */}
+            <CommentSection entityId={entityId} spaceId={spaceId} />
+          </>
+        ) : builtIn === 'claims' ? (
+          <TopicClaims topicId={entityId} spaceId={spaceId} mode="full" />
+        ) : builtIn === 'debates' ? (
+          <TopicDebates topicId={entityId} spaceId={spaceId} mode="full" />
+        ) : (
+          <TopicCoverage topicId={entityId} spaceId={spaceId} mode="full" />
+        )}
       </div>
     </div>
   );

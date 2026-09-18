@@ -23,19 +23,21 @@ type EntityTabsProps = {
   tabEntities: TabEntity[];
 };
 
-export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities }: EntityTabsProps) {
-  const { editable } = useEditable();
-  const { entity } = useQueryEntity({ id: entityId, spaceId });
-  const sidePanelEdit = React.useContext(EntitySidePanelEditContext);
-
-  /**
-   * Full entity page: same as before — only global edit toggle (`editable`).
-   * Side panel: only `panelWantsEdit` (how the panel was opened + toggle). Do **not** OR with
-   * global `editable`, or a leftover edit mode elsewhere forces EditableTabGroup and tabs show
-   * even when the panel is in view mode.
-   */
-  const effectiveEditable = sidePanelEdit != null ? sidePanelEdit.panelWantsEdit : editable;
-
+/**
+ * The tabs an entity carries, in their authored order, with local edits and live renames folded in.
+ *
+ * Extracted from {@link EntityTabs} so the topic view's bar can draw the same tabs beside its own
+ * without a second copy of this (GEO-2910). It is more than a sort: local tab relations are merged
+ * with the server's, rows whose `spaceId` differs from the route's are kept by id so they do not
+ * vanish in the side panel, and names are read live so an inline rename shows without a re-fetch.
+ * A reimplementation would have looked right for about a week.
+ */
+export function useEntityTabEntities({
+  entityId,
+  spaceId,
+  initialTabRelations,
+  tabEntities,
+}: EntityTabsProps): { relations: Relation[]; entities: TabEntity[] } {
   const initialTabRelationIds = React.useMemo(() => new Set(initialTabRelations.map(r => r.id)), [initialTabRelations]);
 
   // Merge local tab relation changes with server data. Tab relations keep their relation `spaceId`;
@@ -70,15 +72,38 @@ export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities
     return map;
   }, [liveNameValues]);
 
-  if (entityHasOnlyPostType(entity)) {
-    return null;
-  }
-
   const sortedTabEntities = sortedTabRelations.map(r => {
     const base = tabEntityMap.get(r.toEntity.id) ?? { id: r.toEntity.id, name: r.toEntity.name };
     const liveName = liveNameMap.get(r.toEntity.id);
     return liveName !== undefined ? { ...base, name: liveName } : base;
   });
+
+  return { relations: sortedTabRelations, entities: sortedTabEntities };
+}
+
+export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities }: EntityTabsProps) {
+  const { editable } = useEditable();
+  const { entity } = useQueryEntity({ id: entityId, spaceId });
+  const sidePanelEdit = React.useContext(EntitySidePanelEditContext);
+
+  /**
+   * Full entity page: same as before — only global edit toggle (`editable`).
+   * Side panel: only `panelWantsEdit` (how the panel was opened + toggle). Do **not** OR with
+   * global `editable`, or a leftover edit mode elsewhere forces EditableTabGroup and tabs show
+   * even when the panel is in view mode.
+   */
+  const effectiveEditable = sidePanelEdit != null ? sidePanelEdit.panelWantsEdit : editable;
+
+  const { relations: sortedTabRelations, entities: sortedTabEntities } = useEntityTabEntities({
+    entityId,
+    spaceId,
+    initialTabRelations,
+    tabEntities,
+  });
+
+  if (entityHasOnlyPostType(entity)) {
+    return null;
+  }
 
   const overviewHref = NavUtils.toEntity(spaceId, entityId);
 
