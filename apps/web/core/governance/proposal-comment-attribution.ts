@@ -119,6 +119,12 @@ export function proposalAttributionLabel(attribution: ProposalCommentAttribution
   // A recorded vote is always said, whatever role its voter holds now. The rule that used to suppress
   // a member's vote clause was there because a member cannot cast one — but a vote on the record is
   // proof that this person did, back when they could, so the premise does not hold for them.
+  //
+  // `Member · Rejected` for a demoted editor was a product call rather than a mechanical one, since the
+  // frame shows no such state; confirmed rather than assumed (GEO-2907 review). The alternatives were a
+  // bare `Rejected`, which discards something true — they are a member — and `Former editor`, which the
+  // join cannot support, since nothing distinguishes a demoted editor from any other member holding a
+  // vote already cast.
   if (vote) return role ? `${role} · ${vote}` : vote;
 
   // No vote. Only an editor can still cast one, so only an editor's silence is worth reporting:
