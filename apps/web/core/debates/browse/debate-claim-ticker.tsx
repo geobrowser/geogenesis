@@ -332,40 +332,49 @@ function TickerClaimText({ text }: { text: string }) {
 }
 
 /**
- * The stack of claim cards in the player's bottom-left corner, oldest at the top.
+ * The claim cards in the player's bottom-left corner, oldest at the top.
  *
  * Anchored in the corner rather than centred over the video: a card in the middle reads as a
  * dialog demanding an answer, and it covers the face of the person making the argument.
  *
- * At rest it shows the last couple of claims. Pointing at it — or tabbing into it — opens the
- * whole of what has been said so far, scrollable, newest at the bottom. That is the Twitch-chat
- * bargain: the corner stays a corner while you are watching, and the backlog is there the moment
- * you go looking for it, without pausing the video or opening a panel.
+ * Two modes. Closed, it is the live layer: a claim appears as it is said, lingers, and goes, so the
+ * corner is empty most of the time. Open — the viewer's pointer is anywhere over the player, or
+ * they have tabbed into the stack — it becomes the whole of what has been said so far, scrollable,
+ * newest at the bottom. That is the Twitch-chat bargain: the corner stays a corner while you are
+ * watching, and the backlog is one movement away without pausing the video or opening a panel.
+ *
+ * `open` is the caller's, because the pointer has to be able to open this from anywhere over the
+ * video — including when nothing is on screen here to point at, which is most of the time.
  */
 export function DebateClaimTickerStack({
   cards,
   history,
+  open = false,
+  onFocusChange,
   participantByClaimId,
   rowsByClaimId,
   entitiesByClaimId,
   onAnswered,
 }: {
   cards: StackedCard[];
-  /** Everything said so far. Falls back to the resting stack where a caller has no history. */
+  /** Everything said so far. Falls back to the live cards where a caller has no history. */
   history?: StackedCard[];
+  /** Show the backlog rather than the live cards. */
+  open?: boolean;
+  /** Keyboard focus entering or leaving the stack, which opens it the way the pointer does. */
+  onFocusChange?: (focused: boolean) => void;
   participantByClaimId?: Map<string, DebateParticipant>;
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
   onAnswered: (claimId: string, position: boolean) => void;
 }) {
-  const [open, setOpen] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
 
   const shown = open ? (history ?? cards) : cards;
 
-  // Opened at the bottom, on the claim they were just looking at — scrolling *up* from there is
-  // the "go back through it" this exists for. Re-run as the history grows so a claim arriving
-  // while the list is open does not leave the view stranded mid-list.
+  // Opened at the bottom, on the most recent claim — scrolling *up* from there is the "go back
+  // through it" this exists for. Re-run as the history grows so a claim arriving while the list is
+  // open does not leave the view stranded mid-list.
   React.useEffect(() => {
     if (!open) return;
     const element = scrollRef.current;
@@ -377,13 +386,11 @@ export function DebateClaimTickerStack({
   return (
     <div
       ref={scrollRef}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
+      onFocus={() => onFocusChange?.(true)}
       // Only when focus leaves the stack entirely — moving between two cards inside it must not
       // collapse the list out from under the keyboard.
       onBlur={event => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onFocusChange?.(false);
       }}
       className={cx(
         'pointer-events-auto flex w-full flex-col gap-1.5',
@@ -397,8 +404,8 @@ export function DebateClaimTickerStack({
           key={card.window.claim.id}
           window={card.window}
           opacity={card.opacity}
-          // Only the resting stack dissolves its older card. In the open list every claim is one
-          // the reader chose to look at, so fading any of them would just make it hard to read.
+          // Only the live stack dissolves its older card. In the open list every claim is one the
+          // reader chose to look at, so fading any of them would just make it hard to read.
           fading={!open && index < shown.length - 1}
           speaker={participantByClaimId?.get(card.window.claim.id) ?? null}
           row={rowsByClaimId.get(card.window.claim.id) ?? null}

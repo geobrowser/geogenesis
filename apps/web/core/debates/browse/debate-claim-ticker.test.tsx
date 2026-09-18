@@ -66,7 +66,7 @@ function claim(overrides: Partial<TimedClaim> = {}): TimedClaim {
 }
 
 function window(overrides: Partial<TimedClaim> = {}): TickerWindow {
-  return { claim: claim(overrides), startMs: 134_600 };
+  return { claim: claim(overrides), startMs: 134_600, endMs: 148_140 };
 }
 
 const SPEAKER = {
@@ -277,7 +277,7 @@ describe('DebateClaimTickerStack', () => {
     { window: window(), opacity: 1 },
   ];
 
-  function renderStack() {
+  function renderStack(props: Partial<React.ComponentProps<typeof DebateClaimTickerStack>> = {}) {
     return render(
       <DebateClaimTickerStack
         cards={resting}
@@ -286,34 +286,49 @@ describe('DebateClaimTickerStack', () => {
         rowsByClaimId={new Map()}
         entitiesByClaimId={new Map()}
         onAnswered={vi.fn()}
+        {...props}
       />
     );
   }
 
-  it('rests on the most recent claims rather than the whole backlog', () => {
+  it('shows only the live cards while closed, not the whole backlog', () => {
     renderStack();
 
     expect(screen.queryByText(/Congress has ceded/)).not.toBeInTheDocument();
   });
 
-  // The point of the corner is that the backlog is one hover away — no pause, no panel.
-  it('opens everything said so far on hover, and closes again on leave', () => {
-    const { container } = renderStack();
-    const stack = container.firstElementChild as HTMLElement;
+  // The point of the corner is that the backlog is one movement away — no pause, no panel.
+  it('shows everything said so far when opened', () => {
+    renderStack({ open: true });
 
-    fireEvent.mouseEnter(stack);
     expect(screen.getByText(/Congress has ceded/)).toBeInTheDocument();
-
-    fireEvent.mouseLeave(stack);
-    expect(screen.queryByText(/Congress has ceded/)).not.toBeInTheDocument();
   });
 
-  // Hover is not available to a keyboard, and the backlog is content rather than decoration.
-  it('opens on focus reaching the stack', () => {
-    const { container } = renderStack();
-
-    fireEvent.focus(container.firstElementChild as HTMLElement);
+  // Opening is the player's call, not the stack's: a card is on screen for a few seconds at a
+  // time, so a hover target made of the cards would usually not be there to hover.
+  it('still draws the backlog when no card is live', () => {
+    renderStack({ cards: [], open: true });
 
     expect(screen.getByText(/Congress has ceded/)).toBeInTheDocument();
+  });
+
+  it('draws nothing at all when closed and no card is live', () => {
+    const { container } = renderStack({ cards: [] });
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  // Hover is not available to a keyboard, and the backlog is content rather than decoration, so
+  // focus reaching the stack has to open it the way the pointer does.
+  it('reports focus entering and leaving so the player can open it', () => {
+    const onFocusChange = vi.fn();
+    const { container } = renderStack({ onFocusChange });
+    const stack = container.firstElementChild as HTMLElement;
+
+    fireEvent.focus(stack);
+    expect(onFocusChange).toHaveBeenLastCalledWith(true);
+
+    fireEvent.blur(stack);
+    expect(onFocusChange).toHaveBeenLastCalledWith(false);
   });
 });
