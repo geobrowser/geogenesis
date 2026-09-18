@@ -12,6 +12,21 @@ This is a code-path investigation. It does not claim a device memory measurement
 still need to be verified on a physical iPhone and Android device. The code already establishes the
 unbounded lifetime that makes the reported blank panels and tab reloads increasingly likely.
 
+## Field reproduction
+
+On 2026-09-18, the PR's Vercel preview was reproduced in mobile Chrome on a physical mobile device:
+
+1. scroll down a few pages of Explore;
+2. stop on a debate and wait for its video to load;
+3. after approximately 30 seconds, the site crashes.
+
+This PR changes documentation only, so its preview exercises the same feed/player implementation as
+the `master` baseline. The result confirms that the scroll-depth crash is still reproducible on a
+real mobile browser and ties the terminal failure to loading a debate after resources have already
+accumulated. Without a browser memory trace or crash log it does not, by itself, prove whether the
+immediate kill came from memory, a decoder ceiling, or both; the unbounded retention path below
+remains the leading cause.
+
 ## Confirmed path
 
 ### 1. The feed appends forever and does not virtualize
