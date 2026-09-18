@@ -9,6 +9,7 @@ import { normId } from '~/core/utils/norm-id';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
 import { NavUtils } from '~/core/utils/utils';
 
+import { AvatarGroup } from '~/design-system/avatar-group';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -72,21 +73,16 @@ export function PersonSpaceIcons({
           <button
             type="button"
             aria-label={`View ${orderedSpaceIds.length} active ${orderedSpaceIds.length === 1 ? 'space' : 'spaces'}`}
-            className="inline-flex shrink-0 items-center rounded-sm transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ctaPrimary"
+            className="inline-flex shrink-0 items-center rounded transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ctaPrimary"
           >
-            <span aria-hidden="true" className="flex items-center -space-x-2">
+            <AvatarGroup>
               {shown.map(spaceId => (
-                <StackedSpaceIcon key={spaceId} spaceId={spaceId} labelsById={labelsById} />
+                <AvatarGroup.Item key={spaceId} size={12}>
+                  <SpaceIcon spaceId={spaceId} labelsById={labelsById} size={12} />
+                </AvatarGroup.Item>
               ))}
-              {overflow > 0 ? (
-                <span
-                  className="relative box-content flex h-3 min-w-3 shrink-0 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[9px] leading-3 text-grey-04 tabular-nums"
-                  data-testid="person-space-overflow"
-                >
-                  +{overflow}
-                </span>
-              ) : null}
-            </span>
+              <AvatarGroup.Overflow count={overflow} size={12} data-testid="person-space-overflow" />
+            </AvatarGroup>
           </button>
         </Popover.Trigger>
         {popoverPortal ? (
@@ -121,7 +117,7 @@ export function PersonSpaceIcons({
                         className="flex min-w-0 items-center gap-2 px-3 py-1.5 transition-colors duration-75 hover:bg-grey-01"
                         data-testid="person-space-option"
                       >
-                        <SpaceListIcon spaceId={spaceId} labelsById={labelsById} />
+                        <SpaceIcon spaceId={spaceId} labelsById={labelsById} size={20} />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-metadataMedium text-text">{name}</span>
                           {hasCounts ? (
@@ -152,31 +148,30 @@ function formatCount(count: number, singular: string): string {
   return `${count} ${count === 1 ? singular : `${singular}s`}`;
 }
 
-function StackedSpaceIcon({ spaceId, labelsById }: { spaceId: string; labelsById: Map<string, SpaceLabel> }) {
+function SpaceIcon({
+  spaceId,
+  labelsById,
+  size,
+}: {
+  spaceId: string;
+  labelsById: Map<string, SpaceLabel>;
+  size: 12 | 20;
+}) {
   const label = spaceLabel(labelsById, spaceId);
   const name = label?.name?.trim() || 'Space';
+  const compact = size === 12;
 
   return (
     <span
-      title={name}
-      className="relative box-content flex h-3 w-3 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-grey-01 text-[8px] font-medium text-grey-04"
-      data-testid="person-space-icon"
-    >
-      {label?.image ? <ThumbGeoImage value={label.image} alt="" /> : spaceInitial(name)}
-    </span>
-  );
-}
-
-function SpaceListIcon({ spaceId, labelsById }: { spaceId: string; labelsById: Map<string, SpaceLabel> }) {
-  const label = spaceLabel(labelsById, spaceId);
-  const name = label?.name?.trim() || 'Space';
-
-  return (
-    <span
+      title={compact ? name : undefined}
       aria-hidden="true"
-      className="relative flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-grey-01 text-footnoteMedium font-medium text-grey-04"
+      className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-grey-01 font-medium text-grey-04 ${
+        compact ? 'h-3 w-3 text-[8px]' : 'h-5 w-5 text-footnoteMedium'
+      }`}
+      data-testid={compact ? 'person-space-icon' : undefined}
     >
-      {label?.image ? <ThumbGeoImage value={label.image} alt="" /> : spaceInitial(name)}
+      {spaceInitial(name)}
+      {label?.image ? <ThumbGeoImage value={label.image} alt="" /> : null}
     </span>
   );
 }

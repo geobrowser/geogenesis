@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NavUtils } from '~/core/utils/utils';
 
 import type { DebateChallenge, DebatePerson } from '../api';
+import type { PersonRecord } from './person-record';
 import { debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
@@ -25,7 +26,7 @@ const mocks = vi.hoisted(() => ({
   cancelChallenge: vi.fn(),
   cancelPending: false,
   cancelError: null as Error | null,
-  records: new Map<string, unknown>(),
+  records: new Map<string, PersonRecord>(),
   publishableSpaceIds: null as Set<string> | null,
   spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */
@@ -122,6 +123,30 @@ function person(userId: string, name: string): DebatePerson {
     online_since: '2026-08-05T11:00:00.000Z',
     can_challenge: true,
   } as DebatePerson;
+}
+
+function record(over: Partial<PersonRecord> = {}): PersonRecord {
+  const result: PersonRecord = {
+    positions: null,
+    debatesArgued: null,
+    claimsBySpace: new Map(),
+    debatesBySpace: new Map(),
+    winRate: null,
+    joinedAt: null,
+    activeSpaceIds: new Set(),
+    ...over,
+  };
+
+  if (!over.activeSpaceIds) {
+    result.activeSpaceIds = new Set(
+      [result.claimsBySpace, result.debatesBySpace]
+        .flatMap(counts => [...(counts ?? [])])
+        .filter(([, count]) => count > 0)
+        .map(([spaceId]) => spaceId)
+    );
+  }
+
+  return result;
 }
 
 function challenge(role: 'requester' | 'recipient', expiresInMs = 25 * 60_000): DebateChallenge {
@@ -483,12 +508,12 @@ describe('PeopleTab', () => {
     mocks.records = new Map([
       [
         PROFILE_SPACE_IDS['user-them'],
-        {
+        record({
           positions: 119,
           debatesArgued: 11,
           winRate: { percent: 73, wins: 8, of: 11, judged: 11 },
           joinedAt: new Date(Date.UTC(2026, 0, 29)),
-        },
+        }),
       ],
     ]);
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
@@ -571,25 +596,25 @@ describe('PeopleTab filters', () => {
     mocks.records = new Map([
       [
         PROFILE_THEM,
-        {
+        record({
           positions: 1,
           debatesArgued: null,
           claimsBySpace: new Map([['spacea', 1]]),
           debatesBySpace: new Map(),
           winRate: null,
           joinedAt: null,
-        },
+        }),
       ],
       [
         PROFILE_OTHER,
-        {
+        record({
           positions: 1,
           debatesArgued: null,
           claimsBySpace: new Map([['spaceb', 1]]),
           debatesBySpace: new Map(),
           winRate: null,
           joinedAt: null,
-        },
+        }),
       ],
     ]);
   });
@@ -609,14 +634,17 @@ describe('PeopleTab filters', () => {
   });
 
   it('defaults to Any space and keeps people with no debate-space activity visible', () => {
-    mocks.records.set(PROFILE_OTHER, {
-      positions: null,
-      debatesArgued: null,
-      claimsBySpace: new Map(),
-      debatesBySpace: new Map(),
-      winRate: null,
-      joinedAt: null,
-    });
+    mocks.records.set(
+      PROFILE_OTHER,
+      record({
+        positions: null,
+        debatesArgued: null,
+        claimsBySpace: new Map(),
+        debatesBySpace: new Map(),
+        winRate: null,
+        joinedAt: null,
+      })
+    );
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
@@ -629,17 +657,20 @@ describe('PeopleTab filters', () => {
 
   it('never offers or keeps a space where nobody has activity', async () => {
     mocks.spaceLabels.set('spacec', { name: 'Dormant', image: null });
-    mocks.records.set(PROFILE_THEM, {
-      positions: 1,
-      debatesArgued: null,
-      claimsBySpace: new Map([
-        ['spacea', 1],
-        ['spacec', 0],
-      ]),
-      debatesBySpace: new Map([['spacec', 0]]),
-      winRate: null,
-      joinedAt: null,
-    });
+    mocks.records.set(
+      PROFILE_THEM,
+      record({
+        positions: 1,
+        debatesArgued: null,
+        claimsBySpace: new Map([
+          ['spacea', 1],
+          ['spacec', 0],
+        ]),
+        debatesBySpace: new Map([['spacec', 0]]),
+        winRate: null,
+        joinedAt: null,
+      })
+    );
     const store = createStore();
     store.set(debatesHubPeopleSpaceIdsAtom, ['spacec']);
 
@@ -690,7 +721,7 @@ describe('PeopleTab filters', () => {
     mocks.records = new Map([
       [
         PROFILE_THEM,
-        {
+        record({
           positions: 5,
           debatesArgued: null,
           claimsBySpace: new Map(
@@ -699,7 +730,7 @@ describe('PeopleTab filters', () => {
           debatesBySpace: new Map(),
           winRate: null,
           joinedAt: null,
-        },
+        }),
       ],
     ]);
 
@@ -715,7 +746,7 @@ describe('PeopleTab filters', () => {
     mocks.records = new Map([
       [
         PROFILE_THEM,
-        {
+        record({
           positions: null,
           debatesArgued: null,
           claimsBySpace: new Map([
@@ -725,7 +756,7 @@ describe('PeopleTab filters', () => {
           debatesBySpace: new Map(),
           winRate: null,
           joinedAt: new Date(Date.UTC(2026, 0, 29)),
-        },
+        }),
       ],
     ]);
 
@@ -764,7 +795,7 @@ describe('PeopleTab filters', () => {
     mocks.records = new Map([
       [
         PROFILE_THEM,
-        {
+        record({
           positions: 4,
           debatesArgued: 4,
           claimsBySpace: new Map([
@@ -781,7 +812,7 @@ describe('PeopleTab filters', () => {
           ]),
           winRate: null,
           joinedAt: new Date(Date.UTC(2026, 0, 29)),
-        },
+        }),
       ],
     ]);
 
@@ -817,6 +848,30 @@ describe('PeopleTab filters', () => {
     const bare = screen.getByText('Vytautas').closest('li') as HTMLElement;
     expect(within(bare).queryByTestId('person-space-icon')).not.toBeInTheDocument();
     expect(within(bare).queryByTestId('person-space-overflow')).not.toBeInTheDocument();
+  });
+
+  it('keeps a proven active space when a capped page makes its exact counts incomplete', async () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.records = new Map([
+      [
+        PROFILE_THEM,
+        record({
+          activeSpaceIds: new Set(['spacea']),
+          claimsBySpace: undefined,
+          debatesBySpace: undefined,
+        }),
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const trigger = screen.getByRole('button', { name: 'View 1 active space' });
+    fireEvent.click(trigger);
+    const list = await screen.findByRole('list', { name: 'Active spaces' });
+    expect(within(list).getByText('Crypto')).toBeInTheDocument();
+    expect(within(list).queryByText(/claims|debates/)).not.toBeInTheDocument();
+
+    await closeActiveSpacesPopover(trigger);
   });
 
   it('shows only spaces where debate publishing is enabled', async () => {

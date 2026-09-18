@@ -30,6 +30,7 @@ import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
+import { isPersonId } from './person-records-document';
 import { PersonSpaceIcons } from './person-space-icons';
 import { usePersonRecords } from './use-person-records';
 import { useUnexpiredRequests } from './use-request-countdown';
@@ -37,17 +38,16 @@ import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
 /**
- * Whether the records batch has yet to answer for anybody on screen.
+ * Whether the records batch has answered for everybody queryable on the current roster.
  *
- * Only ever true before its first answer — `usePersonRecords` keeps the previous list's map while a
- * new one lands — which is exactly the window the membership default must not be spent in. A seed
- * taken against a map with nothing in it reads as "this viewer belongs to none of these spaces" and
- * falls back to the unfiltered list for the whole session.
+ * `usePersonRecords` keeps the previous roster's map while a new one lands. Checking the current ids
+ * rather than `records.size` keeps that placeholder from reconciling a selection against people who
+ * have already left, or clearing it before a newly arrived person's activity has loaded.
  */
 const EMPTY_SPACE_IDS: string[] = [];
 
-function recordsPending(people: DebatePerson[], records: Map<string, PersonRecord>): boolean {
-  return people.length > 0 && records.size === 0;
+function recordsPending(personIds: string[], records: Map<string, PersonRecord>): boolean {
+  return personIds.some(personId => isPersonId(personId) && !records.has(personId));
 }
 
 /**
@@ -80,6 +80,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // that is already cached instead of firing a request per keystroke.
   const personIds = React.useMemo(() => allPeople.map(person => person.profile_space_id), [allPeople]);
   const records = usePersonRecords(personIds);
+  const personRecordsPending = recordsPending(personIds, records);
 
   const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces();
   const publishableSpacesPending = publishableSpaceIds === null && publishableSpacesLoading;
@@ -93,11 +94,9 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     const byPerson = new Map<string, string[]>();
     for (const [personId, record] of records) {
       const activeIds = new Set<string>();
-      for (const counts of [record.claimsBySpace, record.debatesBySpace]) {
-        for (const [spaceId, count] of counts ?? []) {
-          if (count > 0 && isSpaceDebatePublishable(spaceId, publishableSpaceIds)) {
-            activeIds.add(normId(spaceId));
-          }
+      for (const spaceId of record.activeSpaceIds) {
+        if (isSpaceDebatePublishable(spaceId, publishableSpaceIds)) {
+          activeIds.add(normId(spaceId));
         }
       }
       byPerson.set(personId, [...activeIds]);
@@ -105,21 +104,20 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     return byPerson;
   }, [publishableSpaceIds, records]);
 
-  const activeSpaceIds = React.useMemo(
-    () => new Set([...debateSpacesByPerson.values()].flat().map(normId)),
-    [debateSpacesByPerson]
-  );
+  const activeSpaceIds = React.useMemo(() => {
+    return new Set(allPeople.flatMap(person => debateSpacesByPerson.get(person.profile_space_id) ?? []));
+  }, [allPeople, debateSpacesByPerson]);
 
   // A remembered selection can outlive the panel, the activity set, or the publishable set.
   // Reconcile against the exact options this tab is allowed to offer so `keepSelectedVisible`
   // cannot put a disabled, membership-only, or zero-activity space back into the dropdown.
   React.useEffect(() => {
-    if (publishableSpacesPending || recordsPending(allPeople, records)) return;
+    if (publishableSpacesPending || personRecordsPending) return;
     setSpaceIds(current => {
       const kept = current.filter(spaceId => activeSpaceIds.has(normId(spaceId)));
       return kept.length === current.length ? current : kept;
     });
-  }, [activeSpaceIds, allPeople, publishableSpacesPending, records, setSpaceIds]);
+  }, [activeSpaceIds, personRecordsPending, publishableSpacesPending, setSpaceIds]);
 
   // Filtered here rather than through the query: this endpoint takes no parameters at all and
   // returns whoever is available right now in one unpaginated list, so there is nothing to page
@@ -163,7 +161,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     spaceIds,
     setSpaceIds,
     memberSpaceIds: null,
-    pending: peopleQuery.isLoading || publishableSpacesPending || recordsPending(allPeople, records),
+    pending: peopleQuery.isLoading || publishableSpacesPending || personRecordsPending,
     seedSpent: true,
   });
 

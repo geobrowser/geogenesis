@@ -13,6 +13,8 @@ import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 export type PersonRecord = {
   positions: number | null;
   debatesArgued: number | null;
+  /** Spaces with activity already observed, even when a capped page makes the exact counts incomplete. */
+  activeSpaceIds: ReadonlySet<string>;
   /** Distinct claims the person has answered, grouped by response space; absent if the page was short. */
   claimsBySpace?: ReadonlyMap<string, number>;
   /**
@@ -96,6 +98,12 @@ export function derivePersonRecord({
   sharesByDebateId,
 }: PersonRecordInput): PersonRecord {
   const joinedAt = parseCreatedAt(createdAt);
+  const activeSpaceIds = new Set<string>();
+  for (const counts of [claimsBySpace, debatesBySpace]) {
+    for (const [spaceId, count] of counts) {
+      if (count > 0) activeSpaceIds.add(spaceId);
+    }
+  }
   // A truncated page of positions is an arbitrary subset of the claims they answered, so the
   // distinct count from it is quietly low — withheld for the same reason the debate count is.
   const positionsHeld = !positionsTruncated && positions > 0 ? positions : null;
@@ -106,6 +114,7 @@ export function derivePersonRecord({
     return {
       positions: positionsHeld,
       debatesArgued: null,
+      activeSpaceIds,
       claimsBySpace: positionsTruncated ? undefined : claimsBySpace,
       debatesBySpace: undefined,
       winRate: null,
@@ -131,6 +140,7 @@ export function derivePersonRecord({
   return {
     positions: positionsHeld,
     debatesArgued: debatesArgued > 0 ? debatesArgued : null,
+    activeSpaceIds,
     claimsBySpace: positionsTruncated ? undefined : claimsBySpace,
     debatesBySpace,
     winRate:

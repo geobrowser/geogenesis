@@ -201,6 +201,7 @@ describe('truncation', () => {
     expect(result.debatesArgued).toBeNull();
     expect(result.winRate).toBeNull();
     expect(result.debatesBySpace).toBeUndefined();
+    expect(result.activeSpaceIds).toEqual(new Set(['space-a']));
     // Positions are paged separately, so the relation cap says nothing about them.
     expect(result.positions).toBe(5);
     expect(result.claimsBySpace).toEqual(new Map([['space-a', 5]]));
@@ -219,6 +220,7 @@ describe('truncation', () => {
     expect(result.positions).toBeNull();
     expect(result.claimsBySpace).toBeUndefined();
     expect(result.debatesArgued).toBe(1);
+    expect(result.activeSpaceIds).toEqual(new Set(['space-a']));
   });
 });
 
