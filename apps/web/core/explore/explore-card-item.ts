@@ -1,7 +1,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { getRecordingUrls } from '~/core/community-calls/recordings';
-import { DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
+import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
 import { EntityDecoder } from '~/core/io/decoders/entity';
 import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
@@ -14,6 +14,19 @@ import {
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
 } from './explore-constants';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
+
+/**
+ * The claim a Debate argued, as the card needs it: enough to title the card and to open the claim.
+ *
+ * Read from the graph rather than from geo-chat's `debate.claim`, even though the debate card
+ * already loads that: the geo-chat lookup is viewport-gated and asynchronous, so a title taken
+ * from it would render empty (or as the debate's own name) and then swap under the reader. The
+ * relation is already on the entity the card was built from.
+ */
+export type ExploreDebateClaim = {
+  entityId: string;
+  name: string;
+};
 
 /**
  * Everything an `ExploreFeedCard` renders, and nothing about how it was found.
@@ -35,6 +48,8 @@ export type ExploreFeedItem = {
   imageUrl: string | null;
   recordingUrls: string[];
   debateVideoUrls: string[];
+  /** The claim this Debate argued. `null` on every non-debate, and on a debate missing the relation. */
+  debateClaim: ExploreDebateClaim | null;
   commentCount: number;
   isMemberOrEditor: boolean;
   hasPendingMembershipRequest: boolean;
@@ -68,6 +83,29 @@ export function decodeExploreCardEntity(node: unknown): ExploreCardEntity | null
   const decoded = EntityDecoder.decode(raw);
   if (!decoded) return null;
   return { ...decoded, commentCount: raw.backlinks?.totalCount ?? 0, createdAt: raw.createdAt };
+}
+
+const DEBATE_CLAIMS_RELATION = normId(DEBATE_CLAIMS_PROPERTY_ID);
+
+/**
+ * The claim behind a Debate entity, from its own `Claims` relation.
+ *
+ * A Debate carries exactly one — `debate-publish-draft` writes it once, for the motion that was
+ * argued. The claims *extracted from the transcript* use the same relation type but hang off the
+ * transcript's text blocks, not off the debate, so they never reach this.
+ *
+ * Returns null rather than an unnamed target for a relation whose claim has no name: a title is
+ * the whole point here, and the caller has the debate's own name to fall back to.
+ */
+export function debateClaimFromRelations(relations: Entity['relations'] | undefined): ExploreDebateClaim | null {
+  for (const relation of relations ?? []) {
+    if (relation.isDeleted === true) continue;
+    if (normId(relation.type.id) !== DEBATE_CLAIMS_RELATION) continue;
+    const name = relation.toEntity.name?.trim();
+    if (!name) continue;
+    return { entityId: relation.toEntity.id, name };
+  }
+  return null;
 }
 
 function pickDisplaySpaceId(entity: Entity, allowed: Set<string>): string | null {
@@ -161,6 +199,7 @@ export function buildExploreFeedRows(
       imageUrl: imageFromEntity(e, spaceId),
       recordingUrls: getRecordingUrls(relationsInDisplaySpace),
       debateVideoUrls: getRelationVideoUrls(relationsInDisplaySpace, DEBATE_VIDEOS_PROPERTY_ID),
+      debateClaim: debateClaimFromRelations(relationsInDisplaySpace),
       commentCount: e.commentCount,
       isMemberOrEditor: memberOrEditorSpaceIds.has(normId(spaceId)),
     });

@@ -7,6 +7,7 @@ import { Effect } from 'effect';
 
 import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
+import { debateClaimFromRelations } from '~/core/explore/explore-card-item';
 import { parseEntityUpdatedAtToUnixSec } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useSpace } from '~/core/hooks/use-space';
@@ -93,6 +94,8 @@ export function useBlockExploreFeedItem({
     enabled,
   });
 
+  const relationsInSpace = (storeEntity?.relations ?? []).filter(r => r.spaceId === entitySpaceId);
+
   return {
     entityId: rowEntityId,
     spaceId: entitySpaceId,
@@ -109,11 +112,9 @@ export function useBlockExploreFeedItem({
         ? descriptionOverride?.trim() || null
         : description?.trim() || nameCell?.description?.trim() || null,
     imageUrl,
-    recordingUrls: getRecordingUrls((storeEntity?.relations ?? []).filter(r => r.spaceId === entitySpaceId)),
-    debateVideoUrls: getRelationVideoUrls(
-      (storeEntity?.relations ?? []).filter(r => r.spaceId === entitySpaceId),
-      DEBATE_VIDEOS_PROPERTY_ID
-    ),
+    recordingUrls: getRecordingUrls(relationsInSpace),
+    debateVideoUrls: getRelationVideoUrls(relationsInSpace, DEBATE_VIDEOS_PROPERTY_ID),
+    debateClaim: debateClaimFromRelations(relationsInSpace),
     commentCount,
     isMemberOrEditor,
     hasPendingMembershipRequest: false,

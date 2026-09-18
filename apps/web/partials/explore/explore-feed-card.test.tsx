@@ -103,6 +103,7 @@ const item: ExploreFeedItem = {
   commentCount: 2,
   recordingUrls: [],
   debateVideoUrls: [],
+  debateClaim: null,
   isMemberOrEditor: true,
   hasPendingMembershipRequest: false,
 };
