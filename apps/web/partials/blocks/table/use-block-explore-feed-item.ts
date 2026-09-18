@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 
 import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
-import { debateClaimFromRelations } from '~/core/explore/explore-card-item';
+import { debateClaimFromEntity } from '~/core/explore/explore-card-item';
 import { parseEntityUpdatedAtToUnixSec } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useSpace } from '~/core/hooks/use-space';
@@ -95,13 +95,14 @@ export function useBlockExploreFeedItem({
   });
 
   const relationsInSpace = (storeEntity?.relations ?? []).filter(r => r.spaceId === entitySpaceId);
+  const cardTypes = types.map(t => ({ id: t.id, name: t.name }));
 
   return {
     entityId: rowEntityId,
     spaceId: entitySpaceId,
     spaceName: space?.entity.name ?? '',
     spaceImage: space?.entity.image ?? null,
-    types: types.map(t => ({ id: t.id, name: t.name })),
+    types: cardTypes,
     createdAtSec,
     title:
       titleOverride !== undefined
@@ -114,7 +115,7 @@ export function useBlockExploreFeedItem({
     imageUrl,
     recordingUrls: getRecordingUrls(relationsInSpace),
     debateVideoUrls: getRelationVideoUrls(relationsInSpace, DEBATE_VIDEOS_PROPERTY_ID),
-    debateClaim: debateClaimFromRelations(relationsInSpace),
+    debateClaim: debateClaimFromEntity(cardTypes, relationsInSpace),
     commentCount,
     isMemberOrEditor,
     hasPendingMembershipRequest: false,

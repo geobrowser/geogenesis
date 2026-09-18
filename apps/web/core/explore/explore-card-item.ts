@@ -1,6 +1,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { getRecordingUrls } from '~/core/community-calls/recordings';
+import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
 import { EntityDecoder } from '~/core/io/decoders/entity';
 import type { Entity } from '~/core/types';
@@ -90,14 +91,26 @@ const DEBATE_CLAIMS_RELATION = normId(DEBATE_CLAIMS_PROPERTY_ID);
 /**
  * The claim behind a Debate entity, from its own `Claims` relation.
  *
- * A Debate carries exactly one — `debate-publish-draft` writes it once, for the motion that was
- * argued. The claims *extracted from the transcript* use the same relation type but hang off the
- * transcript's text blocks, not off the debate, so they never reach this.
+ * Takes the entity's types, not just its relations, because `Claims` is **not** a debate-only
+ * relation: `debate-publish-draft` writes it once from the debate, for the motion that was argued,
+ * and again from every transcript text block, for the claims extracted out of that block's speech.
+ * Keyed on the relation alone, any text block drawn as a card — a data block's explore view renders
+ * whatever its query returns — would be re-headed and re-linked to one of those extracted claims.
+ * The entity type is what tells the two apart, so it is required here rather than left to each
+ * caller to remember; that is what makes `debateClaim`'s "null on every non-debate" an invariant
+ * rather than a hope.
+ *
+ * A Debate carries exactly one such relation, so the first match is the motion.
  *
  * Returns null rather than an unnamed target for a relation whose claim has no name: a title is
  * the whole point here, and the caller has the debate's own name to fall back to.
  */
-export function debateClaimFromRelations(relations: Entity['relations'] | undefined): ExploreDebateClaim | null {
+export function debateClaimFromEntity(
+  types: readonly { id: string }[] | undefined,
+  relations: Entity['relations'] | undefined
+): ExploreDebateClaim | null {
+  if (!isDebateEntity(types)) return null;
+
   for (const relation of relations ?? []) {
     if (relation.isDeleted === true) continue;
     if (normId(relation.type.id) !== DEBATE_CLAIMS_RELATION) continue;
@@ -199,7 +212,7 @@ export function buildExploreFeedRows(
       imageUrl: imageFromEntity(e, spaceId),
       recordingUrls: getRecordingUrls(relationsInDisplaySpace),
       debateVideoUrls: getRelationVideoUrls(relationsInDisplaySpace, DEBATE_VIDEOS_PROPERTY_ID),
-      debateClaim: debateClaimFromRelations(relationsInDisplaySpace),
+      debateClaim: debateClaimFromEntity(types, relationsInDisplaySpace),
       commentCount: e.commentCount,
       isMemberOrEditor: memberOrEditorSpaceIds.has(normId(spaceId)),
     });
