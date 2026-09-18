@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   cancelError: null as Error | null,
   records: new Map<string, PersonRecord>(),
   publishableSpaceIds: null as Set<string> | null,
+  publishableSpacesLoading: false,
   spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */
   linkProps: [] as Record<string, unknown>[],
@@ -36,10 +37,15 @@ const mocks = vi.hoisted(() => ({
 // The real one reaches for the sync engine and the router; a plain anchor is what the assertions
 // below are about — a real href, and nothing intercepting the click.
 vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, ...props }: { children: React.ReactNode } & Record<string, unknown>) => {
+  PrefetchLink: ({
+    children,
+    ref,
+    ...props
+  }: { children: React.ReactNode; ref?: React.Ref<HTMLAnchorElement> } & Record<string, unknown>) => {
     mocks.linkProps.push(props);
     return (
       <a
+        ref={ref}
         href={props.href as string}
         className={props.className as string | undefined}
         data-testid={props['data-testid'] as string | undefined}
@@ -81,7 +87,7 @@ vi.mock('../use-debate-publishable-spaces', async importOriginal => {
     ...actual,
     useDebatePublishableSpaces: () => ({
       publishableSpaceIds: mocks.publishableSpaceIds,
-      isLoading: false,
+      isLoading: mocks.publishableSpacesLoading,
     }),
   };
 });
@@ -183,6 +189,7 @@ beforeEach(() => {
   mocks.cancelError = null;
   mocks.records = new Map();
   mocks.publishableSpaceIds = null;
+  mocks.publishableSpacesLoading = false;
   mocks.spaceLabels = new Map();
   mocks.linkProps = [];
 });
@@ -682,6 +689,38 @@ describe('PeopleTab filters', () => {
     expect(screen.queryByRole('button', { name: /Dormant/ })).not.toBeInTheDocument();
   });
 
+  it('does not expose or apply remembered spaces until activity gates settle', async () => {
+    mocks.publishableSpacesLoading = true;
+    const store = createStore();
+    store.set(debatesHubPeopleSpaceIdsAtom, ['spacea']);
+
+    const view = render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+    // The selection survives for reconciliation, but an unverified space cannot narrow the roster,
+    // appear on a row, or put itself back into the shared menu through `keepSelectedVisible`.
+    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual(['spacea']);
+    expect(screen.getByText('Arturas')).toBeInTheDocument();
+    expect(screen.getByText('Vytautas')).toBeInTheDocument();
+    expect(screen.queryByText('Active in')).not.toBeInTheDocument();
+    const spaceFilterTrigger = screen.getByRole('button', { name: /Any space/ });
+    fireEvent.click(spaceFilterTrigger);
+    expect(screen.queryByRole('button', { name: /Crypto/ })).not.toBeInTheDocument();
+    fireEvent.click(spaceFilterTrigger);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    mocks.publishableSpacesLoading = false;
+    mocks.publishableSpaceIds = new Set(['spacea']);
+    view.rerender(
+      <Provider store={store}>
+        <PeopleTab onTabChange={mocks.onTabChange} />
+      </Provider>
+    );
+
+    expect(await screen.findByText('Arturas')).toBeInTheDocument();
+    expect(screen.queryByText('Vytautas')).not.toBeInTheDocument();
+    expect(screen.getByText('Active in')).toBeInTheDocument();
+  });
+
   // A space filter alone can never empty the list — a facet only offers spaces somebody is active in — so
   // the case this wording exists for is a space plus something else.
   //
@@ -732,6 +771,7 @@ describe('PeopleTab filters', () => {
           joinedAt: null,
         }),
       ],
+      [PROFILE_OTHER, record()],
     ]);
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
@@ -771,6 +811,7 @@ describe('PeopleTab filters', () => {
 
     const list = await screen.findByRole('list', { name: 'Active spaces' });
     const options = within(list).getAllByTestId('person-space-option');
+    await waitFor(() => expect(options[0]).toHaveFocus());
     expect(options[0]).toHaveAttribute('href', NavUtils.toSpace('spacea'));
     expect(options[1]).toHaveAttribute('href', NavUtils.toSpace('spaceb'));
 

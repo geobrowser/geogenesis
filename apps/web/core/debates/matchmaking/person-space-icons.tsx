@@ -59,6 +59,7 @@ export function PersonSpaceIcons({
   popoverPortal: HTMLElement | null;
 }) {
   const orderedSpaceIds = React.useMemo(() => orderPersonSpaces(spaceIds, debatesBySpace), [spaceIds, debatesBySpace]);
+  const firstSpaceLinkRef = React.useRef<HTMLAnchorElement>(null);
 
   if (orderedSpaceIds.length === 0) return null;
 
@@ -93,7 +94,10 @@ export function PersonSpaceIcons({
               sideOffset={8}
               collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
               hideWhenDetached
-              onOpenAutoFocus={event => event.preventDefault()}
+              onOpenAutoFocus={event => {
+                event.preventDefault();
+                firstSpaceLinkRef.current?.focus();
+              }}
               className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
             >
               <p className="px-3 pt-2.5 pb-1.5 text-footnoteMedium text-grey-04">Active in</p>
@@ -101,7 +105,7 @@ export function PersonSpaceIcons({
                 aria-label="Active spaces"
                 className="m-0 max-h-[356px] list-none overflow-y-auto overscroll-contain p-0"
               >
-                {orderedSpaceIds.map(spaceId => {
+                {orderedSpaceIds.map((spaceId, index) => {
                   const label = spaceLabel(labelsById, spaceId);
                   const name = label?.name?.trim() || 'Space';
                   const claimCount = countForSpace(claimsBySpace, spaceId);
@@ -113,6 +117,7 @@ export function PersonSpaceIcons({
                   return (
                     <li key={spaceId}>
                       <Link
+                        ref={index === 0 ? firstSpaceLinkRef : undefined}
                         href={NavUtils.toSpace(spaceId)}
                         className="flex min-w-0 items-center gap-2 px-3 py-1.5 transition-colors duration-75 hover:bg-grey-01"
                         data-testid="person-space-option"

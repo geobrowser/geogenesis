@@ -84,14 +84,20 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
 
   const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces();
   const publishableSpacesPending = publishableSpaceIds === null && publishableSpacesLoading;
+  const spaceActivityPending = publishableSpacesPending || personRecordsPending;
 
   // "Active in" means evidence of activity, not membership: at least one distinct claim answered
   // or one recorded debate in that space. The same map drives both the row and the filter so a
   // membership-only space cannot appear in one surface but not the other. The publishable-space
-  // gate is still the claim picker's authoritative acceptor-editor set; unknown deliberately fails
-  // open, matching `isSpaceDebatePublishable` elsewhere.
+  // gate is still the claim picker's authoritative acceptor-editor set. A settled lookup with no
+  // answer deliberately fails open, matching `isSpaceDebatePublishable` elsewhere; an in-flight
+  // lookup is different, because drawing its unverified spaces would briefly make them selectable.
+  // Person records get the same treatment: a partial batch must not filter out people whose row has
+  // not landed yet.
   const debateSpacesByPerson = React.useMemo(() => {
     const byPerson = new Map<string, string[]>();
+    if (spaceActivityPending) return byPerson;
+
     for (const [personId, record] of records) {
       const activeIds = new Set<string>();
       for (const spaceId of record.activeSpaceIds) {
@@ -102,22 +108,30 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
       byPerson.set(personId, [...activeIds]);
     }
     return byPerson;
-  }, [publishableSpaceIds, records]);
+  }, [publishableSpaceIds, records, spaceActivityPending]);
 
   const activeSpaceIds = React.useMemo(() => {
     return new Set(allPeople.flatMap(person => debateSpacesByPerson.get(person.profile_space_id) ?? []));
   }, [allPeople, debateSpacesByPerson]);
 
+  // Keep the remembered atom untouched until both activity inputs settle, but never let a stale or
+  // not-yet-verified value affect the current render. Filtering it synchronously also closes the
+  // render between a gate settling and the reconciliation effect below committing its cleanup.
+  const effectiveSpaceIds = React.useMemo(
+    () => (spaceActivityPending ? EMPTY_SPACE_IDS : spaceIds.filter(spaceId => activeSpaceIds.has(normId(spaceId)))),
+    [activeSpaceIds, spaceActivityPending, spaceIds]
+  );
+
   // A remembered selection can outlive the panel, the activity set, or the publishable set.
   // Reconcile against the exact options this tab is allowed to offer so `keepSelectedVisible`
   // cannot put a disabled, membership-only, or zero-activity space back into the dropdown.
   React.useEffect(() => {
-    if (publishableSpacesPending || personRecordsPending) return;
+    if (spaceActivityPending) return;
     setSpaceIds(current => {
       const kept = current.filter(spaceId => activeSpaceIds.has(normId(spaceId)));
       return kept.length === current.length ? current : kept;
     });
-  }, [activeSpaceIds, personRecordsPending, publishableSpacesPending, setSpaceIds]);
+  }, [activeSpaceIds, setSpaceIds, spaceActivityPending]);
 
   // Filtered here rather than through the query: this endpoint takes no parameters at all and
   // returns whoever is available right now in one unpaginated list, so there is nothing to page
@@ -132,12 +146,12 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   }, [allPeople, search]);
 
   const people = React.useMemo(() => {
-    if (spaceIds.length === 0) return searchedPeople;
-    const wanted = new Set(spaceIds.map(normId));
+    if (effectiveSpaceIds.length === 0) return searchedPeople;
+    const wanted = new Set(effectiveSpaceIds.map(normId));
     return searchedPeople.filter(person =>
       (debateSpacesByPerson.get(person.profile_space_id) ?? []).some(spaceId => wanted.has(spaceId))
     );
-  }, [debateSpacesByPerson, searchedPeople, spaceIds]);
+  }, [debateSpacesByPerson, effectiveSpaceIds, searchedPeople]);
 
   // Counted over everything the *other* filters leave, which is what a facet count means here as it
   // does on the claim tabs: the number beside a space is what picking it would give you, so it
@@ -158,10 +172,10 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // qualifying activity. Explicit selections still persist with the atom above.
   const { facetSpaces, onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
     offeredSpaces,
-    spaceIds,
+    spaceIds: effectiveSpaceIds,
     setSpaceIds,
     memberSpaceIds: null,
-    pending: peopleQuery.isLoading || publishableSpacesPending || personRecordsPending,
+    pending: peopleQuery.isLoading || spaceActivityPending,
     seedSpent: true,
   });
 
@@ -169,7 +183,10 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // the same way in both. The viewer's selection is included: a space can be picked and then
   // counted out of the facets, and it still has to be nameable in the trigger.
   const { labelsById } = useSpaceLabels(
-    React.useMemo(() => [...new Set([...facetSpaces.map(space => space.id), ...spaceIds])], [facetSpaces, spaceIds])
+    React.useMemo(
+      () => [...new Set([...facetSpaces.map(space => space.id), ...effectiveSpaceIds])],
+      [effectiveSpaceIds, facetSpaces]
+    )
   );
 
   // Whether the viewer's own filters are what emptied the list, as opposed to nobody being online.
@@ -179,7 +196,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // Which undo to offer. Search alone keeps the wording it had, because a viewer who typed
   // something knows what to take back; once a space filter is involved "Clear search" would name
   // one of the two things holding the list down.
-  const searchIsTheOnlyFilter = Boolean(search.trim()) && spaceIds.length === 0;
+  const searchIsTheOnlyFilter = Boolean(search.trim()) && effectiveSpaceIds.length === 0;
 
   const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
   // A challenge stays `pending` in the activity payload until the server says otherwise, so its own
@@ -233,10 +250,11 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
             Topic props are omitted because people carry no topics to facet on, the same way the
             requests bar omits them. */}
         <SpaceTopicFilters
-          spaceIds={spaceIds}
+          spaceIds={effectiveSpaceIds}
           onSpaceToggle={onSpaceToggle}
           onSpacesClear={onSpacesClear}
           facetSpaces={facetSpaces}
+          countsPending={spaceActivityPending}
         />
       </HubStickyControls>
 
