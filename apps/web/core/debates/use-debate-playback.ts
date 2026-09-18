@@ -368,11 +368,15 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // kept for a gap too large to close that way.
     const syncDelta = offsets.slot2 - offsets.slot1;
     const now = Date.now();
-    // Both corrections below assume the pair's play/pause states are the settled result of a
+    // Every correction below assumes the pair's play/pause states are the settled result of a
     // decision — ours or the viewer's. Two situations break that assumption, and in both the
     // right move is to leave the elements alone rather than to "fix" them: a hidden tab, where
     // the browser stops elements of its own accord, and a resume that has not finished starting
-    // them yet.
+    // them yet. A resume is a split pair by construction, and slot 2 — the cue-less WebM — is
+    // routinely the later of the two to start, so a tick landing there sees a gap that is not
+    // drift and answers it by nudging or hard-seeking the element that is still trying to begin.
+    // On these files a seek is a parse walk (GEO-2828), so that makes the start it is competing
+    // with slower still.
     const pairIsSettled = !hidden && resumesInFlightRef.current === 0;
 
     if (primaryVideo) {
@@ -394,7 +398,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     if (
       primaryVideo &&
       secondaryVideo &&
-      !hidden &&
+      pairIsSettled &&
       !primaryVideo.paused &&
       !secondaryVideo.seeking &&
       !primaryStalled

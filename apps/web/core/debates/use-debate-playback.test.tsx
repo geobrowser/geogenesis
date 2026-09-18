@@ -280,6 +280,52 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
     expect(result.current.playing).toBe(false);
   });
 
+  /**
+   * The drift correction has the same reason to stand down mid-resume as the split-pair check
+   * did, and for a while it did not. A resume is a split pair by construction — slot 2, the
+   * cue-less WebM, is routinely the later of the two to start — so a tick landing in the confirm
+   * window sees a gap that is not drift and answers it by nudging (or hard-seeking) the element
+   * that is still trying to begin, which on these files means a parse walk competing with the
+   * start it is meant to help (GEO-2828).
+   */
+  it('does not correct drift against a video that is still starting', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      // Slot 1 is up and has played on; slot 2 is still parsing, so it reads far "behind".
+      slot1.settlePlay();
+      slot1.currentTime = 10;
+      slot2.currentTime = 0;
+      result.current.onPlaybackTick();
+      await Promise.resolve();
+    });
+
+    // Left alone: not dragged to slot 1's position, and not put on a corrective rate.
+    expect(slot2.currentTime).toBe(0);
+    expect(slot2.playbackRate).toBe(1);
+  });
+
+  /** The control: once the resume has settled, ordinary drift is corrected as before. */
+  it('still corrects drift once the resume has settled', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    slot1.currentTime = 10;
+    slot2.currentTime = 9.5; // beyond the nudge threshold, inside the seek one
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.playbackRate).not.toBe(1);
+  });
+
   /** And the guard must not swallow a real block — the autoplay-policy error still surfaces. */
   it('still surfaces a genuine failure to start', async () => {
     const { result, slot1, slot2 } = await mounted();
