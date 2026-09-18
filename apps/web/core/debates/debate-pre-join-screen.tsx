@@ -332,8 +332,9 @@ export function DebatePreScreen({
         </button>
       )}
 
-      {mediaReady && (
-        <>
+      {/* Laid out but hidden while access is requested, so granting it does not shift the screen. */}
+      {(mediaReady || previewState === 'requesting') && (
+        <div className={cx('contents', !mediaReady && 'invisible')} aria-hidden={!mediaReady} inert={!mediaReady}>
           <div className={cx('flex w-full flex-col gap-[6px]', controlsOrder)}>
             {isMobile ? (
               <>
@@ -425,7 +426,7 @@ export function DebatePreScreen({
             </button>
             {enableMediaPrompt && <p className="text-[12px] leading-4 text-grey-04">{enableMediaPrompt}</p>}
           </div>
-        </>
+        </div>
       )}
     </div>
   );

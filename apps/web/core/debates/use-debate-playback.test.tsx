@@ -1,19 +1,21 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
+
 import * as React from 'react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-import type { Debate } from './api';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ recordingUrl: vi.fn() }));
+import type { Debate, DebateMediaTurnSegment } from './api';
+import { useDebatePlayback } from './use-debate-playback';
 
-// The hook imports exactly these two from './hooks'. Mocking the module blanks everything
+const mocks = vi.hoisted(() => ({ recordingUrl: vi.fn(), turnSegments: [] as DebateMediaTurnSegment[] }));
+
+// The hook imports exactly these three from './hooks'. Mocking the module blanks everything
 // else in it, so anything omitted here arrives as undefined.
 vi.mock('./hooks', () => ({
   useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
+  useDebateMedia: () => ({ data: { turn_segments: mocks.turnSegments }, isLoading: false, error: null }),
 }));
-
-import { useDebatePlayback } from './use-debate-playback';
 
 function debateFixture(id = 'debate-1'): Debate {
   return {
@@ -34,6 +36,7 @@ function debateFixture(id = 'debate-1'): Debate {
 
 describe('useDebatePlayback — playback URLs survive re-activation (GEO-2895)', () => {
   beforeEach(() => {
+    mocks.turnSegments = [];
     mocks.recordingUrl.mockReset();
     mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
       Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
@@ -287,5 +290,66 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
 
     expect(result.current.playing).toBe(true);
     expect(result.current.error).toBeNull();
+  });
+});
+
+describe('useDebatePlayback — the audible slot follows the render, not the allowance (GEO-2949)', () => {
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  // `debateFixture` is a [30s, 30s] allowance, so without segments the hook hands the floor to
+  // slot 1 for the first 30s. The render below cut turn 0 at 20s because that speaker yielded.
+  const yieldedSegments: DebateMediaTurnSegment[] = [
+    {
+      turn_index: 0,
+      participant_slot: 1,
+      output_start_ms: 0,
+      output_end_ms: 20_000,
+      duration_ms: 20_000,
+      countdown_start_ms: 0,
+    },
+    {
+      turn_index: 1,
+      participant_slot: 2,
+      output_start_ms: 20_000,
+      output_end_ms: 55_000,
+      duration_ms: 35_000,
+      countdown_start_ms: 25_000,
+    },
+  ];
+
+  it('unmutes the second speaker from where the render cut, not from the allowance', async () => {
+    mocks.turnSegments = yieldedSegments;
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    act(() => result.current.seekBoth(25));
+
+    // Without this fix the allowance keeps slot 1 audible until 30s — five seconds of slot 2
+    // talking into a muted panel, which is the reported "audio cutting in and out".
+    await waitFor(() => expect(result.current.activeSlot).toBe(2));
+  });
+
+  it('ends the timeline where the video ends, not where the allowance would', async () => {
+    mocks.turnSegments = yieldedSegments;
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    expect(result.current.timelineSeconds).toBe(55);
+  });
+
+  it('keeps using the allowance when the media job has produced no segments yet', async () => {
+    mocks.turnSegments = [];
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    expect(result.current.timelineSeconds).toBe(60);
+    act(() => result.current.seekBoth(25));
+    await waitFor(() => expect(result.current.activeSlot).toBe(1));
   });
 });
