@@ -200,7 +200,27 @@ describe('claimMarkers', () => {
     );
 
     expect(markers.map(marker => marker.id)).toEqual(['a', 'b']);
-    expect(markers[0].fraction).toBeCloseTo(0.1);
+  });
+
+  // The hash has to sit where the card appears, or the two ways the timeline talks about one claim
+  // disagree — the mark is somewhere the card will not show up for several more seconds.
+  it('marks the end of the claim, where its card appears', () => {
+    const [marker] = claimMarkers([timed('a', confident(27_000, 31_000))], 310_000);
+
+    expect(marker.atMs).toBe(31_000);
+    expect(marker.fraction).toBeCloseTo(0.1);
+  });
+
+  // The bug this argument exists for. It used to be the latest claim's end, which only matches the
+  // track the markers are drawn on when the last claim runs to the final second. Measured on live
+  // debates the gap reached 11% — about 20 seconds out on a 210-second debate.
+  it('scales by the debate timeline, not by the last claim', () => {
+    const claims = [timed('a', confident(50_000, 60_000)), timed('b', confident(90_000, 100_000))];
+
+    const markers = claimMarkers(claims, 200_000);
+
+    expect(markers[0].fraction).toBeCloseTo(0.3);
+    expect(markers[1].fraction).toBeCloseTo(0.5);
   });
 
   // A marker is a place to jump to. The middle of a 30s turn is not a place.
@@ -208,7 +228,7 @@ describe('claimMarkers', () => {
     expect(claimMarkers([timed('turn', wholeTurn(0, 30_000))], 270_000)).toEqual([]);
   });
 
-  it('draws nothing before the duration is known', () => {
+  it('draws nothing before the timeline is known', () => {
     expect(claimMarkers([timed('a', confident(1_000, 2_000))], 0)).toEqual([]);
   });
 });
