@@ -21,11 +21,16 @@ const confident = (startMs: number, endMs: number): ClaimTiming => ({
   source: 'published',
 });
 
-/** Matched, but not well enough to assert over the video. */
+/**
+ * Matched, but not well enough to assert over the video.
+ *
+ * 0.28 rather than something nearer the bar on purpose: this is the band where windows collapse to
+ * a word or two and land in an arbitrary part of the turn, which is what the bar exists to catch.
+ */
 const unsure = (startMs: number, endMs: number): ClaimTiming => ({
   startMs,
   endMs,
-  confidence: 0.4,
+  confidence: 0.28,
   source: 'segment',
 });
 
