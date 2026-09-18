@@ -183,9 +183,10 @@ export function stanceOf(node: VoteNode): Stance | null {
  * side back rewrites the row rather than deleting it. The row is what
  * `entitiesConnection(votedBy:)` counts, which is why the tab listed claims with
  * no position on them and the rail counted them — 17 of one account's 211, 12 of
- * another's 34. There is no server-side way to exclude them (`votedByTypes` does
- * not exist), so the vote table is the only source that can tell the difference,
- * and every part of the tab narrows to what it says.
+ * another's 34, 50 across the 20 accounts measured. There is no server-side way
+ * to exclude them today (`votedByTypes` does not exist; GEO-2962 asks for it),
+ * so the vote table is the only source that can tell the difference, and every
+ * part of the tab narrows to what it says.
  *
  * The newest vote of each kind settles that kind even when it carries no side,
  * so a retraction cannot be skipped over and let an older answer fill the gap.

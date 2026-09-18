@@ -89,9 +89,12 @@ export function usePersonResponses({ spaceId, enabled = true }: { spaceId: strin
  * sits directly above a list that shows the 194, so the two had to be reconciled
  * and the vote table is the side that can be.
  *
- * There is no server-side fix available: `votedByTypes` does not exist on either
- * connection, and `userVotes` counts rows rather than claims — a claim answered
- * for both stance and veracity is two of them.
+ * There is no server-side fix available *yet*: `votedByTypes` does not exist on
+ * either connection, and `userVotes` counts rows rather than claims — a claim
+ * answered for both stance and veracity is two of them. GEO-2962 asks for the
+ * argument; when it lands this function and the vote scan behind it come out,
+ * and the count goes back to being one `totalCount` in the server-rendered
+ * facts query.
  */
 export function heldPositionsCount(
   responses: { total: number | null; isError: boolean },
