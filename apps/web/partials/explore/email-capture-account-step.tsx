@@ -71,7 +71,13 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
     };
   }, []);
 
+  // One request at a time. Both resend controls were live during `submitting-code`, so a reader
+  // who pressed resend while a verification was in flight retired the very code being checked --
+  // and in the error state, repeated presses fired again before Privy's state had left `error`.
+  const [sending, setSending] = React.useState(false);
+
   const requestCode = React.useCallback(async () => {
+    setSending(true);
     setCode('');
     try {
       await sendCodeRef.current({ email });
@@ -81,6 +87,8 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
       // rather than a dead end.
       giveUpRef.current();
       openPrivyModalRef.current();
+    } finally {
+      if (mountedRef.current) setSending(false);
     }
   }, [email]);
 
@@ -113,14 +121,14 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
     [code, loginWithCode]
   );
 
-  const sending = otpState.status === 'sending-code';
+  const busy = sending || otpState.status === 'sending-code' || otpState.status === 'submitting-code';
   const verifying = otpState.status === 'submitting-code';
   const failed = otpState.status === 'error';
 
   return (
     <form onSubmit={submitCode} noValidate>
       <p className="mt-[8px] text-[16px] leading-[19px] tracking-[-0.48px] text-[rgba(21,21,21,0.7)]">
-        {sending ? 'Sending a code to ' : 'Enter the code we sent to '}
+        {busy && !verifying ? 'Sending a code to ' : 'Enter the code we sent to '}
         <span className="text-[#151515]">{email}</span>
       </p>
 
@@ -133,14 +141,19 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
           autoComplete="one-time-code"
           // Lets iOS and Chrome offer the code straight from the message, which is the whole reason
           // `one-time-code` exists and the fastest path through this step.
+          //
+          // No `maxLength`: the browser enforces it on the raw input, before `onChange` ever sees
+          // it. Pasting "123 456" from a mail client would be cut to "123 45" and only then have
+          // its spaces stripped, leaving five digits and a step that cannot be completed — while
+          // looking, to the reader, like they pasted the wrong thing. The slice below does the same
+          // job on the normalized value, which is the only place it is correct.
           pattern="\d*"
-          maxLength={CODE_LENGTH}
           value={code}
           onChange={event => setCode(event.currentTarget.value.replace(/\D/g, '').slice(0, CODE_LENGTH))}
           placeholder="123456"
           aria-label="Verification code"
           aria-invalid={failed}
-          disabled={sending || verifying}
+          disabled={busy}
           autoFocus
           className={cx(
             'h-7 w-[132px] min-w-0 rounded-full border bg-white px-3 text-[17px] leading-[19px] tracking-[0.2em] text-text outline-hidden transition-colors placeholder:tracking-[0.2em] placeholder:text-[#b6b6b6] disabled:text-grey-03',
@@ -149,7 +162,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
         />
         <button
           type="submit"
-          disabled={sending || verifying || code.length !== CODE_LENGTH}
+          disabled={busy || code.length !== CODE_LENGTH}
           className="inline-flex h-7 shrink-0 items-center justify-center rounded-full bg-[#151515] px-4 text-[16px] leading-none tracking-[-0.35px] whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           {verifying ? 'Verifying…' : 'Continue'}
@@ -159,7 +172,12 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
       {failed ? (
         <p role="alert" className="mt-2 text-[14px] tracking-[-0.35px] text-red-01">
           That code did not work.{' '}
-          <button type="button" onClick={() => void requestCode()} className="underline underline-offset-2">
+          <button
+            type="button"
+            onClick={() => void requestCode()}
+            disabled={busy}
+            className="underline underline-offset-2 disabled:opacity-60"
+          >
             Send a new one
           </button>
         </p>
@@ -170,7 +188,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
           <button
             type="button"
             onClick={() => void requestCode()}
-            disabled={sending}
+            disabled={busy}
             className="underline underline-offset-2 disabled:opacity-60"
           >
             Send a new code

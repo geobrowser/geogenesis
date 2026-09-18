@@ -53,7 +53,7 @@ function PrivyConnectButton() {
   });
 
   const onLogin = () => {
-    prepareOnboarding(null);
+    prepareOnboarding({ returnTo: null });
     login();
   };
 

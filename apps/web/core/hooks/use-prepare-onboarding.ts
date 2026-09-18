@@ -46,17 +46,23 @@ export function usePrepareOnboarding() {
   const setSelectedTopicIds = useSetAtom(selectedTopicIdsAtom);
 
   /**
-   * `redirectTo` omitted sends them back to the page they pressed on, which is right for a control
-   * in the page. Pass an explicit destination to override it, or `null` for the entry points that
-   * deliberately clear it — the navbar's button is a sign-in from anywhere, not a return to
-   * anywhere, and leaving a stale path there would send the next person somewhere they never were.
+   * Where to land once onboarding finishes, which the four callers want three different things
+   * from. Omitted sends them back to the page they pressed on, which is right for a control in the
+   * page. `returnTo: null` clears it — the navbar's button is a sign-in from anywhere, not a return
+   * to anywhere. `keepReturnTo` leaves the stored value alone entirely, for callers that track
+   * their own destination and would be fighting this one: `use-ranking-compose-access.ts` holds
+   * its redirect in a ref, and `sign-in-prompt.tsx` never set this at all.
+   *
+   * Spelled as two fields rather than a magic string because the alternative was a sentinel that
+   * could collide with a real path.
    */
   return React.useCallback(
-    (redirectTo?: string | null) => {
-      const search = searchParams?.toString();
-      setPostOnboardingRedirect(
-        redirectTo === null ? null : (redirectTo ?? `${pathname}${search ? `?${search}` : ''}`)
-      );
+    ({ returnTo, keepReturnTo }: { returnTo?: string | null; keepReturnTo?: boolean } = {}) => {
+      if (!keepReturnTo) {
+        const search = searchParams?.toString();
+        setPostOnboardingRedirect(returnTo === null ? null : (returnTo ?? `${pathname}${search ? `?${search}` : ''}`));
+      }
+
       setName('');
       setTopicId('');
       setAvatar('');

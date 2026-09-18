@@ -33,6 +33,11 @@ function setup() {
     prepare: usePrepareOnboarding(),
     setSelectedTopicIds: useSetAtom(selectedTopicIdsAtom),
     setName: useSetAtom(nameAtom),
+    setTopicId: useSetAtom(topicIdAtom),
+    setAvatar: useSetAtom(avatarAtom),
+    setSpaceId: useSetAtom(spaceIdAtom),
+    setStep: useSetAtom(stepAtom),
+    setRedirect: useSetAtom(postOnboardingRedirectAtom),
     redirect: useAtomValue(postOnboardingRedirectAtom),
     name: useAtomValue(nameAtom),
     topicId: useAtomValue(topicIdAtom),
@@ -48,13 +53,17 @@ describe('usePrepareOnboarding', () => {
   it('clears every persisted onboarding field', () => {
     const { result } = setup();
 
-    // Seeded first. These atoms default to empty, so a reset that did nothing at all would satisfy
-    // an assertion made against a fresh store — which is exactly what the first version of this
-    // test did.
+    // Every field seeded, not just one. These atoms default to exactly the values the reset
+    // produces, so anything left unseeded is asserted against a fresh store and would pass with its
+    // reset deleted — which is what the first two versions of this test did, one field at a time.
     act(() => {
       result.current.setName('Someone else');
+      result.current.setTopicId('topic-from-before');
+      result.current.setAvatar('https://example.com/someone-else.png');
+      result.current.setSpaceId('space-from-before');
+      result.current.setStep('interested-in');
     });
-    expect(result.current.name).toBe('Someone else');
+    expect(result.current.step).toBe('interested-in');
 
     act(() => {
       result.current.prepare();
@@ -101,7 +110,7 @@ describe('usePrepareOnboarding', () => {
       const { result } = setup();
 
       act(() => {
-        result.current.prepare('/somewhere/else');
+        result.current.prepare({ returnTo: '/somewhere/else' });
       });
 
       expect(result.current.redirect).toBe('/somewhere/else');
@@ -110,11 +119,28 @@ describe('usePrepareOnboarding', () => {
     // The navbar's button signs you in from anywhere rather than returning you anywhere, so it
     // clears the destination. `null` has to mean that rather than falling through to the default —
     // an easy thing to get wrong with `??`, and the reason this case is spelled out.
+    // Two callers track their own destination and would be fighting this one:
+    // `use-ranking-compose-access.ts` holds it in a ref, and `sign-in-prompt.tsx` has never set it.
+    it('leaves the destination untouched when asked to keep it', () => {
+      const { result } = setup();
+      act(() => {
+        result.current.setRedirect('/set/by/somebody/else');
+      });
+
+      act(() => {
+        result.current.prepare({ keepReturnTo: true });
+      });
+
+      expect(result.current.redirect).toBe('/set/by/somebody/else');
+      // The fields are still reset — keeping the destination is the only difference.
+      expect(result.current.step).toBe('start');
+    });
+
     it('clears the destination when given null, rather than falling back to the current page', () => {
       const { result } = setup();
 
       act(() => {
-        result.current.prepare(null);
+        result.current.prepare({ returnTo: null });
       });
 
       expect(result.current.redirect).toBeNull();

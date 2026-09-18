@@ -82,7 +82,7 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   });
 
   return React.useCallback(() => {
-    prepareOnboarding(optionsRef.current?.redirectTo);
+    prepareOnboarding({ returnTo: optionsRef.current?.redirectTo });
     requestedRef.current = true;
     // Copied rather than referenced, so a caller rebuilding the object cannot rewrite an
     // attempt that is already in flight.

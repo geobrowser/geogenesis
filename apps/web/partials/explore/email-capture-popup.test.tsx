@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import * as React from 'react';
+
 import { getDefaultStore } from 'jotai';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -658,16 +660,24 @@ describe('ExploreEmailCapturePopup', () => {
 
     // Never offered to the reader, but it is what StrictMode does to every effect in development,
     // and the dependency array alone does not survive it.
-    it('sends one code even when the step is mounted twice', async () => {
-      const view = await subscribeSuccessfully();
+    // Under StrictMode React deliberately runs setup, cleanup, then setup again. `rerender` does
+    // not do that -- it keeps the same instance -- so the previous version of this test claimed to
+    // cover a double mount while never causing one, and passed with the guard removed.
+    it('sends one code even when the mount effect is replayed', async () => {
+      render(
+        <React.StrictMode>
+          <ExploreEmailCapturePopup />
+        </React.StrictMode>
+      );
+      scrollPastTrigger();
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reader@example.com' } });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+      });
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
       });
 
-      const sendsAfterFirstMount = mocks.sendCode.mock.calls.length;
-      view.rerender(<ExploreEmailCapturePopup />);
-
-      expect(sendsAfterFirstMount).toBe(1);
       expect(mocks.sendCode).toHaveBeenCalledTimes(1);
     });
 
@@ -710,6 +720,36 @@ describe('ExploreEmailCapturePopup', () => {
       // role finds nothing even though the component is still mounted.
       expect(popup()).toBeNull();
       expect(mocks.sendCode).toHaveBeenCalledTimes(1);
+    });
+
+    // Pins the attribute rather than the behaviour, deliberately. The browser enforces `maxLength`
+    // on raw input before `onChange` runs, so pasting "123 456" would be cut to "123 45" and only
+    // then stripped, leaving five digits in a step that cannot be completed. jsdom cannot reproduce
+    // that — `fireEvent.change` assigns `.value` directly and native truncation never happens — so
+    // a behavioural test here would pass with the attribute restored. This one does not.
+    it('sets no maxLength, which would truncate a pasted code before its spaces are stripped', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      expect(screen.getByRole('textbox', { name: 'Verification code' })).not.toHaveAttribute('maxlength');
+    });
+
+    // Both resend controls used to stay live while a verification was in flight, so pressing one
+    // retired the very code being checked.
+    it('will not send a new code while one is being verified', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+
+      mocks.otpState = { status: 'submitting-code' };
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      expect(screen.getByRole('button', { name: 'Send a new code' })).toBeDisabled();
     });
 
     it('says so when the code is refused, and offers a new one', async () => {
