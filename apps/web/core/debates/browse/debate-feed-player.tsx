@@ -18,7 +18,6 @@ import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
-import { DebateScorecard } from './debate-scorecard';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 
@@ -278,14 +277,6 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic]">
           {subtitle}
         </span>
-      )}
-
-      {/* Dimmed behind, so the card reads as the moment the debate arrives at rather than a note
-          stuck over two frozen faces. */}
-      {ready && playbackEnded && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/55 px-3">
-          <DebateScorecard debate={debate} ticker={ticker} votes={votes} onReplay={playFromStart} />
-        </div>
       )}
 
       {error && (
