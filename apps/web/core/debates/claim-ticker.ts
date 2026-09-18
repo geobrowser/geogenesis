@@ -137,12 +137,21 @@ export type ClaimMarker = { id: string; text: string; atMs: number; fraction: nu
 /**
  * Where each claim sits on the scrubber, as a fraction of the debate's length.
  *
- * Every claim with a known moment gets a marker, not just the confident ones: a marker is an
- * offer to jump, and landing a second or two early costs the viewer nothing. Whole-turn fallbacks
- * are excluded — a marker in the middle of a 30s window points at nothing in particular.
+ * Marked at the claim's *end*, like the card — see {@link tickerWindows}. A hash that sat at the
+ * start put the mark somewhere the card would not appear for several more seconds, so the two ways
+ * the timeline talks about one claim disagreed. Jumping to a hash now lands where its card does.
+ *
+ * `timelineMs` is the debate's own timeline, which is what the scrubber track measures. It used to
+ * be the latest claim's end, which is only the same number when the last claim runs to the final
+ * second — otherwise every marker was stretched rightwards by the difference. Measured across live
+ * debates that reached 11%, roughly 20 seconds out on a 210-second debate.
+ *
+ * Every claim with a known moment gets a marker, not just the confident ones: a marker is an offer
+ * to jump, and landing a second or two off costs the viewer nothing. Whole-turn fallbacks are
+ * excluded — a marker at the end of a 30s window points at nothing in particular.
  */
-export function claimMarkers(claims: TimedClaim[], durationMs: number): ClaimMarker[] {
-  if (durationMs <= 0) return [];
+export function claimMarkers(claims: TimedClaim[], timelineMs: number): ClaimMarker[] {
+  if (timelineMs <= 0) return [];
 
   return claims
     .filter(claim => claim.timing !== null && claim.timing.source !== 'block')
@@ -151,8 +160,8 @@ export function claimMarkers(claims: TimedClaim[], durationMs: number): ClaimMar
       return {
         id: claim.id,
         text: claim.text,
-        atMs: timing.startMs,
-        fraction: Math.max(0, Math.min(1, timing.startMs / durationMs)),
+        atMs: timing.endMs,
+        fraction: Math.max(0, Math.min(1, timing.endMs / timelineMs)),
       };
     })
     .sort((a, b) => a.atMs - b.atMs);

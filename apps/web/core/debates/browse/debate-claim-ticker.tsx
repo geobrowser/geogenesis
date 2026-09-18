@@ -75,7 +75,15 @@ export type DebateTicker = {
  * key the feed's count badge and the Claims panel already use, and the transcript on the same key
  * `useDebatePlayback` fetches for subtitles. On a card that is playing, this costs nothing.
  */
-export function useDebateClaimTicker(debate: Debate, playheadMs: number, enabled: boolean): DebateTicker {
+export function useDebateClaimTicker(
+  debate: Debate,
+  {
+    playheadMs,
+    /** The debate's own timeline, which is what the scrubber track measures. */
+    timelineMs,
+    enabled,
+  }: { playheadMs: number; timelineMs: number; enabled: boolean }
+): DebateTicker {
   const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id, enabled);
   const { timings } = useClaimTimings(debate.id, claims, enabled);
 
@@ -95,13 +103,7 @@ export function useDebateClaimTicker(debate: Debate, playheadMs: number, enabled
   const timedClaims = React.useMemo(() => claimsInSpokenOrder(claims.all, timings), [claims.all, timings]);
   const windows = React.useMemo(() => tickerWindows(timedClaims), [timedClaims]);
 
-  // The debate's own length rather than the video element's: the two recordings are composited
-  // against the debate timeline, which is what the scrubber measures.
-  const durationMs = React.useMemo(
-    () => claims.all.reduce((longest, claim) => Math.max(longest, timings.get(claim.id)?.endMs ?? 0), 0),
-    [claims.all, timings]
-  );
-  const markers = React.useMemo(() => claimMarkers(timedClaims, durationMs), [timedClaims, durationMs]);
+  const markers = React.useMemo(() => claimMarkers(timedClaims, timelineMs), [timedClaims, timelineMs]);
 
   // One batch for every claim, the way the panel does it, so the live card and the end-of-debate
   // stack never issue a lookup per claim as they mount.
@@ -235,7 +237,7 @@ const OLDER_CARD_FADE = 'linear-gradient(to top, #000 0, #000 1rem, transparent 
  * Only while something is actually scrolled above. A short backlog sits wholly inside the box with
  * nothing cut off, and fading its first card then would be dimming the top of a list for no reason.
  */
-const HISTORY_EDGE_FADE = 'linear-gradient(to bottom, transparent 0, #000 3.25rem)';
+const HISTORY_EDGE_FADE = 'linear-gradient(to bottom, transparent 0, #000 4.25rem)';
 
 /**
  * The claim card that rises over the video as it is said.
@@ -279,7 +281,7 @@ export function DebateClaimTickerCard({
         opacity,
         ...(fading ? { maskImage: OLDER_CARD_FADE, WebkitMaskImage: OLDER_CARD_FADE } : null),
       }}
-      className="pointer-events-auto flex w-full flex-col gap-1.5 rounded-lg bg-[#151515]/30 p-3"
+      className="pointer-events-auto flex w-full flex-col gap-1.5 rounded-lg bg-[#151515]/30 p-3 backdrop-blur-md"
     >
       <TickerClaimHeader
         claimId={claim.id}
@@ -447,8 +449,8 @@ export function DebateClaimTickerStack({
         }}
         className={cx(
           'pointer-events-auto flex w-full flex-col gap-1.5',
-          // Filling the host, which is one debater's tile inset from its edges — so the open list
-          // reaches at most to the top of their own half and never over the other debater's face.
+          // The host caps the height — see the note on it — so this only has to be allowed to
+          // shrink inside that cap and scroll what does not fit.
           open && 'no-scrollbar min-h-0 overflow-y-auto'
         )}
       >
@@ -506,7 +508,7 @@ function ClaimBacklogChip({
         event.stopPropagation();
         onClick();
       }}
-      className="pointer-events-auto flex shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 py-1.5 text-[0.75rem] leading-[1.0625rem] text-white transition-colors hover:bg-[#151515]/50"
+      className="pointer-events-auto flex shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 py-1.5 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-md transition-colors hover:bg-[#151515]/50"
     >
       <InfoSmall color="white" />
       <span className="tabular-nums">{expanded ? 'Hide' : `${count} ${count === 1 ? 'claim' : 'claims'}`}</span>
