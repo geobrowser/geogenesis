@@ -47,8 +47,19 @@ export function AvailabilityModal({ open, onOpenChange, blocks = [], onSave, ope
           }}
           className="fixed top-1/2 left-1/2 z-[1001] -translate-x-1/2 -translate-y-1/2 focus:outline-hidden"
         >
-          <div className="flex max-h-[calc(100dvh-2rem)] w-[56rem] max-w-[calc(100vw-2rem)] flex-col gap-4 overflow-y-auto rounded-xl bg-white p-5 shadow-card">
-            <div className="flex items-start justify-between gap-4">
+          {/* A column with a hard ceiling: the title stays at the top, the calendar's own footer
+              at the bottom, and the grid between them absorbs whatever height is left. Nothing
+              here scrolls as a whole — a short window must not carry Save off the bottom edge.
+
+              `data-no-sheet-drag` because React events cross portals by the component tree, not the
+              DOM: on mobile this dialog is rendered inside the debates hub's bottom sheet as far as
+              React is concerned, so dragging a block downwards here dragged the *sheet*, and a long
+              drag dismissed it — taking the banner, and with it this dialog, away mid-gesture. */}
+          <div
+            data-no-sheet-drag
+            className="flex max-h-[calc(100dvh-2rem)] w-[56rem] max-w-[calc(100vw-2rem)] flex-col gap-4 overflow-hidden rounded-xl bg-white p-5 shadow-card"
+          >
+            <div className="flex shrink-0 items-start justify-between gap-4">
               <Title asChild>
                 <Text as="h2" variant="smallTitle">
                   Set your debate schedule
@@ -68,6 +79,7 @@ export function AvailabilityModal({ open, onOpenChange, blocks = [], onSave, ope
                 footer buttons ride in the calendar's own action row, beside its Clear all. */}
             {open && (
               <AvailabilityCalendar
+                className="min-h-0 flex-1"
                 initialBlocks={blocks}
                 onChange={setDraft}
                 actions={

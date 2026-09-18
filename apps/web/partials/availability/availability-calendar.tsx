@@ -22,6 +22,7 @@ import {
   weekDates,
 } from '~/core/availability/blocks';
 
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { Text } from '~/design-system/text';
 
 /** Height of one slot row. The whole grid's geometry follows from this. */
@@ -104,19 +105,27 @@ export function AvailabilityCalendar({
   const [today, setToday] = React.useState<Date | null>(null);
   React.useEffect(() => setToday(new Date()), []);
 
-  // Opens at DAY_INITIAL_HOUR with the hours above it scrolled off rather than absent, so an early
-  // riser or another time zone only has to scroll rather than be told this grid is not for them.
-  React.useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = ((DAY_INITIAL_HOUR - DAY_START_HOUR) * 60 * SLOT_PX) / SLOT_MINUTES;
-    }
-  }, []);
-
   const dates = React.useMemo(
     () => (today ? weekDates(addDays(mondayOf(today), weekOffset * 7)) : []),
     [today, weekOffset]
   );
   const isoDates = React.useMemo(() => dates.map(isoDate), [dates]);
+
+  // Opens at DAY_INITIAL_HOUR with the hours above it scrolled off rather than absent, so an early
+  // riser or another time zone only has to scroll rather than be told this grid is not for them.
+  //
+  // The heading row is part of the scrolled content and sticks over the top of it, so it covers
+  // exactly the distance it occupies: scrolling by the hours above leaves DAY_INITIAL_HOUR on the
+  // first line under the headings, with no allowance to make for them.
+  //
+  // Waits for the columns: on mount the week is still null (it is read from the viewer's clock in
+  // an effect of its own), and in a dialog still being laid out there is nothing to scroll yet.
+  const scrolledToOpeningHour = React.useRef(false);
+  React.useEffect(() => {
+    if (scrolledToOpeningHour.current || dates.length === 0 || !scrollRef.current) return;
+    scrolledToOpeningHour.current = true;
+    scrollRef.current.scrollTop = ((DAY_INITIAL_HOUR - DAY_START_HOUR) * 60 * SLOT_PX) / SLOT_MINUTES;
+  }, [dates.length]);
 
   /**
    * The start of the slot the pointer is inside.
@@ -127,9 +136,11 @@ export function AvailabilityCalendar({
    * question the viewer thinks they are answering.
    */
   const slotStartAt = React.useCallback((clientY: number) => {
-    const grid = gridRef.current;
-    if (!grid) return DAY_START_HOUR * 60;
-    const offsetY = clientY - grid.getBoundingClientRect().top;
+    // Measured from a day column, not the grid: the grid's own top is the sticky heading row, and
+    // a column's is midnight, which is what the times are reckoned from.
+    const column = gridRef.current?.querySelector<HTMLElement>('[data-weekday]');
+    if (!column) return DAY_START_HOUR * 60;
+    const offsetY = clientY - column.getBoundingClientRect().top;
     const minutes = DAY_START_HOUR * 60 + Math.floor(offsetY / SLOT_PX) * SLOT_MINUTES;
     // The last slot *starts* one slot before the end of the day.
     return Math.min(clampToDay(minutes), DAY_END_HOUR * 60 - SLOT_MINUTES);
@@ -295,7 +306,9 @@ export function AvailabilityCalendar({
   const todayIso = today ? isoDate(today) : null;
 
   return (
-    <div className={cx('flex flex-col gap-3', className)}>
+    // `min-h-0` so this can be given a bounded height by its caller: without it a flex child
+    // refuses to shrink below its content, and the grid pushes the footer off the bottom.
+    <div className={cx('flex min-h-0 flex-col gap-3', className)}>
       <div className="flex flex-wrap items-center gap-3">
         {/* These double as the legend: each carries the colour its blocks are drawn in, so the
             colours are named exactly once and cannot drift from the grid. */}
@@ -343,17 +356,38 @@ export function AvailabilityCalendar({
         </div>
       </div>
 
-      {/* One horizontal scroller wrapping the head and the body, so the day columns and their
-          headings move together. On mobile the columns take a fixed width — three and a half days
-          in view, the rest a swipe away — while on desktop they share the width as before. */}
-      <div className="overflow-hidden rounded-lg border border-grey-02 bg-white">
-        <div className="overflow-x-auto [--availability-column:calc((100vw-8rem)/3.5)]">
-          <div className="grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] border-b border-grey-02 md:grid-cols-[3.5rem_repeat(7,var(--availability-column))]">
-            <div />
+      {/* One scroller for both axes, with the day headings stuck to its top and the hour column to
+          its left. Two nested scrollers cannot do this: `position: sticky` resolves against the
+          nearest scrollport on each axis, so a gutter inside a vertical scroller has nothing to
+          hold onto while an outer one carries it sideways — which is how the hours ended up
+          drifting off the edge. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-grey-02 bg-white">
+        <div
+          ref={scrollRef}
+          className="max-h-[32rem] min-h-0 flex-1 overflow-auto overscroll-contain [--availability-column:calc((100vw-8rem)/3.5)]"
+        >
+          <div
+            ref={gridRef}
+            // `touch-pan-*` throughout: touch only takes the gesture once a press has been held
+            // (see onPointerDown), and until then the browser keeps it and the grid scrolls both
+            // ways. The pan is suppressed for the rest of a drag by the non-passive listener
+            // above rather than by switching touch-action here — changing it mid-gesture cancels
+            // the pointer, which ended the drag the moment the hold fired.
+            className="relative grid touch-pan-x touch-pan-y grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] select-none md:grid-cols-[3.5rem_repeat(7,var(--availability-column))]"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+          >
+            {/* The corner holds both edges at once, so it must outrank each of them. */}
+            <div className="sticky top-0 left-0 z-40 border-b border-grey-02 bg-white" />
             {dates.map((date, weekday) => {
               const isToday = isoDates[weekday] === todayIso;
               return (
-                <div key={isoDates[weekday]} className="flex justify-center px-2 py-2">
+                <div
+                  key={isoDates[weekday]}
+                  className="sticky top-0 z-30 flex justify-center border-b border-grey-02 bg-white px-2 py-2"
+                >
                   {/* Today takes a box around the whole cell — a coloured number alone was easy to
                     miss in a row of seven. */}
                   <div
@@ -371,62 +405,44 @@ export function AvailabilityCalendar({
                 </div>
               );
             })}
-          </div>
 
-          <div ref={scrollRef} className="max-h-[32rem] overflow-y-auto">
-            <div
-              ref={gridRef}
-              // `touch-pan-*` throughout: touch only takes the gesture once a press has been held
-              // (see onPointerDown), and until then the browser keeps it and the grid scrolls both
-              // ways. The pan is suppressed for the rest of a drag by the non-passive listener
-              // above rather than by switching touch-action here — changing it mid-gesture cancels
-              // the pointer, which ended the drag the moment the hold fired.
-              className="relative grid touch-pan-x touch-pan-y grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] select-none md:grid-cols-[3.5rem_repeat(7,var(--availability-column))]"
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-            >
-              <div>
-                {hours.map(hour => (
-                  <div
-                    key={hour}
-                    className="relative border-b border-divider pr-2 text-right"
-                    style={{ height: SLOT_PX * ROWS_PER_HOUR }}
+            {/* Pinned to the left edge: swiping across the week must not carry the hours away
+                with it, or there is nothing left to read the blocks against. */}
+            <div className="sticky left-0 z-20 bg-white">
+              {hours.map(hour => (
+                <div
+                  key={hour}
+                  className="relative border-b border-divider pr-2 text-right"
+                  style={{ height: SLOT_PX * ROWS_PER_HOUR }}
+                >
+                  <Text
+                    as="span"
+                    variant="footnoteMedium"
+                    color="grey-04"
+                    className="relative -top-1.5"
+                    data-hour-label
                   >
-                    <Text
-                      as="span"
-                      variant="footnoteMedium"
-                      color="grey-04"
-                      className="relative -top-1.5"
-                      data-hour-label
-                    >
-                      {formatTime(hour * 60)}
-                    </Text>
-                  </div>
-                ))}
-              </div>
-
-              {dates.map((_, weekday) => (
-                <div key={isoDates[weekday]} data-weekday={weekday} className="relative border-l border-divider">
-                  {/* Hour rules only. The half-hour dashes drew a line under every slot, which is
-                      a lot of ruling for a grid whose blocks already say where they start. */}
-                  {hours.map(hour => (
-                    <div
-                      key={hour}
-                      className="border-b border-grey-02/60"
-                      style={{ height: SLOT_PX * ROWS_PER_HOUR }}
-                    />
-                  ))}
-
-                  {columns[weekday]?.map(({ block, depth }) => (
-                    <Block key={block.id} block={block} depth={depth} onDelete={() => removeBlock(block.id)} />
-                  ))}
-
-                  {drag?.type === 'create' && drag.weekday === weekday && <Ghost drag={drag} mode={mode} />}
+                    {formatTime(hour * 60)}
+                  </Text>
                 </div>
               ))}
             </div>
+
+            {dates.map((_, weekday) => (
+              <div key={isoDates[weekday]} data-weekday={weekday} className="relative border-l border-divider">
+                {/* Hour rules only. The half-hour dashes drew a line under every slot, which is
+                      a lot of ruling for a grid whose blocks already say where they start. */}
+                {hours.map(hour => (
+                  <div key={hour} className="border-b border-grey-02/60" style={{ height: SLOT_PX * ROWS_PER_HOUR }} />
+                ))}
+
+                {columns[weekday]?.map(({ block, depth }) => (
+                  <Block key={block.id} block={block} depth={depth} onDelete={() => removeBlock(block.id)} />
+                ))}
+
+                {drag?.type === 'create' && drag.weekday === weekday && <Ghost drag={drag} mode={mode} />}
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -476,25 +492,29 @@ function Block({ block, depth, onDelete }: { block: AvailabilityBlock; depth: nu
       }}
       className="group absolute right-1 cursor-grab overflow-hidden rounded-sm px-1.5 py-0.5 text-text"
     >
-      <span className="block truncate text-footnoteMedium tabular-nums">
-        {formatTime(block.start)} – {formatTime(block.end)}
-      </span>
+      {/* The × rides on the label's own line rather than being positioned against the corner: it
+          then sits at exactly the label's inset, with no box of its own to pad it away from the
+          top edge. */}
+      <div className="flex items-start justify-between gap-1">
+        <span className="min-w-0 flex-1 truncate text-footnoteMedium tabular-nums">
+          {formatTime(block.start)} – {formatTime(block.end)}
+        </span>
+        <button
+          type="button"
+          data-delete
+          aria-label={`Delete ${formatTime(block.start)} to ${formatTime(block.end)} block`}
+          onClick={onDelete}
+          className="shrink-0 text-[#151515] opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <CloseSmall />
+        </button>
+      </div>
       {/* Only tall enough blocks can say what kind they are; the colour and its mode button carry
           it for the rest. */}
       {duration > 60 && <span className="block truncate text-footnote uppercase">{KIND_BADGES[block.kind]}</span>}
 
       <div data-edge="start" className="absolute inset-x-0 top-0 h-1.5 cursor-ns-resize" />
       <div data-edge="end" className="absolute inset-x-0 bottom-0 h-1.5 cursor-ns-resize" />
-
-      <button
-        type="button"
-        data-delete
-        aria-label={`Delete ${formatTime(block.start)} to ${formatTime(block.end)} block`}
-        onClick={onDelete}
-        className="absolute top-0 right-0 grid size-4 place-items-center text-[#151515] opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-      >
-        ×
-      </button>
     </div>
   );
 }
