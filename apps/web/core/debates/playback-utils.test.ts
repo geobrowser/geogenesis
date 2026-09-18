@@ -5,6 +5,7 @@ import {
   clampSeconds,
   hasProcessedVideo,
   normalizeTurnDurationsMs,
+  pairPlayhead,
   playBothWithMutedFallback,
   recordingWindowOffsetsSeconds,
   sortTurnSegments,
@@ -236,6 +237,116 @@ describe('recordingWindowOffsetsSeconds', () => {
   });
 });
 
+describe('pairPlayhead (GEO-2947)', () => {
+  const offsets = { slot1: 1, slot2: 3 };
+  const video = (paused: boolean, currentTime: number) => ({ paused, currentTime });
+
+  it('reads slot 1 while it is running', () => {
+    expect(pairPlayhead(video(false, 10), video(false, 8), offsets)).toEqual({ seconds: 11, live: true });
+  });
+
+  it('falls back to slot 1 when both are paused', () => {
+    expect(pairPlayhead(video(true, 10), video(true, 8), offsets)).toEqual({ seconds: 11, live: false });
+  });
+
+  /**
+   * In the foreground slot 1 is canonical, full stop. Slot 2 is *deliberately* allowed to run
+   * ahead — the drift nudge puts it there, and a stalled slot 1 leaves it much further ahead
+   * (GEO-2828) — so an ordinary pause or a scroll-away must not resume from it, or playback skips
+   * audio the viewer never heard.
+   */
+  describe('without trustSecondary (the foreground)', () => {
+    it('ignores a slot 2 that has run ahead of a paused slot 1', () => {
+      expect(pairPlayhead(video(true, 10), video(true, 30), offsets)).toEqual({ seconds: 11, live: false });
+    });
+
+    it('ignores a running slot 2 while slot 1 is paused', () => {
+      expect(pairPlayhead(video(true, 10), video(false, 30), offsets)).toEqual({ seconds: 11, live: false });
+    });
+
+    it('still lets the remembered position raise a frozen slot 1', () => {
+      expect(pairPlayhead(video(true, 10), video(true, 30), offsets, 20)).toEqual({ seconds: 20, live: false });
+    });
+  });
+
+  /**
+   * Off screen the picture inverts: the browser stops whichever element it considers silent, so
+   * slot 1's clock can be frozen at an arbitrary past instant while slot 2 carries the debate on.
+   */
+  describe('with trustSecondary (a backgrounded tab)', () => {
+    it('reads the element still running when slot 1 is the one that stopped', () => {
+      // Slot 1 frozen at 10 (debate 11) while slot 2 has reached 20 (debate 23).
+      expect(pairPlayhead(video(true, 10), video(false, 20), offsets, null, true)).toEqual({
+        seconds: 23,
+        live: true,
+      });
+    });
+
+    /**
+     * The sequence with no tick in between: slot 1 stops, slot 2 plays on, slot 2 stops too.
+     * `timeupdate` is throttled in a background tab, so slot 2 stops somewhere the record never
+     * saw, and its own `pause` arrives when it already reads as paused. Its frozen clock is the
+     * only evidence left.
+     */
+    it('weighs slot 2 frozen clock when it stopped past the last position recorded', () => {
+      expect(pairPlayhead(video(true, 10), video(true, 30), offsets, 23, true)).toEqual({
+        seconds: 33,
+        live: false,
+      });
+    });
+
+    /**
+     * ...but only once slot 2 has actually played. A recording that starts after the debate
+     * window has a positive offset, so an untouched slot 2 would otherwise read as being that far
+     * into the debate.
+     */
+    it('ignores a slot 2 that has never played, offset and all', () => {
+      expect(pairPlayhead(video(true, 0), video(true, 0), offsets, null, true)).toEqual({
+        seconds: 1,
+        live: false,
+      });
+    });
+
+    /**
+     * THE RATCHET. A browser that stopped slot 1 at debate-time 100 while slot 2 ran on to 130 can
+     * hand slot 1 back un-paused at its frozen 100 — un-suspended, or un-paused-but-stalled, which
+     * `paused === false` cannot tell apart. Reading that as "live, we are at 100" walks the
+     * recovered position backwards over half a minute the viewer already heard, and the resume
+     * drags slot 2 back with it.
+     */
+    it('does not let a running slot 1 walk the position back over a record ahead of it', () => {
+      const slot1 = video(false, 99); // running, frozen behind: debate-time 100
+      const slot2 = video(true, 127); // stopped at debate-time 130
+      expect(pairPlayhead(slot1, slot2, offsets, 130, true)).toEqual({ seconds: 130, live: true });
+    });
+
+    /** Nor over the other element's clock, when there is no record to fall back on. */
+    it('does not let a running slot 1 walk the position back over a stopped slot 2', () => {
+      expect(pairPlayhead(video(false, 99), video(true, 127), offsets, null, true)).toEqual({
+        seconds: 130,
+        live: true,
+      });
+    });
+
+    it('keeps the frozen clock when it is ahead of the remembered position', () => {
+      expect(pairPlayhead(video(true, 40), video(true, 5), offsets, 12, true)).toEqual({
+        seconds: 41,
+        live: false,
+      });
+    });
+  });
+
+  /** In the foreground a running slot 1 always wins over the record — that keeps a scrub honest. */
+  it('ignores the remembered position while slot 1 is running', () => {
+    expect(pairPlayhead(video(false, 5), video(true, 20), offsets, 90)).toEqual({ seconds: 6, live: true });
+  });
+
+  it('survives an element that is not mounted yet', () => {
+    expect(pairPlayhead(null, null, offsets)).toEqual({ seconds: 1, live: false });
+    expect(pairPlayhead(null, video(false, 20), offsets, null, true)).toEqual({ seconds: 23, live: true });
+  });
+});
+
 describe('playBothWithMutedFallback (GEO-2783)', () => {
   /**
    * A fake video whose `play()` refuses while it has audio, which is what the autoplay policy
@@ -288,7 +399,7 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
       b.tick();
     };
 
-    expect(await playBothWithMutedFallback(a, b, wait)).toBe('playing');
+    expect(await playBothWithMutedFallback(a, b, { wait })).toBe('playing');
     // The point of the fix: no muted retry, because it was never actually blocked.
     expect([a.plays, b.plays]).toEqual([1, 1]);
   });
@@ -302,7 +413,7 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
     };
 
     // Both already muted, so there is no fallback to try — this must not be reported as playing.
-    expect(await playBothWithMutedFallback(a, b, wait)).toBe('blocked');
+    expect(await playBothWithMutedFallback(a, b, { wait })).toBe('blocked');
   });
 
   it('plays straight away when the browser allows it', async () => {
@@ -349,6 +460,73 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
     };
     const b = fakeVideo({ muted: true });
     expect(await playBothWithMutedFallback(a, b)).toBe('blocked');
+  });
+
+  /**
+   * A mute left behind by a failed retry is invisible to React — it only writes a DOM property
+   * when its own previous value differs — so it survives every later render that says otherwise,
+   * leaving the pair silently muted under a UI still offering a "mute" control (GEO-2947).
+   */
+  it('leaves the pair muted when it gives up, for the renderer to repair', async () => {
+    // Refuses to start either way, so the muted retry fails too and the helper gives up.
+    const stuck = () => {
+      const video = fakeVideo({ muted: false });
+      video.play = async () => {
+        video.plays += 1;
+      };
+      return video;
+    };
+    const a = stuck();
+    const b = stuck();
+
+    expect(await playBothWithMutedFallback(a, b)).toBe('blocked');
+
+    // Deliberately not restored. Anything captured on the way in is up to ~300ms stale by now —
+    // the viewer can mute mid-attempt — and React never repairs a DOM write it did not make, so
+    // a stale `false` written back here would play audibly under a UI showing muted (GEO-2947).
+    expect(a.muted).toBe(true);
+    expect(b.muted).toBe(true);
+  });
+
+  /** ...but a retry that *worked* keeps the mute: the caller records it as the rendered truth. */
+  it('keeps the mute when the muted retry succeeds', async () => {
+    const a = fakeVideo({ muted: false, blockUnmuted: true });
+    const b = fakeVideo({ muted: false, blockUnmuted: true });
+
+    expect(await playBothWithMutedFallback(a, b)).toBe('playing-muted');
+
+    expect(a.muted).toBe(true);
+    expect(b.muted).toBe(true);
+  });
+
+  /**
+   * The retry is the only point where this function starts something it did not start, and it is
+   * reached after a confirm window it spent asleep — so a pause or a scroll-away routinely lands
+   * in between. A caller that checks ownership only once this returns is too late: `play()` has
+   * already been called, and no state check can take it back.
+   */
+  it('does not retry when the attempt was cancelled while confirming', async () => {
+    const a = fakeVideo({ muted: false });
+    const b = fakeVideo({ muted: false });
+
+    expect(await playBothWithMutedFallback(a, b, { isCancelled: () => true })).toBe('cancelled');
+
+    expect(a.plays).toBe(1); // the first attempt only — no restart behind the viewer's pause
+    expect(b.plays).toBe(1);
+    expect(a.paused).toBe(true);
+    expect(b.paused).toBe(true);
+    expect(a.muted).toBe(false); // and nothing was force-muted for a retry that never ran
+  });
+
+  /** The control: an attempt nobody superseded still retries muted and reports it. */
+  it('still retries when nothing cancelled it', async () => {
+    const a = fakeVideo({ muted: false });
+    const b = fakeVideo({ muted: false });
+
+    expect(await playBothWithMutedFallback(a, b, { isCancelled: () => false })).toBe('playing-muted');
+
+    expect(a.plays).toBe(2);
+    expect(a.muted).toBe(true);
   });
 
   it('keeps sound when the play is gesture-driven', async () => {

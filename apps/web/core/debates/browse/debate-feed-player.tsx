@@ -51,6 +51,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     playing,
     userPaused,
     isScrubbing,
+    isResuming,
     playbackEnded,
     mutedByUser,
     setMutedByUser,
@@ -108,6 +109,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         countdown={playing && turnState?.slot === 1 ? turnState : null}
         subtitle={activeSlot === 1 ? subtitle : null}
         mutedByUser={mutedByUser}
+        isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
         onToggle={togglePlayback}
         votes={votes}
@@ -145,6 +147,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         countdown={playing && turnState?.slot === 2 ? turnState : null}
         subtitle={activeSlot === 2 ? subtitle : null}
         mutedByUser={mutedByUser}
+        isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
         onToggle={togglePlayback}
         votes={votes}
@@ -200,6 +203,7 @@ function DebaterVideo({
   countdown,
   subtitle,
   mutedByUser,
+  isResuming,
   onPlaybackTick,
   onToggle,
   votes,
@@ -213,6 +217,7 @@ function DebaterVideo({
   countdown: TurnState;
   subtitle: string | null;
   mutedByUser: boolean;
+  isResuming: boolean;
   onPlaybackTick: () => void;
   onToggle: () => void;
   votes: DebateVotesResult;
@@ -221,6 +226,31 @@ function DebaterVideo({
 }) {
   const { openSidePanel } = useEntitySidePanel();
   const name = participant ? speakerLabel(participant) : 'Debater';
+
+  const muted = !audible || mutedByUser;
+
+  /**
+   * Re-assert the rendered mute after a resume (GEO-2947).
+   *
+   * `playBothWithMutedFallback` mutes both elements to retry a blocked play and cannot put them
+   * back: it does not know what this component renders `muted` from, and anything it captured is
+   * a confirm window out of date by the time it could write it. React will not repair that either
+   * — it writes a DOM property only when its *own* previous value differs, and a mute it never
+   * made is invisible to it — so the element would play audibly under a UI showing muted.
+   *
+   * Not while a resume is confirming: the retry depends on the mute it just made, and writing over
+   * it mid-attempt would block the play this is trying to let happen. `isResuming` falling is
+   * itself what runs this effect again, so the repair lands the moment the attempt is over.
+   *
+   * This is why `playFromStart` no longer writes `muted` either. The value it has (`mutedByUser`)
+   * is not the value rendered here, so repairing from the hook moved the divergence rather than
+   * closing it. `muted` has one owner: this render.
+   */
+  React.useLayoutEffect(() => {
+    const video = videoRef.current;
+    if (!video || isResuming) return;
+    video.muted = muted;
+  }, [isResuming, muted, src, videoRef]);
 
   // A personal space's own id resolves to its "system entity" (an ugly technical
   // record). The space's page entity is the real profile, so open that once it's
@@ -244,7 +274,8 @@ function DebaterVideo({
             playsInline
             preload="metadata"
             src={src}
-            muted={!audible || mutedByUser}
+            // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
+            muted={muted}
             onEnded={onPlaybackTick}
             onLoadedMetadata={onPlaybackTick}
             onPause={onPlaybackTick}
