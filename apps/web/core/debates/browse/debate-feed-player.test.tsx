@@ -25,12 +25,32 @@ vi.mock('~/core/hooks/use-space', () => ({
   useSpace: () => ({ space: null }),
 }));
 
+// The player carries a claim ticker now, which reaches for the transcript, the sync engine and a
+// query client. These tests are about the audio gate; the ticker has its own suite.
+vi.mock('./debate-claim-ticker', () => ({
+  useDebateClaimTicker: () => ({
+    cardsBySlot: new Map(),
+    historyBySlot: new Map(),
+    markers: [],
+    answers: new Map(),
+    onAnswered: vi.fn(),
+    rowsByClaimId: new Map(),
+    entitiesByClaimId: new Map(),
+    participantByClaimId: new Map(),
+  }),
+  DebateClaimTickerStack: () => null,
+  ClaimScrubberMarkers: () => null,
+}));
+
 const participant = (slot: 1 | 2): DebateParticipant =>
   ({
     participant_slot: slot,
     profile_space_id: `space-${slot}`,
     position_label: slot === 1 ? 'For' : 'Against',
   }) as unknown as DebateParticipant;
+
+/** Only what the player reads: its id, and the space the ticker looks for claims in. */
+const debate = { id: 'debate-1', claim: { space_id: 'space-1' } } as unknown as Debate;
 
 const votes: DebateVotesResult = {
   sharePercentFor: () => null,
@@ -78,9 +98,7 @@ function controllerFixture(overrides: { mutedByUser: boolean; turnSlot: 1 | 2; i
 
 function renderPlayer(overrides: { mutedByUser: boolean; turnSlot: 1 | 2; isResuming?: boolean }) {
   mocks.controller = controllerFixture(overrides);
-  const { container, rerender } = render(
-    <DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active votes={votes} />
-  );
+  const { container, rerender } = render(<DebateFeedPlayer debate={debate} active votes={votes} />);
   const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
   return {
     slot1,
@@ -88,7 +106,7 @@ function renderPlayer(overrides: { mutedByUser: boolean; turnSlot: 1 | 2; isResu
     /** Re-render with a new controller state, as the hook's own state changes would. */
     update(next: { mutedByUser: boolean; turnSlot: 1 | 2; isResuming?: boolean }) {
       mocks.controller = controllerFixture(next);
-      rerender(<DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active votes={votes} />);
+      rerender(<DebateFeedPlayer debate={debate} active votes={votes} />);
     },
   };
 }

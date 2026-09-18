@@ -1,0 +1,1934 @@
+{
+  "generatedAt": "2026-09-17T23:58:02.465Z",
+  "api": "https://api-testnet.geobrowser.io/graphql",
+  "floor": 0.7,
+  "constants": {
+    "TYPES_PROPERTY": "8f151ba4de204e3c9cb499ddf96f48f1",
+    "SELECTOR_TYPE": "813ca865db9b486490dec6764febaab3",
+    "TARGET_PROPERTY": "e1788cdf9bae42e987b0d9791de09b31",
+    "DEBATE_VIDEOS_PROPERTY": "c48dc314fa7148aeb967139160456f1d"
+  },
+  "offsetProperties": {
+    "start": "a1d1cb557b184238ba0ec78ba7f289fb",
+    "end": "79a677b597f84ca8a1cf24eef7837b61"
+  },
+  "totals": {
+    "claims": 854,
+    "writes": 140,
+    "alreadyPublished": 13,
+    "belowFloor": 477,
+    "noMatch": 224
+  },
+  "debates": [
+    {
+      "debateEntityId": "019f6b2b762279329a2757e0e3ce0fe9",
+      "debateName": "Bertrand Armando vs. Arturas Vil on Open-source AI models should be restricted",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 16,
+      "writes": [
+        {
+          "entityId": "bbd3facb0fe542a9bb9b14678adddcb6",
+          "claimId": "e55ddac8fcaf4f7cbe4d521d4cde60b4",
+          "claimText": "Open-source AI models should be restricted to a certain extent, but not banned or made unavailable.",
+          "startMs": 61000,
+          "endMs": 84000,
+          "confidence": 0.932,
+          "source": "segment"
+        },
+        {
+          "entityId": "7c70ea4d9b94437abfb3295e23834f5f",
+          "claimId": "eaef03e205a44cb9b9429bd53ee53221",
+          "claimText": "AI is a powerful tool that can be used for nefarious purposes.",
+          "startMs": 105000,
+          "endMs": 110000,
+          "confidence": 1,
+          "source": "segment"
+        },
+        {
+          "entityId": "4d6f4c48738147abbcd227d5d6c6dcc9",
+          "claimId": "20f24aa095344e918a90ef100b9a7c48",
+          "claimText": "Restrictions on open-source AI should still allow users some power and ability to run the models.",
+          "startMs": 86410,
+          "endMs": 98580,
+          "confidence": 0.723,
+          "source": "segment"
+        },
+        {
+          "entityId": "4a6b703766dd4226ac464f1c223644a4",
+          "claimId": "5daaa5952f2443be99cc3d58c5a6e24a",
+          "claimText": "Openness in AI models makes them easier to audit.",
+          "startMs": 22220,
+          "endMs": 27310,
+          "confidence": 0.958,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 9,
+        "noMatch": 3
+      }
+    },
+    {
+      "debateEntityId": "019f8f30f40b7791bf6a541e31e5f497",
+      "debateName": "Arturas Vil vs. Dovile Sv on Governments should have the power to pause frontier AI models",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 8,
+      "writes": [
+        {
+          "entityId": "6f3e492bd5824de6a628eab317dbdf05",
+          "claimId": "de6373fd31ef4b75a430c1ca9dd87732",
+          "claimText": "The Trump administration paused an entropic model.",
+          "startMs": 134000,
+          "endMs": 142000,
+          "confidence": 0.733,
+          "source": "segment"
+        },
+        {
+          "entityId": "5568b48b017144eeaf04602baa56788a",
+          "claimId": "169a77cbfffe4e1d8dea6c2e46e41fa6",
+          "claimText": "The activities of companies should not be directly regulated by the government, especially the executive branch.",
+          "startMs": 20000,
+          "endMs": 36000,
+          "confidence": 0.972,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 6,
+        "noMatch": 0
+      }
+    },
+    {
+      "debateEntityId": "019f953495107f80bfbfe7c31e93b1f6",
+      "debateName": "Arturas Vil vs. Dan Cordie on Congress should provide Dreamers a permanent path to citizenship",
+      "spaceId": "4582fbbee28a16589154f7e36f1ee3c5",
+      "claimCount": 10,
+      "writes": [
+        {
+          "entityId": "0d72255a08c844e98810bc42d3ec4656",
+          "claimId": "47215b101e9641cf8c644a395a0390aa",
+          "claimText": "If their parents are deported, Dreamers may choose to leave the US.",
+          "startMs": 107160,
+          "endMs": 115600,
+          "confidence": 0.733,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 8,
+        "noMatch": 1
+      }
+    },
+    {
+      "debateEntityId": "019f95764dd87012ab2d9aa8a7263f7d",
+      "debateName": "Dan Cordie vs. Ahmed Abdelmalek on The war against Iran was justified",
+      "spaceId": "89bd89bf28ff8a0963faf92a8c905e20",
+      "claimCount": 9,
+      "writes": [
+        {
+          "entityId": "4cbb57b0fa244a69b2387b835ec08ea9",
+          "claimId": "ffa0962a4bfc4f0f954c6aef00d0da56",
+          "claimText": "Iran dismissed international officials who were inspecting its nuclear facilities.",
+          "startMs": 165000,
+          "endMs": 182240,
+          "confidence": 0.969,
+          "source": "segment"
+        },
+        {
+          "entityId": "2da3287cb14d43d3bba07641fffd9dc1",
+          "claimId": "ee2e32ef099147768c24ab12c3efec1f",
+          "claimText": "Iran was financing terrorist organizations and destabilizing the Middle East.",
+          "startMs": 94480,
+          "endMs": 105000,
+          "confidence": 0.857,
+          "source": "segment"
+        },
+        {
+          "entityId": "149bd9d934b445d9918fa55df5780ed9",
+          "claimId": "87406ea1d0f14c9288afb7a56df7c211",
+          "claimText": "Uranium enrichment at 60% is only for nuclear weapons and not for civilian or energy purposes.",
+          "startMs": 77650,
+          "endMs": 94480,
+          "confidence": 0.827,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 3,
+        "noMatch": 3
+      }
+    },
+    {
+      "debateEntityId": "019fa5575d677ba0bfd5c4b739ed1295",
+      "debateName": "Dan Cordie vs. Ahmed Abdelmalek on Sanctuary city policies undermine public safety and should be eliminated",
+      "spaceId": "4582fbbee28a16589154f7e36f1ee3c5",
+      "claimCount": 12,
+      "writes": [
+        {
+          "entityId": "5e8e796b89c14e3caffa4c27c798c89a",
+          "claimId": "117a14c1a0454ff0a430f47a8293517c",
+          "claimText": "Sanctuary city policies will lead to increased crime rates.",
+          "startMs": 36630,
+          "endMs": 53920,
+          "confidence": 0.742,
+          "source": "segment"
+        },
+        {
+          "entityId": "249eac95372742248a4d8474f296ad9e",
+          "claimId": "b5ef770770a14a839c18fa1d9acba622",
+          "claimText": "Sanctuary city policies can restrict cooperation between local authorities and federal immigration enforcement.",
+          "startMs": 13480,
+          "endMs": 22160,
+          "confidence": 0.818,
+          "source": "segment"
+        },
+        {
+          "entityId": "fc09193f111044d1bd6c079f82589c3f",
+          "claimId": "9da684f76e1a42b4b362c839806bc655",
+          "claimText": "Sanctuary city policies may create inconsistent enforcement standards across jurisdictions.",
+          "startMs": 131840,
+          "endMs": 142760,
+          "confidence": 0.975,
+          "source": "segment"
+        },
+        {
+          "entityId": "7e93145424944237a8b3f246fecaa9f9",
+          "claimId": "db9f0da9c66240fbadb566cc8118d160",
+          "claimText": "Inconsistent enforcement from sanctuary policies makes it harder for authorities to coordinate responses involving individuals with serious criminal histories.",
+          "startMs": 142760,
+          "endMs": 152840,
+          "confidence": 0.714,
+          "source": "segment"
+        },
+        {
+          "entityId": "ce505f2d4a624bc1b3b420b8278a590c",
+          "claimId": "bc5294b59dfd4685b50e60a788b49bd9",
+          "claimText": "The U.S. Constitution separates federal and local powers.",
+          "startMs": 179000,
+          "endMs": 184000,
+          "confidence": 0.76,
+          "source": "segment"
+        },
+        {
+          "entityId": "6c20cd1d80a645e4b18977c48be2e608",
+          "claimId": "d21fbcc31b3d4f89a0c993fd9b644d9f",
+          "claimText": "Sanctuary policies promote public health and economic stability.",
+          "startMs": 199520,
+          "endMs": 205610,
+          "confidence": 0.857,
+          "source": "segment"
+        },
+        {
+          "entityId": "158c8af2f1234dbe8ed6662259283cd7",
+          "claimId": "8016b68b2d504ab091abbc1737a787b8",
+          "claimText": "Under the 10th Amendment's anti-commandeering doctrine, the federal government cannot force local taxpayers to fund and execute federal programs.",
+          "startMs": 184000,
+          "endMs": 197000,
+          "confidence": 0.827,
+          "source": "segment"
+        },
+        {
+          "entityId": "75f4daaa53f040288f4a2ae74ab9b640",
+          "claimId": "04a5aa9c0f844a6b88975e461a0ac7fb",
+          "claimText": "Sanctuary policies allow immigrant communities to access healthcare.",
+          "startMs": 203000,
+          "endMs": 210000,
+          "confidence": 0.827,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 4,
+        "noMatch": 0
+      }
+    },
+    {
+      "debateEntityId": "019fb387c13877529e117c8e1662d80e",
+      "debateName": "Arturas Vil vs. CptMoh on Chatbots offer scalable, stigma-free support with outcomes comparable to human-staffed alternatives",
+      "spaceId": "52c7ae149838b6d47ce0f3b2a5974546",
+      "claimCount": 12,
+      "writes": [
+        {
+          "entityId": "e4e4f3b829b840998cc8d47dd37cc5ef",
+          "claimId": "b33c7d202fdf43ed9be90f50f78bd12f",
+          "claimText": "Specialized chatbot agents for mental health support exist.",
+          "startMs": 29450,
+          "endMs": 39820,
+          "confidence": 0.771,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 11,
+        "noMatch": 0
+      }
+    },
+    {
+      "debateEntityId": "019fc7cf338e7e82aa6d5a3ec470aea9",
+      "debateName": "CptMoh vs. Arturas Vil on Governments should have the power to pause frontier AI models",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 11,
+      "writes": [
+        {
+          "entityId": "8c932477097d4bdb9e69f74463e268fe",
+          "claimId": "626eadd40c9b465f8d0732a5d224976c",
+          "claimText": "Any government power to pause frontier AI models should be a regulated process.",
+          "startMs": 82000,
+          "endMs": 98600,
+          "confidence": 0.76,
+          "source": "segment"
+        },
+        {
+          "entityId": "51c141429a1a421fac3236dd4f51a367",
+          "claimId": "6cce623179fb4fb6863dc758a9eb124a",
+          "claimText": "AI models have made injections into future versions of themselves, providing them with instructions.",
+          "startMs": 35750,
+          "endMs": 47400,
+          "confidence": 0.804,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 7,
+        "noMatch": 2
+      }
+    },
+    {
+      "debateEntityId": "019fcdfc68ed7401a71bf4202d75953b",
+      "debateName": "Ahmed Abdelmalek vs. Dan Cordie on Trump administration tariffs have strengthened U.S. manufacturing and the economy",
+      "spaceId": "4582fbbee28a16589154f7e36f1ee3c5",
+      "claimCount": 13,
+      "writes": [
+        {
+          "entityId": "329d27aa8b754d1eab59c53f058bed56",
+          "claimId": "a22d32db67f6414b948c9cc48506cf18",
+          "claimText": "When imported goods lose a price advantage due to tariffs, businesses have a stronger incentive to source and manufacture in the U.S.",
+          "startMs": 185280,
+          "endMs": 195320,
+          "confidence": 0.814,
+          "source": "segment"
+        },
+        {
+          "entityId": "3e4a0955699a4c8f813fcc803a3335ba",
+          "claimId": "69e596198516496b894a96311d4d486e",
+          "claimText": "U.S. manufacturing activity reached its highest level since May 2022.",
+          "startMs": 96080,
+          "endMs": 104040,
+          "confidence": 0.827,
+          "source": "segment"
+        },
+        {
+          "entityId": "9b80faa9a93b4594b32a764d4ca6ecef",
+          "claimId": "e600f3e677c94929bf081e1a268273f4",
+          "claimText": "The U.S. manufacturing sector expanded for seven consecutive months through July of the year the statement was made.",
+          "startMs": 89280,
+          "endMs": 96080,
+          "confidence": 0.889,
+          "source": "segment"
+        },
+        {
+          "entityId": "549d1c17ddfd49c6b96c149ebb8a4c74",
+          "claimId": "fad026475dbd45ad826e1ab45b16de57",
+          "claimText": "Federal Reserve data shows U.S. manufacturing output grew at a 4.7% annual rate during the second quarter of the year the statement was made.",
+          "startMs": 104040,
+          "endMs": 114160,
+          "confidence": 0.769,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 9,
+        "noMatch": 0
+      }
+    },
+    {
+      "debateEntityId": "01a0445ebf2173e2913e33faa8b1490f",
+      "debateName": "Preston Mantel vs. Arturas Vil on Artificial consciousness is possible.",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 12,
+      "writes": [
+        {
+          "entityId": "9c30019fe1ab4a399b2e02e5dfdf9c75",
+          "claimId": "e67a118262fd412496a00c55bd24c7d0",
+          "claimText": "A feeling is defined as a qualia, or a unit of conscious experience",
+          "startMs": 173310,
+          "endMs": 182680,
+          "confidence": 0.729,
+          "source": "segment"
+        },
+        {
+          "entityId": "923a07959adb4957a859d1c9c3ce41cf",
+          "claimId": "e61ab6d2b8dd47778997cb80bbd86984",
+          "claimText": "A definition of consciousness is the subjective first-person experience of awareness of one's internal thoughts, feelings, and external surroundings",
+          "startMs": 127890,
+          "endMs": 134210,
+          "confidence": 0.737,
+          "source": "segment"
+        },
+        {
+          "entityId": "71471db2c62443e18c3ff64cce71d01c",
+          "claimId": "60659aece9d54f6283aa1bb9a3d0be1a",
+          "claimText": "In humans, feelings are driven by the release of chemicals in response to certain stimuli",
+          "startMs": 150170,
+          "endMs": 157640,
+          "confidence": 0.723,
+          "source": "segment"
+        },
+        {
+          "entityId": "1b430d0ad07749429433db1df465835d",
+          "claimId": "94033da80bf6468d9393bcace905d701",
+          "claimText": "AI can have sensory input that gives it awareness of its external surroundings",
+          "startMs": 144120,
+          "endMs": 147400,
+          "confidence": 1,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 6,
+        "noMatch": 2
+      }
+    },
+    {
+      "debateEntityId": "01a0592ce67c78c3bf476ec73ac15368",
+      "debateName": "Arturas Vil vs. Preston Mantel on AI companions are exploiting human emotional vulnerability",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 11,
+      "writes": [
+        {
+          "entityId": "0fc1f1e70c7a41abaaf0e008cc9f213b",
+          "claimId": "5b0f619e34054546a2e32b5bbaa388ea",
+          "claimText": "AI companions are being built to exploit human emotions from a profit-driven perspective.",
+          "startMs": 94650,
+          "endMs": 100240,
+          "confidence": 0.826,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 3,
+        "noMatch": 7
+      }
+    },
+    {
+      "debateEntityId": "01a067e09c9876b3a998d99ac67efa8f",
+      "debateName": "Adam Fischer vs. Dovile Sv on Open-weight AI will outperform closed AI ecosystems",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 14,
+      "writes": [
+        {
+          "entityId": "414153ecc1684dcb95641c6dacb4c16d",
+          "claimId": "fe277c2d04a449a0b942e21be0cec113",
+          "claimText": "EU regulation requires that AI models be trained on expert publications",
+          "startMs": 138010,
+          "endMs": 142800,
+          "confidence": 0.799,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 8,
+        "noMatch": 5
+      }
+    },
+    {
+      "debateEntityId": "01a0686fd02771f0ae49433b1edfa66b",
+      "debateName": "Aja C vs. Urban on A wife's marital duties can include consensual sex with her husband even when she is not initially in the mood",
+      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
+      "claimCount": 15,
+      "writes": [
+        {
+          "entityId": "cfcccf8221bc4605ae33e229050e6442",
+          "claimId": "f8bc342f0eab45f180c9e961ce239811",
+          "claimText": "If a woman is not in the mood for sex, the act will not be a stress reliever for her",
+          "startMs": 123020,
+          "endMs": 128760,
+          "confidence": 0.774,
+          "source": "segment"
+        },
+        {
+          "entityId": "837ee700cb764ec9ad8e39f4c9a95b3f",
+          "claimId": "a5c043d4c6aa4247aeaf6fb0e51458f4",
+          "claimText": "Men are not held to the same expectation as women to provide services in a marriage",
+          "startMs": 28400,
+          "endMs": 35620,
+          "confidence": 0.771,
+          "source": "segment"
+        },
+        {
+          "entityId": "8d3ff443a6c740c2a6d813a3eef7155a",
+          "claimId": "33d5581aaf0242758e336e01ab62cb4d",
+          "claimText": "A marital obligation includes participating in sex that is beneficial for both the husband and wife",
+          "startMs": 175730,
+          "endMs": 182800,
+          "confidence": 0.703,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 7,
+        "noMatch": 5
+      }
+    },
+    {
+      "debateEntityId": "01a06872ceb07d608307d995c1c9452c",
+      "debateName": "Preston Mantel vs. Mark Reiff on Voter ID laws solve a problem that is too rare to justify the burden",
+      "spaceId": "4582fbbee28a16589154f7e36f1ee3c5",
+      "claimCount": 13,
+      "writes": [
+        {
+          "entityId": "25524c6eb1154eb6905c59aff542cda8",
+          "claimId": "bbceb74854d74df9a3aec4bff74379e6",
+          "claimText": "There is significant evidence that voter ID laws suppress voting",
+          "startMs": 90920,
+          "endMs": 96400,
+          "confidence": 0.755,
+          "source": "segment"
+        },
+        {
+          "entityId": "e706709a7b9e44d58aaf96d034d47763",
+          "claimId": "5abdfe3b287145708854a7bda136dc5d",
+          "claimText": "Allowing mail-in voting does not necessarily solve the voter ID problem, as some states might require submitting copies of an ID",
+          "startMs": 170470,
+          "endMs": 179680,
+          "confidence": 0.755,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 10,
+        "noMatch": 1
+      }
+    },
+    {
+      "debateEntityId": "01a07912b2417d91a0826c308e227d07",
+      "debateName": "Bertrand Armando vs. Kevin on The United States should remain NATO's principal security guarantor",
+      "spaceId": "89bd89bf28ff8a0963faf92a8c905e20",
+      "claimCount": 21,
+      "writes": [
+        {
+          "entityId": "298925a8dec84ce2b03f90e13f0a0905",
+          "claimId": "dd1a65cc429349898601e349e5bd565e",
+          "claimText": "Most NATO equipment is purchased directly from the United States",
+          "startMs": 124960,
+          "endMs": 130340,
+          "confidence": 0.833,
+          "source": "segment"
+        },
+        {
+          "entityId": "7780e5f5c7d14725b116e92484a5e2f7",
+          "claimId": "44b18c24b9fe4fc684366acea8c6eec5",
+          "claimText": "Europe needs to take control of its own destiny",
+          "startMs": 111840,
+          "endMs": 116520,
+          "confidence": 0.958,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 15,
+        "noMatch": 4
+      }
+    },
+    {
+      "debateEntityId": "01a07ba0b34376809cb2e7877ee1c6c1",
+      "debateName": "Jimoh Saheed vs. Jimoh-saheed Ikmat Adedamola on Bitcoin's volatility disqualifies it as a serious asset",
+      "spaceId": "c9f267dcb0d270718c2a3c45a64afd32",
+      "claimCount": 5,
+      "writes": [
+        {
+          "entityId": "803c69607eee4f9bb855c9aa8b2fc76c",
+          "claimId": "8eaaad4903284dddaf4b5882d38f3ec7",
+          "claimText": "Assets such as stocks, commodities, and other currencies also experience price movements",
+          "startMs": 0,
+          "endMs": 15960,
+          "confidence": 0.804,
+          "source": "segment"
+        },
+        {
+          "entityId": "f489a78d55f5471984f22b9fa90807e6",
+          "claimId": "04d8602cd2c24e369aeeb3bbc8e41d79",
+          "claimText": "Bitcoin operates on a decentralized network, has a fixed maximum supply, and can be transferred globally without a central authority",
+          "startMs": 15960,
+          "endMs": 34400,
+          "confidence": 0.898,
+          "source": "segment"
+        },
+        {
+          "entityId": "544bc7fc44cf40169bd0e04a550f5aa2",
+          "claimId": "50badbf4c7f047f3a31f5db71fc12a05",
+          "claimText": "Short-term price movements in Bitcoin are positive for individuals looking to make money from daily trading",
+          "startMs": 145000,
+          "endMs": 160680,
+          "confidence": 0.798,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 2,
+        "noMatch": 0
+      }
+    },
+    {
+      "debateEntityId": "01a081de37ef72a3b2af675a5a3c10b6",
+      "debateName": "ROUSSILLON SERRE Alexandre vs. Arturas Vil on The United States should prioritize AI competitiveness over AI regulation",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 10,
+      "writes": [
+        {
+          "entityId": "af59ff4e16f1455082b942952803e653",
+          "claimId": "b39604fdcb27400ab023c897b2a5aa0a",
+          "claimText": "AI competitiveness and AI regulation should go hand in hand rather than one being prioritized",
+          "startMs": 67050,
+          "endMs": 76440,
+          "confidence": 0.76,
+          "source": "segment"
+        },
+        {
+          "entityId": "58e03fd9b8b3431fbe69a88dd5655436",
+          "claimId": "f7107deb963f405fa2168918ca7b5b65",
+          "claimText": "The US government should be able to implement more AI regulation",
+          "startMs": 134000,
+          "endMs": 142630,
+          "confidence": 0.75,
+          "source": "segment"
+        },
+        {
+          "entityId": "21c461b9588d431dac784b4a0e5c7de2",
+          "claimId": "722da8c04ca94ccda6bcac3a3960f51b",
+          "claimText": "AI regulation can hurt competitiveness",
+          "startMs": 165000,
+          "endMs": 176340,
+          "confidence": 0.938,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 3,
+        "noMatch": 4
+      }
+    },
+    {
+      "debateEntityId": "01a081e0202874a1bd02f0bca65b2277",
+      "debateName": "Jonathan Bostock vs. Dahmmy H on Democracies should form a global AI alliance based on shared values",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 18,
+      "writes": [
+        {
+          "entityId": "44e7a514768143bd807889eda2004926",
+          "claimId": "1831c32928e54420851f6529a6689f7c",
+          "claimText": "Restricting a global AI alliance to only democratic nations would increase global risk",
+          "startMs": 40400,
+          "endMs": 49050,
+          "confidence": 0.76,
+          "source": "segment"
+        },
+        {
+          "entityId": "d4a7152e4d854c5db5260c389ccf4cba",
+          "claimId": "8d33b1ccdba8450889da30b07544f72f",
+          "claimText": "AI technology is considered as dangerous as, or more dangerous than, nuclear weapons proliferation",
+          "startMs": 25510,
+          "endMs": 31350,
+          "confidence": 0.833,
+          "source": "segment"
+        },
+        {
+          "entityId": "7f8dd4707dbb4376bfc8d92db6732d0a",
+          "claimId": "c392931c77284c01a147e14ea165f02b",
+          "claimText": "The Eastern Bloc and China were involved in nuclear non-proliferation agreements",
+          "startMs": 34500,
+          "endMs": 40400,
+          "confidence": 0.703,
+          "source": "segment"
+        },
+        {
+          "entityId": "e7d9b809742443f8a326ea4e9863724d",
+          "claimId": "841c2169c8b04cbcac69e7920d1b57d7",
+          "claimText": "Cooperation on AI could potentially balance out harmful competition between countries",
+          "startMs": 111440,
+          "endMs": 120000,
+          "confidence": 0.786,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 10,
+        "noMatch": 4
+      }
+    },
+    {
+      "debateEntityId": "01a08239c1537a72aca1326350672c1a",
+      "debateName": "Arturas Vil vs. Dovile Sv on AI chatbots increase emotional dependence and social isolation",
+      "spaceId": "52c7ae149838b6d47ce0f3b2a5974546",
+      "claimCount": 13,
+      "writes": [
+        {
+          "entityId": "9ffe80b3dc384a1eb62c624fff9fb3d1",
+          "claimId": "39bfe21ee477452c8e0e00326b6fedf6",
+          "claimText": "Human social experience is physical and can involve touch, a feeling of intimacy, and smell",
+          "startMs": 79280,
+          "endMs": 88440,
+          "confidence": 0.889,
+          "source": "segment"
+        },
+        {
+          "entityId": "f00c9d36e95749af81cd6de902c7efa0",
+          "claimId": "d9bdf55a4ef64b6cad60fc0f8eabed41",
+          "claimText": "AI chatbots can increase a person's dependency by reducing the surface-level need for socialization",
+          "startMs": 96920,
+          "endMs": 104200,
+          "confidence": 0.778,
+          "source": "segment"
+        },
+        {
+          "entityId": "5785660fa4b6449d9513ae2f1b54337b",
+          "claimId": "9f8d2b988d824bda9beee5f33136e1e5",
+          "claimText": "AI chatbots may increase emotional dependence and social isolation in people who overuse them or do not know how to use them correctly",
+          "startMs": 9880,
+          "endMs": 18360,
+          "confidence": 0.864,
+          "source": "segment"
+        },
+        {
+          "entityId": "3df35e6970f848e1bc666c422df1a913",
+          "claimId": "62bc3d8247f4425ca6906070cbc52efe",
+          "claimText": "Some people can use AI chatbots to increase their social abilities and skills",
+          "startMs": 26180,
+          "endMs": 34280,
+          "confidence": 0.917,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 9,
+        "noMatch": 0
+      }
+    },
+    {
+      "debateEntityId": "01a0824816287f40831328cde91dd34f",
+      "debateName": "Dovile Sv vs. Arturas Vil on Managers should trust AI recommendations over their intuition",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 8,
+      "writes": [
+        {
+          "entityId": "1ea1a64d92274680a84544e690c71e50",
+          "claimId": "e3f6594c6f4f450ea4905c8bc8365fa0",
+          "claimText": "A good manager should be aware of external factors and constantly test their intuition",
+          "startMs": 159880,
+          "endMs": 171240,
+          "confidence": 0.703,
+          "source": "segment"
+        },
+        {
+          "entityId": "446c7b77bcd54f559872b10ed0ea7c86",
+          "claimId": "20f59ec30bdd4833812b5d174185268e",
+          "claimText": "AI can access a larger volume of information than a human can when making a decision",
+          "startMs": 34030,
+          "endMs": 43020,
+          "confidence": 0.827,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 4,
+        "noMatch": 2
+      }
+    },
+    {
+      "debateEntityId": "01a0867230897651b4eecc37fd275cf6",
+      "debateName": "Adam Fischer vs. Arturas Vil on Dating apps have made relationships worse",
+      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
+      "claimCount": 11,
+      "writes": [
+        {
+          "entityId": "c8c215d99bf54e4992727d29f5f375d8",
+          "claimId": "00c0815dddac4c1bb3d721de4720236c",
+          "claimText": "The illusion of infinite choice on dating apps makes committing to a partner more difficult",
+          "startMs": 8510,
+          "endMs": 16570,
+          "confidence": 0.778,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 8,
+        "noMatch": 2
+      }
+    },
+    {
+      "debateEntityId": "01a08679965b74b2a5af658f7f297fbe",
+      "debateName": "Adam Fischer vs. Arturas Vil on AI companions can never replace human relationships",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 15,
+      "writes": [
+        {
+          "entityId": "515cb57c21434cdeba6ec8667d78ada0",
+          "claimId": "f7c917dca1724799a9150f3f593c7bed",
+          "claimText": "AI companions might be able to replace caretaker relationships",
+          "startMs": 162180,
+          "endMs": 164480,
+          "confidence": 0.8,
+          "source": "segment"
+        },
+        {
+          "entityId": "57dc04d0943f448fb5639c734590a19b",
+          "claimId": "850fd64b63094ecd8e60a8ea107e22b4",
+          "claimText": "An AI therapist may do a much better job than a real human therapist",
+          "startMs": 137880,
+          "endMs": 141720,
+          "confidence": 1,
+          "source": "segment"
+        },
+        {
+          "entityId": "c45d29f642af43f48da505f489212473",
+          "claimId": "44ea946c160b40d683aa15e7f7521e98",
+          "claimText": "A person cannot have a fulfilled and happy life by replacing their human relationships with AI companions",
+          "startMs": 79000,
+          "endMs": 91000,
+          "confidence": 0.707,
+          "source": "segment"
+        },
+        {
+          "entityId": "d9f31521ea334099ac32fd60b9e2e962",
+          "claimId": "162c954bb17845b3bdb39a3951a72e72",
+          "claimText": "AI companions will be able to replace some human relationships",
+          "startMs": 7200,
+          "endMs": 14210,
+          "confidence": 0.7,
+          "source": "segment"
+        },
+        {
+          "entityId": "46a70e47f32c49e8a296015c105985ff",
+          "claimId": "bb3821cb9cd6497fb86923eb0f52396c",
+          "claimText": "Human relationships can be abusive, inconsistent, and judgmental",
+          "startMs": 48960,
+          "endMs": 55960,
+          "confidence": 0.929,
+          "source": "segment"
+        },
+        {
+          "entityId": "ad1e66f4fc7d401ca41984f6aa702074",
+          "claimId": "a370ea6596d044d6afc4b3c76a374645",
+          "claimText": "Some human relationships, such as with therapists or long-distance partners, are mediated, asymmetric, or conducted online",
+          "startMs": 19020,
+          "endMs": 35280,
+          "confidence": 0.745,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 8,
+        "noMatch": 1
+      }
+    },
+    {
+      "debateEntityId": "01a087453374707381a53c44a883c8c6",
+      "debateName": "David Lindstrom vs. Barry Bogin on Unilateral U.S. military action against cartels in Mexico would violate Mexican sovereignty",
+      "spaceId": "89bd89bf28ff8a0963faf92a8c905e20",
+      "claimCount": 7,
+      "writes": [
+        {
+          "entityId": "3c5f16adb9a94b57b020decf67c47a70",
+          "claimId": "f0c61c9a5a03412d978f4c4f556c3f61",
+          "claimText": "It is in the United States' self-interest to intervene militarily to protect its social, economic, political, and health interests",
+          "startMs": 97120,
+          "endMs": 111520,
+          "confidence": 0.799,
+          "source": "segment"
+        },
+        {
+          "entityId": "e7567514deaa4d1885d6c4524967c00d",
+          "claimId": "ce0150cc611f498a9611418ddb94b3cc",
+          "claimText": "Sovereignty is the ability of a country to control all territory within its internationally recognized borders",
+          "startMs": 11860,
+          "endMs": 19700,
+          "confidence": 1,
+          "source": "segment"
+        },
+        {
+          "entityId": "480034c0da5640e68efd69fd89267fd6",
+          "claimId": "6e175105244f4b1b8182ad8a080b81c6",
+          "claimText": "An incursion into another country's territory is still a violation of sovereignty even if it is justified under the laws of war",
+          "startMs": 28320,
+          "endMs": 39000,
+          "confidence": 0.977,
+          "source": "segment"
+        },
+        {
+          "entityId": "ffdf22d4b42342999264080c366115d5",
+          "claimId": "45638a9fd3bc4706911300428b3beafc",
+          "claimText": "A military incursion into another country's territory constitutes a violation of that country's sovereignty",
+          "startMs": 19700,
+          "endMs": 25880,
+          "confidence": 0.848,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 2,
+        "noMatch": 1
+      }
+    },
+    {
+      "debateEntityId": "01a0874b460c7382b3828ff8de648da7",
+      "debateName": "David Lindstrom vs. Barry Bogin on AI chatbots can safely replace therapists for routine mental health care",
+      "spaceId": "52c7ae149838b6d47ce0f3b2a5974546",
+      "claimCount": 11,
+      "writes": [
+        {
+          "entityId": "acd298bfe1a34df0b41f340c767b3505",
+          "claimId": "2d59251ac3e74e6ba09938fedc383937",
+          "claimText": "Creating an AI chatbot that recognizes suicidal ideation while never suggesting it is an engineering problem that has not been adequately demonstrated",
+          "startMs": 130280,
+          "endMs": 136360,
+          "confidence": 0.707,
+          "source": "segment"
+        },
+        {
+          "entityId": "cf1cf644afb64255858914e5ecee9a8e",
+          "claimId": "6ab73405eca340fc904a47bbff5e2052",
+          "claimText": "The act of listening constitutes a large percentage of therapy for routine, low-level mental health care",
+          "startMs": 89040,
+          "endMs": 101680,
+          "confidence": 0.716,
+          "source": "segment"
+        },
+        {
+          "entityId": "800995e8873c4453b992e63ea12c843a",
+          "claimId": "582aaa49ac0a4d069b7a563bbf9f3905",
+          "claimText": "AI chatbots have suggested to individuals that they commit suicide or take other rash, detrimental actions",
+          "startMs": 14100,
+          "endMs": 24240,
+          "confidence": 0.975,
+          "source": "segment"
+        },
+        {
+          "entityId": "148cae1234a54a10ba86e4858afe7741",
+          "claimId": "57e0eb06ffbe4533a3080d5f37ac4fbc",
+          "claimText": "An AI chatbot might be more sensitive than a human therapist in detecting the possibility of self-harm",
+          "startMs": 171920,
+          "endMs": 188440,
+          "confidence": 0.809,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 6,
+        "noMatch": 1
+      }
+    },
+    {
+      "debateEntityId": "01a087719aea7093b5d9d7af33605812",
+      "debateName": "Scot Loyd vs. Catalin on Voter ID laws suppress voter turnout",
+      "spaceId": "4582fbbee28a16589154f7e36f1ee3c5",
+      "claimCount": 11,
+      "writes": [
+        {
+          "entityId": "0f04952cfa434a3796184ed4f920aaa2",
+          "claimId": "9b334548ae7247139adef02ef305adbd",
+          "claimText": "Voter ID laws suppress voter turnout in the United States due to the country's history of systemic racism",
+          "startMs": 0,
+          "endMs": 12480,
+          "confidence": 0.767,
+          "source": "segment"
+        },
+        {
+          "entityId": "1a714a17d183476ea7092805083df4ed",
+          "claimId": "dbd8462771f64cbcbc0ac92ba270babf",
+          "claimText": "The United States has a history of over 400 years of institutionalized slavery followed by Jim Crow laws",
+          "startMs": 6000,
+          "endMs": 21280,
+          "confidence": 0.844,
+          "source": "segment"
+        },
+        {
+          "entityId": "a616557dc73440c399b6f8d650f598a8",
+          "claimId": "7da2810af2a04efbba5ec4b513e1a250",
+          "claimText": "The United States is a nation built on immigration, with people from many different cultures and countries",
+          "startMs": 110240,
+          "endMs": 120920,
+          "confidence": 0.719,
+          "source": "segment"
+        },
+        {
+          "entityId": "e26e61c7fe894f0d8e6fd5b2224d0b69",
+          "claimId": "5167e6c40eb8477483a66cc7a61aa062",
+          "claimText": "Requiring a person to have or present an ID runs counter to the U.S. Constitution and Bill of Rights",
+          "startMs": 128400,
+          "endMs": 138560,
+          "confidence": 0.703,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 6,
+        "noMatch": 1
+      }
+    },
+    {
+      "debateEntityId": "01a08be62a8576a3a0768f55908c6b78",
+      "debateName": "Scot Loyd vs. CptMoh on Getting married is a central part of the success sequence, the best route to economic security and personal happiness",
+      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
+      "claimCount": 22,
+      "writes": [
+        {
+          "entityId": "aaba0c91ce9b44e49c1ed8d798c1c37e",
+          "claimId": "1e4f645b9ac64330a2f1f1cc52e17865",
+          "claimText": "Individuals are in a better position to benefit themselves and others within the institution of marriage",
+          "startMs": 228910,
+          "endMs": 236000,
+          "confidence": 0.753,
+          "source": "segment"
+        },
+        {
+          "entityId": "3dc206656b0e447f8a7f079a6f9d810e",
+          "claimId": "a74a4fdb63454824968da196ecbd28ae",
+          "claimText": "In the United States, over half of marriages end in divorce, which can create negative economic situations",
+          "startMs": 133630,
+          "endMs": 143280,
+          "confidence": 0.733,
+          "source": "segment"
+        },
+        {
+          "entityId": "534a6cbb8a0a47ef9f0d1b017722ff28",
+          "claimId": "0e3e171946764d2ab81bf3facfd2fab6",
+          "claimText": "A successful marriage provides constant emotional and social support",
+          "startMs": 69780,
+          "endMs": 81210,
+          "confidence": 0.804,
+          "source": "segment"
+        },
+        {
+          "entityId": "13cd00b69c1f4fe8b2905276b926f7e8",
+          "claimId": "b5399142f322446a89fcb8c85e206575",
+          "claimText": "In the United States, over half of marriages end in divorce, which can create negative economic situations",
+          "startMs": 133630,
+          "endMs": 143280,
+          "confidence": 0.733,
+          "source": "segment"
+        },
+        {
+          "entityId": "fa41180aa86e405ea507ad2c98f3d48b",
+          "claimId": "4b5f41f70e5649508eda47535dc28a88",
+          "claimText": "A successful marriage provides constant emotional and social support",
+          "startMs": 69780,
+          "endMs": 81210,
+          "confidence": 0.804,
+          "source": "segment"
+        },
+        {
+          "entityId": "5f5b369f20f24df09a3ffbe00e59ca13",
+          "claimId": "f0646be0dd3b449e92c020d3867ebd77",
+          "claimText": "Individuals are in a better position to benefit themselves and others within the institution of marriage",
+          "startMs": 228910,
+          "endMs": 236000,
+          "confidence": 0.753,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 14,
+        "noMatch": 2
+      }
+    },
+    {
+      "debateEntityId": "01a08c4e0e267b839beb6895ba81e132",
+      "debateName": "Daniel Mendilow vs. CptMoh on Getting married is a central part of the success sequence, the best route to economic security and personal happiness",
+      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
+      "claimCount": 10,
+      "writes": [
+        {
+          "entityId": "699180f5fdf648519a76add83b2649a3",
+          "claimId": "5da818d6d7e4488ba9cc44665b7782c5",
+          "claimText": "Marriage is the most publicly acknowledged way to receive long-term emotional support from a partner",
+          "startMs": 233950,
+          "endMs": 252050,
+          "confidence": 0.864,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 5,
+        "noMatch": 4
+      }
+    },
+    {
+      "debateEntityId": "01a08c55bc777e0096da00426f4e0907",
+      "debateName": "Susan Winter vs. Nico Lagan on “Until death do us part” is inherently abusive",
+      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
+      "claimCount": 14,
+      "writes": [
+        {
+          "entityId": "e23ac74dfb764b0c9a9b8316a8c4c060",
+          "claimId": "f3b452988c284edab17fb41bf84016f8",
+          "claimText": "For a man, the most important decision he will ever make is who he chooses to marry and have a family with",
+          "startMs": 92250,
+          "endMs": 98200,
+          "confidence": 0.804,
+          "source": "segment"
+        },
+        {
+          "entityId": "cc3063cc60f84a0a899f11cd56c1143c",
+          "claimId": "2bc2be40ea2e4f788bd59bf509435941",
+          "claimText": "Happiness is a state of mind that a person can choose to have",
+          "startMs": 177820,
+          "endMs": 183680,
+          "confidence": 0.7,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 6,
+        "noMatch": 6
+      }
+    },
+    {
+      "debateEntityId": "01a08c60b2397f92babc11b7aac642ce",
+      "debateName": "Arturas Vil vs. Urban on An AI companion should count as a real relationship",
+      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
+      "claimCount": 11,
+      "writes": [
+        {
+          "entityId": "539ed4a894794ef8be397e7e5f2057e8",
+          "claimId": "5c174f521b9f4c59884dc1b8925d2319",
+          "claimText": "By some definitions, an AI companionship is a real relationship",
+          "startMs": 220700,
+          "endMs": 223500,
+          "confidence": 0.75,
+          "source": "segment"
+        },
+        {
+          "entityId": "5efce89b721f4f4c9dd4c5c3b8153482",
+          "claimId": "921a523685ec4c70bfefd957aa013ecc",
+          "claimText": "AI companions can be useful, helpful, and have real positive effects on a person",
+          "startMs": 12200,
+          "endMs": 24520,
+          "confidence": 0.969,
+          "source": "segment"
+        },
+        {
+          "entityId": "29082b93efbf4ea88457fe5c1037fa16",
+          "claimId": "13b32362e6f048d6aa3604988b7b9889",
+          "claimText": "AI companionship can help address the loneliness epidemic",
+          "startMs": 95000,
+          "endMs": 107610,
+          "confidence": 0.7,
+          "source": "segment"
+        },
+        {
+          "entityId": "ba669f4f11854364891d737d545af79b",
+          "claimId": "fa77c511184a4fa594a6eba713865e48",
+          "claimText": "Many people who have animals for companionship consider it a relationship",
+          "startMs": 89860,
+          "endMs": 95000,
+          "confidence": 0.76,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 5,
+        "noMatch": 2
+      }
+    },
+    {
+      "debateEntityId": "01a08c65dc3d7ae3a5792315d73123ea",
+      "debateName": "Catalin vs. Kevin on GPT-6 Astra is AGI",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 7,
+      "writes": [
+        {
+          "entityId": "b545fb70de944fc8853964fcd2a39a1b",
+          "claimId": "cd5ef403b2b74f3aa0e9f5f7d6d498c5",
+          "claimText": "Artificial General Intelligence (AGI) is a model that can reason and perform tasks at or above a human PhD level across multiple domains",
+          "startMs": 66200,
+          "endMs": 77690,
+          "confidence": 0.705,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 4,
+        "noMatch": 2
+      }
+    },
+    {
+      "debateEntityId": "01a08c7f165177c1955cf58a1790c00e",
+      "debateName": "Susan Winter vs. Dovile Sv on Managers should trust AI recommendations over their intuition",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 12,
+      "writes": [
+        {
+          "entityId": "c2d739cf29b14e52b626e433fbe3d7f0",
+          "claimId": "970991617f5949eab6c1f6b95438071d",
+          "claimText": "The reasoning behind AI-based decisions can be more traceable than decisions based on human intuition",
+          "startMs": 166110,
+          "endMs": 176000,
+          "confidence": 0.804,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 7,
+        "noMatch": 4
+      }
+    },
+    {
+      "debateEntityId": "01a08c831b0a7bf3925a58e568899f62",
+      "debateName": "CptMoh vs. Catalin on You should never hold Bitcoin on a sidechain",
+      "spaceId": "c9f267dcb0d270718c2a3c45a64afd32",
+      "claimCount": 9,
+      "writes": [
+        {
+          "entityId": "87ea76f5598940ba89576a4221753152",
+          "claimId": "baf1b2dbfa7347558f230d9539cf6c53",
+          "claimText": "Bitcoin on the mainchain is secured by the network, while on a sidechain it is secured by bridge operators and validators",
+          "startMs": 16520,
+          "endMs": 32320,
+          "confidence": 0.972,
+          "source": "segment"
+        },
+        {
+          "entityId": "6890f19c23484152a4dc872892f722ce",
+          "claimId": "6fce5772bf5b47f8b398d858bea01e78",
+          "claimText": "The mistake is assuming Bitcoin on a sidechain has the same security guarantees as native Bitcoin, not the act of using a sidechain",
+          "startMs": 81510,
+          "endMs": 90000,
+          "confidence": 0.844,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 6,
+        "noMatch": 1
+      }
+    },
+    {
+      "debateEntityId": "01a08c84503d789180cb886bdf07b5c1",
+      "debateName": "Arturas Vil vs. Urban on Polyamorous relationships are structurally less stable than monogamous marriages",
+      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
+      "claimCount": 12,
+      "writes": [
+        {
+          "entityId": "abce8655455440c797a32c68201b8e76",
+          "claimId": "0bf836ed71684825868c02ad4e653181",
+          "claimText": "A cult is not necessarily wrong in itself",
+          "startMs": 206090,
+          "endMs": 215560,
+          "confidence": 0.75,
+          "source": "segment"
+        },
+        {
+          "entityId": "132c4d93c7d44fbbad2e83c02be722b1",
+          "claimId": "7ba1927b1e724cf5a4ba27ec1d19160c",
+          "claimText": "A polyamorous relationship with a \"structural leadership\" may resemble a sex cult",
+          "startMs": 112840,
+          "endMs": 126760,
+          "confidence": 0.76,
+          "source": "segment"
+        },
+        {
+          "entityId": "a2815ae3c7704ec39b238166f40a2a1a",
+          "claimId": "52fe64ac8c164eb3bc36a179c4ced2b8",
+          "claimText": "Some polyamorous relationships can be stable",
+          "startMs": 135360,
+          "endMs": 137600,
+          "confidence": 1,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 6,
+        "noMatch": 3
+      }
+    },
+    {
+      "debateEntityId": "01a08c8d314d7a2181eab9abe40b679c",
+      "debateName": "Catalin vs. CptMoh on AI will replace most jobs soon",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 10,
+      "writes": [
+        {
+          "entityId": "fe9bb2bca7c8489bb0cc054997e7e5d4",
+          "claimId": "5b939f78e32943aaa7b5cbf823d05790",
+          "claimText": "AI is progressing at a much faster rate than governments can catch up to and properly regulate",
+          "startMs": 185310,
+          "endMs": 195650,
+          "confidence": 0.804,
+          "source": "segment"
+        },
+        {
+          "entityId": "d3d2058408b6456c96e106355ca5295d",
+          "claimId": "60d2e424a12649ed824b6353576fb2f1",
+          "claimText": "AI will dramatically reduce the cost of producing something, which will increase demand so much that employment and production will rise",
+          "startMs": 28400,
+          "endMs": 41480,
+          "confidence": 0.877,
+          "source": "segment"
+        },
+        {
+          "entityId": "1421956a8aae4d20ae3eb3fb1f25ff84",
+          "claimId": "7bf17e1993f942d0959fc477f2190330",
+          "claimText": "Increased output from AI can be supplied by more AI agents, not necessarily by an increase in demand for human jobs",
+          "startMs": 94640,
+          "endMs": 107320,
+          "confidence": 0.753,
+          "source": "segment"
+        },
+        {
+          "entityId": "eac4dcb14b82493c880d3d28f6d5e968",
+          "claimId": "529a7afb6c14431a84b04bb455a0e6aa",
+          "claimText": "A job is a bundle of tasks, and it is a matter of time before AI gets better across the entire bundle",
+          "startMs": 77360,
+          "endMs": 85910,
+          "confidence": 0.76,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 5,
+        "noMatch": 1
+      }
+    },
+    {
+      "debateEntityId": "01a08c95a1d57370af5d43fd637e0e1e",
+      "debateName": "Catalin vs. CptMoh on AI girlfriends are a good thing",
+      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
+      "claimCount": 13,
+      "writes": [
+        {
+          "entityId": "3a3ca5fcd85749bca82c0d0d7648ce8a",
+          "claimId": "8e2aa6d38ae9488f965a9da5e471ba2a",
+          "claimText": "A relationship with an AI girlfriend is not real intimacy because it is a malleable chatbot that does not push back",
+          "startMs": 100640,
+          "endMs": 113200,
+          "confidence": 0.766,
+          "source": "segment"
+        },
+        {
+          "entityId": "f97074f73f6f4bdb8e41db098662fce9",
+          "claimId": "bc162ac098d94d0ea4b2c9301cab31b4",
+          "claimText": "Loneliness can be very damaging to a person's health, and an AI companion may help that person have a better outlook",
+          "startMs": 23360,
+          "endMs": 37360,
+          "confidence": 0.844,
+          "source": "segment"
+        },
+        {
+          "entityId": "62ff49c441114605a050a89abf2cd74f",
+          "claimId": "489ae0bf7b49477d8d51852825afa566",
+          "claimText": "For some people, AI companionship could be their only realistic opportunity to experience a consistent sense of connection and companionship",
+          "startMs": 9600,
+          "endMs": 20830,
+          "confidence": 1,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 10,
+        "noMatch": 0
+      }
+    },
+    {
+      "debateEntityId": "01a08cc598687582b1398dff0816aff6",
+      "debateName": "Catalin vs. Arturas Vil on Frontier AI models should never be released as open weight",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 17,
+      "writes": [
+        {
+          "entityId": "6d321325eb334ef79385ebc1ea21ff80",
+          "claimId": "e196d9975b1d4c1091cabcb8ce78e6a6",
+          "claimText": "AI companies will ignore regulations if doing so is beneficial to them",
+          "startMs": 192829,
+          "endMs": 202510,
+          "confidence": 0.75,
+          "source": "segment"
+        },
+        {
+          "entityId": "bf48a334d52d4f6dbada53b5c5765b80",
+          "claimId": "6554e11627374ea8b62652b321979ea0",
+          "claimText": "Multiple companies, including Google, OpenAI, and Anthropic, create frontier AI models",
+          "startMs": 163520,
+          "endMs": 169320,
+          "confidence": 0.753,
+          "source": "segment"
+        },
+        {
+          "entityId": "37334fd8d5184af7b8595a9a4955f004",
+          "claimId": "2e312cac354c4534949b986c48dbb8ce",
+          "claimText": "Open-weight models provide researchers, startups, and smaller countries with access to advanced AI technology",
+          "startMs": 17800,
+          "endMs": 25540,
+          "confidence": 0.857,
+          "source": "segment"
+        },
+        {
+          "entityId": "b1f9cad0cc0c49edba28e83e591c58d4",
+          "claimId": "0d28b785f5814cbaaee1157afe9bc523",
+          "claimText": "Keeping frontier AI models exclusive to a few companies could increase inequality and concentrate power in the AI industry",
+          "startMs": 8000,
+          "endMs": 17800,
+          "confidence": 0.798,
+          "source": "segment"
+        },
+        {
+          "entityId": "9f6b6cac06014b53ad7f3172b873911e",
+          "claimId": "d4f63cd74a294a9b8bce44373822a4e6",
+          "claimText": "AI technology can be weaponized to create viruses and attack people",
+          "startMs": 65140,
+          "endMs": 80880,
+          "confidence": 0.917,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 11,
+        "noMatch": 1
+      }
+    },
+    {
+      "debateEntityId": "01a09102ba1c76e0b7413f213b31c226",
+      "debateName": "Nico Lagan vs. Dahmmy Hilfigger on Democracies should form a global AI alliance based on shared values",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 12,
+      "writes": [
+        {
+          "entityId": "b4480368ad5046f3bd1ab4c09d796db8",
+          "claimId": "25fe113cc07b46539cf63f9a32525acb",
+          "claimText": "A collaborative effort on AI is the opposite of the current aggressive, unchecked path of development",
+          "startMs": 255510,
+          "endMs": 262810,
+          "confidence": 0.703,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 5,
+        "noMatch": 6
+      }
+    },
+    {
+      "debateEntityId": "01a09121fdce7b93b18bfdc6fcbfe218",
+      "debateName": "Nico Lagan vs. Dahmmy Hilfigger on AI companions can never replace human relationships",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 10,
+      "writes": [
+        {
+          "entityId": "289f82a0f5f8420e9311ad4de815f049",
+          "claimId": "b84f26f0dc5e4d0a9f384d344033be4d",
+          "claimText": "AI may be able to mirror or reflect some parts of the human experience",
+          "startMs": 194440,
+          "endMs": 200720,
+          "confidence": 0.9,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 4,
+        "noMatch": 5
+      }
+    },
+    {
+      "debateEntityId": "01a0912384ab713394f6068faab8c2eb",
+      "debateName": "Kevin vs. Bertrand Armando on Zohran Mamdani should not attend the 25th anniversary September 11 commemoration",
+      "spaceId": "4582fbbee28a16589154f7e36f1ee3c5",
+      "claimCount": 22,
+      "writes": [
+        {
+          "entityId": "d02c33d1bb8749bfba43fdfc7479e868",
+          "claimId": "29c686b8ea1c4f1ab3f583304a4af608",
+          "claimText": "The brother-in-law of the terrorist defended by Zohran Mamdani's chief counsel flew a plane into the Pentagon on 9/11",
+          "startMs": 39280,
+          "endMs": 45690,
+          "confidence": 0.798,
+          "source": "segment"
+        },
+        {
+          "entityId": "63323e9456e44a7e9717c62fbdf380cd",
+          "claimId": "8e2d43aa169744138bd0c1abf1e0c7c8",
+          "claimText": "Zohran Mamdani's chief counsel has defended a convicted terrorist",
+          "startMs": 39280,
+          "endMs": 42410,
+          "confidence": 0.714,
+          "source": "segment"
+        },
+        {
+          "entityId": "899e3a43307a423fb0e439b464101a3b",
+          "claimId": "87604011237b4556a53acfea00033381",
+          "claimText": "Zohran Mamdani has called a pro-Israel lobbying group \"Monsters\"",
+          "startMs": 26280,
+          "endMs": 31120,
+          "confidence": 0.703,
+          "source": "segment"
+        },
+        {
+          "entityId": "96283b25673d4e48af15afb33c8fb2ca",
+          "claimId": "c63e5d3b0eb240e1a579459697b0f264",
+          "claimText": "It would be difficult for the mayor of New York City to not attend the 9/11 ceremony",
+          "startMs": 246180,
+          "endMs": 251000,
+          "confidence": 1,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 14,
+        "noMatch": 4
+      }
+    },
+    {
+      "debateEntityId": "01a0914f931a7ff2a7c107bfa436c213",
+      "debateName": "Kevin vs. Bertrand Armando on Trump’s $5,000 payout shows he expects a Republican defeat in the 2026 midterms",
+      "spaceId": "4582fbbee28a16589154f7e36f1ee3c5",
+      "claimCount": 21,
+      "writes": [
+        {
+          "entityId": "a15ac56fa5594e10a217cea167430efe",
+          "claimId": "69e7e6bbe16f43dd819f844de86f99ed",
+          "claimText": "The 2026 GOP midterm convention is the first in history",
+          "startMs": 227160,
+          "endMs": 230240,
+          "confidence": 0.833,
+          "source": "segment"
+        },
+        {
+          "entityId": "0f6ddd443edb4b78977c3fe1edfa1fac",
+          "claimId": "ab68b603be584c939d93b9958b6db4d0",
+          "claimText": "President Biden distributed $300 a month child tax credits, which were described as poverty relief",
+          "startMs": 34880,
+          "endMs": 40560,
+          "confidence": 0.781,
+          "source": "segment"
+        },
+        {
+          "entityId": "4dc4c64be1b94131ac90707b5c420361",
+          "claimId": "8e34100981f7473cb0ad1adbd925fb46",
+          "claimText": "The cost of the proposed $5,000 dividend would be $1.2 trillion, over 10 times the $125 billion gain from a tariff dividend",
+          "startMs": 102090,
+          "endMs": 118400,
+          "confidence": 0.745,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 9,
+        "noMatch": 9
+      }
+    },
+    {
+      "debateEntityId": "01a0a5efc50c74e1b4715cd3579b4999",
+      "debateName": "Arturas Vil vs. Vik on For people who cannot get a romantic partner, it is better to have an AI companion than to have nothing in their life",
+      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
+      "claimCount": 12,
+      "writes": [
+        {
+          "entityId": "e5c33b7949dd423b977044adbd0f0ee3",
+          "claimId": "97f8b4a80f0643249884cccd4031874b",
+          "claimText": "Replacing romantic partners with AI companions could increase the number of people who cannot get a romantic partner",
+          "startMs": 168600,
+          "endMs": 181280,
+          "confidence": 0.828,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 10,
+        "noMatch": 1
+      }
+    },
+    {
+      "debateEntityId": "01a0b054c50f7540b35192ca5a1737d1",
+      "debateName": "Ash Kumra vs. Nikola Danaylov on Replacing entry-level intellectual tasks with AI will erode human expertise",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 13,
+      "writes": [
+        {
+          "entityId": "b09195272f9c4de48c4abc20abba6522",
+          "claimId": "d47eb5cf321a4b629ce57daade077b5e",
+          "claimText": "Apprenticeship models have been reorganized in the past",
+          "startMs": 36080,
+          "endMs": 38360,
+          "confidence": 0.75,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 10,
+        "noMatch": 2
+      }
+    },
+    {
+      "debateEntityId": "01a0b05831397041b25fbef809f49720",
+      "debateName": "Dahmmy Hilfigger vs. Nico Lagan on A woman's body count matters no more than a man's",
+      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
+      "claimCount": 13,
+      "writes": [
+        {
+          "entityId": "a48408930ec14de2bce90a30094ed7cc",
+          "claimId": "1def220d208e438c8785e6d963079320",
+          "claimText": "People tend to have more respect for things that are difficult to achieve and dismiss things that are easy",
+          "startMs": 246160,
+          "endMs": 253320,
+          "confidence": 0.804,
+          "source": "segment"
+        },
+        {
+          "entityId": "24642b72f50c4ea994f4bf761fed8751",
+          "claimId": "2fa498caebff4f27baa6216f2ccb715b",
+          "claimText": "Pornography has influenced many men to believe that more sexually active women are better sexual partners",
+          "startMs": 168880,
+          "endMs": 179300,
+          "confidence": 0.733,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 6,
+        "noMatch": 5
+      }
+    },
+    {
+      "debateEntityId": "01a0b05b71647eb1bc94d3c145fa8906",
+      "debateName": "Nikola Danaylov vs. Ash Kumra on Large-scale retraining programs can successfully mitigate AI-driven job displacement",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 21,
+      "writes": [
+        {
+          "entityId": "9b8716b3a59f4d7b9e1d90389366fbfa",
+          "claimId": "4fa88d6f4011426383a0bfec9a0dedd2",
+          "claimText": "The marginal benefit of large-scale retraining programs is diminishing and approaching zero",
+          "startMs": 0,
+          "endMs": 15220,
+          "confidence": 0.955,
+          "source": "segment"
+        },
+        {
+          "entityId": "d0518f4b7ed5442db8fe086464929f58",
+          "claimId": "5b4d805024274026aea70a4fb8192e4b",
+          "claimText": "AI is a tool for enablement",
+          "startMs": 195650,
+          "endMs": 199560,
+          "confidence": 0.917,
+          "source": "segment"
+        },
+        {
+          "entityId": "0e28e34291284f4a8db242e65979eae0",
+          "claimId": "8ede996f187a4097a32a64cb9ffe141b",
+          "claimText": "The educational systems in Norway, Finland, and Denmark have reached their worst levels in decades",
+          "startMs": 214180,
+          "endMs": 222880,
+          "confidence": 0.864,
+          "source": "segment"
+        },
+        {
+          "entityId": "19ed7076e2cc44309c5ed65d8722384c",
+          "claimId": "27d79a95401f4d09a1b0b84330e778a4",
+          "claimText": "Evaluations of the US Trade Adjustment Association Program over decades have shown weak results",
+          "startMs": 79730,
+          "endMs": 84560,
+          "confidence": 0.719,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 11,
+        "noMatch": 6
+      }
+    },
+    {
+      "debateEntityId": "01a0b06046bf78f19908d229121a4425",
+      "debateName": "Nico Lagan vs. Dahmmy Hilfigger on Your right to refuse vaccination matters more than the additional health risk you impose on others",
+      "spaceId": "4582fbbee28a16589154f7e36f1ee3c5",
+      "claimCount": 14,
+      "writes": [
+        {
+          "entityId": "50ba02d147a5459b81ec3326d18aeb6e",
+          "claimId": "d6721b4896684f3893d59d89d2e14615",
+          "claimText": "The concept of herd immunity has been proven over time",
+          "startMs": 94150,
+          "endMs": 97280,
+          "confidence": 0.8,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 8,
+        "noMatch": 5
+      }
+    },
+    {
+      "debateEntityId": "01a0b06132657ff099d3abda74cfc234",
+      "debateName": "Susan Winter vs. Arturas Vil on Monogamy should be society’s default",
+      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
+      "claimCount": 13,
+      "writes": [
+        {
+          "entityId": "5e430f06c18f4941b790d3054ca94086",
+          "claimId": "65a49280a26d454e96c625feada79655",
+          "claimText": "Monogamy is a good societal default",
+          "startMs": 104040,
+          "endMs": 110960,
+          "confidence": 0.861,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 4,
+        "noMatch": 8
+      }
+    },
+    {
+      "debateEntityId": "01a0b063404479c396367b36c345da4f",
+      "debateName": "Ash Kumra vs. Nikola Danaylov on Corporate boards should automate executive roles to the same extent as lower-level jobs",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 24,
+      "writes": [
+        {
+          "entityId": "e2652c541c304c519a8daab809d99962",
+          "claimId": "91c430f6942d434993834fff0ad063c1",
+          "claimText": "According to a Zumo report, 44% of C-suite executives trust AI enough to override their own decisions",
+          "startMs": 219040,
+          "endMs": 225470,
+          "confidence": 0.753,
+          "source": "segment"
+        },
+        {
+          "entityId": "f7d34c0efe7d400c932391d2de318322",
+          "claimId": "4cf2c9e185404ef39bcbc33743abef39",
+          "claimText": "Most corporate boards are not yet staffed with AI-native members",
+          "startMs": 234810,
+          "endMs": 237560,
+          "confidence": 0.799,
+          "source": "segment"
+        },
+        {
+          "entityId": "367a855358504f2a8ccec13ad9f7041a",
+          "claimId": "ef4ea1f74a9b4daa85e3fc88a0c0a16d",
+          "claimText": "Executives bear legal fiduciary liability",
+          "startMs": 7290,
+          "endMs": 13720,
+          "confidence": 0.929,
+          "source": "segment"
+        },
+        {
+          "entityId": "39ead1c66fe14dd992068e72c19a7fb9",
+          "claimId": "40ddc7e305cb4dd0952d6cd40c80753a",
+          "claimText": "Executive roles involve negotiation, culture, and empathy, unlike many lower-level tasks suitable for automation",
+          "startMs": 43230,
+          "endMs": 50380,
+          "confidence": 0.716,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 13,
+        "noMatch": 7
+      }
+    },
+    {
+      "debateEntityId": "01a0b066f1337f72a5e992eac32170a2",
+      "debateName": "Susan Winter vs. Arturas Vil on Transparency matters more than mystery in dating",
+      "spaceId": "224406e0de3c48d78ef12774111b8b2f",
+      "claimCount": 16,
+      "writes": [
+        {
+          "entityId": "121faef184e544359034d4b6864c1b26",
+          "claimId": "cbc120a56d53467fa818d8f41cf2812f",
+          "claimText": "Transparency is not necessary for a hookup, which is based on fantasy and illusion",
+          "startMs": 28480,
+          "endMs": 36460,
+          "confidence": 0.833,
+          "source": "segment"
+        },
+        {
+          "entityId": "4f0196eaa8d14426a7a6b3e77259e235",
+          "claimId": "6a99d645756543239c5ce473d088805c",
+          "claimText": "Honesty is essential in dating",
+          "startMs": 60000,
+          "endMs": 72900,
+          "confidence": 0.818,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 6,
+        "noMatch": 8
+      }
+    },
+    {
+      "debateEntityId": "01a0b074f7197fc1be9301f379b1efe7",
+      "debateName": "Dahmmy Hilfigger vs. Nico Lagan on Forcing a woman to give birth is a breach of human autonomy",
+      "spaceId": "4582fbbee28a16589154f7e36f1ee3c5",
+      "claimCount": 10,
+      "writes": [
+        {
+          "entityId": "9cb4936eec314f5e81e2451c5926aee2",
+          "claimId": "4b0f7135d4a24c22bd60f020bece6ef5",
+          "claimText": "Parents are more likely to adopt a newborn than they are to adopt a child that is a few years old",
+          "startMs": 254660,
+          "endMs": 261520,
+          "confidence": 0.972,
+          "source": "segment"
+        },
+        {
+          "entityId": "9818e8844b4b43668b3878c7be9caf9b",
+          "claimId": "95ab67ee47074b43990d7685b85f840d",
+          "claimText": "The foster care system is intended to be a temporary place for children before they are adopted",
+          "startMs": 240840,
+          "endMs": 248240,
+          "confidence": 0.707,
+          "source": "segment"
+        },
+        {
+          "entityId": "499583603f854b3db6c0b95c5ba510bb",
+          "claimId": "94151e2404dd4ed1a8da51b33bc68b38",
+          "claimText": "The U.S. government has given over $832 million to Planned Parenthood to make abortion easier",
+          "startMs": 72810,
+          "endMs": 81320,
+          "confidence": 0.972,
+          "source": "segment"
+        },
+        {
+          "entityId": "d2c0ccf7f3014de1a3c8a0115e3ecca1",
+          "claimId": "b731de0cd21a4e89b8982362a7a1989b",
+          "claimText": "There are three to four times more parents waiting to adopt children than there are children available for adoption",
+          "startMs": 113890,
+          "endMs": 119000,
+          "confidence": 0.753,
+          "source": "segment"
+        },
+        {
+          "entityId": "0c97751b2435401782e7bb1d57666caf",
+          "claimId": "b559973e07304204a398716a07eabbe0",
+          "claimText": "The foster care system can be a step into the school-to-prison pipeline",
+          "startMs": 148520,
+          "endMs": 155130,
+          "confidence": 0.909,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 2,
+        "noMatch": 3
+      }
+    },
+    {
+      "debateEntityId": "01a0b07ca3a4706097a52ac70b111f3f",
+      "debateName": "Arturas Vil vs. Nikola Danaylov on Large language models are further from AGI than is being predicted",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 17,
+      "writes": [
+        {
+          "entityId": "8d6265d9f66a4f9a8e78e0e2d0d7de17",
+          "claimId": "4119e477de384c82b0cec2226674ede8",
+          "claimText": "AGI can be defined as an agent that meets the same standards as an average remote worker",
+          "startMs": 9480,
+          "endMs": 17280,
+          "confidence": 0.826,
+          "source": "segment"
+        },
+        {
+          "entityId": "5b84a1443c44482a9ff40a894242450e",
+          "claimId": "6f0232cd5bed4a4eb8554da11a1c964b",
+          "claimText": "Artificial general intelligence should be better than humans, or at least at a PhD level, across all tasks",
+          "startMs": 92320,
+          "endMs": 100480,
+          "confidence": 0.877,
+          "source": "segment"
+        },
+        {
+          "entityId": "7bc4d6823faa422f835fe17600f06cf7",
+          "claimId": "4b75fd8025724be38250e63b7dd94c3f",
+          "claimText": "The latest AI research is focused on building world models",
+          "startMs": 171480,
+          "endMs": 175200,
+          "confidence": 0.799,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 8,
+        "noMatch": 6
+      }
+    },
+    {
+      "debateEntityId": "01a0b083fb7378f28afbe3e529955f0f",
+      "debateName": "Nikola Danaylov vs. Arturas Vil on There is no meaningful definition of AGI",
+      "spaceId": "41e851610e13a19441c4d980f2f2ce6b",
+      "claimCount": 14,
+      "writes": [
+        {
+          "entityId": "f6004cad6d6c44c7a34de9e373c8ba87",
+          "claimId": "64759c9797924e44958ff0defbd9a27a",
+          "claimText": "The Inuit language has between 20 and 40 different words for different types of snow, in contrast to English which has one",
+          "startMs": 122040,
+          "endMs": 133160,
+          "confidence": 0.735,
+          "source": "segment"
+        },
+        {
+          "entityId": "f486766664ae4104ba2994adf409ba4c",
+          "claimId": "c0d2c47d29a842dc8f8bec0ad0ec58a1",
+          "claimText": "The term \"artificial intelligence\" was first used at an initial 1956 conference on the topic, where John McCarthy provided its original definition",
+          "startMs": 210000,
+          "endMs": 225160,
+          "confidence": 0.733,
+          "source": "segment"
+        }
+      ],
+      "skipped": {
+        "alreadyPublished": 0,
+        "belowFloor": 5,
+        "noMatch": 7
+      }
+    }
+  ]
+}

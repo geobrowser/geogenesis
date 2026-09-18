@@ -33,6 +33,8 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
     $claimsPropertyId: UUID!
     $spaceId: UUID!
     $namePropertyId: UUID!
+    $markdownPropertyId: UUID!
+    $offsetPropertyIds: [UUID!]
   ) {
     entity(id: $id) {
       transcripts: relationsList(filter: { typeId: { is: $transcriptsPropertyId }, spaceId: { is: $spaceId } }) {
@@ -43,6 +45,13 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
             position
             toEntity {
               id
+              # The turn's text, per space. This is the verbatim concatenation of the speaker's
+              # Whisper segments, which is what lets claim-timing.ts locate the turn on the
+              # video timeline by matching it back against the transcript.
+              markdown: valuesList(filter: { propertyId: { is: $markdownPropertyId } }) {
+                spaceId
+                text
+              }
               authors: relationsList(filter: { typeId: { is: $authorsPropertyId }, spaceId: { is: $spaceId } }) {
                 toEntity {
                   id
@@ -50,6 +59,20 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
               }
               claims: relationsList(filter: { typeId: { is: $claimsPropertyId }, spaceId: { is: $spaceId } }) {
                 position
+                # The id of the relation entity below, which is what a publisher writes timecodes
+                # onto. The app only reads them, so nothing here needs it — the backfill scripts do,
+                # and carrying it means they read this traversal rather than re-walking their own.
+                entityId
+                # The relation's own entity, which is where the claim's timecodes live — not on the
+                # claim, because one claim can be stated in two turns and each statement has its
+                # own moment. Empty for every debate published before timecodes existed, which is
+                # all of them bar the test debate; claim-timing.ts falls back to matching.
+                entity {
+                  valuesList(filter: { propertyId: { in: $offsetPropertyIds }, spaceId: { is: $spaceId } }) {
+                    propertyId
+                    integer
+                  }
+                }
                 toEntity {
                   id
                   # Not space-scoped, so only a last resort — see the note above.
@@ -76,6 +99,16 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
 
 type RelationNode<T> = { position?: string | null; toEntity: T | null } | null;
 
+/** A block → claim relation, which carries the claim's timecodes on its own entity. */
+type ClaimRelationNode = {
+  position?: string | null;
+  /** The relation entity's id — where a claim's timecodes are published. */
+  entityId?: string | null;
+  /** Integer values arrive as strings, the way the API serialises them. */
+  entity?: { valuesList?: Array<{ propertyId: string; integer?: string | null } | null> | null } | null;
+  toEntity: ClaimEntity | null;
+} | null;
+
 type ClaimEntity = {
   id: string;
   name?: string | null;
@@ -91,8 +124,9 @@ export type DebateTranscriptClaimsQuery = {
         blocks: Array<
           RelationNode<{
             id: string;
+            markdown?: Array<{ spaceId: string; text?: string | null } | null> | null;
             authors: Array<RelationNode<{ id: string }>> | null;
-            claims: Array<RelationNode<ClaimEntity>> | null;
+            claims: Array<ClaimRelationNode> | null;
           }>
         > | null;
       }>
@@ -108,6 +142,8 @@ type DebateTranscriptClaimsVariables = {
   claimsPropertyId: string;
   spaceId: string;
   namePropertyId: string;
+  markdownPropertyId: string;
+  offsetPropertyIds: string[];
 };
 
 export const debateTranscriptClaimsDocument = parse(DEBATE_TRANSCRIPT_CLAIMS_SOURCE) as TypedDocumentNode<

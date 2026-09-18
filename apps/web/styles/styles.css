@@ -283,6 +283,12 @@
 @custom-variant 2xl (@media (max-width: 1535px));
 @custom-variant 3xl (@media (max-width: 1920px));
 
+/* Whether the viewer has a pointer that can hover, which is not the same question as how wide
+   their screen is. The `hover` feature describes the *primary* input, so a touchscreen laptop
+   reports `hover: hover` and keeps the hover affordances it can actually use — where a width
+   breakpoint would have taken them away and left nothing in their place. */
+@custom-variant no-hover (@media (hover: none));
+
 /* Container-query breakpoints for claim surfaces (GEO-2774).
    NOTE: no apostrophes below. Tailwind reads an apostrophe as a string delimiter even inside a
    comment, so an odd number of them swallows the closing marker and the whole stylesheet fails to

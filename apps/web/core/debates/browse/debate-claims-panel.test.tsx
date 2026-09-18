@@ -26,6 +26,12 @@ const mocks = vi.hoisted(() => ({
   rowGroups: [] as Array<Array<{ spaceId: string; claimIds: string[] }>>,
   /** Whether each rendered row's controls asked for the account-level match, in render order. */
   positionControlOffersDebate: [] as boolean[],
+  /** What `useDebateTranscript` answers with, for the timecode on each row. */
+  transcript: { data: undefined, isSuccess: true, isError: false } as {
+    data?: { segments: unknown[] };
+    isSuccess: boolean;
+    isError: boolean;
+  },
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
@@ -129,6 +135,10 @@ vi.mock('~/core/debates/hooks', () => ({
     mocks.rowGroups.push(groups);
     return { claims: [], isLoading: false, isError: false };
   },
+  // Reached through `useClaimTimings`, which the panel calls to put a timecode on each row.
+  // `mocks.transcript` lets a test supply segments; by default there are none, which is the shape
+  // of every debate recorded before claim timecodes existed.
+  useDebateTranscript: () => mocks.transcript,
 }));
 
 vi.mock('~/design-system/prefetch-link', () => ({
@@ -140,13 +150,21 @@ vi.mock('~/design-system/avatar', () => ({ Avatar: () => <div data-testid="avata
 vi.mock('./winner-vote-button', () => ({ WinnerVoteButton: () => <button type="button">Winner?</button> }));
 
 function claim(id: string, text: string, overrides: Partial<TranscriptClaim> = {}): TranscriptClaim {
-  return { id, text, spaceId: CLAIM_SPACE, ...overrides };
+  return {
+    id,
+    text,
+    spaceId: CLAIM_SPACE,
+    blockId: 'block-1',
+    publishedTiming: null,
+    relationEntityId: null,
+    ...overrides,
+  };
 }
 
 function grouped(byAuthor: Record<string, TranscriptClaim[]>, unattributed: TranscriptClaim[] = []) {
   const byAuthorSpaceId = new Map(Object.entries(byAuthor));
   const all = [...byAuthorSpaceId.values()].flat().concat(unattributed);
-  return { all, byAuthorSpaceId, unattributed, totalCount: all.length };
+  return { all, byAuthorSpaceId, unattributed, blocks: [], totalCount: all.length };
 }
 
 function participant(spaceId: string, name: string, slot: 1 | 2): DebateParticipant {
@@ -224,6 +242,27 @@ describe('DebateClaimsPanel', () => {
     expect(mocks.positionControlOffersDebate.every(offers => offers === false)).toBe(true);
   });
 
+  it('shows when a claim was said once the debate carries timecodes', () => {
+    mocks.claims = grouped({
+      [PRESTON_SPACE]: [claim('claim-1', 'Sleep matters.', { publishedTiming: { startMs: 134_600, endMs: 143_140 } })],
+    });
+
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+
+    expect(within(cardFor('Preston Mantel')).getByText('Said at 2:15')).toBeInTheDocument();
+  });
+
+  // Every debate recorded before timecodes existed, which is nearly all of them. The row is the
+  // same row it always was; it just says nothing about when.
+  it('says nothing about timing for a debate that has none', () => {
+    mocks.claims = grouped({ [PRESTON_SPACE]: [claim('claim-1', 'Sleep matters.')] });
+
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+
+    expect(within(cardFor('Preston Mantel')).getByText('Sleep matters.')).toBeInTheDocument();
+    expect(screen.queryByText(/^Said at /)).not.toBeInTheDocument();
+  });
+
   it('links each claim to its entity in the space the claim lives in', () => {
     mocks.claims = grouped({ [PRESTON_SPACE]: [claim('claim-1', 'Sleep matters.')] });
 
@@ -250,7 +289,29 @@ describe('DebateClaimsPanel', () => {
     expect(mocks.responseControlProps.every(props => props.spaceId === CLAIM_SPACE)).toBe(true);
   });
 
-  it('orders each debater\u2019s claims by the best ranking, unranked keeping transcript order', () => {
+  // A debate is an argument, and reading its claims out of sequence loses the thread. This used to
+  // sort by ranking score, which is the right answer for a feed of unrelated claims and the wrong
+  // one inside a transcript.
+  it('orders a debater\u2019s claims by when they were said, not by ranking', () => {
+    // The ranking would put the last thing said first, so it cannot be what decided this.
+    mocks.rankByClaimId = new Map([['cccc', 0]]);
+    mocks.claims = grouped({
+      [PRESTON_SPACE]: [
+        claim('cccc', 'C.', { publishedTiming: { startMs: 200_000, endMs: 204_000 } }),
+        claim('aaaa', 'A.', { publishedTiming: { startMs: 10_000, endMs: 14_000 } }),
+        claim('bbbb', 'B.', { publishedTiming: { startMs: 100_000, endMs: 104_000 } }),
+      ],
+    });
+
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+
+    expect(mocks.responseControlProps.map(props => props.entityId)).toEqual(['aaaa', 'bbbb', 'cccc']);
+  });
+
+  // Every claim of one turn carries that turn's window, so they tie \u2014 and on a debate with no
+  // timecodes at all, every claim ties. Relation `position` is random, so the ranking is a better
+  // answer to the tie than the order the graph happened to return them in.
+  it('falls back to the best ranking where nothing distinguishes when', () => {
     // Lowercase, dash-free ids: ranks match through `uuidToHex`, which strips dashes and lowercases.
     mocks.rankByClaimId = new Map([['cccc', 0]]);
     mocks.claims = grouped({
