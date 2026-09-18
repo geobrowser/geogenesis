@@ -172,21 +172,23 @@ export function usePersonPositions({
   );
 
   /**
-   * Where to render each claim: the reader's filter first, then their answers.
+   * Where to render each claim: only where the *reader* asked for.
    *
-   * The filter wins outright because it is a request — narrow to a space and the
-   * card has to land in the space asked for, so it replaces the candidates
-   * rather than joining them. Absent one, the spaces they voted in are the
-   * spaces they were reading the claim in, which beats the first of an entity's
-   * `spaceIds`: that ordering put two claims on the reference account's first
-   * screen into somebody's personal space rather than the topic space they are
-   * argued in.
+   * The space they voted in used to be offered as a preference too, and that was
+   * a mistake worth recording. It narrowed a multi-space claim to one space
+   * before `pickDisplaySpaceId` could rank them — so a claim answered in a
+   * personal space rendered there, carrying no Claim type and so no response
+   * controls, even though the same claim sits in the topic space it is argued
+   * in. Ranking is the rule, and a preference that pre-empts it is not a
+   * refinement of it.
+   *
+   * A filter is different in kind: narrow to a space and the card has to land in
+   * the space asked for, ranking or not.
    */
   const preferredSpaces = React.useMemo(() => {
-    const merged = new Map(Object.entries(responses.spacesByClaimId));
-    if (preferredSpaceById) for (const [id, space] of preferredSpaceById) merged.set(id, [space]);
-    return merged;
-  }, [preferredSpaceById, responses.spacesByClaimId]);
+    if (!preferredSpaceById) return undefined;
+    return new Map([...preferredSpaceById].map(([id, space]) => [id, [space]]));
+  }, [preferredSpaceById]);
 
   // The ids the page fetcher closes over — identified, not counted.
   //
@@ -209,7 +211,7 @@ export function usePersonPositions({
     // label them differently. Without this the second selection is served the
     // first one's cards, pointing at the space the reader just navigated away
     // from — the same collision as above, one field over.
-    const preferred = orderedIds.map(id => (preferredSpaces.get(id) ?? []).join('+')).join(',');
+    const preferred = orderedIds.map(id => (preferredSpaces?.get(id) ?? []).join('+')).join(',');
     return `${ids}|${preferred}`;
   }, [matchingIds, orderedIds, preferredSpaces]);
 

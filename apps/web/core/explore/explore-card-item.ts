@@ -7,6 +7,7 @@ import { EntityDecoder } from '~/core/io/decoders/entity';
 import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 import { getRelationVideoUrls } from '~/core/utils/relation-video';
+import { getSpaceRank, getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 import {
   EXPLORE_AVATAR_PROPERTY_ID,
@@ -143,40 +144,52 @@ export function debateClaimFromEntity(
 }
 
 /**
- * Which space's version of an entity a card renders.
+ * Which space's version of an entity a card renders: **the top-ranked one**.
  *
- * **A space where the entity is typed wins.** The same entity can sit in several
- * spaces and be a real, typed record in only one of them: a personal space
- * routinely carries a copy with a name and nothing else, and `entity.spaces`
- * lists that copy first often enough to matter. Picking it renders a claim with
- * no Claim type — which on the feed means no Agree/Disagree, because the card
- * dispatcher reads the types of the space it was given. That is a claim card
- * silently downgraded to a generic one.
+ * This took three goes to get right, so the reasoning is worth keeping.
  *
- * `types` is already derived from the display space's own relations a few lines
- * below, so this is asking the same question earlier: show the version that has
- * something to show.
+ * `entity.spaces` is sorted by `sortSpaceIdsByRank`, which *looks* like it
+ * already answers this — but that sort deliberately leaves equally-ranked ids in
+ * their incoming order, and `SPACE_RANK` is a hard-coded table of ten spaces, so
+ * nearly every real pair is a tie. Taking the first element therefore meant
+ * "whatever order the graph returned", which for a claim in both Relationships
+ * and somebody's personal space was the personal one.
  *
- * Both loops run in `entity.spaces` order, so where two candidates are equally
- * typed the graph's own ordering still decides.
+ * `getTopRankedSpaceId` is the codebase's own answer and breaks ties
+ * deterministically, so it is used here rather than a rule invented for this
+ * path.
+ *
+ * **Typed beats untyped among equally-ranked spaces.** A personal space
+ * routinely carries a name-only copy of an entity, and rendering that copy gives
+ * a claim with no Claim type — which on the feed means no Agree/Disagree at all,
+ * because the card dispatcher reads the types of the space it was handed. Where
+ * the ranking table cannot separate two spaces, the one that holds a real record
+ * is the better answer than whichever id sorts lower, so this narrows to the
+ * typed candidates *before* ranking them and falls back to all of them when none
+ * is typed.
  */
 function pickDisplaySpaceId(entity: Entity, allowed: Set<string>): string | null {
+  const candidates = entity.spaces.filter(sid => allowed.has(normId(sid)));
+  // A caller whose allowed set matches nothing the entity is in gets the
+  // entity's own spaces rather than no card at all.
+  const pool = candidates.length > 0 ? candidates : entity.spaces;
+  if (pool.length === 0) return null;
+
   const typesRelationIdNorm = normId(SystemIds.TYPES_PROPERTY);
   const typedSpaces = new Set(
     entity.relations.filter(r => normId(r.type.id) === typesRelationIdNorm).map(r => normId(r.spaceId))
   );
 
-  for (const sid of entity.spaces) {
-    if (allowed.has(normId(sid)) && typedSpaces.has(normId(sid))) return sid;
-  }
+  // Rank first, strictly. Typing is only allowed to separate spaces the ranking
+  // table cannot — otherwise a name-only copy in a personal space would beat a
+  // canonical space that simply has its types written elsewhere, which is the
+  // ranking overruled rather than refined.
+  const bestRank = Math.min(...pool.map(getSpaceRank));
+  const bestRanked = pool.filter(sid => getSpaceRank(sid) === bestRank);
 
-  // Nothing typed among them — an untyped copy is still better than a card for
-  // a space the caller ruled out.
-  for (const sid of entity.spaces) {
-    if (allowed.has(normId(sid))) return sid;
-  }
+  const typed = bestRanked.filter(sid => typedSpaces.has(normId(sid)));
 
-  return entity.spaces[0] ?? null;
+  return getTopRankedSpaceId(typed.length > 0 ? typed : bestRanked);
 }
 
 function textValueForProperty(entity: Entity, propertyId: string, spaceId: string): string | null {

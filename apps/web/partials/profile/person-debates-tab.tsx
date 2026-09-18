@@ -35,11 +35,18 @@ import { useRecordSelection } from './use-record-selection';
  * No topic menu here. A debate is not tagged with topics the way a claim is, and
  * a type menu would list `Debate` and nothing else.
  */
+/**
+ * The default first, then the two alternatives.
+ *
+ * Old is gone. It was the relation query's order reversed — not a date, since
+ * these rows carry none — so it promised "oldest first" and delivered "whatever
+ * order the side relations came back in, backwards". A control that cannot keep
+ * its promise is worse than one that is missing.
+ */
 const SORT_OPTIONS: HubFilterOption<string>[] = [
+  { value: 'best', label: 'Best' },
   { value: 'new', label: 'New' },
   { value: 'top', label: 'Top' },
-  { value: 'best', label: 'Best' },
-  { value: 'old', label: 'Old' },
 ];
 
 /**

@@ -23,6 +23,8 @@ type SpaceTabsProps = {
   typeIds: string[];
   /** Whether this space renders the person profile — see `buildSpaceTabs`. */
   isProfile: boolean;
+  /** How much this person's record holds, for hiding empty tabs — see `buildSpaceTabs`. */
+  personRecordCounts?: PersonRecordCounts;
 };
 
 type BuiltSpaceTab = {
@@ -69,6 +71,25 @@ type BuildSpaceTabsParams = {
    * Activity it should still have.
    */
   isProfile: boolean;
+  /**
+   * How much this person's record holds, for hiding the tabs that hold nothing
+   * (GEO-2859).
+   *
+   * A tab leading to "No proposals yet" is a promise the profile cannot keep:
+   * most people have never opened a proposal, so on most profiles it is a third
+   * of the navigation spent on an empty room.
+   *
+   * **Undefined shows everything**, which is the safe direction: the counts come
+   * from a request that can fail, and a failed count must not be read as an
+   * empty record and hide a tab holding hundreds of rows.
+   */
+  personRecordCounts?: PersonRecordCounts;
+};
+
+export type PersonRecordCounts = {
+  debates: number;
+  positions: number;
+  proposals: number;
 };
 
 export function buildSpaceTabs({
@@ -78,6 +99,7 @@ export function buildSpaceTabs({
   typeIds,
   isDebugDebatesPageEnabled,
   isProfile,
+  personRecordCounts,
 }: BuildSpaceTabsParams): BuiltSpaceTab[] {
   const tabs: BuiltSpaceTab[] = [];
 
@@ -120,11 +142,24 @@ export function buildSpaceTabs({
    */
   const isPerson = isProfile;
 
-  const PERSON_TABS: BuiltSpaceTab[] = [
-    { label: 'Debates', href: `/space/${spaceId}/debates`, priority: 4 },
-    { label: 'Positions', href: `/space/${spaceId}/positions`, priority: 4 },
-    { label: 'Proposals', href: `/space/${spaceId}/proposals`, priority: 4 },
-  ];
+  // Overview is not in here and is never hidden: it is the profile itself, and a
+  // person with an empty record still has a name, a bio and a rail.
+  const countFor: Record<string, number | undefined> = {
+    Debates: personRecordCounts?.debates,
+    Positions: personRecordCounts?.positions,
+    Proposals: personRecordCounts?.proposals,
+  };
+
+  const PERSON_TABS: BuiltSpaceTab[] = (
+    [
+      { label: 'Debates', href: `/space/${spaceId}/debates`, priority: 4 },
+      { label: 'Positions', href: `/space/${spaceId}/positions`, priority: 4 },
+      { label: 'Proposals', href: `/space/${spaceId}/proposals`, priority: 4 },
+    ] satisfies BuiltSpaceTab[]
+  ).filter(tab => {
+    const count = countFor[tab.label];
+    return count === undefined || count > 0;
+  });
 
   tabs.push(...ALL_SPACES_TABS);
 
@@ -189,7 +224,15 @@ export function buildSpaceTabs({
   return [...seen.values()].sort((a, b) => a.priority - b.priority);
 }
 
-export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities, typeIds, isProfile }: SpaceTabsProps) {
+export function SpaceTabs({
+  spaceId,
+  entityId,
+  initialTabRelations,
+  tabEntities,
+  typeIds,
+  isProfile,
+  personRecordCounts,
+}: SpaceTabsProps) {
   const { editable } = useEditable();
   const isDebugDebatesPageEnabled = useDebugDebatesPageEnabled();
 
@@ -305,6 +348,7 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
   }));
 
   const baseTabs = buildSpaceTabs({
+    personRecordCounts,
     spaceId,
     overviewHref,
     dynamicTabs,

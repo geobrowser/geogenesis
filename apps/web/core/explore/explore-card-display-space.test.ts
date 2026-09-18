@@ -7,19 +7,26 @@ import { normId } from '~/core/utils/norm-id';
 import { type ExploreCardEntity, buildExploreFeedRows } from './explore-card-item';
 
 /**
- * Which space's version of an entity a card renders (GEO-2859).
+ * Which space's version of an entity a card renders: the top-ranked one
+ * (GEO-2859).
  *
- * The same entity can sit in several spaces and be a real, typed record in only
- * one of them — a personal space routinely carries a copy with a name and
- * nothing else. `entity.spaces` lists that copy first often enough to matter,
- * and picking it renders a claim whose card does not know it is a claim: the
- * feed's dispatcher reads the types of the space it was given, so an untyped
- * copy silently becomes a generic card with no Agree/Disagree on it.
+ * Reported three times on the same profile, and each earlier fix was a rule
+ * invented for this path rather than the ranking the product already has:
  *
- * Reported twice on the same profile before the cause was found. The first fix
- * — read the space the person voted in — was right and not sufficient: they had
- * answered that claim in *both* spaces, so the newest vote still landed on the
- * untyped copy.
+ *   1. "Read the space the person voted in" — they had answered that claim in
+ *      *both* spaces, so the newest vote still landed on the untyped copy.
+ *   2. "Prefer a space the entity is typed in" — correct as far as it went, but
+ *      it left the vote preference narrowing the candidates to one space before
+ *      this function could see them.
+ *
+ * The rule is `getTopRankedSpaceId`. `entity.spaces` is already rank-sorted and
+ * looks like it answers this, but `sortSpaceIdsByRank` leaves equally-ranked ids
+ * in incoming order and `SPACE_RANK` covers ten spaces — so nearly every real
+ * pair ties and the first element is just "whatever the graph returned".
+ *
+ * Typing breaks ties the ranking table cannot: a personal space's name-only copy
+ * of a claim renders a card that does not know it is a claim, because the feed's
+ * dispatcher reads the types of the space it was handed.
  */
 const CLAIM_TYPE = 'c1a1c1a1c1a1c1a1c1a1c1a1c1a1c1a1';
 const PERSONAL = 'cc31e40f74231d530f1b5d0fc1cd94d8';
@@ -62,10 +69,27 @@ describe('the space a card renders in', () => {
     expect(row.types.map(type => type.name)).toEqual(['Claim']);
   });
 
-  it('keeps the graph’s own order between two equally typed spaces', () => {
-    const row = rowFor(entity([PERSONAL, TOPIC], [PERSONAL, TOPIC]), [PERSONAL, TOPIC]);
+  /*
+   * Both ranked and both typed: the tie-break decides, and the point is that it
+   * is *deterministic* rather than that it favours either id. `entity.spaces`
+   * order must not settle it — that order is what put the personal copy first in
+   * the first place, and it is re-partitioned on every store merge, so a winner
+   * drawn from it changes between renders and takes the query keys derived from
+   * it along with it.
+   */
+  it('breaks a tie the same way every time, not by the graph’s order', () => {
+    const forwards = rowFor(entity([PERSONAL, TOPIC], [PERSONAL, TOPIC]), [PERSONAL, TOPIC]);
+    const backwards = rowFor(entity([TOPIC, PERSONAL], [PERSONAL, TOPIC]), [PERSONAL, TOPIC]);
 
-    expect(normId(row.spaceId)).toBe(normId(PERSONAL));
+    expect(normId(forwards.spaceId)).toBe(normId(backwards.spaceId));
+  });
+
+  it('prefers a ranked space over an unranked one', () => {
+    // Crypto is in SPACE_RANK; neither of the other two is.
+    const CRYPTO = 'c9f267dcb0d270718c2a3c45a64afd32';
+    const row = rowFor(entity([PERSONAL, CRYPTO], [PERSONAL, CRYPTO]), [PERSONAL, CRYPTO]);
+
+    expect(normId(row.spaceId)).toBe(normId(CRYPTO));
   });
 
   /*
@@ -79,9 +103,24 @@ describe('the space a card renders in', () => {
     expect(normId(row.spaceId)).toBe(normId(PERSONAL));
   });
 
-  it('falls back to an untyped space when none of them is typed', () => {
+  it('still ranks when none of them is typed, rather than giving up', () => {
     const row = rowFor(entity([PERSONAL, TOPIC], []), [PERSONAL, TOPIC]);
 
-    expect(normId(row.spaceId)).toBe(normId(PERSONAL));
+    expect(normId(row.spaceId)).toBe(normId(TOPIC));
+  });
+
+  /*
+   * Typing is only a tie-break. A *ranked* space wins even when the untyped one
+   * is the typed candidate — the ranking table is the product's statement about
+   * which space is canonical, and this function does not get to overrule it.
+   */
+  it('does not let typing beat the ranking table', () => {
+    // The untyped candidate is the *ranked* one. Ranking still wins: a name-only
+    // copy in a personal space must not outrank a canonical space that happens
+    // to carry its types elsewhere.
+    const CRYPTO = 'c9f267dcb0d270718c2a3c45a64afd32';
+    const row = rowFor(entity([PERSONAL, CRYPTO], [PERSONAL]), [PERSONAL, CRYPTO]);
+
+    expect(normId(row.spaceId)).toBe(normId(CRYPTO));
   });
 });

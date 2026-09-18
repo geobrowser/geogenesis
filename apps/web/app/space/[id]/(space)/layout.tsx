@@ -7,6 +7,7 @@ import { notFound } from 'next/navigation';
 import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
+import { fetchProfileFacts } from '~/core/io/subgraph/fetch-profile-facts';
 import { EntityId } from '~/core/io/substream-schema';
 import { profileLinks } from '~/core/profile/profile-links';
 import { SpaceVerifyButton } from '~/core/space/space-verify-button';
@@ -35,6 +36,7 @@ import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 import { SpaceTabs } from '~/partials/space-page/space-tabs';
+import type { PersonRecordCounts } from '~/partials/space-page/space-tabs';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
@@ -76,6 +78,22 @@ export default async function Layout(props0: LayoutProps) {
    * not the other is worse than neither.
    */
   const isProfile = Spaces.isPersonProfileSpace(props.space);
+
+  /**
+   * How much this person's record holds, so the tabs holding nothing are not
+   * drawn (GEO-2859).
+   *
+   * Read here rather than in `SpaceTabs` because the tab bar is server-rendered
+   * with the header: fetched in the client, the tabs would appear and then one
+   * of them would vanish, which is worse than the empty tab it removes.
+   *
+   * `undefined` on failure, and `buildSpaceTabs` reads that as "show
+   * everything". A count that could not be read must not be mistaken for a
+   * record that is empty — hiding a tab holding hundreds of rows is the one
+   * outcome worse than showing one holding none. The same query the rail makes,
+   * so this is a cache hit rather than a second request.
+   */
+  const personRecordCounts = isProfile ? await personRecordCountsFor(spaceId, props.id) : undefined;
 
   /**
    * The rail lives here rather than on the Overview page (GEO-2859).
@@ -209,6 +227,7 @@ export default async function Layout(props0: LayoutProps) {
                   tabEntities={props.tabEntities}
                   typeIds={typeIds}
                   isProfile={isProfile}
+                  personRecordCounts={personRecordCounts}
                 />
               </React.Suspense>
             </div>
@@ -367,3 +386,21 @@ const getSpaceFrontPage = async (spaceId: string) => {
     coverUrl: Entities.cover(entity.relations) ?? null,
   };
 };
+
+/**
+ * The three record counts behind the profile's tabs.
+ *
+ * Swallows the failure deliberately: `fetchProfileFacts` throws so the *rail*
+ * can say its numbers are unavailable rather than print a confident zero, but
+ * here there is no such distinction to draw — a tab is either offered or not.
+ * Returning undefined offers all three, which is the outcome to prefer when
+ * nothing is known.
+ */
+async function personRecordCountsFor(spaceId: string, personEntityId: string): Promise<PersonRecordCounts | undefined> {
+  try {
+    const facts = await fetchProfileFacts(spaceId, personEntityId);
+    return { debates: facts.debates, positions: facts.positions, proposals: facts.proposals };
+  } catch {
+    return undefined;
+  }
+}

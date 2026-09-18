@@ -129,6 +129,48 @@ describe('buildSpaceTabs', () => {
     ]);
   });
 
+  /**
+   * A tab that leads nowhere is not drawn (GEO-2859).
+   *
+   * Most people have never opened a proposal, so on most profiles Proposals is
+   * a third of the navigation spent on "No proposals yet".
+   */
+  describe('a person whose record is partly empty', () => {
+    const personTabs = (personRecordCounts?: { debates: number; positions: number; proposals: number }) =>
+      buildSpaceTabs({
+        spaceId,
+        overviewHref,
+        dynamicTabs: [],
+        typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
+        isProfile: true,
+        isDebugDebatesPageEnabled: false,
+        personRecordCounts,
+      })
+        .map(tab => tab.label)
+        .filter(label => ['Debates', 'Positions', 'Proposals'].includes(label));
+
+    it('drops the tabs holding nothing', () => {
+      expect(personTabs({ debates: 10, positions: 59, proposals: 0 })).toEqual(['Debates', 'Positions']);
+    });
+
+    it('drops all three for a record that is entirely empty', () => {
+      expect(personTabs({ debates: 0, positions: 0, proposals: 0 })).toEqual([]);
+    });
+
+    it('keeps a tab holding exactly one', () => {
+      expect(personTabs({ debates: 1, positions: 0, proposals: 0 })).toEqual(['Debates']);
+    });
+
+    /*
+     * The counts come from a request that can fail, and the failure is reported
+     * as "unknown" rather than as zero. Read as zero it would hide a tab holding
+     * hundreds of rows, which is the one outcome worse than an empty tab.
+     */
+    it('shows everything when the counts could not be read', () => {
+      expect(personTabs(undefined)).toEqual(['Debates', 'Positions', 'Proposals']);
+    });
+  });
+
   it('gives a person their own record tabs, and a space none of them', () => {
     const person = buildSpaceTabs({
       spaceId,
