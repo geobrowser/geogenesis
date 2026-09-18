@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@geogenesis/auth', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: mocks.isModalOpen }),
-  useGeoLoginWithEmail: () => {
+  useLoginWithEmail: () => {
     mocks.useGeoLoginWithEmail();
     // Fresh identities per render, as a real hook returns. A stable `vi.fn()` here made an effect
     // keyed on these look like it ran once when it in fact re-runs on every render.
@@ -520,7 +520,7 @@ describe('ExploreEmailCapturePopup', () => {
     //
     // The wrapper lives in `packages/auth`, which has no test harness, so this guards the call
     // site: swapping back to the raw hook leaves this spy uncalled and the import undefined.
-    it('logs in through the wrapper that puts the wallet into wagmi, not the raw Privy hook', async () => {
+    it('uses the login hook only once an account is asked for', async () => {
       await subscribeSuccessfully();
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Create account' }));

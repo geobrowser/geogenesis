@@ -1,6 +1,6 @@
 'use client';
 
-import { useGeoLoginWithEmail, usePrivy } from '@geogenesis/auth';
+import { useLoginWithEmail, usePrivy } from '@geogenesis/auth';
 
 import * as React from 'react';
 
@@ -429,8 +429,13 @@ function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () => void 
   // Mounted only while someone is signing up, which is the point of it living here: Privy's login
   // hooks register on a shared emitter, and one of these sitting on every Explore visit would be
   // registering callbacks beside the navbar's own login for every reader who never presses the
-  // button that leads here.
-  const { sendCode, loginWithCode, state: otpState } = useGeoLoginWithEmail();
+  // button that leads here — which is what broke that button.
+  //
+  // The embedded wallet this login needs is not created here. It cannot be: this component is
+  // unmounted by the card's own visibility rule the instant `authenticated` turns true, which is
+  // the exact render in which the wallet becomes creatable. `useEnsureEmbeddedWallet`, mounted for
+  // the life of the app in `core/providers.tsx`, does it instead.
+  const { sendCode, loginWithCode, state: otpState } = useLoginWithEmail();
   // Here for the same reason as the hook above, and it is the one that matters more: this registers
   // a second `useLogin` beside the navbar's own, and the navbar's is the login button people
   // actually press. Mounted in the parent it would do that on every Explore visit.

@@ -8,6 +8,7 @@ import { Provider as JotaiProvider } from 'jotai';
 import dynamic from 'next/dynamic';
 import { CookiesProvider } from 'react-cookie';
 
+import { EmbeddedWalletSync } from './wallet/embedded-wallet-sync';
 import { AnalyticsUserIdentifier } from './analytics-user-identifier';
 import { ReactQueryProvider } from './query-client';
 import { SentryUserIdentifier } from './sentry-user-identifier';
@@ -33,6 +34,7 @@ export function Providers({ children }: Props) {
       <LazyPrivyProvider>
         <ReactQueryProvider>
           <LazyWalletProvider>
+            <EmbeddedWalletSync />
             <AnalyticsUserIdentifier />
             <SentryUserIdentifier />
             <JotaiProvider store={store}>
