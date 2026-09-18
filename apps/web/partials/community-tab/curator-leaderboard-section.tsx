@@ -13,26 +13,32 @@ import type {
   CuratorLeaderboardRow,
 } from '~/core/community/curator-leaderboard-types';
 import {
-  CURATOR_LEADERBOARD_MAX_ROWS,
+  CURATOR_LEADERBOARD_PAGE_SIZE,
   CURATOR_LEADERBOARD_PERIOD_OPTIONS,
 } from '~/core/community/curator-leaderboard-types';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, PagesPaginationPlaceholder, getPaginationPages } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { Fullscreen } from '~/design-system/icons/full-screen';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
+import { Spacer } from '~/design-system/spacer';
+import { PageNumberContainer } from '~/design-system/table/styles';
+import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
+import { Text } from '~/design-system/text';
 
 import { FILTER_PILL_CLASS, SingleSelectPill } from './community-filter-pill';
 
 type Props = {
   spaceId: string;
   initialData?: CuratorLeaderboardResult;
+  expanded?: boolean;
 };
 
 const DEFAULT_PERIOD: CuratorLeaderboardPeriod = 'week';
 
-const EMPTY_METRICS: CuratorLeaderboardMetrics = { activeCurators: 0, rankings: 0, newsStories: 0 };
+const EMPTY_METRICS: CuratorLeaderboardMetrics = { activeCurators: 0, rankings: 0, newsStories: 0, debates: 0 };
 
 const INK = 'text-[#2A2B2E]';
 
@@ -59,6 +65,7 @@ const LEADERBOARD_COLUMNS: { key: string; label: string; align: ColumnAlignment 
   { key: 'newsStories', label: 'News stories', align: 'center' },
   { key: 'votes', label: 'Votes', align: 'center' },
   { key: 'submissions', label: 'Submissions', align: 'center' },
+  { key: 'debates', label: 'Debates', align: 'center' },
 ];
 
 function MetricCard({ label, value, isLoading }: { label: string; value: number; isLoading: boolean }) {
@@ -82,6 +89,7 @@ function LeaderboardMetrics({ metrics, isLoading }: { metrics: CuratorLeaderboar
       <MetricCard label="Active curators" value={metrics.activeCurators} isLoading={isLoading} />
       <MetricCard label="Rankings" value={metrics.rankings} isLoading={isLoading} />
       <MetricCard label="News stories" value={metrics.newsStories} isLoading={isLoading} />
+      <MetricCard label="Debates" value={metrics.debates} isLoading={isLoading} />
     </div>
   );
 }
@@ -118,24 +126,25 @@ function LeaderboardTableRow({ row, showTopBorder = false }: { row: CuratorLeade
       <NumberCell value={row.newsStories} />
       <NumberCell value={row.votes} />
       <NumberCell value={row.submissions} colorClass={row.submissions === 0 ? 'text-grey-04' : INK} />
+      <NumberCell value={row.debates} colorClass={row.debates === 0 ? 'text-grey-04' : INK} />
     </tr>
   );
 }
 
 function LeaderboardTable({
   rows,
-  currentUserRow,
+  viewerRow,
   isLoading,
 }: {
   rows: CuratorLeaderboardRow[];
-  currentUserRow: CuratorLeaderboardRow | null;
+  viewerRow: CuratorLeaderboardRow | null;
   isLoading: boolean;
 }) {
   if (isLoading) {
     return (
       <div className="overflow-hidden rounded-lg border border-grey-02">
         <div className="space-y-3 bg-white p-4">
-          {Array.from({ length: 5 }).map((_, index) => (
+          {Array.from({ length: CURATOR_LEADERBOARD_PAGE_SIZE }).map((_, index) => (
             <Skeleton key={index} className="h-10 w-full rounded" />
           ))}
         </div>
@@ -143,9 +152,7 @@ function LeaderboardTable({
     );
   }
 
-  const showCurrentUserRow = currentUserRow && !rows.some(row => row.curatorSpaceId === currentUserRow.curatorSpaceId);
-
-  const isTruncated = rows.length >= CURATOR_LEADERBOARD_MAX_ROWS;
+  const showViewerRow = viewerRow && !rows.some(row => row.curatorSpaceId === viewerRow.curatorSpaceId);
 
   return (
     <div className="overflow-hidden rounded-lg border border-grey-02">
@@ -178,10 +185,54 @@ function LeaderboardTable({
           ) : (
             rows.map(row => <LeaderboardTableRow key={row.curatorSpaceId} row={row} />)
           )}
-          {showCurrentUserRow ? <LeaderboardTableRow row={currentUserRow} showTopBorder={isTruncated} /> : null}
+          {showViewerRow ? <LeaderboardTableRow row={viewerRow} showTopBorder={rows.length > 0} /> : null}
         </tbody>
       </table>
     </div>
+  );
+}
+
+/**
+ * Page controls, drawn only when there is more than one page.
+ */
+function LeaderboardPager({
+  page,
+  pageCount,
+  onChange,
+}: {
+  page: number;
+  pageCount: number;
+  onChange: (page: number) => void;
+}) {
+  if (pageCount <= 1) return null;
+
+  let skipCounter = 0;
+
+  return (
+    <PageNumberContainer>
+      {getPaginationPages(pageCount, page + 1).map(entry =>
+        entry === PagesPaginationPlaceholder.skip ? (
+          <Text
+            key={`ellipsis-${skipCounter++}`}
+            color="grey-03"
+            variant="metadataMedium"
+            className="flex justify-center"
+          >
+            ...
+          </Text>
+        ) : (
+          <PageNumber
+            key={`page-${entry}`}
+            number={entry}
+            isActive={entry === page + 1}
+            onClick={() => onChange(entry - 1)}
+          />
+        )
+      )}
+      <Spacer width={8} />
+      <PreviousButton isDisabled={page === 0} onClick={() => onChange(page - 1)} />
+      <NextButton isDisabled={page >= pageCount - 1} onClick={() => onChange(page + 1)} />
+    </PageNumberContainer>
   );
 }
 
@@ -202,9 +253,15 @@ function IncompleteCountsNotice() {
   return <p className="text-[16px] leading-[20px] text-grey-04">Some activity was not included in these counts.</p>;
 }
 
-export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
-  const [period, setPeriod] = React.useState<CuratorLeaderboardPeriod>(initialData?.period ?? DEFAULT_PERIOD);
+export function CuratorLeaderboardSection({ spaceId, initialData, expanded = false }: Props) {
+  const [period, setPeriodState] = React.useState<CuratorLeaderboardPeriod>(initialData?.period ?? DEFAULT_PERIOD);
+  const [page, setPage] = React.useState(0);
   const { personalSpaceId } = usePersonalSpaceId();
+
+  const setPeriod = React.useCallback((next: CuratorLeaderboardPeriod) => {
+    setPeriodState(next);
+    setPage(0);
+  }, []);
 
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['curator-leaderboard', spaceId, period, personalSpaceId],
@@ -223,20 +280,45 @@ export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
 
   const metrics = data?.metrics ?? EMPTY_METRICS;
   const rows = data?.rows ?? [];
-  const currentUserRow = data?.currentUserRow ?? null;
   const truncated = data?.truncated ?? false;
   const isLoading = isPending;
+
+  const pageCount = Math.max(1, Math.ceil(rows.length / CURATOR_LEADERBOARD_PAGE_SIZE));
+  // Clamped for rendering rather than reset: a refetch that shortens the board should leave the
+  // viewer on its last page, not throw them back to the first for a change they did not make.
+  //
+  // The stored page is deliberately left alone, so a board that shrinks and grows again returns
+  // them to where they were. That is the trade — it restores their place across a transient dip, at
+  // the cost of moving them forward if the board regrows while they are reading the clamped page.
+  const safePage = Math.min(page, pageCount - 1);
+  // The viewer's row wherever it falls, or the one the fetch synthesised for a viewer with no
+  const pageRows = rows.slice(safePage * CURATOR_LEADERBOARD_PAGE_SIZE, (safePage + 1) * CURATOR_LEADERBOARD_PAGE_SIZE);
+
+  // The viewer's row wherever it falls on the board, or the one the fetch synthesised for a viewer
+  // with no activity in this window, who is on no page at all.
+  const viewerRow = rows.find(row => row.isCurrentUser) ?? data?.currentUserRow ?? null;
 
   return (
     <section className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
         <h2 className={cx('text-[24px] leading-[29px] font-semibold tracking-[-0.75px]', INK)}>Curator leaderboard</h2>
-        <SingleSelectPill
-          value={period}
-          options={CURATOR_LEADERBOARD_PERIOD_OPTIONS}
-          onChange={setPeriod}
-          contentClassName="max-w-[180px]"
-        />
+        <div className="flex items-center gap-3">
+          <SingleSelectPill
+            value={period}
+            options={CURATOR_LEADERBOARD_PERIOD_OPTIONS}
+            onChange={setPeriod}
+            contentClassName="max-w-[180px]"
+          />
+          {!expanded && rows.length > 0 ? (
+            <Link
+              href={NavUtils.toCommunityLeaderboard(spaceId)}
+              aria-label="View the full leaderboard"
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04 transition hover:bg-bg focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04"
+            >
+              <Fullscreen color="grey-04" />
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       {isError ? (
@@ -245,7 +327,9 @@ export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
         <>
           <LeaderboardMetrics metrics={metrics} isLoading={isLoading} />
 
-          <LeaderboardTable rows={rows} currentUserRow={currentUserRow} isLoading={isLoading} />
+          <LeaderboardTable rows={expanded ? rows : pageRows} viewerRow={viewerRow} isLoading={isLoading} />
+
+          {expanded ? null : <LeaderboardPager page={safePage} pageCount={pageCount} onChange={setPage} />}
 
           {truncated && !isLoading ? <IncompleteCountsNotice /> : null}
         </>
