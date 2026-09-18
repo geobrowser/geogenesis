@@ -48,7 +48,10 @@ export type PersonRecordsQuery = Record<
       totalCount?: number | null;
       nodes?: Array<{ fromEntityId?: string | null; spaceId?: string | null } | null> | null;
     }
-  | { totalCount?: number | null; nodes?: Array<{ objectId?: string | null } | null> | null }
+  | {
+      totalCount?: number | null;
+      nodes?: Array<{ objectId?: string | null; spaceId?: string | null } | null> | null;
+    }
   | { createdAt?: string | number | null }
   | null
   | undefined
@@ -114,7 +117,7 @@ export function buildPersonRecordsDocument(personIds: string[]): {
     ${personAlias(index, 'positions')}: userVotesConnection(
       first: $positionsFirst
       filter: { and: [$positionFilter, { userId: { is: ${person} } }] }
-    ) { totalCount nodes { objectId } }
+    ) { totalCount nodes { objectId spaceId } }
     ${personAlias(index, 'supported')}: relationsConnection(
       first: $first
       filter: { typeId: { is: $supportedBy }, toEntityId: { is: ${person} } }

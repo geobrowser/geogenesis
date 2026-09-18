@@ -180,10 +180,6 @@ beforeEach(() => {
   mocks.publishableSpaceIds = null;
   mocks.spaceLabels = new Map();
   mocks.linkProps = [];
-  // "Online only" is a stored preference, so it outlives both the store and the run — the suite's
-  // own localStorage file carries a toggle from a previous run into this one. Cleared so each test
-  // starts from the default rather than from whatever the last one left.
-  window.localStorage.removeItem('debatesHubPeopleOnlineOnly');
 });
 
 /**
@@ -647,36 +643,6 @@ describe('PeopleTab filters', () => {
     expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
   });
 
-  it('hides people who are offline while the switch is on, and shows them when it is off', () => {
-    mocks.people = [
-      person('user-them', 'Arturas'),
-      { ...person('user-other', 'Vytautas'), online: false } as DebatePerson,
-    ];
-
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
-
-    const toggle = screen.getByRole('switch', { name: 'Online only' });
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
-    expect(screen.queryByText('Vytautas')).not.toBeInTheDocument();
-
-    fireEvent.click(toggle);
-
-    expect(screen.getByText('Vytautas')).toBeInTheDocument();
-    expect(screen.getByText('Arturas')).toBeInTheDocument();
-  });
-
-  // A payload that omits the field decides which way round this is written: read as "keep whoever
-  // is online" it would empty a full tab, by default, because the switch defaults on.
-  it('keeps a person whose payload says nothing about being online', () => {
-    const unknown = person('user-other', 'Vytautas') as unknown as Record<string, unknown>;
-    delete unknown.online;
-    mocks.people = [person('user-them', 'Arturas'), unknown as unknown as DebatePerson];
-
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
-
-    expect(screen.getByText('Vytautas')).toBeInTheDocument();
-  });
-
   it('caps the space icons on a row and counts the rest', () => {
     mocks.personSpaces = new Map([[PROFILE_THEM, ['spacea', 'spaceb', 'spacec', 'spaced', 'spacee']]]);
 
@@ -739,6 +705,12 @@ describe('PeopleTab filters', () => {
         {
           positions: 4,
           debatesArgued: 4,
+          claimsBySpace: new Map([
+            [ai, 12],
+            [unranked, 2],
+            [root, 0],
+            [crypto, 1],
+          ]),
           debatesBySpace: new Map([
             [ai, 3],
             [unranked, 1],
@@ -759,8 +731,10 @@ describe('PeopleTab filters', () => {
     expect(options.map(option => option.getAttribute('href'))).toEqual(
       [ai, unranked, root, crypto].map(NavUtils.toSpace)
     );
-    expect(within(options[0]).getByText('3 debates')).toBeInTheDocument();
-    expect(within(options[1]).getByText('1 debate')).toBeInTheDocument();
+    expect(within(options[0]).getByText('12 claims · 3 debates')).toBeInTheDocument();
+    expect(within(options[1]).getByText('2 claims · 1 debate')).toBeInTheDocument();
+    expect(within(options[2]).getByText('0 claims · 0 debates')).toBeInTheDocument();
+    expect(within(options[3]).getByText('1 claim · 0 debates')).toBeInTheDocument();
 
     await closeActiveSpacesPopover(trigger);
   });

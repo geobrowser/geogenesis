@@ -26,7 +26,6 @@ import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-deb
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
-import { FilterSwitch } from './filter-switch';
 import { useDebatePeople, useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
@@ -37,12 +36,7 @@ import { usePersonRecords } from './use-person-records';
 import { usePersonSpaces } from './use-person-spaces';
 import { useUnexpiredRequests } from './use-request-countdown';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
-import {
-  type DebatesHubTab,
-  debatesHubPeopleOnlineOnlyAtom,
-  debatesHubPeopleSpaceIdsAtom,
-  debatesHubPeopleSpaceSeedSpentAtom,
-} from '~/atoms';
+import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom, debatesHubPeopleSpaceSeedSpentAtom } from '~/atoms';
 
 /**
  * Whether the spaces batch has yet to answer for anybody on screen.
@@ -84,7 +78,6 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // and `useState` would take the viewer's selection with it (GEO-2850).
   const [spaceIds, setSpaceIds] = useAtom(debatesHubPeopleSpaceIdsAtom);
   const [spaceSeedSpent, setSpaceSeedSpent] = useAtom(debatesHubPeopleSpaceSeedSpentAtom);
-  const [onlineOnly, setOnlineOnly] = useAtom(debatesHubPeopleOnlineOnlyAtom);
 
   // Keyed on everyone available rather than on the filtered list, so narrowing re-slices a batch
   // that is already cached instead of firing a request per keystroke. Both batches are keyed this
@@ -129,25 +122,12 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // back for and every filter below is a slice of what is already in hand.
   const [search, setSearch] = React.useState('');
 
-  // The switch decides the population the other two describe, so it is applied first — the space
-  // counts and the search then both speak about the list the viewer can actually see.
-  //
-  // Excludes whoever is *known* to be offline rather than keeping whoever is known to be online.
-  // The two are the same answer today, when every row this endpoint returns is online and the
-  // switch has nothing to hide, and they differ the moment the field is missing: read the other way
-  // round, a payload without `online` would empty a tab that is full, and it would do it by default
-  // because this switch defaults on.
-  const presentPeople = React.useMemo(
-    () => (onlineOnly ? allPeople.filter(person => person.online !== false) : allPeople),
-    [allPeople, onlineOnly]
-  );
-
   // Matching the same label the row renders keeps "search for what you can see" true.
   const searchedPeople = React.useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return presentPeople;
-    return presentPeople.filter(person => speakerLabel(person).toLowerCase().includes(term));
-  }, [presentPeople, search]);
+    if (!term) return allPeople;
+    return allPeople.filter(person => speakerLabel(person).toLowerCase().includes(term));
+  }, [allPeople, search]);
 
   const people = React.useMemo(() => {
     if (spaceIds.length === 0) return searchedPeople;
@@ -253,16 +233,14 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
           placeholder="Search people"
           aria-label="Search people"
         />
-        {/* The claim tabs' own filter bar, not a second one built to look like it (GEO-2944). The
-            topic props are omitted because people carry no topics to facet on — the same way the
-            requests bar omits them — and the switch goes in `trailing`, where Lobby puts "Matches
-            only": it is not a menu and does not narrow the way one does. */}
+        {/* The claim tabs' own filter bar, not a second one built to look like it (GEO-2944).
+            Topic props are omitted because people carry no topics to facet on, the same way the
+            requests bar omits them. */}
         <SpaceTopicFilters
           spaceIds={spaceIds}
           onSpaceToggle={onSpaceToggle}
           onSpacesClear={onSpacesClear}
           facetSpaces={facetSpaces}
-          trailing={<FilterSwitch label="Online only" checked={onlineOnly} onChange={setOnlineOnly} />}
         />
       </HubStickyControls>
 
@@ -381,6 +359,7 @@ function PersonRow({
       <PersonSpaceIcons
         spaceIds={spaceIds}
         labelsById={labelsById}
+        claimsBySpace={record?.claimsBySpace}
         debatesBySpace={record?.debatesBySpace}
         popoverPortal={popoverPortal}
       />

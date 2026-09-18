@@ -208,20 +208,6 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
 export const debatesHubMatchesOnlyAtom = atomWithStorage('debatesHubMatchesOnly', true);
 
 /**
- * Whether the People tab lists only people who are online (GEO-2944).
- *
- * Stored rather than session-scoped, for the reason "Matches only" is: it answers how you like to
- * arrive at a debate rather than what you are looking through right now, and it is deliberately
- * absent from `resetDebatesHubFiltersAtom` on the same grounds.
- *
- * On by default, which is the list the tab has always shown — everyone online and available right
- * now. Turning it off is what will reveal people who are not online once `/matchmaking/people`
- * returns them; until then it is the switch GEO-2937's availability work needs in place, and the
- * two lists are the same.
- */
-export const debatesHubPeopleOnlineOnlyAtom = atomWithStorage('debatesHubPeopleOnlineOnly', true);
-
-/**
  * The same standing preference for the debate-again flow (GEO-2861), under its own key.
  *
  * Two keys rather than one: the hub asks "who can I debate right now, out of everyone", the rematch

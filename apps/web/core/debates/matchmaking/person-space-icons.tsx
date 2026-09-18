@@ -42,16 +42,18 @@ export function orderPersonSpaces(
 /**
  * A person's active spaces, using the app's overlapping avatar + overflow pattern. The stack is a
  * button because its full answer is useful: opening it lists every space in the same order, with
- * recorded-debate counts explaining why an active space leads the list.
+ * claim and recorded-debate counts explaining the person's activity in each space.
  */
 export function PersonSpaceIcons({
   spaceIds,
   labelsById,
-  debatesBySpace = new Map(),
+  claimsBySpace,
+  debatesBySpace,
   popoverPortal,
 }: {
   spaceIds: string[];
   labelsById: Map<string, SpaceLabel>;
+  claimsBySpace?: ReadonlyMap<string, number>;
   debatesBySpace?: ReadonlyMap<string, number>;
   popoverPortal: HTMLElement | null;
 }) {
@@ -106,7 +108,11 @@ export function PersonSpaceIcons({
                 {orderedSpaceIds.map(spaceId => {
                   const label = spaceLabel(labelsById, spaceId);
                   const name = label?.name?.trim() || 'Space';
-                  const debateCount = debatesBySpace.get(normId(spaceId)) ?? debatesBySpace.get(spaceId) ?? 0;
+                  const claimCount = countForSpace(claimsBySpace, spaceId);
+                  const debateCount = countForSpace(debatesBySpace, spaceId);
+                  // A missing map means that side of the graph response was truncated. Omit both
+                  // numbers rather than presenting the missing half as a confident zero.
+                  const hasCounts = claimCount !== null && debateCount !== null;
 
                   return (
                     <li key={spaceId}>
@@ -116,12 +122,14 @@ export function PersonSpaceIcons({
                         data-testid="person-space-option"
                       >
                         <SpaceListIcon spaceId={spaceId} labelsById={labelsById} />
-                        <span className="min-w-0 flex-1 truncate text-metadataMedium text-text">{name}</span>
-                        {debateCount > 0 ? (
-                          <span className="shrink-0 text-footnote text-grey-04 tabular-nums">
-                            {debateCount} {debateCount === 1 ? 'debate' : 'debates'}
-                          </span>
-                        ) : null}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-metadataMedium text-text">{name}</span>
+                          {hasCounts ? (
+                            <span className="block truncate text-footnote text-grey-04 tabular-nums">
+                              {formatCount(claimCount ?? 0, 'claim')} · {formatCount(debateCount ?? 0, 'debate')}
+                            </span>
+                          ) : null}
+                        </span>
                       </Link>
                     </li>
                   );
@@ -133,6 +141,15 @@ export function PersonSpaceIcons({
       </Popover.Root>
     </div>
   );
+}
+
+function countForSpace(counts: ReadonlyMap<string, number> | undefined, spaceId: string): number | null {
+  if (!counts) return null;
+  return counts.get(normId(spaceId)) ?? counts.get(spaceId) ?? 0;
+}
+
+function formatCount(count: number, singular: string): string {
+  return `${count} ${count === 1 ? singular : `${singular}s`}`;
 }
 
 function StackedSpaceIcon({ spaceId, labelsById }: { spaceId: string; labelsById: Map<string, SpaceLabel> }) {

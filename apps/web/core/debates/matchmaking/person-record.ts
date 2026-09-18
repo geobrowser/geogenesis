@@ -13,9 +13,11 @@ import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 export type PersonRecord = {
   positions: number | null;
   debatesArgued: number | null;
+  /** Distinct claims the person has answered, grouped by response space; absent if the page was short. */
+  claimsBySpace?: ReadonlyMap<string, number>;
   /**
-   * Published debates grouped by the space they were recorded in. Used only to order the person's
-   * active-space list; optional so older callers constructing display-only records stay valid.
+   * Published debates grouped by the space they were recorded in. Used to order and describe the
+   * active-space list; absent if the relation page was short.
    */
   debatesBySpace?: ReadonlyMap<string, number>;
   /**
@@ -34,6 +36,8 @@ export type PersonRecordInput = {
   positions: number;
   /** Their position rows came back short of what the server holds, so the distinct count is low. */
   positionsTruncated: boolean;
+  /** Distinct answered claims grouped by response space. */
+  claimsBySpace?: ReadonlyMap<string, number>;
   /** Every debate they argued, either side, already de-duplicated. */
   debateIds: string[];
   /** Published debates grouped by relation space, already de-duplicated per debate and space. */
@@ -84,6 +88,7 @@ export function derivePersonRecord({
   personId,
   positions,
   positionsTruncated,
+  claimsBySpace = new Map(),
   debateIds,
   debatesBySpace = new Map(),
   truncated,
@@ -98,7 +103,14 @@ export function derivePersonRecord({
   // A truncated page is an arbitrary subset of someone's debates, so both the count and any rate
   // derived from it would be quietly low. No number is the honest answer; a wrong one is not.
   if (truncated) {
-    return { positions: positionsHeld, debatesArgued: null, debatesBySpace, winRate: null, joinedAt };
+    return {
+      positions: positionsHeld,
+      debatesArgued: null,
+      claimsBySpace: positionsTruncated ? undefined : claimsBySpace,
+      debatesBySpace: undefined,
+      winRate: null,
+      joinedAt,
+    };
   }
 
   const debatesArgued = debateIds.length;
@@ -119,6 +131,7 @@ export function derivePersonRecord({
   return {
     positions: positionsHeld,
     debatesArgued: debatesArgued > 0 ? debatesArgued : null,
+    claimsBySpace: positionsTruncated ? undefined : claimsBySpace,
     debatesBySpace,
     winRate:
       debatesArgued > 0 && rateIsHonest
