@@ -109,7 +109,7 @@ export function ProposalBountiesProvider({
   const [draftIds, setDraftIds] = React.useState<Set<string>>(() => new Set());
   const [isSaving, setIsSaving] = React.useState(false);
   const [optimisticLinkedIds, setOptimisticLinkedIds] = React.useState<string[] | null>(null);
-  const { isPanelOpen, togglePanel } = useExclusiveProposalPanel('bounties');
+  const { isPanelOpen, togglePanel } = useExclusiveProposalPanel('bounties', proposalId);
 
   const { data: space } = useQuery({
     queryKey: ['space', daoSpaceId],

@@ -43,26 +43,39 @@ export function ProposalSidePanelShell({
   );
 }
 
+type ProposalPanel = 'bounties' | 'comments';
+
 /**
- * Which of the review screen's side panels is open, if any.
+ * Which of the review screen's side panels is open, if any, and on which proposal.
  *
  * The screen has one panel slot. Held in one place because two independent booleans let both shells
  * render as siblings in the same row — each `shrink-0` and up to 400px — which squeezes the proposal
  * itself out of the space it was sharing. Opening either panel closes the other.
+ *
+ * The proposal is part of the state rather than something a cleanup has to remember to clear. Changing
+ * `proposalId` on the governance route keeps `ActiveProposal` in the same tree position, so React
+ * reconciles these providers with new props instead of unmounting them — no cleanup runs, and a slot
+ * keyed on the panel alone would open the next proposal's panel because the last one was left open.
+ * Keyed on both, a different proposal simply reads as closed.
  */
-const activeProposalPanelAtom = atom<'bounties' | 'comments' | null>(null);
+const activeProposalPanelAtom = atom<{ proposalId: string; panel: ProposalPanel } | null>(null);
 
-export function useExclusiveProposalPanel(panel: 'bounties' | 'comments') {
+export function useExclusiveProposalPanel(panel: ProposalPanel, proposalId: string) {
   const [active, setActive] = useAtom(activeProposalPanelAtom);
 
   const togglePanel = React.useCallback(
-    () => setActive(current => (current === panel ? null : panel)),
-    [panel, setActive]
+    () =>
+      setActive(current =>
+        current?.panel === panel && current.proposalId === proposalId ? null : { proposalId, panel }
+      ),
+    [panel, proposalId, setActive]
   );
 
-  // The slot is module state, so it would otherwise still be set when the next proposal's screen
-  // mounts and open a panel nobody asked for.
-  React.useEffect(() => () => setActive(current => (current === panel ? null : current)), [panel, setActive]);
+  // Still cleared on unmount, so leaving the screen entirely does not leave the slot claimed.
+  React.useEffect(
+    () => () => setActive(current => (current?.panel === panel && current.proposalId === proposalId ? null : current)),
+    [panel, proposalId, setActive]
+  );
 
-  return { isPanelOpen: active === panel, togglePanel };
+  return { isPanelOpen: active?.panel === panel && active.proposalId === proposalId, togglePanel };
 }

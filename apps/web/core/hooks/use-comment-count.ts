@@ -48,21 +48,28 @@ export function useCommentCount(entityId: string, serverCount: number): number {
 
   if (!data) return serverCount;
 
-  // Rows still being published are local knowledge the server provably does not have yet, whatever
-  // the timestamps say — the indexer is behind by design.
-  const unpublishedRows = data.filter(comment => comment.isPendingPublish === true).length;
+  // Rows added locally and not yet seen coming back from the server. The flag is not a claim that the
+  // server lacks them — it means "keep this row through refetches", and it stays set after publishing
+  // until `mergePendingWithServer` sees the indexer return the comment — so it cannot be added to a
+  // server count on its own without double counting one that has caught up.
+  const optimisticRows = data.filter(comment => comment.isPendingPublish === true).length;
+  const serverRows = data.length - optimisticRows;
 
-  if (unpublishedRows > 0) {
-    // A pending row proves the server count is short by at least that many. It does not prove the
-    // cache holds every server row: `useCreateComment` seeds this entry with `(old = [])`, so posting
-    // before the list has loaded — or after that query failed — leaves it holding nothing but the new
-    // comment, and trusting its length would drop a count of 5 to 1.
-    //
-    // Both numbers are lower bounds on the truth, so the larger one is the better answer. It can
-    // over-report only where a deletion has already shrunk the cache below a server count that has
-    // not caught up, which is the same staleness the branch below already prefers the server for.
-    return Math.max(data.length, serverCount + unpublishedRows);
+  if (dataUpdatedAt > seed.at) {
+    // A row the list fetched is proof the fetch happened, and `mergePendingWithServer` guarantees what
+    // it leaves behind is the server's rows plus whatever is still only local — so the length is the
+    // whole count, whether or not the server's own number has caught up.
+    if (serverRows > 0) return data.length;
+
+    // Nothing from the server in here, so this entry holds only what was written into it:
+    // `useCreateComment` seeds it with `(old = [])`, and posting before the list has loaded — or after
+    // that query failed — leaves nothing but the new comment. Its length would read 1 where the server
+    // knows 5, so the server count is the base those local rows are added to.
+    return serverCount + optimisticRows;
   }
 
-  return dataUpdatedAt > seed.at ? data.length : serverCount;
+  // The cache predates this server count, so the count is the better record — including where a row in
+  // it is still flagged. That flag outlives publishing, so adding it to a count that has already
+  // caught up would report the same comment twice.
+  return serverCount;
 }

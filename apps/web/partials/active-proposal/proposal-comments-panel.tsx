@@ -52,7 +52,7 @@ export function ProposalCommentsProvider({
   count: number;
   children: React.ReactNode;
 }) {
-  const { isPanelOpen, togglePanel } = useExclusiveProposalPanel('comments');
+  const { isPanelOpen, togglePanel } = useExclusiveProposalPanel('comments', proposalId);
   const liveCount = useCommentCount(proposalId, count);
 
   const value = React.useMemo<ProposalCommentsValue>(

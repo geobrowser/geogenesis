@@ -118,19 +118,30 @@ describe('useCommentCount', () => {
   });
 
   /**
-   * A row mid-publish is knowledge the server cannot have — the indexer is behind by design — so the
-   * count must not drop back to a server number that predates it.
+   * `isPendingPublish` does not mean the server lacks the row — it means "keep this row through
+   * refetches", and it stays set after publishing until the indexer returns the comment. So a server
+   * count rendered *after* the flagged row was written may already include it, and adding the row to
+   * that count would report the same comment twice.
    */
-  it('keeps a list holding unpublished rows even when the server count is newer', () => {
+  it('does not add a still-flagged row to a server count that already includes it', () => {
+    // Five from the server plus one that published but has not come back from the indexer yet.
     client.setQueryData<CommentEntity[]>(
       ['comments', ENTITY_ID],
-      [comment('1'), comment('2', { isPendingPublish: true } as Partial<CommentEntity>)]
+      [
+        comment('1'),
+        comment('2'),
+        comment('3'),
+        comment('4'),
+        comment('5'),
+        comment('new', { isPendingPublish: true } as Partial<CommentEntity>),
+      ]
     );
 
+    // A later navigation renders six — the indexer has caught up, even though the row is still flagged.
     vi.setSystemTime(90_000);
-    const { result } = renderHook(() => useCommentCount(ENTITY_ID, 1), { wrapper });
+    const { result } = renderHook(() => useCommentCount(ENTITY_ID, 6), { wrapper });
 
-    expect(result.current).toBe(2);
+    expect(result.current).toBe(6);
   });
 
   /**
@@ -169,16 +180,19 @@ describe('useCommentCount', () => {
    * after that query failed — leaves the cache holding nothing but the new comment. Its length is then
    * a count of one, and the server's five is the better half of the answer.
    */
-  it('adds a pending row to the server count when the cache holds only that row', () => {
-    client.setQueryData<CommentEntity[]>(
-      ['comments', ENTITY_ID],
-      [comment('new', { isPendingPublish: true } as Partial<CommentEntity>)]
-    );
-
-    vi.setSystemTime(2_000);
+  it('adds a pending row to the server count when the cache holds only that row', async () => {
     const { result } = renderHook(() => useCommentCount(ENTITY_ID, 5), { wrapper });
 
-    expect(result.current).toBe(6);
+    // Posted after the count was rendered, with the list never having loaded.
+    vi.setSystemTime(2_000);
+    act(() => {
+      client.setQueryData<CommentEntity[]>(
+        ['comments', ENTITY_ID],
+        [comment('new', { isPendingPublish: true } as Partial<CommentEntity>)]
+      );
+    });
+
+    await waitFor(() => expect(result.current).toBe(6));
   });
 
   /**
@@ -186,31 +200,35 @@ describe('useCommentCount', () => {
    * one, the list then loaded and found two already indexed, and the reader has since added a third.
    * `serverCount + pending` would say two and undercount what is plainly on screen.
    */
-  it('keeps the cache length when it is ahead of the server count and a row is pending', () => {
-    client.setQueryData<CommentEntity[]>(
-      ['comments', ENTITY_ID],
-      [comment('1'), comment('2'), comment('new', { isPendingPublish: true } as Partial<CommentEntity>)]
-    );
-
-    vi.setSystemTime(2_000);
+  it('keeps the cache length when it is ahead of the server count and a row is pending', async () => {
     const { result } = renderHook(() => useCommentCount(ENTITY_ID, 1), { wrapper });
 
-    expect(result.current).toBe(3);
+    vi.setSystemTime(2_000);
+    act(() => {
+      client.setQueryData<CommentEntity[]>(
+        ['comments', ENTITY_ID],
+        [comment('1'), comment('2'), comment('new', { isPendingPublish: true } as Partial<CommentEntity>)]
+      );
+    });
+
+    await waitFor(() => expect(result.current).toBe(3));
   });
 
-  it('counts two pending rows over a partial cache', () => {
-    client.setQueryData<CommentEntity[]>(
-      ['comments', ENTITY_ID],
-      [
-        comment('new-1', { isPendingPublish: true } as Partial<CommentEntity>),
-        comment('new-2', { isPendingPublish: true } as Partial<CommentEntity>),
-      ]
-    );
-
-    vi.setSystemTime(2_000);
+  it('counts two pending rows over a partial cache', async () => {
     const { result } = renderHook(() => useCommentCount(ENTITY_ID, 5), { wrapper });
 
-    expect(result.current).toBe(7);
+    vi.setSystemTime(2_000);
+    act(() => {
+      client.setQueryData<CommentEntity[]>(
+        ['comments', ENTITY_ID],
+        [
+          comment('new-1', { isPendingPublish: true } as Partial<CommentEntity>),
+          comment('new-2', { isPendingPublish: true } as Partial<CommentEntity>),
+        ]
+      );
+    });
+
+    await waitFor(() => expect(result.current).toBe(7));
   });
 
   it('never fetches — no queryFn is configured, so an enabled query would throw', async () => {
