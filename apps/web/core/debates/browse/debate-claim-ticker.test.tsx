@@ -122,15 +122,6 @@ describe('DebateClaimTickerCard', () => {
 
   // The card above the newest one dissolves into the video; the newest sits at full strength. In
   // Figma that is one gradient over the whole stack, reproduced per-card — see `OLDER_CARD_FADE`.
-  it('only masks a card that has another below it', () => {
-    const { container } = renderCard({ fading: true });
-    expect((container.firstElementChild as HTMLElement).style.maskImage).toContain('linear-gradient');
-
-    cleanup();
-    const newest = renderCard({ fading: false });
-    expect((newest.container.firstElementChild as HTMLElement).style.maskImage).toBe('');
-  });
-
   it('shows the crowd split before the viewer has answered, per the design', () => {
     mocks.percent = 65;
 

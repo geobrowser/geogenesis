@@ -104,15 +104,29 @@ describe('tickerStack', () => {
     expect(ids(14_500)).toEqual(['first']);
   });
 
-  // The newest is last, so rendered down a column it sits at the bottom, nearest the name, with
-  // the older one riding up above it.
-  it('stacks a newer claim under the one before it, newest last', () => {
+  /**
+   * Two cards do not fit the corner on a tile of any realistic size, and a `justify-end` column
+   * that overflows overflows *downward* — so the second claim pushed the newest card below the
+   * tile, where it was cut in half at the seam between the two debaters.
+   */
+  it('replaces the live claim rather than stacking a second one over the video', () => {
     const overlapping = tickerWindows([
       timed('first', confident(10_000, 14_000)),
       timed('second', confident(14_500, 18_000)),
     ]);
 
-    expect(tickerStack(overlapping, 18_500).map(card => card.window.claim.id)).toEqual(['first', 'second']);
+    expect(tickerStack(overlapping, 18_500).map(card => card.window.claim.id)).toEqual(['second']);
+  });
+
+  // Still ordered newest-last where a caller asks for more than one, so rendered down a column the
+  // newest sits at the bottom, nearest the name.
+  it('orders a deeper stack newest last', () => {
+    const overlapping = tickerWindows([
+      timed('first', confident(10_000, 14_000)),
+      timed('second', confident(14_500, 18_000)),
+    ]);
+
+    expect(tickerStack(overlapping, 18_500, 2).map(card => card.window.claim.id)).toEqual(['first', 'second']);
   });
 
   // Cards expire, so the corner is empty most of the time. What has scrolled past is not lost —

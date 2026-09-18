@@ -193,26 +193,6 @@ export function useDebateClaimTicker(
 }
 
 /**
- * The ramp the card above the newest one wears as it ages out.
- *
- * Figma draws this as one 209×168 alpha gradient over the whole stack region — transparent at the
- * top, fully opaque 71.5px down — with the cards sliding up through it. Reproduced per-card rather
- * than as a mask on a fixed-height box, because that box would have to stay 168px at every player
- * width and the player is responsive. With the stack capped at two (`MAX_STACKED_CARDS`) the
- * arithmetic comes out the same: the newest card sits entirely inside the opaque zone, so the card
- * above it is the only one carrying any of the ramp.
- *
- * Measured up from the card's own bottom rather than as a fraction of its height. How far the
- * resting stack reaches up the video is a physical distance on screen, and a fraction is not one:
- * Figma's older card is two lines where a real claim is often three, so the same percentages
- * stretch the ramp over a taller card and leave the whole of it legible — the stack then climbs
- * most of the tile. Pinned in rem, a long claim fades sooner rather than reaching further.
- *
- * The bottom line stays crisp; everything above it is gone within about two more.
- */
-const OLDER_CARD_FADE = 'linear-gradient(to top, #000 0, #000 1rem, transparent 3.25rem)';
-
-/**
  * How far above the open list's top edge a card is completely gone, in px — the 4.25rem the edge
  * gradient used to ramp over.
  *
@@ -221,8 +201,7 @@ const OLDER_CARD_FADE = 'linear-gradient(to top, #000 0, #000 1rem, transparent 
  * anything inside it has nothing left to sample: masking the scroll box silently flattened the
  * glass on every card in the open list, and the glass came back only at scrollTop 0, where the mask
  * was dropped. Fading each card by its own opacity leaves the backdrop root alone — an element's
- * own mask or opacity does not blind its own backdrop-filter, only its descendants' — which is why
- * the live stack's `OLDER_CARD_FADE` was never affected.
+ * own mask or opacity does not blind its own backdrop-filter, only its descendants'.
  */
 const HISTORY_EDGE_FADE_PX = 68;
 
@@ -238,7 +217,6 @@ const HISTORY_EDGE_FADE_PX = 68;
 export function DebateClaimTickerCard({
   window,
   opacity = 1,
-  fading = false,
   speaker = null,
   row,
   entity,
@@ -247,8 +225,6 @@ export function DebateClaimTickerCard({
   window: TickerWindow;
   /** Driven by the playhead, so a scrub lands on the right strength rather than mid-animation. */
   opacity?: number;
-  /** True for a card that has another below it — the one the stack's gradient dissolves. */
-  fading?: boolean;
   /** Who said it. The card names them, so it no longer has to sit over their tile to attribute. */
   speaker?: DebateParticipant | null;
   row: DebateClaim | null;
@@ -264,13 +240,11 @@ export function DebateClaimTickerCard({
       // The video behind is one big play/pause button; without this every tap on a thumb would
       // also toggle playback.
       onClick={event => event.stopPropagation()}
-      style={{
-        // Left off entirely at full strength, so the open list's edge fade — which writes this
-        // property straight to the node on scroll — is not overwritten on the next render.
-        ...(opacity === 1 ? null : { opacity }),
-        ...(fading ? { maskImage: OLDER_CARD_FADE, WebkitMaskImage: OLDER_CARD_FADE } : null),
-      }}
-      className="pointer-events-auto flex w-full flex-col gap-1.5 rounded-lg bg-[#151515]/30 p-3 backdrop-blur-md"
+      // Left off entirely at full strength, so the open list's edge fade — which writes this
+      // property straight to the node on scroll — is not overwritten on the next render.
+      style={opacity === 1 ? undefined : { opacity }}
+      // `shrink-0` so the open list scrolls a full-height card rather than compressing it to fit.
+      className="pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg bg-[#151515]/30 p-3 backdrop-blur-md"
     >
       <TickerClaimHeader
         claimId={claim.id}
@@ -490,9 +464,6 @@ export function DebateClaimTickerStack({
             key={card.window.claim.id}
             window={card.window}
             opacity={card.opacity}
-            // Only the live stack dissolves its older card. In the open list every claim is one the
-            // reader chose to look at, so fading any of them would just make it hard to read.
-            fading={!open && index < shown.length - 1}
             speaker={participantByClaimId?.get(card.window.claim.id) ?? null}
             row={rowsByClaimId.get(card.window.claim.id) ?? null}
             entity={entitiesByClaimId.get(card.window.claim.id) ?? null}
