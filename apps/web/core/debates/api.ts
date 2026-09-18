@@ -124,10 +124,27 @@ export type DebateMediaArtifact = {
   created_at: string;
 };
 
+/**
+ * One turn as the render actually cut it, rather than as the format allowed for.
+ *
+ * `output_*` is the debate timeline the per-slot recordings play on. `countdown_start_ms` sits
+ * later than `output_start_ms` by the handoff grace window — seconds the incoming speaker is
+ * already talking through but their clock has not started (GEO-2754). Older API replicas omit it.
+ */
+export type DebateMediaTurnSegment = {
+  turn_index: number;
+  participant_slot: ParticipantSlot;
+  output_start_ms: number;
+  output_end_ms: number;
+  duration_ms: number;
+  countdown_start_ms?: number;
+};
+
 export type DebateMediaResponse = {
   job: DebateMediaJobSummary | null;
   artifacts: DebateMediaArtifact[];
   transcript_segment_count: number;
+  turn_segments?: DebateMediaTurnSegment[];
   layout: DebateMediaRenderLayout;
   whisper_model_id: string;
 };
