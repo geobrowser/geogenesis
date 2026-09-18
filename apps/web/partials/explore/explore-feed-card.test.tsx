@@ -103,6 +103,7 @@ const item: ExploreFeedItem = {
   commentCount: 2,
   recordingUrls: [],
   debateVideoUrls: [],
+  debateClaim: null,
   isMemberOrEditor: true,
   hasPendingMembershipRequest: false,
 };
@@ -122,6 +123,27 @@ describe('ExploreFeedCard', () => {
     const debateCard = screen.getByTestId('debate-card');
     // The generic card is handed over as the fallback, ready to render when the debate can't play.
     expect(debateCard.contains(screen.getByText('A debate'))).toBe(true);
+  });
+
+  /**
+   * The two renditions of a debate must head the card identically. `DebateExploreFeedCard` paints
+   * first, headed by the claim, and only swaps to this fallback once its viewport-gated geo-chat
+   * lookups come back saying the debate has no playable video. A fallback headed by the debate's
+   * own name would re-title the card under a reader mid-scroll — the very thing reading the claim
+   * off the graph, rather than out of geo-chat, exists to avoid.
+   */
+  it('heads the fallback with the claim too, so an unwatchable debate does not re-title itself', () => {
+    const debateItem: ExploreFeedItem = {
+      ...item,
+      types: [{ id: 'fd51f935-2063-4617-be39-7b672b23364c', name: 'Debate' }],
+      title: 'Ada vs. Blaise on Fast fashion should be discouraged',
+      debateClaim: { entityId: 'claim-1', name: 'Fast fashion should be discouraged' },
+    };
+    render(<ExploreFeedCard item={debateItem} />);
+
+    const fallback = screen.getByTestId('debate-card');
+    expect(fallback.contains(screen.getByText('Fast fashion should be discouraged'))).toBe(true);
+    expect(screen.queryByText(debateItem.title)).toBeNull();
   });
 
   it('does not route non-debate items to the debate card', () => {

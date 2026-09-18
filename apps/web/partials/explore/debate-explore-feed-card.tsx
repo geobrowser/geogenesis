@@ -21,7 +21,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
-import { ExploreCardEntityLink } from './explore-card-entity-link';
+import { ExploreCardTitle } from './explore-card-title';
 import { ExploreClaimsIcon } from './explore-claims-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
 import { ExploreShareIcon } from './explore-share-icon';
@@ -173,11 +173,7 @@ export function DebateExploreFeedCard({
         </Link>
       </div>
 
-      <ExploreCardEntityLink item={item} opensSidePanel={titleOpensSidePanel}>
-        <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
-          {item.title}
-        </h2>
-      </ExploreCardEntityLink>
+      <ExploreCardTitle item={item} opensSidePanel={titleOpensSidePanel} />
 
       {/* Cap the media at the width the designs (and the full-screen feed) use — feed columns,
           especially data blocks, can be much wider and full-bleed videos dwarf the card. */}

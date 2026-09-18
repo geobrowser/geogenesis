@@ -1,13 +1,17 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react';
 
 import type React from 'react';
 
+import { Provider, useAtomValue } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { NavUtils } from '~/core/utils/utils';
 
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
+import { entitySidePanelAtom } from '~/atoms';
 
 // Reached through the claims panel, which now carries the shared response controls. The module's
 // top-level `atomWithStorage` runs on import, and under Node's own webstorage — which shadows
@@ -81,8 +85,20 @@ vi.mock('~/core/debates/browse/debate-claims-panel', () => ({
   ),
 }));
 
+// Forwards everything to a real anchor rather than only `href`: the claim title's panel behaviour
+// lives in its `onClick` and its opener data attribute, and a mock that dropped them would render
+// a link that looks right and does nothing.
 vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  PrefetchLink: ({
+    children,
+    entityId: _entityId,
+    spaceId: _spaceId,
+    ...rest
+  }: {
+    children: React.ReactNode;
+    entityId?: string;
+    spaceId?: string;
+  } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...rest}>{children}</a>,
 }));
 
 vi.mock('~/design-system/fallback-image', () => ({
@@ -97,6 +113,8 @@ vi.mock('./explore-join-space-button', () => ({
   ExploreJoinSpaceButton: () => <button type="button" data-testid="join-button" />,
 }));
 
+const CLAIM_NAME = 'Fast fashion should be discouraged with higher taxation';
+
 const item: ExploreFeedItem = {
   entityId: 'fd51f9352063461780397b672b23364c',
   spaceId: 'space-1',
@@ -104,12 +122,14 @@ const item: ExploreFeedItem = {
   spaceImage: null,
   types: [{ id: 'fd51f93520634617be397b672b23364c', name: 'Debate' }],
   createdAtSec: 0,
-  title: 'Fast fashion should be discouraged with higher taxation',
+  // What `debate-publish-draft` actually names a Debate entity: the debaters, then the motion.
+  title: `Ada vs. Blaise on ${CLAIM_NAME}`,
   description: null,
   imageUrl: null,
   commentCount: 3,
   recordingUrls: [],
   debateVideoUrls: [],
+  debateClaim: { entityId: 'claim-entity-1', name: CLAIM_NAME },
   isMemberOrEditor: true,
   hasPendingMembershipRequest: false,
 };
@@ -188,14 +208,32 @@ function intersectAll(ratio: number) {
   });
 }
 
-function renderCard() {
-  return render(<DebateExploreFeedCard item={item} fallback={<div data-testid="fallback" />} />);
+function PanelProbe() {
+  const target = useAtomValue(entitySidePanelAtom);
+  return <div data-testid="panel">{target ? `${target.entityId} in ${target.spaceId}` : 'closed'}</div>;
+}
+
+function renderCard(props: Partial<React.ComponentProps<typeof DebateExploreFeedCard>> = {}) {
+  return render(
+    <Provider>
+      <DebateExploreFeedCard item={item} fallback={<div data-testid="fallback" />} {...props} />
+      <PanelProbe />
+    </Provider>
+  );
+}
+
+/** Dispatches a click the way a browser would, so `defaultPrevented` is observable. */
+function clickTitle(init?: MouseEventInit) {
+  const anchor = screen.getByRole('link', { name: CLAIM_NAME });
+  const event = createEvent.click(anchor, init);
+  fireEvent(anchor, event);
+  return event;
 }
 
 describe('DebateExploreFeedCard', () => {
   it('shows the card chrome with video placeholders while the debate loads', () => {
     renderCard();
-    expect(screen.getByText('Fast fashion should be discouraged with higher taxation')).toBeDefined();
+    expect(screen.getByText(CLAIM_NAME)).toBeDefined();
     expect(screen.getByText('View all')).toBeDefined();
     expect(screen.queryByTestId('player')).toBeNull();
     expect(screen.queryByTestId('fallback')).toBeNull();
@@ -287,16 +325,60 @@ describe('DebateExploreFeedCard', () => {
   it('shows the Join-space chip to non-members and honors hideJoinButton', () => {
     const nonMemberItem = { ...item, isMemberOrEditor: false };
 
-    const { unmount } = render(<DebateExploreFeedCard item={nonMemberItem} fallback={<div />} />);
+    const { unmount } = renderCard({ item: nonMemberItem });
     expect(screen.getByTestId('join-button')).toBeDefined();
     unmount();
 
-    render(<DebateExploreFeedCard item={nonMemberItem} hideJoinButton fallback={<div />} />);
+    renderCard({ item: nonMemberItem, hideJoinButton: true });
     expect(screen.queryByTestId('join-button')).toBeNull();
   });
 
   it('does not show the Join-space chip to members', () => {
     renderCard();
     expect(screen.queryByTestId('join-button')).toBeNull();
+  });
+
+  /**
+   * The heading itself — claim vs. debate name, and what a click on it does — is
+   * `ExploreCardTitle`'s, and is covered against every surface in its own suite. What belongs here
+   * is that this card is wired to it, and that the wiring survives the one thing this card does
+   * that no other does: paint before its geo-chat lookups have resolved.
+   */
+  describe('claim heading', () => {
+    it('heads the card with the claim rather than the debate entity name', () => {
+      renderCard();
+
+      expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(CLAIM_NAME);
+      expect(screen.queryByText(item.title)).toBeNull();
+      expect(screen.getByRole('link', { name: CLAIM_NAME })).toHaveAttribute(
+        'href',
+        NavUtils.toEntity('space-1', 'claim-entity-1')
+      );
+    });
+
+    // The claim comes off the entity's own Claims relation, not out of geo-chat, so it is there on
+    // first paint — while this card is still showing video skeletons and, further down the feed,
+    // has not requested anything at all.
+    it('heads the card before any geo-chat request has resolved', () => {
+      renderCard();
+
+      expect(mocks.debateQuery.data).toBeUndefined();
+      expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(CLAIM_NAME);
+    });
+
+    it('opens the claim in the side panel on a surface that has opted in', () => {
+      renderCard({ titleOpensSidePanel: true });
+
+      const event = clickTitle();
+
+      expect(screen.getByTestId('panel')).toHaveTextContent('claim-entity-1 in space-1');
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('falls back to the debate entity name when the relation is missing', () => {
+      renderCard({ item: { ...item, debateClaim: null } });
+
+      expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(item.title);
+    });
   });
 });

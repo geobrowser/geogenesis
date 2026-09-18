@@ -1,7 +1,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
-import { DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
+import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
 
 import { COMMENT_RELATION_TYPE_ID } from './explore-card-item';
 import {
@@ -29,6 +29,8 @@ const CARD_RELATION_TYPE_IDS = [
   EVENT_SCHEMA.RECORDINGS_PROPERTY,
   // Rendered debate video — populates ExploreFeedItem.debateVideoUrls.
   DEBATE_VIDEOS_PROPERTY_ID,
+  // The claim a debate argued — titles the debate card and is what that title opens.
+  DEBATE_CLAIMS_PROPERTY_ID,
 ];
 
 const valuePropertyIdList = CARD_VALUE_PROPERTY_IDS.map(id => `"${id}"`).join(', ');
