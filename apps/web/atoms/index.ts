@@ -106,6 +106,16 @@ export const debatesHubPositionsTopicIdsAtom = atom<string[]>([]);
 export const debatesHubPositionsSearchAtom = atom('');
 
 /**
+ * The People tab's spaces filter (GEO-2944).
+ *
+ * Its own selection rather than any other tab's, for the reason Lobby and Positions have theirs:
+ * this one narrows *people* by the spaces they are in, where the others narrow claims by the space
+ * the claim is in. Carrying a selection across would re-filter a list the viewer never narrowed,
+ * and the two lists do not even offer the same spaces.
+ */
+export const debatesHubPeopleSpaceIdsAtom = atom<string[]>([]);
+
+/**
  * Whether each browse surface's membership default has been applied or forfeited this session.
  *
  * `useMemberSpaceDefault` spends its seed once per *mount*, which was the right lifetime while the
@@ -116,6 +126,7 @@ export const debatesHubPositionsSearchAtom = atom('');
 export const debatesHubExploreSpaceSeedSpentAtom = atom(false);
 export const debatesHubLobbySpaceSeedSpentAtom = atom(false);
 export const debatesHubPositionsSpaceSeedSpentAtom = atom(false);
+export const debatesHubPeopleSpaceSeedSpentAtom = atom(false);
 
 /**
  * Whether the hub has already moved the viewer off an empty Lobby this session (GEO-2863).
@@ -167,6 +178,8 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubPositionsTopicIdsAtom, []);
   set(debatesHubPositionsSearchAtom, '');
   set(debatesHubPositionsSpaceSeedSpentAtom, false);
+  set(debatesHubPeopleSpaceIdsAtom, []);
+  set(debatesHubPeopleSpaceSeedSpentAtom, false);
   // A different viewer has not been shown anything yet, so the courtesy is theirs to receive.
   set(debatesHubLeftLobbyForExploreAtom, false);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than
@@ -193,6 +206,20 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
  * too. The preference stands; only whether it applies on arrival is decided for the viewer.
  */
 export const debatesHubMatchesOnlyAtom = atomWithStorage('debatesHubMatchesOnly', true);
+
+/**
+ * Whether the People tab lists only people who are online (GEO-2944).
+ *
+ * Stored rather than session-scoped, for the reason "Matches only" is: it answers how you like to
+ * arrive at a debate rather than what you are looking through right now, and it is deliberately
+ * absent from `resetDebatesHubFiltersAtom` on the same grounds.
+ *
+ * On by default, which is the list the tab has always shown — everyone online and available right
+ * now. Turning it off is what will reveal people who are not online once `/matchmaking/people`
+ * returns them; until then it is the switch GEO-2937's availability work needs in place, and the
+ * two lists are the same.
+ */
+export const debatesHubPeopleOnlineOnlyAtom = atomWithStorage('debatesHubPeopleOnlineOnly', true);
 
 /**
  * The same standing preference for the debate-again flow (GEO-2861), under its own key.

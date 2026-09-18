@@ -1,13 +1,15 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderWithoutStore, screen, within } from '@testing-library/react';
 
 import type React from 'react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NavUtils } from '~/core/utils/utils';
 
 import type { DebateChallenge, DebatePerson } from '../api';
+import { debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -24,6 +26,10 @@ const mocks = vi.hoisted(() => ({
   cancelPending: false,
   cancelError: null as Error | null,
   records: new Map<string, unknown>(),
+  /** Which spaces each listed person is in, keyed by profile space id (GEO-2944). */
+  personSpaces: new Map<string, string[]>(),
+  memberSpaceIds: null as ReadonlySet<string> | null,
+  spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */
   linkProps: [] as Record<string, unknown>[],
 }));
@@ -66,6 +72,27 @@ vi.mock('./use-person-records', () => ({
   usePersonRecords: () => mocks.records,
 }));
 
+// Same arrangement, for the same reason: one react-query batch for the whole list, mocked so these
+// tests keep rendering the tab without a client.
+vi.mock('./use-person-spaces', () => ({
+  usePersonSpaces: () => mocks.personSpaces,
+}));
+
+vi.mock('../use-claim-space-allowlist', () => ({
+  useClaimSpaceAllowlist: () => ({
+    allowlist: null,
+    memberSpaceIds: mocks.memberSpaceIds,
+    isLoading: false,
+    isSettlingMemberships: false,
+  }),
+}));
+
+// Names and thumbnails come from the browse sidebar's cache, which these tests do not mount.
+vi.mock('~/core/hooks/use-space-labels', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/hooks/use-space-labels')>();
+  return { ...actual, useSpaceLabels: () => ({ labelsById: mocks.spaceLabels, isLoading: false }) };
+});
+
 vi.mock('../use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.currentUserId,
 }));
@@ -77,6 +104,7 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
 }));
 
 const { PeopleTab } = await import('./people-tab');
+const { PERSON_SPACE_ICON_CAP } = await import('./person-space-icons');
 
 /** A real space id shape. `profile-user-them` is not one, and the profile link is gated on it. */
 const PROFILE_SPACE_IDS: Record<string, string> = {
@@ -131,8 +159,34 @@ beforeEach(() => {
   mocks.cancelPending = false;
   mocks.cancelError = null;
   mocks.records = new Map();
+  mocks.personSpaces = new Map();
+  mocks.memberSpaceIds = null;
+  mocks.spaceLabels = new Map();
   mocks.linkProps = [];
+  // "Online only" is a stored preference, so it outlives both the store and the run — the suite's
+  // own localStorage file carries a toggle from a previous run into this one. Cleared so each test
+  // starts from the default rather than from whatever the last one left.
+  window.localStorage.removeItem('debatesHubPeopleOnlineOnly');
 });
+
+/**
+ * A fresh jotai store per render, as the claims-tab suite does.
+ *
+ * The filter selections are atoms since GEO-2850, which makes them module-global by default — so
+ * one test picking a space would hand it to every test after it, and the failure would land on
+ * whichever test happened to run next rather than on the one that set it.
+ */
+function render(ui: React.ReactElement, store: ReturnType<typeof createStore> = createStore()) {
+  return renderWithoutStore(<Provider store={store}>{ui}</Provider>);
+}
+
+// Radix's menu measures its content; jsdom has no observer to measure with.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
 afterEach(cleanup);
 
@@ -496,5 +550,126 @@ describe('the person link', () => {
 
     expect(screen.getByText('Nameless')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Nameless' })).toBeNull();
+  });
+});
+
+// GEO-2944. The filter bar; the suites above are the rows, the request card and the person link.
+describe('PeopleTab filters', () => {
+  const PROFILE_THEM = PROFILE_SPACE_IDS['user-them'] ?? 'profile-user-them';
+  const PROFILE_OTHER = PROFILE_SPACE_IDS['user-other'] ?? 'profile-user-other';
+
+  beforeEach(() => {
+    mocks.spaceLabels = new Map([
+      ['spacea', { name: 'Crypto', image: null }],
+      ['spaceb', { name: 'Health', image: null }],
+    ]);
+    mocks.personSpaces = new Map([
+      [PROFILE_THEM, ['spacea']],
+      [PROFILE_OTHER, ['spaceb']],
+    ]);
+  });
+
+  it('narrows the list to people in a picked space, and counts them on the option', async () => {
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    // One person each, counted over everyone the other filters leave.
+    const crypto = await screen.findByRole('button', { name: /Crypto/ });
+    expect(crypto).toHaveTextContent('1');
+
+    fireEvent.click(crypto);
+
+    expect(screen.getByText('Arturas')).toBeInTheDocument();
+    expect(screen.queryByText('Vytautas')).not.toBeInTheDocument();
+  });
+
+  // A space filter alone can never empty the list — a facet only offers spaces somebody is in — so
+  // the case this wording exists for is a space plus something else.
+  //
+  // The selection is seeded into the store rather than picked through the menu: the menu is covered
+  // above, and a multi-select deliberately stays open across ticks, so its dismissable layer would
+  // swallow the "Clear filters" press as an outside-click instead of passing it to the button.
+  it('blames the filters rather than the search once a space is picked too', async () => {
+    const store = createStore();
+    store.set(debatesHubPeopleSpaceIdsAtom, ['spacea']);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+    fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'Vytautas' } });
+
+    expect(await screen.findByText('Nobody available matches those filters.')).toBeInTheDocument();
+    expect(screen.queryByText('Nobody available matches that search.')).not.toBeInTheDocument();
+
+    // The undo names both things holding the list down, and takes back both.
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    // Both filters are taken back, not just the one named last: the space selection is what the
+    // label promises and the search is what the viewer can see in the box.
+    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual([]);
+    expect((screen.getByLabelText('Search people') as HTMLInputElement).value).toBe('');
+  });
+
+  // With nothing but a search, the wording it had stays: a viewer who typed something knows what to
+  // take back, and "Clear filters" would name one of two things when there is only one.
+  it('still blames the search when the search is the only filter', async () => {
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'nobody' } });
+
+    expect(await screen.findByText('Nobody available matches that search.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
+  });
+
+  it('hides people who are offline while the switch is on, and shows them when it is off', () => {
+    mocks.people = [
+      person('user-them', 'Arturas'),
+      { ...person('user-other', 'Vytautas'), online: false } as DebatePerson,
+    ];
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const toggle = screen.getByRole('switch', { name: 'Online only' });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByText('Vytautas')).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(screen.getByText('Vytautas')).toBeInTheDocument();
+    expect(screen.getByText('Arturas')).toBeInTheDocument();
+  });
+
+  // A payload that omits the field decides which way round this is written: read as "keep whoever
+  // is online" it would empty a full tab, by default, because the switch defaults on.
+  it('keeps a person whose payload says nothing about being online', () => {
+    const unknown = person('user-other', 'Vytautas') as unknown as Record<string, unknown>;
+    delete unknown.online;
+    mocks.people = [person('user-them', 'Arturas'), unknown as unknown as DebatePerson];
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByText('Vytautas')).toBeInTheDocument();
+  });
+
+  it('caps the space icons on a row and counts the rest', () => {
+    mocks.personSpaces = new Map([[PROFILE_THEM, ['spacea', 'spaceb', 'spacec', 'spaced', 'spacee']]]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const row = screen.getByText('Arturas').closest('li') as HTMLElement;
+    expect(within(row).getAllByTestId('person-space-icon')).toHaveLength(PERSON_SPACE_ICON_CAP);
+    expect(within(row).getByTestId('person-space-overflow')).toHaveTextContent('+2');
+  });
+
+  it('draws nothing at all for somebody in no spaces', () => {
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const row = screen.getByText('Vytautas').closest('li') as HTMLElement;
+    expect(within(row).getAllByTestId('person-space-icon')).toHaveLength(1);
+
+    mocks.personSpaces = new Map();
+    cleanup();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const bare = screen.getByText('Vytautas').closest('li') as HTMLElement;
+    expect(within(bare).queryByTestId('person-space-icon')).not.toBeInTheDocument();
+    expect(within(bare).queryByTestId('person-space-overflow')).not.toBeInTheDocument();
   });
 });
