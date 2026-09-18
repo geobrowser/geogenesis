@@ -14,12 +14,18 @@ export const ApiValueDiffSchema = Schema.Struct({
   before: Schema.NullOr(Schema.String),
   after: Schema.NullOr(Schema.String),
   diff: Schema.optional(Schema.Array(ApiDiffChunkSchema)),
+  // v2 versioned-diff API resolves this server-side; v1 omits it.
+  propertyName: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
 export const ApiRelationEndpointSchema = Schema.Struct({
   toEntityId: Schema.String,
   toSpaceId: Schema.NullOr(Schema.String),
   position: Schema.NullOr(Schema.String),
+  // v2 versioned-diff API inlines/resolves these server-side; v1 omits them.
+  toEntityName: Schema.optional(Schema.NullOr(Schema.String)),
+  imageUrl: Schema.optional(Schema.NullOr(Schema.String)),
+  videoUrl: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
 export const ApiRelationDiffSchema = Schema.Struct({
@@ -29,6 +35,8 @@ export const ApiRelationDiffSchema = Schema.Struct({
   changeType: Schema.Union(Schema.Literal('ADD'), Schema.Literal('REMOVE'), Schema.Literal('UPDATE')),
   before: Schema.NullOr(ApiRelationEndpointSchema),
   after: Schema.NullOr(ApiRelationEndpointSchema),
+  // v2 versioned-diff API resolves this server-side; v1 omits it.
+  typeName: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
 export const ApiBlockDiffSchema = Schema.Struct({
@@ -42,6 +50,10 @@ export const ApiBlockDiffSchema = Schema.Struct({
   before: Schema.NullOr(Schema.String),
   after: Schema.NullOr(Schema.String),
   diff: Schema.optional(Schema.Array(ApiDiffChunkSchema)),
+  // v2 rich block shape (folded server-side); v1 omits these.
+  blockName: Schema.optional(Schema.NullOr(Schema.String)),
+  values: Schema.optional(Schema.Array(ApiValueDiffSchema)),
+  relations: Schema.optional(Schema.Array(ApiRelationDiffSchema)),
 });
 
 export const ApiEntityDiffSchema = Schema.Struct({
