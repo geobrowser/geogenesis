@@ -12,7 +12,12 @@ import {
   reachableTopicFacets,
   usePersonPositionIndex,
 } from '~/core/profile/use-person-position-index';
-import { type PositionSort, usePersonPositions, usePersonResponses } from '~/core/profile/use-person-positions';
+import {
+  DEFAULT_POSITION_SORT,
+  type PositionSort,
+  usePersonPositions,
+  usePersonResponses,
+} from '~/core/profile/use-person-positions';
 
 import { PersonRecordFeed } from './person-record-feed';
 import { RecordFilterRow } from './record-filter-row';
@@ -37,7 +42,8 @@ const SORT_OPTIONS: HubFilterOption<string>[] = [
 ];
 
 export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
-  const [sort, setSort] = React.useState<PositionSort>('new');
+  // Shared with the Activity gallery, which links here — see the constant.
+  const [sort, setSort] = React.useState<PositionSort>(DEFAULT_POSITION_SORT);
   const spaces = useRecordSelection();
   const topics = useRecordSelection();
 

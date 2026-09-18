@@ -18,6 +18,21 @@ import { normId } from '~/core/utils/norm-id';
 export type DebateSort = 'new' | 'top' | 'old' | 'best';
 
 /**
+ * What the Debates tab opens on, and what the Activity gallery ranks by.
+ *
+ * A constant rather than a literal in each, because the two have to agree: the
+ * gallery shows the first six of whatever it is handed and links to the tab with
+ * "See all debates", so a gallery ordered differently from the tab it links to
+ * is two answers to one question. Two literals agreeing is a coincidence that
+ * survives until somebody changes one.
+ *
+ * Best rather than New: a record read by a visitor is not a changelog, Explore
+ * itself opens on this ranking, and Debates' New is the order the side relations
+ * came back in rather than a date — only incidentally meaningful.
+ */
+export const DEFAULT_DEBATE_SORT: DebateSort = 'best';
+
+/**
  * Spaces are OR, matching every other multi-select on these tabs.
  *
  * A row is kept when the space it is *displayed in* is picked. That is the space

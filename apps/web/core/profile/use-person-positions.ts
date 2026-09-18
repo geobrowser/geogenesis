@@ -9,6 +9,7 @@ import { ID } from '~/core/id';
 import { fetchExploreRowsByIds } from '~/core/profile/explore-rows-by-ids';
 import {
   type ClaimResponse,
+  DEFAULT_POSITION_SORT,
   type PositionOrder,
   type PositionSort,
   type Stance,
@@ -18,6 +19,7 @@ import {
 import { normId } from '~/core/utils/norm-id';
 
 export type { ClaimResponse, PositionSort, Stance };
+export { DEFAULT_POSITION_SORT };
 
 /**
  * The claims a person holds a position on, ordered and narrowed (GEO-2859, GEO-2918).
@@ -139,7 +141,9 @@ export type UsePersonPositionsParams = {
 
 export function usePersonPositions({
   spaceId,
-  sort = 'new',
+  // So the Activity gallery, which asks for no sort at all, is ordered the same
+  // way as the tab it links to.
+  sort = DEFAULT_POSITION_SORT,
   matchingIds = null,
   preferredSpaceById,
   first = PAGE_SIZE,

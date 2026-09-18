@@ -9,7 +9,7 @@ import { useProfileHistory } from '~/core/hooks/use-profile-history';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
 import { collectSkills, currentRoles } from '~/core/profile/profile-summary';
-import { sortRows } from '~/core/profile/record-client-filter';
+import { DEFAULT_DEBATE_SORT, sortRows } from '~/core/profile/record-client-filter';
 import { useEntityScores } from '~/core/profile/use-entity-scores';
 import { heldPositionsCount, usePersonPositions, usePersonResponses } from '~/core/profile/use-person-positions';
 
@@ -115,16 +115,18 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
   const debates = usePersonDebates(spaceId, true);
 
   /*
-   * Ranked the way the Debates tab opens, so "See all debates" leads to the
-   * same six in the same order.
+   * Ranked the way the Debates tab opens, so "See all debates" leads to the same
+   * six in the same order — one constant, not two literals that happen to match.
    *
-   * The gallery shows the first six of whatever it is handed, so an unsorted
-   * gallery beside a Best-sorted tab is two different answers to one question
-   * with a link between them.
+   * Claims need no equivalent: `usePersonPositions` defaults to the sort its own
+   * tab opens on, so asking it for nothing gets the tab's order.
    */
   const debateIds = React.useMemo(() => debates.rows.map(row => row.entityId), [debates.rows]);
   const { rankings, isLoading: isLoadingRanks, isError: isRanksError } = useEntityScores({ ids: debateIds });
-  const rankedDebates = React.useMemo(() => sortRows(debates.rows, 'best', { rankings }), [debates.rows, rankings]);
+  const rankedDebates = React.useMemo(
+    () => sortRows(debates.rows, DEFAULT_DEBATE_SORT, { rankings }),
+    [debates.rows, rankings]
+  );
   const positions = usePersonPositions({ spaceId });
   const { facts, isLoading: isLoadingFacts, isError: isFactsError } = useProfileFacts({ spaceId, personEntityId });
 

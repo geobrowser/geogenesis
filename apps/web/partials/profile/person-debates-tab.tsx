@@ -5,7 +5,13 @@ import * as React from 'react';
 import type { HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { usePersonDebates } from '~/core/debates/use-person-debates';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import { type DebateSort, filterRowsBySpace, sortRows, spaceFacetsFromRows } from '~/core/profile/record-client-filter';
+import {
+  DEFAULT_DEBATE_SORT,
+  type DebateSort,
+  filterRowsBySpace,
+  sortRows,
+  spaceFacetsFromRows,
+} from '~/core/profile/record-client-filter';
 import { useEntityScores } from '~/core/profile/use-entity-scores';
 
 import { PersonRecordFeed } from './person-record-feed';
@@ -52,18 +58,8 @@ const SORT_OPTIONS_UNRANKED = SORT_OPTIONS.filter(option => !RANKED_SORTS.includ
 const isRanked = (sort: DebateSort) => sort === 'top' || sort === 'best';
 
 export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
-  /*
-   * Best by default, which is the ranking Explore opens on too.
-   *
-   * A record read by a visitor is not a changelog — the question it answers is
-   * "what has this person argued", not "what did they argue most recently", and
-   * the relation order that New gives is only incidentally meaningful anyway
-   * (it is the order the side relations came back in, not a date).
-   *
-   * Positions keeps New, and there it means something this sort cannot: the
-   * order *that person* answered, off the vote table.
-   */
-  const [sort, setSort] = React.useState<DebateSort>('best');
+  // Shared with the Activity gallery, which links here — see the constant.
+  const [sort, setSort] = React.useState<DebateSort>(DEFAULT_DEBATE_SORT);
   const spaces = useRecordSelection();
 
   const { rows, isLoading, isError } = usePersonDebates(spaceId, true);

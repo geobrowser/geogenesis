@@ -35,6 +35,19 @@ import { normId } from '~/core/utils/norm-id';
  */
 export type PositionSort = 'new' | 'top' | 'best';
 
+/**
+ * What the Positions tab opens on, and what the Activity gallery shows.
+ *
+ * New, and it means something here that it cannot mean on Debates: the order
+ * *this person answered*, read from `userVotesConnection` ordered
+ * `VOTED_AT_DESC` — not the order the claims were written, which is a different
+ * list (the two share 4 of their top 10 on the reference account).
+ *
+ * Shared with the gallery for the same reason `DEFAULT_DEBATE_SORT` is: the two
+ * surfaces link to each other and must not disagree.
+ */
+export const DEFAULT_POSITION_SORT: PositionSort = 'new';
+
 const VOTE_ORDER_SOURCE = /* GraphQL */ `
   query PersonVoteOrder($userId: UUID!, $first: Int, $after: Cursor) {
     userVotesConnection(
