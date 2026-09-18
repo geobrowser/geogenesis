@@ -543,6 +543,34 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
   });
 
   /**
+   * The same sequence with no tick between slot 2 advancing and slot 2 stopping — which is the
+   * realistic shape of it, since `timeupdate` is throttled in a background tab. The hook's memory
+   * never saw 40, and slot 2's own `pause` arrives when it already reads as paused, so slot 2's
+   * frozen clock is the only record of those last seconds.
+   */
+  it('resumes from a stopped slot 2 that never reported its last position', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    visibilityState = 'hidden';
+    slot1.browserPause(); // frozen at 0
+    // Advances and stops with nothing observing it in between.
+    slot2.currentTime = 40;
+    slot2.browserPause();
+
+    await act(async () => {
+      setVisibility('visible');
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(slot1.currentTime).toBeCloseTo(40, 1);
+    expect(slot2.currentTime).toBeCloseTo(40, 1);
+    expect(result.current.playing).toBe(true);
+  });
+
+  /**
    * The counterweight to that memory: it must never drag a deliberate move forward. A scrub back
    * to 10s after playing to 25s has to stay at 10s, not be "corrected" to the furthest point.
    */

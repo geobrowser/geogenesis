@@ -171,6 +171,25 @@ describe('pairPlayhead (GEO-2947)', () => {
     expect(pairPlayhead(video(true, 10), video(true, 20), offsets, 23)).toEqual({ seconds: 23, live: false });
   });
 
+  /**
+   * The memory is refreshed on ticks, and `timeupdate` is throttled in a background tab — so an
+   * element that stops between ticks stops somewhere the memory never saw. Its own `pause` event
+   * arrives too late to help: by then it already reads as paused. Slot 2's frozen clock is the
+   * only record of those last seconds.
+   */
+  it('weighs slot 2 frozen clock when it stopped past the last tick observed', () => {
+    // Memory says 23 (the last tick), but slot 2 actually ran on to 30 (debate 33).
+    expect(pairPlayhead(video(true, 10), video(true, 30), offsets, 23)).toEqual({ seconds: 33, live: false });
+  });
+
+  /**
+   * ...but only once slot 2 has actually played. A recording that starts after the debate window
+   * has a positive offset, so an untouched slot 2 would otherwise read as being that far in.
+   */
+  it('ignores a slot 2 that has never played, offset and all', () => {
+    expect(pairPlayhead(video(true, 0), video(true, 0), offsets)).toEqual({ seconds: 1, live: false });
+  });
+
   /** Never backwards: a memory behind the frozen clock is the stale one. */
   it('keeps the frozen clock when it is ahead of the remembered position', () => {
     expect(pairPlayhead(video(true, 40), video(true, 5), offsets, 12)).toEqual({ seconds: 41, live: false });
@@ -307,7 +326,7 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
    * when its own previous value differs — so it survives every later render that says otherwise,
    * leaving the pair silently muted under a UI still offering a "mute" control (GEO-2947).
    */
-  it('restores the original muted state when it gives up', async () => {
+  it('leaves the pair muted when it gives up, for the renderer to repair', async () => {
     // Refuses to start either way, so the muted retry fails too and the helper gives up.
     const stuck = () => {
       const video = fakeVideo({ muted: false });
@@ -321,8 +340,11 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
 
     expect(await playBothWithMutedFallback(a, b)).toBe('blocked');
 
-    expect(a.muted).toBe(false);
-    expect(b.muted).toBe(false);
+    // Deliberately not restored. Anything captured on the way in is up to ~300ms stale by now —
+    // the viewer can mute mid-attempt — and React never repairs a DOM write it did not make, so
+    // a stale `false` written back here would play audibly under a UI showing muted (GEO-2947).
+    expect(a.muted).toBe(true);
+    expect(b.muted).toBe(true);
   });
 
   /** ...but a retry that *worked* keeps the mute: the caller records it as the rendered truth. */

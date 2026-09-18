@@ -125,8 +125,17 @@ export type PairPlayhead = {
  * reset that memory on a deliberate seek and when the recordings change, or a scrub backwards
  * would be dragged forward by it — `useDebatePlayback` does both.
  *
- * `live` says which of those two it was, so a caller can keep its memory current without
- * re-deriving "is either element running" for itself.
+ * The memory alone is not enough either. It is refreshed on ticks, and `timeupdate` is throttled
+ * in a background tab — so an element that stops between ticks stops somewhere the memory never
+ * saw, and its own `pause` event arrives too late to help (it already reads as paused). Both
+ * frozen clocks are therefore weighed alongside it, and the furthest wins.
+ *
+ * Slot 2's is weighed only once its `currentTime` shows the recording has actually played.
+ * A recording that starts after the debate window has a positive offset, so an untouched slot 2
+ * would otherwise read as being that far into the debate before a frame of it has been shown.
+ *
+ * `live` says whether the answer came off a running element, so a caller can keep its memory
+ * current without re-deriving "is either element running" for itself.
  */
 export function pairPlayhead(
   primary: ClockVideo | null,
@@ -136,11 +145,10 @@ export function pairPlayhead(
 ): PairPlayhead {
   if (primary && !primary.paused) return { seconds: primary.currentTime + offsets.slot1, live: true };
   if (secondary && !secondary.paused) return { seconds: secondary.currentTime + offsets.slot2, live: true };
-  const frozen = (primary?.currentTime ?? 0) + offsets.slot1;
-  return {
-    seconds: lastRunningSeconds === null ? frozen : Math.max(frozen, lastRunningSeconds),
-    live: false,
-  };
+  const candidates = [(primary?.currentTime ?? 0) + offsets.slot1];
+  if (secondary && secondary.currentTime > 0) candidates.push(secondary.currentTime + offsets.slot2);
+  if (lastRunningSeconds !== null) candidates.push(lastRunningSeconds);
+  return { seconds: Math.max(...candidates), live: false };
 }
 
 export function participantForSlot(debate: Debate, slot: ParticipantSlot) {
@@ -218,19 +226,18 @@ export async function playBothWithMutedFallback(
   // Nothing to retry if audio was already off — the block is not the autoplay policy.
   if (primary.muted && secondary.muted) return 'blocked';
 
-  const primaryWasMuted = primary.muted;
-  const secondaryWasMuted = secondary.muted;
+  // Both outcomes below leave the elements muted, and deliberately so: this function does not
+  // know what the caller renders `muted` from, and it has been awaiting for up to ~300ms, so any
+  // value it captured on the way in may already be out of date — the viewer can mute from the
+  // control that stays visible during playback, or from another card sharing the preference.
+  // Writing a stale snapshot back is worse than leaving the mute: React only writes a DOM
+  // property when its own previous value differs, so a write it disagrees with is one it will
+  // never repair, and the pair would play audibly under a UI showing muted (GEO-2947).
+  //
+  // 'playing-muted' is paired by the caller with the state change that makes the mute the
+  // rendered truth. 'blocked' is repaired by whoever renders `muted`, once the attempt is over —
+  // `DebateFeedPlayer` re-asserts it when `isResuming` falls.
   primary.muted = true;
   secondary.muted = true;
-  if (await attempt()) return 'playing-muted';
-
-  // Leave no trace on the way out. `muted` is a rendered prop on these elements, and React only
-  // writes a DOM property when its own previous value differs — so a mute left behind here is
-  // invisible to it and survives every later render that says otherwise. 'playing-muted' is safe
-  // because the caller pairs it with the state change that makes the mute the rendered truth;
-  // 'blocked' has no such pairing, and used to leave the pair silently muted underneath a UI
-  // that still offered a "mute" control (GEO-2947).
-  primary.muted = primaryWasMuted;
-  secondary.muted = secondaryWasMuted;
-  return 'blocked';
+  return (await attempt()) ? 'playing-muted' : 'blocked';
 }

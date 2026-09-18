@@ -44,7 +44,7 @@ const votes: DebateVotesResult = {
  * A controller in the one state that matters here: playing, with a turn in progress, both
  * recordings loaded. `mutedByUser` and `turnState` are what the audio gating reads.
  */
-function controllerFixture(overrides: { mutedByUser: boolean; turnSlot: 1 | 2 }) {
+function controllerFixture(overrides: { mutedByUser: boolean; turnSlot: 1 | 2; isResuming?: boolean }) {
   return {
     slot1VideoRef: { current: null },
     slot2VideoRef: { current: null },
@@ -56,6 +56,7 @@ function controllerFixture(overrides: { mutedByUser: boolean; turnSlot: 1 | 2 })
     playing: true,
     userPaused: false,
     isScrubbing: false,
+    isResuming: overrides.isResuming ?? false,
     playbackEnded: false,
     mutedByUser: overrides.mutedByUser,
     setMutedByUser: vi.fn(),
@@ -75,13 +76,21 @@ function controllerFixture(overrides: { mutedByUser: boolean; turnSlot: 1 | 2 })
   };
 }
 
-function renderPlayer(overrides: { mutedByUser: boolean; turnSlot: 1 | 2 }) {
+function renderPlayer(overrides: { mutedByUser: boolean; turnSlot: 1 | 2; isResuming?: boolean }) {
   mocks.controller = controllerFixture(overrides);
-  const { container } = render(
+  const { container, rerender } = render(
     <DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active votes={votes} />
   );
   const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
-  return { slot1, slot2 };
+  return {
+    slot1,
+    slot2,
+    /** Re-render with a new controller state, as the hook's own state changes would. */
+    update(next: { mutedByUser: boolean; turnSlot: 1 | 2; isResuming?: boolean }) {
+      mocks.controller = controllerFixture(next);
+      rerender(<DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active votes={votes} />);
+    },
+  };
 }
 
 /**
@@ -170,6 +179,50 @@ describe('DebateFeedPlayer audio gating where volume is read-only (GEO-2947)', (
 
   it("still honours the viewer's own mute on both elements", () => {
     const { slot1, slot2 } = renderPlayer({ mutedByUser: true, turnSlot: 1 });
+
+    expect(slot1.muted).toBe(true);
+    expect(slot2.muted).toBe(true);
+  });
+});
+
+/**
+ * `playBothWithMutedFallback` mutes both elements to retry a blocked play and leaves them muted:
+ * it neither knows what this component renders `muted` from, nor holds a value still current
+ * after its ~300ms await. React will not repair that on its own — it writes a DOM property only
+ * when its *own* previous value differs, and a mute it never made is invisible to it — so without
+ * this the element plays audibly under a UI showing muted (GEO-2947).
+ */
+describe('DebateFeedPlayer repairs a mute made behind React (GEO-2947)', () => {
+  it('re-asserts the rendered mute once the resume is over', () => {
+    const { slot1, update } = renderPlayer({ mutedByUser: false, turnSlot: 1, isResuming: true });
+
+    // What the fallback does to the speaking element mid-retry, behind React's back.
+    slot1.muted = true;
+    expect(slot1.muted).toBe(true);
+
+    update({ mutedByUser: false, turnSlot: 1, isResuming: false });
+
+    expect(slot1.muted).toBe(false);
+  });
+
+  /** And it must not do it *during* the retry — that would block the play it is waiting on. */
+  it('leaves the mute alone while the resume is still confirming', () => {
+    const { slot1, update } = renderPlayer({ mutedByUser: false, turnSlot: 1, isResuming: true });
+
+    slot1.muted = true;
+    // A tick mid-attempt: the turn moves, so the component re-renders and the effect re-runs.
+    update({ mutedByUser: false, turnSlot: 2, isResuming: true });
+
+    expect(slot1.muted).toBe(true);
+  });
+
+  /** A mute the viewer made during the attempt wins — it is the rendered truth by then. */
+  it('repairs to the newer preference, not the one the attempt started with', () => {
+    const { slot1, slot2, update } = renderPlayer({ mutedByUser: false, turnSlot: 1, isResuming: true });
+
+    slot1.muted = true;
+    slot2.muted = true;
+    update({ mutedByUser: true, turnSlot: 1, isResuming: false });
 
     expect(slot1.muted).toBe(true);
     expect(slot2.muted).toBe(true);

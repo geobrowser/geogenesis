@@ -51,6 +51,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     playing,
     userPaused,
     isScrubbing,
+    isResuming,
     playbackEnded,
     mutedByUser,
     setMutedByUser,
@@ -108,6 +109,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         countdown={playing && turnState?.slot === 1 ? turnState : null}
         subtitle={activeSlot === 1 ? subtitle : null}
         mutedByUser={mutedByUser}
+        isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
         onToggle={togglePlayback}
         votes={votes}
@@ -145,6 +147,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         countdown={playing && turnState?.slot === 2 ? turnState : null}
         subtitle={activeSlot === 2 ? subtitle : null}
         mutedByUser={mutedByUser}
+        isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
         onToggle={togglePlayback}
         votes={votes}
@@ -200,6 +203,7 @@ function DebaterVideo({
   countdown,
   subtitle,
   mutedByUser,
+  isResuming,
   onPlaybackTick,
   onToggle,
   votes,
@@ -213,6 +217,7 @@ function DebaterVideo({
   countdown: TurnState;
   subtitle: string | null;
   mutedByUser: boolean;
+  isResuming: boolean;
   onPlaybackTick: () => void;
   onToggle: () => void;
   votes: DebateVotesResult;
@@ -226,9 +231,8 @@ function DebaterVideo({
    * Whose turn it is decides the *volume*, not the `muted` flag (GEO-2947) — where the platform
    * lets us, which is not everywhere.
    *
-   * `muted` should carry only the viewer's own mute, which is the one thing `playFromStart` and
-   * `playBothWithMutedFallback` already write it for; putting the per-turn gate on it too gave
-   * the element two different notions of "muted" written from two places. And a browser is
+   * `muted` carries only the viewer's own mute now; putting the per-turn gate on it too gave the
+   * element two different notions of "muted" written from two places. And a browser is
    * entitled to stop a <video> it considers silent once the tab is off screen, so muting the
    * listening debater for the length of a turn is what made one of the pair look stoppable.
    * Volume 0 is the same silence to a listener without being a mute.
@@ -250,6 +254,7 @@ function DebaterVideo({
    * the first time it has something to lose, and the turn it becomes the listener is that time.
    */
   const [volumeIsWritable, setVolumeIsWritable] = React.useState(true);
+  const muted = mutedByUser || (!volumeIsWritable && !audible);
 
   React.useLayoutEffect(() => {
     const video = videoRef.current;
@@ -257,7 +262,19 @@ function DebaterVideo({
     const wanted = audible ? 1 : 0;
     video.volume = wanted;
     if (Math.abs(video.volume - wanted) > 0.01) setVolumeIsWritable(false);
-  }, [audible, src, videoRef]);
+
+    // `muted` is a rendered prop, but `playBothWithMutedFallback` mutes both elements to retry a
+    // blocked play and cannot put them back (it neither knows what this renders `muted` from nor
+    // holds a value still current after its await). React will not repair that itself — it only
+    // writes a DOM property when its *own* previous value differs, and a mute it never made is
+    // invisible to it — so the element would play audibly under a UI showing muted. Re-assert it
+    // here, where the rendered truth actually lives.
+    //
+    // Not while a resume is confirming: the retry depends on the mute it just made, and writing
+    // over it mid-attempt would block the play this is trying to let happen. `isResuming` falling
+    // is itself what runs this effect again, so the repair lands the moment the attempt is over.
+    if (!isResuming) video.muted = muted;
+  }, [audible, isResuming, muted, src, videoRef]);
 
   // A personal space's own id resolves to its "system entity" (an ugly technical
   // record). The space's page entity is the real profile, so open that once it's
@@ -282,7 +299,7 @@ function DebaterVideo({
             preload="metadata"
             src={src}
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
-            muted={mutedByUser || (!volumeIsWritable && !audible)}
+            muted={muted}
             onEnded={onPlaybackTick}
             onLoadedMetadata={onPlaybackTick}
             onPause={onPlaybackTick}

@@ -151,6 +151,16 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
    * pause, which is the very failure this file keeps having to fix (GEO-2783, GEO-2895).
    */
   const resumesInFlightRef = React.useRef(0);
+  /**
+   * The same fact as `resumesInFlightRef`, rendered.
+   *
+   * `playBothWithMutedFallback` mutes both elements to retry a blocked play and leaves them that
+   * way; it cannot put them back, because it does not know what the caller renders `muted` from
+   * and anything it captured is a whole confirm window (~300ms an attempt) out of date by then. So the component that renders `muted`
+   * repairs it instead, and this is how it knows the attempt is over — and, while it is not,
+   * that it must not write `muted` from underneath a retry that depends on it.
+   */
+  const [isResuming, setIsResuming] = React.useState(false);
   const getRecordingPlaybackUrlRef = React.useRef(recordingUrlMutation.mutateAsync);
 
   const turnDurations = React.useMemo(
@@ -497,11 +507,15 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // `resumeGenerationRef`), and a flag would be cleared by the first to finish while the
     // other was still starting its elements.
     resumesInFlightRef.current++;
+    setIsResuming(true);
     let outcome: PlayBothOutcome;
     try {
       outcome = await playBothWithMutedFallback(primaryVideo, secondaryVideo);
     } finally {
       resumesInFlightRef.current--;
+      // Only the last one out: overlapping attempts are normal here, and the renderer must not
+      // repair `muted` while another retry is still relying on it.
+      if (resumesInFlightRef.current === 0) setIsResuming(false);
     }
     // Superseded while we waited — something else owns these elements now. Every write below
     // would describe a playback attempt that no longer exists, including the 'blocked' error,
@@ -533,12 +547,12 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     pendingSeekSecondsRef.current = null;
     primaryVideo.pause();
     secondaryVideo.pause();
-    // No `muted` write here any more. It existed to repair the one case where the elements could
-    // be muted behind React's back — a blocked autoplay fallback — and `playBothWithMutedFallback`
-    // now undoes that itself, so writing it again only re-created the divergence from the other
-    // direction: the value this knows (`mutedByUser`) is not the value the player renders once the
-    // per-turn gate falls back to muting on a platform where `volume` is read-only (GEO-2947).
-    // `muted` has one owner now, and it is the render.
+    // No `muted` write here any more. It existed to repair the one case where the elements can be
+    // muted behind React's back — a blocked autoplay fallback — and that repair belongs to
+    // whoever renders `muted`, which is not this hook: the value available here (`mutedByUser`)
+    // stops being the rendered one as soon as the per-turn gate falls back to muting on a
+    // platform where `volume` is read-only. Writing it from here only moved the divergence
+    // (GEO-2947). `DebateFeedPlayer` re-asserts it when `isResuming` falls.
     seekVideosTo(0);
     await resumeBoth();
   }, [resumeBoth, seekVideosTo]);
@@ -580,9 +594,11 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
    * with no controls showing — `playing` is true, so the feed's autoplay effect (`!playing`)
    * would never retry it.
    *
-   * `resumeBoth` is the right instrument: it re-seeks slot 2 to slot 1's position first, so the
-   * pair comes back in step from wherever playback actually got to rather than from where it was
-   * when the tab was hidden. Nothing resets the playhead and nothing touches the mute preference.
+   * `resumeBoth` is the right instrument: it realigns both elements to `pairPlayhead` before
+   * starting them, so the pair comes back in step at wherever the debate actually got to — which
+   * off the back of a hidden tab is whichever element was still running, or the furthest position
+   * seen if the browser stopped them both, and is emphatically not slot 1's frozen clock. Nothing
+   * resets the playhead and nothing touches the mute preference.
    *
    * Only when the viewer had it playing: an explicit pause, a finished debate or a scrub in
    * progress all mean "leave it alone", which is what `backgroundIntentRef` carries.
@@ -670,6 +686,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     playing,
     userPaused,
     isScrubbing,
+    isResuming,
     playbackEnded,
     mutedByUser,
     setMutedByUser,
