@@ -26,7 +26,6 @@ const mocks = vi.hoisted(() => ({
   cancelPending: false,
   cancelError: null as Error | null,
   records: new Map<string, unknown>(),
-  memberSpaceIds: null as ReadonlySet<string> | null,
   publishableSpaceIds: null as Set<string> | null,
   spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */
@@ -73,15 +72,6 @@ vi.mock('./hooks', () => ({
 // without a client, and the row's own behaviour is what they are about.
 vi.mock('./use-person-records', () => ({
   usePersonRecords: () => mocks.records,
-}));
-
-vi.mock('../use-claim-space-allowlist', () => ({
-  useClaimSpaceAllowlist: () => ({
-    allowlist: null,
-    memberSpaceIds: mocks.memberSpaceIds,
-    isLoading: false,
-    isSettlingMemberships: false,
-  }),
 }));
 
 vi.mock('../use-debate-publishable-spaces', async importOriginal => {
@@ -167,7 +157,6 @@ beforeEach(() => {
   mocks.cancelPending = false;
   mocks.cancelError = null;
   mocks.records = new Map();
-  mocks.memberSpaceIds = null;
   mocks.publishableSpaceIds = null;
   mocks.spaceLabels = new Map();
   mocks.linkProps = [];
@@ -617,6 +606,25 @@ describe('PeopleTab filters', () => {
 
     expect(screen.getByText('Arturas')).toBeInTheDocument();
     expect(screen.queryByText('Vytautas')).not.toBeInTheDocument();
+  });
+
+  it('defaults to Any space and keeps people with no debate-space activity visible', () => {
+    mocks.records.set(PROFILE_OTHER, {
+      positions: null,
+      debatesArgued: null,
+      claimsBySpace: new Map(),
+      debatesBySpace: new Map(),
+      winRate: null,
+      joinedAt: null,
+    });
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
+    expect(screen.getByText('Arturas')).toBeInTheDocument();
+    expect(screen.getByText('Vytautas')).toBeInTheDocument();
+    const inactiveRow = screen.getByText('Vytautas').closest('li') as HTMLElement;
+    expect(within(inactiveRow).queryByText('Active in')).not.toBeInTheDocument();
   });
 
   it('never offers or keeps a space where nobody has activity', async () => {

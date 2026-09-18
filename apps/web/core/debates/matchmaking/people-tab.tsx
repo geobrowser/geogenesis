@@ -20,7 +20,6 @@ import { activeDebate } from '../activity-state';
 import type { DebatePerson } from '../api';
 import { useCreateDebateChallenge, useDebateActivity, useGeoChatAuth } from '../hooks';
 import { speakerLabel } from '../playback-utils';
-import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { DebateChallengeCard } from './challenge-card';
@@ -35,7 +34,7 @@ import { PersonSpaceIcons } from './person-space-icons';
 import { usePersonRecords } from './use-person-records';
 import { useUnexpiredRequests } from './use-request-countdown';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
-import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom, debatesHubPeopleSpaceSeedSpentAtom } from '~/atoms';
+import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
 /**
  * Whether the records batch has yet to answer for anybody on screen.
@@ -76,14 +75,12 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // closes on any outside pointer-down, so dismissing a dropdown by clicking away unmounts this tab
   // and `useState` would take the viewer's selection with it (GEO-2850).
   const [spaceIds, setSpaceIds] = useAtom(debatesHubPeopleSpaceIdsAtom);
-  const [spaceSeedSpent, setSpaceSeedSpent] = useAtom(debatesHubPeopleSpaceSeedSpentAtom);
 
   // Keyed on everyone available rather than on the filtered list, so narrowing re-slices a batch
   // that is already cached instead of firing a request per keystroke.
   const personIds = React.useMemo(() => allPeople.map(person => person.profile_space_id), [allPeople]);
   const records = usePersonRecords(personIds);
 
-  const { memberSpaceIds, isLoading: allowlistLoading, isSettlingMemberships } = useClaimSpaceAllowlist();
   const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces();
   const publishableSpacesPending = publishableSpaceIds === null && publishableSpacesLoading;
 
@@ -157,23 +154,17 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     return [...counts].map(([id, count]) => ({ id, name: null, count }));
   }, [debateSpacesByPerson, searchedPeople]);
 
-  // The same menu the claim tabs draw, defaulted the same way (GEO-2789) and held until the options
-  // have finished arriving as well as the gates. The seed fires once, so taking it against a
-  // half-built list would leave a member space that turned up a moment later unselected for the
-  // session — and here the options come from a graph batch that lands after the people do.
+  // The same menu the claim tabs draw, but People deliberately defaults to "Any space". Passing a
+  // spent membership seed prevents the shared menu wiring from auto-selecting the viewer's spaces;
+  // an empty selection therefore leaves the full Geo Chat roster visible, including people with no
+  // qualifying activity. Explicit selections still persist with the atom above.
   const { facetSpaces, onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
     offeredSpaces,
     spaceIds,
     setSpaceIds,
-    memberSpaceIds,
-    pending:
-      peopleQuery.isLoading ||
-      allowlistLoading ||
-      publishableSpacesPending ||
-      isSettlingMemberships ||
-      recordsPending(allPeople, records),
-    seedSpent: spaceSeedSpent,
-    onSeedSpend: () => setSpaceSeedSpent(true),
+    memberSpaceIds: null,
+    pending: peopleQuery.isLoading || publishableSpacesPending || recordsPending(allPeople, records),
+    seedSpent: true,
   });
 
   // Names and thumbnails for the menu and the row icons in one lookup, so the same space is drawn
