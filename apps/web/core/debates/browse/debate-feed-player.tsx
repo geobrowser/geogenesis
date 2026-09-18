@@ -136,6 +136,10 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   // there is no hover to end and so no hover to hold it.
   const [pinnedSlot, setPinnedSlot] = React.useState<number | null>(null);
 
+  /** The same condition the stack is given, so the corner's box can cap itself only when open. */
+  const claimsOpenFor = (slot: number) =>
+    pointerOverSlot === slot || focusedSlot === slot || pinnedSlot === slot;
+
   const claimsFor = (slot: number) => {
     const cards = ticker.cardsBySlot.get(slot) ?? [];
     const history = ticker.historyBySlot.get(slot) ?? [];
@@ -148,7 +152,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
       <DebateClaimTickerStack
         cards={cards}
         history={history}
-        open={pointerOverSlot === slot || focusedSlot === slot || pinned}
+        open={claimsOpenFor(slot)}
         pinned={pinned}
         onTogglePinned={() => setPinnedSlot(current => (current === slot ? null : slot))}
         onFocusChange={focused => setFocusedSlot(current => (focused ? slot : clearSlot(current)))}
@@ -193,6 +197,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         onPlaybackTick={onPlaybackTick}
         onToggle={togglePlayback}
         claims={claimsFor(1)}
+        claimsOpen={claimsOpenFor(1)}
         onClaimsHoverChange={onTileHover(1)}
         topLeft={
           ready ? (
@@ -228,6 +233,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         onPlaybackTick={onPlaybackTick}
         onToggle={togglePlayback}
         claims={claimsFor(2)}
+        claimsOpen={claimsOpenFor(2)}
         onClaimsHoverChange={onTileHover(2)}
         // This is the half the scrubber sits in, so its claim corner is the one that has to lift
         // clear of the bar.
@@ -299,6 +305,7 @@ function DebaterVideo({
   onPlaybackTick,
   onToggle,
   claims,
+  claimsOpen = false,
   onClaimsHoverChange,
   claimsClearScrubber = 'never',
   topLeft,
@@ -316,6 +323,8 @@ function DebaterVideo({
   onToggle: () => void;
   /** This debater's claim corner, if they have anything to show right now. */
   claims?: React.ReactNode;
+  /** Whether the corner is showing the scrollable backlog rather than the live card. */
+  claimsOpen?: boolean;
   /** The pointer entering or leaving this tile, which opens their backlog. */
   onClaimsHoverChange?: (event: React.PointerEvent, hovered: boolean) => void;
   /** Whether the claim corner has to sit above the scrubber, which only one tile hosts. */
@@ -439,11 +448,19 @@ function DebaterVideo({
 
           `items-start` because that cap is a cap, not a width. A flex column stretches its children
           by default, which drew the little claims chip as a 209px bar with two words adrift in it.
-          The cards ask for the full width themselves; everything else here should be its own size. */}
+          The cards ask for the full width themselves; everything else here should be its own size.
+
+          The 60% cap applies only while the list is open, and that is load-bearing. `justify-end`
+          overflows *downward* once its content is taller than the box — measured at 253px of cards
+          in a 175px box, putting the newest card 78px below the corner, where the tile's own
+          `overflow-hidden` cut it in half at the seam. The open list cannot overflow because it
+          scrolls; the live card is one card tall and needs no cap at all. */}
       {claims && (
         <div
           className={cx(
-            'pointer-events-none absolute bottom-3 left-3 z-10 flex max-h-[60%] w-[43%] max-w-[13.0625rem] flex-col items-start justify-end transition-[padding-bottom] duration-150',
+            'pointer-events-none absolute bottom-3 left-3 z-10 flex w-[43%] max-w-[13.0625rem] flex-col items-start justify-end transition-[padding-bottom] duration-150',
+            // Only the open list needs holding back; the live card is one card tall.
+            claimsOpen && 'max-h-[60%]',
             // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling
             // is written out because Tailwind generates classes by scanning this source text, so a
             // composed `group-hover:${…}` would produce a rule that does not exist.

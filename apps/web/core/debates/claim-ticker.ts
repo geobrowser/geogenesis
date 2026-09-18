@@ -50,13 +50,18 @@ export function tickerWindows(claims: TimedClaim[]): TickerWindow[] {
 }
 
 /**
- * How many cards may be stacked over the video at once, before the oldest is dropped.
+ * How many cards are live over the video at once, before the older one is dropped.
  *
- * Two, not three: the stack grows upward from just above the debater's name, and the subtitle sits
- * on the seam above it. Three cards reach into it, which is the crowding this layout exists to
- * avoid. Nothing is lost to the cap — everything said so far is one hover away.
+ * One. Two cards are taller than the corner has room for on a tile of any realistic size, and a
+ * flex column that overflows a `justify-end` box overflows *downward* — so the second claim pushed
+ * the newest card below the tile, where it was cut in half at the seam between the two debaters.
+ *
+ * Making room instead would mean a shorter card or a smaller type size, and the card is already at
+ * the frame's size. So the older claim now leaves as the new one arrives, which is also the more
+ * honest thing for a live layer to do: the corner shows what is being said. Nothing is lost — the
+ * backlog is one hover or one tap away, and that is where reading back through it belongs.
  */
-export const MAX_STACKED_CARDS = 2;
+export const MAX_STACKED_CARDS = 1;
 
 /** Long enough to register as arriving rather than blinking into place. */
 const FADE_IN_MS = 250;
