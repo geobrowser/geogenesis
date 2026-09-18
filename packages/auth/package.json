@@ -32,7 +32,12 @@
   },
   "devDependencies": {
     "prettier": "^3.8.1",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "react": "^19.2.8",
+    "@types/react": "^19.2.8"
   },
-  "ascMain": "./dist/index.js"
+  "ascMain": "./dist/index.js",
+  "peerDependencies": {
+    "react": "^19.2.8"
+  }
 }
