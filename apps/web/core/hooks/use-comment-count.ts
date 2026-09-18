@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { commentsFetchedQueryKey } from '~/core/io/query-keys';
+
 import type { CommentEntity } from '~/partials/comments/types';
 
 /**
@@ -25,6 +27,13 @@ import type { CommentEntity } from '~/partials/comments/types';
  * published yet.
  */
 export function useCommentCount(entityId: string, serverCount: number): number {
+  // Whether the list has ever been fetched, rather than merely written to. Same disabled-subscription
+  // shape as the list below, for the same reason: this reads what another hook owns.
+  const { data: hasFetchedList } = useQuery<boolean>({
+    queryKey: commentsFetchedQueryKey(entityId),
+    enabled: false,
+  });
+
   const { data, dataUpdatedAt } = useQuery<CommentEntity[]>({
     queryKey: ['comments', entityId],
     // A cache subscription, not a second reader of the list — `useComments` owns the fetching, and
@@ -60,11 +69,15 @@ export function useCommentCount(entityId: string, serverCount: number): number {
     // it leaves behind is the server's rows plus whatever is still only local — so the length is the
     // whole count, whether or not the server's own number has caught up.
     //
-    // An empty list counts as an answer too. The list filters what the count merely counted — the count
-    // is backlink ids, the list drops any whose relations do not come back — so it can legitimately
-    // answer none where the count said five, and a pill reading five beside a visibly empty panel is
-    // the worse of the two wrongs.
-    if (serverRows > 0 || data.length === 0) return data.length;
+    // An empty list counts as an answer too, but only from the list. It filters what the count merely
+    // counted — the count is backlink ids, the list drops any whose relations do not come back — so it
+    // can legitimately answer none where the count said five, and a pill reading five beside a visibly
+    // empty panel is the worse of those two wrongs.
+    //
+    // An empty array is not always the list speaking, though: a publish that fails before the list has
+    // loaded filters its own optimistic row back out and leaves `[]` behind, which would otherwise read
+    // as an authoritative none and take a five-comment thread to zero.
+    if (serverRows > 0 || (data.length === 0 && hasFetchedList === true)) return data.length;
 
     // Nothing from the server in here, so this entry holds only what was written into it:
     // `useCreateComment` seeds it with `(old = [])`, and posting before the list has loaded — or after

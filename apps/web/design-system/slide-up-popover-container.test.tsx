@@ -27,6 +27,20 @@ afterEach(() => {
   shardsSeen.length = 0;
 });
 
+/** Two sheets, the second stacked over the first — which is what `slideUpOpenCountAtom` exists for. */
+function mountTwo(store: ReturnType<typeof createStore>, secondOpen: boolean) {
+  return render(
+    <Provider store={store}>
+      <SlideUp isOpen setIsOpen={vi.fn()}>
+        <div>under</div>
+      </SlideUp>
+      <SlideUp isOpen={secondOpen} setIsOpen={vi.fn()}>
+        <div>over</div>
+      </SlideUp>
+    </Provider>
+  );
+}
+
 function mount(store: ReturnType<typeof createStore>, isOpen: boolean) {
   return render(
     <Provider store={store}>
@@ -99,5 +113,46 @@ describe('SlideUp popover container', () => {
     const container = store.get(slideUpPopoverContainerAtom);
     expect(container).not.toBeNull();
     expect(shardsSeen.at(-1)).toContain(container);
+  });
+
+  /**
+   * With two sheets open the upper one's container is the right one to portal into — but when it
+   * closes, the sheet underneath is still open and still needs its own. Holding a single container
+   * meant the upper one's departure left *none*, and popovers over the lower sheet went back to
+   * being unscrollable.
+   */
+  it("hands back the lower sheet's container when the upper one closes", () => {
+    const store = createStore();
+    const { rerender } = mountTwo(store, true);
+
+    const upper = store.get(slideUpPopoverContainerAtom);
+    expect(upper).not.toBeNull();
+
+    rerender(
+      <Provider store={store}>
+        <SlideUp isOpen setIsOpen={vi.fn()}>
+          <div>under</div>
+        </SlideUp>
+        <SlideUp isOpen={false} setIsOpen={vi.fn()}>
+          <div>over</div>
+        </SlideUp>
+      </Provider>
+    );
+
+    const remaining = store.get(slideUpPopoverContainerAtom);
+    expect(remaining).not.toBeNull();
+    expect(remaining).not.toBe(upper);
+    // And it is still exempt from the surviving sheet's lock.
+    expect(shardsSeen.at(-1)).toContain(remaining);
+  });
+
+  it("offers the topmost sheet's container while both are open", () => {
+    const store = createStore();
+    mountTwo(store, true);
+
+    const hosts = Array.from(document.body.querySelectorAll('[data-slide-up-popover-host]'));
+    expect(hosts).toHaveLength(2);
+    // The later sheet is the one a popover is being opened over.
+    expect(store.get(slideUpPopoverContainerAtom)).toBe(hosts.at(-1));
   });
 });

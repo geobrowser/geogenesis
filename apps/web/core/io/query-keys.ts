@@ -45,3 +45,15 @@ export function spacesByIdsQueryKey(spaceIds: string[]) {
 export function proposalCommentVotesQueryKey(entityId: string) {
   return ['proposal-comment-votes', entityId] as const;
 }
+
+/**
+ * Whether an entity's comment list has been fetched, as opposed to merely written to.
+ *
+ * `['comments', id]` has more than one writer: the list query fills it, and `useCreateComment` seeds
+ * and rolls back optimistic rows in it. An empty array means opposite things depending on which wrote
+ * it — the server saying "none" or a failed publish undoing the only row it had — and nothing in the
+ * array can tell them apart, so the fetch records itself here.
+ */
+export function commentsFetchedQueryKey(entityId: string) {
+  return ['comments-fetched', entityId] as const;
+}

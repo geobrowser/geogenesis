@@ -190,10 +190,39 @@ describe('useCommentCount', () => {
 
     vi.setSystemTime(2_000);
     act(() => {
+      // As the list itself writes it: the fetch records that it answered.
+      client.setQueryData(['comments-fetched', ENTITY_ID], true);
       client.setQueryData<CommentEntity[]>(['comments', ENTITY_ID], []);
     });
 
     await waitFor(() => expect(result.current).toBe(0));
+  });
+
+  /**
+   * The other writer of that entry. A publish that fails before the list has loaded filters its own
+   * optimistic row back out and leaves `[]` behind — which is not the list saying none, and reading it
+   * as such took a five-comment thread to zero: 5 → 6 → 0 across one failed post.
+   */
+  it('does not read a rolled-back optimistic row as an empty list', async () => {
+    const { result } = renderHook(() => useCommentCount(ENTITY_ID, 5), { wrapper });
+
+    // Posted before the list loaded.
+    vi.setSystemTime(2_000);
+    act(() => {
+      client.setQueryData<CommentEntity[]>(
+        ['comments', ENTITY_ID],
+        [comment('new', { isPendingPublish: true } as Partial<CommentEntity>)]
+      );
+    });
+    await waitFor(() => expect(result.current).toBe(6));
+
+    // The publish fails and the row is filtered back out, leaving an empty entry nobody fetched.
+    vi.setSystemTime(3_000);
+    act(() => {
+      client.setQueryData<CommentEntity[]>(['comments', ENTITY_ID], []);
+    });
+
+    await waitFor(() => expect(result.current).toBe(5));
   });
 
   it('adds a pending row to the server count when the cache holds only that row', async () => {
