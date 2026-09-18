@@ -41,19 +41,27 @@ describe('tickerWindows', () => {
     const windows = tickerWindows([timed('b', confident(18_000, 22_000)), timed('a', confident(10_000, 14_000))]);
 
     expect(windows.map(window => window.claim.id)).toEqual(['a', 'b']);
-    expect(windows[0].startMs).toBe(10_000);
+    // The card's window, not the claim's: 'a' is said 10_000–14_000 and its card shows from 14_000.
+    expect(windows[0].startMs).toBe(14_000);
   });
 
-  it('keeps a card up for a beat after the claim finishes, so it can be read and answered', () => {
+  // The behaviour Preston asked for: a card that arrives as the debater *starts* asserts a claim
+  // the viewer has not heard them make yet. It has to read as "he just said this".
+  it('shows the card once the claim has been said, not while it is being said', () => {
     const [window] = tickerWindows([timed('a', confident(10_000, 14_000))]);
 
+    expect(window.startMs).toBe(14_000);
     expect(window.endMs).toBe(14_000 + CLAIM_LINGER_MS);
   });
 
-  it('caps a very long claim rather than leaving a card up over the next one', () => {
-    const [window] = tickerWindows([timed('a', confident(0, 30_000))]);
+  // Measuring from the end is what retired the old cap: a window that began at the claim's start
+  // grew with the claim and had to be clamped so a long one did not sit over the next.
+  it('gives every card the same time on screen however long the claim ran', () => {
+    const [long] = tickerWindows([timed('a', confident(0, 30_000))]);
+    const [short] = tickerWindows([timed('b', confident(0, 1_000))]);
 
-    expect(window.endMs).toBe(12_000);
+    expect(long.endMs - long.startMs).toBe(CLAIM_LINGER_MS);
+    expect(short.endMs - short.startMs).toBe(CLAIM_LINGER_MS);
   });
 
   // The live layer asserts "they are saying this now". A claim the matcher placed roughly is fine
@@ -71,6 +79,7 @@ describe('tickerWindows', () => {
 });
 
 describe('tickerStack', () => {
+  // Cards show 14_000–22_000 and 22_000–30_000: each claim's end, plus the linger.
   const windows = tickerWindows([
     timed('first', confident(10_000, 14_000)),
     timed('second', confident(18_000, 22_000)),
@@ -82,14 +91,23 @@ describe('tickerStack', () => {
     expect(ids(5_000)).toEqual([]);
   });
 
-  it('shows the claim being said', () => {
-    expect(ids(12_000)).toEqual(['first']);
+  it('stays quiet while the claim is still being said', () => {
+    expect(ids(12_000)).toEqual([]);
+  });
+
+  it('shows the claim once it has been said', () => {
+    expect(ids(14_500)).toEqual(['first']);
   });
 
   // The newest is last, so rendered down a column it sits at the bottom, nearest the name, with
   // the older one riding up above it.
   it('stacks a newer claim under the one before it, newest last', () => {
-    expect(ids(18_500)).toEqual(['first', 'second']);
+    const overlapping = tickerWindows([
+      timed('first', confident(10_000, 14_000)),
+      timed('second', confident(14_500, 18_000)),
+    ]);
+
+    expect(tickerStack(overlapping, 18_500).map(card => card.window.claim.id)).toEqual(['first', 'second']);
   });
 
   // Cards expire, so the corner is empty most of the time. What has scrolled past is not lost —
@@ -109,7 +127,7 @@ describe('tickerStack', () => {
       timed('d', confident(2_500, 3_500)),
     ]);
 
-    expect(tickerStack(busy, 3_000, 3).map(card => card.window.claim.id)).toEqual(['b', 'c', 'd']);
+    expect(tickerStack(busy, 3_600, 3).map(card => card.window.claim.id)).toEqual(['b', 'c', 'd']);
   });
 });
 
@@ -121,7 +139,8 @@ describe('claimHistory', () => {
   ]);
 
   it('carries everything said so far, oldest first', () => {
-    expect(claimHistory(windows, 20_000).map(card => card.window.claim.id)).toEqual(['a', 'b']);
+    // 'a' finishes at 14_000 and 'b' at 22_000, so at 23_000 both have been said and 'c' has not.
+    expect(claimHistory(windows, 23_000).map(card => card.window.claim.id)).toEqual(['a', 'b']);
   });
 
   // The whole point of the backlog: it holds the claims whose cards have expired, which is what
@@ -134,7 +153,7 @@ describe('claimHistory', () => {
   // A claim the viewer has not reached yet is a spoiler, and "what was said" is a statement about
   // what is behind them.
   it('stops at the playhead rather than listing the whole debate', () => {
-    expect(claimHistory(windows, 12_000).map(card => card.window.claim.id)).toEqual(['a']);
+    expect(claimHistory(windows, 15_000).map(card => card.window.claim.id)).toEqual(['a']);
     expect(claimHistory(windows, 0).map(card => card.window.claim.id)).toEqual([]);
   });
 
@@ -149,13 +168,13 @@ describe('cardOpacity', () => {
   const [window] = tickerWindows([timed('a', confident(10_000, 14_000))]);
 
   it('fades in rather than blinking into place', () => {
-    expect(cardOpacity(window, 10_000)).toBe(0);
-    expect(cardOpacity(window, 10_125)).toBeCloseTo(0.5);
-    expect(cardOpacity(window, 10_400)).toBe(1);
+    expect(cardOpacity(window, 14_000)).toBe(0);
+    expect(cardOpacity(window, 14_125)).toBeCloseTo(0.5);
+    expect(cardOpacity(window, 14_400)).toBe(1);
   });
 
   it('holds at full strength through the middle', () => {
-    expect(cardOpacity(window, 12_000)).toBe(1);
+    expect(cardOpacity(window, 17_000)).toBe(1);
   });
 
   it('fades out over the tail of its window', () => {
@@ -166,8 +185,9 @@ describe('cardOpacity', () => {
   // A scrub lands wherever it lands; the card has to be as visible as its moment says, not as
   // visible as an animation that started when it mounted.
   it('is driven by the playhead, so a scrub into the middle lands at full strength', () => {
-    expect(cardOpacity(window, 13_000)).toBe(1);
-    expect(cardOpacity(window, 9_000)).toBe(0);
+    expect(cardOpacity(window, 17_000)).toBe(1);
+    // Before the card appears — which now includes while the claim is still being said.
+    expect(cardOpacity(window, 12_000)).toBe(0);
     expect(cardOpacity(window, 99_000)).toBe(0);
   });
 });
