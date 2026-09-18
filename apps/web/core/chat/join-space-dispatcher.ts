@@ -44,7 +44,11 @@ export type JoinSpaceDeps = {
  * this signs a transaction, so nothing may reach `requestSpaceMembership` that
  * one of the guards above should have stopped.
  */
-export async function resolveJoinSpace(deps: JoinSpaceDeps, spaceId: string): Promise<JoinSpaceOutput> {
+export async function resolveJoinSpace(
+  deps: JoinSpaceDeps,
+  spaceId: string,
+  signal?: AbortSignal
+): Promise<JoinSpaceOutput> {
   const { hasAccount, personalSpaceId, isRegistered, queryClient, tx } = deps;
 
   if (!validateSpaceId(spaceId)) return { ok: false, error: 'invalid_input', spaceId };
@@ -69,28 +73,36 @@ export async function resolveJoinSpace(deps: JoinSpaceDeps, spaceId: string): Pr
   // space can't be joined at all.
   if (space.type !== 'DAO') return { ok: false, error: 'not_joinable', spaceId, spaceName };
 
-  const access = await runEffectEither(getSpaceAccessById(normalizedSpaceId, normalizedPersonalSpaceId));
-  if (Either.isRight(access) && access.right.canEdit) {
-    return { ok: false, error: 'already_member', spaceId, spaceName };
-  }
-
-  // A request whose vote has ended must not block a fresh one, or a rejected
-  // user is wedged out of the space for good.
-  const activeRequest = await fetchActiveMemberRequest(normalizedSpaceId, normalizedPersonalSpaceId).catch(() => null);
-  if (activeRequest != null && !activeRequest.isVotingEnded) {
-    return { ok: false, error: 'already_requested', spaceId, spaceName };
-  }
-
   try {
+    signal?.throwIfAborted();
+    const access = await runEffectEither(getSpaceAccessById(normalizedSpaceId, normalizedPersonalSpaceId, signal));
+    signal?.throwIfAborted();
+    if (Either.isLeft(access)) return { ok: false, error: 'request_failed', spaceId, spaceName };
+    if (access.right.canEdit) {
+      return { ok: false, error: 'already_member', spaceId, spaceName };
+    }
+
+    // A request whose vote has ended must not block a fresh one, or a rejected
+    // user is wedged out of the space for good. An unavailable check must block
+    // signing, though: it cannot establish that no request is already under vote.
+    const activeRequest = await fetchActiveMemberRequest(normalizedSpaceId, normalizedPersonalSpaceId, {
+      signal,
+      throwOnError: true,
+    });
+    signal?.throwIfAborted();
+    if (activeRequest != null && !activeRequest.isVotingEnded) {
+      return { ok: false, error: 'already_requested', spaceId, spaceName };
+    }
+
     await requestSpaceMembership({
       spaceId: normalizedSpaceId,
       personalSpaceId: normalizedPersonalSpaceId,
       tx,
       queryClient,
       space: { name: spaceName, image: space.entity?.image ?? null },
+      signal,
     });
   } catch {
-    // Already logged by requestSpaceMembership.
     return { ok: false, error: 'request_failed', spaceId, spaceName };
   }
 
@@ -107,12 +119,24 @@ export function useJoinSpaceDispatcher(
   const tx = useSmartAccountTransaction();
 
   const dispatchedRef = React.useRef(new Set<string>());
-  const cancelledRef = React.useRef(false);
+  const controllers = React.useRef(new Map<string, AbortController>());
+
+  // Stop/chat changes call this synchronously, before React commits the scrubbed
+  // transcript. A queued transaction must not slip through that render gap.
+  const cancelPending = React.useCallback(() => {
+    for (const controller of controllers.current.values()) controller.abort();
+    controllers.current.clear();
+  }, []);
 
   React.useEffect(() => {
-    cancelledRef.current = false;
+    const active = controllers.current;
+    const dispatched = dispatchedRef.current;
     return () => {
-      cancelledRef.current = true;
+      for (const [id, controller] of active) {
+        controller.abort();
+        dispatched.delete(id);
+      }
+      active.clear();
     };
   }, []);
 
@@ -122,6 +146,24 @@ export function useJoinSpaceDispatcher(
   );
 
   React.useEffect(() => {
+    const pending = new Set(
+      messages.flatMap(message =>
+        message.role === 'assistant'
+          ? message.parts.flatMap(part =>
+              part.type === JOIN_SPACE_TOOL_PART && isToolUIPart(part) && part.state === 'input-available'
+                ? [part.toolCallId]
+                : []
+            )
+          : []
+      )
+    );
+    for (const [id, controller] of controllers.current) {
+      if (!pending.has(id)) {
+        controller.abort();
+        controllers.current.delete(id);
+      }
+    }
+
     for (const message of messages) {
       if (message.role !== 'assistant') continue;
       for (const part of message.parts) {
@@ -134,18 +176,34 @@ export function useJoinSpaceDispatcher(
         const input = (part as { input?: unknown }).input as JoinSpaceInput | undefined;
         const toolCallId = part.toolCallId;
         const spaceId = typeof input?.spaceId === 'string' ? input.spaceId : '';
+        const controller = new AbortController();
+        controllers.current.set(toolCallId, controller);
+        const signal = controller.signal;
 
         // Serialized with the other client-dispatched tools: this signs through
         // the same smart account a publish uses, and must not race one.
         enqueue(async () => {
-          if (cancelledRef.current) return;
-          const output = spaceId
-            ? await resolveJoinSpace(deps, spaceId)
-            : ({ ok: false, error: 'invalid_input' } satisfies JoinSpaceOutput);
-          if (cancelledRef.current) return;
-          addToolResultRef.current?.({ tool: 'joinSpace', toolCallId, output });
+          try {
+            if (signal.aborted) return;
+            const output = spaceId
+              ? await resolveJoinSpace(deps, spaceId, signal)
+              : ({ ok: false, error: 'invalid_input' } satisfies JoinSpaceOutput);
+            if (!signal.aborted) addToolResultRef.current?.({ tool: 'joinSpace', toolCallId, output });
+          } catch {
+            if (!signal.aborted) {
+              addToolResultRef.current?.({
+                tool: 'joinSpace',
+                toolCallId,
+                output: { ok: false, error: 'request_failed', spaceId } satisfies JoinSpaceOutput,
+              });
+            }
+          } finally {
+            if (controllers.current.get(toolCallId) === controller) controllers.current.delete(toolCallId);
+          }
         });
       }
     }
   }, [messages, addToolResultRef, deps]);
+
+  return cancelPending;
 }

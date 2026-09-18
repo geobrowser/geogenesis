@@ -1,6 +1,7 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
+import { hasPendingClientToolCall, shouldResubmitAfterClientExecution } from './client-tools';
 import { compactedMessages } from './compaction-state';
 import { activeAttachment } from '~/app/api/chat/attachment-note';
 
@@ -33,6 +34,11 @@ describe('compaction operational state', () => {
     const compacted = compactedMessages(messages, 'Keep People and wait for approval.', 'Compacted.');
     expect(activeAttachment(compacted)?.attachment).toMatchObject(attachment);
     expect(compacted[1].parts[0]).toEqual(messages[1].parts[0]);
+  });
+  it('leaves a summarized file conversation ready for input instead of waiting for another tool continuation', () => {
+    const compacted = compactedMessages(messages, 'Keep People and wait for approval.', 'Compacted.');
+    expect(hasPendingClientToolCall(compacted)).toBe(false);
+    expect(shouldResubmitAfterClientExecution({ messages: compacted })).toBe(false);
   });
   it('does not resurrect an attachment consumed by the final assistant turn', () => {
     const completed: UIMessage[] = [

@@ -11,6 +11,7 @@ import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 
+import { withInterruptionNotes } from '../interruption-note';
 import { FOLLOW_UPS_MODEL } from '../models';
 import { anonLimit, ipCeilingLimit, loggedInLimit } from '../rate-limit';
 
@@ -38,8 +39,9 @@ const SYSTEM_PROMPT = `You compress conversations between a user and Geo's in-pr
 
 - The user's overarching goals and any open follow-ups.
 - Concrete actions the assistant took (entities created, edits staged, navigations performed).
-- Key entity, space, and property ids referenced — keep them as inline links if you can recover them from the transcript: \`[Name](geo://entity/{id}?space={sid})\`.
+- Key entity, space, and property ids referenced — keep them as inline links if you can recover them from the transcript: \`[Name](geo://entity/{id}?space={sid})\`. Never invent ids or put a name such as Person in an id slot. If an id is unavailable, leave the name unlinked.
 - Decisions, constraints, or preferences the user expressed.
+- The latest attachment, mapping, exclusions, and whether the user has actually approved the current preview. Call a saved mapping a preview, never a staged or confirmed import. Readiness is not approval and a tool attempt is not success; use its recorded outcome even if earlier assistant prose claims otherwise. Preserve errors and unfinished work explicitly.
 
 Skip greetings, filler, redundant tool-call narration, and obvious progress recaps. Aim for 200–500 words. Lead with the goal in one sentence, then bulleted state. Do not invite further conversation or sign off; the next user turn will follow this summary.
 
@@ -102,12 +104,11 @@ export function validateUIMessages(input: unknown): UIMessage[] | null {
   return (input as UIMessage[]).slice(-MAX_INPUT_MESSAGES);
 }
 
-// Plain-text transcript of just the conversational content. Tool calls become
-// `[<toolName>]` markers so the summarizer knows actions happened without
-// burning tokens on serialized inputs/outputs.
-function formatTranscript(messages: UIMessage[]): string {
+// Keep compact outcome facts: a bare tool name cannot distinguish a preview,
+// failed write, or completed edit. Full rows and payloads stay out of the summary.
+export function formatTranscript(messages: UIMessage[]): string {
   const lines: string[] = [];
-  for (const message of messages) {
+  for (const message of withInterruptionNotes(messages)) {
     const label = message.role === 'user' ? 'User' : 'Assistant';
     const segments: string[] = [];
     for (const part of message.parts) {
@@ -116,7 +117,32 @@ function formatTranscript(messages: UIMessage[]): string {
         if (text) segments.push(text);
       } else if (isToolUIPart(part)) {
         const name = part.type.startsWith('tool-') ? part.type.slice('tool-'.length) : part.type;
-        segments.push(`[${name}]`);
+        const facts: Record<string, string | number | boolean> = {};
+        if (part.state === 'output-available' && part.output && typeof part.output === 'object') {
+          const output = part.output as Record<string, unknown>;
+          for (const key of [
+            'ok',
+            'success',
+            'error',
+            'status',
+            'staged',
+            'canApply',
+            'requiresConfirmation',
+            'entityId',
+            'propertyId',
+            'spaceId',
+            'entityCount',
+            'linkedEntityCount',
+          ]) {
+            const value = output[key];
+            if (typeof value === 'string') facts[key] = value.slice(0, 200);
+            else if (typeof value === 'number' || typeof value === 'boolean') facts[key] = value;
+          }
+        }
+        if (part.state === 'output-error') {
+          facts.error = typeof part.errorText === 'string' ? part.errorText.slice(0, 200) : 'Tool execution failed.';
+        }
+        segments.push(`[${name}: ${part.state}${Object.keys(facts).length ? ` ${JSON.stringify(facts)}` : ''}]`);
       }
     }
     const joined = segments.join('\n').trim();

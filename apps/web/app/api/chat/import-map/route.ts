@@ -319,6 +319,7 @@ export function renderColumns(input: ImportMapInput, candidates?: ColumnCandidat
       ? [
           'Previous preview. Preserve its type, name column, split rules and mappings unless the curator explicitly requests a change:',
           JSON.stringify(input.previousMapping),
+          'This is context, not a submission in this run. Call submitMapping with the complete corrected mapping; reconsiderColumns is only for a rejected submission in this run.',
         ]
       : []),
     // Last, and framed as an instruction, because it is the only reason this
@@ -1092,11 +1093,14 @@ export async function POST(req: Request) {
 
   const reconsiderColumns = tool({
     description:
-      'Revise the columns you were asked to reconsider. Send only those columns — everything else in your mapping stands.',
+      'Only after submitMapping returned accepted: false in this run. Revise the columns it asked you to reconsider; everything else in that submission stands.',
     inputSchema: jsonSchema<ReconsiderColumnsInput>(RECONSIDER_COLUMNS_SCHEMA),
     execute: async ({ columns, summary }: ReconsiderColumnsInput) => {
+      if (!submission) {
+        return { accepted: false, error: 'Call submitMapping with the complete mapping before reconsidering columns.' };
+      }
       for (const column of columns) revised.set(column.index, column);
-      if (summary && submission) submission = { ...submission, summary };
+      if (summary) submission = { ...submission, summary };
       accepted = true;
       return { accepted: true, revised: columns.length };
     },
@@ -1159,7 +1163,14 @@ export async function POST(req: Request) {
         { role: 'user', content: renderColumns(input, candidates) },
       ],
       tools: { listTypes, searchProperties: searchPropertiesTool, submitMapping, reconsiderColumns, requestOntology },
-      toolChoice: 'auto',
+      toolChoice: 'required',
+      // A previous preview is only context. Offering the revision tool before
+      // this run has a submission lets a correction end with no mapping at all.
+      prepareStep: () => ({
+        activeTools: submission
+          ? ['listTypes', 'searchProperties', 'submitMapping', 'reconsiderColumns', 'requestOntology']
+          : ['listTypes', 'searchProperties', 'submitMapping', 'requestOntology'],
+      }),
       // The mapping is the answer, so the run is over the moment it lands.
       // Without this the model spends a whole extra round trip — measured at
       // ~7s — writing a closing paragraph that nothing reads.

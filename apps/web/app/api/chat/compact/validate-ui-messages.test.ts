@@ -7,7 +7,7 @@ vi.mock('@ai-sdk/anthropic', () => ({ createAnthropic: () => () => ({}) }));
 vi.mock('../rate-limit', () => ({ anonLimit: {}, ipCeilingLimit: {}, loggedInLimit: {} }));
 vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
 
-const { validateUIMessages } = await import('./route');
+const { formatTranscript, validateUIMessages } = await import('./route');
 
 function message(n: number): UIMessage {
   return { id: `m${n}`, role: n % 2 === 0 ? 'user' : 'assistant', parts: [{ type: 'text', text: `msg ${n}` }] };
@@ -16,6 +16,57 @@ function message(n: number): UIMessage {
 function conversation(length: number): UIMessage[] {
   return Array.from({ length }, (_, i) => message(i));
 }
+
+describe('compaction evidence', () => {
+  it('distinguishes previews, failed tools, and staged imports without sending full row data', () => {
+    const transcript = formatTranscript([
+      {
+        id: 'outcomes',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'tool-proposeImportMapping',
+            toolCallId: 'preview',
+            state: 'output-available',
+            input: {},
+            output: { status: 'preview', canApply: true, requiresConfirmation: true },
+          },
+          {
+            type: 'tool-applyImport',
+            toolCallId: 'denied',
+            state: 'output-available',
+            input: {},
+            output: { error: 'not_authorized' },
+          },
+          {
+            type: 'tool-applyImport',
+            toolCallId: 'failed',
+            state: 'output-error',
+            input: {},
+            errorText: 'Network unavailable',
+          },
+          {
+            type: 'tool-applyImport',
+            toolCallId: 'staged',
+            state: 'output-available',
+            input: {},
+            output: { staged: true, entityCount: 2, rows: ['Do not copy these rows'] },
+          },
+          { type: 'tool-applyImport', toolCallId: 'pending', state: 'input-available', input: {} },
+        ],
+      },
+    ]);
+    expect(transcript).toContain('"status":"preview"');
+    expect(transcript).toContain('"requiresConfirmation":true');
+    expect(transcript).toContain('"error":"not_authorized"');
+    expect(transcript).toContain('output-error');
+    expect(transcript).toContain('Network unavailable');
+    expect(transcript).toContain('"staged":true');
+    expect(transcript).toContain('"entityCount":2');
+    expect(transcript).toContain('[applyImport: input-available]');
+    expect(transcript).not.toContain('Do not copy these rows');
+  });
+});
 
 describe('validateUIMessages', () => {
   // The whole point of the endpoint is long conversations. Refusing them meant

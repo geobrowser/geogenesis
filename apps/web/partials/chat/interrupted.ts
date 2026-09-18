@@ -17,8 +17,8 @@ import type { UIMessage } from 'ai';
  *
  * The flag lives in `metadata` rather than as a text part on purpose: it
  * survives the JSON round-trip through localStorage, so a reloaded chat keeps
- * the mark, and `convertToModelMessages` drops metadata, so nothing extra is
- * ever sent to the model.
+ * the mark. The API adds a model-visible interruption note before SDK
+ * conversion drops metadata, so a status question cannot revive a stopped task.
  */
 type InterruptedMetadata = { interrupted?: boolean };
 

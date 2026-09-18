@@ -567,7 +567,7 @@ export function ChatWidget() {
   } = useFileAttachment(currentSpaceId);
   useWebFetchDispatcher(messages, addToolResultRef);
   useSearchImagesDispatcher(messages, addToolResultRef);
-  useJoinSpaceDispatcher(messages, addToolResultRef);
+  const cancelPendingJoins = useJoinSpaceDispatcher(messages, addToolResultRef);
 
   // Bridge the gap between status='ready' and the SDK's auto-resubmit firing —
   // otherwise the input flips back to "send" between successive tool calls.
@@ -646,6 +646,7 @@ export function ChatWidget() {
   // Scrub those so the UI actually settles, and block the next auto-resubmit.
   const stopAndScrub = React.useCallback(() => {
     stoppedRef.current = true;
+    cancelPendingJoins();
     stop();
     setMessages(prev => {
       if (prev.length === 0) return prev;
@@ -656,7 +657,7 @@ export function ChatWidget() {
       const scrubbed = last.role === 'assistant' ? scrubUnsettledToolParts(prev) : prev;
       return markLastTurnInterrupted(scrubbed);
     });
-  }, [stop, setMessages]);
+  }, [stop, setMessages, cancelPendingJoins]);
 
   // Persist the in-flight chat only on settled turns. Writing mid-stream
   // serializes partial parts and thrashes localStorage; a closed-tab mid-stream
@@ -762,6 +763,7 @@ export function ChatWidget() {
   // we swap to a different chat (new chat, switch chat) so the next chat
   // starts clean.
   const resetForChatSwap = React.useCallback(() => {
+    cancelPendingJoins();
     navigatedToolCallIds.current.clear();
     openedReviewPanelToolCallIds.current.clear();
     navigatedCreatedEntityForMessageId.current = null;
@@ -773,7 +775,7 @@ export function ChatWidget() {
     // click New chat. The next turn reports this chat's own number.
     setContextTokens(0);
     failedCompactAtTokensRef.current = null;
-  }, []);
+  }, [cancelPendingJoins]);
 
   const handleNewChat = React.useCallback(() => {
     removeAttachment();
@@ -815,8 +817,10 @@ export function ChatWidget() {
     if (isCompacting || isBusy) return;
     const compactingConversation = conversationIdRef.current;
     const attemptedAtTokens = contextTokens;
-    const giveUp = () => {
+    const giveUp = (message: string) => {
+      if (conversationIdRef.current !== compactingConversation) return;
       failedCompactAtTokensRef.current = attemptedAtTokens;
+      reportError(message);
     };
     setIsCompacting(true);
     try {
@@ -828,15 +832,13 @@ export function ChatWidget() {
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
         const message = typeof body?.error === 'string' ? body.error : 'Compaction failed.';
-        giveUp();
-        reportError(message);
+        giveUp(message);
         return;
       }
       const body = (await res.json()) as { summary?: unknown };
       if (conversationIdRef.current !== compactingConversation) return;
       if (typeof body.summary !== 'string' || body.summary.trim().length === 0) {
-        giveUp();
-        reportError('Compaction failed.');
+        giveUp('Compaction failed.');
         return;
       }
       const compacted = compactedMessages(messages, body.summary.trim(), COMPACTION_NOTICE);
@@ -858,8 +860,7 @@ export function ChatWidget() {
       // two-message summary is tiny, and the next turn reports anew.
     } catch (err) {
       console.error('[chat] compaction failed', err);
-      giveUp();
-      reportError('Compaction failed.');
+      giveUp('Compaction failed.');
     } finally {
       setIsCompacting(false);
     }

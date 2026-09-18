@@ -22,8 +22,8 @@ export type GeoQueryRow = {
 export type GeoQuerySuccess = {
   /** Prose answer to the question asked. */
   answer: string;
-  /** Present only when the question wanted a list. Capped — see MAX_ROWS. */
-  rows?: GeoQueryRow[];
+  /** Renderable rows (capped). Empty for count-only questions. */
+  rows: GeoQueryRow[];
   /** The true total, even when `rows` is capped. */
   totalCount?: number;
   /**
@@ -39,5 +39,4 @@ export type GeoQuerySuccess = {
 };
 
 export type GeoQueryOutput =
-  | GeoQuerySuccess
-  | { error: 'not_signed_in' | 'rate_limited' | 'timed_out' | 'question_rejected' | 'lookup_failed' };
+  GeoQuerySuccess | { error: 'not_signed_in' | 'rate_limited' | 'timed_out' | 'question_rejected' | 'lookup_failed' };

@@ -365,6 +365,64 @@ describe('import resolution helpers', () => {
     });
   });
 
+  it('falls back for a tie when a successful metadata response omits one candidate', async () => {
+    getNameValuesBatchMock.mockReturnValue(
+      Effect.succeed([
+        valueRow('Alpha', 'entity-a', { typeIds: ['type-project'] }),
+        valueRow('Alpha', 'entity-b', { typeIds: ['type-project'] }),
+      ])
+    );
+    getEntityTiebreakerBatchMock.mockReturnValue(
+      Effect.succeed([makeTiebreakerData('entity-b', { backlinksCount: 100 })])
+    );
+
+    const result = await resolveRowsByNameAndType({
+      dataRows: [['Alpha']],
+      nameColIdx: 0,
+      selectedType: { id: 'type-project', name: 'Project' },
+      typesColumnIndex: undefined,
+      resolvedTypes: new Map(),
+      guard: { isCurrent: () => true },
+    });
+
+    expect(result.resolvedRows.get(0)?.entityId).toBe('entity-a');
+  });
+
+  it('falls back only for ties affected by a failed chunk and still ranks complete ties', async () => {
+    // Alpha straddles the 50-id chunk boundary. Its first candidate is in the
+    // failed chunk; a healthy response for the second must not make it win.
+    const padding = Array.from({ length: 49 }, (_, i) =>
+      valueRow('Padding', `padding-${i}`, { typeIds: ['type-project'] })
+    );
+    getNameValuesBatchMock.mockReturnValue(
+      Effect.succeed([
+        ...padding,
+        valueRow('Alpha', 'alpha-a', { typeIds: ['type-project'] }),
+        valueRow('Alpha', 'alpha-b', { typeIds: ['type-project'] }),
+        valueRow('Beta', 'beta-a', { typeIds: ['type-project'] }),
+        valueRow('Beta', 'beta-b', { typeIds: ['type-project'] }),
+      ])
+    );
+    getEntityTiebreakerBatchMock.mockImplementation((ids: string[]) =>
+      ids.includes('alpha-a')
+        ? Effect.fail(new Error('one metadata chunk failed'))
+        : Effect.succeed(ids.map(id => makeTiebreakerData(id, { backlinksCount: id.endsWith('-b') ? 10 : 1 })))
+    );
+
+    const result = await resolveRowsByNameAndType({
+      dataRows: [['Padding'], ['Alpha'], ['Beta']],
+      nameColIdx: 0,
+      selectedType: { id: 'type-project', name: 'Project' },
+      typesColumnIndex: undefined,
+      resolvedTypes: new Map(),
+      guard: { isCurrent: () => true },
+    });
+
+    expect(getEntityTiebreakerBatchMock).toHaveBeenCalledTimes(2);
+    expect(result.resolvedRows.get(1)?.entityId).toBe('alpha-a');
+    expect(result.resolvedRows.get(2)?.entityId).toBe('beta-b');
+  });
+
   it('auto-creates relation entities when no type constraints', async () => {
     const createIdSpy = vi.spyOn(ID, 'createEntityId').mockReturnValue('created-relation-id');
 

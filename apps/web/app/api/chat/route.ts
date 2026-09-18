@@ -32,6 +32,7 @@ import {
 } from './chat-system-prompt';
 import { type CostStage, formatTurnCost } from './cost';
 import { buildFollowUpCapabilityNote } from './follow-up-capabilities';
+import { withInterruptionNotes } from './interruption-note';
 import { FOLLOW_UPS_MODEL, MAIN_MODEL } from './models';
 import { anonLimit, ipCeilingLimit, loggedInLimit } from './rate-limit';
 import { requestedItemCount } from './requested-item-count';
@@ -402,7 +403,7 @@ export async function POST(req: Request) {
     return jsonError(400, 'Invalid request body');
   }
 
-  const rawConverted = await convertToModelMessages(uiMessages);
+  const rawConverted = await convertToModelMessages(withInterruptionNotes(uiMessages));
   const { messages: sanitized, droppedToolCallIds } = sanitizeModelMessages(rawConverted);
 
   // Added after sanitizing so the notes can't be mistaken for orphaned tool

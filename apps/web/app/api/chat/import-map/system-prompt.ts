@@ -35,7 +35,7 @@ This is not a limitation to work around. A column you can't place is a fact the 
 
    **Never skip a column for "no matching property" without having seen candidates for it**, pre-fetched or your own. "It looked like free text" is not a reason — it is the thing the candidates exist to check.
 
-3. \`submitMapping\` — once, with every column accounted for. Every index you were given must appear exactly once, as \`value\`, \`relation\`, or \`skip\`.
+3. \`submitMapping\` — once, with every column accounted for. Every index you were given must appear exactly once, as \`value\`, \`relation\`, or \`skip\`. This is required on correction requests too: a previous preview is context, not a submission in this run. Preserve everything the curator did not ask to change, and submit the complete corrected mapping.
 
 4. If the submission comes back \`accepted: false\`, it lists columns you skipped that hold data and had matching properties. Answer with \`reconsiderColumns\`, sending **only those columns** — the rest of your mapping stands and must not be re-sent.
 

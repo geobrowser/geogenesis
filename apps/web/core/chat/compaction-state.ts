@@ -34,7 +34,10 @@ export function compactedMessages(messages: UIMessage[], summary: string, notice
     {
       id: crypto.randomUUID(),
       role: 'assistant',
-      parts: [...(mapping ? [mapping] : []), { type: 'text', text: summary }],
+      // The retained mapping is historical evidence, not a just-finished client
+      // tool awaiting continuation. End that step before the completed summary
+      // or the widget's auto-resubmit heuristic leaves the composer busy.
+      parts: [...(mapping ? [mapping] : []), { type: 'step-start' }, { type: 'text', text: summary }],
     },
   ];
 }

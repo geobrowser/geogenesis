@@ -40,13 +40,14 @@ describe('GEO_QUERY_SYSTEM_PROMPT', () => {
     expect(GEO_QUERY_SYSTEM_PROMPT).not.toContain('src/constants.ts');
   });
 
-  it('forbids scoping a query by space alone', () => {
-    // Measured against the live endpoint: spaceId with no typeId is 9-32s and
-    // often returns `Unexpected error` instead of data — true even for
-    // `first: 0` on a three-entity space. It was the single largest cause of
-    // budget timeouts in round 7, so the rule has to survive prompt edits.
-    expect(GEO_QUERY_SYSTEM_PROMPT).toContain('Never scope by space alone');
-    expect(GEO_QUERY_SYSTEM_PROMPT).toContain('Unexpected error');
+  it('supports exact space totals and distinguishes top-level selectors from computed field filters', () => {
+    // Live regression: top-level spaceId returned a 64k-entity total in 1.36s;
+    // filter.spaceIds failed after 29s even for an empty space. The old rule
+    // conflated these paths and made the assistant refuse valid count requests.
+    expect(GEO_QUERY_SYSTEM_PROMPT).toContain('All-entity counts are supported');
+    expect(GEO_QUERY_SYSTEM_PROMPT).toContain('entitiesConnection(spaceId: "SPACE_ID", first: 0) { totalCount }');
+    expect(GEO_QUERY_SYSTEM_PROMPT).toContain('Avoid `filter: { spaceIds: ... }`');
+    expect(GEO_QUERY_SYSTEM_PROMPT).not.toContain('Never scope by space alone');
   });
 
   it('records the skill version it was ported from', () => {

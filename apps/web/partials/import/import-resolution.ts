@@ -123,6 +123,11 @@ function breakTieWithEntityMetadata(
 ): Candidate {
   if (candidates.length === 1) return candidates[0];
 
+  // Missing metadata is unknown, not zero. If a chunk failed (or omitted an
+  // entity), keep the deterministic fallback for this entire tie instead of
+  // favoring whichever candidate happened to have a successful lookup.
+  if (candidates.some(candidate => !tiebreakerData.has(candidate.id))) return candidates[0];
+
   const withData = candidates.map(c => ({
     candidate: c,
     data: tiebreakerData.get(c.id),

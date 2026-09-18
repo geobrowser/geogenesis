@@ -13,7 +13,7 @@ const SPACE_ID_PATTERN =
 export function buildJoinSpaceTool() {
   return tool({
     description:
-      'Request membership of a public space for the user. Call this ONLY when the user explicitly asks to join, become a member of, or request access to a space ("join the Crypto space", "ask for membership here"). Never call it speculatively — wanting to read, search or navigate a space is not a request to join it, and the proposal is signed immediately without a further confirmation step. Pass a spaceId that came from a tool result this turn; call listSpaces first when the user named the space. This submits a membership request that the space\'s editors vote on — it does not grant access, so never tell the user they have joined.',
+      'Request membership of a public space for the user. Call this ONLY when the latest user message explicitly asks to join, become a member of, request access to, or retry joining a space ("join the Crypto space", "ask for membership here"). A previous request that was stopped or failed is not fresh authorization. Asking whether a request was submitted or what happened is a read-only status question: NEVER call joinSpace to answer it. Use recorded results, or say the status is unconfirmed. Never call it speculatively — wanting to read, search or navigate a space is not a request to join it, and the proposal is signed immediately without a further confirmation step. Pass a spaceId that came from a tool result this turn; call listSpaces first when the user named the space. This submits a membership request that the space\'s editors vote on — it does not grant access, so never tell the user they have joined.',
     inputSchema: jsonSchema<JoinSpaceInput>({
       type: 'object',
       properties: {

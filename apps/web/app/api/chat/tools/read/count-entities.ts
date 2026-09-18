@@ -7,7 +7,7 @@ type Input = { spaceId: string; typeId?: string };
 
 export const countEntities = tool({
   description:
-    'Return the exact number of distinct entities in a space, optionally filtered by one type. Use this for counts instead of listing entities or adding counts for overlapping types. Without typeId, the total includes all graph entities in the space, including schema and internal entities; explain this scope. For the number of ontology types, pass the Type entity id as typeId.',
+    'Return the exact number of distinct published entities in a space, optionally filtered by one type. Omit typeId when the user asks for all entities; the total includes schema and internal graph entities, so explain that scope. Do not list entities or add overlapping type counts to compute a total. For the number of ontology types, pass the Type entity id as typeId.',
   inputSchema: jsonSchema<Input>({
     type: 'object',
     properties: { spaceId: { type: 'string' }, typeId: { type: 'string' } },
@@ -18,6 +18,9 @@ export const countEntities = tool({
     if (!isEntityId(spaceId) || (typeId !== undefined && !isEntityId(typeId))) return { error: 'invalid_input' };
     const space = normalizeEntityId(spaceId);
     const type = typeId ? normalizeEntityId(typeId) : null;
+    // Use the API's top-level selectors. Live checks show this count path is
+    // fast without a type; filter.spaceIds scans the computed entity field and
+    // can time out even for an empty space. first: 0 avoids fetching any rows.
     const result = await runGeoGraphql(
       `{ entitiesConnection(spaceId: "${space}"${type ? `, typeId: "${type}"` : ''}, first: 0) { totalCount } }`,
       undefined,
@@ -32,8 +35,8 @@ export const countEntities = tool({
       totalCount: count,
       exact: true,
       scope: type
-        ? 'Distinct entities of this type in this space.'
-        : 'All distinct graph entities in this space, including schema and internal entities.',
+        ? 'Distinct published entities of this type in this space.'
+        : 'All distinct published graph entities in this space, including schema and internal entities.',
     };
   },
 });

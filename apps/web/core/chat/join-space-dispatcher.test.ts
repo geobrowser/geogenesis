@@ -1,15 +1,24 @@
 import type { QueryClient } from '@tanstack/react-query';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 
+import * as React from 'react';
+
+import type { UIMessage } from 'ai';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { SpaceAccess } from '~/core/access/space-access';
 import type { Space } from '~/core/io/dto/spaces';
+
+import { scrubUnsettledToolParts } from '~/partials/chat/scrub-unsettled-tool-parts';
+
+import { enqueue, waitForFlush } from './apply-queue';
 
 // `vi.mock` is hoisted, so these run before the dispatcher imports them.
 const requestSpaceMembership = vi.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve());
 vi.mock('~/core/access/request-space-membership', () => ({ requestSpaceMembership }));
 
-const getSpaceAccessById = vi.fn(() => Effect.succeed({ isEditor: false, isMember: false, canEdit: false }));
+const getSpaceAccessById = vi.fn<(...args: unknown[]) => Effect.Effect<SpaceAccess, unknown>>();
 vi.mock('~/core/access/space-access', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/access/space-access')>();
   return { ...actual, getSpaceAccessById: (...args: unknown[]) => getSpaceAccessById(...(args as [])) };
@@ -22,7 +31,16 @@ vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberR
 
 vi.mock('~/core/io/queries', () => ({ getSpace: vi.fn(() => Effect.succeed(null)) }));
 
-const { resolveJoinSpace } = await import('./join-space-dispatcher');
+const hookDeps = { queryClient: null as QueryClient | null };
+const hookTx = vi.fn(() => Effect.succeed('0xhash'));
+vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => hookDeps.queryClient }));
+vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: {} }) }));
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: PERSONAL_SPACE_ID, isRegistered: true }),
+}));
+vi.mock('~/core/hooks/use-smart-account-transaction', () => ({ useSmartAccountTransaction: () => hookTx }));
+
+const { resolveJoinSpace, useJoinSpaceDispatcher } = await import('./join-space-dispatcher');
 
 const SPACE_ID = 'c9f267dc1b7a4f3d8e2a5b6c7d8e9f01';
 const PERSONAL_SPACE_ID = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
@@ -51,14 +69,28 @@ function deps(space: Space | null, overrides: Record<string, unknown> = {}) {
   } as Parameters<typeof resolveJoinSpace>[0];
 }
 
-describe('resolveJoinSpace', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    requestSpaceMembership.mockResolvedValue(undefined);
-    getSpaceAccessById.mockReturnValue(Effect.succeed({ isEditor: false, isMember: false, canEdit: false }));
-    fetchActiveMemberRequest.mockResolvedValue(null);
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(res => {
+    resolve = res;
   });
+  return { promise, resolve };
+}
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  requestSpaceMembership.mockReset().mockResolvedValue(undefined);
+  getSpaceAccessById.mockReset().mockReturnValue(Effect.succeed({ isEditor: false, isMember: false, canEdit: false }));
+  fetchActiveMemberRequest.mockReset().mockResolvedValue(null);
+  hookDeps.queryClient = deps(daoSpace()).queryClient;
+});
+
+afterEach(async () => {
+  cleanup();
+  await waitForFlush();
+});
+
+describe('resolveJoinSpace', () => {
   it('requests membership when every check passes', async () => {
     const result = await resolveJoinSpace(deps(daoSpace()), SPACE_ID);
     expect(result).toEqual({ ok: true, status: 'requested', spaceId: SPACE_ID, spaceName: 'Crypto' });
@@ -117,6 +149,49 @@ describe('resolveJoinSpace', () => {
       expect(result).toMatchObject({ ok: false, error: 'already_requested' });
       expect(requestSpaceMembership).not.toHaveBeenCalled();
     });
+
+    it('when the access check fails', async () => {
+      getSpaceAccessById.mockReturnValue(Effect.fail(new Error('access unavailable')));
+      expect(await resolveJoinSpace(deps(daoSpace()), SPACE_ID)).toMatchObject({ ok: false, error: 'request_failed' });
+      expect(fetchActiveMemberRequest).not.toHaveBeenCalled();
+      expect(requestSpaceMembership).not.toHaveBeenCalled();
+    });
+
+    it('when the pending request lookup fails', async () => {
+      fetchActiveMemberRequest.mockRejectedValue(new Error('proposals unavailable'));
+      expect(await resolveJoinSpace(deps(daoSpace()), SPACE_ID)).toMatchObject({ ok: false, error: 'request_failed' });
+      expect(fetchActiveMemberRequest).toHaveBeenCalledWith(
+        SPACE_ID,
+        PERSONAL_SPACE_ID,
+        expect.objectContaining({ throwOnError: true })
+      );
+      expect(requestSpaceMembership).not.toHaveBeenCalled();
+    });
+
+    it('when cancelled while membership access is being checked', async () => {
+      const access = deferred<SpaceAccess>();
+      getSpaceAccessById.mockReturnValue(Effect.promise(() => access.promise));
+      const controller = new AbortController();
+      const pending = resolveJoinSpace(deps(daoSpace()), SPACE_ID, controller.signal);
+      await waitFor(() => expect(getSpaceAccessById).toHaveBeenCalled());
+      controller.abort();
+      access.resolve({ isEditor: false, isMember: false, canEdit: false });
+      await pending;
+      expect(fetchActiveMemberRequest).not.toHaveBeenCalled();
+      expect(requestSpaceMembership).not.toHaveBeenCalled();
+    });
+
+    it('when cancelled while the pending request lookup is running', async () => {
+      const lookup = deferred<null>();
+      fetchActiveMemberRequest.mockReturnValue(lookup.promise);
+      const controller = new AbortController();
+      const pending = resolveJoinSpace(deps(daoSpace()), SPACE_ID, controller.signal);
+      await waitFor(() => expect(fetchActiveMemberRequest).toHaveBeenCalled());
+      controller.abort();
+      lookup.resolve(null);
+      await pending;
+      expect(requestSpaceMembership).not.toHaveBeenCalled();
+    });
   });
 
   it('re-requests once a previous vote has ended, so a rejection is not permanent', async () => {
@@ -130,5 +205,143 @@ describe('resolveJoinSpace', () => {
     requestSpaceMembership.mockRejectedValue(new Error('tx reverted'));
     const result = await resolveJoinSpace(deps(daoSpace()), SPACE_ID);
     expect(result).toMatchObject({ ok: false, error: 'request_failed' });
+  });
+});
+
+const pendingMessages = (toolCallId = 'join-1'): UIMessage[] => [
+  {
+    id: 'assistant-1',
+    role: 'assistant',
+    parts: [{ type: 'tool-joinSpace', toolCallId, state: 'input-available', input: { spaceId: SPACE_ID } }],
+  },
+];
+
+describe('useJoinSpaceDispatcher cancellation', () => {
+  it('dispatches an active request once across renders', async () => {
+    const addResult = { current: vi.fn() };
+    const hook = renderHook(({ messages }) => useJoinSpaceDispatcher(messages, addResult), {
+      initialProps: { messages: pendingMessages() },
+    });
+    await act(async () => {
+      await waitForFlush();
+    });
+    hook.rerender({ messages: pendingMessages() });
+    await act(async () => {
+      await waitForFlush();
+    });
+    expect(requestSpaceMembership).toHaveBeenCalledTimes(1);
+    expect(requestSpaceMembership).toHaveBeenCalledWith(expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(addResult.current).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        toolCallId: 'join-1',
+        output: expect.objectContaining({ ok: true, status: 'requested' }),
+      })
+    );
+  });
+
+  it.each(['stop', 'new chat', 'switch chat'])(
+    'does not sign a queued request after %s removes its tool call',
+    async action => {
+      const blocker = deferred<void>();
+      void enqueue(() => blocker.promise);
+      const addResult = { current: vi.fn() };
+      const messages = pendingMessages();
+      const hook = renderHook(({ messages }) => useJoinSpaceDispatcher(messages, addResult), {
+        initialProps: { messages },
+      });
+      hook.rerender({
+        messages:
+          action === 'stop'
+            ? scrubUnsettledToolParts(messages)
+            : action === 'new chat'
+              ? []
+              : [
+                  {
+                    id: 'other-conversation',
+                    role: 'user',
+                    parts: [{ type: 'text', text: 'Another conversation' }],
+                  },
+                ],
+      });
+      await act(async () => {
+        blocker.resolve();
+        await waitForFlush();
+      });
+      expect(requestSpaceMembership).not.toHaveBeenCalled();
+      expect(addResult.current).not.toHaveBeenCalled();
+    }
+  );
+
+  it('cancels immediately before a scrubbed transcript has rendered', async () => {
+    const blocker = deferred<void>();
+    void enqueue(() => blocker.promise);
+    const addResult = { current: vi.fn() };
+    const hook = renderHook(() => useJoinSpaceDispatcher(pendingMessages(), addResult));
+    act(() => hook.result.current());
+    await act(async () => {
+      blocker.resolve();
+      await waitForFlush();
+    });
+    expect(requestSpaceMembership).not.toHaveBeenCalled();
+    expect(addResult.current).not.toHaveBeenCalled();
+  });
+
+  it('cancels an in-flight lookup when the conversation changes', async () => {
+    const lookup = deferred<null>();
+    fetchActiveMemberRequest.mockReturnValue(lookup.promise);
+    const addResult = { current: vi.fn() };
+    const hook = renderHook(({ messages }) => useJoinSpaceDispatcher(messages, addResult), {
+      initialProps: { messages: pendingMessages() },
+    });
+    await waitFor(() => expect(fetchActiveMemberRequest).toHaveBeenCalled());
+    hook.rerender({ messages: [] });
+    await act(async () => {
+      lookup.resolve(null);
+      await waitForFlush();
+    });
+    expect(requestSpaceMembership).not.toHaveBeenCalled();
+    expect(addResult.current).not.toHaveBeenCalled();
+  });
+
+  it('does not deliver a late transaction result into the next conversation', async () => {
+    const tx = deferred<void>();
+    requestSpaceMembership.mockReturnValue(tx.promise);
+    const addResult = { current: vi.fn() };
+    const hook = renderHook(({ messages }) => useJoinSpaceDispatcher(messages, addResult), {
+      initialProps: { messages: pendingMessages() },
+    });
+    await waitFor(() => expect(requestSpaceMembership).toHaveBeenCalled());
+    hook.rerender({ messages: [] });
+    await act(async () => {
+      tx.resolve();
+      await waitForFlush();
+    });
+    expect(addResult.current).not.toHaveBeenCalled();
+  });
+
+  it('cancels on unmount and still dispatches once under StrictMode', async () => {
+    const addResult = { current: vi.fn() };
+    const hook = renderHook(() => useJoinSpaceDispatcher(pendingMessages(), addResult), {
+      wrapper: ({ children }) => React.createElement(React.StrictMode, null, children),
+    });
+    await act(async () => {
+      await waitForFlush();
+    });
+    expect(requestSpaceMembership).toHaveBeenCalledTimes(1);
+    expect(addResult.current).toHaveBeenCalledTimes(1);
+    hook.unmount();
+
+    requestSpaceMembership.mockClear();
+    addResult.current.mockClear();
+    const blocker = deferred<void>();
+    void enqueue(() => blocker.promise);
+    const unmounted = renderHook(() => useJoinSpaceDispatcher(pendingMessages('join-2'), addResult));
+    unmounted.unmount();
+    await act(async () => {
+      blocker.resolve();
+      await waitForFlush();
+    });
+    expect(requestSpaceMembership).not.toHaveBeenCalled();
+    expect(addResult.current).not.toHaveBeenCalled();
   });
 });
