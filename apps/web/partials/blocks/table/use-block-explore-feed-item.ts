@@ -97,6 +97,20 @@ export function useBlockExploreFeedItem({
   const relationsInSpace = (storeEntity?.relations ?? []).filter(r => r.spaceId === entitySpaceId);
   const cardTypes = types.map(t => ({ id: t.id, name: t.name }));
 
+  // The claim guard reads types scoped to *this row's space*, so it is asked about the same space
+  // the relations beside it were filtered to. `useEntityTypes` is unscoped here, so without this an
+  // entity typed Debate in some other space could take a `Claims` relation written in this one —
+  // which on a transcript text block is an extracted claim, not a motion — and re-head the card
+  // with it. `buildExploreFeedRows` has the property for free: it derives a row's types from the
+  // Types relation in the display space, so its guard and its relations already share a scope.
+  //
+  // Only the guard is scoped. `cardTypes` above is what routes the card (`ExploreFeedCard` reads
+  // `item.types`) and has always been unscoped on this surface; narrowing it would change which
+  // rows render as debate, claim or ranking cards, which is a data-block change and not this one.
+  // The two disagreeing is harmless: the card renders as a debate and heads itself with the
+  // debate's own name, which is the documented fallback.
+  const typesInSpace = types.filter(t => t.spaceId === entitySpaceId).map(t => ({ id: t.id, name: t.name }));
+
   return {
     entityId: rowEntityId,
     spaceId: entitySpaceId,
@@ -115,7 +129,7 @@ export function useBlockExploreFeedItem({
     imageUrl,
     recordingUrls: getRecordingUrls(relationsInSpace),
     debateVideoUrls: getRelationVideoUrls(relationsInSpace, DEBATE_VIDEOS_PROPERTY_ID),
-    debateClaim: debateClaimFromEntity(cardTypes, relationsInSpace),
+    debateClaim: debateClaimFromEntity(typesInSpace, relationsInSpace),
     commentCount,
     isMemberOrEditor,
     hasPendingMembershipRequest: false,
