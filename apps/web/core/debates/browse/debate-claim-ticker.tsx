@@ -54,8 +54,6 @@ export type DebateTicker = {
   markers: ClaimMarker[];
   /** Claims in the order they were said, for the card at the end. */
   claims: TimedClaim[];
-  /** Claim ids the viewer has answered this session. */
-  answered: ReadonlySet<string>;
   /** Which way they answered each one, for the tally at the end. */
   answers: ReadonlyMap<string, boolean>;
   onAnswered: (claimId: string, position: boolean) => void;
@@ -96,9 +94,6 @@ export function useDebateClaimTicker(
   const onAnswered = React.useCallback((claimId: string, position: boolean) => {
     setAnswers(current => new Map(current).set(claimId, position));
   }, []);
-
-  // The ids alone, for every caller that only asks "has this been answered".
-  const answered = React.useMemo(() => new Set(answers.keys()), [answers]);
 
   const timedClaims = React.useMemo(() => claimsInSpokenOrder(claims.all, timings), [claims.all, timings]);
   const windows = React.useMemo(() => tickerWindows(timedClaims), [timedClaims]);
@@ -196,7 +191,6 @@ export function useDebateClaimTicker(
     historyBySlot,
     markers,
     claims: timedClaims,
-    answered,
     answers,
     onAnswered,
     rowsByClaimId,
