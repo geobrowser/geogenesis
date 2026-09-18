@@ -3,6 +3,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SpaceDecoder } from '~/core/io/decoders/space';
+import type { RemoteEntity } from '~/core/io/schema';
 
 import { hasExternalTopic, isPersonProfileSpace } from './spaces';
 
@@ -18,7 +19,7 @@ const SPACE_ID = '00000000000000000000000000000001';
 const TOPIC_ID = '00000000000000000000000000000002';
 const PAGE_ID = '00000000000000000000000000000003';
 
-function remoteEntity(id: string, name: string | null) {
+function remoteEntity(id: string, name: string | null): RemoteEntity {
   return {
     id,
     name,
@@ -74,7 +75,20 @@ describe('hasExternalTopic', () => {
 
 describe('isPersonProfileSpace', () => {
   const person = remoteEntity(TOPIC_ID, 'Preston Mantel');
-  person.types = [{ id: SystemIds.PERSON_TYPE, name: 'Person' }] as never;
+  person.types = [{ id: SystemIds.PERSON_TYPE, name: 'Person' }];
+  person.relationsList = [
+    {
+      id: '00000000000000000000000000000004',
+      entityId: TOPIC_ID,
+      spaceId: SPACE_ID,
+      position: null,
+      verified: null,
+      fromEntity: { id: TOPIC_ID, name: 'Preston Mantel' },
+      toEntity: { id: SystemIds.PERSON_TYPE, name: 'Person', types: [], valuesList: [] },
+      toSpaceId: null,
+      type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
+    },
+  ];
 
   it('is true for a person carried on the page, with no topic at all', () => {
     // The case that broke every visitor's view of somebody else's profile:
