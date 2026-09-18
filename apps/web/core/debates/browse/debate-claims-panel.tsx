@@ -3,7 +3,6 @@
 import * as React from 'react';
 
 import { ClaimSummary } from '~/core/claims/browse/claim-summary';
-import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate, DebateClaim } from '~/core/debates/api';
 import {
   type ClaimTiming,
@@ -13,13 +12,12 @@ import {
 } from '~/core/debates/claim-timing';
 import { compareByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
-import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { type TranscriptClaim, claimsForParticipant, unmatchedClaims } from '~/core/debates/transcript-claims';
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
@@ -29,6 +27,7 @@ import { Close } from '~/design-system/icons/close';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
+import { useDebateClaimResponse } from './use-debate-claim-response';
 import { WinnerVoteButton } from './winner-vote-button';
 
 /** How many of a debater's claims show before "Show more". */
@@ -362,36 +361,11 @@ function PanelClaimControls({
   entity: Entity | null;
 }) {
   // The claim's row title is drawn by `ClaimRow` above, so nothing is passed for it here.
-  const {
-    responseKind,
-    isResponseKindResolved,
-    isViewerResponseResolved,
-    responseBlockedReason,
-    summary,
-    claim,
-    positions,
-    readiness,
-  } = useClaimResponseState({
+  const { responseKind, summary, control } = useDebateClaimResponse({
     claimId,
     spaceId,
     row,
     entity,
-  });
-
-  const promptSignIn = usePrivySignIn();
-  const control = useClaimPositionControl({
-    claim,
-    positions,
-    readiness,
-    answersReady: isResponseKindResolved && isViewerResponseResolved,
-    responseBlockedReason,
-    onRequireSignIn: promptSignIn,
-    // No offer here, so no faces borrowed from one. The panel deliberately has no end slot — the
-    // reader is already watching the debate this claim is being argued in — and the merge exists to
-    // stop a card offering a debate on a side showing nobody to debate. With nothing offered, all it
-    // could do is put an unrelated stranger from an account-level match inside a pill on a row about
-    // this debate's own participants.
-    offersDebate: false,
   });
 
   return (
