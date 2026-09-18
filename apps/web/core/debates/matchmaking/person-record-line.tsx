@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 
-import { InfoSmall } from '~/design-system/icons/info-small';
 import { Megaphone } from '~/design-system/icons/megaphone';
+import { Warning } from '~/design-system/icons/warning';
 import { Text } from '~/design-system/text';
 
 import { Crown } from '../browse/icons';
@@ -71,7 +71,7 @@ export function PersonRecordLine({ record }: { record: PersonRecord }) {
         <ul className="m-0 flex list-none flex-wrap items-center gap-x-3 gap-y-0.5 p-0">
           {positions !== null && (
             <Stat
-              icon={<InfoSmall size={ICON_SIZE} />}
+              icon={<Warning size={ICON_SIZE} />}
               value={String(positions)}
               label={`${positions} ${positions === 1 ? 'position' : 'positions'}`}
             />

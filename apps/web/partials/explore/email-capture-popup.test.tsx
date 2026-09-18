@@ -4,14 +4,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import * as React from 'react';
 
 import { getDefaultStore } from 'jotai';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { isChatOpenAtom } from '~/core/state/chat-store';
 
-import { entitySidePanelAtom } from '~/atoms';
-
 import { ExploreEmailCapturePopup } from './email-capture-popup';
+import { entitySidePanelAtom } from '~/atoms';
 
 const store = getDefaultStore();
 
@@ -345,17 +343,14 @@ describe('ExploreEmailCapturePopup', () => {
     expect(screen.getByRole('button', { name: 'Subscribe' })).not.toBeDisabled();
   });
 
-  // Below 382px the card stops being 350 wide and `object-cover` begins cropping. Centred, it crops
-  // evenly and the artwork's baked-in close glyph drifts left while the real button stays at
-  // `right-4` — 31px apart on a 320px viewport, which uncovers the glyph the chip exists to hide.
-  // Anchored right, both are measured from the same edge at every width.
-  it('anchors the artwork to the right, where the close button is measured from', () => {
+  // The artwork is decoration: a screen reader walking into the card should reach the heading and
+  // the form, not a run of entity names and relation tags from the illustration.
+  it('hides the artwork from assistive technology', () => {
     render(<ExploreEmailCapturePopup />);
     scrollPastTrigger();
 
-    const artwork = popup()?.querySelector('img');
+    const artwork = popup()?.querySelector('img')?.closest('[aria-hidden]');
     expect(artwork).not.toBeNull();
-    expect(artwork?.className).toContain('object-right');
   });
 
   // Opened from the welcome banner on this very page, so a logged-out reader is one click away.
@@ -451,14 +446,14 @@ describe('ExploreEmailCapturePopup', () => {
   });
 
   // Both headlines, not just the one that was reported: they share the styling, so a fix applied
-  // to one is a fix half-applied. The design's 17px leading sits under the 28px glyphs and only
-  // works unwrapped; below 382px the card narrows and these wrap into each other.
+  // to one is a fix half-applied. The design's 15px leading sits under the 24px glyphs and only
+  // works unwrapped; below 320px the sheet narrows and these wrap into each other.
   it('gives both headlines a leading that survives wrapping on a narrow card', async () => {
     const view = render(<ExploreEmailCapturePopup />);
     scrollPastTrigger();
 
-    const heading = screen.getByText('Geo Network launching soon!');
-    expect(heading.className).toContain('max-[382px]:leading-[30px]');
+    const heading = screen.getByText('Geo network launching soon!');
+    expect(heading.className).toContain('max-[319px]:leading-[28px]');
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reader@example.com' } });
     await act(async () => {
@@ -466,7 +461,7 @@ describe('ExploreEmailCapturePopup', () => {
     });
     view.rerender(<ExploreEmailCapturePopup />);
 
-    expect(screen.getByText('You are on the list.').className).toContain('max-[382px]:leading-[30px]');
+    expect(screen.getByText('You are on the list.').className).toContain('max-[319px]:leading-[28px]');
   });
 
   // The observer covers the whole body on a page holding an infinite feed, so leaving it running

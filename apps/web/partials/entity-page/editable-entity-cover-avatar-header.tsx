@@ -20,7 +20,12 @@ import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 
-import { ENTITY_PAGE_CONTENT_MAX_WIDTH, ENTITY_PAGE_COVER_MAX_WIDTH } from './entity-page-layout';
+import {
+  ENTITY_PAGE_CONTENT_MAX_WIDTH,
+  ENTITY_PAGE_COVER_MAX_WIDTH,
+  ENTITY_PAGE_WIDTH_VARIABLES,
+  ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH,
+} from './entity-page-layout';
 
 const COVER_IMAGE_HEIGHT = 320;
 const MOBILE_COVER_IMAGE_HEIGHT_CLASS = 'md:!h-[180px]';
@@ -48,15 +53,26 @@ function computeLayout(hasCover: boolean, hasCoverImage: boolean, hasAvatar: boo
 
 export const EditableCoverAvatarHeader = ({
   avatarUrl,
+  contentMaxWidth = ENTITY_PAGE_CONTENT_MAX_WIDTH,
   coverUrl,
   fitImage = false,
 }: {
   avatarUrl: string | null;
+  /**
+   * How wide the text column under this header is, so the avatar can line up
+   * with it. Defaults to the ordinary page width; a surface that renders a rail
+   * — a profile — passes the wider with-sidebar width instead.
+   */
+  contentMaxWidth?: number;
   coverUrl: string | null;
   fitImage?: boolean;
 }) => {
   const { spaceId, id } = useEntityStoreInstance();
   const editable = useUserIsEditing(spaceId);
+
+  // A profile's column is 1142 wide and narrows to 900 where the rail drops
+  // itself, so the avatar's box has to follow it rather than sit at one width.
+  const isWideColumn = contentMaxWidth === ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH;
 
   const renderedProperties = useEditableProperties(id, spaceId);
 
@@ -130,8 +146,32 @@ export const EditableCoverAvatarHeader = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={TRANSITION}
-            className="absolute right-0 left-0 mx-auto flex justify-start"
-            style={{ bottom: -AVATAR_OVERFLOW, maxWidth: ENTITY_PAGE_CONTENT_MAX_WIDTH }}
+            // Centred in a box the width of the *text column*, so its left edge
+            // lands where the name below it starts. The cover is wider than the
+            // column at every width (1192 against 900 or 1142), so aligning to
+            // the cover instead puts the avatar 25–146px to the left of the
+            // name — which is why this takes the column's width rather than
+            // assuming one.
+            //
+            // And it has to take it *responsively*. `EntityPageContentContainer`
+            // narrows a with-sidebar column back to 900px at `lg` (which is a
+            // max-width of 1023px here), because the rail drops itself at that
+            // point. A fixed 1142 left this box viewport-wide between 901px and
+            // 1023px while the name centred at 900 — the avatar sliding up to
+            // 121px left of the name it is supposed to line up with, in exactly
+            // one band of widths.
+            className={cx(
+              'absolute right-0 left-0 mx-auto flex justify-start',
+              isWideColumn &&
+                'max-w-[var(--entity-page-with-sidebar-max-width)] lg:max-w-[var(--entity-page-content-max-width)]'
+            )}
+            style={{
+              bottom: -AVATAR_OVERFLOW,
+              maxWidth: isWideColumn ? undefined : contentMaxWidth,
+              // Declared here because the container's copy is scoped to its own
+              // element, which is not an ancestor of this one.
+              ...(isWideColumn ? ENTITY_PAGE_WIDTH_VARIABLES : {}),
+            }}
           >
             <div className="flex h-20 w-20 items-center justify-center rounded-lg">
               <AvatarCoverInput

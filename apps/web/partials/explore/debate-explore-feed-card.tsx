@@ -7,22 +7,24 @@ import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
+import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
+import { Warning } from '~/design-system/icons/warning';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
-import { ExploreCardEntityLink } from './explore-card-entity-link';
-import { ExploreClaimsIcon } from './explore-claims-icon';
+import { ExploreCardTitle } from './explore-card-title';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
 import { ExploreShareIcon } from './explore-share-icon';
 import { SpaceThumb } from './space-thumb';
@@ -63,23 +65,12 @@ export function DebateExploreFeedCard({
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
   const debateId = ID.hexToUuid(item.entityId);
 
-  const [container, setContainer] = React.useState<HTMLElement | null>(null);
-
-  // The feed mounts items far below the fold (its pagination sentinel uses a huge rootMargin), so
-  // gate the geo-chat lookups on proximity to the viewport instead of on mount — otherwise every
-  // debate in every loaded page fires its requests at once. Sticky: once fetched, stay fetched.
-  const [nearViewport, setNearViewport] = React.useState(false);
-  React.useEffect(() => {
-    if (!container || nearViewport) return;
-    const observer = new IntersectionObserver(
-      entries => {
-        if (entries.some(entry => entry.isIntersecting)) setNearViewport(true);
-      },
-      { rootMargin: '800px' }
-    );
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, [container, nearViewport]);
+  // The feed retains every fetched row, so proximity has to govern the lifetime of the expensive
+  // subtree, not just its first request. Once this card leaves the window, unmounting the player
+  // releases both video elements and unsubscribes its playback/vote/transcript consumers. Query
+  // data remains in TanStack's cache, so reverse scrolling can rebuild without turning every old
+  // card into a permanently live media player (GEO-2963).
+  const { element: container, ref: setContainer, nearViewport } = useNearViewport({ sticky: false });
 
   // Autoplay while mostly in view, pause when scrolled past — same activation ratio as the
   // full-screen feed. Playback is muted by default so multiple visible cards can't clash.
@@ -114,6 +105,12 @@ export function DebateExploreFeedCard({
     observer.observe(container);
     return () => observer.disconnect();
   }, [container]);
+
+  // A veto, not a replacement: where a surface holds playback to one debate —
+  // a row of cards, all of them fully on screen at once — this says whether it
+  // is this one's turn. A card that is allowed but scrolled away still stops,
+  // because its own judgement above is unchanged.
+  const playbackAllowed = useDebatePlaybackAllowed(debateId);
 
   const debateQuery = useDebate(debateId, nearViewport);
   const debate = debateQuery.data;
@@ -173,19 +170,15 @@ export function DebateExploreFeedCard({
         </Link>
       </div>
 
-      <ExploreCardEntityLink item={item} opensSidePanel={titleOpensSidePanel}>
-        <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
-          {item.title}
-        </h2>
-      </ExploreCardEntityLink>
+      <ExploreCardTitle item={item} opensSidePanel={titleOpensSidePanel} />
 
       {/* Cap the media at the width the designs (and the full-screen feed) use — feed columns,
           especially data blocks, can be much wider and full-bleed videos dwarf the card. */}
       <div className="w-full max-w-[480px]">
-        {readyDebate ? (
-          // `nearViewport` is the same 800px-margin gate the geo-chat lookups already use, so
-          // the recordings resolve while the card is still approaching rather than on arrival.
-          <DebateCardVideos debate={readyDebate} active={active} preload={nearViewport} />
+        {readyDebate && nearViewport ? (
+          // The recordings resolve while the card is still approaching. Crossing back out of
+          // that same window unmounts this subtree instead of retaining two paused videos forever.
+          <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} />
         ) : (
           <DebateVideoSkeleton />
         )}
@@ -193,7 +186,7 @@ export function DebateExploreFeedCard({
 
       <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
         <EntityCommentsButton entityId={item.entityId} spaceId={item.spaceId} count={item.commentCount} />
-        {readyDebate ? <DebateCardExtras debate={readyDebate} spaceId={item.spaceId} /> : null}
+        {readyDebate && nearViewport ? <DebateCardExtras debate={readyDebate} spaceId={item.spaceId} /> : null}
       </EntityRowActions>
     </article>
   );
@@ -217,7 +210,7 @@ function DebateCardExtras({ debate, spaceId }: { debate: Debate; spaceId: string
         onClick={() => setClaimsOpen(true)}
         className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
       >
-        <ExploreClaimsIcon />
+        <Warning size={12} />
         <span className="text-[14px] font-normal tabular-nums">{claims.totalCount}</span>
       </button>
       <button
@@ -249,17 +242,9 @@ function DebateCardExtras({ debate, spaceId }: { debate: Debate; spaceId: string
 
 // Separate component so useDebateVotes (which queries as soon as it mounts) only runs once the
 // debate is loaded and known to be watchable.
-function DebateCardVideos({
-  debate,
-  active,
-  preload,
-}: {
-  debate: Debate;
-  active: boolean;
-  preload: boolean;
-}) {
+function DebateCardVideos({ debate, active }: { debate: Debate; active: boolean }) {
   const votes = useDebateVotes(debate);
-  return <DebateFeedPlayer debate={debate} active={active} preload={preload} votes={votes} />;
+  return <DebateFeedPlayer debate={debate} active={active} preload votes={votes} />;
 }
 
 function DebateVideoSkeleton() {

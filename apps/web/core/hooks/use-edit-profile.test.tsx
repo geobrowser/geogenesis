@@ -1296,4 +1296,26 @@ describe('the rows the history sections publish alongside', () => {
     const [{ values }] = mocks.makeProposal.mock.calls.at(-1)!;
     expect(values.map((value: Value) => value.id)).toContain('history-value-2');
   });
+
+  it('publishes the new payload when a failed row is edited without changing its id', async () => {
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    fail();
+    await act(async () => {
+      await result.current.publish(
+        draft({ name: 'Preston M' }),
+        extra([historyValue('history-value-1', { value: 'first attempt' })])
+      );
+    });
+
+    await act(async () => {
+      await result.current.publish(
+        draft({ name: 'Preston M' }),
+        extra([historyValue('history-value-1', { value: 'edited retry' })])
+      );
+    });
+
+    const [{ values }] = mocks.makeProposal.mock.calls.at(-1)!;
+    expect(values).toContainEqual(expect.objectContaining({ id: 'history-value-1', value: 'edited retry' }));
+  });
 });

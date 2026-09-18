@@ -27,6 +27,7 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
+import { PersonalSpaceProfile } from '~/partials/profile/personal-space-profile';
 import { SpaceOverviewSidePanelContainer } from '~/partials/space-page/space-overview-side-panel-container';
 import { SubtopicGalleryServerContainer } from '~/partials/space-page/subtopic-gallery-server-container';
 
@@ -83,6 +84,19 @@ export default async function SpacePage(props0: Props) {
 
   const space = await cachedFetchSpace(spaceId);
 
+  // A personal space with a person on it gets the profile page. The person is
+  // `space.entity` — `topic ?? page` — because plenty of these carry the person
+  // on `page` with `topicId` still null. See `isPersonProfileSpace`.
+  if (space && Spaces.isPersonProfileSpace(space)) {
+    return <PersonalSpaceBody space={space} topicEntityId={space.entity.id} tabId={tabId} />;
+  }
+
+  // Left on `hasExternalTopic` deliberately, dead though it is: that predicate
+  // cannot return true for a space whose topic resolved — `SpaceDto` builds
+  // `entity` from `topic ?? page`, so the comparison is always false — which
+  // means this branch never fires for the DAO spaces it was written for. Waking
+  // it is a change to every one of them, not a side effect of the profile work.
+  // See `topic-predicates.test.ts`.
   if (Spaces.hasExternalTopic(space)) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
@@ -127,6 +141,68 @@ export default async function SpacePage(props0: Props) {
         </React.Suspense>
       </TrackedErrorBoundary>
     </EntityPageSidebarLayout>
+  );
+}
+
+/**
+ * A personal space, as a profile (GEO-2859).
+ *
+ * The main column only. The header above it and the rail beside it are both
+ * assembled in the layout, so they persist across every tab rather than
+ * appearing and vanishing with this page — see `profileRail` there.
+ *
+ * The layout's providers already carry this entity: for a profile the space's
+ * own `entity` *is* the topic, so `RouteEditorProvider` up there is holding the
+ * person's blocks and tabs, and a second set here would be the same data twice.
+ */
+async function PersonalSpaceBody({
+  space,
+  topicEntityId,
+  tabId,
+}: {
+  space: NonNullable<Awaited<ReturnType<typeof cachedFetchSpace>>>;
+  topicEntityId: string;
+  /** An authored tab, when one is open. Its content replaces the profile. */
+  tabId: string | undefined;
+}) {
+  const spaceId = space.id;
+
+  // An authored tab is a page this person wrote, not a view of their profile.
+  // Rendering Experience and Education underneath it said the tab was a section
+  // of the profile rather than a tab beside it.
+  if (tabId) {
+    return (
+      <React.Suspense fallback={null}>
+        <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+      </React.Suspense>
+    );
+  }
+
+  return (
+    <>
+      <PersonalSpaceProfile spaceId={spaceId} personEntityId={topicEntityId} />
+
+      <Spacer height={40} />
+
+      <React.Suspense fallback={null}>
+        <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+      </React.Suspense>
+
+      {/*
+       * No properties panel. Every property it would list is already on this
+       * page in a form a reader understands — the types in the rail, the links
+       * beside them, the history in its own sections — and the raw table
+       * underneath them says the same things again in the graph's vocabulary
+       * rather than a person's.
+       */}
+      <Spacer height={40} />
+
+      <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+        <React.Suspense fallback={<div />}>
+          <BacklinksServerContainer entityId={topicEntityId} />
+        </React.Suspense>
+      </TrackedErrorBoundary>
+    </>
   );
 }
 

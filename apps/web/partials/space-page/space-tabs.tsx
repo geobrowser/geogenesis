@@ -13,7 +13,7 @@ import { NavUtils, sortRelations } from '~/core/utils/utils';
 
 import { TabGroup } from '~/design-system/tab-group';
 
-import { EditableTabGroup } from '~/partials/entity-page/editable-tab-group';
+import { EditableTabGroup, type SystemTab } from '~/partials/entity-page/editable-tab-group';
 
 type SpaceTabsProps = {
   spaceId: string;
@@ -21,13 +21,38 @@ type SpaceTabsProps = {
   initialTabRelations: Relation[];
   tabEntities: TabEntity[];
   typeIds: string[];
+  /** Whether this space renders the person profile — see `buildSpaceTabs`. */
+  isProfile: boolean;
+  /** How much this person's record holds, for hiding empty tabs — see `buildSpaceTabs`. */
+  personRecordCounts?: PersonRecordCounts;
 };
 
 type BuiltSpaceTab = {
   label: string;
   href: string;
-  priority: 1 | 2 | 3 | 4 | 5;
+  priority: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  /** Draws a rule before this tab, separating the space's own tabs from authored ones. */
+  dividerBefore?: boolean;
+  /** Only shown at the widths where the side rail is dropped. */
+  onlyWhenNarrow?: boolean;
 };
+
+/** The record routes on a profile. Reachable only by their own tab — see the dedupe below. */
+const PERSON_TAB_LABELS = ['Debates', 'Positions', 'Proposals', 'About'] as const;
+
+/**
+ * The About tab, defined once for both paths that draw it.
+ *
+ * The read-only path builds its tabs through `buildSpaceTabs`; the editable one
+ * assembles its own. They each used to spell this out, and they drifted — the
+ * editable copy lost `onlyWhenNarrow`, so an owner in edit mode on a wide screen
+ * could click About and land on an empty column, because `about/page.tsx` hides
+ * its body wherever the rail is showing. Three places have to agree about this
+ * tab's width rule; one of them can at least be one value.
+ */
+function aboutTab(spaceId: string) {
+  return { label: 'About', href: `/space/${spaceId}/about`, onlyWhenNarrow: true } as const;
+}
 
 type BuildSpaceTabsParams = {
   spaceId: string;
@@ -35,6 +60,36 @@ type BuildSpaceTabsParams = {
   dynamicTabs: Array<{ label: string; href: string }>;
   typeIds: string[];
   isDebugDebatesPageEnabled: boolean;
+  /**
+   * Whether this space renders the person profile (GEO-2859).
+   *
+   * Passed in rather than inferred from `PERSON_TYPE`, because the two are not
+   * the same question. `isPersonProfileSpace` wants a `PERSONAL` space *and* a
+   * person on it; a Person entity written into a DAO space satisfies the type
+   * check and nothing else — and would have been handed Positions, Proposals
+   * and About links whose route guards answer 404, while losing Governance and
+   * Activity it should still have.
+   */
+  isProfile: boolean;
+  /**
+   * How much this person's record holds, for hiding the tabs that hold nothing
+   * (GEO-2859).
+   *
+   * A tab leading to "No proposals yet" is a promise the profile cannot keep:
+   * most people have never opened a proposal, so on most profiles it is a third
+   * of the navigation spent on an empty room.
+   *
+   * **Undefined shows everything**, which is the safe direction: the counts come
+   * from a request that can fail, and a failed count must not be read as an
+   * empty record and hide a tab holding hundreds of rows.
+   */
+  personRecordCounts?: PersonRecordCounts;
+};
+
+export type PersonRecordCounts = {
+  debates: number;
+  positions: number;
+  proposals: number;
 };
 
 export function buildSpaceTabs({
@@ -43,6 +98,8 @@ export function buildSpaceTabs({
   dynamicTabs,
   typeIds,
   isDebugDebatesPageEnabled,
+  isProfile,
+  personRecordCounts,
 }: BuildSpaceTabsParams): BuiltSpaceTab[] {
   const tabs: BuiltSpaceTab[] = [];
 
@@ -74,25 +131,87 @@ export function buildSpaceTabs({
     priority: 5,
   };
 
+  /**
+   * A person's record (GEO-2859).
+   *
+   * These are the person's, not the space's: debates they took a side in,
+   * claims they hold a position on, proposals they made anywhere. They stand in
+   * for both Governance and Activity, which is why a person gets neither — a
+   * personal space has no governance of its own, and Proposals is the same log
+   * Activity was showing, with the vote and the outcome on it.
+   */
+  const isPerson = isProfile;
+
+  // Overview is not in here and is never hidden: it is the profile itself, and a
+  // person with an empty record still has a name, a bio and a rail.
+  const countFor: Record<string, number | undefined> = {
+    Debates: personRecordCounts?.debates,
+    Positions: personRecordCounts?.positions,
+    Proposals: personRecordCounts?.proposals,
+  };
+
+  const PERSON_TABS: BuiltSpaceTab[] = (
+    [
+      { label: 'Debates', href: `/space/${spaceId}/debates`, priority: 4 },
+      { label: 'Positions', href: `/space/${spaceId}/positions`, priority: 4 },
+      { label: 'Proposals', href: `/space/${spaceId}/proposals`, priority: 4 },
+    ] satisfies BuiltSpaceTab[]
+  ).filter(tab => {
+    const count = countFor[tab.label];
+    return count === undefined || count > 0;
+  });
+
   tabs.push(...ALL_SPACES_TABS);
 
   if (typeIds.includes(SystemIds.SPACE_TYPE)) {
     if (dynamicTabs.length > 0) {
-      const reservedLabels = new Set([...(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label] : [])]);
+      // Labels an authored tab cannot take, because the route behind each is
+      // reachable no other way.
+      //
+      // Wider than it was. An authored "Claims" or "Debates" tab beating the
+      // system one is fine on a space — those system tabs are not rendered
+      // there at all. On a profile the four below *are* the record, and About
+      // is the only path to the rail's facts below 1024px, where the rail drops
+      // itself. Shadowing one does not replace it; it makes it unreachable.
+      const reservedLabels = new Set([
+        ...(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label] : []),
+        ...(isPerson ? PERSON_TAB_LABELS : []),
+      ]);
       const visibleDynamicTabs =
         reservedLabels.size > 0 ? dynamicTabs.filter(tab => !reservedLabels.has(tab.label)) : dynamicTabs;
 
-      tabs.push(...visibleDynamicTabs.map(tab => ({ ...tab, priority: 1 as const })));
+      // A person's authored tabs go last, behind a rule: the three system tabs
+      // are the record everyone's profile has, and what this person chose to
+      // add is a different kind of thing. A space keeps them beside Overview,
+      // where its own content has always led.
+      tabs.push(
+        ...visibleDynamicTabs.map((tab, index) => ({
+          ...tab,
+          priority: (isPerson ? 6 : 1) as 1 | 6,
+          dividerBefore: isPerson && index === 0,
+        }))
+      );
     }
   }
 
   if (isDebugDebatesPageEnabled) tabs.push(DEBUG_DEBATES_TAB);
 
-  if (typeIds.includes(SystemIds.SPACE_TYPE) && !typeIds.includes(SystemIds.PERSON_TYPE)) {
+  if (typeIds.includes(SystemIds.SPACE_TYPE) && !isPerson) {
     tabs.push(...SOME_SPACES_TABS);
   }
 
-  tabs.push(ACTIVITY_TAB);
+  // The dedupe below is first-wins, so these would lose to an authored tab of
+  // the same name — which is why those names are reserved above.
+  if (isPerson) {
+    tabs.push(...PERSON_TABS);
+
+    // Last, and only where the rail is not. Below 1024px `StickySideRail` drops
+    // itself rather than render something too narrow to read, and without this
+    // the spaces, links and counts are simply unreachable on a phone.
+    tabs.push({ ...aboutTab(spaceId), priority: 7 });
+  }
+
+  if (!isPerson) tabs.push(ACTIVITY_TAB);
 
   const seen = new Map<string, BuiltSpaceTab>();
 
@@ -105,7 +224,15 @@ export function buildSpaceTabs({
   return [...seen.values()].sort((a, b) => a.priority - b.priority);
 }
 
-export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities, typeIds }: SpaceTabsProps) {
+export function SpaceTabs({
+  spaceId,
+  entityId,
+  initialTabRelations,
+  tabEntities,
+  typeIds,
+  isProfile,
+  personRecordCounts,
+}: SpaceTabsProps) {
   const { editable } = useEditable();
   const isDebugDebatesPageEnabled = useDebugDebatesPageEnabled();
 
@@ -144,13 +271,14 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
 
   // Our Community tab renders for non-person spaces, always as the 2nd tab (after
   // Overview) — and in addition to any custom "Community" tab the space authored.
-  const showCommunity = typeIds.includes(SystemIds.SPACE_TYPE) && !typeIds.includes(SystemIds.PERSON_TYPE);
+  const isPersonSpace = isProfile;
+  const showCommunity = typeIds.includes(SystemIds.SPACE_TYPE) && !isPersonSpace;
   // System tabs bracket the custom (dynamic) tabs: Overview + our Community lead,
   // Governance + Activity trail.
-  const systemTabsBefore: Array<{ label: string; href: string }> = [{ label: 'Overview', href: overviewHref }];
+  const systemTabsBefore: SystemTab[] = [{ label: 'Overview', href: overviewHref }];
   if (showCommunity) systemTabsBefore.push({ label: 'Community', href: `/space/${spaceId}/community` });
 
-  const systemTabsAfter: Array<{ label: string; href: string }> = [];
+  const systemTabsAfter: SystemTab[] = [];
 
   if (isDebugDebatesPageEnabled) {
     systemTabsAfter.push({ label: 'Debug debates', href: `/space/${spaceId}/debug-debates` });
@@ -158,9 +286,42 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
 
   if (showCommunity) systemTabsAfter.push({ label: 'Governance', href: `/space/${spaceId}/governance` });
 
-  systemTabsAfter.push({ label: 'Activity', href: `/space/${spaceId}/activity` });
+  // The same three the read-only path builds, so a person's record does not
+  // disappear the moment they switch their own profile into edit mode — and
+  // *before* the authored tabs, which is where they sit on a profile.
+  if (isPersonSpace) {
+    systemTabsBefore.push(
+      { label: 'Debates', href: `/space/${spaceId}/debates` },
+      { label: 'Positions', href: `/space/${spaceId}/positions` },
+      { label: 'Proposals', href: `/space/${spaceId}/proposals` }
+    );
+    systemTabsAfter.push(aboutTab(spaceId));
+  } else {
+    systemTabsAfter.push({ label: 'Activity', href: `/space/${spaceId}/activity` });
+  }
 
   if (editable && typeIds.includes(SystemIds.SPACE_TYPE)) {
+    /*
+     * No reserved-label filter here, unlike the read-only path below, and that
+     * asymmetry is deliberate.
+     *
+     * Read-only hides an authored tab whose name collides with one of the four
+     * record labels, because shadowing a record tab makes it unreachable and
+     * About is the only route to the rail's facts below 1024px. Doing the same
+     * in edit mode would leave the owner a tab they can neither see nor rename
+     * nor delete — an orphan, which is strictly worse than a duplicate.
+     *
+     * So edit mode is the escape hatch: the authored tab is a draggable
+     * `SortableTab` carrying rename and delete, beside the system tab's plain
+     * `StaticTab`, so the two are told apart by what they can do even where
+     * their labels match.
+     *
+     * Three spaces in the graph are in this position today — one authored
+     * `Debates`, one `Positions`, one `About`. (Seventy-two more authored
+     * `About` tabs sit on DAO spaces, which the reservation never touches.)
+     * Whether the owner should also be *warned* that a tab of theirs is hidden
+     * in the read-only view is a design question, not a bug in this branch.
+     */
     const editableTabs = sortedTabRelations.map((relation, i) => ({
       relation,
       entityId: sortedTabEntities[i].id,
@@ -187,11 +348,13 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
   }));
 
   const baseTabs = buildSpaceTabs({
+    personRecordCounts,
     spaceId,
     overviewHref,
     dynamicTabs,
     typeIds,
     isDebugDebatesPageEnabled,
+    isProfile,
   });
 
   // Overview, then our Community tab, then everything else.

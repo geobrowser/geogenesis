@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEBATE_OPPOSED_BY_PROPERTY,
+  DEBATE_SUPPORTED_BY_PROPERTY,
+  DEBATE_TYPE,
   DEGREE_INFORMATION_TYPE,
   DEGREE_PROPERTY,
   DEGREE_TYPE,
@@ -180,5 +183,25 @@ describe('location type options', () => {
   // The graph spells it `Onsite`. Writing `On-site` would point at nothing.
   it('spells them the way the graph does', () => {
     expect(LOCATION_TYPE_OPTIONS.map(option => option.name)).toEqual(['Onsite', 'Hybrid', 'Remote']);
+  });
+});
+
+/**
+ * The three ids a debate uses to name who argued it. Pinned because all three
+ * are indistinguishable from a wrong id at runtime: a bad property id returns an
+ * empty relation list rather than an error, so the tab would simply look like a
+ * person who has never debated.
+ */
+describe('debate participation', () => {
+  it('pins the two side properties and the debate type', () => {
+    expect(DEBATE_SUPPORTED_BY_PROPERTY).toBe('d19fad5651364a7f8309daf5c7bf99dd');
+    expect(DEBATE_OPPOSED_BY_PROPERTY).toBe('c57de77c3eee4e7ba0d2258d18aab11c');
+    expect(DEBATE_TYPE).toBe('fd51f93520634617be397b672b23364c');
+  });
+
+  // Three properties in the graph are named "Supported by". Picking the wrong
+  // one is silent.
+  it('keeps the two sides distinct', () => {
+    expect(DEBATE_SUPPORTED_BY_PROPERTY).not.toBe(DEBATE_OPPOSED_BY_PROPERTY);
   });
 });

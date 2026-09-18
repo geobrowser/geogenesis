@@ -1227,7 +1227,7 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
 
-    expect(screen.getByRole('radio', { name: 'System default' })).toBeChecked();
+    expect(await screen.findByRole('radio', { name: 'System default' })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled();
     expect(screen.queryByRole('radio', { name: 'Studio Speakers' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
@@ -1270,8 +1270,12 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Display Speakers' }));
+    // Awaited, not `getByRole`: the speaker list is populated from `enumerateDevices`, and
+    // selecting a speaker re-renders it while that selection is still pending — so a name can be
+    // briefly absent between two clicks. A synchronous query here made this test fail about one run
+    // in four, on this branch and on master alike.
+    fireEvent.click(await screen.findByRole('radio', { name: 'Studio Speakers' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Display Speakers' }));
 
     act(() =>
       latestSelection.resolve({
@@ -1423,7 +1427,7 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Studio Mic' }));
     await waitFor(() =>
       expect(mocks.createLocalTracks).toHaveBeenCalledWith({
         audio: { deviceId: 'mic-2' },

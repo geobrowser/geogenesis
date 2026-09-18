@@ -375,6 +375,7 @@ describe('EntityFeed Explore type filter', () => {
       commentCount: 0,
       recordingUrls: [],
       debateVideoUrls: [],
+      debateClaim: null,
       isMemberOrEditor: true,
       hasPendingMembershipRequest: false,
     };

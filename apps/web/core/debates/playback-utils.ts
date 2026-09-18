@@ -147,6 +147,84 @@ function offsetSeconds(startedAtMs: number | null, windowStartMs: number): numbe
   return (startedAtMs - windowStartMs) / 1_000;
 }
 
+/** What `pairPlayhead` needs off an element, so tests need not build a whole video. */
+export type ClockVideo = Pick<HTMLVideoElement, 'paused' | 'currentTime'>;
+
+export type PairPlayhead = {
+  /** Debate-timeline seconds. */
+  seconds: number;
+  /** Read off an element that is actually running, rather than reconstructed from a paused one. */
+  live: boolean;
+};
+
+/**
+ * Where the debate is, in debate-timeline seconds, given the two recordings' own clocks.
+ *
+ * Slot 1 is the clock, always, in the foreground. The pair is kept in lockstep, so its position
+ * plus its recording offset is the debate's position, and every seek is expressed that way. Slot 2
+ * is *not* interchangeable with it: it is deliberately allowed to run ahead — the drift nudge puts
+ * it there on purpose, and a stalled slot 1 can leave it far ahead (GEO-2828) — so treating its
+ * clock as the debate's would skip whatever it had got through but the viewer had not heard.
+ *
+ * `trustSecondary` is what turns that off, and it means one specific thing: the pair was stopped
+ * by the browser rather than by us, which happens when the tab is off screen (GEO-2947). There,
+ * slot 1's clock is not canonical at all — it is frozen at whatever instant the browser stopped
+ * the element it considered silent, while slot 2 carried the debate on — so the position has to
+ * be recovered from whatever evidence there is:
+ *
+ *  - whichever element is still running, slot 1 first;
+ *  - then the furthest frozen clock, since a browser does not stop both at the same instant;
+ *  - and `lastRunningSeconds`, the caller's own record, which covers the case where an element
+ *    stopped between the throttled `timeupdate` ticks of a background tab.
+ *
+ * Slot 2's frozen clock counts only once its `currentTime` shows the recording has played: one
+ * that starts after the debate window has a positive offset, so an untouched slot 2 would
+ * otherwise report being that far into the debate before a frame of it had been shown.
+ *
+ * The caller must reset its record on a deliberate seek and when the recordings change, or a
+ * scrub backwards would be dragged forward by it — `useDebatePlayback` does both.
+ *
+ * `live` says whether the answer came off a running element, so a caller can keep its record
+ * current without re-deriving "is either element running" for itself.
+ */
+export function pairPlayhead(
+  primary: ClockVideo | null,
+  secondary: ClockVideo | null,
+  offsets: { slot1: number; slot2: number },
+  lastRunningSeconds: number | null = null,
+  trustSecondary = false
+): PairPlayhead {
+  const primarySeconds = (primary?.currentTime ?? 0) + offsets.slot1;
+  const primaryRunning = Boolean(primary && !primary.paused);
+
+  if (!trustSecondary) {
+    // Slot 1 is the clock and a running slot 1 is the whole answer: the record is only there to
+    // raise a *frozen* one. Anything else would drag a scrub backwards forward again.
+    if (primaryRunning) return { seconds: primarySeconds, live: true };
+    return {
+      seconds: lastRunningSeconds === null ? primarySeconds : Math.max(primarySeconds, lastRunningSeconds),
+      live: false,
+    };
+  }
+
+  // Off screen no clock is authoritative, *including a running one*. A browser that stopped slot 1
+  // at debate-time 100 while slot 2 ran on to 130 can hand slot 1 back un-paused at its frozen 100
+  // — un-suspended, or un-paused-but-stalled, which `paused === false` cannot tell apart and which
+  // is slot 1's documented failure mode (GEO-2828). Returning that 100 as "live" would walk the
+  // recovered position backwards over half a minute the viewer had already heard, and drag slot 2
+  // back with it on the resume. So every piece of evidence is weighed and the furthest wins.
+  const candidates = [primarySeconds];
+  // Slot 2 counts once its clock shows the recording has played: one that starts after the debate
+  // window has a positive offset, so an untouched slot 2 would otherwise report being that far in.
+  if (secondary && secondary.currentTime > 0) candidates.push(secondary.currentTime + offsets.slot2);
+  if (lastRunningSeconds !== null) candidates.push(lastRunningSeconds);
+
+  return {
+    seconds: Math.max(...candidates),
+    live: primaryRunning || Boolean(secondary && !secondary.paused),
+  };
+}
+
 export function participantForSlot(debate: Debate, slot: ParticipantSlot) {
   return debate.participants.find(participant => participant.participant_slot === slot) ?? null;
 }
@@ -162,7 +240,23 @@ export function speakerLabel(participant: Pick<DebateParticipant, 'display_name'
 /** The two elements this helper needs, so tests do not have to build a whole `HTMLVideoElement`. */
 export type PlayableVideo = Pick<HTMLVideoElement, 'muted' | 'paused'> & { play: () => Promise<void> };
 
-export type PlayBothOutcome = 'playing' | 'playing-muted' | 'blocked';
+export type PlayBothOutcome = 'playing' | 'playing-muted' | 'blocked' | 'cancelled';
+
+export type PlayBothOptions = {
+  /** Injectable so tests do not wait on real timers. */
+  wait?: (ms: number) => Promise<void>;
+  /**
+   * Has something else taken ownership of these elements since the attempt began?
+   *
+   * This function confirms a start by polling, so it is *asleep* for most of its runtime, and a
+   * pause or a scroll-away lands there routinely. A caller that only checks ownership once this
+   * returns is too late: the retry below would have called `play()` on both elements in the
+   * meantime, leaving a pair the viewer had paused running in the DOM under a UI showing paused
+   * (GEO-2947). Checked before the retry, which is the only point where this function restarts
+   * something it did not start.
+   */
+  isCancelled?: () => boolean;
+};
 
 /**
  * Start both recordings, falling back to muted when the browser blocks unmuted autoplay
@@ -209,8 +303,7 @@ async function bothRunning(
 export async function playBothWithMutedFallback(
   primary: PlayableVideo,
   secondary: PlayableVideo,
-  /** Injectable so tests do not wait on real timers. */
-  wait: (ms: number) => Promise<void> = defaultWait
+  { wait = defaultWait, isCancelled }: PlayBothOptions = {}
 ): Promise<PlayBothOutcome> {
   const attempt = async () => {
     await Promise.allSettled([primary.play(), secondary.play()]);
@@ -219,9 +312,25 @@ export async function playBothWithMutedFallback(
 
   if (await attempt()) return 'playing';
 
+  // Someone paused these, or scrolled them off screen, while the confirm above was polling. The
+  // retry would start them again — and the caller checking ownership after this returns cannot
+  // undo a `play()` that has already happened.
+  if (isCancelled?.()) return 'cancelled';
+
   // Nothing to retry if audio was already off — the block is not the autoplay policy.
   if (primary.muted && secondary.muted) return 'blocked';
 
+  // Both outcomes below leave the elements muted, and deliberately so: this function does not
+  // know what the caller renders `muted` from, and it has been awaiting for up to ~300ms, so any
+  // value it captured on the way in may already be out of date — the viewer can mute from the
+  // control that stays visible during playback, or from another card sharing the preference.
+  // Writing a stale snapshot back is worse than leaving the mute: React only writes a DOM
+  // property when its own previous value differs, so a write it disagrees with is one it will
+  // never repair, and the pair would play audibly under a UI showing muted (GEO-2947).
+  //
+  // 'playing-muted' is paired by the caller with the state change that makes the mute the
+  // rendered truth. 'blocked' is repaired by whoever renders `muted`, once the attempt is over —
+  // `DebateFeedPlayer` re-asserts it when `isResuming` falls.
   primary.muted = true;
   secondary.muted = true;
   return (await attempt()) ? 'playing-muted' : 'blocked';

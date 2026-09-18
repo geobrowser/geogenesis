@@ -89,6 +89,9 @@
   --animate-debate-scroll-hint: debateScrollHint 700ms ease-in-out;
   --animate-fade-in: fadeIn 0.15s ease-in-out;
   --animate-pulse-strong: pulseStrong 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  /* Fade in while rising 5px into place. `both` holds the first frame before it starts, so the
+     element never flashes at full opacity. Used by the Explore email capture popup. */
+  --animate-rise-in: riseIn 200ms ease-out both;
   --animate-slide-down: slideDown 300ms ease-in-out;
   --animate-slide-up: slideUp 300ms ease-in-out;
 
@@ -326,6 +329,17 @@
   }
   100% {
     opacity: 1;
+  }
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
