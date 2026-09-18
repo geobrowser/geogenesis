@@ -26,16 +26,13 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
 ];
 
 /**
- * Both halves of your request traffic, split the way the design does: the one request you have
- * sent under "Sent", and every unexpired request pointed at you under "Received". A received
- * request lives here for its full 25-minute lifetime — dismissing the popup with "Not now" leaves
- * it untouched, so this is where you come back to it.
+ * Sent + received requests (received stays for the full ~25m lifetime after "Not now").
+ * Server already drops offline/blocked; this tab is presentation and space/status narrowing.
  *
- * The server already filters out offline requesters and blocked users, so this tab only owns
- * presentation plus narrowing. (Requests carry no topics — the topic facet is a Claims/Matches
- * concern, so the design's third menu has nothing to offer here.)
+ * `dense` (live rail): no sticky filters — three stickies stacked would overlap, and a rail
+ * has no room for full-tab chrome.
  */
-export function RequestsTab() {
+export function RequestsTab({ dense = false }: { dense?: boolean } = {}) {
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [status, setStatus] = React.useState<RequestStatusFilter>('all');
 
@@ -95,22 +92,24 @@ export function RequestsTab() {
 
   return (
     <div className="flex flex-col">
-      <HubStickyControls>
-        <SpaceTopicFilters
-          spaceIds={spaceIds}
-          onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
-          onSpacesClear={() => setSpaceIds([])}
-          facetSpaces={facetSpaces}
-          leading={
-            <HubFilterMenu
-              label={STATUS_OPTIONS.find(option => option.value === status)?.label ?? 'Any status'}
-              options={STATUS_OPTIONS}
-              value={status}
-              onChange={setStatus}
-            />
-          }
-        />
-      </HubStickyControls>
+      {!dense && (
+        <HubStickyControls>
+          <SpaceTopicFilters
+            spaceIds={spaceIds}
+            onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
+            onSpacesClear={() => setSpaceIds([])}
+            facetSpaces={facetSpaces}
+            leading={
+              <HubFilterMenu
+                label={STATUS_OPTIONS.find(option => option.value === status)?.label ?? 'Any status'}
+                options={STATUS_OPTIONS}
+                value={status}
+                onChange={setStatus}
+              />
+            }
+          />
+        </HubStickyControls>
+      )}
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState

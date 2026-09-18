@@ -21,6 +21,7 @@ import {
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
+  debatesHubMatchesOnlyAtom,
   debatesHubPositionsSearchAtom,
   debatesHubPositionsSpaceIdsAtom,
   debatesHubPositionsSpaceSeedSpentAtom,
@@ -643,5 +644,144 @@ describe('warming Explore', () => {
     renderOpen('lobby');
 
     expect(screen.queryByTestId('claims-tab-warm')).toBeNull();
+  });
+});
+
+describe('the way out to the full-screen hub', () => {
+  it('offers it from every tab, not just the one it was added on', () => {
+    for (const tab of ['requests', 'lobby', 'explore', 'positions', 'people'] as const) {
+      const view = renderOpen(tab);
+      // The route, whatever the tab hands over with it.
+      expect(screen.getByRole('link', { name: /open full screen/i }).getAttribute('href')).toMatch(/^\/matchmaking/);
+      cleanup();
+      void view;
+    }
+  });
+
+  it.each([
+    ['explore', 'explore'],
+    ['positions', 'positions'],
+  ] as const)('opens the workspace on the list %s was showing', (tab, list) => {
+    renderOpen(tab);
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe(list);
+  });
+
+  it('omits Lobby from the URL, which is the workspace default', () => {
+    renderOpen('lobby');
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBeNull();
+  });
+
+  it.each(['requests', 'people'] as const)('hands over no list from %s, which is not one', tab => {
+    renderOpen(tab);
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(href).toBe('/matchmaking');
+  });
+
+  it('hands over Lobby from Lobby, not what its Matches-only toggle says', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'lobby' });
+    store.set(debatesHubMatchesOnlyAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    // Default list is omitted; the toggle never becomes its own `list` value.
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBeNull();
+  });
+
+  /**
+   * A real anchor, so a modified click opens a tab and the destination shows on hover. A router
+   * push would give neither, and the whole point of the route is that it can be linked to.
+   */
+  it('is a link rather than a button', () => {
+    renderOpen('explore');
+
+    const link = screen.getByRole('link', { name: /open full screen/i });
+    expect(link.tagName).toBe('A');
+    expect(link.getAttribute('href')).toMatch(/^\/matchmaking/);
+  });
+
+  it('closes the panel, so it is not left over the page it navigated to', () => {
+    const store = renderOpen('explore');
+    expect(store.get(debatesHubAtom)).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('link', { name: /open full screen/i }));
+
+    expect(store.get(debatesHubAtom)).toBeNull();
+  });
+});
+
+describe('the filters the expand link carries', () => {
+  it('links to a bare route when nothing is narrowed and nothing handed over', () => {
+    renderOpen('people');
+
+    expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute('href', '/matchmaking');
+  });
+
+  /**
+   * `scope` was the old param name. The workspace reads `list` now; a leftover `scope` must not
+   * become that choice.
+   */
+  it('carries no scope, which the workspace has no way to honour', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    store.set(debatesHubExploreSearchAtom, 'nuclear');
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('scope')).toBeNull();
+  });
+
+  it('carries the tab’s narrowing into the URL', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    store.set(debatesHubExploreSearchAtom, 'nuclear');
+    store.set(debatesHubExploreSpaceIdsAtom, ['space-a']);
+    store.set(debatesHubExploreTopicIdsAtom, ['topic-a', 'topic-b']);
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    const params = new URLSearchParams(href.split('?')[1] ?? '');
+    // Carried with the rest: the search is an atom now, so it outlives the tab being unmounted,
+    // which was the one reason this link used to leave it behind.
+    expect(params.get('list')).toBe('explore');
+    expect(params.get('q')).toBe('nuclear');
+    expect(params.get('spaces')).toBe('space-a');
+    expect(params.get('topics')).toBe('topic-a,topic-b');
+  });
+
+  it('carries Lobby’s narrowing, not Explore’s', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'lobby' });
+    store.set(debatesHubLobbySearchAtom, 'climate');
+    store.set(debatesHubExploreSearchAtom, 'nuclear');
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('q')).toBe('climate');
   });
 });
