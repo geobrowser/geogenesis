@@ -16,13 +16,13 @@ import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
+import { Warning } from '~/design-system/icons/warning';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { ExploreCardTitle } from './explore-card-title';
-import { ExploreClaimsIcon } from './explore-claims-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
 import { ExploreShareIcon } from './explore-share-icon';
 import { SpaceThumb } from './space-thumb';
@@ -213,7 +213,7 @@ function DebateCardExtras({ debate, spaceId }: { debate: Debate; spaceId: string
         onClick={() => setClaimsOpen(true)}
         className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
       >
-        <ExploreClaimsIcon />
+        <Warning size={12} />
         <span className="text-[14px] font-normal tabular-nums">{claims.totalCount}</span>
       </button>
       <button
@@ -245,15 +245,7 @@ function DebateCardExtras({ debate, spaceId }: { debate: Debate; spaceId: string
 
 // Separate component so useDebateVotes (which queries as soon as it mounts) only runs once the
 // debate is loaded and known to be watchable.
-function DebateCardVideos({
-  debate,
-  active,
-  preload,
-}: {
-  debate: Debate;
-  active: boolean;
-  preload: boolean;
-}) {
+function DebateCardVideos({ debate, active, preload }: { debate: Debate; active: boolean; preload: boolean }) {
   const votes = useDebateVotes(debate);
   return <DebateFeedPlayer debate={debate} active={active} preload={preload} votes={votes} />;
 }
