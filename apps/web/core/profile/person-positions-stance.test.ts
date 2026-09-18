@@ -4,13 +4,18 @@ import { decodeVoteOrder } from './person-position-order';
 import { applyFilter } from './use-person-positions';
 
 /**
- * Which side a person came down on, read off their votes (GEO-2859).
+ * How a person answered each claim, read off their votes (GEO-2859).
  *
  * Two fields decide it and they are easy to confuse. `voteKind` says *which
  * question* was answered — 1 is a stance on the claim, 2 is a judgement about
- * whether it is true — and `voteType` says which way. Only the stance vote
- * carries a side; measured on the reference account, `voteType` is 0 for 100
- * agrees, 1 for 86 disagrees and 2 for four that are neither.
+ * whether it is true — and `voteType` says which way: 0 for, 1 against, 2
+ * neither. Measured on the reference account: 100 agree, 86 disagree and 4
+ * neither across 190 stance votes.
+ *
+ * **Both kinds are kept, apart.** They answer different questions, and which one
+ * a card shows depends on the claim's own response kind — a property of the
+ * claim *in a space*, which this decode cannot see. Keeping only the stance left
+ * 18 of that account's 208 positions with no indicator anywhere.
  */
 const vote = (over: Partial<{ objectId: string; voteType: number; voteKind: number }> = {}) => ({
   objectId: 'claim-1',
@@ -19,49 +24,58 @@ const vote = (over: Partial<{ objectId: string; voteType: number; voteKind: numb
   ...over,
 });
 
-describe('the stance on a claim', () => {
+describe('how a claim was answered', () => {
   it('reads agree and disagree off the stance vote', () => {
     const order = decodeVoteOrder([vote({ objectId: 'a', voteType: 0 }), vote({ objectId: 'b', voteType: 1 })]);
 
-    expect(order.stanceByClaimId).toEqual({ a: 'agree', b: 'disagree' });
+    expect(order.responseByClaimId).toEqual({ a: { stance: 'agree' }, b: { stance: 'disagree' } });
   });
 
   it('gives no side to a vote that is neither', () => {
-    expect(decodeVoteOrder([vote({ voteType: 2 })]).stanceByClaimId).toEqual({});
+    expect(decodeVoteOrder([vote({ voteType: 2 })]).responseByClaimId).toEqual({});
   });
 
-  // The trap: a veracity vote is `voteType` 0 or 1 too, but it answers "is this
-  // true", not "do I agree". Reading it as a stance would label a claim somebody
-  // rated for accuracy as one they took a side on.
-  it('ignores a veracity vote, whichever way it went', () => {
-    expect(decodeVoteOrder([vote({ voteKind: 2, voteType: 1 })]).stanceByClaimId).toEqual({});
+  it('records a veracity vote under its own question', () => {
+    // Not dropped: a factual claim asks Verify or Dispute, and throwing this
+    // away is what left those claims with nothing to show.
+    // Keyed normalised, so the default `claim-1` fixture lands as `claim1`.
+    expect(decodeVoteOrder([vote({ voteKind: 2, voteType: 1 })]).responseByClaimId).toEqual({
+      claim1: { veracity: 'disagree' },
+    });
   });
 
-  it('still lists a claim rated only for veracity, with no side', () => {
+  it('keeps both answers when somebody gave both', () => {
+    const order = decodeVoteOrder([
+      vote({ objectId: 'a', voteKind: 1, voteType: 0 }),
+      vote({ objectId: 'a', voteKind: 2, voteType: 1 }),
+    ]);
+
+    expect(order.responseByClaimId).toEqual({ a: { stance: 'agree', veracity: 'disagree' } });
+  });
+
+  it('lists a claim answered only for veracity', () => {
     const order = decodeVoteOrder([vote({ objectId: 'a', voteKind: 2 })]);
 
     expect(order.entityIds).toEqual(['a']);
-    expect(order.stanceByClaimId).toEqual({});
+    expect(order.responseByClaimId).toEqual({ a: { veracity: 'agree' } });
   });
 
-  it('keeps the newest stance when somebody voted twice', () => {
-    // Rows arrive newest-first, so the first one seen is the current position.
+  it('keeps the newest answer when somebody voted twice', () => {
+    // Rows arrive newest-first, so the first one seen is the current answer.
     const order = decodeVoteOrder([
       vote({ objectId: 'claim1', voteType: 1 }),
       vote({ objectId: 'claim1', voteType: 0 }),
     ]);
 
-    expect(order.stanceByClaimId).toEqual({ claim1: 'disagree' });
+    expect(order.responseByClaimId).toEqual({ claim1: { stance: 'disagree' } });
   });
 
   /**
-   * Retracting a position is a vote, not the absence of one.
+   * Retracting is a vote, not the absence of one.
    *
-   * `voteType` 2 is "neither", and it carries no side — so a decode that only
-   * recorded sides skipped straight past it and let the *older* agree or
-   * disagree fill the gap, badging the claim with a position its owner had
-   * already taken back. The newest stance row settles the claim whether or not
-   * it has a side to give.
+   * `voteType` 2 is "neither", and it is how somebody takes a position back — so
+   * a decode that only recorded sides skipped past it and let an older answer
+   * fill the gap, badging a claim with a position its owner had withdrawn.
    */
   it('lets a neutral vote clear a side recorded earlier', () => {
     const order = decodeVoteOrder([
@@ -69,9 +83,7 @@ describe('the stance on a claim', () => {
       vote({ objectId: 'claim1', voteType: 0 }),
     ]);
 
-    expect(order.stanceByClaimId).toEqual({});
-    // Still one of their positions — they answered it, they just answered
-    // "neither".
+    expect(order.responseByClaimId).toEqual({});
     expect(order.entityIds).toEqual(['claim1']);
   });
 
@@ -81,18 +93,18 @@ describe('the stance on a claim', () => {
       vote({ objectId: 'claim1', voteType: 2 }),
     ]);
 
-    expect(order.stanceByClaimId).toEqual({ claim1: 'agree' });
+    expect(order.responseByClaimId).toEqual({ claim1: { stance: 'agree' } });
   });
 
-  it('leaves a veracity vote out of settling the stance', () => {
-    // Kind 2 answers a different question, so it neither sets a side nor stops
-    // the stance vote behind it from being read.
+  it('settles each question on its own newest vote', () => {
+    // A neutral veracity answer must not clear the stance, and vice versa.
     const order = decodeVoteOrder([
-      vote({ objectId: 'claim1', voteKind: 2, voteType: 1 }),
+      vote({ objectId: 'claim1', voteKind: 2, voteType: 2 }),
       vote({ objectId: 'claim1', voteKind: 1, voteType: 0 }),
+      vote({ objectId: 'claim1', voteKind: 2, voteType: 1 }),
     ]);
 
-    expect(order.stanceByClaimId).toEqual({ claim1: 'agree' });
+    expect(order.responseByClaimId).toEqual({ claim1: { stance: 'agree' } });
   });
 });
 
@@ -102,8 +114,6 @@ describe('the stance on a claim', () => {
  * Stance and veracity are separate rows on the same claim. When this paged the
  * vote table directly, a claim whose two votes fell either side of a page
  * boundary escaped the per-page dedupe and rendered twice under one React key.
- * The list is now complete before anything is drawn, so no boundaries remain to
- * straddle — but the dedupe within the list still has to hold.
  */
 describe('the claim order', () => {
   it('lists a claim once however many times it was voted on', () => {
@@ -144,7 +154,7 @@ describe('the claim order', () => {
  * intersection, and only correctly if both lists are whole.
  */
 describe('applyFilter', () => {
-  const order = { entityIds: ['a', 'b', 'c'], stanceByClaimId: {} };
+  const order = { entityIds: ['a', 'b', 'c'], responseByClaimId: {} };
 
   it('keeps the whole list when no filter is applied', () => {
     expect(applyFilter(order, null)).toEqual(['a', 'b', 'c']);
@@ -161,7 +171,7 @@ describe('applyFilter', () => {
   });
 
   it('matches ids however they are spelled', () => {
-    const dashed = { entityIds: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'], stanceByClaimId: {} };
+    const dashed = { entityIds: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'], responseByClaimId: {} };
 
     expect(applyFilter(dashed, ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'])).toHaveLength(1);
   });

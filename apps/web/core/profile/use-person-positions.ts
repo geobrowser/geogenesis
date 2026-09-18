@@ -8,6 +8,7 @@ import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { ID } from '~/core/id';
 import { fetchExploreRowsByIds } from '~/core/profile/explore-rows-by-ids';
 import {
+  type ClaimResponse,
   type PositionOrder,
   type PositionSort,
   type Stance,
@@ -16,7 +17,7 @@ import {
 } from '~/core/profile/person-position-order';
 import { normId } from '~/core/utils/norm-id';
 
-export type { PositionSort, Stance };
+export type { ClaimResponse, PositionSort, Stance };
 
 /**
  * The claims a person holds a position on, ordered and narrowed (GEO-2859, GEO-2918).
@@ -36,7 +37,7 @@ export type { PositionSort, Stance };
  */
 const PAGE_SIZE = 20;
 
-const EMPTY_STANCES: Record<string, Stance> = {};
+const EMPTY_RESPONSES: Record<string, ClaimResponse> = {};
 
 export function personPositionsQueryKey(spaceId: string, sort: PositionSort, filterKey: string) {
   return ['person-positions', ID.uuidToHex(spaceId), sort, filterKey] as const;
@@ -80,7 +81,7 @@ export function usePersonPositions({
     queryFn: ({ signal }) => fetchPositionOrder(spaceId, sort, signal),
   });
 
-  // Stances come from the vote table and nowhere else, so Top needs it as well
+  // Responses come from the vote table and nowhere else, so Top needs it as well
   // as its own order. Keyed identically to the `new` order, so the two share one
   // cache entry and switching sorts back and forth costs nothing.
   const stanceSource = useQuery({
@@ -90,7 +91,7 @@ export function usePersonPositions({
     queryFn: ({ signal }) => fetchPositionOrder(spaceId, 'new', signal),
   });
 
-  const stanceByClaimId = (sort === 'new' ? order.data : stanceSource.data)?.stanceByClaimId ?? EMPTY_STANCES;
+  const responseByClaimId = (sort === 'new' ? order.data : stanceSource.data)?.responseByClaimId ?? EMPTY_RESPONSES;
 
   const orderedIds = React.useMemo(() => applyFilter(order.data, matchingIds), [order.data, matchingIds]);
 
@@ -144,7 +145,7 @@ export function usePersonPositions({
 
   return {
     rows,
-    stanceByClaimId,
+    responseByClaimId,
     /** How many claims the current filter leaves — not how many are rendered. */
     total: orderedIds.length,
     isLoading: order.isLoading || isLoadingRows,

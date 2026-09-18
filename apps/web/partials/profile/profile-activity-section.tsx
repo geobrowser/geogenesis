@@ -8,7 +8,7 @@ import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import { type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import type { Stance } from '~/core/profile/use-person-positions';
+import type { ClaimResponse } from '~/core/profile/use-person-positions';
 import { normId } from '~/core/utils/norm-id';
 
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
@@ -25,8 +25,8 @@ export type ActivityKind = {
   key: string;
   label: string;
   rows: ExploreFeedRow[];
-  /** Which side this person took, by claim id. Claims only; a debate has no stance. */
-  stanceByClaimId?: Record<string, Stance>;
+  /** How this person answered, by claim id. Claims only; a debate has no response. */
+  responseByClaimId?: Record<string, ClaimResponse>;
   /**
    * How many there are in total.
    *
@@ -136,7 +136,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
          */
         <p className="px-4 py-6 text-metadata text-grey-04">Couldn’t load {selected.label.toLowerCase()}.</p>
       ) : (
-        <ActivityGallery rows={selected.rows} stanceByClaimId={selected.stanceByClaimId} />
+        <ActivityGallery rows={selected.rows} responseByClaimId={selected.responseByClaimId} />
       )}
 
       <Link
@@ -152,10 +152,10 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
 
 function ActivityGallery({
   rows,
-  stanceByClaimId,
+  responseByClaimId,
 }: {
   rows: ExploreFeedRow[];
-  stanceByClaimId?: Record<string, Stance>;
+  responseByClaimId?: Record<string, ClaimResponse>;
 }) {
   const shown = React.useMemo(() => rows.slice(0, SHOWN), [rows]);
 
@@ -191,7 +191,7 @@ function ActivityGallery({
             key={`${row.entityId}-${row.spaceId}`}
             row={row}
             label={spaceLabel(labelsById, row.spaceId)}
-            stance={stanceByClaimId?.[normId(row.entityId)]}
+            response={responseByClaimId?.[normId(row.entityId)]}
           />
         ))}
         <span aria-hidden className="w-0 shrink-0 pr-4" />
@@ -280,11 +280,11 @@ function useCentredCard(rows: ExploreFeedRow[]) {
 function GalleryCard({
   row,
   label,
-  stance,
+  response,
 }: {
   row: ExploreFeedRow;
   label: SpaceLabel | undefined;
-  stance: Stance | undefined;
+  response: ClaimResponse | undefined;
 }) {
   // A claim gets the debates panel's own card, and everything else the feed's.
   //
@@ -307,7 +307,7 @@ function GalleryCard({
       )}
     >
       {isClaim ? (
-        <GalleryClaimCard row={row} stance={stance} />
+        <GalleryClaimCard row={row} response={response} />
       ) : (
         // The Join button is hidden: this is a record being read, not a place to
         // be recruited into.

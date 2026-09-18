@@ -4,12 +4,15 @@ import * as React from 'react';
 
 import { type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-card-item';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import type { ClaimResponse } from '~/core/profile/person-position-order';
 import { useInfiniteSentinel } from '~/core/profile/use-infinite-sentinel';
+import { normId } from '~/core/utils/norm-id';
 
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
+import { ClaimResponseTag } from './claim-response-tag';
 import { PartialLoadError } from './partial-load-error';
 
 /**
@@ -35,6 +38,7 @@ export function PersonRecordFeed({
   emptyLabel,
   errorLabel,
   noun,
+  responseByClaimId,
 }: {
   rows: ExploreFeedRow[];
   isLoading: boolean;
@@ -57,6 +61,15 @@ export function PersonRecordFeed({
    * positions."
    */
   noun: string;
+  /**
+   * How the person whose record this is answered each claim, by claim id.
+   *
+   * Without it the Positions tab reported *which* claims somebody had answered
+   * and not *how* — a record of attention with the verdict left out, which is
+   * the one thing it exists to say. Absent on Debates, which has sides rather
+   * than responses.
+   */
+  responseByClaimId?: Record<string, ClaimResponse>;
 }) {
   // Looked up once for the page. These are routinely spaces the viewer has never
   // opened, which the browse sidebar cannot name.
@@ -104,6 +117,15 @@ export function PersonRecordFeed({
           <ExploreFeedCard
             key={`${item.entityId}-${item.spaceId}`}
             item={item}
+            // The card resolves the claim's response kind and hands it back, so
+            // the tag is worded from the question actually asked.
+            responseNote={
+              responseByClaimId
+                ? responseKind => (
+                    <ClaimResponseTag response={responseByClaimId[normId(item.entityId)]} responseKind={responseKind} />
+                  )
+                : undefined
+            }
             hideJoinButton
             // The claim opens in the side panel rather than navigating, as it
             // does on Explore: this is a list somebody is reading down, and

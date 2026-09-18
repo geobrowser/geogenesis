@@ -67,12 +67,13 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
     [index, isLoadingIndex, selection]
   );
 
-  const { rows, isLoading, isError, isFetchingNextPage, hasNextPage, fetchNextPage } = usePersonPositions({
-    spaceId,
-    sort,
-    matchingIds,
-    preferredSpaceById,
-  });
+  const { rows, responseByClaimId, isLoading, isError, isFetchingNextPage, hasNextPage, fetchNextPage } =
+    usePersonPositions({
+      spaceId,
+      sort,
+      matchingIds,
+      preferredSpaceById,
+    });
 
   // These are this person's spaces, which the viewer has often never opened —
   // the browse sidebar cannot name those.
@@ -203,6 +204,7 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
         emptyLabel={isFiltered ? 'No positions match these filters.' : 'No positions on claims yet.'}
         errorLabel="Couldn’t load positions."
         noun="positions"
+        responseByClaimId={responseByClaimId}
       />
     </div>
   );

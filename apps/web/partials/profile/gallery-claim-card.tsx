@@ -9,10 +9,12 @@ import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-cla
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import type { Stance } from '~/core/profile/use-person-positions';
+import type { ClaimResponse } from '~/core/profile/person-position-order';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Skeleton } from '~/design-system/skeleton';
+
+import { ClaimResponseTag } from './claim-response-tag';
 
 /**
  * A claim in the profile's Activity gallery, drawn as the debates panel draws it
@@ -30,7 +32,7 @@ import { Skeleton } from '~/design-system/skeleton';
  * and `readiness` all come out of `useClaimResponseState`. Only the body below
  * differs.
  */
-export function GalleryClaimCard({ row, stance }: { row: ExploreFeedRow; stance?: Stance }) {
+export function GalleryClaimCard({ row, response }: { row: ExploreFeedRow; response?: ClaimResponse }) {
   // Gated on proximity, as the feed's card is: a gallery mounts six of these and
   // a horizontal row puts several off to the side, so the geo-chat and graph
   // reads wait until one is actually near. Sticky — once fetched, stay fetched.
@@ -42,15 +44,22 @@ export function GalleryClaimCard({ row, stance }: { row: ExploreFeedRow; stance?
   const claimRow: DebateClaim | null =
     rowQuery.data?.claims.find(claim => claim.claim_entity_id === row.entityId) ?? null;
 
-  const { isResponseKindResolved, isViewerResponseResolved, responseBlockedReason, claim, positions, readiness } =
-    useClaimResponseState({
-      claimId: row.entityId,
-      spaceId: row.spaceId,
-      row: claimRow,
-      entity,
-      title: row.title,
-      enabled: nearViewport,
-    });
+  const {
+    isResponseKindResolved,
+    isViewerResponseResolved,
+    responseBlockedReason,
+    responseKind,
+    claim,
+    positions,
+    readiness,
+  } = useClaimResponseState({
+    claimId: row.entityId,
+    spaceId: row.spaceId,
+    row: claimRow,
+    entity,
+    title: row.title,
+    enabled: nearViewport,
+  });
 
   // A signed-out visitor gets the sign-in prompt rather than two dead pills —
   // the same hook the feed's card and the claim page use, which also keeps
@@ -78,7 +87,16 @@ export function GalleryClaimCard({ row, stance }: { row: ExploreFeedRow; stance?
           // pills speak for the viewer. In the card's own footer rather than
           // above it: a badge in the row's flow pushed every card carrying one
           // out of line with every card that did not.
-          footer={stance ? <StanceNote stance={stance} /> : undefined}
+          // Held back until the kind is known: labelling a factual claim
+          // "agreed" and then correcting it to "verified" is worse than a beat
+          // with no tag.
+          footer={
+            isResponseKindResolved ? (
+              <div className="px-3 pb-3">
+                <ClaimResponseTag response={response} responseKind={responseKind} />
+              </div>
+            ) : undefined
+          }
         />
       ) : (
         // Held at the card's own height rather than collapsed, so the row does
@@ -86,17 +104,5 @@ export function GalleryClaimCard({ row, stance }: { row: ExploreFeedRow; stance?
         <Skeleton className="h-[164px] w-full rounded-lg" />
       )}
     </div>
-  );
-}
-
-/** Whose profile this is, and where they came down. */
-function StanceNote({ stance }: { stance: Stance }) {
-  return (
-    <p className="px-3 pb-3 text-breadcrumb text-grey-04">
-      They{' '}
-      <span className={stance === 'agree' ? 'text-green' : 'text-red-01'}>
-        {stance === 'agree' ? 'agreed' : 'disagreed'}
-      </span>
-    </p>
   );
 }

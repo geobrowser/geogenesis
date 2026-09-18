@@ -133,7 +133,7 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       key: 'claims',
       label: 'Claims',
       rows: positions.rows,
-      stanceByClaimId: positions.stanceByClaimId,
+      responseByClaimId: positions.responseByClaimId,
       total: facts.positions,
       isLoading: positions.isLoading || isLoadingFacts,
       isCountUnavailable: isFactsError,

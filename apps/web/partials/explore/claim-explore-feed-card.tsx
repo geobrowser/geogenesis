@@ -57,6 +57,7 @@ export function ClaimExploreFeedCard({
   hideSpaceLink = false,
   hideJoinButton = false,
   titleOpensSidePanel = false,
+  responseNote,
 }: {
   item: ExploreFeedItem;
   hideSpaceLink?: boolean;
@@ -70,6 +71,17 @@ export function ClaimExploreFeedCard({
    * existing.
    */
   titleOpensSidePanel?: boolean;
+  /**
+   * A note about how somebody *else* answered this claim, for a surface that is
+   * a record of one person (GEO-2859).
+   *
+   * Built by the caller from the response kind this card resolves, because the
+   * vocabulary depends on it — a factual claim is verified or disputed, not
+   * agreed with — and the kind is a property of the claim in *this* space, which
+   * only this card knows. Absent everywhere else, which is every surface where
+   * the only answer worth reporting is the reader's own.
+   */
+  responseNote?: (responseKind: 'stance' | 'veracity') => React.ReactNode;
 }) {
   // The feed pre-mounts cards thousands of pixels below the fold, so the counts and the geo-chat
   // row are gated on proximity rather than on mount — otherwise every claim in every loaded page
@@ -137,6 +149,22 @@ export function ClaimExploreFeedCard({
   // without a baseline it reports no counts and zeroes the split — but this column states the rule
   // it depends on rather than inheriting it, the same as the claim page's verdict and the shared
   // summary. A verdict drawn from a failed read is the one thing all three must never draw.
+  // Beside the type and the age rather than below the card: this is another
+  // fact about the claim in a row that already holds facts about it, and a band
+  // of its own under the body pushed the response controls out of line with the
+  // rows either side.
+  const extraSegments = React.useMemo(() => {
+    const segments: React.ReactNode[] = [];
+    if (summary.isControversial) segments.push(<ControversialTag key="controversial" />);
+
+    // Held back until the kind is known, or a factual claim reads "agreed" for a
+    // beat and then corrects itself.
+    const note = isResponseKindResolved ? responseNote?.(responseKind) : null;
+    if (note) segments.push(<React.Fragment key="response">{note}</React.Fragment>);
+
+    return segments.length > 0 ? segments : undefined;
+  }, [isResponseKindResolved, responseKind, responseNote, summary.isControversial]);
+
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
 
   return (
@@ -197,7 +225,7 @@ export function ClaimExploreFeedCard({
           item={item}
           hideSpaceLink={hideSpaceLink}
           hideJoinButton={hideJoinButton}
-          extraSegments={summary.isControversial ? [<ControversialTag key="controversial" />] : undefined}
+          extraSegments={extraSegments}
           endSlot={
             <ClaimEndSlot
               claimId={item.entityId}

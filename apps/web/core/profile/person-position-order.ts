@@ -101,14 +101,29 @@ const ORDER_PAGE_SIZE = 500;
  */
 const ORDER_MAX_PAGES = 20;
 
-/** Which way somebody came down on a claim. */
+/** Which way somebody came down. `null` where they answered "neither". */
 export type Stance = 'agree' | 'disagree';
+
+/**
+ * How this person answered a claim, by the question they were answering.
+ *
+ * **Both kinds, not just the stance.** A claim marked factual asks Verify or
+ * Dispute rather than Agree or Disagree, and that answer is a `voteKind` 2 vote
+ * — which the stance-only shape threw away, so 18 of the reference account's 208
+ * positions had no indicator anywhere and nothing said why. Which one a card
+ * shows is the card's to decide: it resolves the claim's response kind itself,
+ * and the same claim can be factual in one space and not in another.
+ */
+export type ClaimResponse = {
+  stance?: Stance;
+  veracity?: Stance;
+};
 
 export type PositionOrder = {
   /** Claim ids, deduped, in the order this sort puts them. Normalised. */
   entityIds: string[];
-  /** Absent for a sort that cannot say — only the vote table carries stances. */
-  stanceByClaimId: Record<string, Stance>;
+  /** Absent for a sort that cannot say — only the vote table carries responses. */
+  responseByClaimId: Record<string, ClaimResponse>;
 };
 
 type VoteNode = { objectId?: string | null; voteType?: number | null; voteKind?: number | null };
@@ -132,24 +147,27 @@ export function stanceOf(node: VoteNode): Stance | null {
  * cast both would otherwise appear twice in their own record. First seen wins,
  * and the rows arrive newest-first, so the position shown is the current one.
  *
- * Only `voteKind` 1 sets the side. Kind 2 is veracity — a judgement about
- * whether the claim is *true*, which is a different question from whether they
- * agree with it — so a claim rated only for veracity carries no side at all,
- * which is the honest answer rather than a missing one.
+ * **Both kinds are kept, apart.** `voteKind` 1 is a stance — do I agree — and 2
+ * is veracity — is this true. They are different questions, so they are not
+ * merged: a card shows whichever one matches the claim's own response kind, and
+ * that kind is a property of the claim *in a space*, which this decode cannot
+ * see. Keeping only the stance is what left a claim answered Verify or Dispute
+ * with no indicator at all.
  *
- * The newest stance vote settles the claim **even when it carries no side.**
- * `voteType` 2 is "neither", and it is how somebody retracts a position — so
- * skipping over it let an older agree or disagree fill the gap and badge a claim
- * with a side its owner had already taken back. 115 neutral stance votes exist
- * in the graph; no one has yet retracted a side they had recorded, so this was
- * waiting rather than visible.
+ * The newest vote of each kind settles that kind **even when it carries no
+ * side.** `voteType` 2 is "neither", and it is how somebody retracts — so
+ * skipping over it let an older answer fill the gap and badge a claim with a
+ * position its owner had already taken back. 115 neutral stance votes exist in
+ * the graph; nobody has yet retracted a recorded side, so this was waiting
+ * rather than visible.
  */
 export function decodeVoteOrder(nodes: readonly (VoteNode | null)[]): PositionOrder {
   const seen = new Set<string>();
   const entityIds: string[] = [];
-  const stanceByClaimId: Record<string, Stance> = {};
-  // Claims whose newest stance vote has been read. Kept apart from
-  // `stanceByClaimId`, which cannot record "answered, with no side".
+  const responseByClaimId: Record<string, ClaimResponse> = {};
+  // Per claim *and kind*: which of the two questions has had its newest answer
+  // read. Kept apart from the response itself, which cannot record "answered,
+  // with no side".
   const settled = new Set<string>();
 
   for (const node of nodes) {
@@ -157,10 +175,11 @@ export function decodeVoteOrder(nodes: readonly (VoteNode | null)[]): PositionOr
     if (!id) continue;
     const key = normId(id);
 
-    if (node.voteKind === 1 && !settled.has(key)) {
-      settled.add(key);
-      const stance = stanceOf(node);
-      if (stance) stanceByClaimId[key] = stance;
+    const field = node.voteKind === 1 ? 'stance' : node.voteKind === 2 ? 'veracity' : null;
+    if (field && !settled.has(`${key}:${field}`)) {
+      settled.add(`${key}:${field}`);
+      const side = stanceOf(node);
+      if (side) responseByClaimId[key] = { ...responseByClaimId[key], [field]: side };
     }
 
     if (seen.has(key)) continue;
@@ -168,7 +187,7 @@ export function decodeVoteOrder(nodes: readonly (VoteNode | null)[]): PositionOr
     entityIds.push(key);
   }
 
-  return { entityIds, stanceByClaimId };
+  return { entityIds, responseByClaimId };
 }
 
 type Page = { nodes: unknown[]; hasNextPage: boolean; endCursor: string | null };
@@ -250,7 +269,7 @@ export async function fetchPositionOrder(
     entityIds.push(key);
   }
 
-  // Score order says nothing about which side anyone took. The tab reads stances
+  // Score order says nothing about how anyone answered. The tab reads responses
   // from the vote order, which it holds whichever sort is showing.
-  return { entityIds, stanceByClaimId: {} };
+  return { entityIds, responseByClaimId: {} };
 }
