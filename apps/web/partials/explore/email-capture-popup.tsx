@@ -11,14 +11,13 @@ import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
-import { timeoutSignal } from '~/core/timeout-signal';
-
-import { entitySidePanelAtom } from '~/atoms';
 import { isChatOpenAtom } from '~/core/state/chat-store';
+import { timeoutSignal } from '~/core/timeout-signal';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
+import { entitySidePanelAtom } from '~/atoms';
 
 /**
  * Persisted alongside the other one-time notices, which is what makes "dismissed" mean dismissed
@@ -81,8 +80,7 @@ function EmailCapturePopup() {
   // signing in would keep scanning the document for every card the feed appends, to answer a
   // question that can no longer change anything. `status === 'done'` keeps it on through the
   // confirmation, which is still on screen and still owes the same precedence.
-  const couldStillShow =
-    scrolledEnough && !closed && ready && !authenticated && (!dismissed || status === 'done');
+  const couldStillShow = scrolledEnough && !closed && ready && !authenticated && (!dismissed || status === 'done');
   const isAnyModalOpen = useAnyModalOpen(couldStillShow);
 
   // Anything the reader deliberately opened owns the screen until they close it, and this waits
@@ -211,31 +209,26 @@ function EmailCapturePopup() {
       // shares this corner: at `z-100` the assistant's button sat over the "Remind me" button and
       // took the click. Deliberately no higher — the slide-up, status bar and toast layers start at
       // 10000 and a dismissible prompt has no business outranking them.
-      className="fixed right-4 bottom-4 z-1101 w-[350px] max-w-[calc(100vw-2rem)] overflow-clip rounded-xl border border-grey-02 bg-white shadow-dropdown"
+      //
+      // Below `sm` (max-width 639px here) it is the mobile frame (76376:22868) instead: a full-width
+      // sheet on the bottom edge, top corners rounded, no shadow, with its own wider artwork.
+      //
+      // Rises 5px into place as it fades in, each time it mounts — including when it comes back after
+      // an overlay closes. With reduced motion it only fades.
+      className={cx(
+        'fixed right-4 bottom-4 z-1101 w-[308px] animate-rise-in overflow-clip rounded-xl border border-grey-02 bg-white shadow-lg motion-reduce:animate-fade-in',
+        'sm:inset-x-0 sm:bottom-0 sm:w-auto sm:rounded-none sm:rounded-t-xl sm:shadow-none'
+      )}
     >
-      {/* The fanned ranking cards on their purple field, from the design (76342:20234).
-          A flat raster, like the welcome banner's artwork beside it. Figma's MCP renders a node
-          together with whatever overlaps its bounds, and `contentsOnly` does not change that here,
-          so the export arrived with the close glyph drawn into it. Painting it out left a worse
-          mark than it removed — the glyph straddles the purple field and a photo card, so nothing
-          cloned or blurred from nearby matched both. The real chip below is positioned over it
-          instead and hides it completely.
+      <DesktopArtwork />
+      <MobileArtwork />
 
-          `object-right` rather than the default centre, which matters below 382px where the card
-          stops being 350 wide and `object-cover` starts cropping. Centred, it crops evenly and the
-          baked glyph drifts left while the real button stays at `right-4` — 31px apart on a 320px
-          viewport, which uncovers the very glyph the chip is there to hide. Anchored right, the
-          glyph and the button are both measured from the same edge and stay aligned at every width.
-
-          The raster is full-bleed on purpose. Figma exported the card's own 12px rounding and its
-          1px #dbdbdb border baked in, and a second rounding inside the container's own read as a
-          pale fringe along the edge — which is what made this look unclean next to the Figma frame.
-          The border is gone and the top corners are filled with the field colour, so the container's
-          `rounded-xl` is the only radius in play. Still wants a clean export from design, at 2x. */}
-      <img src="/explore-email-capture.png" alt="" className="block h-[144px] w-full object-right object-cover select-none" />
-
-      {/* The welcome banner's close button, to the class: the two cards sit on the same page, and a
-          reader should not have to learn a second dismiss control for the second one. */}
+      {/* The frame's 12px line close icon (76378:23346), 11px in from the top-right corner. The
+          button is padded 4px past the glyph so the hit target is 20px rather than 12, with the
+          offsets pulled in by the same 4px to keep the glyph where the design puts it. On the
+          phone sheet the padding grows to 16px for a touch-sized target, offset so the glyph still
+          lands where the mobile frame puts it, 11px in; the few pixels past the sheet's edge are
+          clipped and cannot be tapped, which leaves about 39px. */}
       <button
         type="button"
         onClick={close}
@@ -243,34 +236,40 @@ function EmailCapturePopup() {
         // dismiss button, and a list of controls reading "Dismiss" twice says nothing about which
         // notice either one closes. Matches how the banner names its own.
         aria-label="Dismiss newsletter signup"
-        // `top`/`right` put the 24px chip's centre on (322, 23) — where the artwork's own glyph
-        // sits — so it is covered rather than doubled. The rest is the banner's button verbatim.
-        className="absolute top-[11px] right-4 z-20 rounded-full border border-white/30 bg-black/40 p-1.5 text-white backdrop-blur-sm transition-colors duration-200 ease-in-out hover:bg-black/60"
+        // Darker than the frame's `grey-03`, and darker again on the phone sheet, because the glyph
+        // is the only thing identifying this control and 1.4.11 wants 3:1 for that. The old chip
+        // got there by sitting on its own dark fill; a bare line icon has to get there from
+        // whatever happens to be behind it.
+        //
+        // On the desktop card that is white, where `grey-03` (#b6b6b6) is 2.03:1 and `grey-04`
+        // (#606060) is 6.29:1. On the phone sheet it is *not* white: `MobileArtwork` centres a
+        // 637px composition in a narrower viewport, so on common phones (412-480px) the blurred
+        // Culture card slides under the glyph — measured 2.06-2.93:1 against `grey-04` at 480px.
+        // `text` (#202020) is 5.34:1 or better across that range, and hover cannot make up the
+        // difference on touch, where there is no hover.
+        className="absolute top-[7px] right-[7px] z-20 p-1 text-grey-04 transition-colors duration-200 ease-in-out hover:text-text sm:top-[-5px] sm:right-[-5px] sm:p-4 sm:text-text"
       >
-        <CloseSmall color="white" />
+        <CloseSmall />
       </button>
 
-      {/* Spacing is the design's, measured off the frame rather than eyeballed (76342:20258 and
-          76342:20261). From the artwork's edge at 144.26: text block at y=164, 44 tall; form row at
-          y=233, 28 tall; card ends at 281. Sides are 20. Figma trims its text boxes to cap height,
-          which CSS only does with `text-box-trim` — not dependable across browsers yet. The leading
-          below is set to the design's own box heights instead, which gets the same rhythm and the
-          same total: 144 artwork + 20 + 17 heading + 8 + 19 subtext + 20 + 28 row + 25 = 281. */}
-      <div className="px-5 pt-5 pb-[25px]">
+      {/* Spacing is the frame's, in padding-box coordinates: heading cap box at y=152, 15 tall;
+          subtext at 175, 17 tall; form at 211, 62 tall; card ends at 300. Figma trims text to cap
+          height, which CSS only does with `text-box-trim` — not dependable across browsers yet — so
+          the leading is set to the design's box heights instead, which keeps the same rhythm.
+
+          Mobile frame: heading at y=155, 16 tall; subtext at 179, 19 tall; a 394px form at 218,
+          ending 49 above the sheet's bottom. The 20px gutters are not in the frame, which is drawn
+          at 639 wide; they keep the form off the screen edge on a real phone, where it would
+          otherwise run the full width once the viewport is narrower than 434px. */}
+      <div className="px-5 pb-[27px] text-center sm:pb-[max(49px,env(safe-area-inset-bottom))]">
         {status === 'done' ? (
           // `role="status"` because submitting removes the button that had focus, so a reader who
           // is not watching this corner would otherwise get silence where the confirmation is. The
           // failure path has had `role="alert"` all along; this is the same courtesy for the case
           // that actually worked.
           <div role="status">
-            {/* Same leading, same reason. Shorter copy, but at 28px in 248px it is close enough
-                to the edge that leaving it out would be relying on the string never changing. */}
-            <p className="text-[28px] leading-[17px] font-medium tracking-[-0.84px] text-[#151515] max-[382px]:leading-[30px]">
-              You are on the list.
-            </p>
-            <p className="mt-[8px] text-[16px] leading-[19px] tracking-[-0.48px] text-[rgba(21,21,21,0.7)]">
-              We will be in touch about features, points, and the path to mainnet.
-            </p>
+            <p className={HEADING_CLASS}>You are on the list.</p>
+            <p className={SUBTEXT_CLASS}>We will be in touch about features, points, and the path to mainnet.</p>
           </div>
         ) : (
           // `noValidate`, and the field below is a text input rather than `type="email"`. Native
@@ -280,29 +279,10 @@ function EmailCapturePopup() {
           // `inputMode` and `autoComplete` keep the phone keyboard and the autofill that
           // `type="email"` was there for.
           <form onSubmit={submit} noValidate>
-            {/* 17px leading under a 28px glyph is a single-line leading — it is the design's
-                cap-height trim, and it only holds while the line does not wrap. Below 382px the
-                card stops being 350 wide (350 + 2rem of viewport margin), leaving 248px inside the
-                padding, and this headline wraps — at which point 17px puts the second baseline
-                inside the first line's glyphs. 30px is the smallest leading that clears them.
-                Confirmed the variant actually compiles rather than trusting the class name: the
-                build emits `@media not all and (min-width:382px){…line-height:30px}`. Above the
-                threshold nothing changes, so the design is untouched where the design applies. */}
-            <p className="text-[28px] leading-[17px] font-medium tracking-[-0.84px] text-[#151515] max-[382px]:leading-[30px]">
-              Geo Network launching soon!
-            </p>
-            {/* One line, as in the design. It fits because the app renders Calibre too — the same
-                face the frame is set in — at the design's own 16px and -0.48px tracking. The
-                `metadata` token is the same size but tracks at -0.25px, and over this sentence that
-                extra quarter-pixel per character is what pushed it onto a second line. */}
-            <p className="mt-[8px] text-[16px] leading-[19px] tracking-[-0.48px] text-[rgba(21,21,21,0.7)]">
-              Get updates on features, points, and path to mainnet.
-            </p>
+            <p className={HEADING_CLASS}>Geo network launching soon!</p>
+            <p className={SUBTEXT_CLASS}>Get updates on features, points, and path to mainnet.</p>
 
-            {/* 20 below the subtext, which the design moved up to (row y went 233 -> 228 against a
-                text block ending at 208). 217 + 6 + 87 = 310, across a 350 card with 20 either
-                side. */}
-            <div className="mt-5 flex h-7 items-center gap-[6px]">
+            <div className="mt-[19px] flex flex-col gap-[6px] sm:mx-auto sm:mt-5 sm:max-w-[394px]">
               <input
                 type="text"
                 inputMode="email"
@@ -319,7 +299,7 @@ function EmailCapturePopup() {
                 aria-invalid={status === 'invalid-email'}
                 disabled={status === 'submitting'}
                 className={cx(
-                  'h-7 w-[217px] min-w-0 rounded-full border bg-white px-3 text-[17px] leading-[19px] text-text outline-hidden transition-colors placeholder:text-[#b6b6b6] disabled:text-grey-03',
+                  'h-7 w-full min-w-0 rounded-full border bg-white px-3 text-left text-[17px] leading-[19px] text-text outline-hidden transition-colors placeholder:text-grey-03 disabled:text-grey-03 sm:text-center',
                   status === 'invalid-email' ? 'border-red-01' : 'border-grey-02 focus:border-text'
                 )}
               />
@@ -329,7 +309,7 @@ function EmailCapturePopup() {
               <button
                 type="submit"
                 disabled={status === 'submitting'}
-                className="inline-flex h-7 w-[87px] shrink-0 items-center justify-center rounded-full bg-[#151515] text-[16px] leading-none tracking-[-0.35px] whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="inline-flex h-7 w-full items-center justify-center rounded-full bg-[#151515] px-2.5 text-[16px] leading-none tracking-[-0.35px] whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {status === 'submitting' ? 'Subscribing…' : 'Subscribe'}
               </button>
@@ -344,6 +324,290 @@ function EmailCapturePopup() {
             ) : null}
           </form>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 15px leading under 24px glyphs is the design's cap-height trim, and it only holds while the line
+ * does not wrap. On the mobile frame the heading is 26px (16px trimmed) and 277 wide, inside a sheet
+ * with 20px gutters, so it wraps below about 318px — a folded Galaxy Fold is 280 — at which point
+ * the trimmed leading would put the second line inside the first. 28px clears it.
+ */
+const HEADING_CLASS =
+  'text-[24px] leading-[15px] font-medium tracking-[-0.72px] text-[#151515] sm:text-[26px] sm:leading-[16px] sm:tracking-[-0.78px] sm:max-[319px]:leading-[28px]';
+
+/** 14px on both layouts, the desktop frame's size. The mobile frame sets it at 16px; it was matched to desktop on request. */
+const SUBTEXT_CLASS = 'mt-2 text-[14px] leading-[17px] tracking-[-0.42px] text-[rgba(21,21,21,0.7)]';
+
+const ASSET = '/explore-email-capture';
+
+/**
+ * The knowledge-graph vignette from the design: entity cards joined by dashed edges and relation
+ * tags. Built from the frames' own exported assets rather than flattened to one raster, so it stays
+ * sharp at any pixel density and nothing else from the frame (text, the card's border) gets baked
+ * in. Photos are downsized to 2x their drawn size.
+ *
+ * Every position is the frame's, in padding-box pixels. Figma rotates each element about the
+ * centre of its unrotated box, which is what the outer flex wrapper plus inner `rotate` reproduces;
+ * the card's `overflow-clip` trims whatever the design lets bleed off the edges.
+ *
+ * Desktop and mobile are separate compositions in Figma, not one scaled, so each is drawn as its
+ * own tree and CSS shows one. `sm` is max-width here, so `sm:hidden` is the desktop one.
+ */
+function DesktopArtwork() {
+  return (
+    <div aria-hidden className="pointer-events-none relative h-[152px] select-none sm:hidden">
+      <EntityCard
+        box={[-33, -16, 54.698, 38.327]}
+        rotate={7.92}
+        size={[50.825, 31.624]}
+        label="Person"
+        className="opacity-30 blur-[3.5px]"
+        radius={3.345}
+      >
+        <img src={`${ASSET}/person-faded.png`} alt="" className="absolute inset-0 size-full" />
+      </EntityCard>
+      <EntityCard box={[57.37, -22.02, 98.682, 71.43]} rotate={10.48} label="Health">
+        <HealthPhoto />
+      </EntityCard>
+      <EntityCard box={[245.57, 28.06, 96.858, 67.868]} rotate={7.92} label="Culture">
+        <CulturePhoto />
+      </EntityCard>
+      <EntityCard box={[129, 58, 95.344, 65.071]} rotate={-5.98} label="Philosophy">
+        <PhilosophyPhoto />
+      </EntityCard>
+      <EntityCard box={[-29, 54, 95.202, 64.815]} rotate={-5.8} label="Person">
+        <PersonIllustration />
+      </EntityCard>
+
+      <Edge src="edge-top.svg" className="top-[13px] left-[189px] h-[23.823px] w-[46.5px]" inset="-2.1% -1.08%" />
+      <Edge src="edge-left.svg" className="top-[66.5px] left-[84.5px] h-[18.008px] w-[28px]" inset="-2.78% -1.79%" />
+      <div className="absolute top-[90.05px] left-[286.74px] flex h-[24.341px] w-[76.007px] items-center justify-center">
+        <div className="relative h-[23.823px] w-[75.846px] flex-none rotate-[-179.61deg]">
+          <div className="absolute" style={{ inset: '-2.09% -0.66% -2.1% -0.66%' }}>
+            <img src={`${ASSET}/edge-right.svg`} alt="" className="block size-full max-w-none" />
+          </div>
+        </div>
+      </div>
+
+      <Nodes positions={DESKTOP_NODES} />
+
+      <RelationTag box={[186, 2, 29.27, 30.101]} rotate={46.68} label="Study" />
+      <RelationTag box={[7, 29, 46.309, 20.297]} rotate={12.25} label="Related to" />
+    </div>
+  );
+}
+
+/**
+ * The mobile frame's composition (76376:22868), 637px wide. It is centred in the sheet rather than
+ * pinned left, so on a phone narrower than the frame it bleeds off both edges evenly — the frame
+ * shows its full width only at 639px, the widest viewport this variant covers.
+ */
+function MobileArtwork() {
+  return (
+    <div aria-hidden className="pointer-events-none relative hidden h-[155px] overflow-clip select-none sm:block">
+      <div className="absolute top-0 left-1/2 h-[155px] w-[637px] -translate-x-1/2">
+        <EntityCard
+          box={[80, -14, 54.698, 38.327]}
+          rotate={7.92}
+          size={[50.825, 31.624]}
+          label="Person"
+          className="opacity-30 blur-[3.5px]"
+          radius={3.345}
+        >
+          <img src={`${ASSET}/person-faded.png`} alt="" className="absolute inset-0 size-full" />
+        </EntityCard>
+        <EntityCard
+          box={[507, -22, 72.785, 53]}
+          rotate={-10.96}
+          size={[66.163, 41.168]}
+          label="Culture"
+          className="blur-[8.5px]"
+          radius={6}
+        >
+          <img src={`${ASSET}/culture-faded.jpg`} alt="" className="absolute inset-0 size-full object-cover" />
+        </EntityCard>
+        <EntityCard box={[208.37, -22.02, 98.682, 71.43]} rotate={10.48} label="Health">
+          <HealthPhoto />
+        </EntityCard>
+        <EntityCard box={[398.57, 26.06, 96.858, 67.868]} rotate={7.92} label="Culture">
+          <CulturePhoto />
+        </EntityCard>
+        <EntityCard box={[280, 58, 95.344, 65.071]} rotate={-5.98} label="Philosophy">
+          <PhilosophyPhoto />
+        </EntityCard>
+        <EntityCard box={[122, 54, 95.202, 64.815]} rotate={-5.8} label="Person">
+          <PersonIllustration />
+        </EntityCard>
+
+        <Edge src="edge-top.svg" className="top-[13px] left-[340px] h-[23.823px] w-[46.5px]" inset="-2.1% -1.08%" />
+        <Edge src="edge-left.svg" className="top-[66.5px] left-[235.5px] h-[18.008px] w-[28px]" inset="-2.78% -1.79%" />
+        <div className="absolute top-[70.46px] left-[439.75px] flex h-[41.252px] w-[79.252px] items-center justify-center">
+          <div className="relative h-[40.713px] w-[78.976px] flex-none rotate-[-179.61deg]">
+            <div className="absolute" style={{ inset: '-1.23% -0.63%' }}>
+              <img src={`${ASSET}/edge-right-mobile.svg`} alt="" className="block size-full max-w-none" />
+            </div>
+          </div>
+        </div>
+
+        <Nodes positions={MOBILE_NODES} />
+
+        <RelationTag box={[337, 2, 29.27, 30.101]} rotate={46.68} label="Study" />
+        <RelationTag box={[158, 29, 46.309, 20.297]} rotate={12.25} label="Related to" />
+        <RelationTag box={[430, 3, 42.249, 17.572]} rotate={-9.43} label="Works at" />
+      </div>
+    </div>
+  );
+}
+
+const DESKTOP_NODES: ReadonlyArray<readonly [number, number]> = [
+  [235, 15],
+  [271, 97],
+  [181, 37],
+  [69, 74],
+  [106, 51],
+];
+
+const MOBILE_NODES: ReadonlyArray<readonly [number, number]> = [
+  [386, 15],
+  [424, 95],
+  [512, 55],
+  [332, 37],
+  [220, 74],
+  [257, 51],
+];
+
+function Nodes({ positions }: { positions: ReadonlyArray<readonly [number, number]> }) {
+  return positions.map(([left, top]) => (
+    <img
+      key={`${left}-${top}`}
+      src={`${ASSET}/node.svg`}
+      alt=""
+      className="absolute size-4 max-w-none"
+      style={{ left, top }}
+    />
+  ));
+}
+
+function HealthPhoto() {
+  return <img src={`${ASSET}/health.jpg`} alt="" className="absolute inset-0 size-full object-cover" />;
+}
+
+function CulturePhoto() {
+  return (
+    <>
+      <div className="absolute inset-0 bg-[#d9d9d9]" />
+      <img src={`${ASSET}/culture.jpg`} alt="" className="absolute inset-0 size-full object-cover" />
+    </>
+  );
+}
+
+function PhilosophyPhoto() {
+  return <img src={`${ASSET}/philosophy.jpg`} alt="" className="absolute inset-0 size-full object-cover" />;
+}
+
+/**
+ * The frame lays a 628x170 illustration over this card, counter-rotated so it sits level. Only a
+ * sliver of it is ever visible, so the asset is that sliver: a 160x110 crop taken 110px in from the
+ * illustration's left edge, rotated about the original centre.
+ */
+function PersonIllustration() {
+  return (
+    <img
+      src={`${ASSET}/person.jpg`}
+      alt=""
+      className="absolute top-[-14.67px] left-[-35.24px] h-[110px] w-[160px] max-w-none origin-[204px_85px] rotate-[5.8deg]"
+    />
+  );
+}
+
+/** `[left, top, width, height]` of the rotated element's bounding box, as Figma reports it. */
+type Box = readonly [number, number, number, number];
+
+const boxStyle = ([left, top, width, height]: Box): React.CSSProperties => ({ left, top, width, height });
+
+function EntityCard({
+  box,
+  rotate,
+  size = [90, 56],
+  label,
+  className,
+  radius = 5,
+  children,
+}: {
+  box: Box;
+  rotate: number;
+  size?: readonly [number, number];
+  label: string;
+  /** Effects on the card itself: the background cards are blurred, and some faded. */
+  className?: string;
+  radius?: number;
+  children: React.ReactNode;
+}) {
+  // The smaller background cards are the same 90px card drawn at a smaller size, so the label chip
+  // scales with them.
+  const scale = size[0] / 90;
+  return (
+    <div className="absolute flex items-center justify-center" style={boxStyle(box)}>
+      <div className="flex-none" style={{ transform: `rotate(${rotate}deg)` }}>
+        <div
+          className={cx('relative overflow-clip', className)}
+          style={{ width: size[0], height: size[1], borderRadius: radius }}
+        >
+          {children}
+          <div
+            className="absolute flex items-center justify-center bg-[rgba(21,21,21,0.4)] text-white"
+            style={{
+              left: 4 * scale,
+              bottom: 4 * scale,
+              padding: `${3 * scale}px ${4 * scale}px`,
+              borderRadius: 2.23 * scale,
+              backdropFilter: `blur(${4.46 * scale}px)`,
+            }}
+          >
+            <span
+              className="whitespace-nowrap"
+              style={{
+                fontFamily: 'var(--font-geist-medium)',
+                fontSize: 7.804 * scale,
+                lineHeight: `${8.919 * scale}px`,
+                letterSpacing: -0.1561 * scale,
+              }}
+            >
+              {label}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Edge({ src, className, inset }: { src: string; className: string; inset: string }) {
+  return (
+    <div className={cx('absolute', className)}>
+      <div className="absolute" style={{ inset }}>
+        <img src={`${ASSET}/${src}`} alt="" className="block size-full max-w-none" />
+      </div>
+    </div>
+  );
+}
+
+function RelationTag({ box, rotate, label }: { box: Box; rotate: number; label: string }) {
+  return (
+    <div className="absolute flex items-center justify-center" style={boxStyle(box)}>
+      <div
+        className="flex flex-none items-center justify-center rounded-[9px] border border-[#a6a6a6] bg-white px-1.5 py-[3px]"
+        style={{ transform: `rotate(${rotate}deg)` }}
+      >
+        <span
+          className="whitespace-nowrap text-[#151515]"
+          style={{ fontFamily: 'var(--font-geist-medium)', fontSize: 7, lineHeight: '9px', letterSpacing: -0.14 }}
+        >
+          {label}
+        </span>
       </div>
     </div>
   );
