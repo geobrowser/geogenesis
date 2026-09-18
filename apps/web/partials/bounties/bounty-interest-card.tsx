@@ -64,7 +64,7 @@ export function BountyInterestCard({ detail, roles }: Props) {
       aria-label="Apply for this bounty"
       data-testid="bounty-interest-card"
       data-state={state}
-      className="flex flex-col gap-3 rounded-lg border border-grey-02 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+      className="flex flex-row items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white p-4 sm:flex-col sm:items-stretch sm:justify-start"
     >
       <div className="flex flex-col gap-0.5">
         <Text variant="smallTitle">{copy[state].title}</Text>
