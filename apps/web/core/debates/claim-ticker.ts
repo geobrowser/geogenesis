@@ -1,25 +1,42 @@
 import { type TimedClaim, isAssertableMoment } from './claim-timing';
 
 /**
- * How long a claim card stays up after the debater finishes saying it.
+ * How long a claim card stays up once the debater has finished saying it.
  *
- * Long enough to read a sentence and press a thumb, short enough that the next claim is not queuing
- * behind it. Turns in the default format run 30s and produce two or three claims, so a linger much
- * longer than this starts stacking.
+ * This is now the card's whole life, not a tail added to it — see {@link tickerWindows} — so it is
+ * longer than the 5s it was when the card also stood through the claim being spoken. Eight keeps
+ * the time on screen roughly where it was, which is what a viewer actually has to read a sentence
+ * and press a thumb in.
+ *
+ * Long enough to do that, short enough that the next claim is not queuing behind it. Claims in the
+ * test debate land 5–9s apart at their closest, so a couple will overlap at this length — which is
+ * what the stack is for, and reads as a feed rather than a queue.
  */
-export const CLAIM_LINGER_MS = 5_000;
+export const CLAIM_LINGER_MS = 8_000;
 
-/** A card is never up for longer than this, however long the claim itself ran. */
-const MAX_VISIBLE_MS = 12_000;
-
-/** A claim eligible to surface over the video, with the window it is on screen for. */
+/**
+ * A claim eligible to surface over the video, with the window its *card* is on screen for.
+ *
+ * Not the claim's own times — those are on `claim.timing`, and the scrubber marker uses them to
+ * jump to where it was said. These two say when the card appears and disappears.
+ */
 export type TickerWindow = { claim: TimedClaim; startMs: number; endMs: number };
 
 /**
  * The claims eligible to surface over the video, in the order they are said.
  *
+ * **A card appears when the claim has been said, not when it starts.** Anchored to the start it
+ * arrived while the debater was still mid-sentence, so the card asserted a claim the viewer had not
+ * heard them make yet — it read as the app putting words in their mouth, and the reader was being
+ * asked to agree with something still being argued. Anchored to the end it reads as "he just said
+ * this — do you agree?", which is the question this layer exists to ask.
+ *
+ * That also retires the cap this used to need. A window running from the claim's start had to be
+ * clamped so a long claim did not leave its card up over the next one; measured from the end, every
+ * window is {@link CLAIM_LINGER_MS} long whatever the claim did.
+ *
  * Only confidently-placed claims qualify. A claim the matcher put in roughly the right region is
- * fine in a list and not fine over the video, where the card asserts "they are saying this now" —
+ * fine in a list and not fine over the video, where the card asserts *this is what he just said* —
  * and being wrong about that misquotes a real person. Those claims still appear in the panel.
  */
 export function tickerWindows(claims: TimedClaim[]): TickerWindow[] {
@@ -27,11 +44,7 @@ export function tickerWindows(claims: TimedClaim[]): TickerWindow[] {
     .filter(claim => isAssertableMoment(claim.timing))
     .map(claim => {
       const timing = claim.timing as NonNullable<TimedClaim['timing']>;
-      return {
-        claim,
-        startMs: timing.startMs,
-        endMs: Math.min(timing.endMs + CLAIM_LINGER_MS, timing.startMs + MAX_VISIBLE_MS),
-      };
+      return { claim, startMs: timing.endMs, endMs: timing.endMs + CLAIM_LINGER_MS };
     })
     .sort((a, b) => a.startMs - b.startMs);
 }
