@@ -150,7 +150,15 @@ vi.mock('~/design-system/avatar', () => ({ Avatar: () => <div data-testid="avata
 vi.mock('./winner-vote-button', () => ({ WinnerVoteButton: () => <button type="button">Winner?</button> }));
 
 function claim(id: string, text: string, overrides: Partial<TranscriptClaim> = {}): TranscriptClaim {
-  return { id, text, spaceId: CLAIM_SPACE, blockId: 'block-1', publishedTiming: null, ...overrides };
+  return {
+    id,
+    text,
+    spaceId: CLAIM_SPACE,
+    blockId: 'block-1',
+    publishedTiming: null,
+    relationEntityId: null,
+    ...overrides,
+  };
 }
 
 function grouped(byAuthor: Record<string, TranscriptClaim[]>, unattributed: TranscriptClaim[] = []) {

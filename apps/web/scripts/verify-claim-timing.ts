@@ -1,5 +1,5 @@
 /**
- * End-to-end check of the claim timing resolver against the live testnet debate.
+ * End-to-end check of the claim timing resolver against a live testnet debate.
  *
  * Runs the real grouping, the real resolver and the real ticker selection over the real published
  * data, so the answer is what the UI will draw rather than what a fixture says.
@@ -13,103 +13,21 @@ import {
   isAssertableMoment,
   resolveClaimTimings,
 } from '../core/debates/claim-timing';
-import {
-  AUTHORS_PROPERTY_ID,
-  BLOCKS_PROPERTY_ID,
-  CLAIM_END_OFFSET_PROPERTY_ID,
-  CLAIM_START_OFFSET_PROPERTY_ID,
-  DEBATE_CLAIMS_PROPERTY_ID,
-  DEBATE_TRANSCRIPTS_PROPERTY_ID,
-  MARKDOWN_CONTENT_PROPERTY_ID,
-  NAME_PROPERTY_ID,
-} from '../core/debates/ontology';
-import { groupTranscriptClaims } from '../core/debates/transcript-claims';
+import { fetchDebateClaims, fetchTranscriptSegments } from './lib/debate-claims';
 
-const API = 'https://api-testnet.geobrowser.io/graphql';
-const CHAT = 'https://chat-api-testnet.geobrowser.io';
 // Any debate, so the resolver can be checked where offsets were *not* published as well as where
 // they were — the fallback path is the one that runs on every debate but the test one.
 const DEBATE_ENTITY = (process.argv[2] ?? '01a0a60772dc7cb09bf6ebba15e97b67').replaceAll('-', '');
-const DEBATE_ID = DEBATE_ENTITY.replace(
-  /^(.{8})(.{4})(.{4})(.{4})(.{12})$/,
-  '$1-$2-$3-$4-$5'
-);
 const SPACE = process.argv[3] ?? '4582fbbee28a16589154f7e36f1ee3c5';
 
-const QUERY = `
-query DebateTranscriptClaims(
-  $id: UUID!, $transcriptsPropertyId: UUID!, $blocksPropertyId: UUID!, $authorsPropertyId: UUID!,
-  $claimsPropertyId: UUID!, $spaceId: UUID!, $namePropertyId: UUID!, $markdownPropertyId: UUID!,
-  $offsetPropertyIds: [UUID!]
-) {
-  entity(id: $id) {
-    transcripts: relationsList(filter: { typeId: { is: $transcriptsPropertyId }, spaceId: { is: $spaceId } }) {
-      position
-      toEntity {
-        id
-        blocks: relationsList(filter: { typeId: { is: $blocksPropertyId }, spaceId: { is: $spaceId } }) {
-          position
-          toEntity {
-            id
-            markdown: valuesList(filter: { propertyId: { is: $markdownPropertyId } }) { spaceId text }
-            authors: relationsList(filter: { typeId: { is: $authorsPropertyId }, spaceId: { is: $spaceId } }) {
-              toEntity { id }
-            }
-            claims: relationsList(filter: { typeId: { is: $claimsPropertyId }, spaceId: { is: $spaceId } }) {
-              position
-              entity {
-                valuesList(filter: { propertyId: { in: $offsetPropertyIds }, spaceId: { is: $spaceId } }) {
-                  propertyId
-                  integer
-                }
-              }
-              toEntity {
-                id
-                name
-                spaceIds
-                names: valuesList(filter: { propertyId: { is: $namePropertyId } }) { spaceId text }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}`;
-
-const response = await fetch(API, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    query: QUERY,
-    variables: {
-      id: DEBATE_ENTITY,
-      transcriptsPropertyId: DEBATE_TRANSCRIPTS_PROPERTY_ID,
-      blocksPropertyId: BLOCKS_PROPERTY_ID,
-      authorsPropertyId: AUTHORS_PROPERTY_ID,
-      claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
-      spaceId: SPACE,
-      namePropertyId: NAME_PROPERTY_ID,
-      markdownPropertyId: MARKDOWN_CONTENT_PROPERTY_ID,
-      offsetPropertyIds: [CLAIM_START_OFFSET_PROPERTY_ID, CLAIM_END_OFFSET_PROPERTY_ID],
-    },
-  }),
-});
-
-const body = await response.json();
-if (body.errors) {
-  console.error(JSON.stringify(body.errors, null, 2));
-  process.exit(1);
-}
-
-const claims = groupTranscriptClaims(body.data, SPACE);
+const claims = await fetchDebateClaims(DEBATE_ENTITY, SPACE);
 console.log(`claims: ${claims.totalCount}   blocks: ${claims.blocks.length}`);
 console.log(`with published timecodes: ${claims.all.filter(claim => claim.publishedTiming !== null).length}`);
 
-const transcript = await fetch(`${CHAT}/debates/${DEBATE_ID}/transcript?format=json`).then(value => value.json());
-console.log(`transcript segments: ${transcript.segments.length}`);
+const segments = await fetchTranscriptSegments(DEBATE_ENTITY);
+console.log(`transcript segments: ${segments.length}`);
 
-const timings = resolveClaimTimings({ claims: claims.all, blocks: claims.blocks, segments: transcript.segments });
+const timings = resolveClaimTimings({ claims: claims.all, blocks: claims.blocks, segments });
 const ordered = claimsInSpokenOrder(claims.all, timings);
 
 console.log('\nAs the UI will order and label them:');

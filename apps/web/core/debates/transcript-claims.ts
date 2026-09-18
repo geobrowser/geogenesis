@@ -35,6 +35,14 @@ export type TranscriptClaim = {
    * which is nearly all of them — the resolver recovers those from the transcript instead.
    */
   publishedTiming: { startMs: number; endMs: number } | null;
+  /**
+   * The id of the block → claim relation's own entity, which is where {@link publishedTiming} is
+   * read from and where a backfill writes it.
+   *
+   * From the same relation as {@link blockId} — the turn the claim was first seen on — so the two
+   * always describe the same statement. Null only if the API omits it.
+   */
+  relationEntityId: string | null;
 };
 
 /** One turn of the debate as published, with the text needed to locate it on the recording. */
@@ -72,7 +80,12 @@ export const EMPTY_TRANSCRIPT_CLAIMS: DebateTranscriptClaims = {
   totalCount: 0,
 };
 
-type PresentRelation<T, E = unknown> = { position?: string | null; entity?: E; toEntity: T };
+type PresentRelation<T, E = unknown> = {
+  position?: string | null;
+  entityId?: string | null;
+  entity?: E;
+  toEntity: T;
+};
 
 /**
  * Drop relations the API returned as null (or pointing at nothing) and put the rest in `position`
@@ -84,17 +97,26 @@ type PresentRelation<T, E = unknown> = { position?: string | null; entity?: E; t
  * for grouping and dedupe, which is all this function feeds; anything that needs real order takes
  * it from `claim-timing.ts`.
  *
- * The relation's own `entity` is carried through, because on a block → claim relation that is where
- * the claim's timecodes live.
+ * The relation's own `entity` and `entityId` are carried through, because on a block → claim
+ * relation that entity is where the claim's timecodes live and its id is where a backfill writes
+ * them.
  */
 function presentRelations<T, E = unknown>(
-  relations: Array<{ position?: string | null; entity?: E; toEntity: T | null } | null> | null | undefined
+  relations:
+    | Array<{ position?: string | null; entityId?: string | null; entity?: E; toEntity: T | null } | null>
+    | null
+    | undefined
 ): PresentRelation<T, E>[] {
   const present: PresentRelation<T, E>[] = [];
 
   for (const relation of relations ?? []) {
     if (relation?.toEntity) {
-      present.push({ position: relation.position, entity: relation.entity, toEntity: relation.toEntity });
+      present.push({
+        position: relation.position,
+        entityId: relation.entityId,
+        entity: relation.entity,
+        toEntity: relation.toEntity,
+      });
     }
   }
 
@@ -236,6 +258,7 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
             spaceId: resolved.spaceId,
             blockId: blockEntity.id,
             publishedTiming: publishedTiming(claim.entity?.valuesList),
+            relationEntityId: claim.entityId ?? null,
           };
           rowsByClaimId.set(key, row);
           all.push(row);

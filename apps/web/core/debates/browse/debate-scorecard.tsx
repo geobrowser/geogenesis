@@ -4,20 +4,19 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate, DebateClaim, DebateParticipant } from '~/core/debates/api';
 import { type TimedClaim, formatTimecode } from '~/core/debates/claim-timing';
-import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import type { Entity } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
-import type { DebateTicker } from './debate-claim-ticker';
 import { Crown } from './icons';
+import { useDebateClaimResponse } from './use-debate-claim-response';
+import type { DebateTicker } from './debate-claim-ticker';
 
 /** How long a freshly taken side stays on screen before the card moves on. */
 const ADVANCE_DELAY_MS = 700;
@@ -352,27 +351,13 @@ function ScorecardClaim({
   onAnswered: (claimId: string, position: boolean) => void;
   onSkip: (claimId: string) => void;
 }) {
-  const promptSignIn = usePrivySignIn();
   // Narrowed by the caller, which only passes claims that have a space to publish into.
   const spaceId = claim.spaceId as string;
-  const {
-    responseKind,
-    isResponseKindResolved,
-    isViewerResponseResolved,
-    responseBlockedReason,
-    claim: claimSummary,
-    positions,
-    readiness,
-  } = useClaimResponseState({ claimId: claim.id, spaceId, row, entity });
-
-  const control = useClaimPositionControl({
-    claim: claimSummary,
-    positions,
-    readiness,
-    answersReady: isResponseKindResolved && isViewerResponseResolved,
-    responseBlockedReason,
-    onRequireSignIn: promptSignIn,
-    offersDebate: false,
+  const { responseKind, isViewerResponseResolved, control } = useDebateClaimResponse({
+    claimId: claim.id,
+    spaceId,
+    row,
+    entity,
   });
 
   const position = control.viewerPosition;
