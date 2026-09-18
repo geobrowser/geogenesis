@@ -6,6 +6,7 @@ import { useAtomValue } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
+import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 
 import { spaceSidebarHasContentAtom } from '~/atoms';
 
@@ -67,6 +68,38 @@ type SpaceHeaderContentContainerProps = {
   children: React.ReactNode;
   hasSidebar: boolean;
 };
+
+/**
+ * The profile rail, on the tabs that are a profile and not on the ones that are
+ * not (GEO-2859).
+ *
+ * The twin of `SpaceChromeGate`, and it exists because splitting them let them
+ * drift: the gate learned to keep the header only on the debates *index*, while
+ * the layout went on wrapping every nested debate route in the rail and its
+ * content width. So a debate room lost its header and kept its sidebar — worse
+ * than either alone, since a full-screen player was left framed in a column with
+ * nothing above it.
+ *
+ * Both now read the same two patterns, in one file, which is the only way two
+ * route rules of this kind stay the same rule.
+ */
+export function ProfileRailGate({
+  children,
+  sidebar,
+  isProfile,
+}: {
+  children: React.ReactNode;
+  sidebar: React.ReactNode;
+  isProfile: boolean;
+}) {
+  const pathname = usePathname();
+  const isFullBleedRoute = pathname != null && FULL_BLEED_ROUTE.test(pathname);
+  const isDebatesIndex = pathname != null && DEBATES_INDEX_ROUTE.test(pathname);
+
+  if (!isProfile || (isFullBleedRoute && !isDebatesIndex)) return <>{children}</>;
+
+  return <EntityPageSidebarLayout sidebar={sidebar}>{children}</EntityPageSidebarLayout>;
+}
 
 export function SpaceHeaderContentContainer({ children, hasSidebar }: SpaceHeaderContentContainerProps) {
   return (

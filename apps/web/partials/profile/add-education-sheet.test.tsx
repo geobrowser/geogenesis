@@ -332,3 +332,49 @@ describe('every picker', () => {
     }
   });
 });
+
+/**
+ * ...except on a row that never had one (GEO-2859).
+ *
+ * Editing is a removal and a fresh write, so a blank start *deletes* a date that
+ * was there — which is what the requirement above is for. A row that arrived
+ * undated has nothing to delete, and most history in the graph is undated, so
+ * requiring one there made a legacy record unsavable: correcting a typo in the
+ * degree meant inventing a historical start.
+ */
+describe('AddEducationSheet — a row that was already undated', () => {
+  const undated = {
+    school: { id: 'org-1', name: 'Cincinnati' },
+    degree: { id: 'degree-1', name: 'Doctor of Philosophy' },
+    startDate: null,
+    endDate: null,
+    status: 'studying',
+    fields: [],
+    skills: [],
+  } as never;
+
+  it('lets an undated row be saved without inventing a date', () => {
+    renderSheet({ initial: undated });
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
+  });
+
+  it('still refuses to let a dated row have its date cleared', async () => {
+    renderSheet({ initial: { ...(undated as object), startDate: '2019-03-01T00:00:00.000Z' } as never });
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
+
+    await userEvent.selectOptions(screen.getByLabelText('Start month'), '');
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  });
+
+  it('still requires a date on a brand new row', async () => {
+    renderSheet();
+
+    await userEvent.click(pickers()[0]);
+    await userEvent.click(pickers()[0]);
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  });
+});

@@ -83,7 +83,7 @@ export function AddEducationSheet({ spaceId, school, initial, onCancel, onSave }
   // one is actually going to be written.
   const isOrdered = status === 'studying' || isOrderedRange(start, end);
   /**
-   * A start date is required (GEO-2859).
+   * A start date is required — **unless the row never had one** (GEO-2859).
    *
    * Editing a published row is a removal and a fresh write, and the write only
    * emits a date row when it has one — so saving with the start blank did not
@@ -92,8 +92,16 @@ export function AddEducationSheet({ spaceId, school, initial, onCancel, onSave }
    *
    * It also has nowhere to render: `formatDateRange` draws nothing at all
    * without a start, so the row would come back with its whole date line gone.
+   *
+   * None of that applies to a row that arrived undated: there is no date to
+   * delete and none on screen to lose. Requiring one there made the *ordinary*
+   * case unsavable — **1,739 of the graph's 1,906 employment rows carry no date
+   * at all** — so fixing a typo in a legacy title meant inventing a historical
+   * start. Required for a new row, impossible to clear on a dated one,
+   * grandfathered on an undated one.
    */
-  const hasStart = start !== null;
+  const startedUndated = initial !== undefined && initial.startDate == null;
+  const hasStart = start !== null || startedUndated;
   const canSave = pickedSchool !== null && degree !== null && isOrdered && hasStart;
 
   const save = () => {

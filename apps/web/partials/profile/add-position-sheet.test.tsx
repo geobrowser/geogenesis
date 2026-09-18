@@ -544,3 +544,58 @@ describe('the Change button beside a chosen entity', () => {
     expect(screen.getByRole('button', { name: 'Change Company' })).toBeInTheDocument();
   });
 });
+
+/**
+ * ...except on a row that never had one (GEO-2859).
+ *
+ * Editing is a removal and a fresh write, so a blank start *deletes* a date that
+ * was there — which is what the requirement above is for. A row that arrived
+ * undated has nothing to delete, and **1,739 of the graph's 1,906 employment
+ * rows carry no date at all**, so requiring one there made the ordinary legacy
+ * record unsavable: correcting a typo in the title meant inventing a historical
+ * start.
+ */
+describe('AddPositionSheet — a row that was already undated', () => {
+  it('lets an undated row be saved without inventing a date', async () => {
+    renderSheet({
+      initial: {
+        company: { id: 'org-1', name: 'Geo' },
+        title: { id: 'role-1', name: 'Head of Product' },
+        startDate: null,
+        endDate: null,
+        status: 'current',
+        skills: [],
+      } as never,
+    });
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
+  });
+
+  it('still refuses to let a dated row have its date cleared', async () => {
+    renderSheet({
+      initial: {
+        company: { id: 'org-1', name: 'Geo' },
+        title: { id: 'role-1', name: 'Head of Product' },
+        startDate: '2019-03-01T00:00:00.000Z',
+        endDate: null,
+        status: 'current',
+        skills: [],
+      } as never,
+    });
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
+
+    await userEvent.selectOptions(screen.getByLabelText('Start month'), '');
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  });
+
+  it('still requires a date on a brand new row', async () => {
+    renderSheet();
+
+    await pickCompany();
+    await pickTitle();
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  });
+});

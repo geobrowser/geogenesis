@@ -23,7 +23,6 @@ import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-head
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
 import { ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH } from '~/partials/entity-page/entity-page-layout';
-import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-profile-bio-starter-merge';
 import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
 import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
@@ -39,7 +38,7 @@ import { SpaceTabs } from '~/partials/space-page/space-tabs';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
-import { SpaceChromeGate, SpaceHeaderContentGate } from './space-chrome-gate';
+import { ProfileRailGate, SpaceChromeGate, SpaceHeaderContentGate } from './space-chrome-gate';
 import { resolveSpaceSidebar } from './space-sidebar';
 
 type LayoutProps = {
@@ -216,7 +215,14 @@ export default async function Layout(props0: LayoutProps) {
           </SpaceHeaderContentGate>
           <Spacer height={20} />
         </SpaceChromeGate>
-        {isProfile ? <EntityPageSidebarLayout sidebar={profileRail}>{children}</EntityPageSidebarLayout> : children}
+        {/*
+         * Inside the gate's own file, so this rule and the header's cannot
+         * drift — see `ProfileRailGate`. A nested debate route is full-screen
+         * and takes neither.
+         */}
+        <ProfileRailGate isProfile={isProfile} sidebar={profileRail}>
+          {children}
+        </ProfileRailGate>
       </RouteEditorProvider>
     </EntityStoreProvider>
   );

@@ -283,6 +283,17 @@ async function fetchActionTypes(proposalIds: string[], signal?: AbortSignal): Pr
     byId.set(key, proposalTypeFromActionTypes(actionTypes));
   }
 
+  // A short answer is a failure too. The caller defaults a missing id to
+  // `ADD_EDIT` and renders an unnamed proposal as a raw uuid, which is exactly
+  // what throwing on the network error above exists to prevent — so a request
+  // that succeeded while resolving only some of what it was asked for must not
+  // take the quiet path the error takes loudly.
+  const missing = proposalIds.filter(id => !byId.has(ID.uuidToHex(id)));
+
+  if (missing.length > 0) {
+    throw new Error(`[person-proposals] action types missing for ${missing.length} of ${proposalIds.length} proposals`);
+  }
+
   return byId;
 }
 
