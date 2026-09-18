@@ -6,7 +6,7 @@ import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-s
 import { type ExploreCall, fetchCommunityCallsForExplore } from '~/core/community-calls/fetch-community-calls';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { type FeaturedRanking, fetchFeaturedRankings } from '~/core/io/subgraph/fetch-featured-rankings';
-import { type FeaturedSpace, fetchFeaturedSpaces } from '~/core/io/subgraph/fetch-featured-spaces';
+import { type FeaturedSpace, fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 import { normId } from '~/core/utils/norm-id';
@@ -40,8 +40,12 @@ export const fetchExploreSidePanelData = cache(
       }
     }
 
+    // Shared, not raw. `RootExploreSidePanelContainer` calls this with no options, so the
+    // fallback is the live path for the Root rail rather than a corner — and the raw fetch
+    // bypasses the TTL cache and the in-flight sharing entirely, making every Root request
+    // pay for the Featured list from scratch.
     const featuredSpacesPromise =
-      options.featuredSpacesPromise ?? fetchFeaturedSpaces().catch(() => [] as FeaturedSpace[]);
+      options.featuredSpacesPromise ?? fetchFeaturedSpacesShared().catch(() => [] as FeaturedSpace[]);
     const featuredRankingsPromise = fetchFeaturedRankings().catch(() => [] as FeaturedRanking[]);
     const communityCallsPromise = fetchCommunityCallsForExplore().catch(() => [] as ExploreCall[]);
     const governancePromise = memberSpaceId
