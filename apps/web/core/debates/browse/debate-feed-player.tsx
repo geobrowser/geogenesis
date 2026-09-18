@@ -413,7 +413,7 @@ function DebaterVideo({
 
       {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
 
-      {/* This debater's claims, in the bottom-left of their own tile. One corner each rather than
+      {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks
           the eye to leave the speaker in order to read what the speaker is saying.
 
@@ -431,9 +431,10 @@ function DebaterVideo({
           out at exactly that; the fullscreen player is far wider, and letting the card scale with it
           would hold a paragraph and stop being a glance.
 
-          `items-start` because that cap is a cap, not a width. A flex column stretches its children
+          `items-end` because that cap is a cap, not a width. A flex column stretches its children
           by default, which drew the little claims chip as a 209px bar with two words adrift in it.
-          The cards ask for the full width themselves; everything else here should be its own size.
+          The cards ask for the full width themselves; everything else here should be its own size,
+          against the edge the corner is anchored to.
 
           The 60% cap applies only while the list is open, and that is load-bearing. `justify-end`
           overflows *downward* once its content is taller than the box — measured at 253px of cards
@@ -443,7 +444,7 @@ function DebaterVideo({
       {claims && (
         <div
           className={cx(
-            'pointer-events-none absolute bottom-3 left-3 z-10 flex w-[43%] max-w-[13.0625rem] flex-col items-start justify-end transition-[padding-bottom] duration-150',
+            'pointer-events-none absolute right-3 bottom-3 z-10 flex w-[43%] max-w-[13.0625rem] flex-col items-end justify-end transition-[padding-bottom] duration-150',
             // Only the open list needs holding back; the live card is one card tall.
             claimsOpen && 'max-h-[60%]',
             // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling
@@ -457,13 +458,13 @@ function DebaterVideo({
         </div>
       )}
 
-      {/* Debater identity, opens their personal space in the side panel. On the right, because the
-          left of the bottom band is where the claim stack now lives. */}
+      {/* Debater identity, opens their personal space in the side panel. On the left, opposite the
+          claim corner. */}
       <button
         type="button"
         onClick={openProfile}
         className={cx(
-          'absolute right-4 bottom-3 z-10 flex max-w-[55%] items-center gap-2 text-left transition-[padding-bottom] duration-150',
+          'absolute bottom-3 left-4 z-10 flex max-w-[55%] items-center gap-2 text-left transition-[padding-bottom] duration-150',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
           // Padding rather than `bottom`, because the box is pinned by its bottom edge — the

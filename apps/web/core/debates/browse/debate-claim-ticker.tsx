@@ -208,7 +208,7 @@ const HISTORY_EDGE_FADE_PX = 68;
 /**
  * The claim card that rises over the video as it is said.
  *
- * A translucent dark card in the player's bottom-left corner, stacked upward: the newest arrives
+ * A translucent dark card in the player's bottom-right corner, stacked upward: the newest arrives
  * at the bottom and earlier ones ride up and dissolve, which is the shape of a chat rather than a
  * dialog. It never pauses the video or opens anything — the only thing that interrupts playback is
  * the sign-in prompt, which is the app's standard prompt and only appears if the viewer presses a
@@ -319,7 +319,7 @@ function TickerClaimText({ text }: { text: string }) {
 }
 
 /**
- * The claim cards in the player's bottom-left corner, oldest at the top.
+ * The claim cards in the player's bottom-right corner, oldest at the top.
  *
  * Anchored in the corner rather than centred over the video: a card in the middle reads as a
  * dialog demanding an answer, and it covers the face of the person making the argument.
@@ -435,7 +435,7 @@ export function DebateClaimTickerStack({
   if (shown.length === 0 && !showChip) return null;
 
   return (
-    <div className="flex min-h-0 w-full flex-col items-start gap-1.5">
+    <div className="flex min-h-0 w-full flex-col items-end gap-1.5">
       <div
         ref={scrollRef}
         onScroll={onScroll}
