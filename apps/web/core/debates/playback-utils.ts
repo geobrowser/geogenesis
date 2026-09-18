@@ -218,7 +218,19 @@ export async function playBothWithMutedFallback(
   // Nothing to retry if audio was already off — the block is not the autoplay policy.
   if (primary.muted && secondary.muted) return 'blocked';
 
+  const primaryWasMuted = primary.muted;
+  const secondaryWasMuted = secondary.muted;
   primary.muted = true;
   secondary.muted = true;
-  return (await attempt()) ? 'playing-muted' : 'blocked';
+  if (await attempt()) return 'playing-muted';
+
+  // Leave no trace on the way out. `muted` is a rendered prop on these elements, and React only
+  // writes a DOM property when its own previous value differs — so a mute left behind here is
+  // invisible to it and survives every later render that says otherwise. 'playing-muted' is safe
+  // because the caller pairs it with the state change that makes the mute the rendered truth;
+  // 'blocked' has no such pairing, and used to leave the pair silently muted underneath a UI
+  // that still offered a "mute" control (GEO-2947).
+  primary.muted = primaryWasMuted;
+  secondary.muted = secondaryWasMuted;
+  return 'blocked';
 }

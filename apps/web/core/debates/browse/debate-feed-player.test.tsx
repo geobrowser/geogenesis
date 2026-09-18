@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
@@ -90,6 +90,24 @@ function renderPlayer(overrides: { mutedByUser: boolean; turnSlot: 1 | 2 }) {
  * the element no longer has two notions of "muted" written to it from two places. It also stops
  * the listening debater's element from looking like a silent video to a backgrounded tab.
  */
+/**
+ * iOS Safari: `volume` is read-only. The write is accepted and ignored, and the property stays
+ * at 1 — so a component that silences the listening debater with volume alone puts both of them
+ * on air at once. jsdom happily honours volume, so the platform has to be stubbed to test it.
+ */
+function stubReadOnlyVolume() {
+  const original = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'volume');
+  Object.defineProperty(HTMLMediaElement.prototype, 'volume', {
+    configurable: true,
+    get: () => 1,
+    set: () => {},
+  });
+  return () => {
+    if (original) Object.defineProperty(HTMLMediaElement.prototype, 'volume', original);
+    else Reflect.deleteProperty(HTMLMediaElement.prototype, 'volume');
+  };
+}
+
 describe('DebateFeedPlayer audio gating (GEO-2947)', () => {
   beforeEach(() => {
     mocks.controller = null;
@@ -120,5 +138,40 @@ describe('DebateFeedPlayer audio gating (GEO-2947)', () => {
     // therefore lands the viewer on the speaker rather than on both recordings at once.
     expect(slot1.volume).toBe(1);
     expect(slot2.volume).toBe(0);
+  });
+});
+
+describe('DebateFeedPlayer audio gating where volume is read-only (GEO-2947)', () => {
+  let restoreVolume: (() => void) | null = null;
+
+  beforeEach(() => {
+    restoreVolume = stubReadOnlyVolume();
+  });
+
+  afterEach(() => {
+    restoreVolume?.();
+    restoreVolume = null;
+  });
+
+  /** THE REGRESSION Copilot caught: without the fallback, both debaters are audible on iOS. */
+  it('mutes the listening debater when the volume assignment does not stick', () => {
+    const { slot1, slot2 } = renderPlayer({ mutedByUser: false, turnSlot: 1 });
+
+    expect(slot1.muted).toBe(false); // the speaker is still the one you hear
+    expect(slot2.muted).toBe(true); // ...and the listener is silenced the only way left
+  });
+
+  it('moves that mute with the turn', () => {
+    const { slot1, slot2 } = renderPlayer({ mutedByUser: false, turnSlot: 2 });
+
+    expect(slot1.muted).toBe(true);
+    expect(slot2.muted).toBe(false);
+  });
+
+  it("still honours the viewer's own mute on both elements", () => {
+    const { slot1, slot2 } = renderPlayer({ mutedByUser: true, turnSlot: 1 });
+
+    expect(slot1.muted).toBe(true);
+    expect(slot2.muted).toBe(true);
   });
 });

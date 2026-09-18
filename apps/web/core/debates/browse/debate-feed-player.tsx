@@ -223,26 +223,40 @@ function DebaterVideo({
   const name = participant ? speakerLabel(participant) : 'Debater';
 
   /**
-   * Whose turn it is decides the *volume*, not the `muted` flag (GEO-2947).
+   * Whose turn it is decides the *volume*, not the `muted` flag (GEO-2947) — where the platform
+   * lets us, which is not everywhere.
    *
-   * `muted` now carries only the viewer's own mute, which is the one thing it should mean — and
-   * the one thing `playFromStart` and `playBothWithMutedFallback` already write it for, so the
-   * element no longer has two different notions of "muted" written to it from two places.
+   * `muted` should carry only the viewer's own mute, which is the one thing `playFromStart` and
+   * `playBothWithMutedFallback` already write it for; putting the per-turn gate on it too gave
+   * the element two different notions of "muted" written from two places. And a browser is
+   * entitled to stop a <video> it considers silent once the tab is off screen, so muting the
+   * listening debater for the length of a turn is what made one of the pair look stoppable.
+   * Volume 0 is the same silence to a listener without being a mute.
    *
-   * The reason to move the per-turn gate off it: a browser is entitled to stop a <video> it
-   * considers silent once the tab is off screen, and muting the listening debater for the length
-   * of a turn is what made one of the pair look silent. Volume 0 is the same silence to a
-   * listener without being a mute. It is not a guarantee — a browser may well count volume 0 as
-   * inaudible too — but it costs nothing, and the player no longer depends on the answer either
-   * way: `useDebatePlayback` now leaves a split pair alone off screen and reconciles on return.
+   * iOS Safari does not allow it. `volume` is read-only there: the write is accepted and ignored,
+   * and the property stays at 1. Since this component also stopped muting the listening element,
+   * that would put *both* debaters on air at once the moment the viewer un-mutes — which is why
+   * the assignment is read back rather than assumed. Where it doesn't stick we mute the listener
+   * exactly as before. Mobile is out of scope for background playback anyway (iOS stops inline
+   * <video> on backgrounding regardless), so falling back costs it nothing it had.
    *
-   * Layout effect, so the volume lands in the same commit that React writes `muted` — a turn
-   * change must never leave both recordings briefly audible at once.
+   * Once is enough: it is a platform fact, not a per-turn one, and the first write happens on
+   * mount while the feed is still muted by default — so the fallback is already in place well
+   * before there is any audio to get wrong.
+   *
+   * Note the speaking element cannot detect it — it asks for volume 1 and reads back 1, which is
+   * indistinguishable from the write having worked. That is exactly right: it is the *listening*
+   * element that needs silencing, and it is the one whose write visibly fails. Each detects it
+   * the first time it has something to lose, and the turn it becomes the listener is that time.
    */
+  const [volumeIsWritable, setVolumeIsWritable] = React.useState(true);
+
   React.useLayoutEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    video.volume = audible ? 1 : 0;
+    const wanted = audible ? 1 : 0;
+    video.volume = wanted;
+    if (Math.abs(video.volume - wanted) > 0.01) setVolumeIsWritable(false);
   }, [audible, src, videoRef]);
 
   // A personal space's own id resolves to its "system entity" (an ugly technical
@@ -267,7 +281,8 @@ function DebaterVideo({
             playsInline
             preload="metadata"
             src={src}
-            muted={mutedByUser}
+            // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
+            muted={mutedByUser || (!volumeIsWritable && !audible)}
             onEnded={onPlaybackTick}
             onLoadedMetadata={onPlaybackTick}
             onPause={onPlaybackTick}

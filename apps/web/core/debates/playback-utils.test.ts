@@ -302,6 +302,40 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
     expect(await playBothWithMutedFallback(a, b)).toBe('blocked');
   });
 
+  /**
+   * A mute left behind by a failed retry is invisible to React — it only writes a DOM property
+   * when its own previous value differs — so it survives every later render that says otherwise,
+   * leaving the pair silently muted under a UI still offering a "mute" control (GEO-2947).
+   */
+  it('restores the original muted state when it gives up', async () => {
+    // Refuses to start either way, so the muted retry fails too and the helper gives up.
+    const stuck = () => {
+      const video = fakeVideo({ muted: false });
+      video.play = async () => {
+        video.plays += 1;
+      };
+      return video;
+    };
+    const a = stuck();
+    const b = stuck();
+
+    expect(await playBothWithMutedFallback(a, b)).toBe('blocked');
+
+    expect(a.muted).toBe(false);
+    expect(b.muted).toBe(false);
+  });
+
+  /** ...but a retry that *worked* keeps the mute: the caller records it as the rendered truth. */
+  it('keeps the mute when the muted retry succeeds', async () => {
+    const a = fakeVideo({ muted: false, blockUnmuted: true });
+    const b = fakeVideo({ muted: false, blockUnmuted: true });
+
+    expect(await playBothWithMutedFallback(a, b)).toBe('playing-muted');
+
+    expect(a.muted).toBe(true);
+    expect(b.muted).toBe(true);
+  });
+
   it('keeps sound when the play is gesture-driven', async () => {
     const a = fakeVideo({ muted: false, blockUnmuted: false });
     const b = fakeVideo({ muted: false, blockUnmuted: false });

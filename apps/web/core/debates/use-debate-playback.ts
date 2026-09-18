@@ -533,11 +533,15 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     pendingSeekSecondsRef.current = null;
     primaryVideo.pause();
     secondaryVideo.pause();
-    primaryVideo.muted = mutedByUser;
-    secondaryVideo.muted = mutedByUser;
+    // No `muted` write here any more. It existed to repair the one case where the elements could
+    // be muted behind React's back — a blocked autoplay fallback — and `playBothWithMutedFallback`
+    // now undoes that itself, so writing it again only re-created the divergence from the other
+    // direction: the value this knows (`mutedByUser`) is not the value the player renders once the
+    // per-turn gate falls back to muting on a platform where `volume` is read-only (GEO-2947).
+    // `muted` has one owner now, and it is the render.
     seekVideosTo(0);
     await resumeBoth();
-  }, [mutedByUser, resumeBoth, seekVideosTo]);
+  }, [resumeBoth, seekVideosTo]);
 
   const seekBoth = React.useCallback(
     (seconds: number) => {
