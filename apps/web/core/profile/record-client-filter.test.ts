@@ -86,13 +86,13 @@ describe('sortRows', () => {
     ]);
 
     it('ranks by the score, highest first', () => {
-      expect(sortRows(ROWS, 'top', scores).map(r => r.entityId)).toEqual(['d2', 'd3', 'd1']);
+      expect(sortRows(ROWS, 'top', { scores: scores }).map(r => r.entityId)).toEqual(['d2', 'd3', 'd1']);
     });
 
     it('puts an unscored row last rather than dropping it', () => {
       const partial = new Map([['d3', 5]]);
 
-      expect(sortRows(ROWS, 'top', partial).map(r => r.entityId)).toEqual(['d3', 'd1', 'd2']);
+      expect(sortRows(ROWS, 'top', { scores: partial }).map(r => r.entityId)).toEqual(['d3', 'd1', 'd2']);
     });
 
     it('holds the incoming order where scores tie', () => {
@@ -102,7 +102,7 @@ describe('sortRows', () => {
         ['d3', 5],
       ]);
 
-      expect(sortRows(ROWS, 'top', tied).map(r => r.entityId)).toEqual(['d1', 'd2', 'd3']);
+      expect(sortRows(ROWS, 'top', { scores: tied }).map(r => r.entityId)).toEqual(['d1', 'd2', 'd3']);
     });
 
     // Top is selected before its scores arrive, so this is the first thing drawn.
@@ -116,7 +116,49 @@ describe('sortRows', () => {
       const rows = [row('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 's'), row('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 's')];
       const normalised = new Map([['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 10]]);
 
-      expect(sortRows(rows, 'top', normalised)[0].entityId).toBe('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+      expect(sortRows(rows, 'top', { scores: normalised })[0].entityId).toBe('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+    });
+  });
+
+  /**
+   * Best ranks by the indexer's ranking score, the number Explore's Best orders
+   * by — and by *that* map, not the Score property's.
+   *
+   * The two are different orderings of the same rows: on the reference account
+   * they share one of their top ten. A sort reading the wrong map would look
+   * plausible and be wrong, which is the only reason this is worth a test.
+   */
+  describe('Best', () => {
+    const ranks = {
+      scores: new Map([
+        ['d1', 100],
+        ['d2', 1],
+        ['d3', 50],
+      ]),
+      rankings: new Map([
+        ['d1', 17_864.4],
+        ['d2', 17_901.8],
+        ['d3', 17_890.6],
+      ]),
+    };
+
+    it('ranks by the ranking score, highest first', () => {
+      expect(sortRows(ROWS, 'best', ranks).map(r => r.entityId)).toEqual(['d2', 'd3', 'd1']);
+    });
+
+    it('does not read the Score property, which orders these the other way', () => {
+      expect(sortRows(ROWS, 'top', ranks).map(r => r.entityId)).toEqual(['d1', 'd3', 'd2']);
+    });
+
+    it('puts an unranked row last rather than dropping it', () => {
+      const partial = { rankings: new Map([['d3', 17_890.6]]) };
+
+      expect(sortRows(ROWS, 'best', partial).map(r => r.entityId)).toEqual(['d3', 'd1', 'd2']);
+    });
+
+    // Best is selected before its numbers arrive, so this is the first thing drawn.
+    it('is the New order when nothing has arrived', () => {
+      expect(sortRows(ROWS, 'best').map(r => r.entityId)).toEqual(['d1', 'd2', 'd3']);
     });
   });
 });

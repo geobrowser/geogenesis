@@ -33,6 +33,7 @@ import { useRecordSelection } from './use-record-selection';
 const SORT_OPTIONS: HubFilterOption<string>[] = [
   { value: 'new', label: 'New' },
   { value: 'top', label: 'Top' },
+  { value: 'best', label: 'Best' },
 ];
 
 export function PersonPositionsTab({ spaceId }: { spaceId: string }) {

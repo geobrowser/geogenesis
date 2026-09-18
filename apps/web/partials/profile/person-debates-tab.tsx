@@ -32,18 +32,24 @@ import { useRecordSelection } from './use-record-selection';
 const SORT_OPTIONS: HubFilterOption<string>[] = [
   { value: 'new', label: 'New' },
   { value: 'top', label: 'Top' },
+  { value: 'best', label: 'Best' },
   { value: 'old', label: 'Old' },
 ];
 
 /**
- * Top, dropped when its scores could not be read.
+ * The two ranked sorts, dropped when the numbers behind them could not be read.
  *
- * An empty score map is what both loading and failure look like, and `sortRows`
- * reads it as "keep the incoming order" — so a failed lookup leaves the list in
- * New order under a menu still reading Top. Offering a sort that silently does
- * nothing is worse than offering two.
+ * An empty map is what both loading and failure look like, and `sortRows` reads
+ * it as "keep the incoming order" — so a failed lookup leaves the list in New
+ * order under a menu still reading Top. Offering a sort that silently does
+ * nothing is worse than offering fewer.
+ *
+ * Both go together because both come from one request.
  */
-const SORT_OPTIONS_WITHOUT_TOP = SORT_OPTIONS.filter(option => option.value !== 'top');
+const RANKED_SORTS = ['top', 'best'];
+const SORT_OPTIONS_UNRANKED = SORT_OPTIONS.filter(option => !RANKED_SORTS.includes(option.value));
+
+const isRanked = (sort: DebateSort) => sort === 'top' || sort === 'best';
 
 export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
   const [sort, setSort] = React.useState<DebateSort>('new');
@@ -57,15 +63,24 @@ export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
   // Explore ranks by ordering rows server-side rather than decorating them — so
   // a list already complete in memory has to look them up to rank itself.
   const debateIds = React.useMemo(() => rows.map(row => row.entityId), [rows]);
-  const { scores, isError: isScoresError } = useEntityScores({ ids: debateIds, enabled: sort === 'top' });
+  const {
+    scores,
+    rankings,
+    isError: isScoresError,
+  } = useEntityScores({
+    ids: debateIds,
+    enabled: isRanked(sort),
+  });
 
-  // The order the menu is claiming. With Top withdrawn, that is New — not Top
-  // quietly behaving like New.
-  const effectiveSort = isScoresError && sort === 'top' ? 'new' : sort;
+  // The order the menu is claiming. With the ranked sorts withdrawn, that is New
+  // — not Top quietly behaving like New.
+  const effectiveSort = isScoresError && isRanked(sort) ? 'new' : sort;
+
+  const ranks = React.useMemo(() => ({ scores, rankings }), [rankings, scores]);
 
   const shown = React.useMemo(
-    () => sortRows(filterRowsBySpace(rows, spaces.values), effectiveSort, scores),
-    [effectiveSort, rows, scores, spaces.values]
+    () => sortRows(filterRowsBySpace(rows, spaces.values), effectiveSort, ranks),
+    [effectiveSort, ranks, rows, spaces.values]
   );
 
   const spaceIds = React.useMemo(() => facets.map(facet => facet.id), [facets]);
@@ -98,8 +113,8 @@ export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
           sort={{
             // Falls back to New rather than stranding the reader on a sort that
             // is no longer offered.
-            value: isScoresError && sort === 'top' ? 'new' : sort,
-            options: isScoresError ? SORT_OPTIONS_WITHOUT_TOP : SORT_OPTIONS,
+            value: effectiveSort,
+            options: isScoresError ? SORT_OPTIONS_UNRANKED : SORT_OPTIONS,
             onChange: value => setSort(value as DebateSort),
           }}
           dimensions={

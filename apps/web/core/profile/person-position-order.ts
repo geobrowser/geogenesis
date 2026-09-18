@@ -26,11 +26,14 @@ import { normId } from '~/core/utils/norm-id';
  *   vote; `CREATED_AT` is the claim's own age, which is a different list.
  * - **Top** is the claim's Score, which the vote table cannot see —
  *   `UserVotesOrderBy` holds vote columns only.
+ * - **Best** is the indexer's ranking score, an `EntitiesOrderBy` column rather
+ *   than a property — so it comes from the same connection as New, ordered
+ *   differently.
  *
  * Both are voter-scoped server-side (GEO-2913, GEO-2928), so neither is a scan
  * of the graph narrowed afterwards.
  */
-export type PositionSort = 'new' | 'top';
+export type PositionSort = 'new' | 'top' | 'best';
 
 const VOTE_ORDER_SOURCE = /* GraphQL */ `
   query PersonVoteOrder($userId: UUID!, $first: Int, $after: Cursor) {
@@ -88,7 +91,43 @@ const SCORE_ORDER_SOURCE = /* GraphQL */ `
   }
 `;
 
+/**
+ * Ranking order — the same number Explore's Best shows.
+ *
+ * Not `entitiesRankedForFeed*`, which is where Best is read from on Explore and
+ * has no `votedBy`. It does not need to be: that connection returns its nodes in
+ * strictly descending `rankingScore` (25 of 25 checked for the Relationships
+ * space), so the ordering *is* this column and the two surfaces agree. Explore's
+ * diversity windowing is applied client-side afterwards, in `fetchExploreFeed`,
+ * and deliberately not here — it exists to stop one space crowding an infinite
+ * feed, which is not a problem one person's record has.
+ *
+ * Reading the column rather than the ranked connection is also the more complete
+ * answer: that connection generates candidates on its own rules and dropped 8 of
+ * the reference account's 208 claims, where this returns every one.
+ */
+const BEST_ORDER_SOURCE = /* GraphQL */ `
+  query PersonBestOrder($userId: UUID!, $first: Int, $after: Cursor) {
+    entitiesConnection(
+      votedBy: $userId
+      votedByKinds: [1, 2]
+      orderBy: RANKING_SCORE_DESC
+      first: $first
+      after: $after
+    ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        id
+      }
+    }
+  }
+`;
+
 export const personVoteOrderDocument = parse(VOTE_ORDER_SOURCE) as TypedDocumentNode<any, any>;
+export const personBestOrderDocument = parse(BEST_ORDER_SOURCE) as TypedDocumentNode<any, any>;
 export const personScoreOrderDocument = parse(SCORE_ORDER_SOURCE) as TypedDocumentNode<any, any>;
 
 const ORDER_PAGE_SIZE = 500;
@@ -305,12 +344,15 @@ export async function fetchPositionOrder(
     return decodeVoteOrder(nodes as VoteNode[]);
   }
 
-  const nodes = await pageAll(
-    personScoreOrderDocument,
-    { userId, propertyId: SCORE_SYSTEM_PROPERTY },
-    data => data.entitiesOrderedByPropertyConnection,
-    signal
-  );
+  const nodes =
+    sort === 'best'
+      ? await pageAll(personBestOrderDocument, { userId }, data => data.entitiesConnection, signal)
+      : await pageAll(
+          personScoreOrderDocument,
+          { userId, propertyId: SCORE_SYSTEM_PROPERTY },
+          data => data.entitiesOrderedByPropertyConnection,
+          signal
+        );
 
   const seen = new Set<string>();
   const entityIds: string[] = [];
@@ -323,8 +365,8 @@ export async function fetchPositionOrder(
     entityIds.push(key);
   }
 
-  // Score order says nothing about how anyone answered — including whether the
-  // answer still stands. The tab reads both from the vote order, which it holds
-  // whichever sort is showing, and narrows this list to it.
+  // Neither ordering says anything about how anyone answered — including
+  // whether the answer still stands. The tab reads both from the vote order,
+  // which it holds whichever sort is showing, and narrows this list to it.
   return { entityIds, responseByClaimId: {}, spacesByClaimId: {} };
 }

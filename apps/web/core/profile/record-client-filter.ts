@@ -15,7 +15,7 @@ import { normId } from '~/core/utils/norm-id';
  * genuinely paged, so the same code there would filter the reader's scroll
  * position.
  */
-export type DebateSort = 'new' | 'top' | 'old';
+export type DebateSort = 'new' | 'top' | 'old' | 'best';
 
 /**
  * Spaces are OR, matching every other multi-select on these tabs.
@@ -53,35 +53,45 @@ export function spaceFacetsFromRows<T extends Pick<ExploreFeedRow, 'spaceId'>>(
 }
 
 /**
- * New, Top or Old.
+ * New, Top, Old or Best.
  *
  * **Top ranks by the debate's own Score**, which debates do carry: 66 of the 68
  * in the graph have one. An earlier version of this file claimed they had none
  * and left the sort out on that basis, which was simply unchecked — the score is
  * on the debate entity, not borrowed from the claims argued inside it.
  *
+ * **Best ranks by the indexer's ranking score**, the same number Explore's Best
+ * orders by — `entitiesRankedForFeedConnection` returns its nodes in strictly
+ * descending `rankingScore`, so reading the column directly gives that ordering
+ * for a set the ranked connection cannot be asked about. Explore's diversity
+ * windowing is applied afterwards, client-side, and is deliberately not applied
+ * here: it exists to stop one space crowding an infinite feed, which eleven
+ * debates cannot do.
+ *
+ * This file said Best was impossible for the *opposite* reason — that the
+ * windowing was intrinsic to the ranking. It is not, and the number it ranks by
+ * is one column the graph will sort by on request.
+ *
  * New and Old are the relation query's order and its reverse. Reversed rather
  * than sorted on a date because these rows carry none: a debate's date lives on
  * the entity, and the relation is what this list is built from.
- *
- * Best is still absent, and that one is deliberate. It is a diversity-windowed
- * ranking over a *set of spaces*, built to stop one space crowding an infinite
- * feed — not a question one person's eleven debates can answer.
  */
 export function sortRows<T extends { entityId: string }>(
   rows: readonly T[],
   sort: DebateSort,
-  /** Keyed by normalised id, which is what `decodeScores` hands back. */
-  scores?: ReadonlyMap<string, number>
+  /** Both keyed by normalised id, which is what `decodeScores` hands back. */
+  ranks?: { scores?: ReadonlyMap<string, number>; rankings?: ReadonlyMap<string, number> }
 ): T[] {
   if (sort === 'old') return [...rows].reverse();
-  if (sort !== 'top') return [...rows];
+  if (sort !== 'top' && sort !== 'best') return [...rows];
 
-  // Unscored rows sort last rather than disappearing, and ties keep the order
-  // they arrived in — so Top with no scores yet is the New list rather than a
-  // shuffled one.
+  const by = sort === 'best' ? ranks?.rankings : ranks?.scores;
+
+  // Rows with no number sort last rather than disappearing, and ties keep the
+  // order they arrived in — so a rank that has not loaded yet is the New list
+  // rather than a shuffled one.
   return [...rows]
-    .map((row, index) => ({ row, index, score: scores?.get(normId(row.entityId)) ?? null }))
+    .map((row, index) => ({ row, index, score: by?.get(normId(row.entityId)) ?? null }))
     .sort((a, b) => {
       if (a.score === b.score) return a.index - b.index;
       if (a.score === null) return 1;
