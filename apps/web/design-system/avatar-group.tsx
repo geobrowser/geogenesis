@@ -39,7 +39,10 @@ function AvatarGroupItem({ children, size = 12 }: AvatarGroupItemProps) {
         // because this sits five levels below the surface that knows the answer, and every level
         // between is a ranking component with no opinion about it. Unset resolves to white, so
         // every existing caller is untouched.
-        'relative box-content list-none overflow-hidden rounded-full border-2 border-[color:var(--avatar-group-ring,var(--color-white))]',
+        // `bg-white` under the image, not only the ring around it: an avatar
+        // with a transparent background — a logo saved as a PNG with no matte —
+        // otherwise shows whatever the stack is sitting on through its own face.
+        'relative box-content list-none overflow-hidden rounded-full border-2 border-[color:var(--avatar-group-ring,var(--color-white))] bg-white',
         size === 20 ? 'h-5 w-5' : 'h-3 w-3'
       )}
     >

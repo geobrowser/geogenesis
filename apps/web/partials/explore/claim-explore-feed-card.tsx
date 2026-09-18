@@ -57,6 +57,7 @@ export function ClaimExploreFeedCard({
   hideSpaceLink = false,
   hideJoinButton = false,
   titleOpensSidePanel = false,
+  responseNote,
 }: {
   item: ExploreFeedItem;
   hideSpaceLink?: boolean;
@@ -70,6 +71,17 @@ export function ClaimExploreFeedCard({
    * existing.
    */
   titleOpensSidePanel?: boolean;
+  /**
+   * A note about how somebody *else* answered this claim, for a surface that is
+   * a record of one person (GEO-2859).
+   *
+   * Built by the caller from the response kind this card resolves, because the
+   * vocabulary depends on it — a factual claim is verified or disputed, not
+   * agreed with — and the kind is a property of the claim in *this* space, which
+   * only this card knows. Absent everywhere else, which is every surface where
+   * the only answer worth reporting is the reader's own.
+   */
+  responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
 }) {
   // The feed pre-mounts cards thousands of pixels below the fold, so the counts and the geo-chat
   // row are gated on proximity rather than on mount — otherwise every claim in every loaded page
@@ -137,6 +149,32 @@ export function ClaimExploreFeedCard({
   // without a baseline it reports no counts and zeroes the split — but this column states the rule
   // it depends on rather than inheriting it, the same as the claim page's verdict and the shared
   // summary. A verdict drawn from a failed read is the one thing all three must never draw.
+  const extraSegments = React.useMemo(
+    () => (summary.isControversial ? [<ControversialTag key="controversial" />] : undefined),
+    [summary.isControversial]
+  );
+
+  /*
+   * Under the button it agrees with, rather than in the meta row.
+   *
+   * It went beside the type and the age first, on the reasoning that it is
+   * another fact about the claim in a row that already holds facts about it. On
+   * a real record that row is rarely as empty as it looks in isolation: the
+   * space chip, the type, the age, Controversial and the debate offer are
+   * already competing for it, and a sixth segment wrapped the line.
+   *
+   * Under the matching pill it needs no words to say which side it means —
+   * "Susan agrees" beneath Agree. The pills hold the card's own grid row, so
+   * nothing else moves.
+   *
+   * Held back until the response kind is known, or a factual claim reads
+   * "agrees" for a beat and then corrects itself to "verifies".
+   */
+  const noteFor = React.useCallback(
+    (position: boolean) => (isResponseKindResolved ? responseNote?.(responseKind, position) : null),
+    [isResponseKindResolved, responseKind, responseNote]
+  );
+
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
 
   return (
@@ -197,7 +235,7 @@ export function ClaimExploreFeedCard({
           item={item}
           hideSpaceLink={hideSpaceLink}
           hideJoinButton={hideJoinButton}
-          extraSegments={summary.isControversial ? [<ControversialTag key="controversial" />] : undefined}
+          extraSegments={extraSegments}
           endSlot={
             <ClaimEndSlot
               claimId={item.entityId}
@@ -241,6 +279,7 @@ export function ClaimExploreFeedCard({
             onRespond={control.respond}
             disabled={!control.canRespond}
             titleFor={control.actionTitle}
+            noteFor={responseNote ? noteFor : undefined}
           />
           {control.responseError ? (
             <div role="alert" className="mt-2">

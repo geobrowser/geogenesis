@@ -7,6 +7,7 @@ import { EntityDecoder } from '~/core/io/decoders/entity';
 import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 import { getRelationVideoUrls } from '~/core/utils/relation-video';
+import { getSpaceRank, getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 import {
   EXPLORE_AVATAR_PROPERTY_ID,
@@ -65,6 +66,27 @@ export type ExploreFeedItem = {
  */
 export type ExploreFeedRow = Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>;
 
+/**
+ * A row plus what only a space lookup can answer.
+ *
+ * The three surfaces that resolve spaces themselves — a topic's Coverage, and
+ * the two halves of a person's record — all need this, and all wrote it out
+ * separately. `hasPendingMembershipRequest` is false because the Join button it
+ * belongs to is hidden on every one of them, and the flag only ever changes
+ * that button's label.
+ */
+export function toExploreFeedItem(row: ExploreFeedRow, label: { name: string; image: string | null } | undefined) {
+  return {
+    ...row,
+    // The same last resort the feed uses when a space has no name yet: an id
+    // fragment, which at least differs between two spaces where a shared
+    // placeholder would not.
+    spaceName: label?.name ?? row.spaceId.slice(0, 8),
+    spaceImage: label?.image ?? null,
+    hasPendingMembershipRequest: false,
+  } satisfies ExploreFeedItem;
+}
+
 /** A decoded entity plus the two fields the card needs that aren't part of `Entity`. */
 export type ExploreCardEntity = Entity & { commentCount: number; createdAt?: string };
 
@@ -121,11 +143,53 @@ export function debateClaimFromEntity(
   return null;
 }
 
+/**
+ * Which space's version of an entity a card renders: **the top-ranked one**.
+ *
+ * This took three goes to get right, so the reasoning is worth keeping.
+ *
+ * `entity.spaces` is sorted by `sortSpaceIdsByRank`, which *looks* like it
+ * already answers this — but that sort deliberately leaves equally-ranked ids in
+ * their incoming order, and `SPACE_RANK` is a hard-coded table of ten spaces, so
+ * nearly every real pair is a tie. Taking the first element therefore meant
+ * "whatever order the graph returned", which for a claim in both Relationships
+ * and somebody's personal space was the personal one.
+ *
+ * `getTopRankedSpaceId` is the codebase's own answer and breaks ties
+ * deterministically, so it is used here rather than a rule invented for this
+ * path.
+ *
+ * **Typed beats untyped among equally-ranked spaces.** A personal space
+ * routinely carries a name-only copy of an entity, and rendering that copy gives
+ * a claim with no Claim type — which on the feed means no Agree/Disagree at all,
+ * because the card dispatcher reads the types of the space it was handed. Where
+ * the ranking table cannot separate two spaces, the one that holds a real record
+ * is the better answer than whichever id sorts lower, so this narrows to the
+ * typed candidates *before* ranking them and falls back to all of them when none
+ * is typed.
+ */
 function pickDisplaySpaceId(entity: Entity, allowed: Set<string>): string | null {
-  for (const sid of entity.spaces) {
-    if (allowed.has(normId(sid))) return sid;
-  }
-  return entity.spaces[0] ?? null;
+  const candidates = entity.spaces.filter(sid => allowed.has(normId(sid)));
+  // A caller whose allowed set matches nothing the entity is in gets the
+  // entity's own spaces rather than no card at all.
+  const pool = candidates.length > 0 ? candidates : entity.spaces;
+  if (pool.length === 0) return null;
+
+  const typesRelationIdNorm = normId(SystemIds.TYPES_PROPERTY);
+  const typedSpaces = new Set(
+    entity.relations.filter(r => normId(r.type.id) === typesRelationIdNorm).map(r => normId(r.spaceId))
+  );
+
+  // Rank first, strictly. Typing is only allowed to separate spaces the ranking
+  // table cannot — otherwise a name-only copy in a personal space would beat a
+  // canonical space that simply has its types written elsewhere, which is the
+  // ranking overruled rather than refined.
+  const bestRank = Math.min(...pool.map(getSpaceRank));
+  const bestRanked = pool.filter(sid => getSpaceRank(sid) === bestRank);
+
+  const typed = bestRanked.filter(sid => typedSpaces.has(normId(sid)));
+
+  return getTopRankedSpaceId(typed.length > 0 ? typed : bestRanked);
 }
 
 function textValueForProperty(entity: Entity, propertyId: string, spaceId: string): string | null {

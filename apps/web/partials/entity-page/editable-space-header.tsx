@@ -71,6 +71,7 @@ export function EditableSpaceHeading({
   addSubspaceComponent,
   nameAccessoryComponent,
   actionsComponent,
+  keepSpaceActions = false,
 }: {
   spaceId: string;
   entityId: string;
@@ -79,13 +80,22 @@ export function EditableSpaceHeading({
   nameAccessoryComponent?: React.ReactNode;
   /** Rendered at the end of the name row, e.g. the profile "Debate" button. */
   actionsComponent?: React.ReactNode;
+  /** Keeps the history and overflow controls on routes below the space's own page. */
+  keepSpaceActions?: boolean;
 }) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
   const { space } = useSpace(spaceId);
 
   const path = usePathname();
-  const isSpacePage = path === NavUtils.toSpace(spaceId);
+  // History and the overflow menu are a space's own controls, so they show on
+  // the space's own page and not on an entity inside it.
+  //
+  // A profile keeps them on every one of its tabs (GEO-2859). Its header is
+  // rendered once above all of them rather than per page, so gating on the exact
+  // Overview path made them appear and vanish as the reader moved between tabs
+  // of the same profile — with nothing else in the row changing.
+  const isSpacePage = path === NavUtils.toSpace(spaceId) || keepSpaceActions;
 
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [overlayMode, dispatch] = React.useReducer(overlayReducer, 'closed');
@@ -133,7 +143,11 @@ export function EditableSpaceHeading({
 
   return (
     <>
-      <div className="relative flex items-center justify-between">
+      {/* Wraps rather than squeezing: a long name beside Edit profile, a vote
+          pair, history and the overflow menu has nowhere to go on a phone, and
+          `justify-between` would have compressed the controls into each other.
+          Only engages when it has to, so nothing changes on a wide screen. */}
+      <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <EntityPageTitle
           value={name ?? ''}
           isEditing={isEditing}
@@ -142,7 +156,7 @@ export function EditableSpaceHeading({
           className="min-w-0 grow"
         />
         {(actionsComponent || isSpacePage) && (
-          <div className="inline-flex items-center gap-4">
+          <div className="inline-flex shrink-0 items-center gap-4">
             {actionsComponent}
             {isSpacePage && (
               <>
