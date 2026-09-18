@@ -12,6 +12,7 @@ import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
+import { releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
@@ -264,11 +265,7 @@ function DebaterVideo({
 
     if (video.getAttribute('src') !== src) video.setAttribute('src', src);
 
-    return () => {
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
-    };
+    return () => releaseVideo(video);
   }, [src, videoRef]);
 
   // A personal space's own id resolves to its "system entity" (an ugly technical

@@ -14,6 +14,7 @@ import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -32,11 +33,6 @@ import { SpaceThumb } from './space-thumb';
  * before it gives it up. Strictly between them the card keeps whatever state it had. */
 const ACTIVATE_RATIO = 0.6;
 const DEACTIVATE_RATIO = 0.4;
-/**
- * Keep at most the debates immediately around the viewport warm. Unlike the old sticky preload
- * flag, leaving this window evicts the player and its two sourced video elements.
- */
-const MEDIA_WINDOW_MARGIN = '800px';
 
 type DebateExploreFeedCardProps = {
   item: ExploreFeedItem;
@@ -69,26 +65,12 @@ export function DebateExploreFeedCard({
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
   const debateId = ID.hexToUuid(item.entityId);
 
-  const [container, setContainer] = React.useState<HTMLElement | null>(null);
-
   // The feed retains every fetched row, so proximity has to govern the lifetime of the expensive
   // subtree, not just its first request. Once this card leaves the window, unmounting the player
   // releases both video elements and unsubscribes its playback/vote/transcript consumers. Query
   // data remains in TanStack's cache, so reverse scrolling can rebuild without turning every old
   // card into a permanently live media player (GEO-2963).
-  const [nearViewport, setNearViewport] = React.useState(false);
-  React.useEffect(() => {
-    if (!container) return;
-    const observer = new IntersectionObserver(
-      entries => {
-        const entry = entries[0];
-        if (entry) setNearViewport(entry.isIntersecting);
-      },
-      { rootMargin: MEDIA_WINDOW_MARGIN }
-    );
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, [container]);
+  const { element: container, ref: setContainer, nearViewport } = useNearViewport({ sticky: false });
 
   // Autoplay while mostly in view, pause when scrolled past — same activation ratio as the
   // full-screen feed. Playback is muted by default so multiple visible cards can't clash.
