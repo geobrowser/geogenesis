@@ -17,10 +17,26 @@ import {
  * asymmetrically because of it. The same asymmetry is documented on
  * `HubMultiFilterMenu`, which draws these menus for the debates hub.
  */
+/**
+ * A claim whose topics are assigned in every space it lives in.
+ *
+ * The ordinary case — 199 of the reference account's 208 claims are in one space
+ * — and the shape the first version of this index assumed for all of them. Use
+ * `spacedEntry` for the case it got wrong.
+ */
 const entry = (entityId: string, spaceIds: string[], topicIds: string[]): PositionIndexEntry => ({
   entityId,
   spaceIds,
   topicIds,
+  topicsBySpace: new Map(spaceIds.map(spaceId => [spaceId, new Set(topicIds)])),
+});
+
+/** A claim whose topics differ by space, which every multi-space claim measured does. */
+const spacedEntry = (entityId: string, topicsBySpace: Record<string, string[]>): PositionIndexEntry => ({
+  entityId,
+  spaceIds: Object.keys(topicsBySpace),
+  topicIds: [...new Set(Object.values(topicsBySpace).flat())],
+  topicsBySpace: new Map(Object.entries(topicsBySpace).map(([spaceId, topics]) => [spaceId, new Set(topics)])),
 });
 
 function indexOf(entries: PositionIndexEntry[], names: Record<string, string> = {}): PersonPositionIndex {
@@ -163,5 +179,68 @@ describe('preferredSpacesFor', () => {
     expect(preferredSpacesFor(dashed, { spaceIds: ['SSSSSSSS'] }).get('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')).toBe(
       'ssssssss'
     );
+  });
+});
+
+/**
+ * A topic belongs to the space its relation was written in (GEO-2918).
+ *
+ * The graph records topics per space, so a claim in two spaces can carry a topic
+ * in one and not the other — and **every multi-space claim measured does**: 9 of
+ * 9 on the reference account, 13 of 15 on the busiest, each with its topics
+ * entirely in one of its spaces.
+ *
+ * Pooling them let a Space-A + Topic-T filter match a claim whose T was only
+ * ever assigned in Space B, and `preferredSpacesFor` then drew the card in A,
+ * where the topic the reader had filtered by does not exist. The two dimensions
+ * have to be satisfied by the same space. `claimTopicsById` in the debates hub
+ * keeps the space for the same reason.
+ */
+describe('topics are space-scoped', () => {
+  // Topics in Academia only; the claim also lives in Crypto.
+  const split = indexOf([spacedEntry('claim-split', { crypto: [], academia: ['ai'] })], { ai: 'AI systems' });
+
+  it('matches the space where the topic actually is', () => {
+    expect(matchingEntityIds(split, { spaceIds: ['academia'], topicIds: ['ai'] })).toEqual(['claim-split']);
+  });
+
+  it('does not match a space the topic was never assigned in', () => {
+    expect(matchingEntityIds(split, { spaceIds: ['crypto'], topicIds: ['ai'] })).toEqual([]);
+  });
+
+  it('still matches on the topic alone, wherever it was written', () => {
+    // The reader asked about a topic, not about where it was recorded.
+    expect(matchingEntityIds(split, { spaceIds: [], topicIds: ['ai'] })).toEqual(['claim-split']);
+  });
+
+  it('still matches on the space alone', () => {
+    expect(matchingEntityIds(split, { spaceIds: ['crypto'], topicIds: [] })).toEqual(['claim-split']);
+  });
+
+  it('shows the card in the space that satisfied the filter', () => {
+    const preferred = preferredSpacesFor(split, { spaceIds: [], topicIds: ['ai'] });
+
+    // Not `crypto`, which is the entity's first space and carries no topics.
+    expect(preferred.get('claim-split')).toBe('academia');
+  });
+
+  it('requires one space to satisfy every topic, not two between them', () => {
+    const scattered = indexOf([spacedEntry('claim-two', { crypto: ['ai'], academia: ['society'] })]);
+
+    expect(matchingEntityIds(scattered, { spaceIds: [], topicIds: ['ai'] })).toEqual(['claim-two']);
+    expect(matchingEntityIds(scattered, { spaceIds: [], topicIds: ['ai', 'society'] })).toEqual([]);
+  });
+
+  it('counts a topic only where the reader is looking', () => {
+    const { topics } = narrowedFacets(split, { spaceIds: ['crypto'], topicIds: [] });
+
+    // Offering "AI systems" here would be offering a row that leads nowhere.
+    expect(topics.find(topic => topic.id === 'ai')?.count).toBe(0);
+  });
+
+  it('counts it where it is', () => {
+    const { topics } = narrowedFacets(split, { spaceIds: ['academia'], topicIds: [] });
+
+    expect(topics.find(topic => topic.id === 'ai')?.count).toBe(1);
   });
 });

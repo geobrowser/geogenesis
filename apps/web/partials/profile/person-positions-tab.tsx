@@ -56,8 +56,10 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
     return matchingEntityIds(index, selection);
   }, [index, isFiltered, isLoadingIndex, selection]);
 
-  // A claim in two spaces must render in one the reader picked, not in whichever
-  // the entity happens to list first.
+  // A claim in two spaces must render in the one that satisfied the filter —
+  // not whichever the entity lists first, and not a picked space where the
+  // topic the reader filtered by was never assigned. `selection` carries both
+  // dimensions so the card lands where what they asked for is actually true.
   const preferredSpaceById = React.useMemo(
     () => (isLoadingIndex ? undefined : preferredSpacesFor(index, selection)),
     [index, isLoadingIndex, selection]

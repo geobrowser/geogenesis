@@ -42,6 +42,7 @@ const POSITION_INDEX_SOURCE = /* GraphQL */ `
         id
         spaceIds
         relationsList(first: 50, filter: { typeId: { is: $topicsPropertyId } }) {
+          spaceId
           toEntity {
             id
             name
@@ -68,12 +69,26 @@ const INDEX_PAGE_SIZE = 500;
  */
 const POSITION_INDEX_MAX_PAGES = 20;
 
-/** One claim, reduced to what the control row narrows by. */
+/**
+ * One claim, reduced to what the control row narrows by.
+ *
+ * **Topics are held per space, not pooled.** The graph records a topic as a
+ * relation written *in* a space, so the same claim carries different topics in
+ * different spaces — `claimTopicsById` in the debates hub says the same thing
+ * and keeps the space for the same reason. Every multi-space claim on both
+ * reference accounts has its topics in exactly one of its spaces: 9 of 9, and 13
+ * of 15. Pooling them let a Space-A + Topic-T filter match a claim whose T was
+ * only ever assigned in Space B, and then rendered the card in A where the topic
+ * it was filtered by does not exist.
+ */
 export type PositionIndexEntry = {
   /** Normalised, because every caller arrives holding an id spelled the other way. */
   entityId: string;
   spaceIds: string[];
+  /** Every topic on the claim, in any space. What the unfiltered topic menu lists. */
   topicIds: string[];
+  /** Topics by the space their relation was written in. */
+  topicsBySpace: Map<string, Set<string>>;
 };
 
 export type PositionFacet = {
@@ -100,7 +115,8 @@ export const EMPTY_POSITION_INDEX: PersonPositionIndex = {
 type IndexNode = {
   id?: string | null;
   spaceIds?: (string | null)[] | null;
-  relationsList?: ({ toEntity?: { id?: string | null; name?: string | null } | null } | null)[] | null;
+  relationsList?:
+    ({ spaceId?: string | null; toEntity?: { id?: string | null; name?: string | null } | null } | null)[] | null;
 };
 
 type IndexResponse = {
@@ -118,24 +134,34 @@ function decodePage(response: IndexResponse): IndexPage {
     if (!node?.id) continue;
 
     const topicIds: string[] = [];
-    const topicNames = new Map<string, string | null>();
+    const seenTopic = new Set<string>();
+    const topicsBySpace = new Map<string, Set<string>>();
 
     for (const relation of node.relationsList ?? []) {
       const topic = relation?.toEntity;
       if (!topic?.id) continue;
       const key = normId(topic.id);
+
       // A claim can carry the same topic written in two spaces. One entry each
       // would double it in the facet count and make a menu row read as more of
       // the record than it is.
-      if (topicNames.has(key)) continue;
-      topicNames.set(key, topic.name ?? null);
-      topicIds.push(key);
+      if (!seenTopic.has(key)) {
+        seenTopic.add(key);
+        topicIds.push(key);
+      }
+
+      const spaceId = relation?.spaceId ? normId(relation.spaceId) : null;
+      if (!spaceId) continue;
+      const inSpace = topicsBySpace.get(spaceId);
+      if (inSpace) inSpace.add(key);
+      else topicsBySpace.set(spaceId, new Set([key]));
     }
 
     entries.push({
       entityId: normId(node.id),
       spaceIds: (node.spaceIds ?? []).filter((id): id is string => Boolean(id)).map(normId),
       topicIds,
+      topicsBySpace,
     });
   }
 
@@ -202,20 +228,48 @@ export function facetsFrom(
  * **Spaces are OR and topics are AND**, matching the debates hub exactly — see
  * `HubMultiFilterMenu`, which documents why the two dimensions differ. Picking
  * two spaces asks for either; picking two topics asks for a claim carrying both.
+ *
+ * And the two have to be satisfied **by the same space**, which is the part that
+ * is not obvious. A topic belongs to the space its relation was written in, so a
+ * claim living in A and B with its topics only in B does not become a Space-A
+ * claim about those topics. Asking the two dimensions separately said it did.
  */
 export function matchingEntityIds(
   index: PersonPositionIndex,
   selection: { spaceIds: readonly string[]; topicIds: readonly string[] }
 ): string[] {
-  const spaces = new Set(selection.spaceIds.map(normId));
-  const topics = selection.topicIds.map(normId);
+  return index.entries.filter(entry => satisfyingSpace(entry, selection) !== null).map(entry => entry.entityId);
+}
 
-  return index.entries
-    .filter(entry => {
-      if (spaces.size > 0 && !entry.spaceIds.some(id => spaces.has(id))) return false;
-      return topics.every(topic => entry.topicIds.includes(topic));
-    })
-    .map(entry => entry.entityId);
+/**
+ * A space of this claim's that satisfies the whole selection, or null.
+ *
+ * Doubles as the answer to "where should this card be shown", which is why
+ * `preferredSpacesFor` reads it rather than repeating the rule: the space the
+ * claim matched *in* is the only one where what the reader filtered by is true.
+ *
+ * With no space picked, any of the claim's spaces may satisfy the topics; the
+ * reader asked about topics, not about where they were written. With no topics
+ * picked, any picked space the claim is in will do.
+ */
+export function satisfyingSpace(
+  entry: PositionIndexEntry,
+  selection: { spaceIds: readonly string[]; topicIds: readonly string[] }
+): string | null {
+  const picked = selection.spaceIds.map(normId);
+  const topics = selection.topicIds.map(normId);
+  const candidates = picked.length > 0 ? entry.spaceIds.filter(id => picked.includes(id)) : entry.spaceIds;
+
+  if (candidates.length === 0) return null;
+  if (topics.length === 0) {
+    // In the reader's order where they picked, so a second pick does not move
+    // where the first one's claims appear.
+    return picked.length > 0 ? (picked.find(id => candidates.includes(id)) ?? null) : candidates[0];
+  }
+
+  const ordered = picked.length > 0 ? picked.filter(id => candidates.includes(id)) : candidates;
+
+  return ordered.find(spaceId => topics.every(topic => entry.topicsBySpace.get(spaceId)?.has(topic))) ?? null;
 }
 
 /**
@@ -243,27 +297,42 @@ export function narrowedFacets(
 ): { spaces: PositionFacet[]; topics: PositionFacet[] } {
   const names = new Map(index.topics.map(topic => [topic.id, topic.name]));
 
-  const topicsOnly = index.entries.filter(entry =>
-    selection.topicIds.map(normId).every(topic => entry.topicIds.includes(topic))
+  const topicsOnly = index.entries.filter(
+    entry => satisfyingSpace(entry, { spaceIds: [], topicIds: selection.topicIds }) !== null
   );
-  const everything = index.entries.filter(entry => survives(entry, selection));
+  const everything = index.entries.filter(entry => satisfyingSpace(entry, selection) !== null);
 
   return {
     spaces: withZeroes(
       index.spaces,
       facetsFrom(topicsOnly, entry => entry.spaceIds, new Map())
     ),
+    // Counted over the topics *of the space each claim matched in*, not over its
+    // pooled ones — otherwise ticking a space leaves the topic menu offering
+    // topics that belong to the claim's other space and lead nowhere.
     topics: withZeroes(
       index.topics,
-      facetsFrom(everything, entry => entry.topicIds, names)
+      facetsFrom(everything, entry => topicsIn(entry, selection), names)
     ),
   };
 }
 
-function survives(entry: PositionIndexEntry, selection: { spaceIds: readonly string[]; topicIds: readonly string[] }) {
-  const spaces = new Set(selection.spaceIds.map(normId));
-  if (spaces.size > 0 && !entry.spaceIds.some(id => spaces.has(id))) return false;
-  return selection.topicIds.map(normId).every(topic => entry.topicIds.includes(topic));
+/** The topics of this claim that count, given where the reader is looking. */
+function topicsIn(
+  entry: PositionIndexEntry,
+  selection: { spaceIds: readonly string[]; topicIds: readonly string[] }
+): readonly string[] {
+  if (selection.spaceIds.length === 0) return entry.topicIds;
+
+  const picked = selection.spaceIds.map(normId);
+  const seen = new Set<string>();
+
+  for (const spaceId of entry.spaceIds) {
+    if (!picked.includes(spaceId)) continue;
+    for (const topic of entry.topicsBySpace.get(spaceId) ?? []) seen.add(topic);
+  }
+
+  return [...seen];
 }
 
 /**
@@ -297,17 +366,17 @@ function withZeroes(all: readonly PositionFacet[], narrowed: readonly PositionFa
  */
 export function preferredSpacesFor(
   index: PersonPositionIndex,
-  selection: { spaceIds: readonly string[] }
+  selection: { spaceIds: readonly string[]; topicIds?: readonly string[] }
 ): Map<string, string> {
   const preferred = new Map<string, string>();
-  if (selection.spaceIds.length === 0) return preferred;
-
-  const picked = selection.spaceIds.map(normId);
+  const topicIds = selection.topicIds ?? [];
+  if (selection.spaceIds.length === 0 && topicIds.length === 0) return preferred;
 
   for (const entry of index.entries) {
-    // In the reader's order, not the entity's: picking one space and then a
-    // second should not silently rewrite where the first one's claims appear.
-    const match = picked.find(spaceId => entry.spaceIds.includes(spaceId));
+    // The space the claim *matched in*, from the same rule that decided it
+    // matched. Choosing the space independently could put the card in one where
+    // the topic the reader filtered by was never assigned.
+    const match = satisfyingSpace(entry, { spaceIds: selection.spaceIds, topicIds });
     if (match) preferred.set(entry.entityId, match);
   }
 
