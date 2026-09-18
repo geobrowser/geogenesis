@@ -43,6 +43,9 @@ vi.mock('~/partials/onboarding/dialog', async () => {
     avatarAtom: atom(''),
     spaceIdAtom: atom(''),
     stepAtom: atom('enter-profile'),
+    // Persisted onboarding state like the rest, and the one every hand-written reset forgot —
+    // `PendingPersonalSpaceRunner` turns it into membership proposals for the new personal space.
+    selectedTopicIdsAtom: atom<string[]>([]),
   };
 });
 

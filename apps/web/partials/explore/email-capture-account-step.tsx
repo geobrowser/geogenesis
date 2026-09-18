@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { trackPrivyAuth } from '~/core/analytics';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 
 /** Privy's OTP is six digits. */
@@ -28,7 +29,17 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   // unmounted by the card's own visibility rule the instant `authenticated` turns true, which is
   // the exact render in which the wallet becomes creatable. `useEnsureEmbeddedWallet`, mounted for
   // the life of the app in `core/providers.tsx`, does it instead.
-  const { sendCode, loginWithCode, state: otpState } = useLoginWithEmail();
+  // Reported like every other way into sign-in. Without this the flow emits nothing at all:
+  // `AnalyticsUserIdentifier` covers session restores rather than the moment somebody signs in, and
+  // the three manual entry points each report their own. `link_source` separates this one from the
+  // modal logins, since the whole point of it is that it starts somewhere they were already.
+  const {
+    sendCode,
+    loginWithCode,
+    state: otpState,
+  } = useLoginWithEmail({
+    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login', link_source: 'explore_email_capture' }),
+  });
   // Here for the same reason as the hook above, and it is the one that matters more: this registers
   // a second `useLogin` beside the navbar's own, and the navbar's is the login button people
   // actually press. Mounted in the parent it would do that on every Explore visit.
@@ -49,11 +60,23 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   const sendCodeRef = React.useRef(sendCode);
   sendCodeRef.current = sendCode;
 
+  // A rejection can land after the reader has closed the card -- they dismissed it while the
+  // request was still open. Acting on that would take an explicit dismissal and answer it by
+  // throwing up a login dialog, which is the opposite of what they asked for.
+  const mountedRef = React.useRef(true);
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const requestCode = React.useCallback(async () => {
     setCode('');
     try {
       await sendCodeRef.current({ email });
     } catch {
+      if (!mountedRef.current) return;
       // Captcha, a Privy outage, an address it will not take. Hand them the dialog that does work
       // rather than a dead end.
       giveUpRef.current();

@@ -671,6 +671,47 @@ describe('ExploreEmailCapturePopup', () => {
       expect(mocks.sendCode).toHaveBeenCalledTimes(1);
     });
 
+    // Mounting the step is what sends a code, and the overlay guard returns `null` for the whole
+    // card — so an overlay opening and closing mid-sign-up used to remount the step, mail a second
+    // code, and silently retire the one the reader was part-way through typing.
+    it('keeps the code attempt alive when an overlay opens and closes', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '1234' } });
+      expect(mocks.sendCode).toHaveBeenCalledTimes(1);
+
+      // They open search, then close it.
+      act(() => store.set(isChatOpenAtom, true));
+      view.rerender(<ExploreEmailCapturePopup />);
+      act(() => store.set(isChatOpenAtom, false));
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      // No second code, and what they had typed is still there.
+      expect(mocks.sendCode).toHaveBeenCalledTimes(1);
+      expect((screen.getByRole('textbox', { name: 'Verification code' }) as HTMLInputElement).value).toBe('1234');
+    });
+
+    // It still has to get out of the way while the overlay is up — hidden, not merely behind it.
+    it('yields the screen to the overlay without tearing the attempt down', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+
+      act(() => store.set(isChatOpenAtom, true));
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      // `hidden` takes it out of the layout, hit-testing and the accessibility tree, so querying by
+      // role finds nothing even though the component is still mounted.
+      expect(popup()).toBeNull();
+      expect(mocks.sendCode).toHaveBeenCalledTimes(1);
+    });
+
     it('says so when the code is refused, and offers a new one', async () => {
       const view = await subscribeSuccessfully();
       await act(async () => {

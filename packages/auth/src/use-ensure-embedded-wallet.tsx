@@ -7,6 +7,14 @@ import { useEffect, useRef } from 'react';
 const EMBEDDED_WALLET_TYPE = 'privy';
 
 /**
+ * How many times to ask Privy for a wallet before leaving it alone.
+ *
+ * Enough that a dropped request or a blip recovers without the reader noticing, few enough that an
+ * account Privy will not make a wallet for does not sit in a loop asking forever.
+ */
+const MAX_WALLET_ATTEMPTS = 3;
+
+/**
  * Keeps an authenticated session holding an embedded wallet that wagmi knows about.
  *
  * `embeddedWallets.createOnLogin: 'all-users'` is configured, but it belongs to the *modal* login
@@ -39,39 +47,69 @@ export function useEnsureEmbeddedWallet() {
   const embeddedWallet = wallets.find(wallet => wallet.walletClientType === EMBEDDED_WALLET_TYPE);
   const linkedWalletAddress = user?.wallet?.address;
 
-  // Created once. `createWallet` throws when one already exists, so a repeat is not merely wasteful
-  // -- it is an error, and an error here is the same dead end as having no wallet.
-  const requestedWalletRef = useRef(false);
+  // In flight, not "has ever been attempted". Marking it done up front made any failure permanent:
+  // one dropped request and the session was stuck without a wallet until a reload, with every
+  // smart-account path behaving as though nobody had signed in. The flag is released on failure so
+  // a later render can try again -- bounded, because retrying forever against a Privy that is
+  // refusing this account would be its own kind of broken.
+  const walletAttemptRef = useRef({ inFlight: false, attempts: 0 });
   useEffect(() => {
-    if (!authenticated || embeddedWallet || requestedWalletRef.current) return;
+    const attempt = walletAttemptRef.current;
+    if (!authenticated || embeddedWallet || attempt.inFlight || attempt.attempts >= MAX_WALLET_ATTEMPTS) return;
 
-    requestedWalletRef.current = true;
-    void createWalletRef.current().catch(() => {
-      // Already created elsewhere, or Privy refused. The effect below activates whatever turns up,
-      // and retrying here would only loop.
-    });
+    attempt.inFlight = true;
+    attempt.attempts += 1;
+
+    void createWalletRef.current()
+      .catch(() => {
+        // Either something else created it first -- in which case `embeddedWallet` is about to
+        // appear and the guard above will stop us -- or the request genuinely failed and the next
+        // render is welcome to try.
+      })
+      .finally(() => {
+        walletAttemptRef.current.inFlight = false;
+      });
   }, [authenticated, embeddedWallet]);
 
   // Activate whatever the session ends up with, once it exists. Keyed on the address so a changing
   // `wallets` identity cannot make this loop. A modal login has usually done this already, via
   // `useGeoLogin`; this is then a no-op rather than a second path fighting the first.
+  //
+  // The address is recorded only once activation has actually resolved. Recorded up front, a failed
+  // activation looked exactly like a successful one to every later render, and wagmi stayed empty
+  // for the rest of the session -- the precise failure this hook exists to prevent, reintroduced by
+  // the bookkeeping meant to make it efficient.
   const activatedAddressRef = useRef<string | null>(null);
+  const activatingRef = useRef(false);
   const walletToActivate =
     embeddedWallet ?? (linkedWalletAddress ? wallets.find(w => w.address === linkedWalletAddress) : undefined);
 
   useEffect(() => {
     if (!authenticated || !walletToActivate) return;
-    if (activatedAddressRef.current === walletToActivate.address) return;
+    if (activatedAddressRef.current === walletToActivate.address || activatingRef.current) return;
 
-    activatedAddressRef.current = walletToActivate.address;
-    void setActiveWalletRef.current(walletToActivate);
+    const { address } = walletToActivate;
+    activatingRef.current = true;
+
+    void Promise.resolve(setActiveWalletRef.current(walletToActivate))
+      .then(() => {
+        activatedAddressRef.current = address;
+      })
+      .catch(() => {
+        // Left unrecorded on purpose, so the next render tries again rather than believing a wallet
+        // is active when it is not.
+      })
+      .finally(() => {
+        activatingRef.current = false;
+      });
   }, [authenticated, walletToActivate]);
 
   // Cleared on sign-out so the next session is not skipped as a repeat of this one.
   useEffect(() => {
     if (!authenticated) {
-      requestedWalletRef.current = false;
+      walletAttemptRef.current = { inFlight: false, attempts: 0 };
       activatedAddressRef.current = null;
+      activatingRef.current = false;
     }
   }, [authenticated]);
 }

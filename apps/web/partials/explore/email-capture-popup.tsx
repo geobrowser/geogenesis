@@ -203,7 +203,16 @@ function EmailCapturePopup() {
   // signed-in reader returning to a restored scroll position is briefly indistinguishable from an
   // anonymous one — long enough to be shown a signup card and to start typing into it before it
   // vanishes under them. `core/auth/use-sign-in-deep-link.ts` gates on `ready` for the same reason.
-  if (closed || !ready || authenticated || !scrolledEnough || anOverlayIsOpen) return null;
+  if (closed || !ready || authenticated || !scrolledEnough) return null;
+
+  // An overlay normally takes the card off the screen entirely. Not once a code has been sent:
+  // returning `null` unmounts the step, and mounting is what sends a code — so opening search or
+  // the chat panel mid-sign-up and closing it again would mail a second code and silently retire
+  // the one the reader was part-way through typing. Hidden instead of unmounted, so the attempt
+  // survives. `hidden` takes it out of the layout, the hit-testing and the accessibility tree, so
+  // it still yields the screen completely; it just does not forget where it was.
+  const hiddenByOverlay = anOverlayIsOpen && wantsAccount;
+  if (anOverlayIsOpen && !wantsAccount) return null;
 
   // Dismissal is the one thing the confirmation is exempt from, and only that. Subscribing records
   // the dismissal — which is what stops the popup returning next visit — and without this the same
@@ -222,6 +231,7 @@ function EmailCapturePopup() {
 
   return (
     <div
+      hidden={hiddenByOverlay}
       // A named `region` rather than a `dialog`. Nothing here asked to be opened, so the focus move
       // a dialog owes its reader would be an interruption mid-sentence — and a `dialog` that never
       // takes focus is the worst of both, promising behaviour that is not implemented. As a
