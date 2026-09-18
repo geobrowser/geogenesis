@@ -44,7 +44,7 @@ export function BountyInfoCard({ bounty, showStatus = false, interestedCount }: 
     <section
       aria-label="Bounty details"
       data-testid="bounty-info-card"
-      className="grid grid-cols-1 gap-x-8 gap-y-2 rounded-lg border border-grey-02 bg-white p-4 md:grid-cols-2"
+      className="grid grid-cols-2 gap-x-8 gap-y-2 rounded-lg border border-grey-02 bg-white p-4 md:grid-cols-1"
     >
       <dl className="flex flex-col gap-2">
         <Field label="Bounty budget" help={BOUNTY_FIELD_HELP.budget}>
@@ -116,7 +116,7 @@ export function BountyInfoCard({ bounty, showStatus = false, interestedCount }: 
         </Field>
       </dl>
 
-      <dl className="max-md:border-t max-md:pt-2 flex flex-col gap-2 border-grey-02 md:border-l md:pl-8">
+      <dl className="flex flex-col gap-2 border-l border-grey-02 pl-8 md:border-t md:border-l-0 md:pt-2 md:pl-0">
         <Field label="Max contributors" help={BOUNTY_FIELD_HELP.maxContributors}>
           {bounty.maxContributors != null ? formatPoints(bounty.maxContributors) : 'Unlimited'}
         </Field>

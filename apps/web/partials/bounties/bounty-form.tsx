@@ -215,7 +215,7 @@ export function BountyForm({ spaceId }: Props) {
         />
       </label>
 
-      <div className="grid grid-cols-1 gap-4 mobile:grid-cols-2">
+      <div className="grid grid-cols-2 gap-4 mobile:grid-cols-1">
         <label className="flex flex-col gap-1">
           <Text variant="metadataMedium">Difficulty</Text>
           <Select
@@ -234,7 +234,7 @@ export function BountyForm({ spaceId }: Props) {
         </label>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 mobile:grid-cols-2">
+      <div className="grid grid-cols-2 gap-4 mobile:grid-cols-1">
         <label className="flex flex-col gap-1">
           <Text variant="metadataMedium">Budget (points)</Text>
           <input
@@ -254,7 +254,7 @@ export function BountyForm({ spaceId }: Props) {
       </div>
 
       {!isEasy ? (
-        <div className="grid grid-cols-1 gap-4 mobile:grid-cols-2">
+        <div className="grid grid-cols-2 gap-4 mobile:grid-cols-1">
           <label className="flex flex-col gap-1">
             <Text variant="metadataMedium">Max contributors</Text>
             <input
