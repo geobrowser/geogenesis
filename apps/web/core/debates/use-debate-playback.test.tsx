@@ -701,6 +701,62 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
     expect(slot2.currentTime).toBeCloseTo(10, 1);
   });
 
+  /**
+   * A debate that finished while the tab was away must come back finished.
+   *
+   * `playheadSeconds`, `playing` and `playbackEnded` are maintained by ticks, and ticks are what a
+   * background tab throttles — so on the way back they can all still say "playing, halfway
+   * through". Resuming on that would be wrong twice over: there is nothing left to play, and
+   * `play()` on an element sitting at its end is defined to start it again from the beginning, so
+   * the viewer returns to the debate replaying itself.
+   */
+  it('comes back finished when the debate ended while the tab was away', async () => {
+    const { result, slot1, slot2 } = await playing();
+    const playsBefore = slot1.plays;
+
+    visibilityState = 'hidden';
+    // Both recordings run out (60s of timeline, 30s a turn) with no tick observing it.
+    slot1.currentTime = 60;
+    slot2.currentTime = 60;
+    slot1.browserPause();
+    slot2.browserPause();
+
+    await act(async () => {
+      setVisibility('visible');
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(slot1.plays).toBe(playsBefore); // nothing asked it to start again
+    expect(slot2.plays).toBe(playsBefore);
+    expect(result.current.playing).toBe(false);
+    expect(result.current.playbackEnded).toBe(true); // so the replay control is offered
+    expect(result.current.error).toBeNull();
+  });
+
+  /** The control: a debate stopped part-way through still resumes, as before. */
+  it('still resumes a debate that was only part-way through', async () => {
+    const { result, slot1, slot2 } = await playing();
+    const playsBefore = slot1.plays;
+
+    visibilityState = 'hidden';
+    slot1.currentTime = 30;
+    slot2.currentTime = 30;
+    slot1.browserPause();
+    slot2.browserPause();
+
+    await act(async () => {
+      setVisibility('visible');
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    expect(slot1.plays).toBeGreaterThan(playsBefore);
+    expect(result.current.playing).toBe(true);
+    expect(result.current.playbackEnded).toBe(false);
+  });
+
   /** A pair the browser let run must not be seeked on return — that is the "no reset" half. */
   it('does not touch a pair that kept playing while the tab was hidden', async () => {
     const { result, slot1, slot2 } = await playing();

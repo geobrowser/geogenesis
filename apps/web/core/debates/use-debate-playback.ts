@@ -54,6 +54,11 @@ const MIN_BACKGROUND_RESTART_INTERVAL_MS = 2_000;
 const STALL_AFTER_MS = 500;
 /** Progress smaller than this is float noise on `currentTime`, not playback. */
 const STALL_EPSILON_SECONDS = 0.001;
+/**
+ * How close to the timeline's end counts as the end. Shared by `playbackEnded` and the
+ * background recovery, so the two cannot disagree about whether a debate has finished.
+ */
+const PLAYBACK_END_EPSILON_SECONDS = 0.05;
 
 /**
  * Is this tab off screen?
@@ -591,7 +596,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   );
 
   const ready = Boolean(urls.slot1 && urls.slot2);
-  const playbackEnded = ready && timelineSeconds > 0 && playheadSeconds >= timelineSeconds - 0.05;
+  const playbackEnded =
+    ready && timelineSeconds > 0 && playheadSeconds >= timelineSeconds - PLAYBACK_END_EPSILON_SECONDS;
 
   const togglePlayback = React.useCallback(() => {
     if (playing) {
@@ -647,15 +653,34 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const recoverBackgroundPlayhead = React.useCallback(() => {
     const primaryVideo = slot1VideoRef.current;
     const secondaryVideo = slot2VideoRef.current;
-    if (!primaryVideo || !secondaryVideo) return;
+    if (!primaryVideo || !secondaryVideo) return false;
     const position = pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current, true);
-    lastRunningPlayheadRef.current = clampSeconds(position.seconds, timelineSeconds);
+    const recovered = clampSeconds(position.seconds, timelineSeconds);
+    lastRunningPlayheadRef.current = recovered;
+
+    // Publish it, not just remember it. `playheadSeconds` is React state that only ticks maintain,
+    // and ticks are exactly what a background tab throttles — so on the way back it can be a
+    // whole hidden period out of date, and everything read off it with it: the scrubber, the
+    // active speaker, and `playbackEnded`.
+    setPlayheadSeconds(recovered);
+
+    if (recovered < timelineSeconds - PLAYBACK_END_EPSILON_SECONDS) return false;
+
+    // The debate finished while the tab was away. Resuming here would be wrong twice over: there
+    // is nothing left to play, and `play()` on an element sitting at its end is defined to start
+    // it again from the beginning — so the viewer would come back to the debate replaying itself,
+    // or to a spurious "could not play" (GEO-2947). Land in the finished state instead, which is
+    // the one the ticks would have reached had they been allowed to run.
+    setPlaying(false);
+    setTurnState(null);
+    return true;
   }, [offsets, timelineSeconds]);
 
   const backgroundIntentRef = React.useRef<{
     shouldBePlaying: boolean;
     resumeBoth: () => Promise<void>;
-    recoverBackgroundPlayhead: () => void;
+    /** @returns true when the debate finished while the tab was away — nothing to resume. */
+    recoverBackgroundPlayhead: () => boolean;
   }>({
     shouldBePlaying: false,
     resumeBoth,
@@ -678,12 +703,13 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       const primaryVideo = slot1VideoRef.current;
       const secondaryVideo = slot2VideoRef.current;
       if (!primaryVideo || !secondaryVideo) return;
+      // Settle where the debate got to *first*, and unconditionally: the state this reads from
+      // is maintained by ticks, and a throttled background tab is precisely where ticks did not
+      // run. That includes the case the resume must not happen at all.
+      if (recover()) return;
       // Both still running — the tab was backgrounded and the browser let it be. Nothing to do,
       // and calling resumeBoth here would seek a pair that is already in step.
       if (!primaryVideo.paused && !secondaryVideo.paused) return;
-      // Where the debate got to has to be settled while the stopped clocks can still be read; the
-      // resume then realigns to it like any other.
-      recover();
       void resume();
     };
     document.addEventListener('visibilitychange', reconcile);
