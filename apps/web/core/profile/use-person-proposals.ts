@@ -82,7 +82,10 @@ interface NetworkResult {
 export type ProposalSort = 'new' | 'old';
 
 interface ActionsResult {
-  proposalActionsConnection: { nodes: { proposalId: string; actionType: string }[] } | null;
+  proposalActionsConnection: {
+    pageInfo?: { hasNextPage?: boolean | null; endCursor?: string | null } | null;
+    nodes: { proposalId: string; actionType: string }[];
+  } | null;
 }
 
 /**
@@ -224,15 +227,31 @@ function personProposalsQuery(
  * the voting settings all arrive nameless, and the action is the only record of
  * which it was — so rows that have a name skip this second request entirely.
  */
-function proposalActionsQuery(proposalIds: string[]) {
+function proposalActionsQuery(proposalIds: string[], after: string | null) {
   const ids = proposalIds.map(id => JSON.stringify(ID.hexToUuid(id))).join(', ');
+  const cursor = after === null ? '' : `, after: ${JSON.stringify(after)}`;
 
   return `query {
-    proposalActionsConnection(filter: { proposalId: { in: [${ids}] } }) {
+    proposalActionsConnection(filter: { proposalId: { in: [${ids}] } }, first: ${ACTIONS_PAGE_SIZE}${cursor}) {
+      pageInfo { hasNextPage endCursor }
       nodes { proposalId actionType }
     }
   }`;
 }
+
+/**
+ * Bounded explicitly, because unbounded means 100.
+ *
+ * A connection with no `first` silently caps there and says nothing about it —
+ * the same trap `fetch-profile-history` documents. Twenty unnamed proposals
+ * averaging more than five actions each is enough to cross it, and the result
+ * was not a wrong label but a *thrown* page: the completeness check below read
+ * the truncation as a failed lookup and took the whole tab down with it.
+ */
+const ACTIONS_PAGE_SIZE = 500;
+
+/** Bounds the request count. 500 actions a page against 20 proposals a page. */
+const ACTIONS_MAX_PAGES = 20;
 
 export function personProposalsQueryKey(spaceId: string, sort: ProposalSort, spaceIds: readonly string[]) {
   // The space selection is sorted into the key rather than taken as given, so
@@ -244,26 +263,6 @@ async function fetchActionTypes(proposalIds: string[], signal?: AbortSignal): Pr
   const byId = new Map<string, ProposalType>();
   if (proposalIds.length === 0) return byId;
 
-  const result = await Effect.runPromise(
-    Effect.either(
-      graphql<ActionsResult>({
-        query: proposalActionsQuery(proposalIds),
-        endpoint: Environment.getConfig().api,
-        signal,
-      })
-    )
-  );
-
-  if (Either.isLeft(result)) {
-    // Thrown rather than answered empty. For an unnamed proposal the action
-    // *is* the title — `getProposalName` has nothing else to work from — so an
-    // empty map does not degrade the row, it relabels it: every membership
-    // change becomes "ADD_EDIT" and renders as a raw uuid. A tab that says it
-    // could not load is the honest version of that.
-    console.error('[person-proposals] failed to fetch proposal action types:', result.left);
-    throw result.left;
-  }
-
   // Every action per proposal, then the shared precedence — not the first one
   // back. `proposalActionsConnection` does not promise an order, so first-wins
   // handed a multi-action proposal whichever action the index returned first,
@@ -271,27 +270,72 @@ async function fetchActionTypes(proposalIds: string[], signal?: AbortSignal): Pr
   // said so on `findMembershipAction` all along; this had reimplemented the bug
   // that comment describes.
   const typesByProposal = new Map<string, string[]>();
+  let after: string | null = null;
 
-  for (const node of result.right.proposalActionsConnection?.nodes ?? []) {
-    const key = ID.uuidToHex(node.proposalId);
-    const actionTypes = typesByProposal.get(key);
-    if (actionTypes) actionTypes.push(node.actionType);
-    else typesByProposal.set(key, [node.actionType]);
+  for (let page = 0; page < ACTIONS_MAX_PAGES; page++) {
+    const result: Either.Either<ActionsResult, unknown> = await Effect.runPromise(
+      Effect.either(
+        graphql<ActionsResult>({
+          query: proposalActionsQuery(proposalIds, after),
+          endpoint: Environment.getConfig().api,
+          signal,
+        })
+      )
+    );
+
+    if (Either.isLeft(result)) {
+      // Thrown rather than answered empty. For an unnamed proposal the action
+      // *is* the title — `getProposalName` has nothing else to work from — so an
+      // empty map does not degrade the row, it relabels it: every membership
+      // change becomes "ADD_EDIT" and renders as a raw uuid. A tab that says it
+      // could not load is the honest version of that.
+      console.error('[person-proposals] failed to fetch proposal action types:', result.left);
+      throw result.left;
+    }
+
+    const connection: ActionsResult['proposalActionsConnection'] = result.right.proposalActionsConnection;
+
+    for (const node of connection?.nodes ?? []) {
+      const key = ID.uuidToHex(node.proposalId);
+      const actionTypes = typesByProposal.get(key);
+      if (actionTypes) actionTypes.push(node.actionType);
+      else typesByProposal.set(key, [node.actionType]);
+    }
+
+    const endCursor: string | null = connection?.pageInfo?.endCursor ?? null;
+    if (!connection?.pageInfo?.hasNextPage || endCursor === null) break;
+
+    if (page === ACTIONS_MAX_PAGES - 1) {
+      throw new Error(`[person-proposals] proposal actions exceed ${ACTIONS_MAX_PAGES} pages`);
+    }
+
+    after = endCursor;
   }
 
   for (const [key, actionTypes] of typesByProposal) {
     byId.set(key, proposalTypeFromActionTypes(actionTypes));
   }
 
-  // A short answer is a failure too. The caller defaults a missing id to
-  // `ADD_EDIT` and renders an unnamed proposal as a raw uuid, which is exactly
-  // what throwing on the network error above exists to prevent — so a request
-  // that succeeded while resolving only some of what it was asked for must not
-  // take the quiet path the error takes loudly.
-  const missing = proposalIds.filter(id => !byId.has(ID.uuidToHex(id)));
-
-  if (missing.length > 0) {
-    throw new Error(`[person-proposals] action types missing for ${missing.length} of ${proposalIds.length} proposals`);
+  /*
+   * A proposal with no actions is data, not a failure.
+   *
+   * This used to throw on any id the answer did not cover, on the reasoning that
+   * a *short* answer is as wrong as a failed one. That reasoning was right about
+   * truncation and wrong about emptiness, and the query above has removed the
+   * truncation — so what is left is proposals that genuinely carry no action
+   * row, which the rest of the codebase has always defaulted rather than
+   * refused: `mapApiActionsToProposalType` and `fetch-completed-proposals` both
+   * fall back through `'UNKNOWN'`.
+   *
+   * Refusing cost far more than it saved. The throw rejected the whole
+   * `useInfiniteQuery` page, and on page one `PersonProposalsTab` prints
+   * "Couldn't load proposals." over the entire record with no retry control —
+   * `PartialLoadError` only renders once a row has arrived — and a retry could
+   * not have helped, because the data would not change.
+   */
+  for (const id of proposalIds) {
+    const key = ID.uuidToHex(id);
+    if (!byId.has(key)) byId.set(key, proposalTypeFromActionTypes([]));
   }
 
   return byId;

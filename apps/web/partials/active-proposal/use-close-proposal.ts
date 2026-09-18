@@ -18,6 +18,20 @@ import { useRouter, useSearchParams } from 'next/navigation';
  * proposed into, so without this, closing one drops them in the governance tab
  * of a space they have never opened.
  */
+/**
+ * The governance tab's own filters, which survive closing a proposal.
+ *
+ * Everything else in the search belongs to how the reader *got* here and has no
+ * meaning on the list they are going back to.
+ */
+/*
+ * `proposalType` is the legacy spelling of `proposalCategory` and is still read:
+ * `parseGovernanceCategory` takes it as the fallback when the current param is
+ * absent, so an old link's filter is honoured on arrival and would have been
+ * dropped on the way back out.
+ */
+const GOVERNANCE_FILTER_PARAMS = ['proposalCategory', 'proposalType', 'proposalStatus'] as const;
+
 export function useCloseProposal(spaceId: string) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -43,8 +57,15 @@ export function useCloseProposal(spaceId: string) {
       }
     }
 
-    const params = new URLSearchParams(searchParams?.toString());
-    params.delete('proposalId');
+    // Everything else lands on governance, carrying only the tab's own filters.
+    // An allowlist keeps navigation-only parameters from leaking back into the
+    // list URL, including a rejected `returnSpaceId`.
+    const params = new URLSearchParams();
+    for (const name of GOVERNANCE_FILTER_PARAMS) {
+      const value = searchParams?.get(name);
+      if (value) params.set(name, value);
+    }
+
     const search = params.toString();
     router.push(search ? `/space/${spaceId}/governance?${search}` : `/space/${spaceId}/governance`);
   }, [router, spaceId, searchParams]);

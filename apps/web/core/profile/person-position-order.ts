@@ -247,16 +247,22 @@ export function stanceOf(node: VoteNode): Stance | null {
  * part of the tab narrows to what it says.
  *
  * The newest vote of each kind settles that kind even when it carries no side,
- * so a retraction cannot be skipped over and let an older answer fill the gap.
+ * so a retraction cannot be skipped over and let an older answer fill the gap —
+ * **within a space.** A position is held per space, and the two are independent:
+ * retracting in one place says nothing about a position still held in another.
+ * Keyed without the space, the newest row anywhere settled the kind everywhere,
+ * so a claim agreed in Relationships and later retracted in a personal space
+ * vanished from the list and from the count. Nobody in the graph has done that
+ * yet — 0 of the 20 accounts measured — so this was latent rather than visible.
  */
 export function decodeVoteOrder(nodes: readonly (VoteNode | null)[]): PositionOrder {
   const seen = new Set<string>();
   const order: string[] = [];
   const responseByClaimId: Record<string, ClaimResponse> = {};
   const spacesByClaimId: Record<string, string[]> = {};
-  // Per claim *and kind*: which of the two questions has had its newest answer
-  // read. Kept apart from the response itself, which cannot record "answered,
-  // with no side".
+  // Per claim, kind *and space*: which question has had its newest answer read,
+  // where it was asked. Kept apart from the response itself, which cannot record
+  // "answered, with no side".
   const settled = new Set<string>();
 
   for (const node of nodes) {
@@ -265,8 +271,10 @@ export function decodeVoteOrder(nodes: readonly (VoteNode | null)[]): PositionOr
     const key = normId(id);
 
     const field = node.voteKind === 1 ? 'stance' : node.voteKind === 2 ? 'veracity' : null;
-    if (field && !settled.has(`${key}:${field}`)) {
-      settled.add(`${key}:${field}`);
+    const settledKey = `${key}:${field}:${node.spaceId ? normId(node.spaceId) : ''}`;
+
+    if (field && !settled.has(settledKey)) {
+      settled.add(settledKey);
       const side = stanceOf(node);
 
       if (side) {
@@ -274,7 +282,8 @@ export function decodeVoteOrder(nodes: readonly (VoteNode | null)[]): PositionOr
 
         // From the answers that count, not from a retraction beside them:
         // somebody who took a stance back in one space and holds one in another
-        // should be read in the space they still hold it in.
+        // is read in the space they still hold it in. Reachable because
+        // `settled` carries the space — it was not, before.
         if (node.spaceId) {
           const space = normId(node.spaceId);
           const spaces = (spacesByClaimId[key] ??= []);

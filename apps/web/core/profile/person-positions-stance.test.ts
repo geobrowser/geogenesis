@@ -124,6 +124,38 @@ describe('how a claim was answered', () => {
     expect(order.responseByClaimId).toEqual({ claim1: { stance: 'agree' } });
   });
 
+  /**
+   * A position is held per space, and the two are independent.
+   *
+   * `userVotes` is unique per (user, claim, object type, space, kind), so a
+   * claim answered in two spaces has two rows that can disagree. Settling the
+   * kind on the newest row *anywhere* let a retraction in one space delete a
+   * position still held in another — the claim vanished from the list and from
+   * the count. Nobody in the graph has done this yet, so it was latent.
+   */
+  it('keeps a position held in one space when another space retracted it', () => {
+    const order = decodeVoteOrder([
+      vote({ objectId: 'a', voteType: 2, spaceId: 'personal' }),
+      vote({ objectId: 'a', voteType: 0, spaceId: 'relationships' }),
+    ]);
+
+    expect(order.responseByClaimId).toEqual({ a: { stance: 'agree' } });
+    expect(order.entityIds).toEqual(['a']);
+    expect(order.spacesByClaimId).toEqual({ a: ['relationships'] });
+  });
+
+  it('still lets a retraction clear the side it was cast against', () => {
+    // Same space, so this is the retraction doing its job rather than reaching
+    // across into another space's answer.
+    const order = decodeVoteOrder([
+      vote({ objectId: 'a', voteType: 2, spaceId: 'relationships' }),
+      vote({ objectId: 'a', voteType: 0, spaceId: 'relationships' }),
+    ]);
+
+    expect(order.responseByClaimId).toEqual({});
+    expect(order.entityIds).toEqual([]);
+  });
+
   it('settles each question on its own newest vote', () => {
     // A neutral veracity answer must not clear the stance, and vice versa.
     const order = decodeVoteOrder([

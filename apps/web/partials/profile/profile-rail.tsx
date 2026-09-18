@@ -16,7 +16,7 @@ import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { ID } from '~/core/id';
 import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-facts';
 import { changedLinkFields, profileLinkFields } from '~/core/profile/profile-link-fields';
-import { type ProfileLink } from '~/core/profile/profile-links';
+import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
 import { heldPositionsCount, usePersonResponses } from '~/core/profile/use-person-positions';
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils } from '~/core/utils/utils';
@@ -234,6 +234,28 @@ function LinksSection({
     [entity.values, propertyGroups, schema]
   );
 
+  /*
+   * Shown from the same store the editor writes to, not from the server prop.
+   *
+   * `links` was derived from `space.entity.values` when the page was rendered,
+   * so after the owner saved a change the card went on showing the old handle —
+   * or nothing at all for a newly added link — until a full reload. The value is
+   * already in the store this component reads for `fields`.
+   *
+   * Falls back to the prop while the store has nothing, which is the first paint
+   * and the non-owner rail (it is handed no entity id): an empty `values` there
+   * means "not loaded", and reading it as "no links" would blank a card that the
+   * server had already filled in correctly.
+   */
+  const shownLinks = React.useMemo(() => {
+    const values = (entity.values ?? []).map((value: { property: { id: string }; value: string }) => ({
+      property: { id: value.property.id },
+      value: value.value,
+    }));
+
+    return values.length > 0 ? profileLinks(values) : links;
+  }, [entity.values, links]);
+
   const { canEdit, current, publish, status } = useEditProfile({ isOpen: isEditing });
   const isPublishing = status === 'publishing';
 
@@ -301,11 +323,11 @@ function LinksSection({
           onChange={(propertyId, value) => setDraft(current => ({ ...current, [propertyId]: value }))}
           isDisabled={isPublishing}
         />
-      ) : links.length === 0 ? (
+      ) : shownLinks.length === 0 ? (
         <p className="text-metadata text-grey-04">No links yet.</p>
       ) : (
         <ul className="flex flex-col gap-1">
-          {links.map(link => (
+          {shownLinks.map(link => (
             <li key={link.propertyId} className="flex items-center gap-2">
               <span className="w-20 shrink-0 text-metadata text-grey-04">{link.label}</span>
               <a

@@ -241,7 +241,35 @@ export function matchingEntityIds(
   index: PersonPositionIndex,
   selection: { spaceIds: readonly string[]; topicIds: readonly string[] }
 ): string[] {
-  return index.entries.filter(entry => satisfyingSpace(entry, selection) !== null).map(entry => entry.entityId);
+  const normalised = normaliseSelection(selection);
+
+  return index.entries.filter(entry => satisfyingSpaceOf(entry, normalised) !== null).map(entry => entry.entityId);
+}
+
+/**
+ * The selection, normalised once instead of once per claim.
+ *
+ * `satisfyingSpace` is the inner loop of the whole control row: the facet counts
+ * call it ~75,000 times for the largest record (208 claims against 13 spaces and
+ * 349 topics), and it was re-running `normId` — a regex replace and an
+ * allocation — over both id lists on every one of those calls, then scanning
+ * arrays with `includes` inside its own loops. All of it identical work on
+ * identical input, redone on every filter toggle.
+ */
+type NormalisedSelection = {
+  /** In the reader's own order, which decides where a matching card is shown. */
+  picked: string[];
+  pickedSet: ReadonlySet<string>;
+  topics: string[];
+};
+
+function normaliseSelection(selection: {
+  spaceIds: readonly string[];
+  topicIds: readonly string[];
+}): NormalisedSelection {
+  const picked = selection.spaceIds.map(normId);
+
+  return { picked, pickedSet: new Set(picked), topics: selection.topicIds.map(normId) };
 }
 
 /**
@@ -259,18 +287,30 @@ export function satisfyingSpace(
   entry: PositionIndexEntry,
   selection: { spaceIds: readonly string[]; topicIds: readonly string[] }
 ): string | null {
-  const picked = selection.spaceIds.map(normId);
-  const topics = selection.topicIds.map(normId);
-  const candidates = picked.length > 0 ? entry.spaceIds.filter(id => picked.includes(id)) : entry.spaceIds;
+  return satisfyingSpaceOf(entry, normaliseSelection(selection));
+}
+
+/** The rule itself, over a selection somebody else has already normalised. */
+function satisfyingSpaceOf(
+  entry: PositionIndexEntry,
+  { picked, pickedSet, topics }: NormalisedSelection
+): string | null {
+  // `entry.spaceIds` is normalised at decode, so these are set lookups rather
+  // than the linear scans this used to do inside two nested loops.
+  const candidates = picked.length > 0 ? entry.spaceIds.filter(id => pickedSet.has(id)) : entry.spaceIds;
 
   if (candidates.length === 0) return null;
+
+  const candidateSet = candidates.length > 1 ? new Set(candidates) : null;
+  const isCandidate = (id: string) => (candidateSet ? candidateSet.has(id) : candidates[0] === id);
+
   if (topics.length === 0) {
     // In the reader's order where they picked, so a second pick does not move
     // where the first one's claims appear.
-    return picked.length > 0 ? (picked.find(id => candidates.includes(id)) ?? null) : candidates[0];
+    return picked.length > 0 ? (picked.find(isCandidate) ?? null) : candidates[0];
   }
 
-  const ordered = picked.length > 0 ? picked.filter(id => candidates.includes(id)) : candidates;
+  const ordered = picked.length > 0 ? picked.filter(isCandidate) : candidates;
 
   return ordered.find(spaceId => topics.every(topic => entry.topicsBySpace.get(spaceId)?.has(topic))) ?? null;
 }
@@ -331,10 +371,12 @@ function countMatching(
   index: PersonPositionIndex,
   selection: { spaceIds: readonly string[]; topicIds: readonly string[] }
 ): number {
+  // Once for the whole walk, not once per claim — see `normaliseSelection`.
+  const normalised = normaliseSelection(selection);
   let count = 0;
 
   for (const entry of index.entries) {
-    if (satisfyingSpace(entry, selection) !== null) count += 1;
+    if (satisfyingSpaceOf(entry, normalised) !== null) count += 1;
   }
 
   return count;
