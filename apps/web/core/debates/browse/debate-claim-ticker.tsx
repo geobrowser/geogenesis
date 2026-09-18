@@ -14,7 +14,7 @@ import {
   tickerStack,
   tickerWindows,
 } from '~/core/debates/claim-ticker';
-import { type TimedClaim, claimsInSpokenOrder } from '~/core/debates/claim-timing';
+import { claimsInSpokenOrder } from '~/core/debates/claim-timing';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
@@ -52,16 +52,12 @@ export type DebateTicker = {
   historyBySlot: Map<number, StackedCard[]>;
   /** Every precisely-placed claim, for the scrubber. */
   markers: ClaimMarker[];
-  /** Claims in the order they were said, for the card at the end. */
-  claims: TimedClaim[];
-  /** Which way they answered each one, for the tally at the end. */
+  /** Which way the viewer answered each claim this session. */
   answers: ReadonlyMap<string, boolean>;
   onAnswered: (claimId: string, position: boolean) => void;
   /** Per-claim lookups, hoisted so the card and the end-of-debate stack share one batch. */
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
-  /** Claim id → the debater's display label, for the card at the end. */
-  speakerByClaimId: Map<string, string>;
   /** Claim id → the debater who said it, for the avatar and name the live card wears. */
   participantByClaimId: Map<string, DebateParticipant>;
 };
@@ -135,7 +131,7 @@ export function useDebateClaimTicker(
   // Attribution rides the *block*, not the claim: a claim's own space is the debate's publication
   // space, which both debaters share. The block's `Authors` relation points at the speaker's
   // personal space, which is the id the participant list keys on.
-  const { speakerByClaimId, participantByClaimId } = React.useMemo(() => {
+  const participantByClaimId = React.useMemo(() => {
     const bySpace = new Map<string, DebateParticipant>();
     for (const participant of orderedParticipants(debate)) {
       bySpace.set(uuidToHex(participant.profile_space_id), participant);
@@ -147,15 +143,13 @@ export function useDebateClaimTicker(
       if (speaker) byBlock.set(block.id, speaker);
     }
 
-    const labels = new Map<string, string>();
     const speakers = new Map<string, DebateParticipant>();
     for (const claim of claims.all) {
       const speaker = byBlock.get(claim.blockId);
       if (!speaker) continue;
-      labels.set(claim.id, speakerLabel(speaker));
       speakers.set(claim.id, speaker);
     }
-    return { speakerByClaimId: labels, participantByClaimId: speakers };
+    return speakers;
   }, [claims.all, claims.blocks, debate]);
 
   // One stack per debater, over their own tile. A claim whose speaker could not be resolved —
@@ -190,12 +184,10 @@ export function useDebateClaimTicker(
     cardsBySlot,
     historyBySlot,
     markers,
-    claims: timedClaims,
     answers,
     onAnswered,
     rowsByClaimId,
     entitiesByClaimId,
-    speakerByClaimId,
     participantByClaimId,
   };
 }
