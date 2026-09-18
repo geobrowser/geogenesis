@@ -202,6 +202,11 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     (seconds: number) => turnStateForTime(debate.first_participant_slot, turnDurations, seconds),
     [debate.first_participant_slot, turnDurations]
   );
+  // Callers depend on `turnAt` itself, never on the metadata it is built from. Listing its
+  // internals instead happens to work today — it changes identity exactly when they do — but it
+  // is a coincidence that the next dependency added here would break, silently. Worth stating
+  // because nothing checks it: this project's eslint config pulls `eslint-config-next/typescript`
+  // only, so `react-hooks/exhaustive-deps` is not enabled and a stale dependency list lints clean.
 
   // The slot whose turn it is at the current playhead — stable across pause, so
   // the speaker stays in colour (and keeps subtitles) when the viewer pauses.
@@ -313,7 +318,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       lastSyncSeekAtRef.current = Date.now();
       return true;
     },
-    [offsets.slot1, offsets.slot2]
+    [offsets]
   );
 
   const updateTurnState = React.useCallback(() => {
@@ -494,7 +499,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
         });
       }
     }
-  }, [debate.first_participant_slot, offsets, seekVideosTo, timelineSeconds, turnDurations]);
+  }, [offsets, seekVideosTo, timelineSeconds, turnAt]);
 
   const pauseBoth = React.useCallback(() => {
     // Supersede any resume still confirming, so it cannot un-pause the viewer.
@@ -603,7 +608,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       setTurnState(turnAt(nextTime));
       window.requestAnimationFrame(updateTurnState);
     },
-    [debate.first_participant_slot, seekVideosTo, timelineSeconds, turnDurations, updateTurnState]
+    [seekVideosTo, timelineSeconds, turnAt, updateTurnState]
   );
 
   const ready = Boolean(urls.slot1 && urls.slot2);
