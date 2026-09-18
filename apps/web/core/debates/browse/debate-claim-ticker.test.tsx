@@ -367,58 +367,86 @@ describe('DebateClaimTickerStack', () => {
 
   /** The ramp's two stops, in px. Read off the value rather than the string, which jsdom rewrites. */
   const rampStops = (card: HTMLElement) =>
-    [...card.style.maskImage.matchAll(/(-?\d+)px/g)].map(match => Number(match[1]));
+    [...card.style.maskImage.matchAll(/(-?[\d.]+)px/g)].map(match => Number(match[1]));
+
+  /** Three deep, so the ramp has a card above it, one across it, and one below its reach. */
+  const deepHistory = [
+    { window: window({ id: 'oldest', text: 'Congress has ceded its war powers over decades' }), opacity: 1 },
+    { window: window({ id: 'older', text: 'The court has expanded executive deference' }), opacity: 1 },
+    { window: window(), opacity: 1 },
+  ];
+
+  /** jsdom lays nothing out, so the list's geometry is stated outright. */
+  function layOut(list: HTMLElement) {
+    const cards = [...list.children] as HTMLElement[];
+    cards.forEach((card, index) => {
+      Object.defineProperty(card, 'offsetTop', { configurable: true, value: index * 100 });
+      Object.defineProperty(card, 'offsetHeight', { configurable: true, value: 90 });
+    });
+    return cards;
+  }
+
+  const listOf = (container: HTMLElement) => container.firstElementChild!.firstElementChild as HTMLElement;
 
   /**
-   * One continuous ramp across the list, carried by whichever cards it crosses.
+   * One ramp for the whole list, anchored to its top edge — the construction the Figma frame uses,
+   * where a single 209×168 mask is positioned per card rather than each card getting its own.
    *
-   * Each card gets the gradient shifted by its own distance from the top of the list, so the stops
-   * line up with the list's edge and not the card's. jsdom lays nothing out, so the geometry is
-   * stated outright.
+   * The stops are the frame's: clear for 4.65px, fully opaque at 71.5px.
    */
-  it('ramps the cards the top edge crosses and leaves the rest alone', () => {
-    const { container } = renderStack({ open: true });
-    const list = container.firstElementChild!.firstElementChild as HTMLElement;
-    const cards = [...list.children] as HTMLElement[];
+  it('anchors one ramp to the top of the list rather than to each card', () => {
+    const { container } = renderStack({ open: true, history: deepHistory });
+    const list = listOf(container);
+    const cards = layOut(list);
 
-    cards.forEach((card, index) =>
-      Object.defineProperty(card, 'offsetTop', { configurable: true, value: index * 100 })
-    );
-    fireEvent.scroll(list, { target: { scrollTop: 0 } });
-
-    // Top card straddles the edge: transparent at the edge, solid 68px down.
-    expect(rampStops(cards[0])).toEqual([0, 68]);
-    // The one below it starts past the ramp, so it carries none of it.
-    expect(cards[1].style.maskImage).toBe('');
-  });
-
-  // Scrolling moves the ramp over the cards rather than with them.
-  it('shifts the ramp as the list scrolls under it', () => {
-    const { container } = renderStack({ open: true });
-    const list = container.firstElementChild!.firstElementChild as HTMLElement;
-    const cards = [...list.children] as HTMLElement[];
-
-    cards.forEach((card, index) =>
-      Object.defineProperty(card, 'offsetTop', { configurable: true, value: index * 100 })
-    );
     fireEvent.scroll(list, { target: { scrollTop: 100 } });
 
-    // The first card is now wholly above the list, and the second sits against the edge.
+    // The second card's top is exactly at the edge, so it carries the ramp from its own origin.
+    expect(rampStops(cards[1])).toEqual([4.65, 71.5]);
+    // The first has travelled wholly above the edge, where the list's overflow already hides it.
     expect(cards[0].style.maskImage).toBe('');
-    expect(rampStops(cards[1])).toEqual([0, 68]);
+    // The third starts below the ramp's reach and is drawn whole.
+    expect(cards[2].style.maskImage).toBe('');
+  });
+
+  // The ramp stays with the edge while the cards move under it.
+  it('shifts the ramp as the list scrolls under it', () => {
+    const { container } = renderStack({ open: true, history: deepHistory });
+    const list = listOf(container);
+    const cards = layOut(list);
+
+    fireEvent.scroll(list, { target: { scrollTop: 150 } });
+
+    // Same card, now 50px above the edge: the whole ramp slides down it by that much.
+    expect(rampStops(cards[1])).toEqual([54.65, 121.5]);
+  });
+
+  /**
+   * Preston, from the preview: "if you scroll all the way to the top we should take off the blur
+   * mask". The ramp is there to say there is more above — at the top there is not, and dissolving
+   * the oldest claim is the one moment it works against the reader who scrolled back to find it.
+   */
+  it('takes the ramp off once the list is scrolled to the very top', () => {
+    const { container } = renderStack({ open: true, history: deepHistory });
+    const list = listOf(container);
+    const cards = layOut(list);
+
+    fireEvent.scroll(list, { target: { scrollTop: 100 } });
+    expect(cards[1].style.maskImage).not.toBe('');
+
+    fireEvent.scroll(list, { target: { scrollTop: 0 } });
+
+    for (const card of cards) expect(card.style.maskImage).toBe('');
   });
 
   // The ramp is written to the nodes, and the newest card survives the close.
   it('takes the ramp off again when the corner closes', () => {
-    const { container, rerender } = renderStack({ open: true });
-    const list = container.firstElementChild!.firstElementChild as HTMLElement;
-    const cards = [...list.children] as HTMLElement[];
+    const { container, rerender } = renderStack({ open: true, history: deepHistory });
+    const list = listOf(container);
+    const cards = layOut(list);
 
-    cards.forEach((card, index) =>
-      Object.defineProperty(card, 'offsetTop', { configurable: true, value: index * 100 })
-    );
-    fireEvent.scroll(list, { target: { scrollTop: 0 } });
-    expect(cards[0].style.maskImage).not.toBe('');
+    fireEvent.scroll(list, { target: { scrollTop: 100 } });
+    expect(cards[1].style.maskImage).not.toBe('');
 
     rerender(
       <DebateClaimTickerStack

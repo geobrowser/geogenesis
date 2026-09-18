@@ -193,19 +193,23 @@ export function useDebateClaimTicker(
 }
 
 /**
- * How far down from the open list's top edge the backlog is fully drawn, in px — the 4.25rem ramp
- * the Figma frame dissolves the stack over.
+ * The stack's dissolve, taken from the mask the Figma frame actually ships.
  *
- * The ramp is one continuous gradient across the whole list, but it is applied to each card
- * separately, offset so the stops line up with the list's top edge rather than the card's. That is
- * not a stylistic choice. A `mask-image` makes its element a Backdrop Root, so `backdrop-filter` on
- * anything *inside* it has nothing left to sample: masking the scroll box flattened the glass on
- * every card in the list, and it came back only at scrollTop 0, where the mask was dropped. An
- * element's own mask does not blind its own backdrop-filter — measured in Chrome, a glass card over
- * hard stripes reads 160 contrast unmasked, 178 with a mask on itself, and 249 with one on its
- * parent — so moving the same gradient onto the cards keeps both the ramp and the glass.
+ * That mask is a 209×168 alpha rect filled with a vertical gradient running `y1=0 → y2=71.5`, with
+ * stops at `0.065` (white, opacity 0) and `1` (white): nothing shows for the first 4.65px, the ramp
+ * climbs from there to fully opaque at 71.5px, and the remaining ~96px of the rect is solid. The
+ * frame positions that one rect per card — `mask-position 0,-71px` on the newest, `0,18px` on the
+ * one above — rather than giving each card a gradient of its own, which is the same thing as
+ * anchoring the ramp to the top of the stack region and letting each card carry its slice.
+ *
+ * Reproduced per card for a second reason as well: a `mask-image` makes its element a Backdrop
+ * Root, so a mask on the scroll box leaves any `backdrop-filter` inside it nothing to sample. An
+ * element's own mask does not blind its own — measured in Chrome, a card over hard stripes reads
+ * 160 contrast unmasked, 178 masked itself, and 249 with the mask on its parent.
  */
-const HISTORY_EDGE_FADE_PX = 68;
+const HISTORY_EDGE_OPAQUE_PX = 71.5;
+/** The lead-in: the gradient's first stop sits 6.5% down its 71.5px, and nothing shows above it. */
+const HISTORY_EDGE_CLEAR_PX = 4.65;
 
 /**
  * The claim card that rises over the video as it is said.
@@ -245,8 +249,15 @@ export function DebateClaimTickerCard({
       // Left off entirely at full strength, so the open list's edge fade — which writes this
       // property straight to the node on scroll — is not overwritten on the next render.
       style={opacity === 1 ? undefined : { opacity }}
-      // `shrink-0` so the open list scrolls a full-height card rather than compressing it to fit.
-      className="pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg bg-[#151515]/30 p-3 backdrop-blur-md"
+      /**
+       * `rgba(21,21,21,0.3)`, 8px radius, 12px padding, 6px between the header and the claim — the
+       * frame's own values, and no `backdrop-filter` among them. The translucent fill and the
+       * dissolve are the whole effect; blurring behind it as well made the card read heavier and
+       * muddier than the design, which keeps the video sharp through it.
+       *
+       * `shrink-0` so the open list scrolls a full-height card rather than compressing it to fit.
+       */
+      className="pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg bg-[#151515]/30 p-3"
     >
       <TickerClaimHeader
         claimId={claim.id}
@@ -377,7 +388,7 @@ export function DebateClaimTickerStack({
   const followingLatest = React.useRef(true);
 
   /**
-   * Dissolve the top of the open list — see {@link HISTORY_EDGE_FADE_PX}.
+   * Dissolve the top of the open list — see {@link HISTORY_EDGE_OPAQUE_PX}.
    *
    * Each card carries the slice of the ramp that falls across it, found by shifting the gradient's
    * stops by how far the card's own top sits from the top of the list. A card below the ramp
@@ -391,18 +402,24 @@ export function DebateClaimTickerStack({
   const paintEdgeFade = React.useCallback(() => {
     const element = scrollRef.current;
     if (!element) return;
+    const atTop = element.scrollTop <= 1;
     for (const card of Array.from(element.children) as HTMLElement[]) {
       // The card's top edge, measured from the top of what the list is showing. Negative once the
       // card has started to travel up past it.
       const fromEdge = card.offsetTop - element.scrollTop;
-      const start = -fromEdge;
-      const end = start + HISTORY_EDGE_FADE_PX;
+      const clear = -fromEdge + HISTORY_EDGE_CLEAR_PX;
+      const opaque = -fromEdge + HISTORY_EDGE_OPAQUE_PX;
       // Nothing to paint on a card the ramp does not reach, nor on one that has travelled wholly
       // above the edge, where the list's own overflow has it already.
-      const untouched = end <= 0 || fromEdge + card.offsetHeight < 0;
+      const untouched = opaque <= 0 || fromEdge + card.offsetHeight < 0;
       // `open` is checked here rather than by the callers, because the closed corner is a
       // content-sized box whose top *is* the card's top — the ramp would dissolve the live claim.
-      const ramp = !open || untouched ? '' : `linear-gradient(to bottom, transparent ${start}px, #000 ${end}px)`;
+      //
+      // `atTop` because a reader who has scrolled the list as far back as it goes is looking at the
+      // oldest claim, and dissolving what they just scrolled to is the one moment the ramp works
+      // against them. It is there to say "more above"; at the top there is not.
+      const ramp =
+        !open || atTop || untouched ? '' : `linear-gradient(to bottom, transparent ${clear}px, #000 ${opaque}px)`;
       card.style.maskImage = ramp;
       card.style.webkitMaskImage = ramp;
     }
@@ -429,6 +446,33 @@ export function DebateClaimTickerStack({
     }
     paintEdgeFade();
   }, [open, paintEdgeFade]);
+
+  /**
+   * The list also re-follows the bottom when its geometry changes under it, not only when a claim
+   * arrives. Two ways that happens, both reported from the preview:
+   *
+   * The scrubber appearing lifts the corner by `pb-5`, which shortens the scroll box. A shorter box
+   * raises the maximum scrollTop, so a list that was resting at the bottom is suddenly short of it
+   * and the newest card is cut off by the scrubber.
+   *
+   * Expanding a clamped claim makes its card taller. The card grows downward, past the bottom of
+   * the box, so the reader taps to read the rest of a claim and the rest of it goes under the edge.
+   *
+   * Watching the children as well as the box is what catches the second one — the box does not
+   * change size there, only its content does.
+   */
+  React.useEffect(() => {
+    const element = scrollRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(() => {
+      if (open && followingLatest.current) element.scrollTop = element.scrollHeight;
+      paintEdgeFade();
+    });
+    observer.observe(element);
+    for (const card of Array.from(element.children)) observer.observe(card);
+    return () => observer.disconnect();
+  }, [open, shown.length, paintEdgeFade]);
 
   // A claim arriving while the list is open lands at the bottom, and the list follows it only if
   // the reader was already down there. They open this to read back through what was said, and a
@@ -526,7 +570,7 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
         event.stopPropagation();
         onClick();
       }}
-      className="pointer-events-auto hidden shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 py-1.5 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-md transition-colors hover:bg-[#151515]/50 no-hover:flex"
+      className="pointer-events-auto hidden shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 py-1.5 text-[0.75rem] leading-[1.0625rem] text-white transition-colors hover:bg-[#151515]/50 no-hover:flex"
     >
       <InfoSmall color="white" />
       <span className="tabular-nums">{expanded ? 'Hide' : `${count} ${count === 1 ? 'claim' : 'claims'}`}</span>
@@ -585,7 +629,12 @@ function TickerClaimHeader({
 
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[1.0625rem] text-white">
+      {/* `text-box` trimmed, as the frame has it — and on the text items rather than this row,
+          because the trim acts on a box's own line boxes and these are flex items with their own.
+          The frame gives this line a 7px box in a 16px row, which is its cap height: trimmed, the
+          row is the avatar's 16px and the words centre against it; untrimmed, each 17px line box
+          sets the row instead and the card comes out a pixel taller than the frame draws. */}
+      <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[1.0625rem] text-white [&>span]:[text-box:trim-both_cap_alphabetic]">
         {speaker && (
           <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-white">
             <Avatar avatarUrl={speaker.avatar_cid} value={speaker.profile_space_id} size={16} />
@@ -676,7 +725,10 @@ function ClaimIconButton({
         })
       }
       className={cx(
-        'grid size-5 place-items-center rounded-sm transition-colors disabled:cursor-default',
+        // 20px of target around a 12px glyph, but `-my-0.5` so the extra 4px grows into the card's
+        // padding instead of the header row. The frame's row is the avatar's 16px, and a button
+        // that sets the row taller pushes the whole card past the 97px the frame draws.
+        '-my-0.5 grid size-5 place-items-center rounded-sm transition-colors disabled:cursor-default',
         // Recessive until it matters: dim at rest, brighter on hover, and unmistakable once the
         // reader has actually taken a side.
         selected
