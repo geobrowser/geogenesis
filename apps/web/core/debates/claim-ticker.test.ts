@@ -228,6 +228,13 @@ describe('claimMarkers', () => {
     expect(claimMarkers([timed('turn', wholeTurn(0, 30_000))], 270_000)).toEqual([]);
   });
 
+  // The bug Preston found. Markers used to take any match at all, so a debate whose claims all
+  // matched loosely drew hashes that never produced a card — eight of them on one real debate. A
+  // hash promises something is there, so it holds the same bar the card does.
+  it('leaves out a match too loose to show a card for', () => {
+    expect(claimMarkers([timed('loose', unsure(27_000, 31_000))], 270_000)).toEqual([]);
+  });
+
   it('draws nothing before the timeline is known', () => {
     expect(claimMarkers([timed('a', confident(1_000, 2_000))], 0)).toEqual([]);
   });
