@@ -1,16 +1,21 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import * as React from 'react';
 
 import { ClaimPageView } from '~/core/claims/browse/claim-page-view';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { TOPIC_TYPE_ID } from '~/core/constants';
+import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
+import type { Space } from '~/core/io/dto/spaces';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { TopicPageView } from '~/core/topics/browse/topic-page-view';
 import type { Relation, TabEntity } from '~/core/types';
+import { Spaces } from '~/core/utils/space';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
@@ -30,6 +35,7 @@ import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-met
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
+import { PersonProfileView } from '~/partials/profile/person-profile-view';
 
 type SharedProps = {
   entityId: string;
@@ -145,6 +151,63 @@ function EditorFooter({
   );
 }
 
+export type CustomBrowseView = 'claim' | 'topic' | 'person' | 'generic' | 'pending';
+
+/**
+ * The decision itself, with no hooks in it.
+ *
+ * Exported and pure because it is a routing rule rather than a rendering
+ * detail: which of four read surfaces somebody gets, from four inputs that
+ * arrive at different times. The hook below is the only place those inputs are
+ * gathered.
+ */
+export function customBrowseView({
+  entityId,
+  entity,
+  isLoadingEntity,
+  space,
+  isLoadingSpace,
+  isEditing,
+}: {
+  entityId: string;
+  entity: { types: { id: string }[] } | null | undefined;
+  isLoadingEntity: boolean;
+  space: Pick<Space, 'type' | 'entity'> | null | undefined;
+  isLoadingSpace: boolean;
+  isEditing: boolean;
+}): CustomBrowseView {
+  if (isEditing) return 'generic';
+  // The types decide which page this is, so until they are known there is no page to draw. Falling
+  // through to the generic one meanwhile rendered the value sheet for a claim or a topic and then
+  // replaced it a moment later, which read as the page loading twice.
+  if (!entity) return isLoadingEntity ? 'pending' : 'generic';
+  if (entity.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID))) return 'claim';
+  // After Claim, so an entity typed as both reads as the narrower of the two — a claim is a thing
+  // to take a side on, which is more specific than a subject heading.
+  if (entity.types.some(type => ID.equals(type.id, TOPIC_TYPE_ID))) return 'topic';
+
+  /*
+   * A profile is the *space's* view of a person, not the type's.
+   *
+   * `isPersonProfileSpace` wants a PERSONAL space whose own entity is a Person,
+   * and this wants, on top of that, the entity being read to *be* that entity.
+   * Both halves matter and the first has burned this codebase before: a Person
+   * written into a DAO space satisfies the type check alone, and was once handed
+   * profile tabs whose routes answered 404. A personal space also holds entities
+   * besides its owner, and those are not profiles either.
+   *
+   * Only an entity already typed Person waits for the space read, so the cheap
+   * half of the question gates the expensive one and nothing else is held up by
+   * it.
+   */
+  if (entity.types.some(type => ID.equals(type.id, SystemIds.PERSON_TYPE))) {
+    if (!space) return isLoadingSpace ? 'pending' : 'generic';
+    if (Spaces.isPersonProfileSpace(space) && space.entity && ID.equals(space.entity.id, entityId)) return 'person';
+  }
+
+  return 'generic';
+}
+
 /**
  * Which custom read view this entity gets, if any.
  *
@@ -155,20 +218,19 @@ function EditorFooter({
  * derived across every space either way, so this is about consistency with the controls the pages
  * render rather than about reaching a type a scoped read would miss.
  */
-function useCustomBrowseView(entityId: string, spaceId: string): 'claim' | 'topic' | 'generic' | 'pending' {
+function useCustomBrowseView(entityId: string, spaceId: string): CustomBrowseView {
   const isEditing = useUserIsEditing(spaceId);
   const { entity, isLoading } = useQueryEntity({ id: entityId });
+  const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
 
-  if (isEditing) return 'generic';
-  // The types decide which page this is, so until they are known there is no page to draw. Falling
-  // through to the generic one meanwhile rendered the value sheet for a claim or a topic and then
-  // replaced it a moment later, which read as the page loading twice.
-  if (!entity) return isLoading ? 'pending' : 'generic';
-  if (entity.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID))) return 'claim';
-  // After Claim, so an entity typed as both reads as the narrower of the two — a claim is a thing
-  // to take a side on, which is more specific than a subject heading.
-  if (entity.types.some(type => ID.equals(type.id, TOPIC_TYPE_ID))) return 'topic';
-  return 'generic';
+  return customBrowseView({
+    entityId,
+    entity,
+    isLoadingEntity: isLoading,
+    space,
+    isLoadingSpace,
+    isEditing,
+  });
 }
 
 export function EntityPageBody(props: EntityPageBodyProps) {
@@ -203,6 +265,19 @@ export function EntityPageBody(props: EntityPageBodyProps) {
 
   if (customView === 'topic') {
     return <TopicPageView entityId={entityId} spaceId={spaceId} />;
+  }
+
+  /*
+   * The profile, on the two surfaces that are not the person's space home.
+   *
+   * That route builds it out of three pieces in three places — layout header,
+   * rail, page body — so the side panel and the `(entity)` full-page route, which
+   * share neither the layout nor the rail, both showed the generic value sheet
+   * for somebody's profile. Dispatching it here is what lets one component serve
+   * both, the same way a claim and a topic are served.
+   */
+  if (customView === 'person') {
+    return <PersonProfileView entityId={entityId} spaceId={spaceId} />;
   }
 
   const tabsSection = (
