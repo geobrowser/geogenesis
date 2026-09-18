@@ -38,10 +38,31 @@ type Props = {
  * claim.
  */
 export function ProfileActions({ spaceId, personEntityId }: Props) {
-  const { personalSpaceId } = usePersonalSpaceId();
+  const { personalSpaceId, isLoading: isLoadingOwnership } = usePersonalSpaceId();
   const [isEditOpen, setIsEditOpen] = React.useState(false);
 
   const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
+
+  /**
+   * Nothing branch-dependent until we know whose profile this is.
+   *
+   * `personalSpaceId` is null while it loads, which reads as "not the owner" —
+   * so an owner's own profile briefly offered **Debate**, a request to argue
+   * with themselves, and hid Edit profile. The hook exposes the loading state
+   * for exactly this and carries a comment about the tick where TanStack's own
+   * `isLoading` reads false too early.
+   *
+   * The vote pair is drawn either way, so it renders immediately and the row
+   * does not jump when the answer arrives. Withholding an affordance for a
+   * moment is cheap; offering the wrong one is not.
+   */
+  if (isLoadingOwnership) {
+    return (
+      <div className="flex items-center gap-2">
+        <EntityVoteButtons entityId={personEntityId} spaceId={spaceId} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2">

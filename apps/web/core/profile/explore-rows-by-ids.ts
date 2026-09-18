@@ -17,6 +17,9 @@ import { validateSpaceId } from '~/core/utils/utils';
 
 const FRAGMENT = 'ProfileExploreRowsFragment';
 
+/** Ids per request. Matches the page size, so a full chunk is never truncated. */
+const ID_BATCH_SIZE = 100;
+
 /**
  * Entities by id, selected exactly as the explore feed selects them.
  *
@@ -33,7 +36,7 @@ const SOURCE = /* GraphQL */ `
   ${exploreCardPropertyFragment(FRAGMENT)}
 
   query ProfileExploreRows($ids: [UUID!]) {
-    entitiesConnection(filter: { id: { in: $ids } }, first: 100) {
+    entitiesConnection(filter: { id: { in: $ids } }, first: ${ID_BATCH_SIZE}) {
       nodes {
         ${exploreCardNodeFields(FRAGMENT, { scopeListsToSpaces: false })}
       }
@@ -81,14 +84,30 @@ export async function fetchExploreRowsByIds(
 ): Promise<ExploreFeedRow[]> {
   if (ids.length === 0) return [];
 
-  const entities = await Effect.runPromise(
-    graphql({
-      query: exploreRowsByIdsDocument,
-      decoder: decode,
-      variables: { ids: ids.map(ID.uuidToHex) },
-      signal,
-    })
-  );
+  // Chunked, because `first` bounds the answer and the callers do not bound the
+  // question. `usePersonDebates` hands over everything the relation query found
+  // — up to 200 — against a page that returned 100, so a profile with more than
+  // a hundred debates silently lost cards. Not even predictably: `in` does not
+  // preserve input order, so the missing one was whichever the index returned
+  // last, rather than the oldest.
+  //
+  // The same shape `fetchRelationsByToEntityIds` uses for the same reason.
+  const entities: ExploreCardEntity[] = [];
+
+  for (let start = 0; start < ids.length; start += ID_BATCH_SIZE) {
+    const chunk = ids.slice(start, start + ID_BATCH_SIZE);
+
+    entities.push(
+      ...(await Effect.runPromise(
+        graphql({
+          query: exploreRowsByIdsDocument,
+          decoder: decode,
+          variables: { ids: chunk.map(ID.uuidToHex) },
+          signal,
+        })
+      ))
+    );
+  }
 
   const byId = new Map(entities.map(entity => [normId(entity.id), entity]));
   const ordered = ids
