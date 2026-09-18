@@ -127,26 +127,50 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   // opens their claims and leaves the other's alone, which is the whole reason for splitting them.
   const [pointerOverSlot, setPointerOverSlot] = React.useState<number | null>(null);
   const [focusedSlot, setFocusedSlot] = React.useState<number | null>(null);
-  const claimsOpenFor = (slot: number) => pointerOverSlot === slot || focusedSlot === slot;
+  // Held open by the chip rather than by the pointer — the only way in on a touch screen, where
+  // there is no hover to end and so no hover to hold it.
+  const [pinnedSlot, setPinnedSlot] = React.useState<number | null>(null);
 
   const claimsFor = (slot: number) => {
     const cards = ticker.cardsBySlot.get(slot) ?? [];
     const history = ticker.historyBySlot.get(slot) ?? [];
-    const open = claimsOpenFor(slot);
-    if (playbackEnded || (cards.length === 0 && !(open && history.length > 0))) return null;
+    if (playbackEnded || (cards.length === 0 && history.length === 0)) return null;
+
+    const pinned = pinnedSlot === slot;
+    const clearSlot = (current: number | null) => (current === slot ? null : current);
 
     return (
       <DebateClaimTickerStack
         cards={cards}
         history={history}
-        open={open}
-        onFocusChange={focused => setFocusedSlot(current => (focused ? slot : current === slot ? null : current))}
+        open={pointerOverSlot === slot || focusedSlot === slot || pinned}
+        pinned={pinned}
+        onTogglePinned={() => setPinnedSlot(current => (current === slot ? null : slot))}
+        onFocusChange={focused => setFocusedSlot(current => (focused ? slot : clearSlot(current)))}
         participantByClaimId={ticker.participantByClaimId}
         rowsByClaimId={ticker.rowsByClaimId}
         entitiesByClaimId={ticker.entitiesByClaimId}
         onAnswered={ticker.onAnswered}
       />
     );
+  };
+
+  /**
+   * The pointer entering or leaving one debater's tile.
+   *
+   * Filtered to a real mouse. Touch browsers synthesise `pointerenter` from a tap, so without this
+   * every tap on the video — including the tap that pauses it — would also throw the claim corner
+   * open, and nothing would close it again since there is no corresponding leave. On touch the chip
+   * is the way in, deliberately and only.
+   *
+   * Leaving also clears the pin, so a mouse user who clicked the chip and then moved away does not
+   * leave the corner stuck open behind them.
+   */
+  const onTileHover = (slot: number) => (event: React.PointerEvent, hovered: boolean) => {
+    if (event.pointerType !== 'mouse') return;
+    const clearSlot = (current: number | null) => (current === slot ? null : current);
+    setPointerOverSlot(current => (hovered ? slot : clearSlot(current)));
+    if (!hovered) setPinnedSlot(clearSlot);
   };
 
   return (
@@ -163,7 +187,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         onPlaybackTick={onPlaybackTick}
         onToggle={togglePlayback}
         claims={claimsFor(1)}
-        onClaimsHoverChange={hovered => setPointerOverSlot(current => (hovered ? 1 : current === 1 ? null : current))}
+        onClaimsHoverChange={onTileHover(1)}
         topLeft={
           ready ? (
             <>
@@ -197,7 +221,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         onPlaybackTick={onPlaybackTick}
         onToggle={togglePlayback}
         claims={claimsFor(2)}
-        onClaimsHoverChange={hovered => setPointerOverSlot(current => (hovered ? 2 : current === 2 ? null : current))}
+        onClaimsHoverChange={onTileHover(2)}
         // This is the half the scrubber sits in, so its claim corner is the one that has to lift
         // clear of the bar.
         claimsClearScrubber={scrubberShown ? 'always' : 'on-hover'}
@@ -292,7 +316,7 @@ function DebaterVideo({
   /** This debater's claim corner, if they have anything to show right now. */
   claims?: React.ReactNode;
   /** The pointer entering or leaving this tile, which opens their backlog. */
-  onClaimsHoverChange?: (hovered: boolean) => void;
+  onClaimsHoverChange?: (event: React.PointerEvent, hovered: boolean) => void;
   /** Whether the claim corner has to sit above the scrubber, which only one tile hosts. */
   claimsClearScrubber?: 'never' | 'on-hover' | 'always';
   topLeft?: React.ReactNode;
@@ -315,8 +339,8 @@ function DebaterVideo({
 
   return (
     <div
-      onMouseEnter={() => onClaimsHoverChange?.(true)}
-      onMouseLeave={() => onClaimsHoverChange?.(false)}
+      onPointerEnter={event => onClaimsHoverChange?.(event, true)}
+      onPointerLeave={event => onClaimsHoverChange?.(event, false)}
       className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
     >
       {/* Clicking anywhere on the video toggles pause/play. */}

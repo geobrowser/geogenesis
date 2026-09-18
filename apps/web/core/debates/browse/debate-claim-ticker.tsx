@@ -30,6 +30,7 @@ import type { Entity } from '~/core/types';
 import { Avatar } from '~/design-system/avatar';
 import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { ChevronUp } from '~/design-system/icons/chevron-up';
+import { InfoSmall } from '~/design-system/icons/info-small';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
 
@@ -373,6 +374,8 @@ export function DebateClaimTickerStack({
   cards,
   history,
   open = false,
+  pinned = false,
+  onTogglePinned,
   onFocusChange,
   participantByClaimId,
   rowsByClaimId,
@@ -384,6 +387,10 @@ export function DebateClaimTickerStack({
   history?: StackedCard[];
   /** Show the backlog rather than the live cards. */
   open?: boolean;
+  /** Open because the chip was pressed rather than because the pointer is over the tile. */
+  pinned?: boolean;
+  /** Pressing the chip. Without it the corner has no chip and is hover-only. */
+  onTogglePinned?: () => void;
   /** Keyboard focus entering or leaving the stack, which opens it the way the pointer does. */
   onFocusChange?: (focused: boolean) => void;
   participantByClaimId?: Map<string, DebateParticipant>;
@@ -415,43 +422,97 @@ export function DebateClaimTickerStack({
     syncScrolled();
   }, [open, shown.length, syncScrolled]);
 
-  if (shown.length === 0) return null;
+  const backlog = history ?? cards;
+
+  // Closed with nothing live — which is most of a debate. The chip is the only thing on screen
+  // saying the backlog exists at all, and on a touch screen it is the only way to reach it: there
+  // is no hover, and the video behind is one large play/pause button, so the corner cannot quietly
+  // swallow a tap to mean something else.
+  if (shown.length === 0) {
+    if (open || backlog.length === 0 || !onTogglePinned) return null;
+    return <ClaimBacklogChip count={backlog.length} expanded={false} onClick={onTogglePinned} />;
+  }
 
   return (
-    <div
-      ref={scrollRef}
-      onScroll={syncScrolled}
-      style={
-        open && scrolledDown ? { maskImage: HISTORY_EDGE_FADE, WebkitMaskImage: HISTORY_EDGE_FADE } : undefined
-      }
-      onFocus={() => onFocusChange?.(true)}
-      // Only when focus leaves the stack entirely — moving between two cards inside it must not
-      // collapse the list out from under the keyboard.
-      onBlur={event => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onFocusChange?.(false);
-      }}
-      className={cx(
-        'pointer-events-auto flex w-full flex-col gap-1.5',
-        // Filling the host, which is one debater's tile inset from its edges — so the open list
-        // reaches at most to the top of their own half and never over the other debater's face.
-        open && 'no-scrollbar max-h-full overflow-y-auto'
+    <div className="flex min-h-0 w-full flex-col items-start gap-1.5">
+      <div
+        ref={scrollRef}
+        onScroll={syncScrolled}
+        style={
+          open && scrolledDown ? { maskImage: HISTORY_EDGE_FADE, WebkitMaskImage: HISTORY_EDGE_FADE } : undefined
+        }
+        onFocus={() => onFocusChange?.(true)}
+        // Only when focus leaves the stack entirely — moving between two cards inside it must not
+        // collapse the list out from under the keyboard.
+        onBlur={event => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onFocusChange?.(false);
+        }}
+        className={cx(
+          'pointer-events-auto flex w-full flex-col gap-1.5',
+          // Filling the host, which is one debater's tile inset from its edges — so the open list
+          // reaches at most to the top of their own half and never over the other debater's face.
+          open && 'no-scrollbar min-h-0 overflow-y-auto'
+        )}
+      >
+        {shown.map((card, index) => (
+          <DebateClaimTickerCard
+            key={card.window.claim.id}
+            window={card.window}
+            opacity={card.opacity}
+            // Only the live stack dissolves its older card. In the open list every claim is one the
+            // reader chose to look at, so fading any of them would just make it hard to read.
+            fading={!open && index < shown.length - 1}
+            speaker={participantByClaimId?.get(card.window.claim.id) ?? null}
+            row={rowsByClaimId.get(card.window.claim.id) ?? null}
+            entity={entitiesByClaimId.get(card.window.claim.id) ?? null}
+            onAnswered={onAnswered}
+          />
+        ))}
+      </div>
+
+      {/* Only where the chip is what opened it. A pointer closes by leaving the tile; a tap has
+          nowhere to go, so the way in has to double as the way out. */}
+      {open && pinned && onTogglePinned && (
+        <ClaimBacklogChip count={backlog.length} expanded onClick={onTogglePinned} />
       )}
-    >
-      {shown.map((card, index) => (
-        <DebateClaimTickerCard
-          key={card.window.claim.id}
-          window={card.window}
-          opacity={card.opacity}
-          // Only the live stack dissolves its older card. In the open list every claim is one the
-          // reader chose to look at, so fading any of them would just make it hard to read.
-          fading={!open && index < shown.length - 1}
-          speaker={participantByClaimId?.get(card.window.claim.id) ?? null}
-          row={rowsByClaimId.get(card.window.claim.id) ?? null}
-          entity={entitiesByClaimId.get(card.window.claim.id) ?? null}
-          onAnswered={onAnswered}
-        />
-      ))}
     </div>
+  );
+}
+
+/**
+ * The corner's resting state, and the only part of this layer that is always there to be found.
+ *
+ * The backlog was reachable by hover alone, which is nothing on a touch screen and close to nothing
+ * on a desktop — a viewer only finds an invisible affordance by accident. One small pill fixes both:
+ * it says the claims exist, says how many, and is a tap target where there is no pointer.
+ *
+ * Deliberately the same glyph the Claims button in the interaction bar uses, because it opens the
+ * same set of claims. Two different icons for one idea would be the harder thing to learn.
+ */
+function ClaimBacklogChip({
+  count,
+  expanded,
+  onClick,
+}: {
+  count: number;
+  expanded: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={expanded}
+      aria-label={expanded ? 'Hide the claims said so far' : `Show the ${count} claims said so far`}
+      // The video behind is one big play/pause button.
+      onClick={event => {
+        event.stopPropagation();
+        onClick();
+      }}
+      className="pointer-events-auto flex shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 py-1.5 text-[0.75rem] leading-[1.0625rem] text-white transition-colors hover:bg-[#151515]/50"
+    >
+      <InfoSmall color="white" />
+      <span className="tabular-nums">{expanded ? 'Hide' : `${count} ${count === 1 ? 'claim' : 'claims'}`}</span>
+    </button>
   );
 }
 
