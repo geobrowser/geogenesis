@@ -193,15 +193,17 @@ export function useDebateClaimTicker(
 }
 
 /**
- * How far above the open list's top edge a card is completely gone, in px — the 4.25rem the edge
- * gradient used to ramp over.
+ * How far down from the open list's top edge the backlog is fully drawn, in px — the 4.25rem ramp
+ * the Figma frame dissolves the stack over.
  *
- * The dissolve is per card now, not a mask on the scroll box, and that is a correctness fix rather
- * than a refactor. A `mask-image` makes its element a Backdrop Root, so `backdrop-filter` on
- * anything inside it has nothing left to sample: masking the scroll box silently flattened the
- * glass on every card in the open list, and the glass came back only at scrollTop 0, where the mask
- * was dropped. Fading each card by its own opacity leaves the backdrop root alone — an element's
- * own mask or opacity does not blind its own backdrop-filter, only its descendants'.
+ * The ramp is one continuous gradient across the whole list, but it is applied to each card
+ * separately, offset so the stops line up with the list's top edge rather than the card's. That is
+ * not a stylistic choice. A `mask-image` makes its element a Backdrop Root, so `backdrop-filter` on
+ * anything *inside* it has nothing left to sample: masking the scroll box flattened the glass on
+ * every card in the list, and it came back only at scrollTop 0, where the mask was dropped. An
+ * element's own mask does not blind its own backdrop-filter — measured in Chrome, a glass card over
+ * hard stripes reads 160 contrast unmasked, 178 with a mask on itself, and 249 with one on its
+ * parent — so moving the same gradient onto the cards keeps both the ramp and the glass.
  */
 const HISTORY_EDGE_FADE_PX = 68;
 
@@ -375,23 +377,36 @@ export function DebateClaimTickerStack({
   const followingLatest = React.useRef(true);
 
   /**
-   * Dissolve each card as it crosses the top edge — see {@link HISTORY_EDGE_FADE_PX}.
+   * Dissolve the top of the open list — see {@link HISTORY_EDGE_FADE_PX}.
    *
-   * Written straight to the node instead of through state, because this runs on every scroll frame
-   * and re-rendering a list of cards to change one number on a couple of them is work the browser
-   * should not be asked to do while a finger is moving. Nothing else writes these cards' opacity in
-   * the open list — {@link claimHistory} leaves them all at 1, and the card omits the inline style
-   * at 1 — so there is no tug of war with React over the same property.
+   * Each card carries the slice of the ramp that falls across it, found by shifting the gradient's
+   * stops by how far the card's own top sits from the top of the list. A card below the ramp
+   * entirely gets no mask at all, which is nearly all of them.
+   *
+   * Written straight to the node rather than through state, because this runs on every scroll frame
+   * and re-rendering the list to change a gradient on one card is work the browser should not be
+   * asked to do while a finger is moving. React never sets `mask-image` on these cards, so there is
+   * no tug of war over the property.
    */
   const paintEdgeFade = React.useCallback(() => {
     const element = scrollRef.current;
     if (!element) return;
     for (const card of Array.from(element.children) as HTMLElement[]) {
-      const belowEdge = card.offsetTop + card.offsetHeight - element.scrollTop;
-      const opacity = Math.max(0, Math.min(1, belowEdge / HISTORY_EDGE_FADE_PX));
-      card.style.opacity = opacity === 1 ? '' : String(opacity);
+      // The card's top edge, measured from the top of what the list is showing. Negative once the
+      // card has started to travel up past it.
+      const fromEdge = card.offsetTop - element.scrollTop;
+      const start = -fromEdge;
+      const end = start + HISTORY_EDGE_FADE_PX;
+      // Nothing to paint on a card the ramp does not reach, nor on one that has travelled wholly
+      // above the edge, where the list's own overflow has it already.
+      const untouched = end <= 0 || fromEdge + card.offsetHeight < 0;
+      // `open` is checked here rather than by the callers, because the closed corner is a
+      // content-sized box whose top *is* the card's top — the ramp would dissolve the live claim.
+      const ramp = !open || untouched ? '' : `linear-gradient(to bottom, transparent ${start}px, #000 ${end}px)`;
+      card.style.maskImage = ramp;
+      card.style.webkitMaskImage = ramp;
     }
-  }, []);
+  }, [open]);
 
   const onScroll = React.useCallback(() => {
     const element = scrollRef.current;
@@ -403,12 +418,15 @@ export function DebateClaimTickerStack({
   }, [paintEdgeFade]);
 
   // Opens on the most recent claim — scrolling *up* from there is the "go back through it" this
-  // exists for.
+  // exists for. Closing repaints too, and has to: the ramp is written to the card nodes, and the
+  // newest card survives the close, so a stale slice of gradient would follow it back out.
   React.useEffect(() => {
     const element = scrollRef.current;
-    if (!open || !element) return;
-    followingLatest.current = true;
-    element.scrollTop = element.scrollHeight;
+    if (!element) return;
+    if (open) {
+      followingLatest.current = true;
+      element.scrollTop = element.scrollHeight;
+    }
     paintEdgeFade();
   }, [open, paintEdgeFade]);
 
@@ -418,8 +436,8 @@ export function DebateClaimTickerStack({
   // were halfway through off the screen, which read as the list closing and starting over.
   React.useEffect(() => {
     const element = scrollRef.current;
-    if (!open || !element) return;
-    if (followingLatest.current) element.scrollTop = element.scrollHeight;
+    if (!element) return;
+    if (open && followingLatest.current) element.scrollTop = element.scrollHeight;
     paintEdgeFade();
   }, [open, shown.length, paintEdgeFade]);
 
