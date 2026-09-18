@@ -64,10 +64,18 @@ function renderObservedHook(options?: Parameters<typeof useNearViewport>[0]) {
   return { ...hook, record, target };
 }
 
-function intersect(record: ObserverRecord, target: Element, isIntersecting: boolean) {
+function notify(record: ObserverRecord, target: Element, ...states: boolean[]) {
   act(() => {
     record.callback(
-      [{ target, isIntersecting, intersectionRatio: isIntersecting ? 1 : 0 } as IntersectionObserverEntry],
+      states.map(
+        (isIntersecting, index) =>
+          ({
+            target,
+            time: index,
+            isIntersecting,
+            intersectionRatio: isIntersecting ? 1 : 0,
+          }) as IntersectionObserverEntry
+      ),
       record.observer
     );
   });
@@ -77,7 +85,8 @@ describe('useNearViewport', () => {
   it('is sticky by default and disconnects after the element enters range', () => {
     const { result, record, target } = renderObservedHook();
 
-    intersect(record, target, true);
+    // Sticky means "ever near": a batched enter followed by an exit still counts.
+    notify(record, target, true, false);
 
     expect(result.current.nearViewport).toBe(true);
     expect(record.disconnect).toHaveBeenCalledOnce();
@@ -87,11 +96,22 @@ describe('useNearViewport', () => {
     const { result, record, target } = renderObservedHook({ rootMargin: '400px', sticky: false });
 
     expect(record.options).toEqual({ rootMargin: '400px' });
-    intersect(record, target, true);
+    notify(record, target, true);
     expect(result.current.nearViewport).toBe(true);
 
-    intersect(record, target, false);
+    notify(record, target, false);
     expect(result.current.nearViewport).toBe(false);
+    expect(record.disconnect).not.toHaveBeenCalled();
+  });
+
+  it('uses the latest transition when reversible notifications are batched', () => {
+    const { result, record, target } = renderObservedHook({ sticky: false });
+
+    notify(record, target, true, false);
+    expect(result.current.nearViewport).toBe(false);
+
+    notify(record, target, false, true);
+    expect(result.current.nearViewport).toBe(true);
     expect(record.disconnect).not.toHaveBeenCalled();
   });
 

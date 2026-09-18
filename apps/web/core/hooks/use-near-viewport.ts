@@ -35,12 +35,17 @@ export function useNearViewport({
 
     const observer = new IntersectionObserver(
       entries => {
-        const next = entries.some(entry => entry.isIntersecting);
         if (!sticky) {
-          setNearViewport(next);
+          // IntersectionObserver may batch several transitions for this one watched element.
+          // Its entries are queued chronologically, so reversible state must follow the last
+          // transition rather than treating any earlier intersection as the current state.
+          const latest = entries.at(-1);
+          if (latest) setNearViewport(latest.isIntersecting);
           return;
         }
-        if (next) {
+        // Sticky mode asks whether the element has *ever* entered the window, so any intersecting
+        // entry in a batch is sufficient even when a later entry records that it left again.
+        if (entries.some(entry => entry.isIntersecting)) {
           setNearViewport(true);
           observer.disconnect();
         }
