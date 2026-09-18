@@ -364,7 +364,11 @@ export function AvailabilityCalendar({
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-grey-02 bg-white">
         <div
           ref={scrollRef}
-          className="max-h-[32rem] min-h-0 flex-1 overflow-auto overscroll-contain [--availability-column:calc((100vw-8rem)/3.5)]"
+          // `overscroll-none` rather than `contain`: on iOS a scroller that has run out of room still
+          // rubber-bands, and the sticky hour column and headings slide away from the border with
+          // it. `-webkit-overflow-scrolling: auto` drops the momentum layer that carries that
+          // bounce. On mobile the columns are a fixed width, so the week reaches past the screen.
+          className="max-h-[32rem] min-h-0 flex-1 overflow-auto overscroll-none [--availability-column:calc((100vw-5rem)/3.5)] [-webkit-overflow-scrolling:auto] md:max-h-none"
         >
           <div
             ref={gridRef}

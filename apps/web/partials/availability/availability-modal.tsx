@@ -4,7 +4,10 @@ import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import type { AvailabilityBlock } from '~/core/availability/blocks';
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
@@ -37,7 +40,10 @@ export function AvailabilityModal({ open, onOpenChange, blocks = [], onSave, ope
   return (
     <Root open={open} onOpenChange={onOpenChange}>
       <Portal>
-        <Overlay className="fixed inset-0 z-[1000] bg-text/20" />
+        {/* Above the status bar, the toasts and the chat launcher — see `scheduleDialog` in
+            `core/z-layers`. Full screen on a phone, those corners sat on top of its footer and
+            took the taps meant for Clear all and Save. */}
+        <Overlay className={cx('fixed inset-0 bg-text/20', Z_LAYER_CLASS.scheduleDialogBackdrop)} />
         <Content
           aria-describedby={undefined}
           onCloseAutoFocus={event => {
@@ -45,7 +51,12 @@ export function AvailabilityModal({ open, onOpenChange, blocks = [], onSave, ope
             event.preventDefault();
             openerRef.current.focus();
           }}
-          className="fixed top-1/2 left-1/2 z-[1001] -translate-x-1/2 -translate-y-1/2 focus:outline-hidden"
+          // Centred on a desktop window; on a phone it takes the whole screen, where a week grid
+          // has no room to spare for margins.
+          className={cx(
+            'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 focus:outline-hidden md:inset-0 md:translate-x-0 md:translate-y-0',
+            Z_LAYER_CLASS.scheduleDialog
+          )}
         >
           {/* A column with a hard ceiling: the title stays at the top, the calendar's own footer
               at the bottom, and the grid between them absorbs whatever height is left. Nothing
@@ -57,7 +68,7 @@ export function AvailabilityModal({ open, onOpenChange, blocks = [], onSave, ope
               drag dismissed it — taking the banner, and with it this dialog, away mid-gesture. */}
           <div
             data-no-sheet-drag
-            className="flex max-h-[calc(100dvh-2rem)] w-[56rem] max-w-[calc(100vw-2rem)] flex-col gap-4 overflow-hidden rounded-xl bg-white p-5 shadow-card"
+            className="flex max-h-[calc(100dvh-2rem)] w-[56rem] max-w-[calc(100vw-2rem)] flex-col gap-4 overflow-hidden overscroll-none rounded-xl bg-white p-5 shadow-card md:h-dvh md:max-h-dvh md:w-screen md:max-w-none md:gap-3 md:rounded-none md:p-4"
           >
             <div className="flex shrink-0 items-start justify-between gap-4">
               <Title asChild>
