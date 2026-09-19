@@ -101,12 +101,19 @@ export function NavbarActions() {
 
         <Menu
           trigger={
-            <div className="relative h-7 w-7 overflow-hidden rounded-full">
-              {avatarValue ? (
-                <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
-              ) : (
-                <Avatar value={address} size={28} />
-              )}
+            // The avatar stays 28px; the tap area around it grows to 44 on a phone. Radix sizes its
+            // trigger button to this content, so padding here is what the thumb actually gets — and
+            // this menu is the only way to a profile, personal space or sign out on mobile, which
+            // it had no way to reach at all until this change. Not applied to the rest of the row:
+            // those controls were already on phones and belong to GEO-2970's sweep.
+            <div className="flex items-center justify-center sm:h-11 sm:w-11">
+              <div className="relative h-7 w-7 overflow-hidden rounded-full">
+                {avatarValue ? (
+                  <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
+                ) : (
+                  <Avatar value={address} size={28} />
+                )}
+              </div>
             </div>
           }
           open={open}

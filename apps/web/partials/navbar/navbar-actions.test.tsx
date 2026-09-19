@@ -256,4 +256,23 @@ describe('NavbarActions profile menu', () => {
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(mocks.logout).toHaveBeenCalledOnce();
   });
+  // This PR is what puts these on a phone, so they are the ones it has to make tappable. 28px and
+  // ~34px are fine with a cursor and under every touch-target minimum — 44pt in Apple's guidance,
+  // 48dp in Material. The rest of the navbar row was already on mobile and belongs to GEO-2970.
+  //
+  // Asserted on the class because jsdom does not evaluate media queries: a rendering test would
+  // pass with the mobile sizing removed.
+  describe('touch targets on mobile', () => {
+    it('gives the profile trigger a thumb-sized area without resizing the avatar', async () => {
+      mocks.profile = { name: 'Max', avatarUrl: null };
+      render(<NavbarActions />);
+
+      const avatar = await screen.findByTestId('fallback-avatar');
+
+      expect(avatar.closest('[class*="sm:h-11"]')).not.toBeNull();
+      // The avatar itself is untouched — the area around it grew, not the picture.
+      expect(avatar.closest('.h-7')).not.toBeNull();
+    });
+  });
+
 });

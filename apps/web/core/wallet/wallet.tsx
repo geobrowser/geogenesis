@@ -72,7 +72,15 @@ function PrivyConnectButton() {
     login();
   };
 
-  return <Button onClick={onLogin}>Log in</Button>;
+  // 44px on a phone. `Button` is ~34 by default, which was academic while this was hidden on
+  // mobile — it is the only deliberate way to sign in there now, so it wants a thumb-sized target.
+  // Scoped to this button rather than the shared component: every other `Button` in the app has the
+  // same problem and that is GEO-2970's sweep, not something to change from inside the navbar.
+  return (
+    <Button className="sm:h-11" onClick={onLogin}>
+      Log in
+    </Button>
+  );
 }
 
 export function GeoConnectButton() {
