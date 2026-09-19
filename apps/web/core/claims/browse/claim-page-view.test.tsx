@@ -84,6 +84,7 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     responseError: null,
   }),
 }));
+vi.mock('./claim-position-comment', () => ({ ClaimPositionCommentControl: () => null }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => () => {} }));
 vi.mock('~/core/debates/backfill-readiness-for-held-position', () => ({
   useBackfillReadinessForHeldPosition: () => {},
