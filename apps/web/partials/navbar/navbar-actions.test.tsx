@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
     avatarUrl: 'ipfs://avatar',
   } as { name: string | null; avatarUrl: string | null } | null,
   personalSpaceId: 'personal-space' as string | null,
+  // `ModeToggle` renders only on a space page; null keeps it out of the other suites as before.
+  spaceId: null as string | null,
   isSmartAccountLoading: false,
   dialogMounts: 0,
   pendingPersonalSpace: { isPending: false, topicId: null as string | null },
@@ -50,7 +52,7 @@ vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => mocks.pendingPersonalSpace,
 }));
 vi.mock('~/core/state/feature-flags', () => ({}));
-vi.mock('~/core/hooks/use-space-id', () => ({ useSpaceId: () => null }));
+vi.mock('~/core/hooks/use-space-id', () => ({ useSpaceId: () => mocks.spaceId }));
 vi.mock('~/core/hooks/use-access-control', () => ({
   useAccessControl: () => ({ canEdit: false, isLoading: false }),
 }));
@@ -80,7 +82,10 @@ vi.mock('~/design-system/fallback-image', () => ({
   FallbackImage: ({ value }: { value: string }) => <img src={value} alt="" />,
 }));
 vi.mock('~/design-system/avatar', () => ({
-  Avatar: ({ value }: { value: string }) => <div data-testid="fallback-avatar">{value}</div>,
+  // The value goes in an attribute, not the text. A real `Avatar` renders an image; rendering it
+  // as text made it part of the trigger's accessible name, so the button announced as "Open profile
+  // menu 0x1234…" — a mock artefact that would have sent someone chasing the wrong thing.
+  Avatar: ({ value }: { value: string }) => <div data-testid="fallback-avatar" data-value={value} />,
 }));
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ href, children, ...props }: React.ComponentProps<'a'>) => (
@@ -104,7 +109,10 @@ vi.mock('~/design-system/menu', () => ({
     className?: string;
   }) => (
     <div>
-      <button aria-label="Open profile menu" onClick={() => onOpenChange(!open)}>
+      {/* No `aria-label` here on purpose. The mock used to supply one, which meant the real
+          trigger could go unnamed and this suite would never notice — the name has to come from
+          the component. */}
+      <button onClick={() => onOpenChange(!open)}>
         {trigger}
       </button>
       {open && (
@@ -139,7 +147,12 @@ describe('NavbarActions profile menu', () => {
 
     await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
 
-    expect(screen.getByTestId('profile-menu')).toHaveClass('sm:w-[322px]');
+    // No mobile width override: a fixed 322 does not fit a 320px viewport once `Menu` takes its
+    // 8px collision padding each side, and Radix repositions fixed-width content rather than
+    // shrinking it. The base is viewport-calculated with 322 as a ceiling, which is what phones
+    // want — so the assertion is that the override is gone.
+    expect(screen.getByTestId('profile-menu')).toHaveClass('w-[calc(100vw-16px)]', 'max-w-[322px]');
+    expect(screen.getByTestId('profile-menu').className).not.toContain('sm:w-[322px]');
     const identityLink = screen.getByRole('link', { name: /Max max@example\.com/ });
     expect(identityLink).toHaveAttribute('href', '/space/personal-space');
     expect(identityLink).toHaveClass('gap-3', 'px-3', 'py-2.5');
@@ -256,4 +269,42 @@ describe('NavbarActions profile menu', () => {
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(mocks.logout).toHaveBeenCalledOnce();
   });
+  // This PR is what puts these on a phone, so they are the ones it has to make tappable. 28px and
+  // ~34px are fine with a cursor and under every touch-target minimum — 44pt in Apple's guidance,
+  // 48dp in Material. The rest of the navbar row was already on mobile and belongs to GEO-2970.
+  //
+  // Asserted on the class because jsdom does not evaluate media queries: a rendering test would
+  // pass with the mobile sizing removed.
+  describe('touch targets on mobile', () => {
+    it('gives the profile trigger a thumb-sized area without resizing the avatar', async () => {
+      mocks.profile = { name: 'Max', avatarUrl: null };
+      render(<NavbarActions />);
+
+      const avatar = await screen.findByTestId('fallback-avatar');
+
+      // Both dimensions on the same ancestor. Height alone passed with `sm:w-11` removed, which
+      // leaves a 44px-tall sliver 28px wide — not the thumb-sized area the test claims.
+      const tapArea = avatar.closest('[class*="sm:h-11"]');
+      expect(tapArea).not.toBeNull();
+      expect(tapArea?.className ?? '').toContain('sm:w-11');
+      // The avatar itself is untouched — the area around it grew, not the picture.
+      expect(avatar.closest('.h-7')).not.toBeNull();
+    });
+  });
+
+  // Icon-only, every glyph inside `aria-hidden`, so it announced as nothing. It was desktop-only
+  // until this branch put the account surface back on phones, which is what exposed it — the same
+  // class of gap as the search, create and profile controls beside it.
+  describe('the edit mode toggle', () => {
+    it('says what pressing it does, and carries its state', async () => {
+      mocks.spaceId = 'space-1';
+      render(<NavbarActions />);
+
+      const toggle = await screen.findByTestId('edit-toggle');
+
+      expect(toggle).toHaveAccessibleName(/Switch to (edit|browse) mode/);
+      expect(toggle).toHaveAttribute('aria-pressed');
+    });
+  });
+
 });

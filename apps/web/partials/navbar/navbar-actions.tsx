@@ -101,18 +101,34 @@ export function NavbarActions() {
 
         <Menu
           trigger={
-            <div className="relative h-7 w-7 overflow-hidden rounded-full">
-              {avatarValue ? (
-                <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
-              ) : (
-                <Avatar value={address} size={28} />
-              )}
+            // The avatar stays 28px; the tap area around it grows to 44 on a phone. Radix sizes its
+            // trigger button to this content, so padding here is what the thumb actually gets — and
+            // this menu is the only way to a profile, personal space or sign out on mobile, which
+            // it had no way to reach at all until this change. Not applied to the rest of the row:
+            // those controls were already on phones and belong to GEO-2970's sweep.
+            <div className="flex items-center justify-center sm:h-11 sm:w-11">
+              {/* The trigger is an image and nothing else: `FallbackImage` has an empty alt and
+                  `Avatar` carries no label, so Radix's button announced as nothing at all. It is
+                  the only way to a profile, personal space or sign out on a phone. Named the way
+                  the debates button beside it is. */}
+              <span className="sr-only">Open profile menu</span>
+              <div className="relative h-7 w-7 overflow-hidden rounded-full">
+                {avatarValue ? (
+                  <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
+                ) : (
+                  <Avatar value={address} size={28} />
+                )}
+              </div>
             </div>
           }
           open={open}
           onOpenChange={onOpenChange}
           sideOffset={12}
-          className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] sm:w-[322px]"
+          // No `sm:w-[322px]`. A fixed 322 does not fit a 320px viewport once `Menu` takes its 8px
+          // collision padding on each side, and Radix repositions fixed-width content rather than
+          // shrinking it, so the menu was clipped. The base width is already viewport-calculated
+          // with 322 as a maximum, which is what phones want.
+          className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px]"
         >
           <IdentityHeader
             address={address}
@@ -360,6 +376,12 @@ function ModeToggle() {
         ref={toggleRef}
         onClick={onToggle}
         data-testid="edit-toggle"
+        // Icon-only, and every glyph inside is `aria-hidden`, so this announced as nothing. It was
+        // desktop-only until this branch put the account surface back on phones, which is what
+        // exposed it. The label says what pressing it does rather than what it is, and
+        // `aria-pressed` carries the state the two icons convey visually.
+        aria-label={editable ? 'Switch to browse mode' : 'Switch to edit mode'}
+        aria-pressed={editable}
         animate={controls}
         variants={variants}
         className="relative flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"

@@ -18,9 +18,14 @@ export function Navbar({ onSearchClick, hideLogo = false }: Props) {
       data-app-navbar
       className="sticky top-0 z-60 flex h-11 w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1"
     >
-      <div className="flex items-center gap-8 md:gap-4">
+      {/* `min-w-0` so this side is what gives when the bar is tight. Without it a flex child will
+          not shrink below its content, so on a narrow phone the two groups fought and the controls
+          on the right -- the only route to an account since they came back on mobile -- were the
+          ones pushed out. The breadcrumb truncating is the right thing to lose. */}
+      <div className="flex min-w-0 items-center gap-8 md:gap-4">
+        {/* The mark holds its size (`shrink-0`) so the squeeze lands on the breadcrumb text. */}
         {hideLogo ? null : (
-          <Link href={NavUtils.toRoot()}>
+          <Link href={NavUtils.toRoot()} className="shrink-0">
             <GeoLogoLarge />
           </Link>
         )}
@@ -37,8 +42,12 @@ export function Navbar({ onSearchClick, hideLogo = false }: Props) {
           We encapsulate the search in the ClientOnly even though its not dependent on account state so
           we don't get any layout shift when the navbar actions appear.
       */}
+      {/* `shrink-0`: these are fixed-size controls with touch targets to keep, so they hold their
+          width and the breadcrumb above absorbs the squeeze. */}
       <ClientOnly>
-        <NavbarClientActions onSearchClick={onSearchClick} />
+        <div className="shrink-0">
+          <NavbarClientActions onSearchClick={onSearchClick} />
+        </div>
       </ClientOnly>
     </nav>
   );
