@@ -51,6 +51,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     error,
     playing,
     userPaused,
+    autoplayBlocked,
     isScrubbing,
     isResuming,
     playbackEnded,
@@ -88,20 +89,48 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   // mid-scrub.
   React.useEffect(() => {
     if (!ready) return;
-    if (active && !userPaused && !isScrubbing && !playing && !playbackEnded) {
+    // A refusal is not retried: the browser gives the same answer every time, and
+    // only the viewer's tap is a gesture it will accept.
+    if (active && !awaitingTap && !isScrubbing && !playing && !playbackEnded) {
       void resumeBoth();
     } else if (!active && playing) {
       suspend();
     }
-  }, [active, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend, userPaused]);
+  }, [active, autoplayBlocked, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend, userPaused]);
 
-  const showControls = ready && (userPaused || (playbackEnded && !hasVoted));
-  // End of an unvoted debate offers a replay; a user pause shows the paused glyph.
+  /**
+   * Stopped, and only a tap will start it.
+   *
+   * The two ways in are different facts — the viewer paused, or the browser
+   * refused — and identical from here: the video is not running and the control
+   * is the only answer either accepts.
+   */
+  const awaitingTap = userPaused || autoplayBlocked;
+
+  const showControls = ready && (awaitingTap || (playbackEnded && !hasVoted));
+  // End of an unvoted debate offers a replay; a stopped one shows the paused glyph.
   const showReplay = ready && playbackEnded && !hasVoted;
-  const showPausedGlyph = ready && userPaused && !playbackEnded;
+  const showPausedGlyph = ready && awaitingTap && !playbackEnded;
 
   return (
-    <div ref={measurement.elementRef} className="group relative flex flex-col gap-2">
+    <div
+      ref={measurement.elementRef}
+      /*
+       * The player's state, readable from outside React.
+       *
+       * Autoplay faults here are device-specific — iOS refuses in Low Power Mode
+       * and headless engines do not — so the machine that reproduces them is
+       * rarely one with a debugger attached. These four booleans are what
+       * `PlaybackDiagnostics` reports, and what an inspector on a phone can read
+       * without one. They are the difference between "the browser refused" and
+       * "the app never noticed", which look identical on screen.
+       */
+      data-debate-ready={ready ? 'true' : 'false'}
+      data-debate-active={active ? 'true' : 'false'}
+      data-debate-playing={playing ? 'true' : 'false'}
+      data-debate-autoplay-blocked={autoplayBlocked ? 'true' : 'false'}
+      className="group relative flex flex-col gap-2"
+    >
       <DebaterVideo
         participant={slot1Participant}
         src={urls.slot1}

@@ -505,6 +505,95 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
    * in between. A caller that checks ownership only once this returns is too late: `play()` has
    * already been called, and no state check can take it back.
    */
+  /**
+   * The element iOS actually gives you when it refuses (GEO-2978).
+   *
+   * `play()` sets `paused` false synchronously and only then rejects; the user agent pauses it
+   * again afterwards. So the confirm poll's first pass sees both elements un-paused and, before
+   * this fix, reported 'playing' for a play that was being refused — which left the card
+   * believing it was playing while both videos sat at `t=0.0`, with no retry and no play button,
+   * and needing two taps to start.
+   */
+  function refusingVideo() {
+    const video = {
+      muted: true,
+      paused: true,
+      plays: 0,
+      async play() {
+        video.plays += 1;
+        // Synchronous, exactly as the spec has it.
+        video.paused = false;
+        await Promise.resolve();
+        // And the user agent takes it back.
+        video.paused = true;
+        throw Object.assign(new Error('refused'), { name: 'NotAllowedError' });
+      },
+    };
+    return video;
+  }
+
+  it('does not report playing when the refusal un-pauses the element first', async () => {
+    const a = refusingVideo();
+    const b = refusingVideo();
+
+    expect(await playBothWithMutedFallback(a, b)).toBe('blocked');
+  });
+
+  /**
+   * The same shape where `paused` never comes back — a stricter reading of the same race. The
+   * browser's answer decides it either way.
+   */
+  it('trusts the refusal over a stale un-paused reading', async () => {
+    const stuck = () => {
+      const video = {
+        muted: true,
+        paused: true,
+        plays: 0,
+        async play() {
+          video.plays += 1;
+          video.paused = false;
+          throw Object.assign(new Error('refused'), { name: 'NotAllowedError' });
+        },
+      };
+      return video;
+    };
+
+    expect(await playBothWithMutedFallback(stuck(), stuck())).toBe('blocked');
+  });
+
+  /**
+   * A refusal is the browser's answer and survives the cancellation check, because
+   * `resumeBoth` re-enters while `playing` is false and so cancels its own previous
+   * attempt as a matter of course. Reporting 'cancelled' there lost the answer every
+   * time and the card never learned it had been refused (GEO-2978).
+   *
+   * Muted on both, so there is no retry left that could turn this into playback.
+   */
+  it('reports a refusal even when the attempt was cancelled while confirming', async () => {
+    const a = fakeVideo({ muted: true, blockUnmuted: false });
+    const b = fakeVideo({ muted: true, blockUnmuted: false });
+    a.play = async function refuse() {
+      a.plays += 1;
+      throw Object.assign(new Error('refused'), { name: 'NotAllowedError' });
+    };
+    b.play = a.play.bind(b);
+
+    expect(await playBothWithMutedFallback(a, b, { isCancelled: () => true })).toBe('blocked');
+  });
+
+  /** But an interruption of ours is still a cancellation, not a refusal. */
+  it('still reports a cancellation when our own pause interrupted the attempt', async () => {
+    const a = fakeVideo({ muted: true, blockUnmuted: false });
+    const b = fakeVideo({ muted: true, blockUnmuted: false });
+    a.play = async function abort() {
+      a.plays += 1;
+      throw Object.assign(new Error('interrupted by a call to pause()'), { name: 'AbortError' });
+    };
+    b.play = a.play.bind(b);
+
+    expect(await playBothWithMutedFallback(a, b, { isCancelled: () => true })).toBe('cancelled');
+  });
+
   it('does not retry when the attempt was cancelled while confirming', async () => {
     const a = fakeVideo({ muted: false });
     const b = fakeVideo({ muted: false });

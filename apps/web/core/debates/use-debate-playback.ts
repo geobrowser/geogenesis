@@ -109,6 +109,22 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const [error, setError] = React.useState<string | null>(null);
   const [playing, setPlaying] = React.useState(false);
   const [userPaused, setUserPaused] = React.useState(false);
+  /**
+   * The browser refused to start this pair, so the viewer has to.
+   *
+   * Distinct from `userPaused`, which is a decision somebody made. This is a
+   * decision made *for* them — and measured on a phone rather than guessed at
+   * (GEO-2978): `play()` comes back `NotAllowedError` with the elements muted,
+   * inline and fully buffered, which is iOS in Low Power Mode, or with
+   * auto-play turned off for the site. Both are ordinary states a reader can be
+   * in, not faults.
+   *
+   * It drives the same two things `userPaused` does — show the play control,
+   * and stop the autoplay effect trying again — because a refusal that keeps
+   * being retried is a refusal every time, and the viewer's tap is the one
+   * thing that will be allowed.
+   */
+  const [autoplayBlocked, setAutoplayBlocked] = React.useState(false);
   const [isScrubbing, setIsScrubbing] = React.useState(false);
   const isScrubbingRef = React.useRef(false);
   const wasPlayingBeforeScrubRef = React.useRef(false);
@@ -606,13 +622,41 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       // thing noticed from inside, and is spelled out rather than left to the generation check so
       // that a future caller cannot accidentally read it as a successful start.
       if (outcome === 'cancelled') return;
+
+      /*
+       * A refusal outlives the attempt that discovered it.
+       *
+       * It describes the device — this browser will not autoplay right now — so
+       * it is recorded above the ownership check, which exists to stop a
+       * superseded attempt writing *playback* state. And superseded is the norm
+       * rather than the exception: `resumeBoth` bumps the generation on entry
+       * and the autoplay effect re-enters while `playing` is false, so an
+       * attempt is routinely overtaken before it reports. Recorded below the
+       * check, the refusal was discarded every time and the card never learned
+       * of it.
+       *
+       * It also ends that loop, because the effect reads the flag.
+       */
+      if (outcome === 'blocked') setAutoplayBlocked(true);
+
       if (resumeGenerationRef.current !== generation) return;
+
       if (outcome === 'blocked') {
+        /*
+         * The elements and the playback state belong to *this* attempt, so they
+         * stay under the ownership check — pausing elements a newer resume has
+         * started would undo it.
+         *
+         * No error copy. This used to say "Could not play both videos. Try Play
+         * again.", which named a control that was not on screen and a failure
+         * that had not happened: the videos are fine and the device simply wants
+         * to be asked by a person. `autoplayBlocked` puts that question on the
+         * card instead.
+         */
         primaryVideo.pause();
         secondaryVideo.pause();
         setPlaying(false);
         setTurnState(null);
-        setError('Could not play both videos. Try Play again.');
         return;
       }
       // The browser only allowed it muted (GEO-2783) — record that so the unmute control is honest
@@ -621,6 +665,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       if (outcome === 'playing-muted') setMutedByUser(true);
       setPlaying(true);
       setUserPaused(false);
+      // Whatever refused last time has stopped refusing.
+      setAutoplayBlocked(false);
     },
     [offsets, seekVideosTo, setMutedByUser, timelineSeconds]
   );
@@ -840,6 +886,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     error,
     playing,
     userPaused,
+    autoplayBlocked,
     isScrubbing,
     isResuming,
     playbackEnded,

@@ -277,8 +277,22 @@ export type PlayBothOptions = {
  * whether `play()` resolved. `play()` can resolve while the element is still transitioning out of
  * `paused`, so checking `paused` on the very next microtask reports a block on a video that plays
  * a moment later — which is why the feed showed "Could not play both videos" on essentially every
- * scroll while the recordings played fine. A rejected `play()` needs no special case: a rejection
- * leaves the element paused, so it fails the same check.
+ * scroll while the recordings played fine.
+ *
+ * **But a rejected `play()` does need a special case, and assuming otherwise is GEO-2978.** This
+ * comment used to end "a rejection leaves the element paused, so it fails the same check". It does
+ * not, or not in time: `play()` sets `paused` to false *synchronously* and only then rejects, and
+ * the user agent pauses it again afterwards. So the first confirm poll can see both elements
+ * un-paused and report success for a play the browser was in the middle of refusing.
+ *
+ * Measured on an iPhone in Low Power Mode, which refuses every autoplay: the card reported
+ * `playing=true` with both elements `PAUSED` at `t=0.0` and `calls=[play REJECTED:NotAllowedError]`.
+ * From there nothing recovers — the autoplay effect will not retry a card it believes is playing,
+ * no refusal is recorded, and the paused glyph never renders. The viewer's first tap only pauses
+ * what the app imagined was running, which is why it took two taps to start a video.
+ *
+ * So a refusal now invalidates the reading: whatever `paused` said mid-flight, the browser has
+ * told us plainly that it did not start.
  *
  * The grace window is deliberately short. It only has to outlast the paused -> playing transition,
  * and every millisecond of it delays the muted retry on a genuine block.
@@ -300,17 +314,60 @@ async function bothRunning(
   return !primary.paused && !secondary.paused;
 }
 
+/**
+ * Whether a rejected `play()` was the browser declining, rather than us
+ * interrupting.
+ *
+ * Real engines name it; the message is checked too because a rejection that
+ * crosses a boundary can arrive as a plain `Error` carrying the same sentence.
+ */
+function isRefusal(reason: unknown): boolean {
+  if (!(reason instanceof Error)) return false;
+
+  return reason.name === 'NotAllowedError' || /notallowed|does not allow|user agent/i.test(reason.message);
+}
+
 export async function playBothWithMutedFallback(
   primary: PlayableVideo,
   secondary: PlayableVideo,
   { wait = defaultWait, isCancelled }: PlayBothOptions = {}
 ): Promise<PlayBothOutcome> {
-  const attempt = async () => {
-    await Promise.allSettled([primary.play(), secondary.play()]);
-    return bothRunning(primary, secondary, wait);
+  /**
+   * Whether the browser said no, as opposed to simply not having started yet.
+   *
+   * `play()` rejects for two quite different reasons and they need telling
+   * apart: `NotAllowedError` is a policy answer — no gesture, or iOS in Low
+   * Power Mode — while an `AbortError` is our own `pause()` interrupting the
+   * attempt. Only the first is a fact about the device.
+   */
+  const attempt = async (): Promise<{ running: boolean; refused: boolean }> => {
+    const settled = await Promise.allSettled([primary.play(), secondary.play()]);
+    const refused = settled.some(result => result.status === 'rejected' && isRefusal(result.reason));
+
+    return { running: await bothRunning(primary, secondary, wait), refused };
   };
 
-  if (await attempt()) return 'playing';
+  const first = await attempt();
+
+  if (first.running && !first.refused) return 'playing';
+
+  /*
+   * A refusal outranks the cancellation check below, and that ordering is the
+   * whole fix for GEO-2978.
+   *
+   * `resumeBoth` bumps its generation on entry, and its caller re-enters while
+   * `playing` is false — so by the time this returns, `isCancelled` is routinely
+   * true simply because the *next* attempt has started. Reporting 'cancelled'
+   * there threw away the browser's answer, the next attempt threw away its own,
+   * and the card never learned it had been refused: no play control, no error,
+   * just a still frame. Measured against the preview with `play()` forced to
+   * reject — zero play controls on six cards.
+   *
+   * Only when there is nothing left to try. With audio still on, the muted retry
+   * below is the thing that usually turns a refusal into playback, and skipping
+   * it to report early would lose real playback to protect a flag.
+   */
+  if (first.refused && primary.muted && secondary.muted) return 'blocked';
 
   // Someone paused these, or scrolled them off screen, while the confirm above was polling. The
   // retry would start them again — and the caller checking ownership after this returns cannot
@@ -333,5 +390,8 @@ export async function playBothWithMutedFallback(
   // `DebateFeedPlayer` re-asserts it when `isResuming` falls.
   primary.muted = true;
   secondary.muted = true;
-  return (await attempt()) ? 'playing-muted' : 'blocked';
+
+  const retry = await attempt();
+
+  return retry.running && !retry.refused ? 'playing-muted' : 'blocked';
 }

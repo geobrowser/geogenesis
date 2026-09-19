@@ -227,6 +227,93 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
     expect(slot2.paused).toBe(true);
   });
 
+  /**
+   * A refusal is a control, not an error (GEO-2978).
+   *
+   * Measured on a phone with the diagnostic readout: `play()` comes back
+   * `NotAllowedError` with both elements muted, inline and fully buffered —
+   * iOS in Low Power Mode, or with auto-play turned off for the site. Neither
+   * is a fault, and the videos are fine.
+   *
+   * The card used to answer that with "Could not play both videos. Try Play
+   * again." and no play button, because `showControls` reads `userPaused` and
+   * nobody had paused. The viewer's first tap only revealed the control and
+   * the second started it — the two-tap sequence this was reported as.
+   */
+  it('offers the play control when the browser refuses to autoplay', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      // What iOS answers: refused outright, nothing superseded the attempt.
+      slot1.rejectPlay();
+      slot2.rejectPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.autoplayBlocked).toBe(true);
+    expect(result.current.playing).toBe(false);
+    // And no alarming copy about a failure that did not happen.
+    expect(result.current.error).toBeNull();
+  });
+
+  /**
+   * The case that actually happens, and the reason the first fix did nothing.
+   *
+   * Every entry to `resumeBoth` bumps the generation, and the autoplay effect
+   * re-enters while `playing` is false — so an attempt is routinely superseded
+   * before it reaches the outcome. The refusal is a fact about the device rather
+   * than about the attempt, so it has to survive that; otherwise each attempt
+   * discards its own answer and the next one asks again.
+   */
+  it('records a refusal even when a newer resume supersedes the attempt', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.rejectPlay();
+      slot2.rejectPlay();
+      // A second activation lands inside the first one's confirm window.
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.rejectPlay();
+      slot2.rejectPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.autoplayBlocked).toBe(true);
+  });
+
+  /**
+   * The flag has to clear, or a card refused once stays refused for the session
+   * even after the viewer's tap — which is allowed, being a gesture.
+   */
+  it('clears the refusal once playback actually starts', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.rejectPlay();
+      slot2.rejectPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+    expect(result.current.autoplayBlocked).toBe(true);
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.autoplayBlocked).toBe(false);
+    expect(result.current.playing).toBe(true);
+  });
+
   /** The positive control: an uninterrupted resume still reports playback. */
   it('reports playing when nothing interrupts it', async () => {
     const { result, slot1, slot2 } = await mounted();
@@ -337,21 +424,31 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
     expect(slot2.playbackRate).not.toBe(1);
   });
 
-  /** And the guard must not swallow a real block — the autoplay-policy error still surfaces. */
-  it('still surfaces a genuine failure to start', async () => {
+  /**
+   * And the guard must not swallow a real block — it still reaches the viewer, but as a
+   * control rather than as a sentence.
+   *
+   * This asserted an error message until GEO-2978, on the reasoning that a refusal is
+   * something the viewer needs to be told. The reasoning was right and the rendering was not:
+   * `showControls` reads `userPaused`, so a refused card offered no play button, and the
+   * message — "Could not play both videos. Try Play again." — named a Play control that was
+   * not on screen and a failure that had not happened. Measured on a phone, the videos are
+   * muted, inline and fully buffered; iOS simply wants to be asked by a person.
+   */
+  it('turns a genuine block into a play control rather than an error', async () => {
     const { result, slot1, slot2 } = await mounted();
 
     await act(async () => {
       void result.current.resumeBoth();
       await Promise.resolve();
-      // The browser refuses to start them and nothing superseded the attempt, so the viewer
-      // does need to be told.
+      // The browser refuses to start them and nothing superseded the attempt.
       slot1.rejectPlay();
       slot2.rejectPlay();
       await new Promise(resolve => setTimeout(resolve, 400));
     });
 
-    expect(result.current.error).not.toBeNull();
+    expect(result.current.autoplayBlocked).toBe(true);
+    expect(result.current.error).toBeNull();
     expect(result.current.playing).toBe(false);
   });
 
