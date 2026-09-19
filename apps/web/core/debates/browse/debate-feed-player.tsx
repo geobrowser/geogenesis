@@ -442,19 +442,20 @@ function DebaterVideo({
           the open list climbed to the debater's chin — more of their face than it needs, and
           further than the edge fade can dissolve.
 
-          Half the video's width, two lines, capped at 360px — a departure from the frame's 209px
-          and three lines, and a deliberate one.
+          360px and two lines — a departure from the frame's 209px and three lines, and a
+          deliberate one.
 
           Measured over all 854 published claims in Calibre at 16/17: at the frame's 209px the
           median claim runs to *four* lines and only 30% are shown whole. Width and lines both buy
           legibility, but width is what keeps the card short, and a short card is what keeps it
           below the speaker's chin — the face is in the middle of the tile, so height costs more
-          than width does. Half of the explore card's 484px tile is 242px, where two lines show
-          about 15% of claims whole; the rest are a tap away, and the point of this layer is the
-          glance rather than the reading.
+          than width does. Two lines at 360px show 62% of claims whole against three lines at 260px
+          showing 66%: the same reading in a card 17px shorter.
 
-          The cap is what holds the fullscreen player to the same card: 50% of a 900px tile would
-          be 450, which stops being a corner label.
+          75% is where the explore card's 484px tile lands on the 360 cap; the cap is what holds a
+          far wider fullscreen player to the same card rather than a 450px one. Half the tile was
+          tried and reverted — 242px reads better as a corner label but shows only about 13% of
+          claims whole, which is a look bought with most of the legibility.
 
           The name row used to ration this width, because the two share the bottom band. The card
           names its speaker itself, so the row now steps aside while a card is up (`nameHidden`).
@@ -479,7 +480,7 @@ function DebaterVideo({
       {claims && (
         <div
           className={cx(
-            'pointer-events-none absolute right-3 bottom-3 z-10 flex w-[50%] max-w-[22.5rem] flex-col items-end justify-end transition-[padding-bottom] duration-150',
+            'pointer-events-none absolute right-3 bottom-3 z-10 flex w-[75%] max-w-[22.5rem] flex-col items-end justify-end transition-[padding-bottom] duration-150',
             // A phone gives the live card the whole tile, and takes it back for the backlog: one
             // claim over a video wants to be read at a glance, where a list you have opened to
             // scroll wants to leave the debate visible behind it.
