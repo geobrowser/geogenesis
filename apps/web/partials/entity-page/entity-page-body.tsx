@@ -158,10 +158,11 @@ export function customBrowseView({
   // through to the generic one meanwhile rendered the value sheet for a claim or a topic and then
   // replaced it a moment later, which read as the page loading twice.
   if (!entity) return isLoadingEntity ? 'pending' : 'generic';
-  if (entity.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID))) return 'claim';
-  // After Claim, so an entity typed as both reads as the narrower of the two — a claim is a thing
-  // to take a side on, which is more specific than a subject heading.
-  if (entity.types.some(type => ID.equals(type.id, TOPIC_TYPE_ID))) return 'topic';
+
+  const byType = viewFromTypes(entity);
+
+  if (byType === 'claim') return 'claim';
+  if (byType === 'topic') return 'topic';
 
   /*
    * A profile is the *space's* view of a person, not the type's.
@@ -172,12 +173,8 @@ export function customBrowseView({
    * written into a DAO space satisfies the type check alone, and was once handed
    * profile tabs whose routes answered 404. A personal space also holds entities
    * besides its owner, and those are not profiles either.
-   *
-   * Only an entity already typed Person waits for the space read, so the cheap
-   * half of the question gates the expensive one and nothing else is held up by
-   * it.
    */
-  if (entity.types.some(type => ID.equals(type.id, SystemIds.PERSON_TYPE))) {
+  if (byType === 'person') {
     // `person-pending`, not `pending`: the caller holds back the *body* on this
     // one and draws the header regardless. A profile and an ordinary Person
     // entity have the same cover, avatar, name and bio, so there is nothing to
@@ -189,6 +186,47 @@ export function customBrowseView({
   }
 
   return 'generic';
+}
+
+/**
+ * The view an entity's own types put it in line for, before any space is read.
+ *
+ * Precedence lives here and only here. Claim beats Topic, so an entity typed as
+ * both reads as the narrower of the two — a claim is a thing to take a side on,
+ * which is more specific than a subject heading — and both beat Person for the
+ * same reason.
+ *
+ * `'person'` is a *candidate*, not an answer: whether that person's page is a
+ * profile is the space's to say, and `customBrowseView` asks it.
+ */
+function viewFromTypes(entity: { types: { id: string }[] }): 'claim' | 'topic' | 'person' | null {
+  if (entity.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID))) return 'claim';
+  if (entity.types.some(type => ID.equals(type.id, TOPIC_TYPE_ID))) return 'topic';
+  if (entity.types.some(type => ID.equals(type.id, SystemIds.PERSON_TYPE))) return 'person';
+
+  return null;
+}
+
+/**
+ * Whether the space has to be read before this entity's view is known.
+ *
+ * The one question `useSpace` is enabled by, and it is asked through
+ * `viewFromTypes` rather than restated. Restating it is exactly what went wrong:
+ * the gate tested Person alone, so an entity typed Person *and* Claim — which
+ * the routing test covers explicitly — fetched a space that the claim branch
+ * above was always going to discard. A gate that repeats a precedence it does
+ * not own drifts from it the first time the precedence changes.
+ */
+export function needsSpaceForView({
+  entity,
+  isEditing,
+}: {
+  entity: { types: { id: string }[] } | null | undefined;
+  isEditing: boolean;
+}): boolean {
+  if (isEditing || !entity) return false;
+
+  return viewFromTypes(entity) === 'person';
 }
 
 /**
@@ -206,22 +244,18 @@ function useCustomBrowseView(entityId: string, spaceId: string): CustomBrowseVie
   const { entity, isLoading } = useQueryEntity({ id: entityId });
 
   /*
-   * Asked for only by an entity that could answer with it.
+   * Asked for only by an entity whose view actually depends on it.
    *
-   * `useSpace` sits above the type dispatch — hooks cannot be called
-   * conditionally — but its *query* can be, and running it unasked put a
-   * `getSpace` request behind every claim, topic and ordinary entity page that
-   * had no use for the answer. Passing `undefined` leaves the query disabled,
-   * which is what `useSpace` already does with a missing id.
+   * `useSpace` sits above the dispatch — hooks cannot be called conditionally —
+   * but its *query* can be, and running it unasked put a `getSpace` request
+   * behind every claim, topic and ordinary entity page that had no use for the
+   * answer. Passing `undefined` leaves the query disabled, which is what
+   * `useSpace` already does with a missing id.
    *
-   * The type test is duplicated from `customBrowseView` rather than hoisted out
-   * of it, because that function has to stay a pure decision over the inputs it
-   * is given; this is the one place that has to know which input to bother
-   * fetching.
+   * `needsSpaceForView` reads the same precedence the dispatch does rather than
+   * repeating part of it — see the note there.
    */
-  const couldBeProfile = Boolean(!isEditing && entity?.types.some(type => ID.equals(type.id, SystemIds.PERSON_TYPE)));
-
-  const { space, isLoading: isLoadingSpace } = useSpace(couldBeProfile ? spaceId : undefined);
+  const { space, isLoading: isLoadingSpace } = useSpace(needsSpaceForView({ entity, isEditing }) ? spaceId : undefined);
 
   return customBrowseView({
     entityId,

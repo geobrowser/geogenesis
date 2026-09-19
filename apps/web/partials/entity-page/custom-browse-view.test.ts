@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { TOPIC_TYPE_ID } from '~/core/constants';
 
-import { customBrowseView } from './entity-page-body';
+import { customBrowseView, needsSpaceForView } from './entity-page-body';
 
 /**
  * Which read surface an entity gets.
@@ -121,5 +121,65 @@ describe('customBrowseView', () => {
     const dashed = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
     expect(view({ entityId: dashed })).toBe('person');
+  });
+});
+
+/**
+ * The query gate and the dispatch read one precedence.
+ *
+ * `useSpace` is enabled by this, and it used to restate the Person test on its
+ * own — so an entity typed Person *and* Claim fetched a space the claim branch
+ * was always going to discard. The cost was a wasted request; the risk was
+ * worse, since a gate repeating a precedence it does not own drifts from it the
+ * first time the precedence changes.
+ *
+ * The invariant is the point: the space is fetched exactly when the answer
+ * depends on it.
+ */
+describe('needsSpaceForView', () => {
+  const needs = (types: { id: string }[], isEditing = false) => needsSpaceForView({ entity: { types }, isEditing });
+
+  it('asks for the space for a Person', () => {
+    expect(needs([PERSON])).toBe(true);
+  });
+
+  it('does not ask for an entity the types already settle', () => {
+    expect(needs([CLAIM_TYPE])).toBe(false);
+    expect(needs([TOPIC_TYPE])).toBe(false);
+    expect(needs([])).toBe(false);
+  });
+
+  it('does not ask when a higher-priority type wins over Person', () => {
+    expect(needs([PERSON, CLAIM_TYPE])).toBe(false);
+    expect(needs([PERSON, TOPIC_TYPE])).toBe(false);
+  });
+
+  it('does not ask while editing, which falls through to the generic page', () => {
+    expect(needs([PERSON], true)).toBe(false);
+  });
+
+  it('has nothing to ask about before the entity arrives', () => {
+    expect(needsSpaceForView({ entity: null, isEditing: false })).toBe(false);
+  });
+
+  /**
+   * Stated as the invariant rather than case by case: the space is fetched
+   * exactly when withholding it would change the answer.
+   */
+  it('is true exactly when the view would wait for the space', () => {
+    const combinations = [[], [CLAIM_TYPE], [TOPIC_TYPE], [PERSON], [PERSON, CLAIM_TYPE], [PERSON, TOPIC_TYPE]];
+
+    for (const types of combinations) {
+      const withoutSpace = customBrowseView({
+        entityId: PERSON_ENTITY,
+        entity: { types },
+        isLoadingEntity: false,
+        space: null,
+        isLoadingSpace: true,
+        isEditing: false,
+      });
+
+      expect(needsSpaceForView({ entity: { types }, isEditing: false })).toBe(withoutSpace === 'person-pending');
+    }
   });
 });

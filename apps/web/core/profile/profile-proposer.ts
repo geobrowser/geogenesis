@@ -36,6 +36,16 @@ export function fallbackProposer(spaceId: string): Profile {
  * **Unknown is not empty.** The counts come from a request that can fail, and
  * hiding a tab holding hundreds of rows is the one outcome worse than showing
  * one holding none — so null and undefined both offer the tab.
+ *
+ * **The two callers can disagree about Positions, and that is not a bug here.**
+ * They feed this the counts they can afford. `ProfileRecordTabs` runs in the
+ * browser and reads the vote table, so it knows a retracted position is not one;
+ * the space route's bar is server-rendered with the header and has only
+ * `entitiesConnection(votedBy:)`, which counts the retraction. So a person whose
+ * every position has been taken back keeps the tab on their space page and loses
+ * it in the panel. GEO-2962 asks for the `votedByTypes` argument that would let
+ * the server answer the same way; until it lands, the divergence is the cost of
+ * a server-rendered tab bar rather than something to paper over on one side.
  */
 export function hasRecordToShow(count: number | null | undefined): boolean {
   return count === null || count === undefined || count > 0;
