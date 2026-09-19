@@ -1,13 +1,13 @@
 /**
  * Builds the publish plan for claim timecodes across every debate that has claims.
  *
- * `2026-09-15-debate-claim-timecodes-publish-instructions.md` did this for one debate by hand, with
- * four of thirteen offsets hand-corrected after reading the transcript. That does not scale to 80
- * debates, and it does not need to: the matcher that produced those numbers is now
- * `core/debates/claim-timing.ts`, so this runs it over everything and writes out the ops.
+ * The first debate was done by hand, with four of its thirteen offsets corrected after reading the
+ * transcript. That does not scale to 80 debates and does not need to: the matcher that produced
+ * those numbers is `core/debates/claim-timing.ts`, so this runs it over everything and writes out
+ * the ops.
  *
  * Read-only. It resolves nothing about wallets and publishes nothing — it produces a JSON file for
- * the publishing agent to execute. See `docs/plans/2026-09-17-debate-claim-timecodes-backfill.md`.
+ * the publishing agent to execute.
  *
  * Usage:
  *   bun scripts/plan-claim-timecodes.ts [--floor 0.7] [--out plan.json] [--limit N]

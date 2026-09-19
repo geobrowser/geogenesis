@@ -10,6 +10,16 @@
  * relation entity missing. A rejected claim is not a failure — it falls back to the matcher, which
  * is the same place it would have been without any of this.
  *
+ * One answers file per task file, same filename, holding the reader's choices. `startSegment` and
+ * `endSegment` are `i` values from that claim's own turn, inclusive; `notInTurn` is the escape
+ * hatch for a claim whose specifics are not in the turn it was filed under, which is the case the
+ * matcher cannot express and the main reason for reading at all:
+ *
+ *   { "matches": [
+ *       { "claimId": "ad46e41f…", "startSegment": 12, "endSegment": 15 },
+ *       { "claimId": "8401b74c…", "notInTurn": true }
+ *   ] }
+ *
  * Usage:
  *   bun scripts/build-plan-from-matches.ts --tasks ./claim-matching-tasks --answers ./answers --out plan.json
  */

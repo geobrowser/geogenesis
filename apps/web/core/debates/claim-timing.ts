@@ -47,8 +47,7 @@ export type TimedClaim = TranscriptClaim & { timing: ClaimTiming | null };
  * no threshold catches: the claim's specifics were not in its turn at all.
  *
  * The matcher is the fallback. Where an LLM has read the turn and chosen the span, or the extractor
- * has published one, that answer is used instead — see
- * `docs/plans/2026-09-18-debate-claim-timecodes-llm-matching.md` and GEO-2958.
+ * has published one, that answer is used instead — see GEO-2958.
  */
 export const LIVE_TIMING_CONFIDENCE = 0.4;
 
