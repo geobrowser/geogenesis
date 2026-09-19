@@ -80,7 +80,10 @@ vi.mock('~/design-system/fallback-image', () => ({
   FallbackImage: ({ value }: { value: string }) => <img src={value} alt="" />,
 }));
 vi.mock('~/design-system/avatar', () => ({
-  Avatar: ({ value }: { value: string }) => <div data-testid="fallback-avatar">{value}</div>,
+  // The value goes in an attribute, not the text. A real `Avatar` renders an image; rendering it
+  // as text made it part of the trigger's accessible name, so the button announced as "Open profile
+  // menu 0x1234…" — a mock artefact that would have sent someone chasing the wrong thing.
+  Avatar: ({ value }: { value: string }) => <div data-testid="fallback-avatar" data-value={value} />,
 }));
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ href, children, ...props }: React.ComponentProps<'a'>) => (
@@ -104,7 +107,10 @@ vi.mock('~/design-system/menu', () => ({
     className?: string;
   }) => (
     <div>
-      <button aria-label="Open profile menu" onClick={() => onOpenChange(!open)}>
+      {/* No `aria-label` here on purpose. The mock used to supply one, which meant the real
+          trigger could go unnamed and this suite would never notice — the name has to come from
+          the component. */}
+      <button onClick={() => onOpenChange(!open)}>
         {trigger}
       </button>
       {open && (
@@ -139,7 +145,12 @@ describe('NavbarActions profile menu', () => {
 
     await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
 
-    expect(screen.getByTestId('profile-menu')).toHaveClass('sm:w-[322px]');
+    // No mobile width override: a fixed 322 does not fit a 320px viewport once `Menu` takes its
+    // 8px collision padding each side, and Radix repositions fixed-width content rather than
+    // shrinking it. The base is viewport-calculated with 322 as a ceiling, which is what phones
+    // want — so the assertion is that the override is gone.
+    expect(screen.getByTestId('profile-menu')).toHaveClass('w-[calc(100vw-16px)]', 'max-w-[322px]');
+    expect(screen.getByTestId('profile-menu').className).not.toContain('sm:w-[322px]');
     const identityLink = screen.getByRole('link', { name: /Max max@example\.com/ });
     expect(identityLink).toHaveAttribute('href', '/space/personal-space');
     expect(identityLink).toHaveClass('gap-3', 'px-3', 'py-2.5');
@@ -269,7 +280,11 @@ describe('NavbarActions profile menu', () => {
 
       const avatar = await screen.findByTestId('fallback-avatar');
 
-      expect(avatar.closest('[class*="sm:h-11"]')).not.toBeNull();
+      // Both dimensions on the same ancestor. Height alone passed with `sm:w-11` removed, which
+      // leaves a 44px-tall sliver 28px wide — not the thumb-sized area the test claims.
+      const tapArea = avatar.closest('[class*="sm:h-11"]');
+      expect(tapArea).not.toBeNull();
+      expect(tapArea?.className ?? '').toContain('sm:w-11');
       // The avatar itself is untouched — the area around it grew, not the picture.
       expect(avatar.closest('.h-7')).not.toBeNull();
     });

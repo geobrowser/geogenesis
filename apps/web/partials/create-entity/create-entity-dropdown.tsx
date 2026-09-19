@@ -34,7 +34,10 @@ export function CreateEntityDropdown() {
       onOpenChange={setIsMenuOpen}
       asChild
       trigger={
-        <button className="rounded-full p-2 text-grey-04 transition-colors duration-200 hover:bg-grey-01 focus:bg-grey-01 active:bg-divider">
+        <button
+          aria-label="Create"
+          className="rounded-full p-2 text-grey-04 transition-colors duration-200 hover:bg-grey-01 focus:bg-grey-01 active:bg-divider"
+        >
           <Create />
         </button>
       }

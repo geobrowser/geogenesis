@@ -107,6 +107,11 @@ export function NavbarActions() {
             // it had no way to reach at all until this change. Not applied to the rest of the row:
             // those controls were already on phones and belong to GEO-2970's sweep.
             <div className="flex items-center justify-center sm:h-11 sm:w-11">
+              {/* The trigger is an image and nothing else: `FallbackImage` has an empty alt and
+                  `Avatar` carries no label, so Radix's button announced as nothing at all. It is
+                  the only way to a profile, personal space or sign out on a phone. Named the way
+                  the debates button beside it is. */}
+              <span className="sr-only">Open profile menu</span>
               <div className="relative h-7 w-7 overflow-hidden rounded-full">
                 {avatarValue ? (
                   <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
@@ -119,7 +124,11 @@ export function NavbarActions() {
           open={open}
           onOpenChange={onOpenChange}
           sideOffset={12}
-          className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] sm:w-[322px]"
+          // No `sm:w-[322px]`. A fixed 322 does not fit a 320px viewport once `Menu` takes its 8px
+          // collision padding on each side, and Radix repositions fixed-width content rather than
+          // shrinking it, so the menu was clipped. The base width is already viewport-calculated
+          // with 322 as a maximum, which is what phones want.
+          className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px]"
         >
           <IdentityHeader
             address={address}

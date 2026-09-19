@@ -1,11 +1,24 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Every occupant of this row is loaded through `next/dynamic`, which resolves asynchronously and
-// so puts nothing in the DOM for a synchronous assertion. The wrapper this suite is about is
-// rendered by the component itself either way, so the children are irrelevant here.
+/**
+ * `next/dynamic` is mocked so the row's children render synchronously.
+ *
+ * Without this they are absent when the assertion runs, and a test that only inspects the
+ * surrounding markup passes whether or not the account surface is there at all — which is what the
+ * first version of this did. The regression it guards is "you cannot reach your account on a
+ * phone", so it has to see the thing itself.
+ */
+vi.mock('next/dynamic', () => ({
+  default: (loader: () => Promise<unknown>) => {
+    const name = String(loader);
+    if (name.includes('navbar-actions')) return () => <div data-testid="navbar-actions" />;
+    if (name.includes('create-entity-dropdown')) return () => <div data-testid="create-entity" />;
+    return () => <div data-testid="debates-hub" />;
+  },
+}));
 
 import { NavbarClientActions } from './navbar-client-actions';
 
@@ -13,19 +26,31 @@ afterEach(cleanup);
 
 describe('NavbarClientActions', () => {
   /**
-   * `sm` is max-width 639px in this repo (`styles.css`, `@custom-variant sm`), not Tailwind's usual
-   * min-width — so `sm:hidden` on this wrapper hid the account surface on phones while reading like
-   * the opposite. That is signing in when logged out, and the avatar, personal space link and sign
-   * out when logged in: a phone had no way to reach an account at all.
+   * `sm` is max-width 639px here (`styles.css`, `@custom-variant sm`), not Tailwind's usual
+   * min-width — so `sm:hidden` on this row hid the account surface on phones while reading like the
+   * opposite. That is signing in when logged out, and the avatar, personal space link and sign out
+   * when logged in: a phone had no way to reach an account at all.
    *
-   * Asserted as the absence of the class rather than by behaviour, because jsdom does not evaluate
-   * media queries — a rendering test would pass either way.
+   * The width itself cannot be asserted — jsdom does not evaluate media queries — so this checks
+   * that the account surface renders and that nothing between it and the root hides it.
    */
-  it('hides nothing on mobile', () => {
+  it('renders the account surface with nothing hiding it on mobile', () => {
     const { container } = render(<NavbarClientActions onSearchClick={vi.fn()} />);
 
-    // Asserted against this component's own markup rather than a particular element, so it keeps
-    // holding if the structure changes — what matters is that nothing in this row is width-gated.
-    expect(container.innerHTML).not.toContain('sm:hidden');
+    const account = screen.getByTestId('navbar-actions');
+
+    for (let node: HTMLElement | null = account; node; node = node.parentElement) {
+      expect(node.className ?? '').not.toContain('hidden');
+      if (node === container.firstElementChild) break;
+    }
+  });
+
+  // Three of the four controls in this row are icon-only. Radix wraps the profile avatar in a
+  // button of its own, so an unnamed trigger announces as nothing — and this row is the whole of
+  // account access on a phone.
+  it('names its icon-only controls', () => {
+    render(<NavbarClientActions onSearchClick={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
   });
 });

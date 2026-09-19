@@ -30,6 +30,7 @@ export function NavbarClientActions({ onSearchClick }: Props) {
       <CreateEntityDropdown />
 
       <button
+        aria-label="Search"
         className="rounded-full p-2 text-grey-04 transition-colors duration-200 hover:bg-grey-01 focus:bg-grey-01 active:bg-divider"
         onClick={onSearchClick}
       >
