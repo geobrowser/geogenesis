@@ -345,21 +345,31 @@ describe('ClaimExploreFeedCard', () => {
   it('matches the debates-panel shell on mobile when Explore opts in', () => {
     mocks.positive = 9;
     mocks.negative = 3;
-    const { container } = render(<ClaimExploreFeedCard item={item} matchDebatePanelClaimCardsOnMobile />);
+    const { container } = render(<ClaimExploreFeedCard item={item} variant="debate-panel-mobile" />);
     scrollIntoRange();
 
     const card = container.querySelector(':scope > article') as HTMLElement;
-    expect(card).toHaveClass('md:my-2', 'md:rounded-lg', 'md:border', 'md:border-grey-02', 'md:bg-white', 'md:p-3');
+    expect(card).toHaveClass('md:claim-card-panel-surface', 'md:my-2');
     expect(card.firstElementChild).toHaveClass('md:gap-y-0!');
 
     const title = screen.getByRole('link', { name: item.title }).querySelector('h2');
-    expect(title).toHaveClass('md:text-metadataMedium!', 'md:leading-snug!', 'md:line-clamp-3');
+    expect(title).toHaveClass('md:claim-card-panel-title!');
 
     const desktopMetadata = screen.getByText('Claim').closest('.contents');
     expect(desktopMetadata).toHaveClass('md:hidden');
 
     const summary = screen.getByTestId('inline-summary');
-    expect(summary).toHaveClass('md:-mx-3', 'md:-mb-3', 'md:mt-3', 'md:rounded-b-lg');
+    expect(summary).toHaveClass('claim-card-summary-band', 'md:-mx-3', 'md:-mb-3', 'md:mt-3', 'md:rounded-b-lg');
+  });
+
+  it('keeps mobile metadata semantic content single and preserves the Join action', () => {
+    mocks.positive = 6;
+    mocks.negative = 6;
+    render(<ClaimExploreFeedCard item={{ ...item, isMemberOrEditor: false }} variant="debate-panel-mobile" />);
+    scrollIntoRange();
+
+    expect(screen.getAllByText('Controversial')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Join' }).closest('.contents')).not.toHaveClass('md:hidden');
   });
 
   it('leaves the existing feed-row shell unchanged outside the Explore opt-in', () => {

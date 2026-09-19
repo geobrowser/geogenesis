@@ -52,12 +52,14 @@ import { ExploreMetaRow } from './explore-meta-row';
  *
  * Scoped to Claim entities by the caller. Every other type keeps the generic card untouched.
  */
+export type ClaimCardVariant = 'feed' | 'debate-panel-mobile';
+
 export function ClaimExploreFeedCard({
   item,
   hideSpaceLink = false,
   hideJoinButton = false,
   titleOpensSidePanel = false,
-  matchDebatePanelClaimCardsOnMobile = false,
+  variant = 'feed',
   responseNote,
 }: {
   item: ExploreFeedItem;
@@ -72,8 +74,8 @@ export function ClaimExploreFeedCard({
    * existing.
    */
   titleOpensSidePanel?: boolean;
-  /** Use the debates side-panel card shell at phone widths (Explore only). */
-  matchDebatePanelClaimCardsOnMobile?: boolean;
+  /** The main Explore page opts into the debates side-panel chrome at phone widths. */
+  variant?: ClaimCardVariant;
   /**
    * A note about how somebody *else* answered this claim, for a surface that is
    * a record of one person (GEO-2859).
@@ -179,6 +181,7 @@ export function ClaimExploreFeedCard({
   );
 
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
+  const matchesDebatePanelOnMobile = variant === 'debate-panel-mobile';
 
   return (
     // The `<article>` is the root and stays the root. Two things depend on that and neither is
@@ -195,8 +198,7 @@ export function ClaimExploreFeedCard({
       className={cx(
         '@container flex flex-col gap-4',
         'border-b border-divider py-4 last:border-b-0',
-        matchDebatePanelClaimCardsOnMobile &&
-          'md:my-2 md:rounded-lg md:border md:border-grey-02 md:bg-white md:p-3 md:last:border-b'
+        matchesDebatePanelOnMobile && 'md:my-2 md:claim-card-panel-surface md:last:border-b'
       )}
     >
       {/*
@@ -231,7 +233,7 @@ export function ClaimExploreFeedCard({
           // The container-query variant is emitted after viewport variants, so this is important:
           // at phone width both match, and the panel rhythm (explicit margins on header/title/
           // footer) must win over the feed card's generic 16px row gap.
-          matchDebatePanelClaimCardsOnMobile && 'md:gap-y-0!',
+          matchesDebatePanelOnMobile && 'md:gap-y-0!',
           // No verdict, no column, no rule. A claim nobody has answered has nothing to report, and
           // an empty 220px cell behind a vertical line reads as something having failed to load —
           // where the claim simply taking the full width reads as a claim nobody has answered.
@@ -247,7 +249,7 @@ export function ClaimExploreFeedCard({
           hideSpaceLink={hideSpaceLink}
           hideJoinButton={hideJoinButton}
           extraSegments={extraSegments}
-          compactOnMobile={matchDebatePanelClaimCardsOnMobile}
+          compactOnMobile={matchesDebatePanelOnMobile}
           endSlot={
             <ClaimEndSlot
               claimId={item.entityId}
@@ -259,10 +261,7 @@ export function ClaimExploreFeedCard({
               className="ml-auto"
             />
           }
-          className={cx(
-            'col-start-1 row-start-1 mb-3 claim-card-narrow:mb-0',
-            matchDebatePanelClaimCardsOnMobile && 'md:mb-2!'
-          )}
+          className="col-start-1 row-start-1 mb-3 claim-card-narrow:mb-0"
         />
 
         {/* No thumbnail: claims carry no image, so the generic card's 60px well is either an empty
@@ -276,8 +275,7 @@ export function ClaimExploreFeedCard({
           <h2
             className={cx(
               'mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-pretty text-text group-hover/title:underline',
-              matchDebatePanelClaimCardsOnMobile &&
-                'md:mb-3! md:line-clamp-3 md:text-metadataMedium! md:leading-snug! md:tracking-normal!'
+              matchesDebatePanelOnMobile && 'md:claim-card-panel-title!'
             )}
           >
             {item.title}
@@ -321,7 +319,7 @@ export function ClaimExploreFeedCard({
               spaceId={item.spaceId}
               responseKind={responseKind}
               summary={summary}
-              matchDebatePanelOnMobile={matchDebatePanelClaimCardsOnMobile}
+              matchDebatePanelOnMobile={matchesDebatePanelOnMobile}
             />
           </div>
         ) : null}
@@ -413,7 +411,7 @@ function ClaimVerdictColumn({
           summary={summary}
           layout="inline"
           className={cx(
-            'border-t border-divider bg-grey-01 px-3 py-2',
+            'claim-card-summary-band',
             matchDebatePanelOnMobile && 'md:-mx-3 md:mt-3 md:-mb-3 md:rounded-b-lg'
           )}
         />

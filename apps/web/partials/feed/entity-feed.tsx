@@ -22,6 +22,7 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 
+import type { ClaimCardVariant } from '~/partials/explore/claim-explore-feed-card';
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
 import { ExploreTypeFilterMenu } from './explore-type-filter-menu';
@@ -100,8 +101,8 @@ type EntityFeedProps = {
   feedTopSpacingClassName?: string;
   /** When true, renders a divider line between the filter row and the first feed card. */
   dividerBeforeFeed?: boolean;
-  /** Give Claim rows the debates-panel card chrome on the mobile Explore route. */
-  matchDebatePanelClaimCardsOnMobile?: boolean;
+  /** Presentation used for Claim rows; the main Explore route uses the mobile panel variant. */
+  claimCardVariant?: ClaimCardVariant;
   /**
    * Whether a card's entity name opens the side panel instead of navigating (GEO-2757). Explore
    * turns this on. Off for the space activity tab, which is a feed inside a space rather than the
@@ -156,7 +157,7 @@ export function EntityFeed({
   feedTopSpacingClassName,
   dividerBeforeFeed = false,
   titleOpensSidePanel = false,
-  matchDebatePanelClaimCardsOnMobile = false,
+  claimCardVariant = 'feed',
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExploreSort>(initialSort);
@@ -459,7 +460,7 @@ export function EntityFeed({
               hideSpaceLink={lockedSpaceId != null}
               hideJoinButton={lockedSpaceId != null}
               titleOpensSidePanel={titleOpensSidePanel}
-              matchDebatePanelClaimCardsOnMobile={matchDebatePanelClaimCardsOnMobile}
+              claimCardVariant={claimCardVariant}
             />
           ))
         )}

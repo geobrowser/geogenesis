@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
@@ -77,79 +79,69 @@ export function ExploreMetaRow({
 
   const timeAgo = formatExploreRelativeTime(item.createdAtSec);
 
-  const segments: React.ReactNode[] = [];
+  const segments: { key: string; content: React.ReactNode; showOnCompactMobile: boolean }[] = [];
 
   if (!hideJoinButton && !item.isMemberOrEditor) {
-    segments.push(
-      <ExploreJoinSpaceButton
-        key="join"
-        spaceId={item.spaceId}
-        hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
-        variant="compact"
-        label="Join"
-      />
-    );
+    segments.push({
+      key: 'join',
+      // Joining is behaviour, not metadata. Compacting the row must never remove an action the
+      // ordinary Explore card offers; only the Claim type and age disappear on mobile.
+      showOnCompactMobile: true,
+      content: (
+        <ExploreJoinSpaceButton
+          spaceId={item.spaceId}
+          hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
+          variant="compact"
+          label="Join"
+        />
+      ),
+    });
   }
 
   if (types.length > 0) {
-    segments.push(
-      <span key="types" className={`inline-flex min-w-0 flex-wrap items-center ${SEGMENT_CLASS}`}>
-        {types.map((type, index) => (
-          <React.Fragment key={type.id}>
-            {index > 0 ? <MetaDot /> : null}
-            <span className="truncate">{type.name}</span>
-          </React.Fragment>
-        ))}
-      </span>
-    );
+    segments.push({
+      key: 'types',
+      showOnCompactMobile: false,
+      content: (
+        <span className={`inline-flex min-w-0 flex-wrap items-center ${SEGMENT_CLASS}`}>
+          {types.map((type, index) => (
+            <React.Fragment key={type.id}>
+              {index > 0 ? <MetaDot /> : null}
+              <span className="truncate">{type.name}</span>
+            </React.Fragment>
+          ))}
+        </span>
+      ),
+    });
   }
 
-  if (extraSegments) segments.push(...extraSegments);
+  extraSegments?.forEach((content, index) => {
+    segments.push({ key: `extra-${index}`, content, showOnCompactMobile: true });
+  });
 
   if (timeAgo) {
-    segments.push(
-      <span key="time" className={`shrink-0 ${SEGMENT_CLASS}`}>
-        {timeAgo}
-      </span>
-    );
+    segments.push({
+      key: 'time',
+      showOnCompactMobile: false,
+      content: <span className={`shrink-0 ${SEGMENT_CLASS}`}>{timeAgo}</span>,
+    });
   }
 
   const showSpace = !hideSpaceLink;
   if (!showSpace && segments.length === 0 && !endSlot) return null;
 
-  const allSegments = (
-    <>
-      {/* A 6px spacer rather than a dot: the space is the row's subject, not one of its facts. */}
-      {showSpace && segments.length > 0 ? <span className="w-1.5 shrink-0" /> : null}
-      {segments.map((segment, index) => (
-        <React.Fragment key={index}>
-          {index > 0 ? <MetaDot /> : null}
-          {segment}
-        </React.Fragment>
-      ))}
-    </>
-  );
+  const hasCompactSegments = segments.some(segment => segment.showOnCompactMobile);
+  const firstCompactSegment = segments.find(segment => segment.showOnCompactMobile);
 
-  const compactSegments = extraSegments?.length ? (
+  const metadata = (
     <>
-      {showSpace ? <span className="w-1.5 shrink-0" /> : null}
-      {extraSegments.map((segment, index) => (
-        <React.Fragment key={index}>
-          {index > 0 ? <MetaDot /> : null}
-          {segment}
-        </React.Fragment>
-      ))}
-    </>
-  ) : null;
-
-  return (
-    <div
-      className={`flex min-w-0 flex-wrap items-center gap-y-2 ${compactOnMobile ? 'md:items-start' : ''} ${className ?? ''}`}
-    >
       {showSpace ? (
         <Link
           href={NavUtils.toSpace(item.spaceId)}
-          className={`flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline ${compactOnMobile ? 'md:text-footnoteMedium md:tracking-normal md:text-grey-04' : ''}`}
+          className={cx(
+            'flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline',
+            compactOnMobile && 'md:text-footnoteMedium md:tracking-normal md:text-grey-04'
+          )}
         >
           <SpaceThumb
             image={item.spaceImage}
@@ -159,16 +151,43 @@ export function ExploreMetaRow({
           <span className="min-w-0 truncate">{item.spaceName}</span>
         </Link>
       ) : null}
-      {compactOnMobile ? (
-        <>
-          {/* Explore's desktop row keeps its type and age. The debates panel has neither, so the
-              mobile card keeps only the space and Claim-specific flags such as Controversial. */}
-          <span className="contents md:hidden">{allSegments}</span>
-          <span className="hidden md:contents">{compactSegments}</span>
-        </>
-      ) : (
-        allSegments
+      {/* A 6px spacer rather than a dot: the space is the row's subject, not one of its facts. */}
+      {showSpace && segments.length > 0 ? (
+        <span className={cx('w-1.5 shrink-0', compactOnMobile && !hasCompactSegments && 'md:hidden')} />
+      ) : null}
+      {segments.map((segment, index) => {
+        // A segment later in the desktop run may become the first compact segment. Its desktop
+        // separator disappears with the segments ahead of it; subsequent compact segments keep
+        // their dot, so the responsive row has exactly the same separator rules without a second
+        // copy of any semantic content.
+        const hideDotOnCompactMobile = !segment.showOnCompactMobile || segment.key === firstCompactSegment?.key;
+        const renderedSegment = compactOnMobile ? (
+          <span className={cx('contents', !segment.showOnCompactMobile && 'md:hidden')}>{segment.content}</span>
+        ) : (
+          segment.content
+        );
+
+        return (
+          <React.Fragment key={segment.key}>
+            {index > 0 ? (
+              <MetaDot className={compactOnMobile && hideDotOnCompactMobile ? 'md:hidden' : undefined} />
+            ) : null}
+            {renderedSegment}
+          </React.Fragment>
+        );
+      })}
+    </>
+  );
+
+  return (
+    <div
+      className={cx(
+        'flex min-w-0 flex-wrap items-center gap-y-2',
+        compactOnMobile && 'md:claim-card-panel-header!',
+        className
       )}
+    >
+      {compactOnMobile ? <span className="flex min-w-0 flex-1 flex-wrap items-center">{metadata}</span> : metadata}
       {endSlot}
     </div>
   );
