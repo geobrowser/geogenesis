@@ -99,11 +99,18 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
       <section
         ref={sectionRef}
         data-activity-section
-        className="flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white"
+        className={cx(
+          'flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white',
+          // Not a card on a phone. A bordered panel holding bordered cards spends two gutters and two
+          // rules on saying "these belong together", which the heading already says — and on a 390px
+          // screen that is most of what a claim's buttons needed. The heading and the rule under it
+          // stay; the box around them goes, and the gallery below can reach the screen edge.
+          'md:overflow-visible md:rounded-none md:border-0 md:bg-transparent'
+        )}
       >
         {/* The toggles sit to the right of the heading, and wrap below it rather
           than squeezing into it on a narrow screen. */}
-        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-divider px-4 py-3">
+        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-divider px-4 py-3 md:px-0">
           <h3 className="text-metadataMedium text-text">Activity</h3>
 
           {/* Only when there is a choice to make. One pill on its own is a label
@@ -341,12 +348,17 @@ function ActivityGallery({
           element whose overflow is the whole point is a bad trade for one class.
           The wrapper is the width the reader actually sees, which is what the
           cards want to measure — see `GalleryCard`. */}
-      <div className="@container">
+      {/* The bleed is on the container rather than the scroller, because `cqw` below measures this
+          element: widening only what scrolls would give the reader more to look at without giving the
+          cards any more to size against. Out through the app shell's own gutter (`2ch`, see the
+          layout) on a phone, so a card can use the full width and the one behind it is cut off by the
+          screen edge rather than by a panel. */}
+      <div className="@container md:-mr-[2ch]">
         <div
           ref={scrollerRef}
-          className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 items-start gap-4 overflow-x-auto py-2"
+          className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 items-start gap-4 overflow-x-auto py-2 md:scroll-px-0"
         >
-          <span aria-hidden className="w-0 shrink-0 pl-4" />
+          <span aria-hidden className="w-0 shrink-0 pl-4 md:pl-0" />
           {shown.map(row => (
             <GalleryCard
               key={`${row.entityId}-${row.spaceId}`}
@@ -469,13 +481,11 @@ function GalleryCard({
         // be three times wider, so `80vw` there is not 80% of anything the reader
         // can see. The scroller establishes the container this measures — see
         // `ActivityGallery`.
-        // 88%, not 80%: at 80 the card came to 283px on a 390px phone, which left the pill row
-        // 257px once the card's own padding was off it — under the 272px that `claim-pills-wide`
-        // needs to put Agree and Disagree side by side, so they stacked. 88 gives the row 285px
-        // and keeps a sliver of the next card in view, which is what says the gallery scrolls.
-        // Narrower phones still stack, which is the container query doing its job rather than a
-        // card growing wider than the screen it is on.
-        'w-[min(420px,88cqw)] shrink-0 snap-start',
+        // Sized so the pill row clears the 272px that `claim-pills-wide` needs to put Agree and
+        // Disagree side by side — the card's own padding takes 26px off whatever this is — while
+        // leaving a clear sliver of the next card. Narrower phones still stack, which is the
+        // container query doing its job rather than a card growing wider than its screen.
+        'w-[min(420px,84cqw)] shrink-0 snap-start',
         // The lobby card brings its own outline; the feed's card does not, and
         // draws a rule underneath itself to separate it from the next card
         // *down* — which in a row is a line under nothing.
