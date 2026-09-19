@@ -53,6 +53,16 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
 
+// The card's header names its speaker and links to them, which reaches for the side panel and for
+// the space behind the profile. Neither is what these tests are about.
+const openSidePanel = vi.fn();
+vi.mock('~/core/hooks/use-entity-side-panel', () => ({
+  useEntitySidePanel: () => ({ openSidePanel, closeSidePanel: vi.fn(), sidePanelTarget: null }),
+}));
+vi.mock('~/core/hooks/use-space', () => ({
+  useSpace: (spaceId?: string) => ({ space: spaceId ? { entity: { id: `page-${spaceId}` } } : null, isLoading: false }),
+}));
+
 function claim(overrides: Partial<TimedClaim> = {}): TimedClaim {
   return {
     id: 'claim-1',
@@ -108,6 +118,30 @@ describe('DebateClaimTickerCard', () => {
 
   // The card carries its own attribution now, which is what lets the stack live in one fixed
   // corner instead of over the speaker's tile. Get this wrong and the card misquotes a real person.
+  // The same link as the name in the corner of the tile, and the same person.
+  it('opens the speaker from the card, the way the tile corner does', () => {
+    openSidePanel.mockClear();
+    renderCard();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Peter Feldip' }));
+
+    expect(openSidePanel).toHaveBeenCalledWith(`page-${SPEAKER.profile_space_id}`, SPEAKER.profile_space_id, false);
+  });
+
+  // The video behind is one big play/pause button.
+  it('does not toggle playback when the speaker is opened', () => {
+    const onToggle = vi.fn();
+    render(
+      <div onClick={onToggle}>
+        <DebateClaimTickerCard window={window()} speaker={SPEAKER} row={null} entity={null} onAnswered={vi.fn()} />
+      </div>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Peter Feldip' }));
+
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
   it('names the debater who said it', () => {
     renderCard();
 

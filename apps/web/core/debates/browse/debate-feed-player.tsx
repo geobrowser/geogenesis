@@ -10,8 +10,6 @@ import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playb
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
-import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
-import { useSpace } from '~/core/hooks/use-space';
 import { releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
@@ -20,6 +18,7 @@ import { Text } from '~/design-system/text';
 
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
+import { useOpenDebaterProfile } from './use-open-debater-profile';
 
 type DebateFeedPlayerProps = {
   debate: Debate;
@@ -137,7 +136,16 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   const [pinnedSlot, setPinnedSlot] = React.useState<number | null>(null);
 
   /** The same condition the stack is given, so the corner's box can cap itself only when open. */
-  const claimsOpenFor = (slot: number) => pointerOverSlot === slot || focusedSlot === slot || pinnedSlot === slot;
+  const claimsOpenFor = (slot: number) => {
+    // A backlog opened on purpose stays open, and a claim arriving lands at the bottom of it —
+    // that is the whole point of having opened it.
+    if (pinnedSlot === slot) return true;
+    // Hover does not get to do that. A claim being presented is the thing the viewer came for, and
+    // swapping it for a scrollable list the moment the pointer crosses the tile takes it away
+    // mid-sentence. The backlog is what the corner offers in the silences.
+    const live = ticker.cardsBySlot.get(slot)?.length ?? 0;
+    return live === 0 && (pointerOverSlot === slot || focusedSlot === slot);
+  };
 
   const claimsFor = (slot: number) => {
     const cards = ticker.cardsBySlot.get(slot) ?? [];
@@ -349,7 +357,6 @@ function DebaterVideo({
   scrubber?: React.ReactNode;
   scrimClassName?: string;
 }) {
-  const { openSidePanel } = useEntitySidePanel();
   const name = participant ? speakerLabel(participant) : 'Debater';
 
   const muted = !audible || mutedByUser;
@@ -392,16 +399,7 @@ function DebaterVideo({
     return () => releaseVideo(video);
   }, [src, videoRef]);
 
-  // A personal space's own id resolves to its "system entity" (an ugly technical
-  // record). The space's page entity is the real profile, so open that once it's
-  // loaded and fall back to the space id while it's still fetching.
-  const { space } = useSpace(participant?.profile_space_id);
-  const profileEntityId = space?.entity.id || participant?.profile_space_id;
-
-  const openProfile = (event: React.MouseEvent) => {
-    event.stopPropagation();
-    if (participant && profileEntityId) openSidePanel(profileEntityId, participant.profile_space_id, false);
-  };
+  const openProfile = useOpenDebaterProfile(participant);
 
   return (
     <div

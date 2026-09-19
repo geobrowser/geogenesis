@@ -33,6 +33,7 @@ import { ThumbUp } from '~/design-system/icons/thumb-up';
 
 import { useLineClampOverflow } from './line-clamp-overflow';
 import { useDebateClaimResponse } from './use-debate-claim-response';
+import { useOpenDebaterProfile } from './use-open-debater-profile';
 
 export type DebateTicker = {
   /**
@@ -656,6 +657,7 @@ function TickerClaimHeader({
   onAnswered: (claimId: string, position: boolean) => void;
 }) {
   const { responseKind, summary, control } = useDebateClaimResponse({ claimId, spaceId, row, entity });
+  const openProfile = useOpenDebaterProfile(speaker);
 
   const position = control.viewerPosition;
 
@@ -676,24 +678,38 @@ function TickerClaimHeader({
 
   return (
     <div className="flex items-center justify-between gap-2">
-      {/* `text-box` trimmed, as the frame has it — and on the text items rather than this row,
-          because the trim acts on a box's own line boxes and these are flex items with their own.
-          The frame gives this line a 7px box in a 16px row, which is its cap height: trimmed, the
-          row is the avatar's 16px and the words centre against it; untrimmed, each 17px line box
-          sets the row instead and the card comes out a pixel taller than the frame draws. */}
-      <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[1.0625rem] text-white [&>span]:[text-box:trim-both_cap_alphabetic]">
+      {/* `text-box` trimmed, as the frame has it, and on each text node rather than on the row.
+          The trim acts on a box's own line boxes, and these are flex items with their own; the
+          frame gives this line a 7px box in a 16px row, which is its cap height. Trimmed, the row
+          is the avatar's 16px and the words centre against it. Untrimmed, each 17px line box sets
+          the row instead and the card comes out a pixel taller than the frame draws. Per node and
+          not via a child selector, because the name now sits inside a button. */}
+      <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[1.0625rem] text-white">
         {speaker && (
-          <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-white">
-            <Avatar avatarUrl={speaker.avatar_cid} value={speaker.profile_space_id} size={16} />
-          </span>
+          // The same link as the name in the corner of the tile, and the same person — a reader
+          // looking at who said this should be able to go and look at them from here.
+          <button
+            type="button"
+            onClick={openProfile}
+            title={`Open ${speakerLabel(speaker)}`}
+            className="flex min-w-0 items-center gap-1.5 text-left hover:underline"
+          >
+            <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-white">
+              <Avatar avatarUrl={speaker.avatar_cid} value={speaker.profile_space_id} size={16} />
+            </span>
+            <span className="truncate [text-box:trim-both_cap_alphabetic]">{speakerLabel(speaker)}</span>
+          </button>
         )}
-        {speaker && <span className="truncate">{speakerLabel(speaker)}</span>}
         {percent !== null && (
           <>
-            {speaker && <span aria-hidden>·</span>}
+            {speaker && (
+              <span aria-hidden className="[text-box:trim-both_cap_alphabetic]">
+                ·
+              </span>
+            )}
             {/* Same wording as the verdict on the claim page — "65% agree", or "65% verify" on a
                 factual claim, so the share reads the same wherever it is printed. */}
-            <span className="shrink-0 tabular-nums">
+            <span className="shrink-0 tabular-nums [text-box:trim-both_cap_alphabetic]">
               {percent}% {copy.positiveAction.toLowerCase()}
             </span>
           </>
