@@ -22,6 +22,7 @@ import { ClientOnly } from '~/design-system/client-only';
 import { SlideUpBodyState } from '~/design-system/slide-up-body-state';
 
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
+import { MobileBrowseDrawer } from '~/partials/browse-sidebar/mobile-browse-drawer';
 import { EntityCommentsPanelHost } from '~/partials/comments/entity-comments-panel-host';
 import { CreateSpaceDialog } from '~/partials/create-space/create-space-dialog';
 import { EntitySidePanel } from '~/partials/entity-page/entity-side-panel';
@@ -98,6 +99,7 @@ const DebatesHubPanel = dynamic(
 
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
+  const [mobileBrowseOpen, setMobileBrowseOpen] = React.useState(false);
   const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
   const fullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
 
@@ -130,7 +132,13 @@ export function App({ children }: { children: React.ReactNode }) {
         </React.Suspense>
         <div className="mobile:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
         <div className="flex min-w-0 flex-1 flex-col">
-          <Navbar onSearchClick={() => setOpen(true)} hideLogo={sidebarOpen && !fullscreenActive} />
+          <Navbar
+            onBrowseClick={() => setMobileBrowseOpen(true)}
+            onSearchClick={() => setOpen(true)}
+            hideLogo={sidebarOpen && !fullscreenActive}
+            showBrowseButton={!fullscreenActive}
+          />
+          <MobileBrowseDrawer open={mobileBrowseOpen && !fullscreenActive} onOpenChange={setMobileBrowseOpen} />
           <SearchDialog open={open} onDone={() => setOpen(false)} />
           <div className="min-w-0 flex-1 2xl:px-[2ch]">
             <Main>{children}</Main>

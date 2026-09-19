@@ -2,25 +2,39 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
+import { NavigationMenu } from '~/design-system/icons/navigation-menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { NavbarClientActions } from './navbar-client-actions';
 import { NavbarSpaceMetadata } from './navbar-space-metadata';
 
 interface Props {
+  onBrowseClick: () => void;
   onSearchClick: () => void;
   hideLogo?: boolean;
+  showBrowseButton?: boolean;
 }
 
-export function Navbar({ onSearchClick, hideLogo = false }: Props) {
+export function Navbar({ onBrowseClick, onSearchClick, hideLogo = false, showBrowseButton = true }: Props) {
   return (
     <nav
       data-app-navbar
       className="sticky top-0 z-60 flex h-11 w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1"
     >
-      <div className="flex items-center gap-8 md:gap-4">
+      <div className="flex min-w-0 items-center gap-8 sm:gap-2 md:gap-4">
+        {showBrowseButton ? (
+          <button
+            type="button"
+            aria-label="Open browse menu"
+            aria-haspopup="dialog"
+            onClick={onBrowseClick}
+            className="-my-1 -ml-3 hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg text-grey-04 transition-colors hover:bg-grey-01 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-text active:bg-divider sm:flex"
+          >
+            <NavigationMenu />
+          </button>
+        ) : null}
         {hideLogo ? null : (
-          <Link href={NavUtils.toRoot()}>
+          <Link href={NavUtils.toRoot()} className={showBrowseButton ? 'sm:hidden' : undefined}>
             <GeoLogoLarge />
           </Link>
         )}
