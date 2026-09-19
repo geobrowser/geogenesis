@@ -217,12 +217,9 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
     width: number;
     sectionHeight: number;
     naturalDocumentHeight: number;
-    scrollY: number;
+    /** The position being held for the reader, which only ever moves up. */
+    holdY: number;
   } | null>(null);
-  // Set while this hook is the one moving the page, so its own correction is not mistaken below for
-  // the reader choosing to scroll.
-  const restoringRef = React.useRef(false);
-
   const prepareSwitch = React.useCallback(() => {
     const section = sectionRef.current;
     const reserve = reserveRef.current;
@@ -234,7 +231,7 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
       width,
       sectionHeight: height,
       naturalDocumentHeight: document.documentElement.scrollHeight - currentReserve,
-      scrollY: window.scrollY,
+      holdY: window.scrollY,
     };
 
     // Hold the outgoing view's whole height before React replaces it. Waiting for the layout effect
@@ -249,7 +246,10 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
     const reserve = reserveRef.current;
     if (!section || !reserve) return;
 
-    const sync = () => {
+    // Sizing only. Nothing here moves the reader: this runs on every scroll, and a function that
+    // both sizes the reserve and corrects the position will correct it every time they scroll —
+    // which reads as the page refusing to move (GEO-2974).
+    const sizeReserve = () => {
       const { width, height } = section.getBoundingClientRect();
       const swap = swapRef.current;
 
@@ -263,45 +263,50 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
       }
 
       const naturalDocumentHeight = swap.naturalDocumentHeight - swap.sectionHeight + height;
-      const missingScrollRange = Math.max(0, swap.scrollY + window.innerHeight - naturalDocumentHeight);
-
-      reserve.style.height = `${missingScrollRange}px`;
-
-      // The reserve is in the document now, so the position asked for is reachable again. Anything
-      // that already moved the reader — a frame painted before the reserve was in place — is undone
-      // here, synchronously, so they never see it.
-      if (Math.abs(window.scrollY - swap.scrollY) > 1) {
-        restoringRef.current = true;
-        window.scrollTo(0, swap.scrollY);
-      }
+      reserve.style.height = `${Math.max(0, swap.holdY + window.innerHeight - naturalDocumentHeight)}px`;
     };
 
-    sync();
+    sizeReserve();
+
+    // The reserve is in the document now, so the position asked for is reachable again. If a frame
+    // painted before it was — the gallery can paint empty while its queries land — the reader is put
+    // back here, once, before the browser paints. Once, because this is a correction for the swap
+    // that just happened and not a rule about where the page may be scrolled to.
+    const swap = swapRef.current;
+    if (swap && Math.abs(window.scrollY - swap.holdY) > 1) {
+      window.scrollTo(0, swap.holdY);
+    }
 
     if (typeof ResizeObserver === 'undefined') return;
     // Claim cards grow as their queries land. Shrink the reserve by the same amount so the overall
     // document height stays steady rather than drifting.
-    const observer = new ResizeObserver(sync);
+    const observer = new ResizeObserver(sizeReserve);
     observer.observe(section);
 
-    const onScroll = () => {
-      // The correction above, arriving as a scroll event. Treating it as the reader moving up would
-      // release the very height that made the correction possible.
-      if (restoringRef.current) {
-        restoringRef.current = false;
-        return;
-      }
+    // Armed a frame late, so the scroll events belonging to the swap itself — the correction above,
+    // and any clamp it was correcting — are not read as the reader choosing to move.
+    let armed = false;
+    const arm = requestAnimationFrame(() => {
+      armed = true;
+    });
 
-      const swap = swapRef.current;
-      if (!swap) return;
+    const onScroll = () => {
+      if (!armed) return;
+
+      const current = swapRef.current;
+      if (!current) return;
 
       // Once the reader moves up of their own accord, stop holding space they no longer need.
-      swap.scrollY = Math.min(swap.scrollY, window.scrollY);
-      sync();
+      // Moving down needs nothing held and nothing released.
+      if (window.scrollY < current.holdY) {
+        current.holdY = window.scrollY;
+        sizeReserve();
+      }
     };
     window.addEventListener('scroll', onScroll, { passive: true });
 
     return () => {
+      cancelAnimationFrame(arm);
       observer.disconnect();
       window.removeEventListener('scroll', onScroll);
     };

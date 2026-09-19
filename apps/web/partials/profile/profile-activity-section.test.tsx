@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -59,8 +59,22 @@ const rect = (width: number, height: number): DOMRect => ({
   toJSON: () => ({}),
 });
 
-/** A 390×600 mobile viewport sitting 400px down a synthetic profile page. */
+/**
+ * A 390×600 mobile viewport sitting 400px down a synthetic profile page.
+ *
+ * Includes a `ResizeObserver`, which JSDOM has none of. Without one the hook takes its
+ * no-observer path and never attaches the scroll listener — so anything asserted about scrolling
+ * passed for the wrong reason, whatever the code did.
+ */
 function mockMobileActivityGeometry(pageHeightWithoutActivity: number) {
+  class TestResizeObserver {
+    constructor(private readonly callback: ResizeObserverCallback) {}
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  vi.stubGlobal('ResizeObserver', TestResizeObserver);
+
   const originalRect = HTMLElement.prototype.getBoundingClientRect;
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
     if ('activitySection' in this.dataset) {
@@ -248,6 +262,53 @@ describe('ProfileActivitySection', () => {
     fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
 
     expect(scrollTo).toHaveBeenCalledWith(0, 400);
+  });
+
+  /**
+   * The reader has to be able to scroll afterwards. Sizing the reserve and correcting the position
+   * were the same function once, and that function ran on every scroll — so scrolling down, which
+   * leaves the held position where it was, corrected the reader straight back to it. The page read
+   * as refusing to move (GEO-2974).
+   */
+  it('lets the reader scroll down after a switch', async () => {
+    const scroll = mockMobileActivityGeometry(600);
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+    render(<ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />);
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    scrollTo.mockClear();
+
+    // The scroll listener is armed a frame after the swap, so that the swap's own events are not
+    // read as the reader moving. Wait for it, then scroll down.
+    await act(async () => {
+      await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
+    });
+
+    scroll.y = 700;
+    fireEvent.scroll(window);
+
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('stops holding height the reader has scrolled back above', async () => {
+    const scroll = mockMobileActivityGeometry(600);
+    const { container } = render(
+      <ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />
+    );
+    const reserve = container.querySelector<HTMLElement>('[data-activity-scroll-reserve]');
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(reserve).toHaveStyle({ height: '150px' });
+
+    await act(async () => {
+      await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
+    });
+
+    // Back up to the top: nothing below the viewport needs holding any more.
+    scroll.y = 0;
+    fireEvent.scroll(window);
+
+    expect(reserve).toHaveStyle({ height: '0px' });
   });
 
   it('leaves the reader alone when the reserve did its job', () => {
