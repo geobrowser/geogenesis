@@ -380,7 +380,10 @@ describe('ClaimExploreFeedCard', () => {
     const segmentWrapper = screen.getByTestId('join-root').closest('.contents');
     expect(segmentWrapper).toHaveProperty('tagName', 'DIV');
     expect(segmentWrapper).not.toHaveClass('md:hidden');
-    expect(segmentWrapper?.parentElement).toHaveProperty('tagName', 'DIV');
+    const metadataWrapper = segmentWrapper?.parentElement;
+    expect(metadataWrapper).toHaveProperty('tagName', 'DIV');
+    expect(metadataWrapper).toHaveClass('contents', 'md:flex', 'md:flex-1');
+    expect(metadataWrapper).not.toHaveClass('flex', 'flex-1');
   });
 
   it('leaves the existing feed-row shell unchanged outside the Explore opt-in', () => {

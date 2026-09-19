@@ -190,7 +190,13 @@ export function ExploreMetaRow({
         className
       )}
     >
-      {compactOnMobile ? <div className="flex min-w-0 flex-1 flex-wrap items-center">{metadata}</div> : metadata}
+      {compactOnMobile ? (
+        // Preserve the ordinary desktop row's direct-child layout. This group only becomes a flex
+        // item where the max-width mobile variant also moves the end slot to the header's far edge.
+        <div className="contents md:flex md:min-w-0 md:flex-1 md:flex-wrap md:items-center">{metadata}</div>
+      ) : (
+        metadata
+      )}
       {endSlot}
     </div>
   );
