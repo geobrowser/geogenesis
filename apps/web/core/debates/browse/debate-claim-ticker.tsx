@@ -287,8 +287,16 @@ export function DebateClaimTickerCard({
   );
 }
 
-/** Three lines of a claim before the card would start covering the face saying it. */
-const TICKER_CLAMP_LINES = 3;
+/**
+ * Two lines of a claim before the card starts covering the face saying it.
+ *
+ * Three was the frame's, and the arithmetic changed when the card got wider. Measured over all 854
+ * published claims: three lines at 260px shows 66% of them whole, two lines at 360px shows 62% —
+ * near enough the same reading, in a card 17px shorter. Height is the expensive dimension here,
+ * because the speaker's face is in the middle of the tile and the card grows up towards it, while
+ * width runs along the bottom where there is far less to cover.
+ */
+const TICKER_CLAMP_LINES = 2;
 
 /**
  * The claim itself, clamped to three lines, and expandable in place when there is more.
@@ -324,7 +332,7 @@ function TickerClaimText({ text }: { text: string }) {
       // The clamp already blockifies the box; only the expanded state needs `block` of its own.
       className={cx(
         'text-[1rem] leading-[1.0625rem] tracking-[-0.16px] text-white',
-        expanded ? 'block' : 'line-clamp-3'
+        expanded ? 'block' : 'line-clamp-2'
       )}
     >
       {text}
