@@ -705,6 +705,15 @@ body[data-slide-up-open] [data-radix-popper-content-wrapper] {
   z-index: 10003 !important;
 }
 
+/* Mobile bottom sheets own downward overscroll so the browser cannot turn it into page refresh. */
+@media (max-width: 1023px) {
+  html[data-mobile-sheet-open],
+  html[data-mobile-sheet-open] body,
+  body[data-mobile-sheet-open] {
+    overscroll-behavior-y: none;
+  }
+}
+
 /* Ranking compose edit mode (mobile): hide app navbar and use full viewport. */
 @media (max-width: 1023px) {
   html[data-ranking-compose-edit] [data-app-navbar],
