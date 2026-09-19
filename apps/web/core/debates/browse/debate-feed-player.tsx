@@ -139,16 +139,6 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   /** The same condition the stack is given, so the corner's box can cap itself only when open. */
   const claimsOpenFor = (slot: number) => pointerOverSlot === slot || focusedSlot === slot || pinnedSlot === slot;
 
-  /**
-   * Whether this debater's corner is drawing a card right now — which is the same question as
-   * whether their name is about to be covered by one, since both sit in the bottom band.
-   */
-  const cornerHasCard = (slot: number) => {
-    if (playbackEnded) return false;
-    const shown = claimsOpenFor(slot) ? ticker.historyBySlot.get(slot) : ticker.cardsBySlot.get(slot);
-    return (shown?.length ?? 0) > 0;
-  };
-
   const claimsFor = (slot: number) => {
     const cards = ticker.cardsBySlot.get(slot) ?? [];
     const history = ticker.historyBySlot.get(slot) ?? [];
@@ -207,7 +197,6 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         onToggle={togglePlayback}
         claims={claimsFor(1)}
         claimsOpen={claimsOpenFor(1)}
-        nameHidden={cornerHasCard(1)}
         onClaimsHoverChange={onTileHover(1)}
         topLeft={
           ready ? (
@@ -244,7 +233,6 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         onToggle={togglePlayback}
         claims={claimsFor(2)}
         claimsOpen={claimsOpenFor(2)}
-        nameHidden={cornerHasCard(2)}
         onClaimsHoverChange={onTileHover(2)}
         // This is the half the scrubber sits in, so its claim corner is the one that has to lift
         // clear of the bar.
@@ -325,7 +313,6 @@ function DebaterVideo({
   onToggle,
   claims,
   claimsOpen = false,
-  nameHidden = false,
   onClaimsHoverChange,
   clearScrubber = 'never',
   topLeft,
@@ -345,8 +332,6 @@ function DebaterVideo({
   claims?: React.ReactNode;
   /** Whether the corner is showing the scrollable backlog rather than the live card. */
   claimsOpen?: boolean;
-  /** Whether a claim card is up, in which case this debater's name steps out of its way. */
-  nameHidden?: boolean;
   /** The pointer entering or leaving this tile, which opens their backlog. */
   onClaimsHoverChange?: (event: React.PointerEvent, hovered: boolean) => void;
   /** Whether the claim corner has to sit above the scrubber, which only one tile hosts. */
@@ -481,8 +466,11 @@ function DebaterVideo({
           tried and reverted — 242px reads better as a corner label but shows only about 13% of
           claims whole, which is a look bought with most of the legibility.
 
-          The name row used to ration this width, because the two share the bottom band. The card
-          names its speaker itself, so the row now steps aside while a card is up (`nameHidden`).
+          `bottom-[2.375rem]` puts the corner above the debater's name rather than beside it, which
+          is what lets the card have the width at all: the two used to share the bottom band, and a
+          260px card already left the name only 188px. It costs the card 26px of height on the
+          tile, which is the trade for keeping the name — and its link to the debater's profile —
+          on screen throughout.
 
           A phone splits the difference by state rather than picking one width. A live card takes
           the whole tile — 93% of ~361px is 337, a 313px line, where two lines hold about 45% of
@@ -504,13 +492,13 @@ function DebaterVideo({
       {claims && (
         <div
           className={cx(
-            'pointer-events-none absolute right-3 bottom-3 z-10 flex w-[75%] max-w-[22.5rem] flex-col items-end justify-end transition-[padding-bottom] duration-150',
-            // A phone gives the live card the whole tile, and takes it back for the backlog: one
-            // claim over a video wants to be read at a glance, where a list you have opened to
-            // scroll wants to leave the debate visible behind it.
-            claimsOpen ? 'md:w-[62%]' : 'md:w-[93%]',
-            // Only the open list needs holding back; the live card is one card tall.
-            claimsOpen && 'max-h-[60%]',
+            'pointer-events-none absolute right-3 bottom-[2.375rem] z-10 flex flex-col items-end justify-end transition-[padding-bottom] duration-150',
+            // Two widths, by state rather than by screen. A live claim takes the whole tile,
+            // because it is one line of somebody's argument and there is nothing to read it
+            // against. The backlog is a list you have opened to scroll, and it should leave the
+            // debate visible behind it — so it gives most of the picture back, and at that width
+            // the dissolve at its top edge reads as the edge of a list rather than as damage.
+            claimsOpen ? 'max-h-[60%] w-[45%] md:w-[62%]' : 'w-[93%] max-w-[45rem]',
             // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling
             // is written out because Tailwind generates classes by scanning this source text, so a
             // composed `group-hover:${…}` would produce a rule that does not exist.
@@ -525,20 +513,15 @@ function DebaterVideo({
       {/* Debater identity, opens their personal space in the side panel. On the left, opposite the
           claim corner.
 
-          Back to a generous 55%: this no longer rations the claim corner's width, because it gives
-          way to a card rather than sitting beside one. The cost is that the debater's profile is
-          not reachable from here while a claim is up — it is a link as well as a label — which is
-          most of a debate in the other direction, since the corner is empty far more than it is
-          full. */}
+          A generous 55%, and it no longer rations the claim corner's width: the corner sits above
+          this row rather than beside it. It also stays put — it used to fade out under a card,
+          which cost the viewer the link to the debater's profile exactly when they were reading
+          something that debater had said. */}
       <button
         type="button"
         onClick={openProfile}
         className={cx(
-          'absolute bottom-3 left-4 z-10 flex max-w-[55%] items-center gap-2 text-left transition-[padding-bottom,opacity] duration-150',
-          // Out of the card's way, because the card already says who is speaking — the same avatar
-          // and the same name, on its own first line. Two of them in one band is a repetition the
-          // corner has to be narrow to avoid, and the corner is the thing worth the space.
-          nameHidden && 'pointer-events-none opacity-0',
+          'absolute bottom-3 left-4 z-10 flex max-w-[55%] items-center gap-2 text-left transition-[padding-bottom] duration-150',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
           // Padding rather than `bottom`, because the box is pinned by its bottom edge — the
