@@ -548,9 +548,21 @@ export function DebateClaimTickerStack({
           // Nothing live and nothing open: the chip is on its own, and an empty box between it and
           // the tile edge would still take its gap.
           shown.length === 0 && 'hidden',
-          // The host caps the height — see the note on it — so this only has to be allowed to
-          // shrink inside that cap and scroll what does not fit.
-          open && 'no-scrollbar min-h-0 overflow-y-auto'
+          /**
+           * 156px of backlog, and the number is picked between two constraints rather than chosen.
+           *
+           * Cards are 80px and sit 6px apart. The newest one is crisp only if the box is at least
+           * `71.5 + 80 = 151.5px`, or the ramp reaches down into it. Two cards want 166px, so a box
+           * of 166 or more never scrolls — and a list that never scrolls sits at its own top, where
+           * the ramp correctly declines to fade anything. 156px is inside both: the newest card
+           * clears the ramp by 4px, and two cards overflow by 10.
+           *
+           * In px on this element rather than a percentage on the host, which is what it used to
+           * be. A percentage there was measured against the tile and then shared with the chip, so
+           * on a phone the chip's 43px came out of the list's 130 and left 87 — one card, most of
+           * it inside the ramp.
+           */
+          open && 'no-scrollbar max-h-[9.75rem] min-h-0 overflow-y-auto'
         )}
       >
         {shown.map((card, index) => (
@@ -602,7 +614,10 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
         event.stopPropagation();
         onClick();
       }}
-      className="pointer-events-auto hidden shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2.5 py-2.5 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-[44px] transition-colors hover:bg-[#151515]/50 no-hover:flex"
+      // 20px tall, which is the debater's avatar across the band from it — the two read as one row
+      // when they match and as a mistake when they do not. The tap target is kept at ~36px by an
+      // `::after` that reaches past the box without taking any layout.
+      className="pointer-events-auto relative hidden h-5 shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-[44px] transition-colors after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] hover:bg-[#151515]/50 no-hover:flex"
     >
       <InfoSmall color="white" />
       <span className="tabular-nums">{expanded ? 'Hide' : `${count} ${count === 1 ? 'claim' : 'claims'}`}</span>

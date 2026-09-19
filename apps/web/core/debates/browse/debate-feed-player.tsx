@@ -279,6 +279,13 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
           eye is already using the seam as. Figma's own frame specifies the same trim. Browsers
           without it fall back to the box being centred, which is where this started.
 
+          `w-max` is what makes the cap above it mean anything. An absolutely positioned box with
+          `left: 50%` and an automatic width is shrink-to-fit against the space *from that point to
+          the container's edge* — half the tile — so the caption wrapped at 178px however high the
+          max-width was set, and raising the cap to 90% changed nothing at all. Sizing to
+          max-content and letting the cap do the clamping is the fix: measured on a 355px phone
+          tile, the same caption goes from 178px over three lines to 239px over two.
+
           90% of the width on a phone, 70% above it. A subtitle is one whole transcript segment and
           those are short: across 7,359 of them the median is 27 characters, the 99th is 33, and the
           longest in the corpus is 41. At the explore card's 484px tile 70% leaves 327px of line and
@@ -287,7 +294,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
           which is where a segment starts folding onto a second line and taking the caption off the
           seam. */}
       {subtitle && (
-        <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
+        <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
           {subtitle}
         </span>
       )}
@@ -485,11 +492,17 @@ function DebaterVideo({
           The cards ask for the full width themselves; everything else here should be its own size,
           against the edge the corner is anchored to.
 
-          The 60% cap applies only while the list is open, and that is load-bearing. `justify-end`
-          overflows *downward* once its content is taller than the box — measured at 253px of cards
-          in a 175px box, putting the newest card 78px below the corner, where the tile's own
-          `overflow-hidden` cut it in half at the seam. The open list cannot overflow because it
-          scrolls; the live card is one card tall and needs no cap at all. */}
+          No height cap here any more. It used to carry one, which was wrong twice over: measured
+          against the tile, so the same class meant a different number of cards on a phone than on
+          a desktop; and shared with the chip, so on a phone the chip's 43px came out of the list's
+          budget and left one card, most of it under the dissolve. The list caps itself in px now —
+          see `max-h-[9.75rem]` on the scroll box, which is sized against the cards rather than
+          against the picture.
+
+          `justify-end` is still load-bearing: it overflows *downward* once its content is taller
+          than its box, which is how a second card used to push the newest one 78px below the
+          corner and into the tile's own `overflow-hidden`. Nothing here may set a height the
+          content can exceed. */}
       {claims && (
         <div
           className={cx(
@@ -503,7 +516,7 @@ function DebaterVideo({
             // The backlog is a list you have opened to scroll, and it should leave the debate
             // visible behind it — so it gives most of the picture back, and at that width the
             // dissolve at its top edge reads as the edge of a list rather than as damage.
-            claimsOpen ? 'max-h-[60%] w-[45%] md:w-[62%]' : 'w-[calc(100%-1.75rem)] max-w-[45rem]',
+            claimsOpen ? 'w-[45%] md:w-[62%]' : 'w-[calc(100%-1.75rem)] max-w-[45rem]',
             // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling
             // is written out because Tailwind generates classes by scanning this source text, so a
             // composed `group-hover:${…}` would produce a rule that does not exist.
