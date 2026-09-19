@@ -1,5 +1,5 @@
-export const MOBILE_SHEET_SCROLL_SELECTOR = '[data-entity-side-panel-scroll]';
-
+const MOBILE_SHEET_SURFACE_SELECTOR = '[data-mobile-sheet-surface]';
+const MOBILE_SHEET_SCROLL_SELECTOR = '[data-mobile-sheet-scroll]';
 const MOBILE_SHEET_DRAG_HANDLE_SELECTOR = '[data-mobile-sheet-drag-handle]';
 const INTERACTIVE_DRAG_TARGET_SELECTOR =
   'button, a, input, textarea, select, [role="button"], [contenteditable="true"], [data-no-sheet-drag]';
@@ -12,10 +12,13 @@ const INTERACTIVE_DRAG_TARGET_SELECTOR =
 export function shouldStartMobileSheetDrag(target: EventTarget | null, root: HTMLElement): boolean {
   if (!(target instanceof Element)) return false;
 
+  const surface = root.querySelector<HTMLElement>(MOBILE_SHEET_SURFACE_SELECTOR);
+  if (!surface?.contains(target)) return false;
+
   if (target.closest(MOBILE_SHEET_DRAG_HANDLE_SELECTOR)) return true;
   if (target.closest(INTERACTIVE_DRAG_TARGET_SELECTOR)) return false;
 
-  const scrollEl = root.querySelector<HTMLElement>(MOBILE_SHEET_SCROLL_SELECTOR);
+  const scrollEl = surface.querySelector<HTMLElement>(MOBILE_SHEET_SCROLL_SELECTOR);
   return !scrollEl || scrollEl.scrollTop <= 0;
 }
 
@@ -52,7 +55,8 @@ export function preventMobileSheetPullToRefresh(root: HTMLElement): () => void {
   const handleTouchMove = (event: TouchEvent) => {
     if (!gesture) return;
 
-    const touch = Array.from(event.touches).find(candidate => candidate.identifier === gesture?.touchId);
+    const touchId = gesture.touchId;
+    const touch = Array.from(event.touches).find(candidate => candidate.identifier === touchId);
     if (!touch) return;
 
     if (gesture.direction === 'pending') {

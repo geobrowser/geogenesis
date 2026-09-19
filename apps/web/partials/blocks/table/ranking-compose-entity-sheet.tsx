@@ -3,14 +3,16 @@
 import * as React from 'react';
 
 import cx from 'classnames';
-import { AnimatePresence, type PanInfo, motion, useDragControls } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useSetAtom } from 'jotai';
 import { createPortal } from 'react-dom';
 
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
+import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-panel-popover-portal';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
-import { preventMobileSheetPullToRefresh, shouldStartMobileSheetDrag } from '~/core/utils/mobile-sheet-drag';
+
+import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
 
 import { EntitySidePanelSurface } from '~/partials/entity-page/entity-side-panel';
 
@@ -39,28 +41,25 @@ const ENTITY_SHEET_TOP_OFFSET_PX = 200;
 export function RankingComposeEntitySheet({ target, onClose }: Props) {
   const isMobile = useIsMobileLayout();
   const setRemoveScrollShard = useSetAtom(rankingComposeRemoveScrollShardAtom);
-  const mobileOverlayRef = React.useRef<HTMLDivElement | null>(null);
 
   const [portalTarget, setPortalTarget] = React.useState<HTMLElement | null>(null);
 
-  const dragControls = useDragControls();
+  const { dragControls, handleDragEnd, handlePointerDown, setOverlayElement } = useMobileSheetDrag({
+    enabled: isMobile && Boolean(target),
+    onDismiss: onClose,
+  });
 
   const overlayRef = React.useCallback(
     (node: HTMLDivElement | null) => {
-      mobileOverlayRef.current = node;
+      setOverlayElement(node);
       setRemoveScrollShard(node);
     },
-    [setRemoveScrollShard]
+    [setOverlayElement, setRemoveScrollShard]
   );
 
   React.useLayoutEffect(() => {
     return () => setRemoveScrollShard(null);
   }, [setRemoveScrollShard]);
-
-  React.useEffect(() => {
-    if (!isMobile || !target || !mobileOverlayRef.current) return;
-    return preventMobileSheetPullToRefresh(mobileOverlayRef.current);
-  }, [isMobile, portalTarget, target]);
 
   React.useLayoutEffect(() => {
     setPortalTarget(document.body);
@@ -88,17 +87,6 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
     };
   }, [target]);
 
-  const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (info.offset.y > 72 || info.velocity.y > 420) {
-      onClose();
-    }
-  };
-
-  const handleOverlayPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!isMobile || !shouldStartMobileSheetDrag(event.target, event.currentTarget)) return;
-    dragControls.start(event);
-  };
-
   if (!portalTarget) {
     return null;
   }
@@ -114,7 +102,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          onPointerDown={handleOverlayPointerDown}
+          onPointerDown={handlePointerDown}
         >
           <button
             type="button"
@@ -127,6 +115,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
             role="dialog"
             aria-modal="true"
             data-ranking-entity-sheet
+            data-mobile-sheet-surface
             drag={isMobile ? 'y' : false}
             dragControls={dragControls}
             dragListener={false}
@@ -146,15 +135,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
             style={isMobile ? { top: ENTITY_SHEET_TOP_OFFSET_PX } : undefined}
             onClick={event => event.stopPropagation()}
           >
-            {isMobile ? (
-              <div
-                className="flex shrink-0 cursor-grab touch-none justify-center pt-2 pb-1 active:cursor-grabbing"
-                data-mobile-sheet-drag-handle
-                aria-hidden
-              >
-                <div className="h-1 w-10 rounded-full bg-grey-02" />
-              </div>
-            ) : null}
+            {isMobile ? <MobileSheetGrabHandle /> : null}
 
             <EntitySidePanelPopoverPortalProvider>
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

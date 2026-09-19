@@ -5,15 +5,18 @@ import { preventMobileSheetPullToRefresh, shouldStartMobileSheetDrag } from './m
 function createSheet(scrollTop = 0) {
   const root = document.createElement('div');
   root.innerHTML = `
-    <div data-mobile-sheet-drag-handle><span data-testid="handle-child"></span></div>
-    <header><span data-testid="header"></span><button data-testid="button">Open</button></header>
-    <main data-entity-side-panel-scroll>
-      <span data-testid="content"></span>
-      <a data-testid="link" href="#">Entity</a>
-    </main>
+    <div data-testid="backdrop"></div>
+    <section data-mobile-sheet-surface>
+      <div data-mobile-sheet-drag-handle><span data-testid="handle-child"></span></div>
+      <header><span data-testid="header"></span><button data-testid="button">Open</button></header>
+      <main data-mobile-sheet-scroll>
+        <span data-testid="content"></span>
+        <a data-testid="link" href="#">Entity</a>
+      </main>
+    </section>
   `;
 
-  const scrollEl = root.querySelector<HTMLElement>('[data-entity-side-panel-scroll]');
+  const scrollEl = root.querySelector<HTMLElement>('[data-mobile-sheet-scroll]');
   if (!scrollEl) throw new Error('Missing test scroll surface');
   Object.defineProperty(scrollEl, 'scrollTop', { configurable: true, value: scrollTop });
 
@@ -53,6 +56,12 @@ describe('shouldStartMobileSheetDrag', () => {
     expect(shouldStartMobileSheetDrag(target('button'), root)).toBe(false);
     expect(shouldStartMobileSheetDrag(target('link'), root)).toBe(false);
   });
+
+  it('does not start a sheet drag from the backdrop', () => {
+    const { root, target } = createSheet();
+
+    expect(shouldStartMobileSheetDrag(target('backdrop'), root)).toBe(false);
+  });
 });
 
 function touchEvent(
@@ -80,11 +89,30 @@ describe('preventMobileSheetPullToRefresh', () => {
     removeGuard();
   });
 
-  it('leaves upward scrolling and gestures on scrolled content native', () => {
+  it('prevents a handle drag even when the sheet content is scrolled', () => {
+    const { root, target } = createSheet(24);
+    const removeGuard = preventMobileSheetPullToRefresh(root);
+
+    touchEvent('touchstart', target('handle-child'), { clientX: 20, clientY: 20 });
+    const move = touchEvent('touchmove', target('handle-child'), { clientX: 20, clientY: 40 });
+
+    expect(move.defaultPrevented).toBe(true);
+    removeGuard();
+  });
+
+  it('leaves upward, horizontal, and scrolled-content gestures native', () => {
     const topSheet = createSheet();
     const removeTopGuard = preventMobileSheetPullToRefresh(topSheet.root);
     touchEvent('touchstart', topSheet.target('content'), { clientX: 20, clientY: 40 });
     const upwardMove = touchEvent('touchmove', topSheet.target('content'), { clientX: 20, clientY: 20 });
+
+    const horizontalSheet = createSheet();
+    const removeHorizontalGuard = preventMobileSheetPullToRefresh(horizontalSheet.root);
+    touchEvent('touchstart', horizontalSheet.target('content'), { clientX: 20, clientY: 20 });
+    const horizontalMove = touchEvent('touchmove', horizontalSheet.target('content'), {
+      clientX: 40,
+      clientY: 20,
+    });
 
     const scrolledSheet = createSheet(24);
     const removeScrolledGuard = preventMobileSheetPullToRefresh(scrolledSheet.root);
@@ -95,8 +123,10 @@ describe('preventMobileSheetPullToRefresh', () => {
     });
 
     expect(upwardMove.defaultPrevented).toBe(false);
+    expect(horizontalMove.defaultPrevented).toBe(false);
     expect(scrolledMove.defaultPrevented).toBe(false);
     removeTopGuard();
+    removeHorizontalGuard();
     removeScrolledGuard();
   });
 });

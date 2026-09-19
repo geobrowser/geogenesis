@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import cx from 'classnames';
-import { type PanInfo, motion, useAnimation, useDragControls } from 'framer-motion';
+import { motion, useAnimation } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import { usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
@@ -13,6 +13,7 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { getLocalUnpublishedChangesFingerprint } from '~/core/hooks/use-local-changes';
+import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 import { useSidePanelEntityScope } from '~/core/hooks/use-side-panel-entity-scope';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useDiff } from '~/core/state/diff-store';
@@ -32,7 +33,6 @@ import {
 } from '~/core/state/personal-profile/create-post-flow';
 import type { Entity } from '~/core/types';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
-import { preventMobileSheetPullToRefresh, shouldStartMobileSheetDrag } from '~/core/utils/mobile-sheet-drag';
 import { NavUtils } from '~/core/utils/utils';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
@@ -40,6 +40,7 @@ import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { CloseSidePanel } from '~/design-system/icons/close-side-panel';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Fullscreen } from '~/design-system/icons/full-screen';
+import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
@@ -303,7 +304,11 @@ export function EntitySidePanelSurface({
         {showHeader ? (
           <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} onClose={onClose} />
         ) : null}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-entity-side-panel-scroll>
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          data-entity-side-panel-scroll
+          data-mobile-sheet-scroll
+        >
           <EntitySidePanelActiveTabProvider entityId={entityId}>
             <EntitySidePanelBody
               key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
@@ -330,8 +335,6 @@ export function EntitySidePanel() {
   const pathname = usePathname();
   const jotaiStore = useStore();
   const isMobile = useIsMobileLayout();
-  const dragControls = useDragControls();
-  const mobileOverlayRef = React.useRef<HTMLDivElement>(null);
   const setSidePanelHostElement = useSetAtom(entitySidePanelHostElementAtom);
   const { isReviewOpen, bumpReviewVersion } = useDiff();
   // `isReviewOpen` is the *edit* review sheet only, so on any other slide-up — the proposal review,
@@ -385,6 +388,16 @@ export function EntitySidePanel() {
     closeSidePanel();
   }, [bumpReviewVersion, closeSidePanel, createPostFlow, jotaiStore, setCreatePostFlow, setEditable, sidePanelTarget]);
 
+  const {
+    dragControls,
+    handleDragEnd: handleSheetDragEnd,
+    handlePointerDown: handleSheetPointerDown,
+    setOverlayElement,
+  } = useMobileSheetDrag({
+    enabled: isMobile && Boolean(sidePanelTarget),
+    onDismiss: handleCloseSidePanel,
+  });
+
   React.useEffect(() => {
     if (!sidePanelTarget) return;
 
@@ -397,11 +410,6 @@ export function EntitySidePanel() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [sidePanelTarget, handleCloseSidePanel]);
-
-  React.useEffect(() => {
-    if (!isMobile || !sidePanelTarget || !mobileOverlayRef.current) return;
-    return preventMobileSheetPullToRefresh(mobileOverlayRef.current);
-  }, [isMobile, sidePanelTarget]);
 
   React.useLayoutEffect(() => {
     const html = document.documentElement;
@@ -501,7 +509,7 @@ export function EntitySidePanel() {
   if (isMobile) {
     return createPortal(
       <motion.div
-        ref={mobileOverlayRef}
+        ref={setOverlayElement}
         className={cx(
           'fixed inset-0 overscroll-none',
           overSlideUp ? Z_LAYER_CLASS.entitySidePanelOverSlideUp : 'z-[200]',
@@ -509,9 +517,7 @@ export function EntitySidePanel() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.15 }}
-        onPointerDown={event => {
-          if (shouldStartMobileSheetDrag(event.target, event.currentTarget)) dragControls.start(event);
-        }}
+        onPointerDown={handleSheetPointerDown}
       >
         <button
           type="button"
@@ -522,6 +528,7 @@ export function EntitySidePanel() {
         <motion.div
           ref={panelHostRef as React.Ref<HTMLDivElement>}
           data-entity-side-panel
+          data-mobile-sheet-surface
           role="dialog"
           aria-modal="true"
           aria-label="Entity side panel"
@@ -530,22 +537,14 @@ export function EntitySidePanel() {
           dragListener={false}
           dragConstraints={{ top: 0, bottom: 0 }}
           dragElastic={0.12}
-          onDragEnd={(_event, info: PanInfo) => {
-            if (info.offset.y > 72 || info.velocity.y > 420) handleCloseSidePanel();
-          }}
+          onDragEnd={handleSheetDragEnd}
           initial={{ y: '100%' }}
           animate={{ y: 0 }}
           transition={{ type: 'spring', damping: 30, stiffness: 320 }}
           className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
           style={{ top: MOBILE_SHEET_TOP_OFFSET_PX }}
         >
-          <div
-            className="flex shrink-0 cursor-grab touch-none justify-center pt-2 pb-1 active:cursor-grabbing"
-            data-mobile-sheet-drag-handle
-            aria-hidden
-          >
-            <div className="h-1 w-10 rounded-full bg-grey-02" />
-          </div>
+          <MobileSheetGrabHandle />
           {panelBody}
         </motion.div>
       </motion.div>,
