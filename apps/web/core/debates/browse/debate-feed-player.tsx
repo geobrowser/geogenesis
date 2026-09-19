@@ -496,10 +496,14 @@ function DebaterVideo({
             'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end transition-[padding-bottom] duration-150',
             // Two widths, by state rather than by screen. A live claim takes the whole tile,
             // because it is one line of somebody's argument and there is nothing to read it
-            // against. The backlog is a list you have opened to scroll, and it should leave the
-            // debate visible behind it — so it gives most of the picture back, and at that width
-            // the dissolve at its top edge reads as the edge of a list rather than as damage.
-            claimsOpen ? 'max-h-[60%] w-[45%] md:w-[62%]' : 'w-[93%] max-w-[45rem]',
+            // against. `100% - 1.75rem` rather than a percentage: the corner hangs off `right-3`,
+            // so subtracting that 12px and the name's own `left-4` 16px lands the card's left edge
+            // exactly on the avatar below it, which is the line the eye already has.
+            //
+            // The backlog is a list you have opened to scroll, and it should leave the debate
+            // visible behind it — so it gives most of the picture back, and at that width the
+            // dissolve at its top edge reads as the edge of a list rather than as damage.
+            claimsOpen ? 'max-h-[60%] w-[45%] md:w-[62%]' : 'w-[calc(100%-1.75rem)] max-w-[45rem]',
             // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling
             // is written out because Tailwind generates classes by scanning this source text, so a
             // composed `group-hover:${…}` would produce a rule that does not exist.
