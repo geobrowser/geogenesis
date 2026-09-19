@@ -23,9 +23,13 @@ import type { Entity } from '~/core/types';
  * an offer there is nothing for an account-level match's faces to be borrowed into.
  *
  * Deliberately not in `core/claims/browse` beside `useClaimResponseState`: `matchmaking-claim-card`
- * imports from that directory, so a hook there importing back would close a cycle. The two claim
- * surfaces outside debates (the claim page and the explore card) still wire this up themselves —
- * the claim page is handed its state rather than resolving it, so it cannot use this as written.
+ * imports from that directory, so a hook there importing back would close a cycle.
+ *
+ * The two claim surfaces outside a debate — the claim page and the explore card — keep wiring this
+ * up themselves, and should. Neither sits inside a debate, so both leave `offersDebate` at its
+ * default and *do* make the offer, which is the one thing fixed in place here. The claim page also
+ * resolves its state a level above the component that builds the control, so it has nothing to
+ * hand this hook at the point it would be called.
  */
 export function useDebateClaimResponse({
   claimId,

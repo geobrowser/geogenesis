@@ -15,13 +15,15 @@
 import { writeFile } from 'node:fs/promises';
 
 import { resolveClaimTimings } from '../core/debates/claim-timing';
-import { CLAIM_END_OFFSET_PROPERTY_ID, CLAIM_START_OFFSET_PROPERTY_ID } from '../core/debates/ontology';
-import { API, fetchAllDebates, fetchDebateClaims, fetchTranscriptSegments } from './lib/debate-claims';
-
-const arg = (name: string) => {
-  const index = process.argv.indexOf(`--${name}`);
-  return index === -1 ? undefined : process.argv[index + 1];
-};
+import {
+  CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_START_OFFSET_PROPERTY_ID,
+  DEBATE_VIDEOS_PROPERTY_ID,
+  SELECTOR_TYPE_ID,
+  TARGET_PROPERTY_ID,
+  TYPES_PROPERTY_ID,
+} from '../core/debates/ontology';
+import { API, arg, fetchAllDebates, fetchDebateClaims, fetchTranscriptSegments } from './lib/debate-claims';
 
 /**
  * The confidence a match must reach before it is written to the graph.
@@ -36,11 +38,6 @@ const arg = (name: string) => {
 const FLOOR = Number(arg('floor') ?? 0.7);
 const OUT = arg('out') ?? 'claim-timecode-plan.json';
 const LIMIT = arg('limit') ? Number(arg('limit')) : Infinity;
-
-const TYPES_PROPERTY = '8f151ba4de204e3c9cb499ddf96f48f1';
-const SELECTOR_TYPE = '813ca865db9b486490dec6764febaab3';
-const TARGET_PROPERTY = 'e1788cdf9bae42e987b0d9791de09b31';
-const DEBATE_VIDEOS_PROPERTY = 'c48dc314fa7148aeb967139160456f1d';
 
 type PlannedWrite = {
   entityId: string;
@@ -167,7 +164,9 @@ if (failures > 0) console.log(`  debates that failed to load:            ${failu
 
 console.log('\nmatch confidence, all matched claims:');
 for (const key of [...histogram.keys()].sort()) {
-  console.log(`  ${key}–${(Number(key) + 0.1).toFixed(1)}  ${'#'.repeat(histogram.get(key) ?? 0)} ${histogram.get(key)}`);
+  console.log(
+    `  ${key}–${(Number(key) + 0.1).toFixed(1)}  ${'#'.repeat(histogram.get(key) ?? 0)} ${histogram.get(key)}`
+  );
 }
 
 // What a different floor would have published, so the choice is made with the consequence in view
@@ -194,7 +193,12 @@ await writeFile(
       generatedAt: new Date().toISOString(),
       api: API,
       floor: FLOOR,
-      constants: { TYPES_PROPERTY, SELECTOR_TYPE, TARGET_PROPERTY, DEBATE_VIDEOS_PROPERTY },
+      constants: {
+        TYPES_PROPERTY: TYPES_PROPERTY_ID,
+        SELECTOR_TYPE: SELECTOR_TYPE_ID,
+        TARGET_PROPERTY: TARGET_PROPERTY_ID,
+        DEBATE_VIDEOS_PROPERTY: DEBATE_VIDEOS_PROPERTY_ID,
+      },
       offsetProperties: { start: CLAIM_START_OFFSET_PROPERTY_ID, end: CLAIM_END_OFFSET_PROPERTY_ID },
       totals,
       debates: withWrites,

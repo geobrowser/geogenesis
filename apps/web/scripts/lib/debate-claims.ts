@@ -32,10 +32,10 @@ import {
 } from '../../core/io/debate-transcript-claims-document';
 
 export const API = 'https://api-testnet.geobrowser.io/graphql';
-export const CHAT = 'https://chat-api-testnet.geobrowser.io';
+const CHAT = 'https://chat-api-testnet.geobrowser.io';
 
 /** `4c81561d1f95…` → `4c81561d-1f95-…`. The chat API wants the dashed form; the graph does not. */
-export function toDashedUuid(id: string): string {
+function toDashedUuid(id: string): string {
   return id.replaceAll('-', '').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
 }
 
@@ -101,4 +101,15 @@ export async function fetchTranscriptSegments(debateEntityId: string): Promise<D
     // A debate whose recording geo-chat no longer serves simply gets no matches.
     return [];
   }
+}
+
+/**
+ * Reads `--name value` off the command line.
+ *
+ * Three scripts here take flags and each had written this out again. It is four lines, which is
+ * exactly the size of thing that gets copied until one copy quietly disagrees with the others.
+ */
+export function arg(name: string): string | undefined {
+  const index = process.argv.indexOf(`--${name}`);
+  return index === -1 ? undefined : process.argv[index + 1];
 }

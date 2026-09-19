@@ -21,12 +21,7 @@ import { join } from 'node:path';
 
 import type { DebateTranscriptSegment } from '../core/debates/api';
 import { findBlockWindow, matchClaimWindow } from '../core/debates/claim-timing';
-import { fetchAllDebates, fetchDebateClaims, fetchTranscriptSegments } from './lib/debate-claims';
-
-const arg = (name: string) => {
-  const index = process.argv.indexOf(`--${name}`);
-  return index === -1 ? undefined : process.argv[index + 1];
-};
+import { arg, fetchAllDebates, fetchDebateClaims, fetchTranscriptSegments } from './lib/debate-claims';
 
 const OUT = arg('out') ?? './claim-matching-tasks';
 const LIMIT = arg('limit') ? Number(arg('limit')) : Infinity;

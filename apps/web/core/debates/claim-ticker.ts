@@ -61,7 +61,7 @@ export function tickerWindows(claims: TimedClaim[]): TickerWindow[] {
  * honest thing for a live layer to do: the corner shows what is being said. Nothing is lost — the
  * backlog is one hover or one tap away, and that is where reading back through it belongs.
  */
-export const MAX_STACKED_CARDS = 1;
+const MAX_STACKED_CARDS = 1;
 
 /** Long enough to register as arriving rather than blinking into place. */
 const FADE_IN_MS = 250;

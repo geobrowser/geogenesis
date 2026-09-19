@@ -35,7 +35,7 @@ import { useLineClampOverflow } from './line-clamp-overflow';
 import { useDebateClaimResponse } from './use-debate-claim-response';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
-export type DebateTicker = {
+type DebateTicker = {
   /**
    * The cards to draw right now, oldest first, keyed by the participant slot that said them.
    *
@@ -566,7 +566,7 @@ export function DebateClaimTickerStack({
           open && 'no-scrollbar max-h-[9.75rem] min-h-0 overflow-y-auto'
         )}
       >
-        {shown.map((card, index) => (
+        {shown.map(card => (
           <DebateClaimTickerCard
             key={card.window.claim.id}
             window={card.window}

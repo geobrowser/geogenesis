@@ -16,22 +16,19 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { CLAIM_END_OFFSET_PROPERTY_ID, CLAIM_START_OFFSET_PROPERTY_ID } from '../core/debates/ontology';
-import { API } from './lib/debate-claims';
-
-const arg = (name: string) => {
-  const index = process.argv.indexOf(`--${name}`);
-  return index === -1 ? undefined : process.argv[index + 1];
-};
+import {
+  CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_START_OFFSET_PROPERTY_ID,
+  DEBATE_VIDEOS_PROPERTY_ID,
+  SELECTOR_TYPE_ID,
+  TARGET_PROPERTY_ID,
+  TYPES_PROPERTY_ID,
+} from '../core/debates/ontology';
+import { API, arg } from './lib/debate-claims';
 
 const TASKS = arg('tasks') ?? './claim-matching-tasks';
 const ANSWERS = arg('answers') ?? './claim-matching-answers';
 const OUT = arg('out') ?? 'claim-timecode-plan.json';
-
-const TYPES_PROPERTY = '8f151ba4de204e3c9cb499ddf96f48f1';
-const SELECTOR_TYPE = '813ca865db9b486490dec6764febaab3';
-const TARGET_PROPERTY = 'e1788cdf9bae42e987b0d9791de09b31';
-const DEBATE_VIDEOS_PROPERTY = 'c48dc314fa7148aeb967139160456f1d';
 
 type TaskSegment = { i: number; startMs: number; endMs: number; text: string };
 type TaskClaim = {
@@ -104,7 +101,8 @@ for (const file of (await readdir(TASKS)).filter(name => name.endsWith('.json'))
         // On an unpublished claim this is just a decline. On a published one it says a live offset
         // is wrong, which needs removing rather than rewriting — a different op and a judgement
         // call, so it is reported rather than acted on.
-        if (claim.published) disputed.push(`${claim.claimId}: published offset disputed — "${claim.text.slice(0, 60)}"`);
+        if (claim.published)
+          disputed.push(`${claim.claimId}: published offset disputed — "${claim.text.slice(0, 60)}"`);
         else declined += 1;
         continue;
       }
@@ -204,7 +202,12 @@ await writeFile(
       generatedAt: new Date().toISOString(),
       api: API,
       source: 'llm-read',
-      constants: { TYPES_PROPERTY, SELECTOR_TYPE, TARGET_PROPERTY, DEBATE_VIDEOS_PROPERTY },
+      constants: {
+        TYPES_PROPERTY: TYPES_PROPERTY_ID,
+        SELECTOR_TYPE: SELECTOR_TYPE_ID,
+        TARGET_PROPERTY: TARGET_PROPERTY_ID,
+        DEBATE_VIDEOS_PROPERTY: DEBATE_VIDEOS_PROPERTY_ID,
+      },
       offsetProperties: { start: CLAIM_START_OFFSET_PROPERTY_ID, end: CLAIM_END_OFFSET_PROPERTY_ID },
       totals: {
         placed,

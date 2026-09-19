@@ -121,3 +121,13 @@ export const SOURCES_PROPERTY_ID = '49c5d5e1679a4dbdbfd33f618f227c94'; // Conten
  */
 export const CLAIM_START_OFFSET_PROPERTY_ID = 'a1d1cb557b184238ba0ec78ba7f289fb';
 export const CLAIM_END_OFFSET_PROPERTY_ID = '79a677b597f84ca8a1cf24eef7837b61';
+
+/**
+ * The typing that says a relation points at a *span* of its target rather than the whole of it.
+ *
+ * A relation entity carrying offsets is typed `Selector` and given a `Target property` naming the
+ * property the span is measured in — `Debate videos` here, the same shape `Reply to` uses to anchor
+ * a comment to a range of text. Both existed in the Geo ontology space already.
+ */
+export const SELECTOR_TYPE_ID = '813ca865db9b486490dec6764febaab3';
+export const TARGET_PROPERTY_ID = 'e1788cdf9bae42e987b0d9791de09b31';
