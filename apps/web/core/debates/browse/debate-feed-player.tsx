@@ -695,9 +695,14 @@ function FeedScrubber({
       <div className="relative h-(--track-height) w-full overflow-hidden rounded-full bg-white/40">
         <span className="absolute inset-y-0 left-0 rounded-full bg-white" style={{ width: `${progress}%` }} />
       </div>
-      {/* Above the track and below the range input, so a marker is clickable but a drag anywhere
-          along the bar still scrubs. */}
-      <ClaimScrubberMarkers markers={markers} onSeek={ms => onSeek(ms / 1000)} className="z-1" />
+      {/* Above the range input, which is the only way a marker can be clicked at all: the input is
+          transparent but covers the whole bar, so at a lower z it swallowed every marker click and
+          scrubbed to the pixel instead of seeking to the claim. The comment here used to claim the
+          opposite, which is how it survived.
+
+          Only the 2px hashes intercept — their wrapper is `pointer-events-none` — so a drag that
+          starts anywhere else along the bar still reaches the input and scrubs. */}
+      <ClaimScrubberMarkers markers={markers} onSeek={ms => onSeek(ms / 1000)} className="z-3" />
       <span
         className="pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.35)]"
         style={{ left: `calc(12px + ${progress}% * (100% - 24px) / 100%)` }}

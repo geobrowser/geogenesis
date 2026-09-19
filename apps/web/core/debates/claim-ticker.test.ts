@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ClaimTiming, TimedClaim } from './claim-timing';
 import {
   CLAIM_LINGER_MS,
+  backlogWindows,
   cardOpacity,
   claimHistory,
   claimMarkers,
   tickerStack,
   tickerWindows,
 } from './claim-ticker';
+import type { ClaimTiming, TimedClaim } from './claim-timing';
 
 function timed(id: string, timing: ClaimTiming | null, text = `Claim ${id}`): TimedClaim {
   return {
@@ -159,6 +160,38 @@ describe('tickerStack', () => {
   });
 });
 
+/**
+ * The backlog takes any claim it can place, not only the ones firm enough to draw a card for.
+ *
+ * Sharing one filtered list made the corner disagree with itself: the chip counted "N claims" and
+ * the list opened on a subset, silently dropping everything the matcher had placed only loosely.
+ */
+describe('backlogWindows', () => {
+  const claims = [
+    timed('published', confident(10_000, 14_000)),
+    timed('loose', unsure(18_000, 22_000)),
+    timed('whole-turn', wholeTurn(0, 30_000)),
+    timed('unplaced', null),
+  ];
+
+  // Ordered by when each claim *finished* being said, so the whole-turn fallback — which ends when
+  // its turn does — joins the list last rather than at the turn's start.
+  it('includes claims the live layer will not assert', () => {
+    expect(backlogWindows(claims).map(w => w.claim.id)).toEqual(['published', 'loose', 'whole-turn']);
+  });
+
+  it('still leaves out a claim with no timing at all, which cannot be ordered', () => {
+    expect(backlogWindows(claims).map(w => w.claim.id)).not.toContain('unplaced');
+  });
+
+  // The live layer is unchanged and stays strict.
+  it('is a superset of the live windows', () => {
+    const live = tickerWindows(claims).map(w => w.claim.id);
+    expect(live).toEqual(['published']);
+    expect(backlogWindows(claims).map(w => w.claim.id)).toEqual(expect.arrayContaining(live));
+  });
+});
+
 describe('claimHistory', () => {
   const windows = tickerWindows([
     timed('a', confident(10_000, 14_000)),
@@ -189,6 +222,25 @@ describe('claimHistory', () => {
   // a list someone has deliberately opened to read.
   it('holds every entry at full strength', () => {
     expect(claimHistory(windows, 200_000).map(card => card.opacity)).toEqual([1, 1, 1]);
+  });
+});
+
+/**
+ * A marker sits at the claim's end and seeks just inside the card's window. Seeking to the hash
+ * itself lands on the first frame of the fade, where the card is fully transparent — and the
+ * scrubber is mostly used while paused, so the playhead stays there and nothing is ever drawn.
+ */
+describe('claimMarkers seek target', () => {
+  const windows = tickerWindows([timed('a', confident(10_000, 14_000))]);
+
+  it('seeks past the fade rather than to the hash itself', () => {
+    const [marker] = claimMarkers([timed('a', confident(10_000, 14_000))], 100_000);
+
+    expect(marker.atMs).toBe(14_000);
+    expect(marker.seekMs).toBeGreaterThan(marker.atMs);
+    // The whole point: the card is actually visible where the click lands.
+    expect(cardOpacity(windows[0], marker.atMs)).toBe(0);
+    expect(cardOpacity(windows[0], marker.seekMs)).toBe(1);
   });
 });
 

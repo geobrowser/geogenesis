@@ -40,8 +40,31 @@ export type TickerWindow = { claim: TimedClaim; startMs: number; endMs: number }
  * and being wrong about that misquotes a real person. Those claims still appear in the panel.
  */
 export function tickerWindows(claims: TimedClaim[]): TickerWindow[] {
+  return windowsFor(claims, claim => isAssertableMoment(claim.timing));
+}
+
+/**
+ * The same windows for the backlog, which takes any claim it can place at all.
+ *
+ * The live layer and the backlog are asking different questions. A card asserts "they said this, at
+ * this moment", so it needs a moment firm enough to stand behind — {@link isAssertableMoment}. The
+ * backlog only claims "they have said this already", and a whole-turn fallback answers that
+ * perfectly well: its window ends when the turn does, so the claim joins the list once the turn is
+ * over, which is exactly when it became true.
+ *
+ * Built separately rather than filtered from one list, because sharing the list is what made the
+ * corner quietly disagree with itself: the chip counted "N claims" and the list opened on a subset,
+ * missing every claim the matcher had placed only loosely. Invisible on today's corpus — the
+ * backfill published offsets for 853 of 854 claims, so everything is assertable — and true of every
+ * debate recorded from now until the extractor emits offsets itself (GEO-2958).
+ */
+export function backlogWindows(claims: TimedClaim[]): TickerWindow[] {
+  return windowsFor(claims, claim => claim.timing !== null);
+}
+
+function windowsFor(claims: TimedClaim[], include: (claim: TimedClaim) => boolean): TickerWindow[] {
   return claims
-    .filter(claim => isAssertableMoment(claim.timing))
+    .filter(include)
     .map(claim => {
       const timing = claim.timing as NonNullable<TimedClaim['timing']>;
       return { claim, startMs: timing.endMs, endMs: timing.endMs + CLAIM_LINGER_MS };
@@ -137,7 +160,23 @@ function spokenSoFar(windows: TickerWindow[], playheadMs: number): TickerWindow[
   return windows.filter(window => playheadMs >= window.startMs);
 }
 
-export type ClaimMarker = { id: string; text: string; atMs: number; fraction: number };
+export type ClaimMarker = {
+  id: string;
+  text: string;
+  /** Where the hash sits: the moment the claim finished being said. */
+  atMs: number;
+  /**
+   * Where a click on it jumps to, which is *not* where it sits.
+   *
+   * A card's window opens at `atMs` and fades in over {@link FADE_IN_MS}, so its opacity at that
+   * exact instant is zero. The scrubber is mostly used while paused, where the playhead then stays
+   * put — so seeking to the hash showed the viewer nothing at all, on the one interaction whose
+   * entire purpose is to show them that claim. Landing just inside the window costs a quarter of a
+   * second of accuracy and is the difference between a card and a blank corner.
+   */
+  seekMs: number;
+  fraction: number;
+};
 
 /**
  * Where each claim sits on the scrubber, as a fraction of the debate's length.
@@ -172,6 +211,8 @@ export function claimMarkers(claims: TimedClaim[], timelineMs: number): ClaimMar
         id: claim.id,
         text: claim.text,
         atMs: timing.endMs,
+        // Just inside the card's window, so a click lands on a drawn card — see `seekMs`.
+        seekMs: timing.endMs + FADE_IN_MS,
         fraction: Math.max(0, Math.min(1, timing.endMs / timelineMs)),
       };
     })

@@ -9,6 +9,7 @@ import {
   type ClaimMarker,
   type StackedCard,
   type TickerWindow,
+  backlogWindows,
   claimHistory,
   claimMarkers,
   tickerStack,
@@ -55,7 +56,7 @@ type DebateTicker = {
   markers: ClaimMarker[];
   /** Which way the viewer answered each claim this session. */
   answers: ReadonlyMap<string, boolean>;
-  onAnswered: (claimId: string, position: boolean) => void;
+  onAnswered: (claimId: string, position: boolean | null) => void;
   /** Per-claim lookups, hoisted so the card and the end-of-debate stack share one batch. */
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
@@ -88,12 +89,26 @@ export function useDebateClaimTicker(
   // viewer had just chosen off the screen before they saw it land; the filled icon is the
   // acknowledgement now, and the card stays until a newer claim displaces it. The end-of-debate
   // card still reads this to skip what has already been answered.
-  const onAnswered = React.useCallback((claimId: string, position: boolean) => {
-    setAnswers(current => new Map(current).set(claimId, position));
+  const onAnswered = React.useCallback((claimId: string, position: boolean | null) => {
+    setAnswers(current => {
+      // Identity is the bail-out: React skips the update when the state comes back unchanged, which
+      // is what lets every card report on mount without a re-render apiece.
+      if (position === null) {
+        if (!current.has(claimId)) return current;
+        const next = new Map(current);
+        next.delete(claimId);
+        return next;
+      }
+      if (current.get(claimId) === position) return current;
+      return new Map(current).set(claimId, position);
+    });
   }, []);
 
   const timedClaims = React.useMemo(() => claimsInSpokenOrder(claims.all, timings), [claims.all, timings]);
+  // Two lists, because the live layer and the backlog answer different questions — see
+  // `backlogWindows`. Cards and markers assert a moment; the backlog only says "already said".
   const windows = React.useMemo(() => tickerWindows(timedClaims), [timedClaims]);
+  const backlog = React.useMemo(() => backlogWindows(timedClaims), [timedClaims]);
 
   const markers = React.useMemo(() => claimMarkers(timedClaims, timelineMs), [timedClaims, timelineMs]);
 
@@ -111,7 +126,18 @@ export function useDebateClaimTicker(
     return map;
   }, [entities]);
 
+  /**
+   * Empty while this ticker is switched off, which is not the same as having no claims.
+   *
+   * `useDebateTranscriptClaims` is gated on `enabled`, but the feed card and the explore card both
+   * fetch the same query *ungated* — so the cache is warm and a disabled ticker still reads a full
+   * claim list out of it. Handing that to `useDebateClaimsBySpaces`, which has no gate of its own,
+   * started authenticated row queries and a gateway subscription for every mounted feed item rather
+   * than the active and preloaded pair.
+   */
   const rowGroups = React.useMemo(() => {
+    if (!enabled) return [];
+
     const bySpace = new Map<string, string[]>();
     for (const claim of claims.all) {
       if (!claim.spaceId) continue;
@@ -120,7 +146,7 @@ export function useDebateClaimTicker(
       else bySpace.set(claim.spaceId, [claim.id]);
     }
     return [...bySpace].map(([spaceId, ids]) => ({ spaceId, claimIds: ids }));
-  }, [claims.all]);
+  }, [enabled, claims.all]);
 
   const rowsQuery = useDebateClaimsBySpaces(rowGroups);
   const rowsByClaimId = React.useMemo(() => {
@@ -157,29 +183,37 @@ export function useDebateClaimTicker(
   // attribution and the participant list can disagree — is left out rather than parked over
   // whichever half: putting a claim over the wrong face is the misquote this whole layer is
   // careful about, and now that the corner itself attributes, getting it wrong is louder.
-  const windowsBySlot = React.useMemo(() => {
-    const bySlot = new Map<number, TickerWindow[]>();
-    if (!enabled) return bySlot;
+  const groupBySlot = React.useCallback(
+    (source: TickerWindow[]) => {
+      const bySlot = new Map<number, TickerWindow[]>();
+      if (!enabled) return bySlot;
 
-    for (const window of windows) {
-      const slot = participantByClaimId.get(window.claim.id)?.participant_slot;
-      if (slot === undefined) continue;
-      const existing = bySlot.get(slot);
-      if (existing) existing.push(window);
-      else bySlot.set(slot, [window]);
-    }
-    return bySlot;
-  }, [enabled, windows, participantByClaimId]);
+      for (const window of source) {
+        const slot = participantByClaimId.get(window.claim.id)?.participant_slot;
+        if (slot === undefined) continue;
+        const existing = bySlot.get(slot);
+        if (existing) existing.push(window);
+        else bySlot.set(slot, [window]);
+      }
+      return bySlot;
+    },
+    [enabled, participantByClaimId]
+  );
 
-  const { cardsBySlot, historyBySlot } = React.useMemo(() => {
+  const liveBySlot = React.useMemo(() => groupBySlot(windows), [groupBySlot, windows]);
+  const backlogBySlot = React.useMemo(() => groupBySlot(backlog), [groupBySlot, backlog]);
+
+  const cardsBySlot = React.useMemo(() => {
     const cards = new Map<number, StackedCard[]>();
+    for (const [slot, slotWindows] of liveBySlot) cards.set(slot, tickerStack(slotWindows, playheadMs));
+    return cards;
+  }, [liveBySlot, playheadMs]);
+
+  const historyBySlot = React.useMemo(() => {
     const history = new Map<number, StackedCard[]>();
-    for (const [slot, slotWindows] of windowsBySlot) {
-      cards.set(slot, tickerStack(slotWindows, playheadMs));
-      history.set(slot, claimHistory(slotWindows, playheadMs));
-    }
-    return { cardsBySlot: cards, historyBySlot: history };
-  }, [windowsBySlot, playheadMs]);
+    for (const [slot, slotWindows] of backlogBySlot) history.set(slot, claimHistory(slotWindows, playheadMs));
+    return history;
+  }, [backlogBySlot, playheadMs]);
 
   return {
     cardsBySlot,
@@ -236,7 +270,7 @@ export function DebateClaimTickerCard({
   speaker?: DebateParticipant | null;
   row: DebateClaim | null;
   entity: Entity | null;
-  onAnswered: (claimId: string, position: boolean) => void;
+  onAnswered: (claimId: string, position: boolean | null) => void;
 }) {
   const { claim } = window;
 
@@ -399,7 +433,7 @@ export function DebateClaimTickerStack({
   participantByClaimId?: Map<string, DebateParticipant>;
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
-  onAnswered: (claimId: string, position: boolean) => void;
+  onAnswered: (claimId: string, position: boolean | null) => void;
 }) {
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -671,21 +705,27 @@ function TickerClaimHeader({
   speaker: DebateParticipant | null;
   row: DebateClaim | null;
   entity: Entity | null;
-  onAnswered: (claimId: string, position: boolean) => void;
+  onAnswered: (claimId: string, position: boolean | null) => void;
 }) {
   const { responseKind, summary, control } = useDebateClaimResponse({ claimId, spaceId, row, entity });
   const openProfile = useOpenDebaterProfile(speaker);
 
   const position = control.viewerPosition;
 
-  // Reported once, on the transition. The card stays up for the rest of its window so the viewer
-  // sees the side they just took; it is the *next* seek past it that will skip it.
-  const reported = React.useRef(false);
+  /**
+   * Reported on every change, including back to nothing.
+   *
+   * It used to latch on the first non-null side, which made the map a record of what the viewer
+   * *first* pressed rather than what they hold: switch from Agree to Disagree, or clear the side
+   * entirely, and the map kept the original. The end-of-debate scorecard reads this to decide which
+   * claims to skip and how to tally them, so a stale entry there is the viewer's own answer
+   * misreported back to them.
+   *
+   * Safe to fire on mount, when there is no position and nothing to say: `onAnswered` returns the
+   * same map when nothing changes, so React bails out rather than re-rendering every card.
+   */
   React.useEffect(() => {
-    if (position !== null && !reported.current) {
-      reported.current = true;
-      onAnswered(claimId, position);
-    }
+    onAnswered(claimId, position);
   }, [position, claimId, onAnswered]);
 
   const copy = ENTITY_RESPONSE_COPY[responseKind];
@@ -849,7 +889,7 @@ export function ClaimScrubberMarkers({
           aria-label={`Jump to: ${marker.text}`}
           onClick={event => {
             event.stopPropagation();
-            onSeek(marker.atMs);
+            onSeek(marker.seekMs);
           }}
           style={{ left: `${marker.fraction * 100}%` }}
           className="pointer-events-auto absolute top-1/2 h-2.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/80 transition-[height,background-color] hover:h-3.5 hover:bg-white"

@@ -212,12 +212,38 @@ describe('DebateClaimTickerCard', () => {
     expect(onAnswered).toHaveBeenCalledExactlyOnceWith('claim-1', true);
   });
 
-  it('does not report an answer for a claim the viewer has not taken a side on', () => {
+  /**
+   * The map has to track the side the viewer *holds*, not the first one they pressed. It used to
+   * latch, so switching sides or clearing one left the scorecard tallying an answer nobody holds.
+   */
+  it('reports a side the viewer changes, and its removal', () => {
+    const onAnswered = vi.fn();
+    mocks.viewerPosition = true;
+    const { rerender } = renderCard({ onAnswered });
+    expect(onAnswered).toHaveBeenLastCalledWith('claim-1', true);
+
+    mocks.viewerPosition = false;
+    rerender(
+      <DebateClaimTickerCard window={window()} speaker={SPEAKER} row={null} entity={null} onAnswered={onAnswered} />
+    );
+    expect(onAnswered).toHaveBeenLastCalledWith('claim-1', false);
+
+    mocks.viewerPosition = null;
+    rerender(
+      <DebateClaimTickerCard window={window()} speaker={SPEAKER} row={null} entity={null} onAnswered={onAnswered} />
+    );
+    expect(onAnswered).toHaveBeenLastCalledWith('claim-1', null);
+  });
+
+  // `null` is the report, not silence — it is how a cleared side reaches the map, which drops the
+  // entry rather than keeping a stale one. What must never happen is reporting a *side* nobody took.
+  it('reports no side for a claim the viewer has not answered', () => {
     const onAnswered = vi.fn();
 
     renderCard({ onAnswered });
 
-    expect(onAnswered).not.toHaveBeenCalled();
+    expect(onAnswered).not.toHaveBeenCalledWith('claim-1', true);
+    expect(onAnswered).not.toHaveBeenCalledWith('claim-1', false);
   });
 
   // The video behind the card is one large play/pause button.
