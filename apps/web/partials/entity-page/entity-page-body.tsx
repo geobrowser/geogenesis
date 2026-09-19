@@ -12,20 +12,18 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { TopicPageView } from '~/core/topics/browse/topic-page-view';
 import type { Relation, TabEntity } from '~/core/types';
 import { Spaces } from '~/core/utils/space';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
-import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Spacer } from '~/design-system/spacer';
 
 import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
-import { BacklinksClientContainer } from '~/partials/entity-page/backlinks-client-container';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { EntityBacklinks } from '~/partials/entity-page/entity-backlinks';
 import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
@@ -92,27 +90,6 @@ function EntityTabsSection({
   );
 }
 
-/**
- * Both variants fetch through `BacklinksClientContainer`, which is the only one of the two
- * containers that can run here.
- *
- * `BacklinksServerContainer` is an async component. This file is a client component, so React
- * doesn't treat it as a Server Component — it re-invokes the function on every render, which fires
- * its two requests again, suspends, resolves, renders, and invokes it again. The `Suspense` that
- * used to wrap it hid that entirely: the backlinks looked fine while a single entity page load sent
- * `EntityBacklinksPage` 82 times and `Spaces` 64 times, with identical variables (GEO-2666).
- *
- * The server container is still right for the three routes that render it from an actual server
- * component; it just can't be reached from here.
- */
-function EntityBacklinks({ entityId }: { entityId: string }) {
-  return (
-    <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-      <BacklinksClientContainer entityId={entityId} />
-    </TrackedErrorBoundary>
-  );
-}
-
 function EditorFooter({
   entityId,
   spaceId,
@@ -151,7 +128,7 @@ function EditorFooter({
   );
 }
 
-export type CustomBrowseView = 'claim' | 'topic' | 'person' | 'generic' | 'pending';
+export type CustomBrowseView = 'claim' | 'topic' | 'person' | 'person-pending' | 'generic' | 'pending';
 
 /**
  * The decision itself, with no hooks in it.
@@ -201,7 +178,13 @@ export function customBrowseView({
    * it.
    */
   if (entity.types.some(type => ID.equals(type.id, SystemIds.PERSON_TYPE))) {
-    if (!space) return isLoadingSpace ? 'pending' : 'generic';
+    // `person-pending`, not `pending`: the caller holds back the *body* on this
+    // one and draws the header regardless. A profile and an ordinary Person
+    // entity have the same cover, avatar, name and bio, so there is nothing to
+    // get wrong by drawing them — where blanking the page would make every
+    // Person in a DAO space wait out a space read for a view it was never going
+    // to get.
+    if (!space) return isLoadingSpace ? 'person-pending' : 'generic';
     if (Spaces.isPersonProfileSpace(space) && space.entity && ID.equals(space.entity.id, entityId)) return 'person';
   }
 
@@ -284,8 +267,6 @@ export function EntityPageBody(props: EntityPageBodyProps) {
    * the editor/properties footer — because the profile has its own tabs and its
    * own idea of what belongs under each.
    */
-  const personProfile = customView === 'person' ? <PersonProfileView entityId={entityId} spaceId={spaceId} /> : null;
-
   const tabsSection = (
     <EntityTabsSection
       entityId={entityId}
@@ -294,6 +275,31 @@ export function EntityPageBody(props: EntityPageBodyProps) {
       tabEntities={tabEntities}
     />
   );
+
+  /*
+   * Keyed on the entity, because the route does not remount these views on
+   * navigation — `default-entity-page` renders this component unkeyed, which
+   * `relation-chip-section` documents for the same reason. Following one person
+   * to the next would otherwise keep the previous profile's open tab and that
+   * tab's space and topic chips, and render B's record filtered by A's
+   * selection. The side panel escapes it only because `EntitySidePanelBody` is
+   * keyed; the route is not.
+   *
+   * The person's authored tabs go with it: they belong to the page Overview
+   * shows, and this is the only tab bar either of these surfaces has — the space
+   * route carries them in its own header instead, which is why the profile body
+   * there does not.
+   */
+  const personProfile =
+    customView === 'person' ? (
+      <PersonProfileView key={entityId} entityId={entityId} spaceId={spaceId} authoredTabs={tabsSection} />
+    ) : null;
+
+  // The space read is still out on an entity that might be a profile. Its header
+  // is already drawn above; what follows it is the part that depends on the
+  // answer, and the generic tabs-and-editor would have to be swapped out for the
+  // profile a moment later.
+  const isPersonPending = customView === 'person-pending';
 
   if (props.variant === 'sidePanel') {
     const { isRelationPage = false, previewName, previewDescription, notice, belowBodySlot, hideProperties } = props;
@@ -327,25 +333,26 @@ export function EntityPageBody(props: EntityPageBodyProps) {
               </div>
             </div>
             <Spacer height={40} />
-            {personProfile ?? (
-              <>
-                {tabsSection}
-                {notice ? (
-                  <>
-                    <Spacer height={24} />
-                    {notice}
-                  </>
-                ) : null}
-                <Spacer height={40} />
-                <EditorFooter
-                  entityId={entityId}
-                  spaceId={spaceId}
-                  variant="sidePanel"
-                  belowBodySlot={belowBodySlot}
-                  hideProperties={hideProperties}
-                />
-              </>
-            )}
+            {personProfile ??
+              (isPersonPending ? null : (
+                <>
+                  {tabsSection}
+                  {notice ? (
+                    <>
+                      <Spacer height={24} />
+                      {notice}
+                    </>
+                  ) : null}
+                  <Spacer height={40} />
+                  <EditorFooter
+                    entityId={entityId}
+                    spaceId={spaceId}
+                    variant="sidePanel"
+                    belowBodySlot={belowBodySlot}
+                    hideProperties={hideProperties}
+                  />
+                </>
+              ))}
           </div>
         </EntityPageContentContainer>
       </div>
@@ -378,21 +385,22 @@ export function EntityPageBody(props: EntityPageBodyProps) {
         <Spacer height={24} />
         <TypeSchemaInline entityId={entityId} spaceId={spaceId} />
         <Spacer height={16} />
-        {personProfile ?? (
-          <>
-            {tabsSection}
-            {notice ? <Spacer height={24} /> : null}
-            {notice}
-            {(showSpacer || !!notice) && <Spacer height={40} />}
-            <EditorFooter
-              entityId={entityId}
-              spaceId={spaceId}
-              variant="route"
-              belowBodySlot={belowBodySlot}
-              hideProperties={hideProperties}
-            />
-          </>
-        )}
+        {personProfile ??
+          (isPersonPending ? null : (
+            <>
+              {tabsSection}
+              {notice ? <Spacer height={24} /> : null}
+              {notice}
+              {(showSpacer || !!notice) && <Spacer height={40} />}
+              <EditorFooter
+                entityId={entityId}
+                spaceId={spaceId}
+                variant="route"
+                belowBodySlot={belowBodySlot}
+                hideProperties={hideProperties}
+              />
+            </>
+          ))}
       </EntityPageContentContainer>
     </>
   );

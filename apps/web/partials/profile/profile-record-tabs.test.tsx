@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
@@ -70,6 +70,40 @@ describe('ProfileRecordTabs', () => {
     renderTabs();
 
     expect(screen.getByTestId('panel')).toHaveTextContent('overview');
+  });
+
+  /**
+   * A person's authored tabs belong to the page Overview shows.
+   *
+   * The space route carries them in its own header; neither of the surfaces this
+   * renders on has one, so dropping them here left a person's authored pages
+   * unreachable from the panel entirely — reachable on their space and nowhere
+   * else.
+   */
+  it('renders the authored tabs inside Overview', () => {
+    render(
+      <ProfileRecordTabs
+        entityId="person-1"
+        spaceId="space-1"
+        authoredTabs={<div data-testid="authored">authored</div>}
+      />
+    );
+
+    expect(screen.getByTestId('authored')).toBeInTheDocument();
+  });
+
+  it('does not repeat them on the record tabs', () => {
+    render(
+      <ProfileRecordTabs
+        entityId="person-1"
+        spaceId="space-1"
+        authoredTabs={<div data-testid="authored">authored</div>}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Debates' }));
+
+    expect(screen.queryByTestId('authored')).not.toBeInTheDocument();
   });
 
   it('switches the panel in place rather than navigating', async () => {

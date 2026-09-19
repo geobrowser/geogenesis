@@ -66,10 +66,20 @@ describe('customBrowseView', () => {
     expect(view({ entityId: OTHER_ENTITY })).toBe('generic');
   });
 
-  it('waits for the space rather than drawing the value sheet and replacing it', () => {
-    // The same rule the types already follow two branches up: nothing is shorter
-    // and quieter than the wrong page swapped out from under the reader.
-    expect(view({ space: null, isLoadingSpace: true })).toBe('pending');
+  /**
+   * `person-pending`, not `pending`.
+   *
+   * The two are different instructions to the caller: `pending` draws nothing at
+   * all, which is right when the entity's own types are unknown and the whole
+   * page is in question. Here only the *body* is — a profile and an ordinary
+   * Person entity have the same cover, avatar, name and bio — so the header is
+   * drawn either way and only what follows it waits.
+   *
+   * Blanking the page instead made every Person in a DAO space wait out a space
+   * read for a view it was never going to get.
+   */
+  it('holds back only the body while the space read is out', () => {
+    expect(view({ space: null, isLoadingSpace: true })).toBe('person-pending');
   });
 
   it('falls through when the space could not be read at all', () => {

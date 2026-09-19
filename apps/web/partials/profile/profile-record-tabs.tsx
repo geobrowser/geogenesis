@@ -3,21 +3,21 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { motion } from 'framer-motion';
 
 import { useProfileFacts } from '~/core/hooks/use-profile-facts';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useSpace } from '~/core/hooks/use-space';
-import { profileLinks } from '~/core/profile/profile-links';
+import { fallbackProposer, hasRecordToShow } from '~/core/profile/profile-proposer';
+import { profileRailFacts } from '~/core/profile/profile-rail-facts';
 import { heldPositionsCount, usePersonResponses } from '~/core/profile/use-person-positions';
-import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import type { Profile } from '~/core/types';
 
-import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Spacer } from '~/design-system/spacer';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 
 import { Editor } from '~/partials/editor/editor';
-import { BacklinksClientContainer } from '~/partials/entity-page/backlinks-client-container';
+import { EntityBacklinks } from '~/partials/entity-page/entity-backlinks';
 
 import { PersonDebatesTab } from './person-debates-tab';
 import { PersonPositionsTab } from './person-positions-tab';
@@ -47,7 +47,16 @@ type RecordTab = 'overview' | 'debates' | 'positions' | 'proposals' | 'about';
  * the profile cannot keep. Unknown counts show everything, since hiding a tab
  * holding hundreds of rows is the one outcome worse than showing an empty one.
  */
-export function ProfileRecordTabs({ entityId, spaceId }: { entityId: string; spaceId: string }) {
+export function ProfileRecordTabs({
+  entityId,
+  spaceId,
+  authoredTabs,
+}: {
+  entityId: string;
+  spaceId: string;
+  /** See `PersonProfileView`. Rendered inside Overview, above this person's page. */
+  authoredTabs?: React.ReactNode;
+}) {
   const [tab, setTab] = React.useState<RecordTab>('overview');
 
   const {
@@ -65,8 +74,14 @@ export function ProfileRecordTabs({ entityId, spaceId }: { entityId: string; spa
   const responses = usePersonResponses({ spaceId });
   const positions = heldPositionsCount(responses, facts.positions);
 
+  // Unknown counts offer every tab, which `hasRecordToShow` is the statement of
+  // — so a read that is still out or has failed is passed through as unknown
+  // rather than folded into a second rule here.
   const isCountKnown = !isLoadingFacts && !isFactsError;
-  const has = React.useCallback((count: number | null) => !isCountKnown || count === null || count > 0, [isCountKnown]);
+  const has = React.useCallback(
+    (count: number | null) => hasRecordToShow(isCountKnown ? count : undefined),
+    [isCountKnown]
+  );
 
   const tabs = React.useMemo(() => {
     const all: { id: RecordTab; label: string; shown: boolean }[] = [
@@ -96,49 +111,83 @@ export function ProfileRecordTabs({ entityId, spaceId }: { entityId: string; spa
             type="button"
             onClick={() => setTab(entry.id)}
             aria-current={tab === entry.id ? 'page' : undefined}
-            className={cx(tabGroupTabLinkStyles({ active: tab === entry.id }), 'shrink-0 pb-2')}
+            className={cx(tabGroupTabLinkStyles({ active: tab === entry.id }), 'relative shrink-0 pb-2')}
           >
             {entry.label}
+            {/*
+             * The underline is not decoration here, it is the only thing that
+             * says which tab is open: `tabGroupTabLinkStyles` gives an inactive
+             * tab `hover:text-text`, which is exactly the active colour, so
+             * hovering one made it indistinguishable from the open one.
+             *
+             * Same `layoutId` as `TabGroup`, so it slides between tabs the way
+             * the route's bar does rather than cutting.
+             */}
+            {tab === entry.id && (
+              <motion.div
+                layoutId="profile-record-tabs-active-border"
+                layout
+                initial={false}
+                transition={{ duration: 0.2 }}
+                className="absolute right-0 bottom-[-1px] left-0 h-px bg-text"
+              />
+            )}
           </button>
         ))}
       </div>
 
       <Spacer height={24} />
 
-      <TabPanel tab={tab} entityId={entityId} spaceId={spaceId} />
+      <TabPanel tab={tab} entityId={entityId} spaceId={spaceId} authoredTabs={authoredTabs} />
     </div>
   );
 }
 
-function TabPanel({ tab, entityId, spaceId }: { tab: RecordTab; entityId: string; spaceId: string }) {
+function TabPanel({
+  tab,
+  entityId,
+  spaceId,
+  authoredTabs,
+}: {
+  tab: RecordTab;
+  entityId: string;
+  spaceId: string;
+  authoredTabs?: React.ReactNode;
+}) {
   if (tab === 'debates') return <PersonDebatesTab spaceId={spaceId} />;
   if (tab === 'positions') return <PersonPositionsTab spaceId={spaceId} />;
   if (tab === 'proposals') return <ProposalsPanel spaceId={spaceId} />;
   if (tab === 'about') return <AboutPanel entityId={entityId} spaceId={spaceId} />;
 
-  return <OverviewPanel entityId={entityId} spaceId={spaceId} />;
+  return <OverviewPanel entityId={entityId} spaceId={spaceId} authoredTabs={authoredTabs} />;
 }
 
 /** What the space route's Overview shows: the record sections, then their page. */
-function OverviewPanel({ entityId, spaceId }: { entityId: string; spaceId: string }) {
+function OverviewPanel({
+  entityId,
+  spaceId,
+  authoredTabs,
+}: {
+  entityId: string;
+  spaceId: string;
+  authoredTabs?: React.ReactNode;
+}) {
   return (
     <>
       <PersonalSpaceProfile spaceId={spaceId} personEntityId={entityId} />
 
       <Spacer height={40} />
 
+      {/* This person's own tabs, which select what the editor below renders —
+          the same pairing the space route makes, minus its header. Renders
+          nothing for somebody who has authored none. */}
+      {authoredTabs}
+
       <Editor spaceId={spaceId} shouldHandleOwnSpacing />
 
       <Spacer height={40} />
 
-      {/*
-       * The *client* container, not the server one: this is a client component,
-       * so React re-invokes an async server component on every render — one
-       * entity page once sent `EntityBacklinksPage` 82 times that way (GEO-2666).
-       */}
-      <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-        <BacklinksClientContainer entityId={entityId} />
-      </TrackedErrorBoundary>
+      <EntityBacklinks entityId={entityId} />
     </>
   );
 }
@@ -146,31 +195,9 @@ function OverviewPanel({ entityId, spaceId }: { entityId: string; spaceId: strin
 /** The rail's cards, in the column — which is what the About route renders too. */
 function AboutPanel({ entityId, spaceId }: { entityId: string; spaceId: string }) {
   const { space } = useSpace(spaceId);
+  const facts = React.useMemo(() => profileRailFacts(space, spaceId), [space, spaceId]);
 
-  const links = React.useMemo(
-    () =>
-      profileLinks(
-        (space?.entity?.values ?? []).map(value => ({ property: { id: value.property.id }, value: value.value }))
-      ),
-    [space?.entity?.values]
-  );
-
-  const types = React.useMemo(
-    () => (space?.entity?.types ?? []).map(type => ({ id: type.id, name: type.name ?? null })),
-    [space?.entity?.types]
-  );
-
-  return (
-    <ProfileRailSections
-      spaceId={spaceId}
-      personEntityId={entityId}
-      types={types}
-      links={links}
-      systemEntityId={space?.entity?.id ?? spaceId}
-      address={space?.address ?? null}
-      spaceType={space?.type ?? 'PERSONAL'}
-    />
-  );
+  return <ProfileRailSections spaceId={spaceId} personEntityId={entityId} {...facts} />;
 }
 
 /**
@@ -184,18 +211,7 @@ function ProposalsPanel({ spaceId }: { spaceId: string }) {
   const { profilesBySpaceId } = useProfilesBySpaceIds(spaceIds);
 
   const proposer: Profile = React.useMemo(
-    () =>
-      profilesBySpaceId.get(spaceId) ?? {
-        // Someone the graph has no profile row for yet. The rows still render,
-        // unnamed — the same fallback the route makes.
-        id: spaceId,
-        spaceId,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: spaceId as `0x${string}`,
-        profileLink: null,
-      },
+    () => profilesBySpaceId.get(spaceId) ?? fallbackProposer(spaceId),
     [profilesBySpaceId, spaceId]
   );
 

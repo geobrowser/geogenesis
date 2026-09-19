@@ -30,7 +30,20 @@ import { ProfileRecordTabs } from './profile-record-tabs';
  * is already a single column with no rail, its facts moved into an About tab —
  * which is exactly the shape a side panel has, at every width.
  */
-export function PersonProfileView({ entityId, spaceId }: { entityId: string; spaceId: string }) {
+export function PersonProfileView({
+  entityId,
+  spaceId,
+  authoredTabs,
+}: {
+  entityId: string;
+  spaceId: string;
+  /**
+   * The person's own authored tabs, which the space route carries in its header
+   * and neither of these surfaces has one for. Rendered inside Overview, since
+   * that is the page they belong to.
+   */
+  authoredTabs?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col">
       {/* The roles line the space layout draws under the name. Renders nothing
@@ -39,7 +52,7 @@ export function PersonProfileView({ entityId, spaceId }: { entityId: string; spa
 
       <Spacer height={16} />
 
-      <ProfileRecordTabs entityId={entityId} spaceId={spaceId} />
+      <ProfileRecordTabs entityId={entityId} spaceId={spaceId} authoredTabs={authoredTabs} />
     </div>
   );
 }
