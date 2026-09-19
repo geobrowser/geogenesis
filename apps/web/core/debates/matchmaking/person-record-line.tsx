@@ -59,11 +59,11 @@ export function winRateLabel(winRate: NonNullable<PersonRecord['winRate']>): str
  * failure where absence reads as new — so this returns just the join date for someone who has not
  * started yet, and nothing at all for someone we know nothing about.
  */
-export function PersonRecordLine({ record }: { record: PersonRecord }) {
+export function PersonRecordLine({ record, activeSpaces }: { record: PersonRecord; activeSpaces?: React.ReactNode }) {
   const { positions, debatesArgued, winRate, joinedAt } = record;
   const hasStats = positions !== null || debatesArgued !== null || winRate !== null;
 
-  if (!hasStats && !joinedAt) return null;
+  if (!hasStats && !activeSpaces && !joinedAt) return null;
 
   return (
     <>
@@ -92,6 +92,7 @@ export function PersonRecordLine({ record }: { record: PersonRecord }) {
           )}
         </ul>
       )}
+      {activeSpaces}
       {joinedAt && (
         <Text as="p" variant="footnote" color="grey-04">
           On Geo since {formatJoinedAt(joinedAt)}

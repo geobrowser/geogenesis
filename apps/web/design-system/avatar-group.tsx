@@ -12,6 +12,11 @@ type AvatarGroupItemProps = {
   size?: 12 | 20;
 };
 
+type AvatarGroupOverflowProps = Omit<React.ComponentPropsWithoutRef<'li'>, 'children'> & {
+  count: number;
+  size?: 12 | 20;
+};
+
 export function AvatarGroup({ children, variant = 'overlap' }: Props) {
   const childCount = React.Children.count(children);
   const useSpacedLayout = variant === 'spaced' && childCount > 1;
@@ -51,4 +56,25 @@ function AvatarGroupItem({ children, size = 12 }: AvatarGroupItemProps) {
   );
 }
 
+/** The shared `+N` tail for an overlapping avatar stack. */
+function AvatarGroupOverflow({ count, size = 12, className, ...props }: AvatarGroupOverflowProps) {
+  if (count <= 0) return null;
+
+  const isCompact = size === 12;
+
+  return (
+    <li
+      {...props}
+      className={cx(
+        'relative box-content flex shrink-0 list-none items-center justify-center rounded-full border-2 border-[color:var(--avatar-group-ring,var(--color-white))] bg-grey-02 text-grey-04 tabular-nums',
+        isCompact ? 'h-3 px-1 text-[9px]' : 'h-5 px-1.5 text-[11px]',
+        className
+      )}
+    >
+      <span className={cx('block', isCompact ? 'h-3 leading-[12px]' : 'h-5 leading-[20px]')}>+{count}</span>
+    </li>
+  );
+}
+
 AvatarGroup.Item = AvatarGroupItem;
+AvatarGroup.Overflow = AvatarGroupOverflow;

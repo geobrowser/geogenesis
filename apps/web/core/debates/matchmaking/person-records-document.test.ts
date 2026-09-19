@@ -19,6 +19,10 @@ describe('buildPersonRecordsDocument', () => {
     expect(source.match(/relationsConnection/g)).toHaveLength(4);
     expect(source.match(/entity\(/g)).toHaveLength(2);
     expect(source.match(/^query /gm)).toHaveLength(1);
+    // The relation's publication space is the space the recorded debate belongs to.
+    expect(source.match(/fromEntityId\s+spaceId/g)).toHaveLength(4);
+    // The vote's publication space is where the person answered the claim.
+    expect(source.match(/objectId\s+spaceId/g)).toHaveLength(2);
   });
 
   // A hex id cannot start a GraphQL name — `07842862…` is not a valid alias — so aliases are
@@ -164,6 +168,31 @@ describe('readPersonRecords', () => {
     expect(records.get(A)?.positions).toBe(1);
   });
 
+  it('groups distinct answered claims by response space', () => {
+    const records = readPersonRecords(
+      {
+        p0_positions: {
+          totalCount: 4,
+          nodes: [
+            { objectId: 'c1', spaceId: 'space-one' },
+            { objectId: 'c1', spaceId: 'space-one' },
+            { objectId: 'c2', spaceId: 'space-one' },
+            { objectId: 'c1', spaceId: 'space-two' },
+          ],
+        },
+        p0_supported: { totalCount: 0, nodes: [] },
+        p0_opposed: { totalCount: 0, nodes: [] },
+        p0_joined: {},
+      },
+      [A]
+    );
+
+    expect([...records.get(A)!.claimsBySpace]).toEqual([
+      ['spaceone', 2],
+      ['spacetwo', 1],
+    ]);
+  });
+
   // Short is not the same as full. Someone holding exactly the page size has come back whole, and
   // withholding their count would be the boundary bug the relation cap already had once.
   it('does not call an exactly full page of positions short', () => {
@@ -209,6 +238,35 @@ describe('readPersonRecords', () => {
     );
 
     expect(records.get(A)?.debateIds).toEqual(['d1']);
+  });
+
+  it('groups distinct recorded debates by publication space', () => {
+    const records = readPersonRecords(
+      {
+        p0_positions: positions([]),
+        p0_supported: {
+          nodes: [
+            { fromEntityId: 'd1', spaceId: 'space-one' },
+            { fromEntityId: 'd2', spaceId: 'space-one' },
+          ],
+        },
+        // The repeated d1 models a malformed debate appearing on both sides. It remains one debate
+        // in the same way `debateIds` does, rather than inflating that space's activity.
+        p0_opposed: {
+          nodes: [
+            { fromEntityId: 'd1', spaceId: 'space-one' },
+            { fromEntityId: 'd3', spaceId: 'space-two' },
+          ],
+        },
+        p0_joined: {},
+      },
+      [A]
+    );
+
+    expect([...records.get(A)!.debatesBySpace]).toEqual([
+      ['spaceone', 2],
+      ['spacetwo', 1],
+    ]);
   });
 
   // The round trip an unusable id used to break: `A` is queried as `p0`, so decoding against the
@@ -288,8 +346,10 @@ describe('readPersonRecords', () => {
 
     expect(records.get(A)).toEqual({
       positions: 0,
+      claimsBySpace: new Map(),
       positionsTruncated: true,
       debateIds: [],
+      debatesBySpace: new Map(),
       truncated: true,
       createdAt: null,
     });

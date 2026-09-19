@@ -9,6 +9,7 @@ import { PersonRecordLine } from './person-record-line';
 const FULL: PersonRecord = {
   positions: 119,
   debatesArgued: 11,
+  activeSpaceIds: new Set(),
   winRate: { percent: 73, wins: 8, of: 11, judged: 11 },
   joinedAt: new Date(Date.UTC(2026, 0, 29)),
 };
