@@ -509,15 +509,20 @@ export function DebateClaimTickerStack({
     paintEdgeFade();
   }, [open, shown.length, paintEdgeFade]);
 
-  // The chip is the only thing on screen saying the backlog exists at all, and on a touch screen it
-  // is the only way to reach it: there is no hover, and the video behind is one large play/pause
-  // button, so the corner cannot quietly swallow a tap to mean something else.
-  //
-  // It stays up for the whole debate once there is anything to show. It used to be drawn only when
-  // no card was live, so it blinked out every time a claim was said and came back seconds later —
-  // the one fixed thing in the corner was the thing that moved most, and on a touch screen the way
-  // in disappeared exactly when the corner was worth opening.
-  const showChip = backlog.length > 0 && onTogglePinned !== undefined;
+  /**
+   * The chip is the only thing on screen saying the backlog exists at all, and on a touch screen it
+   * is the only way to reach it: there is no hover, and the video behind is one large play/pause
+   * button, so the corner cannot quietly swallow a tap to mean something else.
+   *
+   * It yields to a live card, though. The card sits on top of it in the column, so a chip that
+   * stayed up held the card 43px higher than it needed to be — and 43px up a phone tile is the
+   * difference between a card under the speaker's chin and a card across their face. There is also
+   * nothing for the chip to say in that moment: a claim is already on screen, which is the thing it
+   * exists to announce.
+   *
+   * Still drawn while the backlog is *open*, because there it is the way back out.
+   */
+  const showChip = backlog.length > 0 && onTogglePinned !== undefined && (open || cards.length === 0);
   if (shown.length === 0 && !showChip) return null;
 
   return (

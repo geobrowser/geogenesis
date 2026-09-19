@@ -339,13 +339,24 @@ describe('DebateClaimTickerStack', () => {
     expect(screen.queryByRole('button', { name: /Hide the claims/ })).not.toBeInTheDocument();
   });
 
-  // The corner used to draw the chip only when no card was live, so it blinked out every time a
-  // claim was said — the one fixed thing in the corner was the thing that moved most.
-  it('keeps the chip up while a claim is live', () => {
+  /**
+   * The chip sits under the card in the column, so one that stayed up while a claim was live held
+   * the card 43px higher than it needed to be — the difference, on a phone tile, between a card
+   * under the speaker's chin and a card across their face. It has nothing to announce in that
+   * moment either: the claim it would point at is already on screen.
+   */
+  it('gives way to a live claim so the card can sit at the bottom', () => {
     renderStack({ onTogglePinned: vi.fn() });
 
     expect(screen.getByText(/Supreme Court/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Show the 2 claims/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /claims said so far/ })).not.toBeInTheDocument();
+  });
+
+  // Still the way back out of an opened backlog, live card or not.
+  it('keeps the chip while the backlog is open', () => {
+    renderStack({ open: true, pinned: true, onTogglePinned: vi.fn() });
+
+    expect(screen.getByRole('button', { name: 'Hide the claims said so far' })).toBeInTheDocument();
   });
 
   /**
