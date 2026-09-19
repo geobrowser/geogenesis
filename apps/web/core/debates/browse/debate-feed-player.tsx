@@ -106,7 +106,13 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   // until hover meant there was no visible way to stop a video that had already started. Mute
   // recedes once the viewer has turned the sound on and has no more use for it; while muted it
   // stays, because feed debates autoplay silent and it is the only way to find the audio.
-  const recede = 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100';
+  //
+  // `no-hover:opacity-100` because a receding control needs a way back, and hover is not one on a
+  // phone. Without it the mute button faded out the moment the viewer turned the sound on and then
+  // stayed faded — invisible but still tappable, so a tap meant to pause the video muted it
+  // instead, and nothing could ever bring the control back. On a pointer device the hover that
+  // reveals it is the same gesture that makes a click possible, so there is no such window there.
+  const recede = 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 no-hover:opacity-100';
   const idle = !playing || playbackEnded;
 
   // Whether the scrubber is on screen, which the claim stack has to know as well as the scrubber
@@ -304,7 +310,17 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
                 'transition-opacity',
                 scrubberShown
                   ? 'opacity-100'
-                  : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100'
+                  : // `[&_button]:` as well as the wrapper itself, because the claim markers inside
+                    // set `pointer-events-auto` on themselves — they have to, so a drag can pass
+                    // between them to the range input underneath. An explicit value beats an
+                    // inherited one, so `pointer-events-none` here never reached them and a fully
+                    // transparent marker stayed clickable: a click meant to pause the video seeked
+                    // it instead. The descendant selector outranks the marker's own class.
+                    //
+                    // Focusability is deliberately untouched. Tabbing to a marker sets
+                    // `timelineFocused`, which is what brings the scrubber back into view, so the
+                    // keyboard route in depends on them staying in the tab order while hidden.
+                    'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [&_button]:pointer-events-none group-hover:[&_button]:pointer-events-auto'
               )}
             >
               <FeedScrubber

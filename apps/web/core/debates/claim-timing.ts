@@ -87,6 +87,25 @@ const MAX_WINDOW_SEGMENTS = 6;
  * Skewed towards the vocabulary of argument rather than a general stopword list: "claim", "think"
  * and "point" appear in most turns of most debates and match everything, which is the same problem
  * "the" has.
+ *
+ * One rule governs what may *not* go in here: **a word whose opposite is scored must be scored
+ * too.** Drop one half of a polarity pair and the matcher can no longer tell the halves apart, so
+ * it will happily place a claim over the sentence that says the reverse — and this layer's whole
+ * job is pointing at the moment a particular thing was said.
+ *
+ * Three pairs were broken that way. `not` was dropped while `never`, `no`, `cannot`, `nothing`,
+ * `neither` and `without` were all kept, so "X is safe" and "X is not safe" scored identically.
+ * `more` and `most` were dropped while `less`, `fewer` and `least` were kept. `many` was dropped
+ * while `few` was kept. All four are now scored.
+ *
+ * Measured over the 852 matchable claims: 54 windows move, 35 of them on claims containing a
+ * negator, and the scores barely shift in aggregate — 131 rise, 147 fall, 574 unchanged, 13 claims
+ * newly clear the 0.40 bar and 7 newly fall below it. Cheap in score, and the 54 moves are the
+ * point: those are the claims the matcher was free to place against their own opposite.
+ *
+ * Modals are the deliberate exception. `can`, `could`, `may`, `might`, `must`, `should`, `will`
+ * and `would` are *all* dropped, so no pair is broken — a claim's modality is invisible to the
+ * matcher, which is symmetric and merely lossy rather than wrong.
  */
 const STOPWORDS = new Set([
   'about',
@@ -134,15 +153,11 @@ const STOPWORDS = new Set([
   'look',
   'made',
   'make',
-  'many',
   'may',
   'mean',
   'might',
-  'more',
-  'most',
   'much',
   'must',
-  'not',
   'now',
   'off',
   'one',

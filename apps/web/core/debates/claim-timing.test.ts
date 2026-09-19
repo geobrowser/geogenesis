@@ -5,6 +5,7 @@ import {
   type ClaimTiming,
   LIVE_TIMING_CONFIDENCE,
   claimsInSpokenOrder,
+  contentWords,
   findBlockWindow,
   formatTimecode,
   isAssertableMoment,
@@ -398,5 +399,39 @@ describe('formatTimecode', () => {
     expect(formatTimecode(9_400)).toBe('0:09');
     expect(formatTimecode(134_600)).toBe('2:15');
     expect(formatTimecode(270_000)).toBe('4:30');
+  });
+});
+
+/**
+ * The rule the stopword list has to keep: a word whose opposite is scored must be scored too.
+ * Drop one half of a pair and the matcher cannot tell "X is safe" from "X is not safe", and will
+ * place the claim over whichever window it meets first.
+ */
+describe('contentWords keeps both halves of a polarity pair', () => {
+  const pairs: [string, string][] = [
+    ['not', 'never'],
+    ['more', 'less'],
+    ['most', 'least'],
+    ['many', 'few'],
+  ];
+
+  for (const [word, opposite] of pairs) {
+    it(`scores "${word}" as well as "${opposite}"`, () => {
+      expect(contentWords(`funding is ${word} available`)).toContain(word);
+      expect(contentWords(`funding is ${opposite} available`)).toContain(opposite);
+    });
+  }
+
+  // The claim and its reverse must not reduce to the same set, which is what let the matcher
+  // choose between them arbitrarily.
+  it('tells a claim apart from its negation', () => {
+    expect(contentWords('vaccination was safe')).not.toEqual(contentWords('vaccination was not safe'));
+  });
+
+  // Modality is dropped on purpose, and symmetrically, so no pair is broken.
+  it('drops every modal, so none outranks another', () => {
+    for (const modal of ['can', 'could', 'may', 'might', 'must', 'should', 'will', 'would']) {
+      expect(contentWords(`funding ${modal} arrive`)).not.toContain(modal);
+    }
   });
 });

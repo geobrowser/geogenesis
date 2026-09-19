@@ -626,11 +626,16 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
        * whatsoever. `absolute opacity-0` keeps it focusable and costs no layout, and focus brings it
        * back into the flow so the focus ring lands on something the viewer can see.
        *
+       * `pointer-events-none` is stated rather than inherited from the host. It already resolved to
+       * `none` through inheritance — measured, clicks at the invisible chip's own coordinates land
+       * on the card behind it — but that depended on an ancestor nobody editing this file can see,
+       * and the sibling scroll box next to it sets `auto`. One class makes the intent local.
+       *
        * Hidden by position rather than by `sr-only`: that utility also zeroes padding and height,
        * and Tailwind emits its `not-sr-only` counterpart *after* `px-2` and `h-5`, so restoring the
        * chip would have stripped its own shape. Checked, not assumed.
        */
-      className="absolute flex h-5 shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 text-[0.75rem] leading-[1.0625rem] text-white opacity-0 backdrop-blur-[44px] transition-colors after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] hover:bg-[#151515]/50 focus-visible:pointer-events-auto focus-visible:relative focus-visible:opacity-100 no-hover:pointer-events-auto no-hover:relative no-hover:opacity-100"
+      className="pointer-events-none absolute flex h-5 shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 text-[0.75rem] leading-[1.0625rem] text-white opacity-0 backdrop-blur-[44px] transition-colors after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] hover:bg-[#151515]/50 focus-visible:pointer-events-auto focus-visible:relative focus-visible:opacity-100 no-hover:pointer-events-auto no-hover:relative no-hover:opacity-100"
     >
       <InfoSmall color="white" />
       <span className="tabular-nums">{expanded ? 'Hide' : `${count} ${count === 1 ? 'claim' : 'claims'}`}</span>

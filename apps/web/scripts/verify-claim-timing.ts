@@ -43,7 +43,8 @@ for (const claim of ordered) {
 // strength of its transcript match alone — which is the fallback working, and also the thing worth
 // knowing about, since neither surface distinguishes an inferred moment from a published one.
 const bySource = new Map<string, number>();
-for (const claim of ordered) bySource.set(claim.timing?.source ?? 'none', (bySource.get(claim.timing?.source ?? 'none') ?? 0) + 1);
+for (const claim of ordered)
+  bySource.set(claim.timing?.source ?? 'none', (bySource.get(claim.timing?.source ?? 'none') ?? 0) + 1);
 console.log(`\nby source: ${[...bySource].map(([key, count]) => `${key}=${count}`).join('  ')}`);
 const assertable = ordered.filter(claim => isAssertableMoment(claim.timing)).length;
 console.log(`firm enough to state — timecode, live card: ${assertable} of ${ordered.length}`);
@@ -57,11 +58,25 @@ console.log(`used for ordering only (matched, below the bar): ${belowBar}`);
 const windows = tickerWindows(ordered);
 console.log(`\nticker-eligible claims: ${windows.length} of ${ordered.length}`);
 
-const markers = claimMarkers(ordered, 270_000);
+/**
+ * The debate's own length, taken from the transcript.
+ *
+ * This was hard-coded to 270s while the script accepts any debate id, so every marker's `fraction`
+ * was scaled against the wrong timeline and the playback sample stopped at 4:30 — on a longer
+ * debate it silently checked the first four and a half minutes and called that the UI.
+ */
+const timelineMs = segments.reduce((end, segment) => Math.max(end, segment.end_ms), 0);
+if (timelineMs === 0) {
+  console.log('\nno transcript, so no timeline to place markers on — stopping here.');
+  process.exit(0);
+}
+console.log(`timeline: ${(timelineMs / 1000).toFixed(0)}s`);
+
+const markers = claimMarkers(ordered, timelineMs);
 console.log(`scrubber markers: ${markers.length}`);
 
 console.log('\nWhat the viewer sees, sampled every 10s:');
-for (let ms = 0; ms <= 270_000; ms += 10_000) {
+for (let ms = 0; ms <= timelineMs; ms += 10_000) {
   const stack = tickerStack(windows, ms);
   for (const card of stack) {
     console.log(
