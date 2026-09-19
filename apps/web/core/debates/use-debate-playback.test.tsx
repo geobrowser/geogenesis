@@ -109,6 +109,23 @@ describe('useDebatePlayback — playback URLs survive re-activation (GEO-2895)',
 });
 
 /**
+ * The rejection WebKit gives for a refused autoplay, in the shape it gives it (GEO-2978).
+ *
+ * A `DOMException` rather than an `Error`, because that is what `play()` rejects with and the two
+ * are not interchangeable to a guard written as `instanceof Error`. Classification reads the
+ * `name`; the message is here only so that a fixture matching on prose would be seen to be wrong.
+ */
+const refusal = () =>
+  new DOMException('The request is not allowed by the user agent or the platform.', 'NotAllowedError');
+
+/**
+ * And the rejection our own `pause()` produces, which must never read as a refusal — note that
+ * Chrome's wording for it mentions the user agent too.
+ */
+const interruption = () =>
+  new DOMException('The play() request was interrupted by the user agent.', 'AbortError');
+
+/**
  * A fake <video> that models the one browser behaviour this race depends on: calling
  * `pause()` while a `play()` promise is still pending rejects that promise and leaves the
  * element paused. Without modelling that, an interrupted resume looks like a successful one
@@ -137,7 +154,7 @@ function fakeVideo() {
     },
     pause() {
       video.paused = true;
-      video.pending?.reject(new Error('The play() request was interrupted by a call to pause()'));
+      video.pending?.reject(new DOMException('The play() request was interrupted by a call to pause()', 'AbortError'));
       video.pending = null;
     },
     /**
@@ -145,7 +162,7 @@ function fakeVideo() {
      * Distinct from pause(): nothing superseded this attempt, so it must still be reported.
      */
     rejectPlay() {
-      video.pending?.reject(new Error('play() failed because the user agent does not allow it'));
+      video.pending?.reject(refusal());
       video.pending = null;
     },
     /** Let the in-flight play() succeed, as the browser would once the media starts. */
@@ -171,6 +188,17 @@ function fakeVideo() {
     browserResume() {
       video.paused = false;
     },
+    /**
+     * Reject the in-flight play() as an interruption, leaving the element paused.
+     *
+     * The shape a refusal must not be confused with: same rejection channel, same mention of the
+     * user agent, opposite meaning — one is the device saying no, the other is us calling pause().
+     */
+    interruptPlay() {
+      video.paused = true;
+      video.pending?.reject(interruption());
+      video.pending = null;
+    },
     /** Resolve the play() without the element ever starting — a stall, or a recording that 404s. */
     stallPlay() {
       video.pending?.resolve();
@@ -187,7 +215,7 @@ function fakeVideo() {
     detachPlay() {
       const detached = video.pending;
       video.pending = null;
-      return () => detached?.reject(new Error('play() failed because the user agent does not allow it'));
+      return () => detached?.reject(refusal());
     },
   };
   return video as unknown as HTMLVideoElement & {
@@ -198,6 +226,7 @@ function fakeVideo() {
     browserResume: () => void;
     stallPlay: () => void;
     detachPlay: () => () => void;
+    interruptPlay: () => void;
   };
 }
 
@@ -388,6 +417,40 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
     expect(result.current.playing).toBe(false);
     expect(result.current.autoplayBlocked).toBe(false);
     expect(result.current.error).toBe('Could not play both videos. Try Play again.');
+  });
+
+  /**
+   * An interruption is not a refusal, however it is worded.
+   *
+   * Classification used to fall back to matching the rejection's message, and a phrase broad
+   * enough to catch WebKit's "not allowed by the user agent" also catches Chrome interrupting
+   * with the user agent in the sentence. Read as a refusal, an ordinary pause or scroll-away
+   * would latch the tap control and stop the card autoplaying for the rest of the session — the
+   * exact failure this change exists to remove, caused by the fix for it.
+   */
+  it('does not read an interruption that mentions the user agent as a refusal', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.interruptPlay();
+      slot2.interruptPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.autoplayBlocked).toBe(false);
+
+    // And the card still autoplays when asked again, which latching would have prevented.
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.playing).toBe(true);
   });
 
   /** The positive control: an uninterrupted resume still reports playback. */

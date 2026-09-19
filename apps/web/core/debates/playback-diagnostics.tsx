@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { usePlaybackDiagnosticsEnabled } from '~/core/state/feature-flags';
+import { errorName } from '~/core/utils/error-name';
 
 /**
  * Why a debate video on screen is not playing, answered on the device it is not
@@ -60,7 +61,9 @@ function patchMediaElement() {
     if (result && typeof result.then === 'function') {
       result.then(
         () => note(this, 'ok'),
-        (error: unknown) => note(this, `REJECTED:${error instanceof Error ? error.name : 'unknown'}`)
+        // Structurally, not behind `instanceof Error`: `play()` rejects with a `DOMException`,
+        // and reporting the refusal that matters as `unknown` would waste the whole reading.
+        (error: unknown) => note(this, `REJECTED:${errorName(error)}`)
       );
     }
 

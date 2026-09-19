@@ -520,7 +520,7 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
         await Promise.resolve();
         // And the user agent takes it back.
         video.paused = true;
-        throw Object.assign(new Error('refused'), { name: 'NotAllowedError' });
+        throw new DOMException('The request is not allowed by the user agent or the platform.', 'NotAllowedError');
       },
     };
     return video;
@@ -546,7 +546,7 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
         async play() {
           video.plays += 1;
           video.paused = false;
-          throw Object.assign(new Error('refused'), { name: 'NotAllowedError' });
+          throw new DOMException('The request is not allowed by the user agent or the platform.', 'NotAllowedError');
         },
       };
       return video;
@@ -568,7 +568,7 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
     const b = fakeVideo({ muted: true, blockUnmuted: false });
     a.play = async function refuse() {
       a.plays += 1;
-      throw Object.assign(new Error('refused'), { name: 'NotAllowedError' });
+      throw new DOMException('The request is not allowed by the user agent or the platform.', 'NotAllowedError');
     };
     b.play = a.play.bind(b);
 
@@ -594,13 +594,19 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
     expect(await playBothWithMutedFallback(stalled(), stalled())).toBe('blocked');
   });
 
-  /** But an interruption of ours is still a cancellation, not a refusal. */
+  /**
+   * But an interruption of ours is still a cancellation, not a refusal — and the wording is the
+   * point. Classification used to fall back to matching the message, where a phrase broad enough
+   * for WebKit's "not allowed by the user agent" also caught an interruption that named the user
+   * agent. That turns an ordinary pause or scroll-away into a latched refusal, which stops the
+   * card autoplaying for the rest of the session. Only the `name` separates the two.
+   */
   it('still reports a cancellation when our own pause interrupted the attempt', async () => {
     const a = fakeVideo({ muted: true, blockUnmuted: false });
     const b = fakeVideo({ muted: true, blockUnmuted: false });
     a.play = async function abort() {
       a.plays += 1;
-      throw Object.assign(new Error('interrupted by a call to pause()'), { name: 'AbortError' });
+      throw new DOMException('The play() request was interrupted by the user agent.', 'AbortError');
     };
     b.play = a.play.bind(b);
 

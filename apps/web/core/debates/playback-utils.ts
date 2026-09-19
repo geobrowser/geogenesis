@@ -1,3 +1,5 @@
+import { errorName } from '~/core/utils/error-name';
+
 import type { Debate, DebateMediaResponse, DebateMediaTurnSegment, DebateParticipant, ParticipantSlot } from './api';
 
 export type TurnState = {
@@ -325,16 +327,20 @@ async function bothRunning(
 }
 
 /**
- * Whether a rejected `play()` was the browser declining, rather than us
- * interrupting.
+ * Whether a rejected `play()` was the browser declining, rather than us interrupting.
  *
- * Real engines name it; the message is checked too because a rejection that
- * crosses a boundary can arrive as a plain `Error` carrying the same sentence.
+ * On the name only. `play()` rejects with a `DOMException` and the spec names it: `NotAllowedError`
+ * for a policy refusal, `AbortError` for an interruption — which, here, is almost always our own
+ * `pause()`. Matching the *message* instead conflates them, because the engines do not agree on
+ * wording and their phrases overlap: WebKit refuses with "not allowed by the user agent", while
+ * Chrome interrupts with "the play() request was interrupted", and a substring broad enough to
+ * catch the first catches interruptions that mention the user agent too. Calling one of those a
+ * refusal latches the tap control and stops autoplay after an ordinary scroll.
+ *
+ * `errorName` rather than `instanceof Error`, for the reason documented there.
  */
 function isRefusal(reason: unknown): boolean {
-  if (!(reason instanceof Error)) return false;
-
-  return reason.name === 'NotAllowedError' || /notallowed|does not allow|user agent/i.test(reason.message);
+  return errorName(reason) === 'NotAllowedError';
 }
 
 export async function playBothWithMutedFallback(
