@@ -443,9 +443,17 @@ function DebaterVideo({
           the open list climbed to the debater's chin — more of their face than it needs, and
           further than the edge fade can dissolve.
 
-          Capped at the 209px the frame draws it at. The explore card is 484px wide, where 43% comes
-          out at exactly that; the fullscreen player is far wider, and letting the card scale with it
-          would hold a paragraph and stop being a glance.
+          Capped at 260px rather than the 209px the frame draws, which is a deliberate departure.
+          Measured over all 854 published claims in Calibre at 16/17, a 209px card shows a claim
+          whole 30% of the time and the median claim runs to four lines — the card is a fragment
+          ending in an ellipsis more often than not. 260px takes that to 66% at the same three
+          lines and the same 97px height; it is the only lever that buys legibility without
+          climbing the speaker's face. The extractor's claims are simply longer than the frame
+          assumed. 54% is where the explore card's 484px tile lands on 260; the fullscreen player
+          is far wider, and the cap is what stops the card there rather than holding a paragraph.
+
+          The phone keeps 62%, which on its ~361px tile comes out at 224px — a little wider than
+          before, without the card taking three quarters of the picture.
 
           `md:w-[62%]` because the 43% is the only measurement in this layer that is a share of the
           tile rather than a size. Everything else — the type, the avatar, the padding — is fixed px
@@ -467,7 +475,7 @@ function DebaterVideo({
       {claims && (
         <div
           className={cx(
-            'pointer-events-none absolute right-3 bottom-3 z-10 flex w-[43%] max-w-[13.0625rem] flex-col items-end justify-end transition-[padding-bottom] duration-150 md:w-[62%]',
+            'pointer-events-none absolute right-3 bottom-3 z-10 flex w-[54%] max-w-[16.25rem] flex-col items-end justify-end transition-[padding-bottom] duration-150 md:w-[62%]',
             // Only the open list needs holding back; the live card is one card tall.
             claimsOpen && 'max-h-[60%]',
             // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling
@@ -482,12 +490,21 @@ function DebaterVideo({
       )}
 
       {/* Debater identity, opens their personal space in the side panel. On the left, opposite the
-          claim corner. */}
+          claim corner.
+
+          38% rather than 55%, because the wider card now reaches 260px and the two share this band
+          on a pointer device. On the 484px explore tile the card leaves 188px here once both insets
+          are paid, and 38% is 184 of it. The cap was never close to binding anyway: measured in
+          Calibre at 16px a name row runs 96px for "Arturas Vil" and 142px for "Bertrand Armando",
+          20–29% of the tile. Only something like "Konstantinos Papadopoulos" (198px) now truncates.
+
+          The phone does not share the band — the chip sits between the card and this row whenever
+          there is a card to show — so nothing there depends on this number. */}
       <button
         type="button"
         onClick={openProfile}
         className={cx(
-          'absolute bottom-3 left-4 z-10 flex max-w-[55%] items-center gap-2 text-left transition-[padding-bottom] duration-150',
+          'absolute bottom-3 left-4 z-10 flex max-w-[38%] items-center gap-2 text-left transition-[padding-bottom] duration-150',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
           // Padding rather than `bottom`, because the box is pinned by its bottom edge — the
