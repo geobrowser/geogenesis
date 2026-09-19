@@ -466,11 +466,12 @@ function DebaterVideo({
           tried and reverted — 242px reads better as a corner label but shows only about 13% of
           claims whole, which is a look bought with most of the legibility.
 
-          `bottom-[2.375rem]` puts the corner above the debater's name rather than beside it, which
-          is what lets the card have the width at all: the two used to share the bottom band, and a
-          260px card already left the name only 188px. It costs the card 26px of height on the
-          tile, which is the trade for keeping the name — and its link to the debater's profile —
-          on screen throughout.
+          Back on the name's own line, and drawn over it — `z-[11]` against the name's `z-10`,
+          under the subtitle's `z-20`. The corner had been lifted clear of the name, which cost 26px
+          of the tile's height for a gap nobody asked for. Sharing the line is what lets the card
+          have the full width: the name is still there and still a link the moment no card covers
+          it, and behind a card it goes under 30% dark and a 44px blur rather than being switched
+          off, which is the one thing that reads worse than either.
 
           A phone splits the difference by state rather than picking one width. A live card takes
           the whole tile — 93% of ~361px is 337, a 313px line, where two lines hold about 45% of
@@ -492,7 +493,7 @@ function DebaterVideo({
       {claims && (
         <div
           className={cx(
-            'pointer-events-none absolute right-3 bottom-[2.375rem] z-10 flex flex-col items-end justify-end transition-[padding-bottom] duration-150',
+            'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end transition-[padding-bottom] duration-150',
             // Two widths, by state rather than by screen. A live claim takes the whole tile,
             // because it is one line of somebody's argument and there is nothing to read it
             // against. The backlog is a list you have opened to scroll, and it should leave the
