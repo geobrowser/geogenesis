@@ -162,7 +162,10 @@ export function ExploreMetaRow({
         // copy of any semantic content.
         const hideDotOnCompactMobile = !segment.showOnCompactMobile || segment.key === firstCompactSegment?.key;
         const renderedSegment = compactOnMobile ? (
-          <span className={cx('contents', !segment.showOnCompactMobile && 'md:hidden')}>{segment.content}</span>
+          // Segments are intentionally arbitrary React nodes. In particular, the Join action is
+          // rooted in a div through Pending, so this wrapper must permit both block and inline
+          // content. A span here produces browser-repaired SSR markup and a hydration mismatch.
+          <div className={cx('contents', !segment.showOnCompactMobile && 'md:hidden')}>{segment.content}</div>
         ) : (
           segment.content
         );
@@ -187,7 +190,7 @@ export function ExploreMetaRow({
         className
       )}
     >
-      {compactOnMobile ? <span className="flex min-w-0 flex-1 flex-wrap items-center">{metadata}</span> : metadata}
+      {compactOnMobile ? <div className="flex min-w-0 flex-1 flex-wrap items-center">{metadata}</div> : metadata}
       {endSlot}
     </div>
   );

@@ -154,7 +154,15 @@ vi.mock('~/design-system/prefetch-link', () => ({
 
 vi.mock('~/design-system/fallback-image', () => ({ FallbackImage: () => <div data-testid="image" /> }));
 
-vi.mock('./explore-join-space-button', () => ({ ExploreJoinSpaceButton: () => <button type="button">Join</button> }));
+vi.mock('./explore-join-space-button', () => ({
+  // The real component is rooted in Pending's div. Preserve that content model here so the compact
+  // metadata test catches invalid inline wrappers that browsers repair before hydration.
+  ExploreJoinSpaceButton: () => (
+    <div data-testid="join-root">
+      <button type="button">Join</button>
+    </div>
+  ),
+}));
 
 type ObserverRecord = {
   callback: IntersectionObserverCallback;
@@ -369,7 +377,10 @@ describe('ClaimExploreFeedCard', () => {
     scrollIntoRange();
 
     expect(screen.getAllByText('Controversial')).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Join' }).closest('.contents')).not.toHaveClass('md:hidden');
+    const segmentWrapper = screen.getByTestId('join-root').closest('.contents');
+    expect(segmentWrapper).toHaveProperty('tagName', 'DIV');
+    expect(segmentWrapper).not.toHaveClass('md:hidden');
+    expect(segmentWrapper?.parentElement).toHaveProperty('tagName', 'DIV');
   });
 
   it('leaves the existing feed-row shell unchanged outside the Explore opt-in', () => {
