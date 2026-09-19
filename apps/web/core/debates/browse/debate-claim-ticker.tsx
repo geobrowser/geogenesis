@@ -265,8 +265,14 @@ export function DebateClaimTickerCard({
        * best fit at 44px: mean error 5.7/255 against the frame, where no blur at all scores 20.0.
        *
        * `shrink-0` so the open list scrolls a full-height card rather than compressing it to fit.
+       *
+       * The ramp arrives as `--claim-ramp`, and is refused where there is no pointer. It is a
+       * desktop affordance: on a hovering device the corner is a glance and the fade says "more
+       * above". On a phone it is something the reader opened on purpose and is reading, in a
+       * fraction of the area — an expanded claim ends up half dissolved with no way to bring it
+       * back, and the fade stops being a hint and starts being in the way.
        */
-      className="pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg bg-[#151515]/30 p-3 backdrop-blur-[44px]"
+      className="pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg bg-[#151515]/30 [mask-image:var(--claim-ramp,none)] p-3 backdrop-blur-[44px] [-webkit-mask-image:var(--claim-ramp,none)] no-hover:[mask-image:none] no-hover:[-webkit-mask-image:none]"
     >
       <TickerClaimHeader
         claimId={claim.id}
@@ -429,8 +435,9 @@ export function DebateClaimTickerStack({
       // against them. It is there to say "more above"; at the top there is not.
       const ramp =
         !open || atTop || untouched ? '' : `linear-gradient(to bottom, transparent ${clear}px, #000 ${opaque}px)`;
-      card.style.maskImage = ramp;
-      card.style.webkitMaskImage = ramp;
+      // Through a custom property rather than `mask-image` itself, so the card's own stylesheet can
+      // refuse it — see the `no-hover` override there.
+      card.style.setProperty('--claim-ramp', ramp || 'none');
     }
   }, [open]);
 
@@ -579,7 +586,7 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
         event.stopPropagation();
         onClick();
       }}
-      className="pointer-events-auto hidden shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 py-1.5 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-[44px] transition-colors hover:bg-[#151515]/50 no-hover:flex"
+      className="pointer-events-auto hidden shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2.5 py-2.5 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-[44px] transition-colors hover:bg-[#151515]/50 no-hover:flex"
     >
       <InfoSmall color="white" />
       <span className="tabular-nums">{expanded ? 'Hide' : `${count} ${count === 1 ? 'claim' : 'claims'}`}</span>
@@ -737,7 +744,11 @@ function ClaimIconButton({
         // 20px of target around a 12px glyph, but `-my-0.5` so the extra 4px grows into the card's
         // padding instead of the header row. The frame's row is the avatar's 16px, and a button
         // that sets the row taller pushes the whole card past the 97px the frame draws.
-        '-my-0.5 grid size-5 place-items-center rounded-sm transition-colors disabled:cursor-default',
+        //
+        // 28px on a touch screen, by the same trick: a 20px target is comfortable under a cursor
+        // and small under a thumb. The negative margin absorbs all of the growth, so the row stays
+        // 16px and the card stays 97px on both.
+        '-my-0.5 grid size-5 place-items-center rounded-sm transition-colors disabled:cursor-default md:-my-1.5 md:size-7',
         // Recessive until it matters: dim at rest, brighter on hover, and unmistakable once the
         // reader has actually taken a side.
         selected

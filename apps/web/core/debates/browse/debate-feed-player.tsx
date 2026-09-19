@@ -447,6 +447,13 @@ function DebaterVideo({
           out at exactly that; the fullscreen player is far wider, and letting the card scale with it
           would hold a paragraph and stop being a glance.
 
+          `md:w-[62%]` because the 43% is the only measurement in this layer that is a share of the
+          tile rather than a size. Everything else — the type, the avatar, the padding — is fixed px
+          and lands on a phone at exactly the size the frame draws it. The card did not: a ~355px
+          phone tile gave it 153px, so the same 16px type had 129px of line against the frame's
+          185px, and a claim that reads as two lines on a desktop ran to four cramped ones. 62% of
+          that tile is 220px, which the cap trims back to the frame's own 209.
+
           `items-end` because that cap is a cap, not a width. A flex column stretches its children
           by default, which drew the little claims chip as a 209px bar with two words adrift in it.
           The cards ask for the full width themselves; everything else here should be its own size,
@@ -460,7 +467,7 @@ function DebaterVideo({
       {claims && (
         <div
           className={cx(
-            'pointer-events-none absolute right-3 bottom-3 z-10 flex w-[43%] max-w-[13.0625rem] flex-col items-end justify-end transition-[padding-bottom] duration-150',
+            'pointer-events-none absolute right-3 bottom-3 z-10 flex w-[43%] max-w-[13.0625rem] flex-col items-end justify-end transition-[padding-bottom] duration-150 md:w-[62%]',
             // Only the open list needs holding back; the live card is one card tall.
             claimsOpen && 'max-h-[60%]',
             // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling

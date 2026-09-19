@@ -365,9 +365,14 @@ describe('DebateClaimTickerStack', () => {
     expect(list.style.webkitMaskImage).toBe('');
   });
 
-  /** The ramp's two stops, in px. Read off the value rather than the string, which jsdom rewrites. */
-  const rampStops = (card: HTMLElement) =>
-    [...card.style.maskImage.matchAll(/(-?[\d.]+)px/g)].map(match => Number(match[1]));
+  /**
+   * The ramp's two stops, in px.
+   *
+   * Read off `--claim-ramp` rather than `mask-image`: the ramp is written to a custom property so
+   * the card's stylesheet can refuse it on a device with no pointer, where the fade is in the way.
+   */
+  const ramp = (card: HTMLElement) => card.style.getPropertyValue('--claim-ramp');
+  const rampStops = (card: HTMLElement) => [...ramp(card).matchAll(/(-?[\d.]+)px/g)].map(m => Number(m[1]));
 
   /** Three deep, so the ramp has a card above it, one across it, and one below its reach. */
   const deepHistory = [
@@ -404,9 +409,9 @@ describe('DebateClaimTickerStack', () => {
     // The second card's top is exactly at the edge, so it carries the ramp from its own origin.
     expect(rampStops(cards[1])).toEqual([4.65, 71.5]);
     // The first has travelled wholly above the edge, where the list's overflow already hides it.
-    expect(cards[0].style.maskImage).toBe('');
+    expect(ramp(cards[0])).toBe('none');
     // The third starts below the ramp's reach and is drawn whole.
-    expect(cards[2].style.maskImage).toBe('');
+    expect(ramp(cards[2])).toBe('none');
   });
 
   // The ramp stays with the edge while the cards move under it.
@@ -432,11 +437,11 @@ describe('DebateClaimTickerStack', () => {
     const cards = layOut(list);
 
     fireEvent.scroll(list, { target: { scrollTop: 100 } });
-    expect(cards[1].style.maskImage).not.toBe('');
+    expect(ramp(cards[1])).not.toBe('none');
 
     fireEvent.scroll(list, { target: { scrollTop: 0 } });
 
-    for (const card of cards) expect(card.style.maskImage).toBe('');
+    for (const card of cards) expect(ramp(card)).toBe('none');
   });
 
   // The ramp is written to the nodes, and the newest card survives the close.
@@ -446,7 +451,7 @@ describe('DebateClaimTickerStack', () => {
     const cards = layOut(list);
 
     fireEvent.scroll(list, { target: { scrollTop: 100 } });
-    expect(cards[1].style.maskImage).not.toBe('');
+    expect(ramp(cards[1])).not.toBe('none');
 
     rerender(
       <DebateClaimTickerStack
@@ -459,7 +464,7 @@ describe('DebateClaimTickerStack', () => {
       />
     );
 
-    for (const card of [...list.children] as HTMLElement[]) expect(card.style.maskImage).toBe('');
+    for (const card of [...list.children] as HTMLElement[]) expect(ramp(card)).toBe('none');
   });
 
   // The gaps between cards are holes in the list, and the video behind is one big play/pause
