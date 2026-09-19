@@ -189,21 +189,28 @@ function ActivityGallery({
        * right. Spacers are honoured on both sides, and `scroll-px` keeps a
        * snapped card off the edge it lands against.
        */}
-      <div
-        ref={scrollerRef}
-        className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 items-stretch gap-4 overflow-x-auto py-2"
-      >
-        <span aria-hidden className="w-0 shrink-0 pl-4" />
-        {shown.map(row => (
-          <GalleryCard
-            key={`${row.entityId}-${row.spaceId}`}
-            row={row}
-            label={spaceLabel(labelsById, row.spaceId)}
-            response={responseByClaimId?.[normId(row.entityId)]}
-            personName={personName}
-          />
-        ))}
-        <span aria-hidden className="w-0 shrink-0 pr-4" />
+      {/* `@container` on a wrapper rather than on the scroller itself: the
+          container types imply `contain: inline-size`, and containing the
+          element whose overflow is the whole point is a bad trade for one class.
+          The wrapper is the width the reader actually sees, which is what the
+          cards want to measure — see `GalleryCard`. */}
+      <div className="@container">
+        <div
+          ref={scrollerRef}
+          className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 items-stretch gap-4 overflow-x-auto py-2"
+        >
+          <span aria-hidden className="w-0 shrink-0 pl-4" />
+          {shown.map(row => (
+            <GalleryCard
+              key={`${row.entityId}-${row.spaceId}`}
+              row={row}
+              label={spaceLabel(labelsById, row.spaceId)}
+              response={responseByClaimId?.[normId(row.entityId)]}
+              personName={personName}
+            />
+          ))}
+          <span aria-hidden className="w-0 shrink-0 pr-4" />
+        </div>
       </div>
     </DebatePlaybackGate>
   );
@@ -310,7 +317,12 @@ function GalleryCard({
     <div
       data-activity-card
       className={cx(
-        'w-[min(420px,80vw)] shrink-0 snap-start',
+        // `cqw`, not `vw`. The viewport is the wrong ruler for a card in a side
+        // panel: the panel is a column of its own width inside a window that may
+        // be three times wider, so `80vw` there is not 80% of anything the reader
+        // can see. The scroller establishes the container this measures — see
+        // `ActivityGallery`.
+        'w-[min(420px,80cqw)] shrink-0 snap-start',
         // The lobby card brings its own outline; the feed's card does not, and
         // draws a rule underneath itself to separate it from the next card
         // *down* — which in a row is a line under nothing.

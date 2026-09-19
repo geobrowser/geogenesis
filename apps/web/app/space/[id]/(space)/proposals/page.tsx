@@ -4,6 +4,7 @@ import { Effect } from 'effect';
 import { notFound } from 'next/navigation';
 
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph';
+import { fallbackProposer } from '~/core/profile/profile-proposer';
 import type { Profile } from '~/core/types';
 import { Spaces } from '~/core/utils/space';
 
@@ -43,17 +44,4 @@ export default async function ProposalsPage(props: Props) {
   const [proposer] = await Effect.runPromise(fetchProfilesBySpaceIds([params.id]));
 
   return <PersonProposalsTab spaceId={params.id} proposer={proposer ?? fallbackProposer(params.id)} />;
-}
-
-/** Someone the graph has no profile row for yet. The rows still render, unnamed. */
-function fallbackProposer(spaceId: string): Profile {
-  return {
-    id: spaceId,
-    spaceId,
-    name: null,
-    avatarUrl: null,
-    coverUrl: null,
-    address: spaceId as `0x${string}`,
-    profileLink: null,
-  };
 }
