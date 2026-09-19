@@ -5,6 +5,8 @@ import { createGeoWalletConfig, createMockConfig } from '@geogenesis/auth/wallet
 
 import * as React from 'react';
 
+import { Button } from '~/design-system/button';
+
 import { trackPrivyAuth } from '../analytics';
 import { Environment } from '../environment';
 import { usePrepareOnboarding } from '../hooks/use-prepare-onboarding';
@@ -71,13 +73,13 @@ function PrivyConnectButton() {
   };
 
   return (
-    <button
-      type="button"
-      className="inline-flex h-11 cursor-pointer items-center justify-center rounded-full border-2 border-[#151515] bg-white px-5 font-[family-name:var(--font-geist-medium)] text-[20px] leading-none font-medium tracking-[-0.8px] text-[#151515] transition-[background-color,border-color,color,box-shadow] duration-150 hover:border-[#0e0e0e] hover:text-[#0e0e0e] hover:shadow-[inset_0_0_0_1px_#0e0e0e] focus-visible:border-[#0e0e0e] focus-visible:shadow-[inset_0_0_0_1px_#0e0e0e] focus-visible:outline-none max-[1730px]:text-[18px]"
+    <Button
+      variant="primary"
+      className="h-7 shrink-0 !gap-0 !rounded-full !border-transparent !bg-[#151515] !px-2.5 !py-0 !text-[16px] !leading-[13px] font-normal tracking-[-0.35px] whitespace-nowrap !text-white !shadow-none hover:!bg-[#151515] focus-visible:!border-text focus-visible:!shadow-inner-text"
       onClick={onLogin}
     >
       Log in
-    </button>
+    </Button>
   );
 }
 
