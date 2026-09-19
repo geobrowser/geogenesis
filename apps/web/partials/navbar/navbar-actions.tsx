@@ -376,6 +376,12 @@ function ModeToggle() {
         ref={toggleRef}
         onClick={onToggle}
         data-testid="edit-toggle"
+        // Icon-only, and every glyph inside is `aria-hidden`, so this announced as nothing. It was
+        // desktop-only until this branch put the account surface back on phones, which is what
+        // exposed it. The label says what pressing it does rather than what it is, and
+        // `aria-pressed` carries the state the two icons convey visually.
+        aria-label={editable ? 'Switch to browse mode' : 'Switch to edit mode'}
+        aria-pressed={editable}
         animate={controls}
         variants={variants}
         className="relative flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"

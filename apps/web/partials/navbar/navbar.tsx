@@ -23,8 +23,9 @@ export function Navbar({ onSearchClick, hideLogo = false }: Props) {
           on the right -- the only route to an account since they came back on mobile -- were the
           ones pushed out. The breadcrumb truncating is the right thing to lose. */}
       <div className="flex min-w-0 items-center gap-8 md:gap-4">
+        {/* The mark holds its size (`shrink-0`) so the squeeze lands on the breadcrumb text. */}
         {hideLogo ? null : (
-          <Link href={NavUtils.toRoot()}>
+          <Link href={NavUtils.toRoot()} className="shrink-0">
             <GeoLogoLarge />
           </Link>
         )}

@@ -47,7 +47,7 @@ const SpaceBreadcrumb = ({ spaceId }: SpaceBreadcrumbProps) => {
   const spaceImage = space.entity.image;
 
   return (
-    <Link href={NavUtils.toSpace(spaceId)} className="flex items-center justify-center gap-1.5">
+    <Link href={NavUtils.toSpace(spaceId)} className="flex min-w-0 items-center justify-center gap-1.5">
       <div className="relative h-4 w-4 overflow-hidden rounded-sm">
         <ThumbGeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" loading="eager" fetchPriority="high" />
       </div>
@@ -107,7 +107,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
 
   if (!entity || otherSpaces.length < 1) {
     return (
-      <Link href={NavUtils.toSpace(spaceId)} className="flex items-center justify-center gap-1.5">
+      <Link href={NavUtils.toSpace(spaceId)} className="flex min-w-0 items-center justify-center gap-1.5">
         <div className="relative h-4 w-4 overflow-hidden rounded-sm">
           <ThumbGeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" loading="eager" fetchPriority="high" />
         </div>

@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
     avatarUrl: 'ipfs://avatar',
   } as { name: string | null; avatarUrl: string | null } | null,
   personalSpaceId: 'personal-space' as string | null,
+  // `ModeToggle` renders only on a space page; null keeps it out of the other suites as before.
+  spaceId: null as string | null,
   isSmartAccountLoading: false,
   dialogMounts: 0,
   pendingPersonalSpace: { isPending: false, topicId: null as string | null },
@@ -50,7 +52,7 @@ vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => mocks.pendingPersonalSpace,
 }));
 vi.mock('~/core/state/feature-flags', () => ({}));
-vi.mock('~/core/hooks/use-space-id', () => ({ useSpaceId: () => null }));
+vi.mock('~/core/hooks/use-space-id', () => ({ useSpaceId: () => mocks.spaceId }));
 vi.mock('~/core/hooks/use-access-control', () => ({
   useAccessControl: () => ({ canEdit: false, isLoading: false }),
 }));
@@ -287,6 +289,21 @@ describe('NavbarActions profile menu', () => {
       expect(tapArea?.className ?? '').toContain('sm:w-11');
       // The avatar itself is untouched — the area around it grew, not the picture.
       expect(avatar.closest('.h-7')).not.toBeNull();
+    });
+  });
+
+  // Icon-only, every glyph inside `aria-hidden`, so it announced as nothing. It was desktop-only
+  // until this branch put the account surface back on phones, which is what exposed it — the same
+  // class of gap as the search, create and profile controls beside it.
+  describe('the edit mode toggle', () => {
+    it('says what pressing it does, and carries its state', async () => {
+      mocks.spaceId = 'space-1';
+      render(<NavbarActions />);
+
+      const toggle = await screen.findByTestId('edit-toggle');
+
+      expect(toggle).toHaveAccessibleName(/Switch to (edit|browse) mode/);
+      expect(toggle).toHaveAttribute('aria-pressed');
     });
   });
 
