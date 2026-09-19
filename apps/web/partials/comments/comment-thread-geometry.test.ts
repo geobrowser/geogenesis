@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { avatarBottomInRowPx, PAGE_DENSITY, PANEL_DENSITY, threadArmCenterPx, threadSpineOffsetPx } from './comment-density';
+import {
+  PAGE_DENSITY,
+  PANEL_DENSITY,
+  avatarBottomInRowPx,
+  threadArmCenterPx,
+  threadSpineOffsetPx,
+} from './comment-density';
 
 describe('threadSpineOffsetPx', () => {
   // The invariant, stated the way the layout actually works: a nested reply list is

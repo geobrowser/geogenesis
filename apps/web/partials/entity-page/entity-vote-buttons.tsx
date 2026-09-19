@@ -8,6 +8,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { Effect } from 'effect';
+import { useStore } from 'jotai';
 
 import { trackPrivyAuth } from '~/core/analytics';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
@@ -49,6 +50,8 @@ import { Skeleton } from '~/design-system/skeleton';
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
 import { VOTE_BUTTON_CLASS, VOTE_CHEVRON_SELECTED_CLASS } from '~/partials/entity-page/vote-button-styles';
 
+import { slideUpPopoverContainerAtom } from '~/atoms';
+
 const ENTITY_RESPONSE_OBJECT_TYPE = 0;
 
 type ResponseVariant = 'default' | 'thumbs' | 'chevrons';
@@ -69,6 +72,12 @@ export function EntityVoteButtons({
   presentation = 'inline',
 }: EntityVoteButtonsProps) {
   const prepareOnboarding = usePrepareOnboarding();
+  // Read rather than subscribed: this component renders once per claim on a list, and a subscription
+  // would re-render every one of them whenever a sheet opens or closes — which the batching tests
+  // rightly count as work. `Popover.Portal` only mounts when the popover opens, and opening renders
+  // anyway, so reading the store at that moment is current enough.
+  const store = useStore();
+  const slideUpPopoverContainer = store.get(slideUpPopoverContainerAtom);
   const responseBatch = useClaimResponseBatchState();
   // Deliberately unscoped by space. `store.getEntity` filters `relations` to the space asked for
   // but derives `types` from all of them, so a claim collected into another space — a data block
@@ -372,7 +381,9 @@ export function EntityVoteButtons({
             {displayLabel}
           </button>
         </Popover.Trigger>
-        <Popover.Portal>
+        {/* Into the sheet's own container when one is open, so this list is exempt from the sheet's
+            scroll lock; the body otherwise, unchanged. */}
+        <Popover.Portal container={slideUpPopoverContainer ?? undefined}>
           <Popover.Content
             align="center"
             side="bottom"

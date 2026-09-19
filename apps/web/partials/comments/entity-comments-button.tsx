@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 
 import { ExploreCommentsIcon } from '~/partials/explore/explore-comments-icon';
@@ -23,11 +24,14 @@ export function EntityCommentsButton({
 }: {
   entityId: string;
   spaceId: string;
+  /** A server-rendered count; the live one takes over as soon as the list has been read. */
   count: number;
   className?: string;
 }) {
   const { commentsTarget, openComments } = useEntityCommentsPanel();
   const isOpen = commentsTarget?.entityId === entityId;
+  // Commenting from the panel this button opens used to leave the number beside it behind.
+  const liveCount = useCommentCount(entityId, count);
 
   return (
     <button
@@ -35,7 +39,7 @@ export function EntityCommentsButton({
       // Marks this as an opener: clicking one while the panel is open switches
       // it to that entity rather than dismissing it as an outside click.
       data-entity-comments-opener
-      aria-label={`Comments (${count})`}
+      aria-label={`Comments (${liveCount})`}
       aria-expanded={isOpen}
       onClick={event => {
         // These rows are commonly wrapped in a link to the entity.
@@ -46,7 +50,7 @@ export function EntityCommentsButton({
       className={className ?? 'inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text'}
     >
       <ExploreCommentsIcon className="text-grey-04" />
-      <span className="text-[14px] font-normal tabular-nums">{count}</span>
+      <span className="text-[14px] font-normal tabular-nums">{liveCount}</span>
     </button>
   );
 }
