@@ -88,8 +88,6 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   // cannot shift the selection out from under them.
   const selected = available.find(kind => kind.key === selectedKey) ?? available[0];
 
-  const { galleryRef, contentRef, heldHeight, holdHeight } = useHeldHeight(selected?.key);
-
   // Nothing at all rather than an empty card. A heading over a blank space reads
   // as a page that failed to load, and most accounts have never been in a debate.
   if (kinds.some(kind => kind.isLoading) || available.length === 0 || !selected) return null;
@@ -113,11 +111,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
                   key={kind.key}
                   type="button"
                   aria-pressed={isSelected}
-                  onClick={() => {
-                    // Before the swap, so there is a height to hold.
-                    holdHeight();
-                    setSelectedKey(kind.key);
-                  }}
+                  onClick={() => setSelectedKey(kind.key)}
                   className={cx(
                     'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-smallButton transition-colors',
                     isSelected
@@ -136,39 +130,20 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
         )}
       </header>
 
-      {/*
-       * The gallery keeps the height it had while the kinds are swapped.
-       *
-       * Measured on a phone: Debates puts the document at 1198px with the
-       * reader 389px down it; the moment Claims is picked it is 874px, which is
-       * shorter than where they were standing, so the browser clamps the scroll
-       * and throws them 179px up the page. A claim card really is shorter than a
-       * debate card, so the collapse is legitimate — what is not is doing it
-       * underneath somebody.
-       *
-       * So the swap happens at the old height and the height is released
-       * afterwards, by which point the reader is looking at the new cards rather
-       * than being moved past them.
-       */}
-      <div ref={galleryRef} style={heldHeight === null ? undefined : { minHeight: heldHeight }}>
-        <div ref={contentRef}>
-          {selected.isError && selected.rows.length === 0 ? (
-            /*
-             * No retry here on purpose. This card is a summary; the tab its count
-             * links to holds the authoritative list and offers the retry, so a
-             * second control here would be a second thing to keep in step.
-             */
-            <p className="px-4 py-6 text-metadata text-grey-04">Couldn’t load {selected.label.toLowerCase()}.</p>
-          ) : (
-            <ActivityGallery
-              rows={selected.rows}
-              responseByClaimId={selected.responseByClaimId}
-              personName={selected.personName}
-            />
-          )}
-        </div>
-      </div>
-
+      {selected.isError && selected.rows.length === 0 ? (
+        /*
+         * No retry here on purpose. This card is a summary; the tab its count
+         * links to holds the authoritative list and offers the retry, so a
+         * second control here would be a second thing to keep in step.
+         */
+        <p className="px-4 py-6 text-metadata text-grey-04">Couldn’t load {selected.label.toLowerCase()}.</p>
+      ) : (
+        <ActivityGallery
+          rows={selected.rows}
+          responseByClaimId={selected.responseByClaimId}
+          personName={selected.personName}
+        />
+      )}
       <Link
         href={selected.href}
         className="flex items-center justify-center gap-2 border-t border-divider py-3 text-metadataMedium text-grey-04 transition-colors hover:text-text"
@@ -238,108 +213,6 @@ function ActivityGallery({
       </div>
     </DebatePlaybackGate>
   );
-}
-
-/**
- * Whether the floor can come off without moving the reader.
- *
- * Two ways out, and the first is the ordinary one: the incoming content has
- * grown past the floor, so the floor is adding nothing. Otherwise it is adding
- * `padding`, and dropping it takes that much off the bottom of the page — safe
- * only while the reader is above where the page would then end.
- *
- * A pure function because it is the whole rule, and because the alternative was
- * a timer: an earlier version lifted the floor after two frames, which is a
- * guess about when the content settles rather than an answer about whether it is
- * safe. The incoming cards grew for about a second and a half.
- */
-export function canReleaseHeldHeight({
-  heldHeight,
-  contentHeight,
-  documentHeight,
-  viewportHeight,
-  scrollY,
-}: {
-  heldHeight: number;
-  contentHeight: number;
-  documentHeight: number;
-  viewportHeight: number;
-  scrollY: number;
-}): boolean {
-  const padding = heldHeight - contentHeight;
-  if (padding <= 0) return true;
-
-  return scrollY <= documentHeight - padding - viewportHeight;
-}
-
-/**
- * Keeps a swapped region from collapsing out from under the reader.
- *
- * A claim card really is shorter than a debate card, so the region genuinely
- * shrinks — what is not acceptable is doing it while somebody is standing below
- * the new bottom of the page. Measured on a phone: Debates puts the document at
- * 1198px with the reader 389px down it, and picking Claims takes it to 874px,
- * whose furthest scroll is 210px. The browser has nowhere to put them but 179px
- * up the page.
- *
- * There is no scroll position that survives that, so this holds the *height*
- * instead: the region is floored at what it measured when the swap was asked
- * for, and the floor comes off only once dropping it would not move anybody.
- *
- * **The release condition is the whole point**, and a timer is not it. An
- * earlier version lifted the floor after two frames, which measured well and
- * fixed nothing: the incoming cards keep growing for about a second and a half
- * as their own queries land (196px, then 217px, then 254px), so the floor was
- * always gone long before the document stopped moving. Instead this asks the
- * only question that matters — is the page still tall enough underneath this
- * reader without the floor — and keeps asking until the answer is yes.
- */
-function useHeldHeight(selectedKey: string | undefined) {
-  /** The region that carries the floor. */
-  const galleryRef = React.useRef<HTMLDivElement | null>(null);
-  /** The content inside it, which keeps its natural height so it can be measured. */
-  const contentRef = React.useRef<HTMLDivElement | null>(null);
-  const [heldHeight, setHeldHeight] = React.useState<number | null>(null);
-
-  const holdHeight = React.useCallback(() => {
-    const height = contentRef.current?.getBoundingClientRect().height;
-    if (height) setHeldHeight(height);
-  }, []);
-
-  React.useEffect(() => {
-    if (heldHeight === null) return;
-
-    const check = () => {
-      const content = contentRef.current;
-
-      const release =
-        !content ||
-        canReleaseHeldHeight({
-          heldHeight,
-          contentHeight: content.getBoundingClientRect().height,
-          documentHeight: document.documentElement.scrollHeight,
-          viewportHeight: window.innerHeight,
-          scrollY: window.scrollY,
-        });
-
-      if (release) setHeldHeight(null);
-    };
-
-    // Polled *and* on scroll: the content settles on its own schedule, and the
-    // reader scrolling up is the other way the answer turns yes.
-    const interval = window.setInterval(check, 250);
-    window.addEventListener('scroll', check, { passive: true });
-    check();
-
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener('scroll', check);
-    };
-    // Re-armed by the key, so a second switch before the first released still
-    // measures and releases rather than being swallowed by the held value.
-  }, [heldHeight, selectedKey]);
-
-  return { galleryRef, contentRef, heldHeight, holdHeight };
 }
 
 /**
