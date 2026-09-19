@@ -38,7 +38,12 @@ export function NavbarClientActions({ onSearchClick }: Props) {
 
       <DebatesHubButton />
 
-      <div className="flex items-center sm:hidden">
+      {/* Shown on every width. This was `sm:hidden`, and `sm` here is max-width 639px
+          (`styles.css`, `@custom-variant sm`) rather than Tailwind's usual min-width — so it hid
+          the account surface on phones, which is the opposite of what the class reads as. That is
+          the whole of signing in when logged out, and the avatar, personal space link and sign out
+          when logged in, so a phone had no way to reach an account at all. */}
+      <div className="flex items-center">
         <NavbarActions />
       </div>
     </div>
