@@ -134,20 +134,22 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   // Held open by the chip rather than by the pointer — the only way in on a touch screen, where
   // there is no hover to end and so no hover to hold it.
   const [pinnedSlot, setPinnedSlot] = React.useState<number | null>(null);
-  /** Whether the pointer is over the video *above* this slot's live card — see `claimsOpenFor`. */
-  const [aboveCornerSlot, setAboveCornerSlot] = React.useState<number | null>(null);
+  /**
+   * The slot whose backlog the pointer has opened, held until the pointer leaves that tile.
+   *
+   * A latch rather than a live test of where the pointer is. Reaching the backlog means crossing
+   * into it, and a rule that closed the moment the pointer came back down would put the cards
+   * permanently out of reach — no scrolling it, no expanding a claim, no answering one. So the
+   * pointer opens it by going above the live card, and then the tile holds it open.
+   */
+  const [backlogHoverSlot, setBacklogHoverSlot] = React.useState<number | null>(null);
 
   /** The same condition the stack is given, so the corner's box can cap itself only when open. */
   const claimsOpenFor = (slot: number) => {
     // A backlog opened on purpose stays open, and a claim arriving lands at the bottom of it —
     // that is the whole point of having opened it. Same for a keyboard that has tabbed into it.
     if (pinnedSlot === slot || focusedSlot === slot) return true;
-    if (pointerOverSlot !== slot) return false;
-    // With nothing live, anywhere over the tile asks for the backlog. With a claim on screen, only
-    // the video *above* it does: the card's own band belongs to the card, so a pointer resting
-    // there — or travelling through it — cannot swap the claim out mid-sentence.
-    const live = (ticker.cardsBySlot.get(slot)?.length ?? 0) > 0;
-    return !live || aboveCornerSlot === slot;
+    return pointerOverSlot === slot && backlogHoverSlot === slot;
   };
 
   /**
@@ -177,7 +179,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
 
     if (!hovered) {
       setPointerOverSlot(clearSlot);
-      setAboveCornerSlot(clearSlot);
+      setBacklogHoverSlot(clearSlot);
       setPinnedSlot(clearSlot);
       liveCornerTop.current.delete(slot);
       return;
@@ -185,23 +187,24 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
 
     setPointerOverSlot(slot);
 
-    // Nothing live to protect, which is most of a debate: the backlog answers to the tile as a
-    // whole, and there is no edge to measure or remember.
-    if ((ticker.cardsBySlot.get(slot)?.length ?? 0) === 0) {
-      liveCornerTop.current.delete(slot);
-      setAboveCornerSlot(clearSlot);
-      return;
-    }
-
+    const live = (ticker.cardsBySlot.get(slot)?.length ?? 0) > 0;
     // Measured only while the card itself is what the corner is drawing. Once the backlog is open
     // the remembered edge is the one that counts, and reading the box again would move the line.
-    if (!claimsOpenFor(slot)) {
+    // Skipped entirely with nothing live, which is most of a debate and the whole cost here.
+    if (live && !claimsOpenFor(slot)) {
       const corner = event.currentTarget.querySelector('[data-claim-corner]');
       if (corner) liveCornerTop.current.set(slot, corner.getBoundingClientRect().top);
     }
 
-    const edge = liveCornerTop.current.get(slot);
-    setAboveCornerSlot(edge !== undefined && event.clientY < edge ? slot : clearSlot);
+    setBacklogHoverSlot(current => {
+      if (current === slot) return current;
+      // Nothing being presented: the backlog answers to the tile as a whole.
+      if (!live) return slot;
+      // A claim is up, so only the video above it asks for the backlog. The card's own band belongs
+      // to the card, and a pointer resting there cannot swap the claim out mid-sentence.
+      const edge = liveCornerTop.current.get(slot);
+      return edge !== undefined && event.clientY < edge ? slot : current;
+    });
   };
 
   const claimsFor = (slot: number) => {
