@@ -21,10 +21,10 @@ import { join } from 'node:path';
 
 import type { DebateTranscriptSegment } from '../core/debates/api';
 import { findBlockWindow, matchClaimWindow } from '../core/debates/claim-timing';
-import { arg, fetchAllDebates, fetchDebateClaims, fetchTranscriptSegments } from './lib/debate-claims';
+import { arg, fetchAllDebates, fetchDebateClaims, fetchTranscriptSegments, numberArg } from './lib/debate-claims';
 
 const OUT = arg('out') ?? './claim-matching-tasks';
-const LIMIT = arg('limit') ? Number(arg('limit')) : Infinity;
+const LIMIT = numberArg('limit', { fallback: Infinity, min: 1 });
 /**
  * Claims that already carry offsets come out too, to be confirmed rather than placed.
  *
@@ -68,7 +68,9 @@ for (const debate of debates) {
 
     const turns = [];
     for (const block of claims.blocks) {
-      const inTurn = claims.all.filter(claim => claim.blockId === block.id);
+      // `restated` claims are left out: the row carries one turn's relation entity out of two, so
+      // an answer for it could only ever be published against one of the statements. See `restated`.
+      const inTurn = claims.all.filter(claim => claim.blockId === block.id && !claim.restated);
       const pending = inTurn.filter(claim => claim.publishedTiming === null || !SKIP_PUBLISHED);
       alreadyPublished += inTurn.filter(claim => claim.publishedTiming !== null).length;
       if (pending.length === 0) continue;

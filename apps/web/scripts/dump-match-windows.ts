@@ -9,10 +9,10 @@
  * Usage: bun scripts/dump-match-windows.ts [howManyDebates] [skip]
  */
 import { contentWords, findBlockWindow, matchClaimWindow } from '../core/debates/claim-timing';
-import { fetchAllDebates, fetchDebateClaims, fetchTranscriptSegments } from './lib/debate-claims';
+import { fetchAllDebates, fetchDebateClaims, fetchTranscriptSegments, numberAt } from './lib/debate-claims';
 
-const want = Number(process.argv[2] ?? 5);
-const skip = Number(process.argv[3] ?? 0);
+const want = numberAt(2, 'howManyDebates', 5, 1);
+const skip = numberAt(3, 'skip', 0);
 
 const debates = await fetchAllDebates();
 let seen = 0;

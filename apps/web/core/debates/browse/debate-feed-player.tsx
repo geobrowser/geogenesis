@@ -573,10 +573,10 @@ function DebaterVideo({
       {/* Debater identity, opens their personal space in the side panel. On the left, opposite the
           claim corner.
 
-          A generous 55%, and it no longer rations the claim corner's width: the corner sits above
-          this row rather than beside it. It also stays put — it used to fade out under a card,
-          which cost the viewer the link to the debater's profile exactly when they were reading
-          something that debater had said. */}
+          A generous 55%, and it no longer rations the claim corner's width: the corner shares this
+          row and draws over it rather than sitting beside it. It also stays put — it used to fade
+          out under a card, which cost the viewer the link to the debater's profile exactly when
+          they were reading something that debater had said. */}
       <button
         type="button"
         onClick={openProfile}

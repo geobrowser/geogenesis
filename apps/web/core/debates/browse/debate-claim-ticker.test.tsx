@@ -71,6 +71,7 @@ function claim(overrides: Partial<TimedClaim> = {}): TimedClaim {
     blockId: 'block-1',
     publishedTiming: null,
     relationEntityId: 'relation-1',
+    restated: false,
     timing: { startMs: 134_600, endMs: 143_140, confidence: 1, source: 'published' },
     ...overrides,
   };

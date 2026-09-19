@@ -113,3 +113,44 @@ export function arg(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
   return index === -1 ? undefined : process.argv[index + 1];
 }
+
+/**
+ * Reads a number off the command line, refusing anything that is not one.
+ *
+ * `Number(arg('floor'))` on a typo gives `NaN`, and every comparison against `NaN` is false — so a
+ * mistyped `--floor` did not fail, it silently *disabled* the confidence floor and planned a write
+ * for every match the matcher produced. The same shape sat behind `--limit`, where it quietly meant
+ * "no limit" and would have walked all 80 debates.
+ *
+ * A bad flag stops the script instead. These write publish plans; a silent misreading of the one
+ * number that bounds them is the worst available outcome.
+ */
+export function numberArg(
+  name: string,
+  { fallback, min = -Infinity, max = Infinity }: { fallback: number; min?: number; max?: number }
+): number {
+  const raw = arg(name);
+  if (raw === undefined) return fallback;
+
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < min || value > max) {
+    console.error(`--${name} must be a number between ${min} and ${max}; got "${raw}"`);
+    process.exit(1);
+  }
+  return value;
+}
+
+/**
+ * The same guard for a positional argument, which cannot name itself in the error.
+ */
+export function numberAt(index: number, label: string, fallback: number, min = 0): number {
+  const raw = process.argv[index];
+  if (raw === undefined) return fallback;
+
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < min) {
+    console.error(`${label} must be a number of at least ${min}; got "${raw}"`);
+    process.exit(1);
+  }
+  return value;
+}

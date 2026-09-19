@@ -83,6 +83,7 @@ function claim(id: string, text: string, overrides: Partial<TranscriptClaim> = {
     blockId: 'block-1',
     publishedTiming: null,
     relationEntityId: null,
+    restated: false,
     ...overrides,
   };
 }
@@ -159,6 +160,25 @@ describe('matchClaimWindow', () => {
 
 describe('resolveClaimTimings', () => {
   const claims = [SUPREME_COURT, SIDESTEPPING, SEC];
+
+  /**
+   * A claim stated in two turns is one deduped row carrying one turn's block and offsets, so any
+   * moment resolved for it would be one of two with no way to tell which. Declining keeps it in the
+   * panel and out of the live layer, where a card would otherwise be drawn over the wrong face.
+   */
+  it('gives no timing to a claim stated in two turns, published offsets included', () => {
+    const timings = resolveClaimTimings({
+      claims: [
+        claim('restated', 'Said in two turns', { publishedTiming: { startMs: 1_000, endMs: 2_000 }, restated: true }),
+        claim('ordinary', 'Said once', { publishedTiming: { startMs: 3_000, endMs: 4_000 } }),
+      ],
+      blocks: [],
+      segments: [],
+    });
+
+    expect(timings.has('restated')).toBe(false);
+    expect(timings.get('ordinary')).toMatchObject({ startMs: 3_000, source: 'published' });
+  });
 
   it('prefers published timecodes over matching, and says so', () => {
     const published = claim('claim-published', SEC.text, { publishedTiming: { startMs: 1000, endMs: 2000 } });

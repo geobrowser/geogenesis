@@ -47,9 +47,12 @@ for (const claim of ordered) bySource.set(claim.timing?.source ?? 'none', (bySou
 console.log(`\nby source: ${[...bySource].map(([key, count]) => `${key}=${count}`).join('  ')}`);
 const assertable = ordered.filter(claim => isAssertableMoment(claim.timing)).length;
 console.log(`firm enough to state — timecode, live card: ${assertable} of ${ordered.length}`);
-console.log(
-  `used for ordering only (matched, below the bar): ${ordered.filter(c => c.timing?.source === 'segment').length - assertable}`
-);
+// Counted directly, not as `segments - assertable`: `assertable` spans every source, and a
+// published timing scores 1, so on a fully published debate that subtraction printed 0 − 13.
+const belowBar = ordered.filter(
+  claim => claim.timing?.source === 'segment' && !isAssertableMoment(claim.timing)
+).length;
+console.log(`used for ordering only (matched, below the bar): ${belowBar}`);
 
 const windows = tickerWindows(ordered);
 console.log(`\nticker-eligible claims: ${windows.length} of ${ordered.length}`);

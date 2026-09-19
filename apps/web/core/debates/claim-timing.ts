@@ -359,6 +359,12 @@ export function resolveClaimTimings({ claims, blocks, segments }: ResolveClaimTi
   };
 
   for (const claim of claims) {
+    // Two turns, one deduped row: the block, the offsets and the relation entity on it all belong
+    // to whichever turn was read first, so any moment resolved here would be one of two and there
+    // is no way to tell which. Declining leaves the claim in the panel and out of the live layer,
+    // which is where a claim whose speaker cannot be established already goes. See `restated`.
+    if (claim.restated) continue;
+
     if (claim.publishedTiming) {
       timings.set(claim.id, { ...claim.publishedTiming, confidence: 1, source: 'published' });
       continue;

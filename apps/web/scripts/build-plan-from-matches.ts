@@ -94,11 +94,28 @@ for (const file of (await readdir(TASKS)).filter(name => name.endsWith('.json'))
     continue;
   }
 
-  const byClaimId = new Map(answers.map(answer => [answer.claimId, answer]));
+  /**
+   * Built by hand rather than with `new Map(answers.map(…))`, which keeps the last entry for a
+   * repeated key and throws the rest away. A claim answered twice with two different spans would
+   * have been silently resolved to whichever came last — the opposite of what this script is for,
+   * and invisible in its own "rejected" count.
+   */
+  const byClaimId = new Map<string, Answer>();
+  const answeredTwice = new Set<string>();
+  for (const answer of answers) {
+    if (byClaimId.has(answer.claimId)) answeredTwice.add(answer.claimId);
+    byClaimId.set(answer.claimId, answer);
+  }
+
   const writes: (typeof plans)[number]['writes'] = [];
 
   for (const turn of task.turns) {
     for (const claim of turn.claims) {
+      if (answeredTwice.has(claim.claimId)) {
+        rejected.push(`${claim.claimId}: answered more than once`);
+        continue;
+      }
+
       const answer = byClaimId.get(claim.claimId);
       if (!answer) {
         unanswered += 1;
@@ -132,7 +149,7 @@ for (const file of (await readdir(TASKS)).filter(name => name.endsWith('.json'))
         continue;
       }
       if (writes.some(write => write.claimId === claim.claimId)) {
-        rejected.push(`${claim.claimId}: answered more than once`);
+        rejected.push(`${claim.claimId}: appears in more than one turn of this task file`);
         continue;
       }
 

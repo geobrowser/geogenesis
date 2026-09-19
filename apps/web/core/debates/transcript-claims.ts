@@ -43,6 +43,21 @@ export type TranscriptClaim = {
    * always describe the same statement. Null only if the API omits it.
    */
   relationEntityId: string | null;
+  /**
+   * True when the same claim entity is linked from more than one turn.
+   *
+   * `find-or-create` links an existing claim rather than minting a second, so one entity really can
+   * be two statements by two speakers — see the grouping tests. This row is deduped, though, and
+   * carries only the *first* relation's block, offsets and relation entity. Rather than let that
+   * silently stand in for both statements, the flag says the row cannot answer "when" or "who", and
+   * the surfaces that assert either decline it: {@link resolveClaimTimings} gives it no timing, so
+   * no card is drawn over a face and no timecode is printed beside a row, and the backfill scripts
+   * skip it rather than writing one occurrence and leaving the other unplaced.
+   *
+   * Zero of the 854 claims published today are restated, so this costs nothing now. Modelling
+   * timing per statement is the real fix and belongs with the backend work in GEO-2958.
+   */
+  restated: boolean;
 };
 
 /** One turn of the debate as published, with the text needed to locate it on the recording. */
@@ -259,9 +274,14 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
             blockId: blockEntity.id,
             publishedTiming: publishedTiming(claim.entity?.valuesList),
             relationEntityId: claim.entityId ?? null,
+            restated: false,
           };
           rowsByClaimId.set(key, row);
           all.push(row);
+        } else if (row.blockId !== blockEntity.id) {
+          // A second turn for a claim already seen. The same relation repeated inside one block is
+          // just noise and does not count — see `restated`.
+          row.restated = true;
         }
 
         const authorKey = authorSpaceId ? uuidToHex(authorSpaceId) : '';

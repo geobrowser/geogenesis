@@ -615,10 +615,22 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
         event.stopPropagation();
         onClick();
       }}
-      // 20px tall, which is the debater's avatar across the band from it — the two read as one row
-      // when they match and as a mistake when they do not. The tap target is kept at ~36px by an
-      // `::after` that reaches past the box without taking any layout.
-      className="pointer-events-auto relative hidden h-5 shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-[44px] transition-colors after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] hover:bg-[#151515]/50 no-hover:flex"
+      /**
+       * 20px tall, which is the debater's avatar across the band from it — the two read as one row
+       * when they match and as a mistake when they do not. The tap target is kept at ~36px by an
+       * `::after` that reaches past the box without taking any layout.
+       *
+       * On a pointer device it is present but out of the way, not absent. It used to be `hidden`,
+       * which took it out of the tab order too — and since the corner draws nothing at all when no
+       * claim is live, which is most of a debate, that left a keyboard with no way into the backlog
+       * whatsoever. `absolute opacity-0` keeps it focusable and costs no layout, and focus brings it
+       * back into the flow so the focus ring lands on something the viewer can see.
+       *
+       * Hidden by position rather than by `sr-only`: that utility also zeroes padding and height,
+       * and Tailwind emits its `not-sr-only` counterpart *after* `px-2` and `h-5`, so restoring the
+       * chip would have stripped its own shape. Checked, not assumed.
+       */
+      className="absolute flex h-5 shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 text-[0.75rem] leading-[1.0625rem] text-white opacity-0 backdrop-blur-[44px] transition-colors after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] hover:bg-[#151515]/50 focus-visible:pointer-events-auto focus-visible:relative focus-visible:opacity-100 no-hover:pointer-events-auto no-hover:relative no-hover:opacity-100"
     >
       <InfoSmall color="white" />
       <span className="tabular-nums">{expanded ? 'Hide' : `${count} ${count === 1 ? 'claim' : 'claims'}`}</span>

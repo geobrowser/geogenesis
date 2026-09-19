@@ -23,7 +23,7 @@ import {
   TARGET_PROPERTY_ID,
   TYPES_PROPERTY_ID,
 } from '../core/debates/ontology';
-import { API, arg, fetchAllDebates, fetchDebateClaims, fetchTranscriptSegments } from './lib/debate-claims';
+import { API, arg, fetchAllDebates, fetchDebateClaims, fetchTranscriptSegments, numberArg } from './lib/debate-claims';
 
 /**
  * The confidence a match must reach before it is written to the graph.
@@ -35,9 +35,9 @@ import { API, arg, fetchAllDebates, fetchDebateClaims, fetchTranscriptSegments }
  * something at a specific second. Leaving a claim alone costs nothing: the matcher still runs for
  * it at read time, at its true confidence.
  */
-const FLOOR = Number(arg('floor') ?? 0.7);
+const FLOOR = numberArg('floor', { fallback: 0.7, min: 0, max: 1 });
 const OUT = arg('out') ?? 'claim-timecode-plan.json';
-const LIMIT = arg('limit') ? Number(arg('limit')) : Infinity;
+const LIMIT = numberArg('limit', { fallback: Infinity, min: 1 });
 
 type PlannedWrite = {
   entityId: string;
@@ -55,7 +55,7 @@ type DebatePlan = {
   spaceId: string;
   claimCount: number;
   writes: PlannedWrite[];
-  skipped: { alreadyPublished: number; belowFloor: number; noMatch: number };
+  skipped: { alreadyPublished: number; belowFloor: number; noMatch: number; restated: number };
 };
 
 const debates = await fetchAllDebates();
@@ -90,9 +90,16 @@ for (const debate of debates) {
     const timings = resolveClaimTimings({ claims: claims.all, blocks: claims.blocks, segments });
 
     const writes: PlannedWrite[] = [];
-    const skipped = { alreadyPublished: 0, belowFloor: 0, noMatch: 0 };
+    const skipped = { alreadyPublished: 0, belowFloor: 0, noMatch: 0, restated: 0 };
 
     for (const claim of claims.all) {
+      // Stated in two turns and deduped into one row, so it carries one turn's relation entity out
+      // of two. Writing to that one would place half the claim and silently leave the other half
+      // unplaced, which is worse than leaving both to the matcher. See `restated`.
+      if (claim.restated) {
+        skipped.restated += 1;
+        continue;
+      }
       // Idempotent: a claim that already carries offsets is never rewritten, so the plan can be
       // regenerated and republished after a partial run without duplicating anything.
       if (claim.publishedTiming !== null) {
@@ -148,8 +155,9 @@ const totals = plans.reduce(
     alreadyPublished: sum.alreadyPublished + plan.skipped.alreadyPublished,
     belowFloor: sum.belowFloor + plan.skipped.belowFloor,
     noMatch: sum.noMatch + plan.skipped.noMatch,
+    restated: sum.restated + plan.skipped.restated,
   }),
-  { claims: 0, writes: 0, alreadyPublished: 0, belowFloor: 0, noMatch: 0 }
+  { claims: 0, writes: 0, alreadyPublished: 0, belowFloor: 0, noMatch: 0, restated: 0 }
 );
 
 const withWrites = plans.filter(plan => plan.writes.length > 0);
@@ -160,6 +168,7 @@ console.log(`  to publish (segment match >= ${FLOOR}): ${totals.writes}`);
 console.log(`  already carry offsets:                  ${totals.alreadyPublished}`);
 console.log(`  matched but below the floor:            ${totals.belowFloor}`);
 console.log(`  no usable match (turn fallback or none):${totals.noMatch}`);
+if (totals.restated > 0) console.log(`  stated in two turns, left to the matcher: ${totals.restated}`);
 if (failures > 0) console.log(`  debates that failed to load:            ${failures}`);
 
 console.log('\nmatch confidence, all matched claims:');

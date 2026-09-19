@@ -11,7 +11,16 @@ import {
 } from './claim-ticker';
 
 function timed(id: string, timing: ClaimTiming | null, text = `Claim ${id}`): TimedClaim {
-  return { id, text, spaceId: 'space-1', blockId: 'block-1', publishedTiming: null, relationEntityId: null, timing };
+  return {
+    id,
+    text,
+    spaceId: 'space-1',
+    blockId: 'block-1',
+    publishedTiming: null,
+    relationEntityId: null,
+    restated: false,
+    timing,
+  };
 }
 
 const confident = (startMs: number, endMs: number): ClaimTiming => ({

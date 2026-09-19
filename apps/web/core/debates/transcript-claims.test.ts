@@ -151,6 +151,30 @@ describe('groupTranscriptClaims', () => {
     expect(grouped.all).toHaveLength(1);
   });
 
+  /**
+   * The row is deduped and carries one turn's block, offsets and relation entity out of two, so it
+   * cannot answer "when" or "who". The flag is what stops the surfaces that assert either from
+   * using the first turn's answer for both — see `restated`.
+   */
+  it('marks a claim stated in two turns, so nothing reads one turn as both', () => {
+    const grouped = group(
+      response([
+        { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: ARTURAS, claims: [{ id: 'claim-1' }] },
+      ])
+    );
+
+    expect(grouped.all[0].restated).toBe(true);
+  });
+
+  it('does not mark a claim the graph merely returned twice for one turn', () => {
+    const grouped = group(
+      response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }, { id: 'claim-1' }] }])
+    );
+
+    expect(grouped.all[0].restated).toBe(false);
+  });
+
   it('still lists a claim once per speaker when that speaker repeats it', () => {
     const grouped = group(
       response([
