@@ -266,13 +266,16 @@ export function DebateClaimTickerCard({
        *
        * `shrink-0` so the open list scrolls a full-height card rather than compressing it to fit.
        *
-       * The ramp arrives as `--claim-ramp`, and is refused where there is no pointer. It is a
-       * desktop affordance: on a hovering device the corner is a glance and the fade says "more
-       * above". On a phone it is something the reader opened on purpose and is reading, in a
-       * fraction of the area — an expanded claim ends up half dissolved with no way to bring it
-       * back, and the fade stops being a hint and starts being in the way.
+       * The ramp arrives as `--claim-ramp`, which {@link paintEdgeFade} only ever sets while the
+       * backlog is open — a live card is never dissolved, on any device.
+       *
+       * It did come off entirely on touch for a while, because an expanded claim could end up half
+       * dissolved with no way to bring it back. Two things since have made that the wrong cure: the
+       * ramp lifts at the top of the list, which is where a reader who has scrolled back is, and
+       * the open list is narrower than the live card on a phone now, so the fade reads as the edge
+       * of a list rather than as damage to the claim you are reading.
        */
-      className="pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg bg-[#151515]/30 [mask-image:var(--claim-ramp,none)] p-3 backdrop-blur-[44px] [-webkit-mask-image:var(--claim-ramp,none)] no-hover:[mask-image:none] no-hover:[-webkit-mask-image:none]"
+      className="pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg bg-[#151515]/30 [mask-image:var(--claim-ramp,none)] p-3 backdrop-blur-[44px] [-webkit-mask-image:var(--claim-ramp,none)]"
     >
       <TickerClaimHeader
         claimId={claim.id}

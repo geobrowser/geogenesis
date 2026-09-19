@@ -442,30 +442,29 @@ function DebaterVideo({
           the open list climbed to the debater's chin — more of their face than it needs, and
           further than the edge fade can dissolve.
 
-          Capped at 360px rather than the 209px the frame draws, and two lines rather than three.
-          Both are deliberate departures, and they trade against each other.
+          Half the video's width, two lines, capped at 360px — a departure from the frame's 209px
+          and three lines, and a deliberate one.
 
           Measured over all 854 published claims in Calibre at 16/17: at the frame's 209px the
-          median claim runs to *four* lines and only 30% are shown whole. Lines and width both buy
+          median claim runs to *four* lines and only 30% are shown whole. Width and lines both buy
           legibility, but width is what keeps the card short, and a short card is what keeps it
           below the speaker's chin — the face is in the middle of the tile, so height costs more
-          than width does. Two lines at 360px shows 62% of claims whole against three lines at
-          260px showing 66%, for a card 17px shorter.
+          than width does. Half of the explore card's 484px tile is 242px, where two lines show
+          about 15% of claims whole; the rest are a tap away, and the point of this layer is the
+          glance rather than the reading.
 
-          What paid for it is the name row: it used to ration this width, because the two share the
-          bottom band and a 260px card already left the name only 188px. The card names its speaker
-          itself, so the row is redundant exactly when it is in the way — it steps aside while a
-          card is up (see `nameHidden`), and the corner can have the whole width.
+          The cap is what holds the fullscreen player to the same card: 50% of a 900px tile would
+          be 450, which stops being a corner label.
 
-          88% on a phone, where the tile is ~361px and the same 16px type needs proportionally more
-          of it.
+          The name row used to ration this width, because the two share the bottom band. The card
+          names its speaker itself, so the row now steps aside while a card is up (`nameHidden`).
 
-          `md:w-[62%]` because the 43% is the only measurement in this layer that is a share of the
-          tile rather than a size. Everything else — the type, the avatar, the padding — is fixed px
-          and lands on a phone at exactly the size the frame draws it. The card did not: a ~355px
-          phone tile gave it 153px, so the same 16px type had 129px of line against the frame's
-          185px, and a claim that reads as two lines on a desktop ran to four cramped ones. 62% of
-          that tile is 220px, which the cap trims back to the frame's own 209.
+          A phone splits the difference by state rather than picking one width. A live card takes
+          the whole tile — 93% of ~361px is 337, a 313px line, where two lines hold about 45% of
+          claims whole — because one claim over a video is there to be read at a glance and there
+          is nothing else in the band to share with. The backlog drops back to 62%, because a list
+          you have opened to scroll through should leave the debate visible behind it, and that is
+          also where the dissolve earns its place again.
 
           `items-end` because that cap is a cap, not a width. A flex column stretches its children
           by default, which drew the little claims chip as a 209px bar with two words adrift in it.
@@ -480,7 +479,11 @@ function DebaterVideo({
       {claims && (
         <div
           className={cx(
-            'pointer-events-none absolute right-3 bottom-3 z-10 flex w-[75%] max-w-[22.5rem] flex-col items-end justify-end transition-[padding-bottom] duration-150 md:w-[88%]',
+            'pointer-events-none absolute right-3 bottom-3 z-10 flex w-[50%] max-w-[22.5rem] flex-col items-end justify-end transition-[padding-bottom] duration-150',
+            // A phone gives the live card the whole tile, and takes it back for the backlog: one
+            // claim over a video wants to be read at a glance, where a list you have opened to
+            // scroll wants to leave the debate visible behind it.
+            claimsOpen ? 'md:w-[62%]' : 'md:w-[93%]',
             // Only the open list needs holding back; the live card is one card tall.
             claimsOpen && 'max-h-[60%]',
             // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling
