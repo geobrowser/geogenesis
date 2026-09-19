@@ -265,7 +265,7 @@ function EmailCapturePopup() {
       // took the click. Deliberately no higher — the slide-up, status bar and toast layers start at
       // 10000 and a dismissible prompt has no business outranking them.
       //
-      // Below `sm` (max-width 639px here) it is the mobile frame (76376:22868) instead: a full-width
+      // At `mobile` (max-width 639px) it is the mobile frame (76376:22868) instead: a full-width
       // sheet on the bottom edge, top corners rounded, no shadow, with its own wider artwork.
       //
       // Rises 5px into place as it fades in, each time it mounts — including when it comes back after
