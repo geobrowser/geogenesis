@@ -74,27 +74,37 @@ export function ProfileRecordTabs({
   const responses = usePersonResponses({ spaceId });
   const positions = heldPositionsCount(responses, facts.positions);
 
-  // Unknown counts offer every tab, which `hasRecordToShow` is the statement of
-  // — so a read that is still out or has failed is passed through as unknown
-  // rather than folded into a second rule here.
-  const isCountKnown = !isLoadingFacts && !isFactsError;
-  const has = React.useCallback(
-    (count: number | null) => hasRecordToShow(isCountKnown ? count : undefined),
-    [isCountKnown]
+  /*
+   * Unknown counts offer every tab, which `hasRecordToShow` is the statement of
+   * — so a read that is still out or has failed is passed through as unknown
+   * rather than folded into a second rule here.
+   *
+   * **Positions knows on its own.** It comes from the vote table, which is a
+   * different request from the facts, so a facts failure says nothing about it:
+   * where `usePersonResponses` has answered, a zero there is a definite zero and
+   * hiding the tab is right. Reading both through one `isCountKnown` left an
+   * empty Positions tab standing whenever the facts request happened to fail.
+   */
+  const areFactsKnown = !isLoadingFacts && !isFactsError;
+  const arePositionsKnown = responses.total !== null || areFactsKnown;
+
+  const fromFacts = React.useCallback(
+    (count: number | null) => hasRecordToShow(areFactsKnown ? count : undefined),
+    [areFactsKnown]
   );
 
   const tabs = React.useMemo(() => {
     const all: { id: RecordTab; label: string; shown: boolean }[] = [
       { id: 'overview', label: 'Overview', shown: true },
-      { id: 'debates', label: 'Debates', shown: has(facts.debates) },
-      { id: 'positions', label: 'Positions', shown: has(positions) },
-      { id: 'proposals', label: 'Proposals', shown: has(facts.proposals) },
+      { id: 'debates', label: 'Debates', shown: fromFacts(facts.debates) },
+      { id: 'positions', label: 'Positions', shown: hasRecordToShow(arePositionsKnown ? positions : undefined) },
+      { id: 'proposals', label: 'Proposals', shown: fromFacts(facts.proposals) },
       // Always: it is the rail, and neither surface has one.
       { id: 'about', label: 'About', shown: true },
     ];
 
     return all.filter(entry => entry.shown);
-  }, [facts.debates, facts.proposals, has, positions]);
+  }, [arePositionsKnown, facts.debates, facts.proposals, fromFacts, positions]);
 
   // A tab that stops being offered while it is open — its count arrived as zero
   // — would leave the reader on a list nothing points at.
@@ -102,15 +112,69 @@ export function ProfileRecordTabs({
     if (!tabs.some(entry => entry.id === tab)) setTab('overview');
   }, [tab, tabs]);
 
+  /*
+   * Real tab semantics, which the repo's other in-place tab rows do not have.
+   *
+   * `TabGroup` is links — a reader tabs through them and Enter navigates, which
+   * is correct for navigation and is *not* the ARIA tabs pattern. This is the
+   * other thing: one widget swapping its own panel, where a screen reader should
+   * hear "tab, 2 of 5, selected" and the arrow keys should move between tabs
+   * while Tab itself leaves the row. `aria-current="page"` says neither, and
+   * page is the wrong token for something that does not change the page.
+   *
+   * `DebatesHubPanel` has the same row with the same gap; it is untouched here
+   * because it is not this change, but it is the obvious next adopter.
+   */
+  const baseId = React.useId();
+  const tabId = (id: RecordTab) => `${baseId}-tab-${id}`;
+  const panelId = `${baseId}-panel`;
+
+  const onTabKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const deltas: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1 };
+    const delta = deltas[event.key];
+    const isEdge = event.key === 'Home' || event.key === 'End';
+    if (delta === undefined && !isEdge) return;
+
+    event.preventDefault();
+
+    const index = tabs.findIndex(entry => entry.id === tab);
+    // Wraps, which the pattern calls for: the row is a loop, not a list with ends.
+    const nextIndex = isEdge
+      ? event.key === 'Home'
+        ? 0
+        : tabs.length - 1
+      : (index + delta + tabs.length) % tabs.length;
+
+    const next = tabs[nextIndex];
+    if (!next) return;
+
+    setTab(next.id);
+    // Automatic activation, so the panel follows the arrow key. Focus has to
+    // follow it too, or the next arrow press is read against the tab the reader
+    // left behind.
+    document.getElementById(tabId(next.id))?.focus();
+  };
+
   return (
     <div className="flex flex-col">
-      <div className="no-scrollbar -mx-1 flex items-center gap-4 overflow-x-auto border-b border-divider px-1">
+      <div
+        role="tablist"
+        aria-label="Profile sections"
+        onKeyDown={onTabKeyDown}
+        className="no-scrollbar -mx-1 flex items-center gap-4 overflow-x-auto border-b border-divider px-1"
+      >
         {tabs.map(entry => (
           <button
             key={entry.id}
+            id={tabId(entry.id)}
             type="button"
+            role="tab"
+            aria-selected={tab === entry.id}
+            aria-controls={panelId}
+            // Roving focus: one stop for the whole row, so Tab moves past it
+            // rather than through every tab in it.
+            tabIndex={tab === entry.id ? 0 : -1}
             onClick={() => setTab(entry.id)}
-            aria-current={tab === entry.id ? 'page' : undefined}
             className={cx(tabGroupTabLinkStyles({ active: tab === entry.id }), 'relative shrink-0 pb-2')}
           >
             {entry.label}
@@ -138,7 +202,9 @@ export function ProfileRecordTabs({
 
       <Spacer height={24} />
 
-      <TabPanel tab={tab} entityId={entityId} spaceId={spaceId} authoredTabs={authoredTabs} />
+      <div id={panelId} role="tabpanel" aria-labelledby={tabId(tab)}>
+        <TabPanel tab={tab} entityId={entityId} spaceId={spaceId} authoredTabs={authoredTabs} />
+      </div>
     </div>
   );
 }

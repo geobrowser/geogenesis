@@ -204,7 +204,24 @@ export function customBrowseView({
 function useCustomBrowseView(entityId: string, spaceId: string): CustomBrowseView {
   const isEditing = useUserIsEditing(spaceId);
   const { entity, isLoading } = useQueryEntity({ id: entityId });
-  const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
+
+  /*
+   * Asked for only by an entity that could answer with it.
+   *
+   * `useSpace` sits above the type dispatch — hooks cannot be called
+   * conditionally — but its *query* can be, and running it unasked put a
+   * `getSpace` request behind every claim, topic and ordinary entity page that
+   * had no use for the answer. Passing `undefined` leaves the query disabled,
+   * which is what `useSpace` already does with a missing id.
+   *
+   * The type test is duplicated from `customBrowseView` rather than hoisted out
+   * of it, because that function has to stay a pure decision over the inputs it
+   * is given; this is the one place that has to know which input to bother
+   * fetching.
+   */
+  const couldBeProfile = Boolean(!isEditing && entity?.types.some(type => ID.equals(type.id, SystemIds.PERSON_TYPE)));
+
+  const { space, isLoading: isLoadingSpace } = useSpace(couldBeProfile ? spaceId : undefined);
 
   return customBrowseView({
     entityId,
@@ -251,21 +268,29 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   }
 
   /*
-   * The profile, on the two surfaces that are not the person's space home.
+   * The profile, for the side panel.
    *
-   * That route builds it out of three pieces in three places — layout header,
-   * rail, page body — so the side panel and the `(entity)` full-page route, which
-   * share neither the layout nor the rail, showed the generic value sheet for
-   * somebody's profile. Handling it here is what lets one component serve both,
-   * the same way a claim and a topic are served.
+   * The space route builds it out of three pieces in three places — layout
+   * header, rail, page body — so the panel, which has none of them, showed the
+   * generic value sheet for somebody's profile instead. Clicking a debate
+   * participant opens on exactly the pair that route uses: the person entity, in
+   * their personal space.
    *
-   * Unlike those two it is a *body*, not a whole page, and returning early like
-   * they do was a mistake worth recording: it threw away the cover, the avatar,
-   * the name and the bio that both variants draw below, so the panel opened on a
-   * bare Activity card with nothing above it saying whose record it was. What it
-   * replaces is only what follows the header — the entity's authored tabs and
-   * the editor/properties footer — because the profile has its own tabs and its
-   * own idea of what belongs under each.
+   * **Only the panel reaches this**, and an earlier version of this comment said
+   * the `(entity)` full-page route did too. It does not:
+   * `space/(entity)/[id]/[entityId]/page.tsx` intercepts every Person before
+   * `DefaultEntityPage`, and for a personal space's own entity — which is typed
+   * Space as well as Person — `ProfileEntityServerContainer` *redirects* to
+   * `/space/<id>`, the real profile with its header, tabs and rail. That is a
+   * better answer than this one and is left alone.
+   *
+   * Unlike the claim and topic views this is a *body*, not a whole page, and
+   * returning early like they do was a mistake worth recording: it threw away
+   * the cover, the avatar, the name and the bio drawn below, so the panel opened
+   * on a bare Activity card with nothing above it saying whose record it was.
+   * What it replaces is only what follows the header — the entity's authored
+   * tabs and the editor/properties footer — because the profile has its own tabs
+   * and its own idea of what belongs under each.
    */
   const tabsSection = (
     <EntityTabsSection
@@ -277,18 +302,16 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   );
 
   /*
-   * Keyed on the entity, because the route does not remount these views on
-   * navigation — `default-entity-page` renders this component unkeyed, which
-   * `relation-chip-section` documents for the same reason. Following one person
-   * to the next would otherwise keep the previous profile's open tab and that
-   * tab's space and topic chips, and render B's record filtered by A's
-   * selection. The side panel escapes it only because `EntitySidePanelBody` is
-   * keyed; the route is not.
+   * Keyed on the entity. `EntitySidePanelBody` is keyed too, so this is belt and
+   * braces today — but the reason it is cheap to keep is that the route renders
+   * this component *unkeyed* (`default-entity-page`, documented in
+   * `relation-chip-section` for the same reason). Anything that later reaches
+   * this branch from there would otherwise carry the previous profile's open tab
+   * and that tab's space and topic chips into the next person's record.
    *
    * The person's authored tabs go with it: they belong to the page Overview
-   * shows, and this is the only tab bar either of these surfaces has — the space
-   * route carries them in its own header instead, which is why the profile body
-   * there does not.
+   * shows, and this is the only tab bar the panel has — the space route carries
+   * them in its own header instead, which is why the profile body there does not.
    */
   const personProfile =
     customView === 'person' ? (

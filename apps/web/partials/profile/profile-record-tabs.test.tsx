@@ -45,7 +45,7 @@ const renderTabs = () => render(<ProfileRecordTabs entityId="person-1" spaceId="
 
 const tabNames = () =>
   screen
-    .getAllByRole('button')
+    .getAllByRole('tab')
     .map(button => button.textContent)
     .filter(Boolean);
 
@@ -101,7 +101,7 @@ describe('ProfileRecordTabs', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Debates' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Debates' }));
 
     expect(screen.queryByTestId('authored')).not.toBeInTheDocument();
   });
@@ -109,7 +109,7 @@ describe('ProfileRecordTabs', () => {
   it('switches the panel in place rather than navigating', async () => {
     renderTabs();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Debates' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Debates' }));
 
     expect(screen.getByTestId('panel')).toHaveTextContent('debates');
   });
@@ -171,10 +171,99 @@ describe('ProfileRecordTabs', () => {
    * while the reader is standing on it — which would leave them on a list
    * nothing points at.
    */
+  /**
+   * Positions is the one count that knows on its own.
+   *
+   * It comes from the vote table, a different request from the facts — so a
+   * facts failure says nothing about it, and a zero there is a definite zero.
+   * Reading both through one "are the counts known" flag left an empty Positions
+   * tab standing whenever the facts request happened to fail.
+   */
+  it('still hides Positions on a definite zero when the facts failed', () => {
+    mocks.isFactsError = true;
+    mocks.heldPositions = 0;
+    renderTabs();
+
+    expect(tabNames()).not.toContain('Positions');
+  });
+
+  it('offers Positions when neither source could answer', () => {
+    mocks.isFactsError = true;
+    mocks.heldPositions = null;
+    renderTabs();
+
+    expect(tabNames()).toContain('Positions');
+  });
+
+  /**
+   * The row is a tab widget, not a list of links.
+   *
+   * `TabGroup` is links, where tabbing through each and pressing Enter is
+   * correct. This swaps its own panel, so a screen reader should hear "tab, 2 of
+   * 5, selected", the arrow keys should move between tabs, and Tab itself should
+   * leave the row — which is roving `tabIndex`.
+   */
+  describe('tab semantics', () => {
+    it('is a labelled tablist whose open tab is the selected one', () => {
+      renderTabs();
+
+      expect(screen.getByRole('tablist', { name: 'Profile sections' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('tab', { name: 'Debates' })).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('points the panel at the tab that opened it', () => {
+      renderTabs();
+
+      const panel = screen.getByRole('tabpanel');
+      expect(panel).toHaveAttribute('aria-labelledby', screen.getByRole('tab', { name: 'Overview' }).id);
+      expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-controls', panel.id);
+    });
+
+    it('keeps one tab stop for the whole row', () => {
+      renderTabs();
+
+      expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('tabindex', '0');
+      expect(screen.getByRole('tab', { name: 'Debates' })).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('moves between tabs with the arrow keys', async () => {
+      renderTabs();
+
+      screen.getByRole('tab', { name: 'Overview' }).focus();
+      await userEvent.keyboard('{ArrowRight}');
+
+      expect(screen.getByTestId('panel')).toHaveTextContent('debates');
+      // Focus follows the selection, or the next arrow press is read against the
+      // tab the reader left behind.
+      expect(screen.getByRole('tab', { name: 'Debates' })).toHaveFocus();
+    });
+
+    it('wraps at the ends, because the row is a loop', async () => {
+      renderTabs();
+
+      screen.getByRole('tab', { name: 'Overview' }).focus();
+      await userEvent.keyboard('{ArrowLeft}');
+
+      expect(screen.getByRole('tab', { name: 'About' })).toHaveFocus();
+    });
+
+    it('jumps to the ends with Home and End', async () => {
+      renderTabs();
+
+      screen.getByRole('tab', { name: 'Overview' }).focus();
+      await userEvent.keyboard('{End}');
+      expect(screen.getByRole('tab', { name: 'About' })).toHaveFocus();
+
+      await userEvent.keyboard('{Home}');
+      expect(screen.getByRole('tab', { name: 'Overview' })).toHaveFocus();
+    });
+  });
+
   it('falls back to Overview when the open tab stops being offered', async () => {
     const { rerender } = renderTabs();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Debates' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Debates' }));
     expect(screen.getByTestId('panel')).toHaveTextContent('debates');
 
     mocks.facts = { debates: 0, positions: 59, proposals: 0 };
