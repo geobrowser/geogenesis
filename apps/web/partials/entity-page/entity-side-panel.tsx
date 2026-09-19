@@ -157,7 +157,7 @@ function EntitySidePanelHeader({
   const entityPageHref = NavUtils.toEntity(entitySpaceId, entityId, panelCtx?.panelWantsEdit ?? false);
 
   return (
-    <div className="sticky top-0 z-10 flex h-11 shrink-0 items-center gap-2 border-b border-divider bg-white px-4 py-1 sm:px-5">
+    <div className="sticky top-0 z-10 flex h-11 shrink-0 items-center gap-2 border-b border-divider bg-white px-4 py-1 mobile:px-5">
       <button
         type="button"
         onClick={onClose}
@@ -209,7 +209,7 @@ function EntitySidePanelBody({
 
   if (surface.isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center px-4 py-24 sm:px-5">
+      <div className="flex flex-1 items-center justify-center px-4 py-24 mobile:px-5">
         <Text variant="body" color="grey-04">
           Loading entity…
         </Text>
@@ -219,7 +219,7 @@ function EntitySidePanelBody({
 
   if (!surface.isReady || !entity) {
     return (
-      <div className="flex flex-1 items-center justify-center px-4 py-24 sm:px-5">
+      <div className="flex flex-1 items-center justify-center px-4 py-24 mobile:px-5">
         <Text variant="body" color="grey-04">
           Could not load this entity in this space. Try opening it full page from the link in the header.
         </Text>

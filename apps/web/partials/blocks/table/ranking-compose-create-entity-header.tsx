@@ -27,7 +27,7 @@ export function RankingComposeCreateEntityHeader({
   publishSpaceLocked = false,
 }: Props) {
   return (
-    <div className="flex h-11 shrink-0 items-center justify-between gap-4 border-b border-divider bg-white px-4 py-1 sm:px-5">
+    <div className="flex h-11 shrink-0 items-center justify-between gap-4 border-b border-divider bg-white px-4 py-1 mobile:px-5">
       <RankingComposePublishSpacePicker
         publishSpaceIds={publishSpaceIds}
         publishSpaceId={publishSpaceId}
