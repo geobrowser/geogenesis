@@ -38,14 +38,14 @@ export function NavbarClientActions({ onSearchClick }: Props) {
 
       <DebatesHubButton />
 
-      {/* Shown on every width. This was `sm:hidden`, and `sm` here is max-width 639px
-          (`styles.css`, `@custom-variant sm`) rather than Tailwind's usual min-width — so it hid
-          the account surface on phones, which is the opposite of what the class reads as. That is
-          the whole of signing in when logged out, and the avatar, personal space link and sign out
-          when logged in, so a phone had no way to reach an account at all. */}
-      <div className="flex items-center">
-        <NavbarActions />
-      </div>
+      {/* No wrapper and no width condition. This sat in a `sm:hidden` div, and `sm` here is
+          max-width 639px (`styles.css`, `@custom-variant sm`) rather than Tailwind's usual
+          min-width — so it hid the account surface on phones, the opposite of what the class
+          reads as. That is signing in when logged out, and the avatar, personal space link and
+          sign out when logged in, so a phone had no way to reach an account at all.
+          `NavbarActions` brings its own `flex items-center` row, so the div was carrying the
+          condition and nothing else. */}
+      <NavbarActions />
     </div>
   );
 }

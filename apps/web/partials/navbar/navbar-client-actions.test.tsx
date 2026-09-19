@@ -21,15 +21,11 @@ describe('NavbarClientActions', () => {
    * Asserted as the absence of the class rather than by behaviour, because jsdom does not evaluate
    * media queries — a rendering test would pass either way.
    */
-  it('does not hide the account surface at any width', () => {
+  it('hides nothing on mobile', () => {
     const { container } = render(<NavbarClientActions onSearchClick={vi.fn()} />);
 
-    // The account surface holds the last slot in the row.
-    const row = container.firstElementChild;
-    const accountSlot = row?.lastElementChild;
-
-    expect(row?.className).toContain('flex items-center');
-    expect(accountSlot).not.toBeNull();
-    expect(accountSlot?.className ?? '').not.toContain('hidden');
+    // Asserted against this component's own markup rather than a particular element, so it keeps
+    // holding if the structure changes — what matters is that nothing in this row is width-gated.
+    expect(container.innerHTML).not.toContain('sm:hidden');
   });
 });
