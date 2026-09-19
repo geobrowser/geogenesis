@@ -469,7 +469,13 @@ function GalleryCard({
         // be three times wider, so `80vw` there is not 80% of anything the reader
         // can see. The scroller establishes the container this measures — see
         // `ActivityGallery`.
-        'w-[min(420px,80cqw)] shrink-0 snap-start',
+        // 88%, not 80%: at 80 the card came to 283px on a 390px phone, which left the pill row
+        // 257px once the card's own padding was off it — under the 272px that `claim-pills-wide`
+        // needs to put Agree and Disagree side by side, so they stacked. 88 gives the row 285px
+        // and keeps a sliver of the next card in view, which is what says the gallery scrolls.
+        // Narrower phones still stack, which is the container query doing its job rather than a
+        // card growing wider than the screen it is on.
+        'w-[min(420px,88cqw)] shrink-0 snap-start',
         // The lobby card brings its own outline; the feed's card does not, and
         // draws a rule underneath itself to separate it from the next card
         // *down* — which in a row is a line under nothing.
