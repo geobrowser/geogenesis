@@ -43,5 +43,16 @@ describe('entity tab navigation', () => {
         activeSystemTab: null,
       })
     ).toBe(true);
+
+    expect(
+      isEntityTabActive({
+        href: '/claim',
+        activeTabId: TAB_ID,
+        fullPath: '/claim',
+        sidePanel: true,
+        sidePanelKey: 'overview',
+        activeSystemTab: null,
+      })
+    ).toBe(false);
   });
 });

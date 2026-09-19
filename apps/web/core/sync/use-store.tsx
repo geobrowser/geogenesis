@@ -16,6 +16,7 @@ import { Entity, Property, Relation, Value } from '../types';
 import { Properties } from '../utils/property';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
+import { collectCursorPages } from './collect-cursor-pages';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { hydrateEntityBatched } from './hydrate-entity-batcher';
 import { E, mergeRelations } from './orm';
@@ -479,6 +480,60 @@ export function useQueryEntities({
     refetch,
     endCursor: data?.endCursor ?? null,
     hasNextPage: data?.hasNextPage ?? false,
+  };
+}
+
+type QueryAllEntitiesOptions = {
+  where: WhereCondition;
+  pageSize?: number;
+  enabled?: boolean;
+  orderBy?: EntitiesOrderBy[];
+};
+
+/**
+ * Fetches a complete cursor connection before exposing its entities.
+ *
+ * Use this for bounded record summaries whose totals and client-side ranking must describe the
+ * whole set. Ordinary list screens should keep using `useQueryEntities` and expose pagination.
+ */
+export function useQueryAllEntities({ where, pageSize = 100, enabled = true, orderBy }: QueryAllEntitiesOptions) {
+  const cache = useQueryClient();
+  const { store, stream } = useSyncEngine();
+
+  const { data, isFetched, isLoading, error, refetch } = useQuery({
+    enabled,
+    queryKey: ['store', 'all-entities', stableStringify(where), pageSize, orderBy ?? null],
+    queryFn: async () => {
+      const ids = await collectCursorPages(async after => {
+        const page = await E.syncMany({ store, cache, where, first: pageSize, after, orderBy });
+        stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: page.merged, remoteEntities: page.remote });
+
+        return {
+          items: page.merged.map(entity => entity.id),
+          endCursor: page.endCursor,
+          hasNextPage: page.hasNextPage,
+        };
+      });
+
+      return { ids: [...new Set(ids)] };
+    },
+  });
+
+  const entities = useSelector(
+    reactive,
+    () => {
+      if (!enabled || !data) return [];
+      return data.ids.map(id => store.getEntity(id)).filter((entity): entity is Entity => entity !== null);
+    },
+    equal
+  );
+
+  return {
+    entities,
+    isLoading: !isFetched && enabled && isLoading,
+    isFetched: isFetched && enabled,
+    error,
+    refetch,
   };
 }
 

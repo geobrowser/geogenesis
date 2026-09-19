@@ -1,12 +1,8 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-
 import * as React from 'react';
 
-import { ClaimPageView } from '~/core/claims/browse/claim-page-view';
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { TOPIC_TYPE_ID } from '~/core/constants';
+import { CLAIM_PAGE_CONTENT_MAX_WIDTH, ClaimPageView } from '~/core/claims/browse/claim-page-view';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -14,6 +10,7 @@ import type { Space } from '~/core/io/dto/spaces';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { TopicPageView } from '~/core/topics/browse/topic-page-view';
 import type { Relation, TabEntity } from '~/core/types';
+import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { Spaces } from '~/core/utils/space';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
@@ -158,7 +155,7 @@ export function customBrowseView({
   // replaced it a moment later, which read as the page loading twice.
   if (!entity) return isLoadingEntity ? 'pending' : 'generic';
 
-  const byType = viewFromTypes(entity);
+  const byType = entityBrowseViewFromTypes(entity.types);
 
   if (byType === 'claim') return 'claim';
   if (isEditing) return 'generic';
@@ -189,29 +186,10 @@ export function customBrowseView({
 }
 
 /**
- * The view an entity's own types put it in line for, before any space is read.
- *
- * Precedence lives here and only here. Claim beats Topic, so an entity typed as
- * both reads as the narrower of the two — a claim is a thing to take a side on,
- * which is more specific than a subject heading — and both beat Person for the
- * same reason.
- *
- * `'person'` is a *candidate*, not an answer: whether that person's page is a
- * profile is the space's to say, and `customBrowseView` asks it.
- */
-function viewFromTypes(entity: { types: { id: string }[] }): 'claim' | 'topic' | 'person' | null {
-  if (entity.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID))) return 'claim';
-  if (entity.types.some(type => ID.equals(type.id, TOPIC_TYPE_ID))) return 'topic';
-  if (entity.types.some(type => ID.equals(type.id, SystemIds.PERSON_TYPE))) return 'person';
-
-  return null;
-}
-
-/**
  * Whether the space has to be read before this entity's view is known.
  *
  * The one question `useSpace` is enabled by, and it is asked through
- * `viewFromTypes` rather than restated. Restating it is exactly what went wrong:
+ * `entityBrowseViewFromTypes` rather than restated. Restating it is exactly what went wrong:
  * the gate tested Person alone, so an entity typed Person *and* Claim — which
  * the routing test covers explicitly — fetched a space that the claim branch
  * above was always going to discard. A gate that repeats a precedence it does
@@ -226,7 +204,7 @@ export function needsSpaceForView({
 }): boolean {
   if (isEditing || !entity) return false;
 
-  return viewFromTypes(entity) === 'person';
+  return entityBrowseViewFromTypes(entity.types) === 'person';
 }
 
 /**
@@ -312,6 +290,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
               avatarUrl={claimAvatarUrl}
               coverUrl={props.coverUrl}
               fitImage={props.variant === 'sidePanel'}
+              contentMaxWidth={CLAIM_PAGE_CONTENT_MAX_WIDTH}
               // Claims use both media properties as part of their identity. The generic fitted
               // side-panel header suppresses avatars because they are usually just list
               // thumbnails, but doing that here would make a claim's configured avatar vanish.

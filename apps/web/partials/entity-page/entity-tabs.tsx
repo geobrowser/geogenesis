@@ -5,6 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useQueryEntity, useRelations, useValues } from '~/core/sync/use-store';
 import { TabEntity } from '~/core/types';
 import { Relation } from '~/core/types';
@@ -41,6 +42,7 @@ export function EntityTabs({
   // space access (and uses the panel's own intent when mounted there), so a toggle carried from a
   // different space cannot expose tab editing to a reader of this one.
   const effectiveEditable = useUserIsEditing(spaceId);
+  const sidePanelTab = useEntitySidePanelActiveTab();
   const { entity } = useQueryEntity({ id: entityId, spaceId });
 
   const initialTabRelationIds = React.useMemo(() => new Set(initialTabRelations.map(r => r.id)), [initialTabRelations]);
@@ -77,6 +79,25 @@ export function EntityTabs({
     return map;
   }, [liveNameValues]);
 
+  const overviewHref = NavUtils.toEntity(spaceId, entityId);
+  const leadingSystemTabs = systemTabsBefore ?? [{ label: 'Overview', href: overviewHref }];
+  const systemTabKey = leadingSystemTabs.flatMap(tab => (tab.sidePanelKey ? [tab.sidePanelKey] : [])).join('\u0000');
+  const activeSystemTab = sidePanelTab?.activeSystemTab ?? null;
+  const setActiveSystemTab = sidePanelTab?.setActiveSystemTab;
+  const clearToOverview = sidePanelTab?.setActiveTabId;
+
+  // Counts can settle after the panel opens. If the selected product tab disappears at zero,
+  // reconcile the shared panel state instead of leaving an unreachable empty panel selected.
+  // This belongs at the shared entity-tabs boundary so browse and edit bars follow one rule.
+  React.useEffect(() => {
+    const systemTabKeys = systemTabKey === '' ? [] : systemTabKey.split('\u0000');
+    if (!activeSystemTab || systemTabKeys.includes(activeSystemTab)) return;
+
+    const fallback = systemTabKeys.includes('overview') ? 'overview' : systemTabKeys[0];
+    if (fallback && setActiveSystemTab) setActiveSystemTab(fallback);
+    else clearToOverview?.(null);
+  }, [activeSystemTab, clearToOverview, setActiveSystemTab, systemTabKey]);
+
   if (entityHasOnlyPostType(entity)) {
     return null;
   }
@@ -86,9 +107,6 @@ export function EntityTabs({
     const liveName = liveNameMap.get(r.toEntity.id);
     return liveName !== undefined ? { ...base, name: liveName } : base;
   });
-
-  const overviewHref = NavUtils.toEntity(spaceId, entityId);
-  const leadingSystemTabs = systemTabsBefore ?? [{ label: 'Overview', href: overviewHref }];
 
   if (effectiveEditable) {
     const editableTabs = sortedTabRelations.map((relation, i) => ({

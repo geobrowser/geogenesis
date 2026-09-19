@@ -11,18 +11,11 @@ import { ID } from '~/core/id';
 import { sortRows } from '~/core/profile/record-client-filter';
 import { useEntityScores } from '~/core/profile/use-entity-scores';
 import type { WhereCondition } from '~/core/sync/experimental_query-layer';
-import { useQueryEntities } from '~/core/sync/use-store';
+import { useQueryAllEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 
 import { useClaimExploreRows } from './use-claim-explore-rows';
-
-/**
- * One bounded window is enough for the summary and covers the full record for ordinary claims.
- * The GEO-2975 claims feed will own paging when it lands; keeping the scope in this hook means that
- * feed can replace the transport without changing what this page considers related.
- */
-const CLAIM_RECORD_LIMIT = 100;
 
 /** Stable empty rows keep the query result from changing identity while it is disabled. */
 const NO_ROWS: ExploreFeedRow[] = [];
@@ -85,18 +78,15 @@ export function useClaimRecord({
   spaceId: string;
   topicIds: string[];
 }) {
-  const related = useQueryEntities({
+  const related = useQueryAllEntities({
     where: relatedClaimsWhere({ spaceId, topicIds, requireTagId: DEBATE_TAG_ID }),
-    first: CLAIM_RECORD_LIMIT,
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
     enabled: topicIds.length > 0,
-    deferUntilFetched: true,
-    prefetchNextPage: false,
   });
 
   const topicRelatedIds = React.useMemo(() => relatedClaimIds(claimId, related.entities), [claimId, related.entities]);
 
-  const claimDebates = useQueryEntities({
+  const claimDebates = useQueryAllEntities({
     where: {
       types: [{ id: { equals: DEBATE_TYPE_ID } }],
       spaces: [{ equals: spaceId }],
@@ -108,21 +98,15 @@ export function useClaimRecord({
         },
       ],
     },
-    first: CLAIM_RECORD_LIMIT,
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
     enabled: true,
-    deferUntilFetched: true,
-    prefetchNextPage: false,
   });
 
   const claimDebateIds = React.useMemo(() => entityIds(claimDebates.entities), [claimDebates.entities]);
-  const extractedClaims = useQueryEntities({
+  const extractedClaims = useQueryAllEntities({
     where: claimsExtractedFromDebatesWhere(spaceId, claimDebateIds),
-    first: CLAIM_RECORD_LIMIT,
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
     enabled: claimDebateIds.length > 0,
-    deferUntilFetched: true,
-    prefetchNextPage: false,
   });
 
   const relatedIds = React.useMemo(
@@ -130,7 +114,7 @@ export function useClaimRecord({
     [claimId, extractedClaims.entities, related.entities]
   );
 
-  const relatedDebates = useQueryEntities({
+  const relatedDebates = useQueryAllEntities({
     where: {
       types: [{ id: { equals: DEBATE_TYPE_ID } }],
       spaces: [{ equals: spaceId }],
@@ -142,11 +126,8 @@ export function useClaimRecord({
         },
       ],
     },
-    first: CLAIM_RECORD_LIMIT,
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
     enabled: topicRelatedIds.length > 0,
-    deferUntilFetched: true,
-    prefetchNextPage: false,
   });
 
   const debateIds = React.useMemo(

@@ -46,6 +46,9 @@ import { type ClaimResponseState, useClaimResponseState } from './use-claim-resp
 
 type ClaimTab = 'overview' | 'debates' | 'claims' | 'sources' | 'custom';
 
+/** Shared with the cover/avatar header so its left edge stays aligned with the claim column. */
+export const CLAIM_PAGE_CONTENT_MAX_WIDTH = 720;
+
 export function resolveClaimTab({
   pathname,
   authoredTabId,
@@ -166,7 +169,10 @@ export function ClaimPageView({
 
   return (
     <div className="@container">
-      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 py-6 @[560px]:gap-8 @[560px]:px-5 @[560px]:py-8">
+      <div
+        className="mx-auto flex w-full flex-col gap-6 px-4 py-6 @[560px]:gap-8 @[560px]:px-5 @[560px]:py-8"
+        style={{ maxWidth: CLAIM_PAGE_CONTENT_MAX_WIDTH }}
+      >
         {/* Hero */}
         <header className="flex flex-col gap-3">
           {/* `text-pretty`, not `text-balance`. Balancing evens every line to the same length,

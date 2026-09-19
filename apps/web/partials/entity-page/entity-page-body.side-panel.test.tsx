@@ -73,6 +73,7 @@ vi.mock('~/partials/entity-page/entity-page-header', () => ({ EntityPageHeader: 
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => null }));
 vi.mock('~/partials/comments/comments-section', () => ({ CommentSection: () => null }));
 vi.mock('~/core/claims/browse/claim-page-view', () => ({
+  CLAIM_PAGE_CONTENT_MAX_WIDTH: 720,
   ClaimPageView: (props: Record<string, unknown>) => {
     mocks.claimPage = props;
     return <div data-testid="claim-page">{props.footer as React.ReactNode}</div>;
@@ -175,6 +176,7 @@ describe('EntityPageBody claim side panel', () => {
       coverUrl: 'https://example.com/cover.png',
       fitImage: true,
       withAvatar: true,
+      contentMaxWidth: 720,
     });
   });
 

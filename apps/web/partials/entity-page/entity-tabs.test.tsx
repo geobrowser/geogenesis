@@ -9,6 +9,12 @@ const mocks = vi.hoisted(() => ({
   editable: false,
   editingSpace: null as string | null,
   readTabs: null as Array<{ label: string; href: string }> | null,
+  sidePanel: null as null | {
+    activeTabId: string | null;
+    activeSystemTab: string | null;
+    setActiveTabId: ReturnType<typeof vi.fn>;
+    setActiveSystemTab: ReturnType<typeof vi.fn>;
+  },
 }));
 
 vi.mock('~/core/hooks/use-user-is-editing', () => ({
@@ -22,6 +28,10 @@ vi.mock('~/core/sync/use-store', () => ({
   useQueryEntity: () => ({ entity: { id: 'claim-1', types: [] } }),
   useRelations: ({ mergeWith }: { mergeWith: unknown[] }) => mergeWith,
   useValues: () => [],
+}));
+
+vi.mock('~/core/state/entity-side-panel-active-tab', () => ({
+  useEntitySidePanelActiveTab: () => mocks.sidePanel,
 }));
 
 vi.mock('~/design-system/tab-group', () => ({
@@ -49,6 +59,7 @@ beforeEach(() => {
   mocks.editable = false;
   mocks.editingSpace = null;
   mocks.readTabs = null;
+  mocks.sidePanel = null;
 });
 
 afterEach(cleanup);
@@ -101,5 +112,27 @@ describe('EntityTabs access and system tabs', () => {
     );
 
     expect(mocks.readTabs?.map(tab => tab.label)).toEqual(['Overview', 'Debates']);
+  });
+
+  it('returns a side panel to Overview when its selected system tab disappears', () => {
+    const setActiveSystemTab = vi.fn();
+    mocks.sidePanel = {
+      activeTabId: null,
+      activeSystemTab: 'sources',
+      setActiveTabId: vi.fn(),
+      setActiveSystemTab,
+    };
+
+    render(
+      <EntityTabs
+        entityId="claim-1"
+        spaceId="space-1"
+        initialTabRelations={[]}
+        tabEntities={[]}
+        systemTabsBefore={[{ label: 'Overview', href: '/claim', sidePanelKey: 'overview' }]}
+      />
+    );
+
+    expect(setActiveSystemTab).toHaveBeenCalledWith('overview');
   });
 });
