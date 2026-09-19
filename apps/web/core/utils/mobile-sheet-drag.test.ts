@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { preventMobileSheetPullToRefresh, shouldStartMobileSheetDrag } from './mobile-sheet-drag';
+import {
+  lockMobileSheetDocumentOverscroll,
+  preventMobileSheetPullToRefresh,
+  shouldStartMobileSheetDrag,
+} from './mobile-sheet-drag';
 
 function createSheet(scrollTop = 0) {
   const root = document.createElement('div');
@@ -61,6 +65,36 @@ describe('shouldStartMobileSheetDrag', () => {
     const { root, target } = createSheet();
 
     expect(shouldStartMobileSheetDrag(target('backdrop'), root)).toBe(false);
+  });
+});
+
+describe('lockMobileSheetDocumentOverscroll', () => {
+  it('keeps the document locked until every stacked sheet releases it', () => {
+    const releaseFirst = lockMobileSheetDocumentOverscroll();
+    const releaseSecond = lockMobileSheetDocumentOverscroll();
+
+    expect(document.documentElement.hasAttribute('data-mobile-sheet-open')).toBe(true);
+    expect(document.body.hasAttribute('data-mobile-sheet-open')).toBe(true);
+
+    releaseFirst();
+    expect(document.documentElement.hasAttribute('data-mobile-sheet-open')).toBe(true);
+    expect(document.body.hasAttribute('data-mobile-sheet-open')).toBe(true);
+
+    releaseSecond();
+    expect(document.documentElement.hasAttribute('data-mobile-sheet-open')).toBe(false);
+    expect(document.body.hasAttribute('data-mobile-sheet-open')).toBe(false);
+  });
+
+  it('allows cleanup to be called more than once without unlocking another sheet', () => {
+    const releaseFirst = lockMobileSheetDocumentOverscroll();
+    const releaseSecond = lockMobileSheetDocumentOverscroll();
+
+    releaseFirst();
+    releaseFirst();
+    expect(document.documentElement.hasAttribute('data-mobile-sheet-open')).toBe(true);
+
+    releaseSecond();
+    expect(document.documentElement.hasAttribute('data-mobile-sheet-open')).toBe(false);
   });
 });
 

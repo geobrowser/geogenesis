@@ -512,7 +512,7 @@ export function EntitySidePanel() {
         ref={setOverlayElement}
         className={cx(
           'fixed inset-0 overscroll-none',
-          overSlideUp ? Z_LAYER_CLASS.entitySidePanelOverSlideUp : 'z-[200]',
+          overSlideUp ? Z_LAYER_CLASS.entitySidePanelOverSlideUp : 'z-[200]'
         )}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

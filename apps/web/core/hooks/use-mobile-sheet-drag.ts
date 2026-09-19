@@ -4,7 +4,11 @@ import * as React from 'react';
 
 import { type PanInfo, useDragControls } from 'framer-motion';
 
-import { preventMobileSheetPullToRefresh, shouldStartMobileSheetDrag } from '~/core/utils/mobile-sheet-drag';
+import {
+  lockMobileSheetDocumentOverscroll,
+  preventMobileSheetPullToRefresh,
+  shouldStartMobileSheetDrag,
+} from '~/core/utils/mobile-sheet-drag';
 
 const DISMISS_OFFSET_PX = 72;
 const DISMISS_VELOCITY_PX_PER_SECOND = 420;
@@ -18,6 +22,11 @@ type Options = {
 export function useMobileSheetDrag({ enabled, onDismiss }: Options) {
   const dragControls = useDragControls();
   const [overlayElement, setOverlayElement] = React.useState<HTMLElement | null>(null);
+
+  React.useLayoutEffect(() => {
+    if (!enabled) return;
+    return lockMobileSheetDocumentOverscroll();
+  }, [enabled]);
 
   React.useEffect(() => {
     if (!enabled || !overlayElement) return;

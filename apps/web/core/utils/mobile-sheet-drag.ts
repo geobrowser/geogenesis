@@ -1,13 +1,40 @@
 const MOBILE_SHEET_SURFACE_SELECTOR = '[data-mobile-sheet-surface]';
 const MOBILE_SHEET_SCROLL_SELECTOR = '[data-mobile-sheet-scroll]';
 const MOBILE_SHEET_DRAG_HANDLE_SELECTOR = '[data-mobile-sheet-drag-handle]';
+const MOBILE_SHEET_OPEN_ATTRIBUTE = 'data-mobile-sheet-open';
 const INTERACTIVE_DRAG_TARGET_SELECTOR =
   'button, a, input, textarea, select, [role="button"], [contenteditable="true"], [data-no-sheet-drag]';
 
+let documentOverscrollLockCount = 0;
+
 /**
- * A mobile entity sheet can be pulled down from its non-interactive surface while its content is
- * at the top. Once the content has been scrolled, only the dedicated handle starts a sheet drag so
- * a downward gesture can return the content to the top without fighting the sheet.
+ * Prevents browser overscroll gestures while any mobile sheet is open. The reference count keeps
+ * the lock in place when sheets are stacked and makes each caller's cleanup idempotent.
+ */
+export function lockMobileSheetDocumentOverscroll(): () => void {
+  const { documentElement, body } = document;
+
+  documentOverscrollLockCount += 1;
+  documentElement.setAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE, '');
+  body.setAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE, '');
+
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    documentOverscrollLockCount = Math.max(0, documentOverscrollLockCount - 1);
+
+    if (documentOverscrollLockCount === 0) {
+      documentElement.removeAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE);
+      body.removeAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE);
+    }
+  };
+}
+
+/**
+ * A mobile sheet can be pulled down from its non-interactive surface while its content is at the
+ * top. Once the content has been scrolled, only the dedicated handle starts a sheet drag so a
+ * downward gesture can return the content to the top without fighting the sheet.
  */
 export function shouldStartMobileSheetDrag(target: EventTarget | null, root: HTMLElement): boolean {
   if (!(target instanceof Element)) return false;

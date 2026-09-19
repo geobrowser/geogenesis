@@ -707,10 +707,9 @@ body[data-slide-up-open] [data-radix-popper-content-wrapper] {
 
 /* Mobile bottom sheets own downward overscroll so the browser cannot turn it into page refresh. */
 @media (max-width: 1023px) {
-  html[data-entity-side-panel-open],
-  html[data-entity-side-panel-open] body,
-  html[data-ranking-compose-entity-sheet-open],
-  html[data-ranking-compose-entity-sheet-open] body {
+  html[data-mobile-sheet-open],
+  html[data-mobile-sheet-open] body,
+  body[data-mobile-sheet-open] {
     overscroll-behavior-y: none;
   }
 }
