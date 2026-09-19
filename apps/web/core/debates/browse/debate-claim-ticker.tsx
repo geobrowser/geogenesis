@@ -250,14 +250,23 @@ export function DebateClaimTickerCard({
       // property straight to the node on scroll — is not overwritten on the next render.
       style={opacity === 1 ? undefined : { opacity }}
       /**
-       * `rgba(21,21,21,0.3)`, 8px radius, 12px padding, 6px between the header and the claim — the
-       * frame's own values, and no `backdrop-filter` among them. The translucent fill and the
-       * dissolve are the whole effect; blurring behind it as well made the card read heavier and
-       * muddier than the design, which keeps the video sharp through it.
+       * `rgba(21,21,21,0.3)`, 8px radius, 12px padding, 6px between the header and the claim, over a
+       * 44px backdrop blur.
+       *
+       * Every value but the blur is read straight off the frame. The blur is fitted, because the
+       * Dev Mode export does not carry it — there is no `filter` or `backdrop` anywhere in that
+       * file, and taking the omission at face value is how this card ended up flat.
+       *
+       * What gives it away is the render itself. Down the card's right edge the video outside runs
+       * 176 → 54 as the tile's scrim ramps to black, while inside the card the same column barely
+       * moves, 118 → 98 — and at the bottom the card is *brighter* than the backdrop it covers,
+       * which no amount of dark translucent fill can do. Only a blur can, by averaging in the
+       * brightness above. Rebuilding the tile from the same still and sweeping the radius puts the
+       * best fit at 44px: mean error 5.7/255 against the frame, where no blur at all scores 20.0.
        *
        * `shrink-0` so the open list scrolls a full-height card rather than compressing it to fit.
        */
-      className="pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg bg-[#151515]/30 p-3"
+      className="pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg bg-[#151515]/30 p-3 backdrop-blur-[44px]"
     >
       <TickerClaimHeader
         claimId={claim.id}
@@ -570,7 +579,7 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
         event.stopPropagation();
         onClick();
       }}
-      className="pointer-events-auto hidden shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 py-1.5 text-[0.75rem] leading-[1.0625rem] text-white transition-colors hover:bg-[#151515]/50 no-hover:flex"
+      className="pointer-events-auto hidden shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 py-1.5 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-[44px] transition-colors hover:bg-[#151515]/50 no-hover:flex"
     >
       <InfoSmall color="white" />
       <span className="tabular-nums">{expanded ? 'Hide' : `${count} ${count === 1 ? 'claim' : 'claims'}`}</span>
