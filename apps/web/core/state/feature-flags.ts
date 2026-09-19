@@ -21,6 +21,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'playbackDiagnostics',
+    label: 'Playback diagnostics',
+    description:
+      'Pin a readout to the bottom of the screen showing, for every debate video on screen, whether play() was called and what happened to it. For autoplay faults that only happen on a real phone (GEO-2978).',
+    enabledByDefault: false,
+  },
+  {
     id: 'debugDebatesPage',
     label: 'Debates debug tab per space',
     description: 'Enable per-space debate processing diagnostics.',
@@ -109,6 +116,10 @@ export function useFeatureFlag(id: FeatureFlagId) {
 
 export function useDebugDebatesPageEnabled() {
   return useFeatureFlag('debugDebatesPage');
+}
+
+export function usePlaybackDiagnosticsEnabled() {
+  return useFeatureFlag('playbackDiagnostics');
 }
 
 /**
