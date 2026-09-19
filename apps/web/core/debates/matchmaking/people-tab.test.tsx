@@ -1,19 +1,26 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderWithoutStore, screen, waitFor, within } from '@testing-library/react';
 
 import type React from 'react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NavUtils } from '~/core/utils/utils';
 
 import type { DebateChallenge, DebatePerson } from '../api';
+import type { PersonRecord } from './person-record';
+import { debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
   /** Privy's answer; the tab's signed-out paths hang off it. */
   authenticated: true,
   people: [] as DebatePerson[],
+  peopleDataAvailable: true,
+  peopleLoading: false,
+  peopleError: null as Error | null,
+  peopleRefetch: vi.fn(),
   challenge: null as DebateChallenge | null,
   outboundRequest: null as unknown,
   activeDebate: null as unknown,
@@ -23,7 +30,10 @@ const mocks = vi.hoisted(() => ({
   cancelChallenge: vi.fn(),
   cancelPending: false,
   cancelError: null as Error | null,
-  records: new Map<string, unknown>(),
+  records: new Map<string, PersonRecord>(),
+  publishableSpaceIds: null as Set<string> | null,
+  publishableSpacesLoading: false,
+  spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */
   linkProps: [] as Record<string, unknown>[],
 }));
@@ -31,10 +41,19 @@ const mocks = vi.hoisted(() => ({
 // The real one reaches for the sync engine and the router; a plain anchor is what the assertions
 // below are about — a real href, and nothing intercepting the click.
 vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, ...props }: { children: React.ReactNode } & Record<string, unknown>) => {
+  PrefetchLink: ({
+    children,
+    ref,
+    ...props
+  }: { children: React.ReactNode; ref?: React.Ref<HTMLAnchorElement> } & Record<string, unknown>) => {
     mocks.linkProps.push(props);
     return (
-      <a href={props.href as string} className={props.className as string | undefined}>
+      <a
+        ref={ref}
+        href={props.href as string}
+        className={props.className as string | undefined}
+        data-testid={props['data-testid'] as string | undefined}
+      >
         {children}
       </a>
     );
@@ -56,7 +75,13 @@ vi.mock('../hooks', () => ({
 }));
 
 vi.mock('./hooks', () => ({
-  useDebatePeople: () => ({ data: { people: mocks.people }, isLoading: false, error: null }),
+  useDebatePeople: () => ({
+    data: mocks.peopleDataAvailable ? { people: mocks.people } : undefined,
+    isLoading: mocks.peopleLoading,
+    error: mocks.peopleError,
+    failureReason: mocks.peopleError,
+    refetch: mocks.peopleRefetch,
+  }),
   useDebateRequests: () => ({ data: { incoming: [], outbound: null }, isLoading: false, error: null }),
 }));
 
@@ -65,6 +90,23 @@ vi.mock('./hooks', () => ({
 vi.mock('./use-person-records', () => ({
   usePersonRecords: () => mocks.records,
 }));
+
+vi.mock('../use-debate-publishable-spaces', async importOriginal => {
+  const actual = await importOriginal<typeof import('../use-debate-publishable-spaces')>();
+  return {
+    ...actual,
+    useDebatePublishableSpaces: () => ({
+      publishableSpaceIds: mocks.publishableSpaceIds,
+      isLoading: mocks.publishableSpacesLoading,
+    }),
+  };
+});
+
+// Names and thumbnails come from the browse sidebar's cache, which these tests do not mount.
+vi.mock('~/core/hooks/use-space-labels', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/hooks/use-space-labels')>();
+  return { ...actual, useSpaceLabels: () => ({ labelsById: mocks.spaceLabels, isLoading: false }) };
+});
 
 vi.mock('../use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.currentUserId,
@@ -77,6 +119,7 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
 }));
 
 const { PeopleTab } = await import('./people-tab');
+const { PERSON_SPACE_ICON_CAP } = await import('./person-space-icons');
 
 /** A real space id shape. `profile-user-them` is not one, and the profile link is gated on it. */
 const PROFILE_SPACE_IDS: Record<string, string> = {
@@ -96,6 +139,30 @@ function person(userId: string, name: string): DebatePerson {
     online_since: '2026-08-05T11:00:00.000Z',
     can_challenge: true,
   } as DebatePerson;
+}
+
+function record(over: Partial<PersonRecord> = {}): PersonRecord {
+  const result: PersonRecord = {
+    positions: null,
+    debatesArgued: null,
+    claimsBySpace: new Map(),
+    debatesBySpace: new Map(),
+    winRate: null,
+    joinedAt: null,
+    activeSpaceIds: new Set(),
+    ...over,
+  };
+
+  if (!over.activeSpaceIds) {
+    result.activeSpaceIds = new Set(
+      [result.claimsBySpace, result.debatesBySpace]
+        .flatMap(counts => [...(counts ?? [])])
+        .filter(([, count]) => count > 0)
+        .map(([spaceId]) => spaceId)
+    );
+  }
+
+  return result;
 }
 
 function challenge(role: 'requester' | 'recipient', expiresInMs = 25 * 60_000): DebateChallenge {
@@ -121,6 +188,10 @@ beforeEach(() => {
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
   mocks.people = [person('user-them', 'Arturas'), person('user-other', 'Vytautas')];
+  mocks.peopleDataAvailable = true;
+  mocks.peopleLoading = false;
+  mocks.peopleError = null;
+  mocks.peopleRefetch.mockReset();
   mocks.challenge = null;
   mocks.outboundRequest = null;
   mocks.activeDebate = null;
@@ -131,8 +202,42 @@ beforeEach(() => {
   mocks.cancelPending = false;
   mocks.cancelError = null;
   mocks.records = new Map();
+  mocks.publishableSpaceIds = null;
+  mocks.publishableSpacesLoading = false;
+  mocks.spaceLabels = new Map();
   mocks.linkProps = [];
 });
+
+/**
+ * A fresh jotai store per render, as the claims-tab suite does.
+ *
+ * The filter selections are atoms since GEO-2850, which makes them module-global by default — so
+ * one test picking a space would hand it to every test after it, and the failure would land on
+ * whichever test happened to run next rather than on the one that set it.
+ */
+function render(ui: React.ReactElement, store: ReturnType<typeof createStore> = createStore()) {
+  return renderWithoutStore(<Provider store={store}>{ui}</Provider>);
+}
+
+/**
+ * Radix defers a FocusScope's unmount event by one timer tick. Let it finish inside this test's
+ * jsdom window; otherwise the full parallel suite can replace `CustomEvent` before the old popup
+ * dispatches its cleanup event and report an unhandled cross-window Event error after every
+ * assertion has passed.
+ */
+async function closeActiveSpacesPopover(trigger: HTMLElement) {
+  fireEvent.click(trigger);
+  await waitFor(() => expect(screen.queryByRole('list', { name: 'Active spaces' })).not.toBeInTheDocument());
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+}
+
+// Radix's menu measures its content; jsdom has no observer to measure with.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
 afterEach(cleanup);
 
@@ -424,12 +529,12 @@ describe('PeopleTab', () => {
     mocks.records = new Map([
       [
         PROFILE_SPACE_IDS['user-them'],
-        {
+        record({
           positions: 119,
           debatesArgued: 11,
           winRate: { percent: 73, wins: 8, of: 11, judged: 11 },
           joinedAt: new Date(Date.UTC(2026, 0, 29)),
-        },
+        }),
       ],
     ]);
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
@@ -496,5 +601,395 @@ describe('the person link', () => {
 
     expect(screen.getByText('Nameless')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Nameless' })).toBeNull();
+  });
+});
+
+// GEO-2944. The filter bar; the suites above are the rows, the request card and the person link.
+describe('PeopleTab filters', () => {
+  const PROFILE_THEM = PROFILE_SPACE_IDS['user-them'] ?? 'profile-user-them';
+  const PROFILE_OTHER = PROFILE_SPACE_IDS['user-other'] ?? 'profile-user-other';
+
+  beforeEach(() => {
+    mocks.spaceLabels = new Map([
+      ['spacea', { name: 'Crypto', image: null }],
+      ['spaceb', { name: 'Health', image: null }],
+    ]);
+    mocks.records = new Map([
+      [
+        PROFILE_THEM,
+        record({
+          positions: 1,
+          debatesArgued: null,
+          claimsBySpace: new Map([['spacea', 1]]),
+          debatesBySpace: new Map(),
+          winRate: null,
+          joinedAt: null,
+        }),
+      ],
+      [
+        PROFILE_OTHER,
+        record({
+          positions: 1,
+          debatesArgued: null,
+          claimsBySpace: new Map([['spaceb', 1]]),
+          debatesBySpace: new Map(),
+          winRate: null,
+          joinedAt: null,
+        }),
+      ],
+    ]);
+  });
+
+  it('narrows the list to people in a picked space, and counts them on the option', async () => {
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    // One person each, counted over everyone the other filters leave.
+    const crypto = await screen.findByRole('button', { name: /Crypto/ });
+    expect(crypto).toHaveTextContent('1');
+
+    fireEvent.click(crypto);
+
+    expect(screen.getByText('Arturas')).toBeInTheDocument();
+    expect(screen.queryByText('Vytautas')).not.toBeInTheDocument();
+  });
+
+  it('defaults to Any space and keeps people with no debate-space activity visible', () => {
+    mocks.records.set(
+      PROFILE_OTHER,
+      record({
+        positions: null,
+        debatesArgued: null,
+        claimsBySpace: new Map(),
+        debatesBySpace: new Map(),
+        winRate: null,
+        joinedAt: null,
+      })
+    );
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
+    expect(screen.getByText('Arturas')).toBeInTheDocument();
+    expect(screen.getByText('Vytautas')).toBeInTheDocument();
+    const inactiveRow = screen.getByText('Vytautas').closest('li') as HTMLElement;
+    expect(within(inactiveRow).queryByText('Active in')).not.toBeInTheDocument();
+  });
+
+  it('never offers or keeps a space where nobody has activity', async () => {
+    mocks.spaceLabels.set('spacec', { name: 'Dormant', image: null });
+    mocks.records.set(
+      PROFILE_THEM,
+      record({
+        positions: 1,
+        debatesArgued: null,
+        claimsBySpace: new Map([
+          ['spacea', 1],
+          ['spacec', 0],
+        ]),
+        debatesBySpace: new Map([['spacec', 0]]),
+        winRate: null,
+        joinedAt: null,
+      })
+    );
+    const store = createStore();
+    store.set(debatesHubPeopleSpaceIdsAtom, ['spacec']);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+    await waitFor(() => expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual([]));
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    expect(await screen.findByRole('button', { name: /Crypto/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Dormant/ })).not.toBeInTheDocument();
+  });
+
+  it('does not expose or apply remembered spaces until activity gates settle', async () => {
+    mocks.publishableSpacesLoading = true;
+    const store = createStore();
+    store.set(debatesHubPeopleSpaceIdsAtom, ['spacea']);
+
+    const view = render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+    // The selection survives for reconciliation, but an unverified space cannot narrow the roster,
+    // appear on a row, or put itself back into the shared menu through `keepSelectedVisible`.
+    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual(['spacea']);
+    expect(screen.getByText('Arturas')).toBeInTheDocument();
+    expect(screen.getByText('Vytautas')).toBeInTheDocument();
+    expect(screen.queryByText('Active in')).not.toBeInTheDocument();
+    const spaceFilterTrigger = screen.getByRole('button', { name: /Any space/ });
+    fireEvent.click(spaceFilterTrigger);
+    expect(screen.queryByRole('button', { name: /Crypto/ })).not.toBeInTheDocument();
+    fireEvent.click(spaceFilterTrigger);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    mocks.publishableSpacesLoading = false;
+    mocks.publishableSpaceIds = new Set(['spacea']);
+    view.rerender(
+      <Provider store={store}>
+        <PeopleTab onTabChange={mocks.onTabChange} />
+      </Provider>
+    );
+
+    expect(await screen.findByText('Arturas')).toBeInTheDocument();
+    expect(screen.queryByText('Vytautas')).not.toBeInTheDocument();
+    expect(screen.getByText('Active in')).toBeInTheDocument();
+  });
+
+  it('preserves a remembered space until the current roster has answered', async () => {
+    mocks.peopleDataAvailable = false;
+    mocks.peopleLoading = true;
+    const store = createStore();
+    store.set(debatesHubPeopleSpaceIdsAtom, ['spacea']);
+
+    const view = render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual(['spacea']);
+    expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
+
+    // A failed cold load still has no roster answer, so it must not be allowed to invalidate the
+    // selection either. The retry can later produce the evidence needed to keep or remove it.
+    mocks.peopleLoading = false;
+    mocks.peopleError = new Error('Roster unavailable');
+    view.rerender(
+      <Provider store={store}>
+        <PeopleTab onTabChange={mocks.onTabChange} />
+      </Provider>
+    );
+    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual(['spacea']);
+
+    mocks.peopleDataAvailable = true;
+    mocks.peopleError = null;
+    view.rerender(
+      <Provider store={store}>
+        <PeopleTab onTabChange={mocks.onTabChange} />
+      </Provider>
+    );
+
+    expect(await screen.findByText('Arturas')).toBeInTheDocument();
+    expect(screen.queryByText('Vytautas')).not.toBeInTheDocument();
+    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual(['spacea']);
+  });
+
+  // A space filter alone can never empty the list — a facet only offers spaces somebody is active in — so
+  // the case this wording exists for is a space plus something else.
+  //
+  // The selection is seeded into the store rather than picked through the menu: the menu is covered
+  // above, and a multi-select deliberately stays open across ticks, so its dismissable layer would
+  // swallow the "Clear filters" press as an outside-click instead of passing it to the button.
+  it('blames the filters rather than the search once a space is picked too', async () => {
+    const store = createStore();
+    store.set(debatesHubPeopleSpaceIdsAtom, ['spacea']);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+    fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'Vytautas' } });
+
+    expect(await screen.findByText('Nobody available matches those filters.')).toBeInTheDocument();
+    expect(screen.queryByText('Nobody available matches that search.')).not.toBeInTheDocument();
+
+    // The undo names both things holding the list down, and takes back both.
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    // Both filters are taken back, not just the one named last: the space selection is what the
+    // label promises and the search is what the viewer can see in the box.
+    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual([]);
+    expect((screen.getByLabelText('Search people') as HTMLInputElement).value).toBe('');
+  });
+
+  // With nothing but a search, the wording it had stays: a viewer who typed something knows what to
+  // take back, and "Clear filters" would name one of two things when there is only one.
+  it('still blames the search when the search is the only filter', async () => {
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'nobody' } });
+
+    expect(await screen.findByText('Nobody available matches that search.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
+  });
+
+  it('caps the space icons on a row and counts the rest', () => {
+    mocks.records = new Map([
+      [
+        PROFILE_THEM,
+        record({
+          positions: 5,
+          debatesArgued: null,
+          claimsBySpace: new Map(
+            ['spacea', 'spaceb', 'spacec', 'spaced', 'spacee'].map(spaceId => [spaceId, 1] as const)
+          ),
+          debatesBySpace: new Map(),
+          winRate: null,
+          joinedAt: null,
+        }),
+      ],
+      [PROFILE_OTHER, record()],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const row = screen.getByText('Arturas').closest('li') as HTMLElement;
+    expect(within(row).getAllByTestId('person-space-icon')).toHaveLength(PERSON_SPACE_ICON_CAP);
+    expect(within(row).getByTestId('person-space-overflow')).toHaveTextContent('+2');
+  });
+
+  it('puts Active in above the join date and opens the complete space list', async () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.records = new Map([
+      [
+        PROFILE_THEM,
+        record({
+          positions: null,
+          debatesArgued: null,
+          claimsBySpace: new Map([
+            ['spacea', 1],
+            ['spaceb', 1],
+          ]),
+          debatesBySpace: new Map(),
+          winRate: null,
+          joinedAt: new Date(Date.UTC(2026, 0, 29)),
+        }),
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const row = screen.getByText('Arturas').closest('li') as HTMLElement;
+    expect(row.textContent!.indexOf('Active in')).toBeLessThan(row.textContent!.indexOf('On Geo since Jan 2026'));
+    expect(row).not.toHaveTextContent('Active in…');
+
+    const trigger = within(row).getByRole('button', { name: 'View 2 active spaces' });
+    fireEvent.click(trigger);
+
+    const list = await screen.findByRole('list', { name: 'Active spaces' });
+    expect(list.closest('[role="dialog"]')).toHaveAttribute('aria-label', 'Active in');
+    const options = within(list).getAllByTestId('person-space-option');
+    await waitFor(() => expect(options[0]).toHaveFocus());
+    expect(options[0]).toHaveAttribute('href', NavUtils.toSpace('spacea'));
+    expect(options[1]).toHaveAttribute('href', NavUtils.toSpace('spaceb'));
+
+    await closeActiveSpacesPopover(trigger);
+  });
+
+  it('shows only spaces with activity and orders them by debates, then canonical rank', async () => {
+    const root = 'a19c345ab9866679b001d7d2138d88a1';
+    const crypto = 'c9f267dcb0d270718c2a3c45a64afd32';
+    const ai = '41e851610e13a19441c4d980f2f2ce6b';
+    const unranked = 'ffffffffffffffffffffffffffffffff';
+    const inactive = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.spaceLabels = new Map([
+      [root, { name: 'Root', image: null }],
+      [crypto, { name: 'Crypto', image: null }],
+      [ai, { name: 'AI', image: null }],
+      [unranked, { name: 'Unranked', image: null }],
+      [inactive, { name: 'Inactive', image: null }],
+    ]);
+    mocks.records = new Map([
+      [
+        PROFILE_THEM,
+        record({
+          positions: 4,
+          debatesArgued: 4,
+          claimsBySpace: new Map([
+            [ai, 12],
+            [unranked, 0],
+            [root, 2],
+            [crypto, 1],
+            [inactive, 0],
+          ]),
+          debatesBySpace: new Map([
+            [ai, 3],
+            [unranked, 1],
+            [inactive, 0],
+          ]),
+          winRate: null,
+          joinedAt: new Date(Date.UTC(2026, 0, 29)),
+        }),
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const trigger = screen.getByRole('button', { name: 'View 4 active spaces' });
+    fireEvent.click(trigger);
+    const list = await screen.findByRole('list', { name: 'Active spaces' });
+    const options = within(list).getAllByTestId('person-space-option');
+
+    expect(options.map(option => option.getAttribute('href'))).toEqual(
+      [ai, unranked, root, crypto].map(NavUtils.toSpace)
+    );
+    expect(within(options[0]).getByText('12 claims · 3 debates')).toBeInTheDocument();
+    expect(within(options[1]).getByText('0 claims · 1 debate')).toBeInTheDocument();
+    expect(within(options[2]).getByText('2 claims · 0 debates')).toBeInTheDocument();
+    expect(within(options[3]).getByText('1 claim · 0 debates')).toBeInTheDocument();
+    expect(within(list).queryByText('Inactive')).not.toBeInTheDocument();
+
+    await closeActiveSpacesPopover(trigger);
+  });
+
+  it('draws nothing at all for somebody in no spaces', () => {
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const row = screen.getByText('Vytautas').closest('li') as HTMLElement;
+    expect(within(row).getAllByTestId('person-space-icon')).toHaveLength(1);
+
+    mocks.records = new Map();
+    cleanup();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const bare = screen.getByText('Vytautas').closest('li') as HTMLElement;
+    expect(within(bare).queryByTestId('person-space-icon')).not.toBeInTheDocument();
+    expect(within(bare).queryByTestId('person-space-overflow')).not.toBeInTheDocument();
+  });
+
+  it('keeps a proven active space when a capped page makes its exact counts incomplete', async () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.records = new Map([
+      [
+        PROFILE_THEM,
+        record({
+          activeSpaceIds: new Set(['spacea']),
+          claimsBySpace: undefined,
+          debatesBySpace: undefined,
+        }),
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const trigger = screen.getByRole('button', { name: 'View 1 active space' });
+    fireEvent.click(trigger);
+    const list = await screen.findByRole('list', { name: 'Active spaces' });
+    expect(within(list).getByText('Crypto')).toBeInTheDocument();
+    expect(within(list).queryByText(/claims|debates/)).not.toBeInTheDocument();
+
+    await closeActiveSpacesPopover(trigger);
+  });
+
+  it('shows only spaces where debate publishing is enabled', async () => {
+    mocks.publishableSpaceIds = new Set(['spacea']);
+    const store = createStore();
+    // A remembered selection must not smuggle a disabled space back into `keepSelectedVisible`.
+    store.set(debatesHubPeopleSpaceIdsAtom, ['spaceb']);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+    await waitFor(() => expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual([]));
+
+    const activeRow = (await screen.findByText('Arturas')).closest('li') as HTMLElement;
+    const inactiveRow = screen.getByText('Vytautas').closest('li') as HTMLElement;
+    expect(within(activeRow).getAllByTestId('person-space-icon')).toHaveLength(1);
+    expect(within(inactiveRow).queryByTestId('person-space-icon')).not.toBeInTheDocument();
+
+    const trigger = within(activeRow).getByRole('button', { name: 'View 1 active space' });
+    fireEvent.click(trigger);
+    const list = await screen.findByRole('list', { name: 'Active spaces' });
+    expect(within(list).getByText('Crypto')).toBeInTheDocument();
+    expect(within(list).queryByText('Health')).not.toBeInTheDocument();
+
+    await closeActiveSpacesPopover(trigger);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    expect(await screen.findByRole('button', { name: /Crypto/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Health/ })).not.toBeInTheDocument();
   });
 });

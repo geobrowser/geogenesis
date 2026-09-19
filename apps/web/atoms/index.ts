@@ -106,7 +106,17 @@ export const debatesHubPositionsTopicIdsAtom = atom<string[]>([]);
 export const debatesHubPositionsSearchAtom = atom('');
 
 /**
- * Whether each browse surface's membership default has been applied or forfeited this session.
+ * The People tab's spaces filter (GEO-2944).
+ *
+ * Its own selection rather than any other tab's, for the reason Lobby and Positions have theirs:
+ * this one narrows *people* by spaces where they have debate activity, while the others narrow
+ * claims by the space the claim is in. Carrying a selection across would re-filter a list the
+ * viewer never narrowed, and the two lists do not even offer the same spaces.
+ */
+export const debatesHubPeopleSpaceIdsAtom = atom<string[]>([]);
+
+/**
+ * Whether each claim-browse surface's membership default has been applied or forfeited this session.
  *
  * `useMemberSpaceDefault` spends its seed once per *mount*, which was the right lifetime while the
  * selection died with the mount too. Now that the selection outlives the panel, the seed has to as
@@ -167,6 +177,7 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubPositionsTopicIdsAtom, []);
   set(debatesHubPositionsSearchAtom, '');
   set(debatesHubPositionsSpaceSeedSpentAtom, false);
+  set(debatesHubPeopleSpaceIdsAtom, []);
   // A different viewer has not been shown anything yet, so the courtesy is theirs to receive.
   set(debatesHubLeftLobbyForExploreAtom, false);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than

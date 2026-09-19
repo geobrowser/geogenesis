@@ -191,24 +191,36 @@ describe('truncation', () => {
   it('withholds the debate count and rate rather than under-reporting', () => {
     const result = record({
       positions: 5,
+      claimsBySpace: new Map([['space-a', 5]]),
       debateIds: ['d1'],
+      debatesBySpace: new Map([['space-a', 1]]),
       truncated: true,
       winnerByDebateId: new Map([['d1', share(ME)]]),
     });
 
     expect(result.debatesArgued).toBeNull();
     expect(result.winRate).toBeNull();
+    expect(result.debatesBySpace).toBeUndefined();
+    expect(result.activeSpaceIds).toEqual(new Set(['space-a']));
     // Positions are paged separately, so the relation cap says nothing about them.
     expect(result.positions).toBe(5);
+    expect(result.claimsBySpace).toEqual(new Map([['space-a', 5]]));
   });
 
   // Positions are a distinct-claim count off a page of rows now, so that page can be short too —
   // and a short one under-reports exactly the way a short relation page does.
   it('withholds the positions count when their own page came back short', () => {
-    const result = record({ positions: 250, positionsTruncated: true, debateIds: ['d1'] });
+    const result = record({
+      positions: 250,
+      positionsTruncated: true,
+      claimsBySpace: new Map([['space-a', 137]]),
+      debateIds: ['d1'],
+    });
 
     expect(result.positions).toBeNull();
+    expect(result.claimsBySpace).toBeUndefined();
     expect(result.debatesArgued).toBe(1);
+    expect(result.activeSpaceIds).toEqual(new Set(['space-a']));
   });
 });
 
