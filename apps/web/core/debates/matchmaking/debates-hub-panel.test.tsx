@@ -21,6 +21,7 @@ import {
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
+  debatesHubPeopleSpaceIdsAtom,
   debatesHubPositionsSearchAtom,
   debatesHubPositionsSpaceIdsAtom,
   debatesHubPositionsSpaceSeedSpentAtom,
@@ -196,6 +197,7 @@ const FILTER_ATOMS = [
   { name: 'debatesHubLobbyTopicIdsAtom', atom: debatesHubLobbyTopicIdsAtom, dirty: ['topic-a'], cleared: [] },
   { name: 'debatesHubLobbySearchAtom', atom: debatesHubLobbySearchAtom, dirty: 'nuclear', cleared: '' },
   { name: 'debatesHubLobbySpaceSeedSpentAtom', atom: debatesHubLobbySpaceSeedSpentAtom, dirty: true, cleared: false },
+  { name: 'debatesHubPeopleSpaceIdsAtom', atom: debatesHubPeopleSpaceIdsAtom, dirty: ['space-a'], cleared: [] },
 ] as const;
 
 describe('DebatesHubPanel', () => {
@@ -244,7 +246,9 @@ describe('DebatesHubPanel', () => {
    * new account the previous one's *preference* is what every other stored setting here does.
    */
   it('covers every filter atom on every surface', () => {
-    const exported = Object.keys(atomsModule).filter(name => /^debatesHub(Explore|Lobby|Positions).*Atom$/.test(name));
+    const exported = Object.keys(atomsModule).filter(name =>
+      /^debatesHub[A-Z][A-Za-z]*(?:SpaceIds|TopicIds|Search|SpaceSeedSpent)Atom$/.test(name)
+    );
 
     expect(new Set(exported)).toEqual(new Set(FILTER_ATOMS.map(entry => entry.name)));
   });
