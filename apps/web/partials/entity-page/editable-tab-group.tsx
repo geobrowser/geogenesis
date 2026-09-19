@@ -27,52 +27,17 @@ import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-acti
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
-import { NavUtils, validateEntityId } from '~/core/utils/utils';
+import { entityTabIdFromHref, isEntityTabActive } from '~/core/utils/entity-tab-navigation';
+import { NavUtils } from '~/core/utils/utils';
 
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { ExpandSmall } from '~/design-system/icons/expand-small';
 import { Menu } from '~/design-system/icons/menu';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import type { TabGroupTab } from '~/design-system/tab-group';
 
-function tabIdFromEntityTabHref(href: string): string | null {
-  const idx = href.indexOf('tabId=');
-  if (idx === -1) return null;
-  const raw = href.slice(idx + 6).split('&')[0];
-  return validateEntityId(raw) ? raw : null;
-}
-
-function isEntityTabHrefActive(
-  href: string,
-  activeTabId: string | null,
-  sidePanel: boolean,
-  fullPath: string,
-  sidePanelKey?: string,
-  activeSystemTab?: string | null
-): boolean {
-  if (!sidePanel) return href === fullPath;
-  if (sidePanelKey) return (activeSystemTab ?? 'overview') === sidePanelKey;
-  const hrefTabId = tabIdFromEntityTabHref(href);
-  if (hrefTabId === null) return activeTabId === null;
-  return activeTabId === hrefTabId;
-}
-
-export type SystemTab = {
-  label: string;
-  href: string;
-  /** In-place product tab key used when this group renders in an entity side panel. */
-  sidePanelKey?: string;
-  /**
-   * Only shown where the side rail is not.
-   *
-   * Desktop-first breakpoints, so `lg:` applies at 1023px and below —
-   * `StickySideRail` drops itself at exactly that width. A tab whose page only
-   * repeats the rail has to disappear when the rail comes back, in edit mode as
-   * well as out of it: `about/page.tsx` hides its body on a wide screen, so
-   * leaving the tab there is a link to an empty column.
-   */
-  onlyWhenNarrow?: boolean;
-};
+export type SystemTab = Pick<TabGroupTab, 'label' | 'href' | 'sidePanelKey' | 'onlyWhenNarrow'>;
 
 export type EditableTab = {
   relation: Relation;
@@ -333,20 +298,20 @@ export function EditableTabGroup({
                 href={tab.href}
                 label={tab.label}
                 onlyWhenNarrow={tab.onlyWhenNarrow}
-                active={isEntityTabHrefActive(
-                  tab.href,
+                active={isEntityTabActive({
+                  href: tab.href,
                   activeTabId,
-                  Boolean(sidePanelTab),
+                  sidePanel: Boolean(sidePanelTab),
                   fullPath,
-                  tab.sidePanelKey,
-                  sidePanelTab?.activeSystemTab
-                )}
+                  sidePanelKey: tab.sidePanelKey,
+                  activeSystemTab: sidePanelTab?.activeSystemTab,
+                })}
                 onSelect={
                   sidePanelTab
                     ? () =>
                         tab.sidePanelKey
                           ? sidePanelTab.setActiveSystemTab(tab.sidePanelKey)
-                          : sidePanelTab.setActiveTabId(tabIdFromEntityTabHref(tab.href))
+                          : sidePanelTab.setActiveTabId(entityTabIdFromHref(tab.href))
                     : undefined
                 }
               />
@@ -376,20 +341,20 @@ export function EditableTabGroup({
                 href={tab.href}
                 label={tab.label}
                 onlyWhenNarrow={tab.onlyWhenNarrow}
-                active={isEntityTabHrefActive(
-                  tab.href,
+                active={isEntityTabActive({
+                  href: tab.href,
                   activeTabId,
-                  Boolean(sidePanelTab),
+                  sidePanel: Boolean(sidePanelTab),
                   fullPath,
-                  tab.sidePanelKey,
-                  sidePanelTab?.activeSystemTab
-                )}
+                  sidePanelKey: tab.sidePanelKey,
+                  activeSystemTab: sidePanelTab?.activeSystemTab,
+                })}
                 onSelect={
                   sidePanelTab
                     ? () =>
                         tab.sidePanelKey
                           ? sidePanelTab.setActiveSystemTab(tab.sidePanelKey)
-                          : sidePanelTab.setActiveTabId(tabIdFromEntityTabHref(tab.href))
+                          : sidePanelTab.setActiveTabId(entityTabIdFromHref(tab.href))
                     : undefined
                 }
               />

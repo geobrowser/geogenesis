@@ -87,4 +87,19 @@ describe('EntityTabs access and system tabs', () => {
 
     expect(mocks.readTabs?.map(tab => tab.label)).toEqual(['Overview', 'Debates']);
   });
+
+  it('keeps an authored label when the matching product tab is not available', () => {
+    render(
+      <EntityTabs
+        entityId="claim-1"
+        spaceId="space-1"
+        initialTabRelations={RELATIONS as never[]}
+        tabEntities={[{ id: 'tab-1', name: 'Debates' }]}
+        systemTabsBefore={[{ label: 'Overview', href: '/claim' }]}
+        reservedSystemLabels={['Overview']}
+      />
+    );
+
+    expect(mocks.readTabs?.map(tab => tab.label)).toEqual(['Overview', 'Debates']);
+  });
 });

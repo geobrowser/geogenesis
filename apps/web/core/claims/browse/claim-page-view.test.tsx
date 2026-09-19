@@ -9,7 +9,7 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import { SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
 
-import { ClaimPageView } from './claim-page-view';
+import { ClaimPageView, resolveClaimTab } from './claim-page-view';
 
 const mocks = vi.hoisted(() => ({
   entity: null as Record<string, unknown> | null,
@@ -19,10 +19,10 @@ const mocks = vi.hoisted(() => ({
   chipSection: null as Record<string, unknown> | null,
   tabs: null as Record<string, unknown> | null,
   record: {
-    claimIds: ['claim-1'],
+    relatedClaimIds: [],
     claimRows: [],
     debateRows: [],
-    claimsTotal: 1,
+    claimsTotal: 0,
     debatesTotal: 0,
     claimsLoading: false,
     debatesLoading: false,
@@ -42,8 +42,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/space/space-1/claim-1',
-  useSearchParams: () => ({ get: () => null }),
 }));
+vi.mock('~/core/state/editor/editor-provider', () => ({ useActiveTabIdForEditor: () => null }));
 
 vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
   ENTITY_DESCRIPTION_MAX_LINES: mocks.maxLines,
@@ -148,6 +148,9 @@ beforeEach(() => {
   mocks.clamp = null;
   mocks.chipSection = null;
   mocks.tabs = null;
+  mocks.record.claimsTotal = 0;
+  mocks.record.claimsLoading = false;
+  mocks.record.claimsError = false;
   mocks.record.debatesTotal = 0;
   mocks.record.debatesLoading = false;
   mocks.record.debatesError = false;
@@ -155,10 +158,12 @@ beforeEach(() => {
 
 describe('ClaimPageView record', () => {
   it('offers product tabs before authored claim tabs', () => {
+    mocks.record.claimsTotal = 1;
+
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(mocks.tabs).toMatchObject({
-      reservedSystemLabels: ['Overview', 'Debates', 'Related claims', 'Sources'],
+      reservedSystemLabels: ['Overview', 'Related claims'],
       divideBeforeAuthored: true,
     });
     expect(mocks.tabs?.systemTabsBefore).toEqual([
@@ -168,6 +173,13 @@ describe('ClaimPageView record', () => {
   });
 
   it('hides empty system tabs and shows them once they have content', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect((mocks.tabs?.systemTabsBefore as Array<{ label: string }>).map(tab => tab.label)).toEqual(['Overview']);
+    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Overview']);
+
+    cleanup();
+    mocks.record.claimsTotal = 1;
     mocks.record.debatesTotal = 1;
     mocks.entity = {
       ...claimEntity('Anything'),
@@ -202,6 +214,28 @@ describe('ClaimPageView record', () => {
 
     expect(screen.getByTestId('editable-heading')).toBeInTheDocument();
     expect(screen.getByTestId('editable-description')).toBeInTheDocument();
+  });
+});
+
+describe('resolveClaimTab', () => {
+  it('does not borrow the underlying route or authored query for a side panel', () => {
+    expect(
+      resolveClaimTab({
+        pathname: '/space/space-1/claim-1/debates',
+        authoredTabId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        panel: { activeTabId: null, activeSystemTab: null },
+      })
+    ).toBe('overview');
+  });
+
+  it('uses the panel selection when one is present', () => {
+    expect(
+      resolveClaimTab({
+        pathname: '/space/space-1/claim-1',
+        authoredTabId: null,
+        panel: { activeTabId: null, activeSystemTab: 'sources' },
+      })
+    ).toBe('sources');
   });
 });
 

@@ -10,30 +10,32 @@ import { usePathname } from 'next/navigation';
 import { useEditable } from '~/core/state/editable-store';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
-import { validateEntityId } from '~/core/utils/utils';
+import { entityTabIdFromHref, isEntityTabActive } from '~/core/utils/entity-tab-navigation';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+export type TabGroupTab = {
+  href: string;
+  label: string;
+  badge?: string;
+  disabled?: boolean;
+  hidden?: boolean;
+  /** In-place product tab key used when this tab group renders in an entity side panel. */
+  sidePanelKey?: string;
+  /** Draws a rule before this tab, marking where one group of tabs ends and another begins. */
+  dividerBefore?: boolean;
+  /**
+   * Only shown where the side rail is not.
+   *
+   * Breakpoints here are desktop-first (`lg` is max-width 1023px), and
+   * `StickySideRail` drops itself at exactly that width — so a tab reaching
+   * the rail's content appears precisely when the rail stops being there.
+   */
+  onlyWhenNarrow?: boolean;
+};
+
 interface TabGroupProps {
-  tabs: Array<{
-    href: string;
-    label: string;
-    badge?: string;
-    disabled?: boolean;
-    hidden?: boolean;
-    /** In-place product tab key used when this tab group renders in an entity side panel. */
-    sidePanelKey?: string;
-    /** Draws a rule before this tab, marking where one group of tabs ends and another begins. */
-    dividerBefore?: boolean;
-    /**
-     * Only shown where the side rail is not.
-     *
-     * Breakpoints here are desktop-first (`lg` is max-width 1023px), and
-     * `StickySideRail` drops itself at exactly that width — so a tab reaching
-     * the rail's content appears precisely when the rail stops being there.
-     */
-    onlyWhenNarrow?: boolean;
-  }>;
+  tabs: TabGroupTab[];
   className?: string;
 }
 
@@ -245,13 +247,6 @@ export const tabGroupTabLinkStyles = cva(
   }
 );
 
-function tabIdFromEntityTabHref(href: string): string | null {
-  const idx = href.indexOf('tabId=');
-  if (idx === -1) return null;
-  const raw = href.slice(idx + 6).split('&')[0];
-  return validateEntityId(raw) ? raw : null;
-}
-
 function Tab({ href, label, badge, disabled, hidden, sidePanelKey, activeRef }: TabProps) {
   const { editable } = useEditable();
 
@@ -260,13 +255,14 @@ function Tab({ href, label, badge, disabled, hidden, sidePanelKey, activeRef }: 
   const sidePanelTab = useEntitySidePanelActiveTab();
 
   const fullPath = activeTabId ? `${path}?tabId=${activeTabId}` : `${path}`;
-  const active = sidePanelTab
-    ? sidePanelKey
-      ? (sidePanelTab.activeSystemTab ?? 'overview') === sidePanelKey
-      : tabIdFromEntityTabHref(href) === null
-        ? activeTabId === null
-        : activeTabId === tabIdFromEntityTabHref(href)
-    : href === fullPath;
+  const active = isEntityTabActive({
+    href,
+    activeTabId,
+    fullPath,
+    sidePanel: Boolean(sidePanelTab),
+    sidePanelKey,
+    activeSystemTab: sidePanelTab?.activeSystemTab,
+  });
 
   if (!editable && hidden) {
     return null;
@@ -281,7 +277,7 @@ function Tab({ href, label, badge, disabled, hidden, sidePanelKey, activeRef }: 
     );
   }
 
-  const hrefTabId = tabIdFromEntityTabHref(href);
+  const hrefTabId = entityTabIdFromHref(href);
 
   if (sidePanelTab) {
     return (

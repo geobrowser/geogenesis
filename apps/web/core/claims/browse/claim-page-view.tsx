@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
@@ -10,9 +10,10 @@ import type { DebateClaim } from '~/core/debates/api';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import { SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
+import { hasRecordToShow } from '~/core/profile/profile-proposer';
+import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Relation, TabEntity } from '~/core/types';
@@ -36,6 +37,7 @@ import { PersonRecordFeed } from '~/partials/profile/person-record-feed';
 import { type ActivityKind, ProfileActivitySection } from '~/partials/profile/profile-activity-section';
 
 import { ClaimEndSlot } from './claim-end-slot';
+import { getClaimSources } from './claim-sources';
 import { ClaimSourcesTab } from './claim-sources-tab';
 import { ControversialTag } from './claim-summary';
 import { ClaimVerdict } from './claim-verdict';
@@ -44,7 +46,31 @@ import { type ClaimResponseState, useClaimResponseState } from './use-claim-resp
 
 type ClaimTab = 'overview' | 'debates' | 'claims' | 'sources' | 'custom';
 
-const SYSTEM_TAB_LABELS = ['Overview', 'Debates', 'Related claims', 'Sources'];
+export function resolveClaimTab({
+  pathname,
+  authoredTabId,
+  panel,
+}: {
+  pathname: string;
+  authoredTabId: string | null;
+  panel: { activeTabId: string | null; activeSystemTab: string | null } | null;
+}): ClaimTab {
+  // A side panel owns its navigation. The page behind it may itself be on /debates or carry a
+  // custom tab query, and borrowing either would make a newly opened panel start on the wrong tab.
+  if (panel) {
+    if (panel.activeTabId) return 'custom';
+    if (panel.activeSystemTab === 'debates') return 'debates';
+    if (panel.activeSystemTab === 'claims') return 'claims';
+    if (panel.activeSystemTab === 'sources') return 'sources';
+    return 'overview';
+  }
+
+  if (authoredTabId) return 'custom';
+  if (pathname.endsWith('/debates')) return 'debates';
+  if (pathname.endsWith('/claims')) return 'claims';
+  if (pathname.endsWith('/sources')) return 'sources';
+  return 'overview';
+}
 
 /**
  * The browse-mode read view for a Claim.
@@ -79,7 +105,7 @@ export function ClaimPageView({
 }) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const activeAuthoredTabId = useActiveTabIdForEditor();
   const sidePanelTab = useEntitySidePanelActiveTab();
 
   // Hoisted so one lookup answers for the whole page. geo-chat's row and the graph's `Is factual`
@@ -98,27 +124,16 @@ export function ClaimPageView({
   const topics = React.useMemo(() => relationsOfType(entity?.relations, TOPICS_PROPERTY_ID), [entity?.relations]);
   const tags = React.useMemo(() => relationsOfType(entity?.relations, TAG_PROPERTY_ID), [entity?.relations]);
   const topicIds = React.useMemo(() => topics.map(topic => topic.toEntity.id), [topics]);
-  const hasSources = React.useMemo(
-    () =>
-      (entity?.relations ?? []).some(
-        relation => relation.isDeleted !== true && ID.equals(relation.type.id, SOURCES_PROPERTY_ID)
-      ),
-    [entity?.relations]
-  );
+  const sources = React.useMemo(() => getClaimSources(entity?.relations ?? []), [entity?.relations]);
   // Named types only: an unnamed one would render as a raw id, which says less than no chip.
   const typeName = entity?.types.find(type => type.name)?.name ?? null;
   const record = useClaimRecord({ claimId: entityId, spaceId, topicIds });
 
-  const requestedTab: ClaimTab =
-    sidePanelTab?.activeTabId || searchParams.get('tabId')
-      ? 'custom'
-      : sidePanelTab?.activeSystemTab === 'debates' || pathname.endsWith('/debates')
-        ? 'debates'
-        : sidePanelTab?.activeSystemTab === 'claims' || pathname.endsWith('/claims')
-          ? 'claims'
-          : sidePanelTab?.activeSystemTab === 'sources' || pathname.endsWith('/sources')
-            ? 'sources'
-            : 'overview';
+  const requestedTab = resolveClaimTab({
+    pathname,
+    authoredTabId: activeAuthoredTabId,
+    panel: sidePanelTab,
+  });
 
   const overviewHref = NavUtils.toEntity(spaceId, entityId);
   const hrefs = {
@@ -126,20 +141,16 @@ export function ClaimPageView({
     claims: `${overviewHref}/claims`,
     sources: `${overviewHref}/sources`,
   };
-  const hasDebates = record.debatesLoading || record.debatesError || record.debatesTotal > 0;
-  const hasClaims = record.claimsLoading || record.claimsError || record.claimsTotal > 0;
+  // Matches profile record tabs: unknown/error stays reachable, while a settled zero disappears.
+  const hasDebates = hasRecordToShow(record.debatesLoading || record.debatesError ? undefined : record.debatesTotal);
+  const hasClaims = hasRecordToShow(record.claimsLoading || record.claimsError ? undefined : record.claimsTotal);
+  const hasSources = sources.length > 0;
   const systemTabs = [
     { label: 'Overview', href: overviewHref, sidePanelKey: 'overview' },
     ...(hasDebates ? [{ label: 'Debates', href: hrefs.debates, sidePanelKey: 'debates' }] : []),
     ...(hasClaims ? [{ label: 'Related claims', href: hrefs.claims, sidePanelKey: 'claims' }] : []),
     ...(hasSources ? [{ label: 'Sources', href: hrefs.sources, sidePanelKey: 'sources' }] : []),
   ];
-  const activeTab: ClaimTab =
-    (requestedTab === 'debates' && !hasDebates) ||
-    (requestedTab === 'claims' && !hasClaims) ||
-    (requestedTab === 'sources' && !hasSources)
-      ? 'overview'
-      : requestedTab;
 
   if (isLoading && !entity) {
     return (
@@ -225,12 +236,12 @@ export function ClaimPageView({
           initialTabRelations={initialTabRelations}
           tabEntities={tabEntities}
           systemTabsBefore={systemTabs}
-          reservedSystemLabels={SYSTEM_TAB_LABELS}
+          reservedSystemLabels={systemTabs.map(tab => tab.label)}
           divideBeforeAuthored
         />
 
         <ClaimTabPanel
-          activeTab={activeTab}
+          activeTab={requestedTab}
           entityId={entityId}
           spaceId={spaceId}
           entityRelations={entity.relations}

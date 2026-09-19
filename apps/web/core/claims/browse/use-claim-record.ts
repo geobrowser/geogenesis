@@ -1,7 +1,5 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import { relatedClaimsWhere } from '~/core/claims/related-claims';
@@ -9,11 +7,12 @@ import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TAG_ID, DEBATE_TYPE_ID } from '~/core
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { ID } from '~/core/id';
-import { fetchExploreRowsByIds } from '~/core/profile/explore-rows-by-ids';
 import { sortRows } from '~/core/profile/record-client-filter';
 import { useEntityScores } from '~/core/profile/use-entity-scores';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
+
+import { useClaimExploreRows } from './use-claim-explore-rows';
 
 /**
  * One bounded window is enough for the summary and covers the full record for ordinary claims.
@@ -26,39 +25,23 @@ const CLAIM_RECORD_LIMIT = 100;
 const NO_ROWS: ExploreFeedRow[] = [];
 
 /**
- * The current claim followed by its drawable neighbours.
+ * Drawable neighbours only.
  *
  * The source matches its own `relatedClaimsWhere` clause, so it must be removed before the related
  * count is observed. This helper owns that ordering and is exported for the regression test: doing
  * the subtraction after counting is the GEO-2758 bug the ticket explicitly calls out.
  */
-export function claimRecordIds(claimId: string, related: Pick<Entity, 'id' | 'name'>[]): string[] {
-  return [
-    claimId,
-    ...related.filter(entity => Boolean(entity.name) && !ID.equals(entity.id, claimId)).map(entity => entity.id),
-  ];
-}
-
-function useExploreRows(ids: string[], spaceId: string, enabled: boolean) {
-  const normalizedIds = React.useMemo(() => ids.map(ID.uuidToHex), [ids]);
-
-  return useQuery({
-    queryKey: ['claim-record', 'explore-rows', spaceId, normalizedIds],
-    queryFn: ({ signal }) => {
-      const preferredSpaces = new Map(ids.map(id => [ID.uuidToHex(id), [spaceId]]));
-      return fetchExploreRowsByIds(ids, signal, preferredSpaces);
-    },
-    enabled: enabled && ids.length > 0,
-    staleTime: 30_000,
-  });
+export function relatedClaimIds(claimId: string, related: Pick<Entity, 'id' | 'name'>[]): string[] {
+  return related.filter(entity => Boolean(entity.name) && !ID.equals(entity.id, claimId)).map(entity => entity.id);
 }
 
 /**
- * The Debates and Claims record shared by the claim Overview summary and its two full tabs.
+ * The Debates and Related claims record shared by the claim Overview summary and its two full tabs.
  *
  * Related claims use the canonical clause and require the debate tag. Debates then point at any
- * claim in that exact scope, while both row sets are hydrated through the explore card projection
- * so the summary and tabs render the same cards as the rest of the product.
+ * claim in that exact scope (including the current claim), while the Related claims rows contain
+ * neighbours only. Both row sets are hydrated through the explore card projection so the summary
+ * and tabs render the same cards as the rest of the product.
  */
 export function useClaimRecord({
   claimId,
@@ -78,7 +61,8 @@ export function useClaimRecord({
     prefetchNextPage: false,
   });
 
-  const claimIds = React.useMemo(() => claimRecordIds(claimId, related.entities), [claimId, related.entities]);
+  const relatedIds = React.useMemo(() => relatedClaimIds(claimId, related.entities), [claimId, related.entities]);
+  const scopedClaimIds = React.useMemo(() => [claimId, ...relatedIds], [claimId, relatedIds]);
 
   const debates = useQueryEntities({
     where: {
@@ -87,22 +71,22 @@ export function useClaimRecord({
       relations: [
         {
           typeOf: { id: { equals: DEBATE_CLAIMS_PROPERTY_ID } },
-          toEntity: { id: { in: claimIds } },
+          toEntity: { id: { in: scopedClaimIds } },
         },
       ],
     },
     first: CLAIM_RECORD_LIMIT,
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: claimIds.length > 0,
+    enabled: scopedClaimIds.length > 0,
     deferUntilFetched: true,
     prefetchNextPage: false,
   });
 
   const debateIds = React.useMemo(() => debates.entities.map(entity => entity.id), [debates.entities]);
-  const claimsRowsQuery = useExploreRows(claimIds, spaceId, !related.isLoading);
-  const debatesRowsQuery = useExploreRows(debateIds, spaceId, !debates.isLoading);
+  const claimsRowsQuery = useClaimExploreRows(relatedIds, spaceId, !related.isLoading);
+  const debatesRowsQuery = useClaimExploreRows(debateIds, spaceId, !debates.isLoading);
 
-  const claimScores = useEntityScores({ ids: claimIds });
+  const claimScores = useEntityScores({ ids: relatedIds });
   const debateScores = useEntityScores({ ids: debateIds });
 
   const claimRanks = React.useMemo(
@@ -124,10 +108,10 @@ export function useClaimRecord({
   );
 
   return {
-    claimIds,
+    relatedClaimIds: relatedIds,
     claimRows,
     debateRows,
-    claimsTotal: claimIds.length,
+    claimsTotal: relatedIds.length,
     debatesTotal: debateIds.length,
     claimsLoading: related.isLoading || claimsRowsQuery.isLoading || (claimScores.isLoading && !claimScores.isError),
     debatesLoading:

@@ -1,18 +1,14 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-
 import * as React from 'react';
 
-import { SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
-import { ID } from '~/core/id';
-import { fetchExploreRowsByIds } from '~/core/profile/explore-rows-by-ids';
 import type { Relation } from '~/core/types';
-import { dedupeRelationsByToEntityId } from '~/core/utils/dedupe-relations';
 
 import { PersonRecordFeed } from '~/partials/profile/person-record-feed';
 
 import { ClaimProvenance } from './claim-provenance';
+import { getClaimSources } from './claim-sources';
+import { useClaimExploreRows } from './use-claim-explore-rows';
 
 /** Provenance plus the source entities themselves, rendered as the explore feed cards they use elsewhere. */
 export function ClaimSourcesTab({
@@ -24,29 +20,14 @@ export function ClaimSourcesTab({
   claimRelations: Relation[];
   spaceId: string;
 }) {
-  const sourceIds = React.useMemo(
-    () =>
-      dedupeRelationsByToEntityId(
-        claimRelations.filter(
-          relation => relation.isDeleted !== true && ID.equals(relation.type.id, SOURCES_PROPERTY_ID)
-        )
-      ).map(relation => relation.toEntity.id),
-    [claimRelations]
-  );
+  const sourceIds = React.useMemo(() => getClaimSources(claimRelations).map(source => source.id), [claimRelations]);
+  const sources = useClaimExploreRows(sourceIds, spaceId);
 
-  const sources = useQuery({
-    queryKey: ['claim', ID.uuidToHex(claimId), 'sources', sourceIds.map(ID.uuidToHex)],
-    queryFn: ({ signal }) => {
-      const preferredSpaces = new Map(sourceIds.map(id => [ID.uuidToHex(id), [spaceId]]));
-      return fetchExploreRowsByIds(sourceIds, signal, preferredSpaces);
-    },
-    enabled: sourceIds.length > 0,
-    staleTime: 30_000,
-  });
-
-  // The parent removes the Sources tab when this is empty. Keep the panel empty too in case a
-  // stale route or side-panel selection briefly asks for it while relations are changing.
-  if (sourceIds.length === 0) return null;
+  // The parent removes the Sources tab when this is empty. The route remains addressable directly,
+  // matching the profile record-tab pattern, so a stale bookmark still gets an honest empty state.
+  if (sourceIds.length === 0) {
+    return <p className="py-6 text-metadata text-grey-04">No sources have been linked to this claim yet.</p>;
+  }
 
   return (
     <div className="flex flex-col gap-4">
