@@ -21,6 +21,8 @@ interface TabGroupProps {
     badge?: string;
     disabled?: boolean;
     hidden?: boolean;
+    /** In-place product tab key used when this tab group renders in an entity side panel. */
+    sidePanelKey?: string;
     /** Draws a rule before this tab, marking where one group of tabs ends and another begins. */
     dividerBefore?: boolean;
     /**
@@ -136,10 +138,24 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
               {t.dividerBefore && <span aria-hidden className="h-4 w-px shrink-0 bg-grey-02" />}
               {t.onlyWhenNarrow ? (
                 <span className="hidden lg:contents">
-                  <Tab href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+                  <Tab
+                    href={t.href}
+                    label={t.label}
+                    badge={t.badge}
+                    disabled={t.disabled}
+                    hidden={t.hidden}
+                    sidePanelKey={t.sidePanelKey}
+                  />
                 </span>
               ) : (
-                <Tab href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+                <Tab
+                  href={t.href}
+                  label={t.label}
+                  badge={t.badge}
+                  disabled={t.disabled}
+                  hidden={t.hidden}
+                  sidePanelKey={t.sidePanelKey}
+                />
               )}
             </React.Fragment>
           ))}
@@ -162,6 +178,7 @@ interface TabProps {
   badge?: React.ReactNode;
   disabled?: boolean;
   hidden?: boolean;
+  sidePanelKey?: string;
 }
 
 /** Shared with entity/space `TabGroup` and governance home tab rows (same underline behavior). */
@@ -191,7 +208,7 @@ function tabIdFromEntityTabHref(href: string): string | null {
   return validateEntityId(raw) ? raw : null;
 }
 
-function Tab({ href, label, badge, disabled, hidden }: TabProps) {
+function Tab({ href, label, badge, disabled, hidden, sidePanelKey }: TabProps) {
   const { editable } = useEditable();
 
   const path = usePathname();
@@ -200,9 +217,11 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
 
   const fullPath = activeTabId ? `${path}?tabId=${activeTabId}` : `${path}`;
   const active = sidePanelTab
-    ? tabIdFromEntityTabHref(href) === null
-      ? activeTabId === null
-      : activeTabId === tabIdFromEntityTabHref(href)
+    ? sidePanelKey
+      ? (sidePanelTab.activeSystemTab ?? 'overview') === sidePanelKey
+      : tabIdFromEntityTabHref(href) === null
+        ? activeTabId === null
+        : activeTabId === tabIdFromEntityTabHref(href)
     : href === fullPath;
 
   if (!editable && hidden) {
@@ -225,7 +244,9 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
       <button
         type="button"
         className={tabGroupTabLinkStyles({ active, disabled })}
-        onClick={() => sidePanelTab.setActiveTabId(hrefTabId)}
+        onClick={() =>
+          sidePanelKey ? sidePanelTab.setActiveSystemTab(sidePanelKey) : sidePanelTab.setActiveTabId(hrefTabId)
+        }
       >
         {label}
         {badge && <Badge>{badge}</Badge>}

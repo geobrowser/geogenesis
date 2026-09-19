@@ -4,8 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import { useEditable } from '~/core/state/editable-store';
-import { EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useQueryEntity, useRelations, useValues } from '~/core/sync/use-store';
 import { TabEntity } from '~/core/types';
 import { Relation } from '~/core/types';
@@ -14,27 +13,35 @@ import { NavUtils, sortRelations } from '~/core/utils/utils';
 
 import { TabGroup } from '~/design-system/tab-group';
 
-import { EditableTabGroup } from './editable-tab-group';
+import { EditableTabGroup, type SystemTab } from './editable-tab-group';
 
 type EntityTabsProps = {
   entityId: string;
   spaceId: string;
   initialTabRelations: Relation[];
   tabEntities: TabEntity[];
+  /** Product-owned tabs that lead the entity's authored tabs. Defaults to Overview. */
+  systemTabsBefore?: SystemTab[];
+  /** Authored labels hidden in browse mode because a product-owned tab already uses the name. */
+  reservedSystemLabels?: string[];
+  /** Visually separates the first authored tab from the product-owned record tabs. */
+  divideBeforeAuthored?: boolean;
 };
 
-export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities }: EntityTabsProps) {
-  const { editable } = useEditable();
+export function EntityTabs({
+  entityId,
+  spaceId,
+  initialTabRelations,
+  tabEntities,
+  systemTabsBefore,
+  reservedSystemLabels = [],
+  divideBeforeAuthored = false,
+}: EntityTabsProps) {
+  // The global toggle is intent, not permission. `useUserIsEditing` intersects it with current
+  // space access (and uses the panel's own intent when mounted there), so a toggle carried from a
+  // different space cannot expose tab editing to a reader of this one.
+  const effectiveEditable = useUserIsEditing(spaceId);
   const { entity } = useQueryEntity({ id: entityId, spaceId });
-  const sidePanelEdit = React.useContext(EntitySidePanelEditContext);
-
-  /**
-   * Full entity page: same as before — only global edit toggle (`editable`).
-   * Side panel: only `panelWantsEdit` (how the panel was opened + toggle). Do **not** OR with
-   * global `editable`, or a leftover edit mode elsewhere forces EditableTabGroup and tabs show
-   * even when the panel is in view mode.
-   */
-  const effectiveEditable = sidePanelEdit != null ? sidePanelEdit.panelWantsEdit : editable;
 
   const initialTabRelationIds = React.useMemo(() => new Set(initialTabRelations.map(r => r.id)), [initialTabRelations]);
 
@@ -81,6 +88,7 @@ export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities
   });
 
   const overviewHref = NavUtils.toEntity(spaceId, entityId);
+  const leadingSystemTabs = systemTabsBefore ?? [{ label: 'Overview', href: overviewHref }];
 
   if (effectiveEditable) {
     const editableTabs = sortedTabRelations.map((relation, i) => ({
@@ -95,25 +103,24 @@ export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities
         entityId={entityId}
         spaceId={spaceId}
         editableTabs={editableTabs}
-        systemTabsBefore={[{ label: 'Overview', href: overviewHref }]}
+        systemTabsBefore={leadingSystemTabs}
         overviewHref={overviewHref}
       />
     );
   }
 
   // Build tabs in the correct order
-  const tabs = sortedTabEntities.map(entity => ({
-    label: entity.name ?? '',
-    href: `${overviewHref}?tabId=${entity.id}`,
-  }));
+  const reserved = new Set(reservedSystemLabels);
+  const tabs = sortedTabEntities
+    .filter(entity => !reserved.has(entity.name ?? ''))
+    .map(entity => ({
+      label: entity.name ?? '',
+      href: `${overviewHref}?tabId=${entity.id}`,
+    }));
 
-  // Add Overview tab at the beginning
   const allTabs = [
-    {
-      label: 'Overview',
-      href: overviewHref,
-    },
-    ...tabs,
+    ...leadingSystemTabs,
+    ...tabs.map((tab, index) => ({ ...tab, dividerBefore: divideBeforeAuthored && index === 0 })),
   ];
 
   if (allTabs.length <= 1) {

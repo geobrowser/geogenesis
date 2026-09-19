@@ -46,9 +46,12 @@ function isEntityTabHrefActive(
   href: string,
   activeTabId: string | null,
   sidePanel: boolean,
-  fullPath: string
+  fullPath: string,
+  sidePanelKey?: string,
+  activeSystemTab?: string | null
 ): boolean {
   if (!sidePanel) return href === fullPath;
+  if (sidePanelKey) return (activeSystemTab ?? 'overview') === sidePanelKey;
   const hrefTabId = tabIdFromEntityTabHref(href);
   if (hrefTabId === null) return activeTabId === null;
   return activeTabId === hrefTabId;
@@ -57,6 +60,8 @@ function isEntityTabHrefActive(
 export type SystemTab = {
   label: string;
   href: string;
+  /** In-place product tab key used when this group renders in an entity side panel. */
+  sidePanelKey?: string;
   /**
    * Only shown where the side rail is not.
    *
@@ -328,9 +333,21 @@ export function EditableTabGroup({
                 href={tab.href}
                 label={tab.label}
                 onlyWhenNarrow={tab.onlyWhenNarrow}
-                active={isEntityTabHrefActive(tab.href, activeTabId, Boolean(sidePanelTab), fullPath)}
+                active={isEntityTabHrefActive(
+                  tab.href,
+                  activeTabId,
+                  Boolean(sidePanelTab),
+                  fullPath,
+                  tab.sidePanelKey,
+                  sidePanelTab?.activeSystemTab
+                )}
                 onSelect={
-                  sidePanelTab ? () => sidePanelTab.setActiveTabId(tabIdFromEntityTabHref(tab.href)) : undefined
+                  sidePanelTab
+                    ? () =>
+                        tab.sidePanelKey
+                          ? sidePanelTab.setActiveSystemTab(tab.sidePanelKey)
+                          : sidePanelTab.setActiveTabId(tabIdFromEntityTabHref(tab.href))
+                    : undefined
                 }
               />
             ))}
@@ -359,9 +376,21 @@ export function EditableTabGroup({
                 href={tab.href}
                 label={tab.label}
                 onlyWhenNarrow={tab.onlyWhenNarrow}
-                active={isEntityTabHrefActive(tab.href, activeTabId, Boolean(sidePanelTab), fullPath)}
+                active={isEntityTabHrefActive(
+                  tab.href,
+                  activeTabId,
+                  Boolean(sidePanelTab),
+                  fullPath,
+                  tab.sidePanelKey,
+                  sidePanelTab?.activeSystemTab
+                )}
                 onSelect={
-                  sidePanelTab ? () => sidePanelTab.setActiveTabId(tabIdFromEntityTabHref(tab.href)) : undefined
+                  sidePanelTab
+                    ? () =>
+                        tab.sidePanelKey
+                          ? sidePanelTab.setActiveSystemTab(tab.sidePanelKey)
+                          : sidePanelTab.setActiveTabId(tabIdFromEntityTabHref(tab.href))
+                    : undefined
                 }
               />
             ))}

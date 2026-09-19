@@ -317,7 +317,12 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             />
           )
         ) : null}
-        <ClaimPageView entityId={entityId} spaceId={spaceId} />
+        <ClaimPageView
+          entityId={entityId}
+          spaceId={spaceId}
+          initialTabRelations={initialTabRelations}
+          tabEntities={tabEntities}
+        />
       </>
     );
   }

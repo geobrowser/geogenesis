@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { usePathname, useSearchParams } from 'next/navigation';
+
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateClaim } from '~/core/debates/api';
@@ -10,25 +12,34 @@ import { useDebateClaims } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
+import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useQueryEntity } from '~/core/sync/use-store';
-import type { Relation } from '~/core/types';
+import type { Relation, TabEntity } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
 import { ClampedText } from '~/design-system/clamped-text';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
+import { Editor } from '~/partials/editor/editor';
 import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
+import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS, RelationChipSection } from '~/partials/entity-page/relation-chip-section';
 import { SectionTitle } from '~/partials/entity-page/section-title';
+import { PersonRecordFeed } from '~/partials/profile/person-record-feed';
+import { type ActivityKind, ProfileActivitySection } from '~/partials/profile/profile-activity-section';
 
-import { ClaimDebates } from './claim-debates';
 import { ClaimEndSlot } from './claim-end-slot';
-import { ClaimProvenance } from './claim-provenance';
-import { ClaimRelatedClaims } from './claim-related-claims';
+import { ClaimSourcesTab } from './claim-sources-tab';
 import { ControversialTag } from './claim-summary';
 import { ClaimVerdict } from './claim-verdict';
+import { useClaimRecord } from './use-claim-record';
 import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
+
+type ClaimTab = 'overview' | 'debates' | 'claims' | 'sources' | 'custom';
+
+const SYSTEM_TAB_LABELS = ['Overview', 'Debates', 'Claims', 'Sources'];
 
 /**
  * The browse-mode read view for a Claim.
@@ -46,8 +57,21 @@ import { type ClaimResponseState, useClaimResponseState } from './use-claim-resp
  * never been debated, that carries no topics and was authored by hand shows its text, its space,
  * and the controls to act on it — and nothing else.
  */
-export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId: string }) {
+export function ClaimPageView({
+  entityId,
+  spaceId,
+  initialTabRelations = [],
+  tabEntities = [],
+}: {
+  entityId: string;
+  spaceId: string;
+  initialTabRelations?: Relation[];
+  tabEntities?: TabEntity[];
+}) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const sidePanelTab = useEntitySidePanelActiveTab();
 
   // Hoisted so one lookup answers for the whole page. geo-chat's row and the graph's `Is factual`
   // are two copies of the same fact and can disagree — while an edit to the flag indexes, most
@@ -67,6 +91,26 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
   const topicIds = React.useMemo(() => topics.map(topic => topic.toEntity.id), [topics]);
   // Named types only: an unnamed one would render as a raw id, which says less than no chip.
   const typeName = entity?.types.find(type => type.name)?.name ?? null;
+  const record = useClaimRecord({ claimId: entityId, spaceId, topicIds });
+
+  const activeTab: ClaimTab =
+    sidePanelTab?.activeTabId || searchParams.get('tabId')
+      ? 'custom'
+      : sidePanelTab?.activeSystemTab === 'debates' || pathname.endsWith('/debates')
+        ? 'debates'
+        : sidePanelTab?.activeSystemTab === 'claims' || pathname.endsWith('/claims')
+          ? 'claims'
+          : sidePanelTab?.activeSystemTab === 'sources' || pathname.endsWith('/sources')
+            ? 'sources'
+            : 'overview';
+
+  const overviewHref = NavUtils.toEntity(spaceId, entityId);
+  const systemTabs = [
+    { label: 'Overview', href: overviewHref, sidePanelKey: 'overview' },
+    { label: 'Debates', href: `${overviewHref}/debates`, sidePanelKey: 'debates' },
+    { label: 'Claims', href: `${overviewHref}/claims`, sidePanelKey: 'claims' },
+    { label: 'Sources', href: `${overviewHref}/sources`, sidePanelKey: 'sources' },
+  ];
 
   if (isLoading && !entity) {
     return (
@@ -134,23 +178,126 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
             offering before the argument itself is somewhere else to take it. */}
         <RelationChipSection label="Topics" relations={topics} spaceId={spaceId} />
 
-        <ClaimVerdict entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
+        <EntityTabs
+          entityId={entityId}
+          spaceId={spaceId}
+          initialTabRelations={initialTabRelations}
+          tabEntities={tabEntities}
+          systemTabsBefore={systemTabs}
+          reservedSystemLabels={SYSTEM_TAB_LABELS}
+          divideBeforeAuthored
+        />
 
-        <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
-
-        <ClaimDebates claimId={entityId} spaceId={spaceId} responseKind={responseKind} />
-
-        <ClaimProvenance claimId={entityId} claimRelations={entity.relations} spaceId={spaceId} />
-
-        <ClaimRelatedClaims claimId={entityId} spaceId={spaceId} topicIds={topicIds} />
-
-        {/* Last, and in the same `page` variant a regular entity uses — the entity body renders it
-            this way for both the route and the side panel, and only the dedicated comments panel
-            asks for the `panel` variant. Unlike the modules above, this one always renders: an
-            empty thread is an invitation to start it, not an absence to hide. */}
-        <CommentSection entityId={entityId} spaceId={spaceId} />
+        <ClaimTabPanel
+          activeTab={activeTab}
+          entityId={entityId}
+          spaceId={spaceId}
+          entityRelations={entity.relations}
+          responseKind={responseKind}
+          summary={summary}
+          state={state}
+          row={row}
+          record={record}
+          hrefs={{ debates: systemTabs[1]!.href, claims: systemTabs[2]!.href }}
+        />
       </div>
     </div>
+  );
+}
+
+function ClaimTabPanel({
+  activeTab,
+  entityId,
+  spaceId,
+  entityRelations,
+  responseKind,
+  summary,
+  state,
+  row,
+  record,
+  hrefs,
+}: {
+  activeTab: ClaimTab;
+  entityId: string;
+  spaceId: string;
+  entityRelations: Relation[];
+  responseKind: ClaimResponseState['responseKind'];
+  summary: ClaimResponseState['summary'];
+  state: ClaimResponseState;
+  row: DebateClaim | null;
+  record: ReturnType<typeof useClaimRecord>;
+  hrefs: { debates: string; claims: string };
+}) {
+  if (activeTab === 'custom') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
+
+  if (activeTab === 'debates') {
+    return (
+      <PersonRecordFeed
+        rows={record.debateRows}
+        isLoading={record.debatesLoading}
+        isError={record.debatesError}
+        loadingLabel="Loading debates…"
+        emptyLabel="No debates on this claim or its related claims yet."
+        errorLabel="Couldn’t load debates."
+        noun="debates"
+      />
+    );
+  }
+
+  if (activeTab === 'claims') {
+    return (
+      <PersonRecordFeed
+        rows={record.claimRows}
+        isLoading={record.claimsLoading}
+        isError={record.claimsError}
+        loadingLabel="Loading claims…"
+        emptyLabel="No related debate claims yet."
+        errorLabel="Couldn’t load claims."
+        noun="claims"
+      />
+    );
+  }
+
+  if (activeTab === 'sources') {
+    return <ClaimSourcesTab claimId={entityId} claimRelations={entityRelations} spaceId={spaceId} />;
+  }
+
+  const kinds: ActivityKind[] = [
+    {
+      key: 'debates',
+      label: 'Debates',
+      rows: record.debateRows,
+      total: record.debatesTotal,
+      isLoading: record.debatesLoading,
+      isError: record.debatesError,
+      href: hrefs.debates,
+      seeAllLabel: 'See all debates',
+    },
+    {
+      key: 'claims',
+      label: 'Claims',
+      rows: record.claimRows,
+      total: record.claimsTotal,
+      isLoading: record.claimsLoading,
+      isError: record.claimsError,
+      href: hrefs.claims,
+      seeAllLabel: 'See all claims',
+    },
+  ];
+
+  return (
+    <>
+      {/* The response control is the first Overview section. Its summary is grouped with it because
+          it is the result of the same choice, rather than an activity module between the position
+          options and Activity. */}
+      <section aria-label="Position response options" className="flex flex-col gap-3">
+        <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
+        <ClaimVerdict entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
+      </section>
+      <ProfileActivitySection kinds={kinds} />
+      {/* Last, like the ordinary entity page. An empty thread is an invitation, not absence. */}
+      <CommentSection entityId={entityId} spaceId={spaceId} />
+    </>
   );
 }
 
