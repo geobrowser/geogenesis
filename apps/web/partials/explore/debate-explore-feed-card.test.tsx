@@ -1,7 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react';
 
-import type React from 'react';
+import * as React from 'react';
 
 import { Provider, useAtomValue } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -154,6 +155,7 @@ function watchableDebate(): Debate {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   observers = [];
   mocks.debateQuery = { data: undefined, isError: false };
   mocks.mediaQuery = { data: undefined, isError: false };
@@ -213,12 +215,18 @@ function PanelProbe() {
   return <div data-testid="panel">{target ? `${target.entityId} in ${target.spaceId}` : 'closed'}</div>;
 }
 
+// The card is rendered inside the app's query provider — its comment count reads the comments cache —
+// so the harness has to provide one too, or the double is laxer than the real tree.
+let client: QueryClient;
+
 function renderCard(props: Partial<React.ComponentProps<typeof DebateExploreFeedCard>> = {}) {
   return render(
-    <Provider>
-      <DebateExploreFeedCard item={item} fallback={<div data-testid="fallback" />} {...props} />
-      <PanelProbe />
-    </Provider>
+    <QueryClientProvider client={client}>
+      <Provider>
+        <DebateExploreFeedCard item={item} fallback={<div data-testid="fallback" />} {...props} />
+        <PanelProbe />
+      </Provider>
+    </QueryClientProvider>
   );
 }
 

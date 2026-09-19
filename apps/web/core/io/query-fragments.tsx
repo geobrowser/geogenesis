@@ -554,6 +554,30 @@ export const isEditorOfSpaceQuery = graphql(/* GraphQL */ `
   }
 `);
 
+/**
+ * Both roles for a set of people, in one request.
+ *
+ * `memberSpaceId: { in: [...] }` is server-filtered the same way the single-person checks above are,
+ * so this answers "which of these people are editors, and which are members" without a request per
+ * person and without paging the whole space — the participant lists are capped, and a space past the
+ * cap would report everyone beyond it as holding no role, which reads exactly like a correct answer.
+ *
+ * `first` must be at least the number of ids asked about: it caps rows returned, so a smaller value
+ * would quietly drop roles the space really holds. Callers chunk to keep both bounded.
+ */
+export const spaceRolesForParticipantsQuery = graphql(/* GraphQL */ `
+  query SpaceRolesForParticipants($spaceId: UUID!, $participantSpaceIds: [UUID!], $first: Int!) {
+    space(id: $spaceId) {
+      editorsList(filter: { memberSpaceId: { in: $participantSpaceIds } }, first: $first) {
+        memberSpaceId
+      }
+      membersList(filter: { memberSpaceId: { in: $participantSpaceIds } }, first: $first) {
+        memberSpaceId
+      }
+    }
+  }
+`);
+
 // Paginated members/editors. `totalCount` is authoritative for the count
 // shown in the chip and footers; `membersList`/`editorsList` carry the
 // current page of memberSpaceIds.

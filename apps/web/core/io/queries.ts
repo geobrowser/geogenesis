@@ -85,6 +85,7 @@ import {
   spaceEditorsPageQuery,
   spaceMembersPageQuery,
   spaceQuery,
+  spaceRolesForParticipantsQuery,
   spacesQuery,
   spacesWhereMemberQuery,
   userEntityResponseQuery,
@@ -812,6 +813,33 @@ export function getIsEditorOfSpace(spaceId: string, memberSpaceId: string, signa
     query: isEditorOfSpaceQuery,
     decoder: data => (data.space?.editorsList?.length ?? 0) > 0,
     variables: { spaceId, memberSpaceId },
+    signal,
+  });
+}
+
+export type SpaceRolesForParticipants = {
+  editorSpaceIds: string[];
+  memberSpaceIds: string[];
+};
+
+/**
+ * Which of `participantSpaceIds` are editors, and which are members, in one request.
+ *
+ * Chunked by the caller; `first` tracks the chunk size because it caps rows rather than filtering
+ * them, so asking about more people than `first` would silently under-report roles.
+ */
+export function getSpaceRolesForParticipants(
+  spaceId: string,
+  participantSpaceIds: string[],
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: spaceRolesForParticipantsQuery,
+    decoder: (data): SpaceRolesForParticipants => ({
+      editorSpaceIds: data.space?.editorsList?.map(e => e.memberSpaceId as string) ?? [],
+      memberSpaceIds: data.space?.membersList?.map(m => m.memberSpaceId as string) ?? [],
+    }),
+    variables: { spaceId, participantSpaceIds, first: Math.max(participantSpaceIds.length, 1) },
     signal,
   });
 }
