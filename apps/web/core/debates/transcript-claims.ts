@@ -54,8 +54,10 @@ export type TranscriptClaim = {
    * no card is drawn over a face and no timecode is printed beside a row, and the backfill scripts
    * skip it rather than writing one occurrence and leaving the other unplaced.
    *
-   * Zero of the 854 claims published today are restated, so this costs nothing now. Modelling
-   * timing per statement is the real fix and belongs with the backend work in GEO-2958.
+   * No restated claim has been observed in the published corpus yet, so the flag costs nothing in
+   * practice — but the grouping tests treat two speakers sharing a claim as the ordinary case under
+   * find-or-create, so it is a matter of when. Modelling timing per statement is the real fix and
+   * belongs with the backend work in GEO-2958.
    */
   restated: boolean;
 };

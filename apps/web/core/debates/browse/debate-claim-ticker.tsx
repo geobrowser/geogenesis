@@ -626,14 +626,11 @@ export function DebateClaimTickerStack({
 /**
  * The way into the backlog where there is no pointer to open it with.
  *
- * Drawn only on a device that cannot hover. Everywhere else the corner opens by pointing at the
- * tile, and a permanent pill duplicating that would be furniture over the video — the Figma frame
- * has no chip in it, and the resting player is quieter without one.
- *
- * `hidden` rather than transparent, so it is out of the tab order on a device that will never show
- * it. The cost is that a keyboard on a hovering device has no control to press: it reaches the
- * backlog by tabbing into a live card, which opens the corner the way the pointer does, and cannot
- * reach it at all while the corner is empty. That is the same place the hover-only design started.
+ * Shown on a device that cannot hover. Everywhere else the corner opens by pointing at the tile,
+ * and a permanent pill duplicating that would be furniture over the video — the Figma frame has no
+ * chip in it, and the resting player is quieter without one. It stays in the DOM there all the
+ * same, because a keyboard has no pointer either; how that is done, and why not with `sr-only`, is
+ * on the `className` below rather than restated here.
  *
  * Deliberately the same glyph the Claims button in the interaction bar uses, because it opens the
  * same set of claims. Two different icons for one idea would be the harder thing to learn.

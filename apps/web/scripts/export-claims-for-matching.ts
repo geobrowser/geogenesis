@@ -28,10 +28,11 @@ const LIMIT = numberArg('limit', { fallback: Infinity, min: 1 });
 /**
  * Claims that already carry offsets come out too, to be confirmed rather than placed.
  *
- * 140 of the 153 published so far were written by the matcher alone at a 0.7 score, with nothing
- * human or otherwise reading the transcript behind them — and a published offset is the app's
- * definition of certainty, so an error in one is invisible from then on. Reading them costs a fifth
- * again on top of the unplaced claims and is the only chance to catch one.
+ * Most of what is published was written by `plan-claim-timecodes.ts` from the matcher alone, at a
+ * 0.7 score, with nothing human or otherwise reading the transcript behind it — and a published
+ * offset is the app's definition of certainty, scored 1.0, so an error in one is invisible from
+ * then on. Reading them back is the only chance to catch one, and the run prints how many there
+ * are rather than this comment guessing at a number that changes with every backfill.
  */
 const SKIP_PUBLISHED = process.argv.includes('--skip-published');
 

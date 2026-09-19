@@ -233,6 +233,15 @@ describe('claimHistory', () => {
 describe('claimMarkers seek target', () => {
   const windows = tickerWindows([timed('a', confident(10_000, 14_000))]);
 
+  // Three of 51 debates end on their last claim. Seeking past the timeline there finishes playback,
+  // and the player takes the whole corner down — the blank this offset exists to prevent.
+  it('never seeks to or past the end of the recording', () => {
+    const [marker] = claimMarkers([timed('a', confident(10_000, 30_000))], 30_000);
+
+    expect(marker.atMs).toBe(30_000);
+    expect(marker.seekMs).toBeLessThan(30_000);
+  });
+
   it('seeks past the fade rather than to the hash itself', () => {
     const [marker] = claimMarkers([timed('a', confident(10_000, 14_000))], 100_000);
 

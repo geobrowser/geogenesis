@@ -54,9 +54,13 @@ export function tickerWindows(claims: TimedClaim[]): TickerWindow[] {
  *
  * Built separately rather than filtered from one list, because sharing the list is what made the
  * corner quietly disagree with itself: the chip counted "N claims" and the list opened on a subset,
- * missing every claim the matcher had placed only loosely. Invisible on today's corpus — the
- * backfill published offsets for 853 of 854 claims, so everything is assertable — and true of every
- * debate recorded from now until the extractor emits offsets itself (GEO-2958).
+ * missing every claim the matcher had placed only loosely.
+ *
+ * How much that hides depends entirely on how many claims carry published offsets, which is a
+ * moving number — a backfill raises it, every newly recorded debate lowers it, and it reaches
+ * nothing-to-hide only when the extractor emits offsets itself (GEO-2958). No count is recorded
+ * here for that reason: it would be wrong by the next debate, and a comment that has to be right
+ * about a live corpus is a comment that will be wrong.
  */
 export function backlogWindows(claims: TimedClaim[]): TickerWindow[] {
   return windowsFor(claims, claim => claim.timing !== null);
@@ -173,6 +177,15 @@ export type ClaimMarker = {
    * put — so seeking to the hash showed the viewer nothing at all, on the one interaction whose
    * entire purpose is to show them that claim. Landing just inside the window costs a quarter of a
    * second of accuracy and is the difference between a card and a blank corner.
+   *
+   * Held short of the end of the recording, because the player takes the whole corner down once
+   * playback has finished — so an offset that ran past the timeline produced exactly the blank it
+   * was added to prevent. Measured across 51 debates with published offsets: three have their last
+   * claim ending on the final frame, and the median debate has 45 seconds of tail after it.
+   *
+   * Those three keep a residue this cannot fix: a claim that finishes as the recording does has no
+   * frame on which its card could be drawn, since the window opens where the timeline stops. The
+   * clamp at least leaves the corner up, so the backlog is still there to read it in.
    */
   seekMs: number;
   fraction: number;
@@ -211,8 +224,9 @@ export function claimMarkers(claims: TimedClaim[], timelineMs: number): ClaimMar
         id: claim.id,
         text: claim.text,
         atMs: timing.endMs,
-        // Just inside the card's window, so a click lands on a drawn card — see `seekMs`.
-        seekMs: timing.endMs + FADE_IN_MS,
+        // Just inside the card's window, and never at or past the end of the recording — see
+        // `seekMs` for both halves of that.
+        seekMs: Math.min(timing.endMs + FADE_IN_MS, timelineMs - 1),
         fraction: Math.max(0, Math.min(1, timing.endMs / timelineMs)),
       };
     })

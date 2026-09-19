@@ -91,15 +91,36 @@ export async function fetchDebateClaims(debateEntityId: string, spaceId: string)
   return groupTranscriptClaims(data, spaceId);
 }
 
-/** The debate's Whisper transcript, or none where geo-chat no longer serves it. */
+/**
+ * The debate's Whisper transcript, or none where geo-chat genuinely has none.
+ *
+ * "None" means a 404 and nothing else. Every other failure throws.
+ *
+ * This used to swallow the lot — a 500, a dropped connection, a body that would not parse — and
+ * hand back an empty transcript, which is indistinguishable from a debate that was never recorded.
+ * Downstream that is not a small lie: the planner counts every claim of that debate as unmatched
+ * and writes a plan that looks complete, the export drops the debate from its task files, and the
+ * verifier prints "no transcript" and exits 0. An outage halfway through a run would have produced
+ * a confident, quietly partial answer — the one outcome these scripts exist to avoid.
+ */
 export async function fetchTranscriptSegments(debateEntityId: string): Promise<DebateTranscriptSegment[]> {
+  const url = `${CHAT}/debates/${toDashedUuid(debateEntityId)}/transcript?format=json`;
+
+  let response: Response;
   try {
-    const response = await fetch(`${CHAT}/debates/${toDashedUuid(debateEntityId)}/transcript?format=json`);
-    if (!response.ok) return [];
+    response = await fetch(url);
+  } catch (cause) {
+    throw new Error(`transcript request failed for ${debateEntityId}: ${(cause as Error).message}`, { cause });
+  }
+
+  // The recording is not served, which is a real answer about this debate rather than a failure.
+  if (response.status === 404) return [];
+  if (!response.ok) throw new Error(`transcript for ${debateEntityId} returned ${response.status}`);
+
+  try {
     return (await response.json())?.segments ?? [];
-  } catch {
-    // A debate whose recording geo-chat no longer serves simply gets no matches.
-    return [];
+  } catch (cause) {
+    throw new Error(`transcript for ${debateEntityId} was not valid JSON`, { cause });
   }
 }
 
