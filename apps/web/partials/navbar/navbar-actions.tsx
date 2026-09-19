@@ -96,7 +96,7 @@ export function NavbarActions() {
     const identityDetail = email ?? address;
 
     return (
-      <div key="navbar-content" className="flex items-center gap-4">
+      <div key="navbar-content" className="flex items-center gap-4 max-[359px]:gap-1">
         <ModeToggle />
 
         <Menu
@@ -384,7 +384,7 @@ function ModeToggle() {
         aria-pressed={editable}
         animate={controls}
         variants={variants}
-        className="relative flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
+        className="relative flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1 sm:h-11"
       >
         <motion.div
           aria-hidden
@@ -395,7 +395,7 @@ function ModeToggle() {
             type: 'spring',
             bounce: 0,
           }}
-          className="pointer-events-none absolute top-1 left-1 z-0 h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
+          className="pointer-events-none absolute top-1 left-1 z-0 h-5 w-7 rounded-[44px] bg-white shadow-dropdown sm:top-3"
         />
         <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
           <div className={cx('transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}>

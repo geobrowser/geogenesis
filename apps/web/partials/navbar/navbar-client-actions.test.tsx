@@ -3,6 +3,8 @@ import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { NavbarClientActions } from './navbar-client-actions';
+
 /**
  * `next/dynamic` is mocked so the row's children render synchronously.
  *
@@ -19,8 +21,6 @@ vi.mock('next/dynamic', () => ({
     return () => <div data-testid="debates-hub" />;
   },
 }));
-
-import { NavbarClientActions } from './navbar-client-actions';
 
 afterEach(cleanup);
 
@@ -43,6 +43,9 @@ describe('NavbarClientActions', () => {
       expect(node.className ?? '').not.toContain('hidden');
       if (node === container.firstElementChild) break;
     }
+
+    // At the 320px floor the row keeps every control and tightens only inter-control spacing.
+    expect(container.firstElementChild).toHaveClass('max-[359px]:gap-1');
   });
 
   // Three of the four controls in this row are icon-only. Radix wraps the profile avatar in a

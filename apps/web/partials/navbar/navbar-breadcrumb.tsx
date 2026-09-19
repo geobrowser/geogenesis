@@ -48,11 +48,11 @@ const SpaceBreadcrumb = ({ spaceId }: SpaceBreadcrumbProps) => {
 
   return (
     <Link href={NavUtils.toSpace(spaceId)} className="flex min-w-0 items-center justify-center gap-1.5">
-      <div className="relative h-4 w-4 overflow-hidden rounded-sm">
+      <div className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
         <ThumbGeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" loading="eager" fetchPriority="high" />
       </div>
-      <Divider type="vertical" className="inline-block h-4 w-px" />
-      <div className="truncate sm:max-w-[20ch]">
+      <Divider type="vertical" className="inline-block h-4 w-px shrink-0" />
+      <div className="min-w-0 truncate sm:max-w-[20ch]">
         <Text variant="button" className="hover:text-text!">
           {spaceName.slice(0, 48) + (spaceName.length > 48 ? '...' : '')}
         </Text>
@@ -108,11 +108,11 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
   if (!entity || otherSpaces.length < 1) {
     return (
       <Link href={NavUtils.toSpace(spaceId)} className="flex min-w-0 items-center justify-center gap-1.5">
-        <div className="relative h-4 w-4 overflow-hidden rounded-sm">
+        <div className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
           <ThumbGeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" loading="eager" fetchPriority="high" />
         </div>
-        <Divider type="vertical" className="inline-block h-4 w-px" />
-        <div className="truncate sm:max-w-[20ch]">
+        <Divider type="vertical" className="inline-block h-4 w-px shrink-0" />
+        <div className="min-w-0 truncate sm:max-w-[20ch]">
           <Text variant="button" className="hover:text-text!">
             {spaceName.slice(0, 48) + (spaceName.length > 48 ? '...' : '')}
           </Text>
@@ -128,18 +128,20 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
 
   return (
     <Popover.Root open={open} onOpenChange={onOpenChange}>
-      <div className="inline-flex items-center justify-center gap-1.5 rounded-md border border-grey-02 px-1.5">
-        <Link href={NavUtils.toSpace(spaceId)} className="relative h-4 w-4 overflow-hidden rounded-sm">
+      <div className="inline-flex max-w-full min-w-0 items-center justify-center gap-1.5 rounded-md border border-grey-02 px-1.5">
+        <Link href={NavUtils.toSpace(spaceId)} className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
           <ThumbGeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" loading="eager" fetchPriority="high" />
         </Link>
-        <Divider type="vertical" className="inline-block h-4 w-px" />
-        <Popover.Trigger className="flex items-center gap-1.5">
-          <div className="truncate sm:max-w-[20ch]">
+        <Divider type="vertical" className="inline-block h-4 w-px shrink-0" />
+        <Popover.Trigger className="flex min-w-0 items-center gap-1.5">
+          <div className="min-w-0 truncate sm:max-w-[20ch]">
             <Text variant="button" className="hover:text-text!">
               {shorten(spaceName)}
             </Text>
           </div>
-          <ChevronDownSmall color="grey-03" />
+          <span className="shrink-0">
+            <ChevronDownSmall color="grey-03" />
+          </span>
         </Popover.Trigger>
       </div>
       <Popover.Portal container={portalContainer}>

@@ -112,9 +112,7 @@ vi.mock('~/design-system/menu', () => ({
       {/* No `aria-label` here on purpose. The mock used to supply one, which meant the real
           trigger could go unnamed and this suite would never notice — the name has to come from
           the component. */}
-      <button onClick={() => onOpenChange(!open)}>
-        {trigger}
-      </button>
+      <button onClick={() => onOpenChange(!open)}>{trigger}</button>
       {open && (
         <div data-testid="profile-menu" className={className}>
           {children}
@@ -131,6 +129,7 @@ describe('NavbarActions profile menu', () => {
     mocks.logout.mockReset();
     mocks.profile = { name: 'Max', avatarUrl: 'ipfs://avatar' };
     mocks.personalSpaceId = 'personal-space';
+    mocks.spaceId = null;
     mocks.isSmartAccountLoading = false;
     mocks.dialogMounts = 0;
     mocks.pendingPersonalSpace = { isPending: false, topicId: null };
@@ -296,15 +295,17 @@ describe('NavbarActions profile menu', () => {
   // until this branch put the account surface back on phones, which is what exposed it — the same
   // class of gap as the search, create and profile controls beside it.
   describe('the edit mode toggle', () => {
-    it('says what pressing it does, and carries its state', async () => {
+    it('is named, stateful, thumb-sized, and compactly spaced on narrow phones', async () => {
       mocks.spaceId = 'space-1';
       render(<NavbarActions />);
 
       const toggle = await screen.findByTestId('edit-toggle');
 
-      expect(toggle).toHaveAccessibleName(/Switch to (edit|browse) mode/);
-      expect(toggle).toHaveAttribute('aria-pressed');
+      expect(toggle).toHaveAccessibleName('Switch to edit mode');
+      expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      expect(toggle).toHaveClass('sm:h-11');
+      expect(toggle.parentElement).toHaveClass('max-[359px]:gap-1');
+      expect(toggle.querySelector('.absolute')).toHaveClass('sm:top-3');
     });
   });
-
 });
