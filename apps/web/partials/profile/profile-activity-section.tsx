@@ -175,21 +175,33 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
        * stays compact while switching away from the taller Debates view cannot
        * clamp the viewport upward. Profiles with content below Activity need no
        * reserve at all, and desktop keeps its natural layout.
+       *
+       * `hidden md:block`, not `md:hidden`: the breakpoints here are desktop-first
+       * (`md` is `max-width: 767px`, see styles.css), so `md:hidden` hid this on
+       * exactly the phones it exists for — `display: none` reserves no height, and
+       * the fix was inert on the only screens that needed it.
        */}
-      <div ref={reserveRef} data-activity-scroll-reserve aria-hidden className="pointer-events-none md:hidden" />
+      <div ref={reserveRef} data-activity-scroll-reserve aria-hidden className="pointer-events-none hidden md:block" />
     </div>
   );
 }
 
 /**
- * Preserve the mobile scroll range while Activity views of different heights
- * are swapped. There is no scroll position to restore when the new document is
- * shorter than the viewport's old bottom; keeping only that missing height in
- * the document is what prevents the browser from clamping `scrollY`.
+ * Keep the reader where they were while Activity views of different heights are swapped.
  *
- * The reserve is a sibling of the card rather than a `min-height` on it. That
- * leaves the selected gallery and its footer at their natural height instead
- * of putting a short Claims row inside a debate-sized white card.
+ * Switching to a shorter view makes the document shorter, and a document that no longer reaches the
+ * reader's viewport bottom has no scroll position to hold them at — the browser moves them up. On a
+ * profile with content below Activity there is other height to absorb that; on a short one, like a
+ * person with only an Activity card, there is none, and the page jumps to the top.
+ *
+ * Two things hold the position, in order of precedence:
+ *
+ *  1. A sibling reserve supplies exactly the document height missing below the viewport, so the
+ *     shorter view never shortens the scrollable range. It is a sibling rather than a `min-height`
+ *     on the card, which keeps a three-row Claims gallery from sitting inside a debate-sized box.
+ *  2. If the position is lost anyway — the gallery can paint empty for a frame before its queries
+ *     land, which shortens the document below even the reserve's reach — it is put back before the
+ *     browser paints.
  */
 function useMobileActivityHeightReserve(selectedKey: string | undefined) {
   const sectionRef = React.useRef<HTMLElement | null>(null);
@@ -198,8 +210,11 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
     width: number;
     sectionHeight: number;
     naturalDocumentHeight: number;
-    viewportBottom: number;
+    scrollY: number;
   } | null>(null);
+  // Set while this hook is the one moving the page, so its own correction is not mistaken below for
+  // the reader choosing to scroll.
+  const restoringRef = React.useRef(false);
 
   const prepareSwitch = React.useCallback(() => {
     const section = sectionRef.current;
@@ -212,12 +227,13 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
       width,
       sectionHeight: height,
       naturalDocumentHeight: document.documentElement.scrollHeight - currentReserve,
-      viewportBottom: window.scrollY + window.innerHeight,
+      scrollY: window.scrollY,
     };
 
-    // Deliberately over-reserve before the swap. The layout effect replaces
-    // this with the exact missing scroll range before the browser paints the
-    // new view.
+    // Hold the outgoing view's whole height before React replaces it. Waiting for the layout effect
+    // would leave a window where the document is short and the position is already gone; over-
+    // reserving now costs nothing, because the effect below replaces it with the exact figure before
+    // anything is painted.
     reserve.style.height = `${height}px`;
   }, []);
 
@@ -230,9 +246,9 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
       const { width, height } = section.getBoundingClientRect();
       const swap = swapRef.current;
 
-      // A new layout width (rotation, resized side panel, breakpoint change)
-      // has different card wrapping. Drop the old calculation; the next tab
-      // switch will establish one for the new layout.
+      // A new layout width (rotation, resized side panel, breakpoint change) has different card
+      // wrapping. Drop the old calculation; the next tab switch will establish one for the new
+      // layout.
       if (!swap || Math.abs(swap.width - width) > 1) {
         swapRef.current = null;
         reserve.style.height = '0px';
@@ -240,24 +256,40 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
       }
 
       const naturalDocumentHeight = swap.naturalDocumentHeight - swap.sectionHeight + height;
-      const missingScrollRange = Math.max(0, swap.viewportBottom - naturalDocumentHeight);
+      const missingScrollRange = Math.max(0, swap.scrollY + window.innerHeight - naturalDocumentHeight);
 
       reserve.style.height = `${missingScrollRange}px`;
+
+      // The reserve is in the document now, so the position asked for is reachable again. Anything
+      // that already moved the reader — a frame painted before the reserve was in place — is undone
+      // here, synchronously, so they never see it.
+      if (Math.abs(window.scrollY - swap.scrollY) > 1) {
+        restoringRef.current = true;
+        window.scrollTo(0, swap.scrollY);
+      }
     };
 
     sync();
 
-    // Claim cards grow as their queries land. Shrink the reserve by the same
-    // amount so the overall document height stays steady rather than drifting.
     if (typeof ResizeObserver === 'undefined') return;
+    // Claim cards grow as their queries land. Shrink the reserve by the same amount so the overall
+    // document height stays steady rather than drifting.
     const observer = new ResizeObserver(sync);
     observer.observe(section);
+
     const onScroll = () => {
+      // The correction above, arriving as a scroll event. Treating it as the reader moving up would
+      // release the very height that made the correction possible.
+      if (restoringRef.current) {
+        restoringRef.current = false;
+        return;
+      }
+
       const swap = swapRef.current;
       if (!swap) return;
 
-      // Once the reader moves up, do not retain space they no longer need.
-      swap.viewportBottom = Math.min(swap.viewportBottom, window.scrollY + window.innerHeight);
+      // Once the reader moves up of their own accord, stop holding space they no longer need.
+      swap.scrollY = Math.min(swap.scrollY, window.scrollY);
       sync();
     };
     window.addEventListener('scroll', onScroll, { passive: true });

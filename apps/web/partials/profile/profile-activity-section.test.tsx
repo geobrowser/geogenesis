@@ -76,7 +76,13 @@ function mockMobileActivityGeometry(pageHeightWithoutActivity: number) {
     return originalRect.call(this);
   });
 
-  vi.spyOn(window, 'scrollY', 'get').mockReturnValue(400);
+  const scroll: { y: number; moveAfterFirstRead?: number } = { y: 400 };
+  let reads = 0;
+  vi.spyOn(window, 'scrollY', 'get').mockImplementation(() => {
+    reads += 1;
+    if (scroll.moveAfterFirstRead !== undefined && reads > 1) return scroll.moveAfterFirstRead;
+    return scroll.y;
+  });
   vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(600);
   vi.spyOn(document.documentElement, 'scrollHeight', 'get').mockImplementation(() => {
     const section = document.querySelector<HTMLElement>('[data-activity-section]');
@@ -87,6 +93,10 @@ function mockMobileActivityGeometry(pageHeightWithoutActivity: number) {
       (reserve?.getBoundingClientRect().height ?? 0)
     );
   });
+
+  // Returned so a test can stand in for the browser moving the reader — there is no real layout
+  // here to clamp a scroll position, and the recovery path exists for exactly that case.
+  return scroll;
 }
 
 /**
@@ -166,6 +176,89 @@ describe('ProfileActivitySection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
     expect(reserve).toHaveStyle({ height: '150px' });
+  });
+
+  /**
+   * The reserve has to be *displayed* on the screens it exists for, which is the one thing the tests
+   * above could not see: they mock geometry, JSDOM applies no Tailwind, and so a reserve that the
+   * browser was hiding still measured and asserted perfectly while doing nothing on a real phone.
+   *
+   * The breakpoints here are desktop-first — `md` is `@media (max-width: 767px)`, see styles.css — so
+   * `md:hidden` hides an element *on mobile*. This element carried exactly that, which made the whole
+   * mechanism inert on the only viewports it was written for (GEO-2974). Asserting the class is
+   * crude, but it is the only trace of the mistake that survives into JSDOM.
+   */
+  it('keeps the reserve displayed at the mobile breakpoint, where it is the only thing holding the page', () => {
+    mockMobileActivityGeometry(600);
+
+    const { container } = render(
+      <ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />
+    );
+    const reserve = container.querySelector<HTMLElement>('[data-activity-scroll-reserve]');
+
+    // `md:hidden` would switch it off below 768px, which is every phone.
+    expect(reserve?.className).not.toMatch(/(^|\s)md:hidden(\s|$)/);
+    // And it has to be on at that width rather than merely not off.
+    expect(reserve?.className).toMatch(/(^|\s)md:block(\s|$)/);
+  });
+
+  /**
+   * Susan Winter's profile, which is where this was reported: an Activity card with nothing below it,
+   * so the document barely exceeds the viewport and the card's own height is the entire scroll range.
+   * Switching to the shorter view takes more height out of the page than the page has to spare.
+   */
+  it('holds the whole missing range on a profile with nothing below Activity', () => {
+    // 40px of page besides the card: a name and an avatar, no sections after it.
+    mockMobileActivityGeometry(40);
+
+    const { container } = render(
+      <ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />
+    );
+    const reserve = container.querySelector<HTMLElement>('[data-activity-scroll-reserve]');
+
+    // Nothing to hold before a switch: the page is however tall it is.
+    expect(reserve).toHaveStyle({ height: '0px' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+
+    // Claims: 40 + 250 = 290 natural, and the reader's viewport bottom is at 1000.
+    expect(reserve).toHaveStyle({ height: '710px' });
+
+    // And it has to be on screen to mean anything. On this profile the reserve is the only thing
+    // between the reader and the top of the page, so a height it is not allowed to render is the
+    // same as no fix at all — which is how this shipped once already.
+    expect(reserve?.className).toMatch(/(^|\s)md:block(\s|$)/);
+    expect(reserve?.className).not.toMatch(/(^|\s)md:hidden(\s|$)/);
+  });
+
+  /**
+   * The reserve is in the document a frame before React swaps the view, but the gallery can paint
+   * empty while its queries land, and a document shorter than the reserve can cover takes the reader
+   * with it. Where that happens they are put back, before the browser paints.
+   */
+  it('puts the reader back when a shrink beat the reserve to it', () => {
+    const scroll = mockMobileActivityGeometry(600);
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+    render(<ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />);
+
+    // The switch reads the position once on the way in; by the time the effect looks again the
+    // browser has moved the reader, which is the ordering this recovery exists for.
+    scroll.moveAfterFirstRead = 150;
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+
+    expect(scrollTo).toHaveBeenCalledWith(0, 400);
+  });
+
+  it('leaves the reader alone when the reserve did its job', () => {
+    mockMobileActivityGeometry(600);
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+    render(<ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 
   it('adds no reserve when content below Activity already preserves the scroll range', () => {
