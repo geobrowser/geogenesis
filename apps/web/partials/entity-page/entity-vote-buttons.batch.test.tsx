@@ -33,6 +33,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@geogenesis/auth', () => ({
+  // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
+  usePrivy: () => ({ authenticated: false }),
   useGeoLogin: () => ({ login: vi.fn() }),
 }));
 

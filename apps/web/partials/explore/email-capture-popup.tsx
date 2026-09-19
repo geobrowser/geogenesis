@@ -10,6 +10,7 @@ import { useAtomValue } from 'jotai';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
+import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
 import { isChatOpenAtom } from '~/core/state/chat-store';
 import { timeoutSignal } from '~/core/timeout-signal';
@@ -17,6 +18,10 @@ import { timeoutSignal } from '~/core/timeout-signal';
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
+import { AccountStep } from './email-capture-account-step';
+import { HEADING_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
+import { CONTROL_HEIGHT_CLASS, CONTROL_LABEL_CLASS } from './email-capture-styles';
+import { clearPendingSignup, readPendingSignup, writePendingSignup } from './pending-signup';
 import { entitySidePanelAtom } from '~/atoms';
 
 /**
@@ -67,13 +72,32 @@ function EmailCapturePopup() {
   const { isOpen: isDebatesHubOpen } = useDebatesHub();
   const entitySidePanelTarget = useAtomValue(entitySidePanelAtom);
   const { dismissed, remember: rememberDismissed } = useDismissedNotice(EMAIL_CAPTURE_ID);
-  const [scrolledEnough, setScrolledEnough] = React.useState(false);
+  // Read once, at mount. An attempt left mid-flight by a navigation comes back into the code step
+  // rather than vanishing: `dismissed` is already true by then, and the `status === 'done'`
+  // exception that would otherwise keep the card up is component state a navigation destroyed.
+  const [resumed] = React.useState(() => readPendingSignup());
+
+  // A resumed attempt does not ask anybody to scroll two screens again to get back to it.
+  const [scrolledEnough, setScrolledEnough] = React.useState(() => resumed !== null);
   const [email, setEmail] = React.useState('');
-  const [status, setStatus] = React.useState<Status>('idle');
+  const [status, setStatus] = React.useState<Status>(() => (resumed ? 'done' : 'idle'));
   // Separate from the persisted notice below. Subscribing *records* the dismissal so the popup does
   // not return next visit, but it must not close the card out from under the confirmation — so the
   // two are different acts: one remembers, one closes.
   const [closed, setClosed] = React.useState(false);
+
+  // Privy's headless email login. The reader has just typed their address into the form above, so
+  // the modal's first step -- asking for it again -- is the one thing worth removing. `state` is
+  // Privy's own flow state ('sending-code' | 'awaiting-code-input' | 'submitting-code' | 'error' |
+  // 'done'), which is more trustworthy than a second copy of the same machine kept here.
+  // The same preparation `usePrivySignIn` does before the modal opens. Onboarding's step and field
+  // atoms are persisted, so without this a new account resumes whatever half-finished run was left
+  // in this browser, and finishes onboarding on whichever page it was abandoned on.
+  const prepareOnboarding = usePrepareOnboarding();
+  const [wantsAccount, setWantsAccount] = React.useState(() => resumed !== null);
+  // The address as accepted, so the account is created against what was actually subscribed rather
+  // than whatever is in the field if they keep typing.
+  const [subscribedEmail, setSubscribedEmail] = React.useState(() => resumed?.email ?? '');
 
   // Watched only while the popup could still appear. The observer covers the whole body on a page
   // holding an infinite feed, so leaving it on after the card is dismissed, closed, or made moot by
@@ -123,7 +147,24 @@ function EmailCapturePopup() {
   }, [authenticated, dismissed, scrolledEnough]);
 
   /** What the close button does: remember it, and take it off the screen now. */
+  /**
+   * Hands over to the account step, which owns the OTP flow from here.
+   *
+   * Deliberately does not request the code itself. Privy's headless login is a hook, and a hook
+   * called here would be mounted on every Explore visit -- registering login callbacks on Privy's
+   * shared emitter for every reader who never presses this, alongside the ones the navbar's own
+   * login already registers. Mounted inside the step instead, it exists only while someone is
+   * actually signing up.
+   */
+  const startAccount = React.useCallback(() => {
+    prepareOnboarding();
+    writePendingSignup(subscribedEmail);
+    setWantsAccount(true);
+  }, [prepareOnboarding, subscribedEmail]);
+
   const close = React.useCallback(() => {
+    // Closing is a decision, so the attempt should not follow them to the next page.
+    clearPendingSignup();
     rememberDismissed();
     setClosed(true);
   }, [rememberDismissed]);
@@ -149,6 +190,7 @@ function EmailCapturePopup() {
         const body = (await response.json()) as { result?: NewsletterSubscribeResult };
         if (body.result === 'subscribed') {
           setStatus('done');
+          setSubscribedEmail(email.trim());
           // Recorded, not closed. Having joined is the strongest reason not to ask again next
           // visit, but the confirmation still has to be readable — and still has to be closable,
           // which it was not while this called the same function the close button does.
@@ -173,7 +215,19 @@ function EmailCapturePopup() {
   // signed-in reader returning to a restored scroll position is briefly indistinguishable from an
   // anonymous one — long enough to be shown a signup card and to start typing into it before it
   // vanishes under them. `core/auth/use-sign-in-deep-link.ts` gates on `ready` for the same reason.
-  if (closed || !ready || authenticated || !scrolledEnough || anOverlayIsOpen) return null;
+  // Signing in is what the attempt was for, so there is nothing left to resume.
+  if (authenticated) clearPendingSignup();
+
+  if (closed || !ready || authenticated || !scrolledEnough) return null;
+
+  // An overlay normally takes the card off the screen entirely. Not once a code has been sent:
+  // returning `null` unmounts the step, and mounting is what sends a code — so opening search or
+  // the chat panel mid-sign-up and closing it again would mail a second code and silently retire
+  // the one the reader was part-way through typing. Hidden instead of unmounted, so the attempt
+  // survives. `hidden` takes it out of the layout, the hit-testing and the accessibility tree, so
+  // it still yields the screen completely; it just does not forget where it was.
+  const hiddenByOverlay = anOverlayIsOpen && wantsAccount;
+  if (anOverlayIsOpen && !wantsAccount) return null;
 
   // Dismissal is the one thing the confirmation is exempt from, and only that. Subscribing records
   // the dismissal — which is what stops the popup returning next visit — and without this the same
@@ -192,6 +246,7 @@ function EmailCapturePopup() {
 
   return (
     <div
+      hidden={hiddenByOverlay}
       // A named `region` rather than a `dialog`. Nothing here asked to be opened, so the focus move
       // a dialog owes its reader would be an interruption mid-sentence — and a `dialog` that never
       // takes focus is the worst of both, promising behaviour that is not implemented. As a
@@ -268,8 +323,48 @@ function EmailCapturePopup() {
           // failure path has had `role="alert"` all along; this is the same courtesy for the case
           // that actually worked.
           <div role="status">
-            <p className={HEADING_CLASS}>You are on the list.</p>
-            <p className={SUBTEXT_CLASS}>We will be in touch about features, points, and the path to mainnet.</p>
+            <p className={HEADING_CLASS}>{wantsAccount ? 'Check your email.' : 'You are on the list.'}</p>
+
+            {wantsAccount ? (
+              <AccountStep
+                email={subscribedEmail}
+                onGiveUp={() => {
+                  setWantsAccount(false);
+                  close();
+                }}
+              />
+            ) : (
+              <>
+                <p className={SUBTEXT_CLASS}>
+                  While we are here, do you want to create an account with the same email address?
+                </p>
+
+                {/* The confirmation used to be a dead end whose only action was dismissing it, and
+                    this is the moment someone is most willing — they have just handed over an
+                    address on purpose. "Skip" is exactly the old behaviour, kept as an equal option
+                    rather than a smaller one, because the newsletter signup they already completed
+                    is a real outcome and nothing here should read as undoing it.
+
+                    Laid out as the subscribe row is after the restyle: a column with the same
+                    spacing and width, so the card keeps one shape whichever state it is in. */}
+                <div className="mt-[19px] flex flex-col gap-[6px] sm:mx-auto sm:mt-5 sm:max-w-[394px]">
+                  <button
+                    type="button"
+                    onClick={startAccount}
+                    className={`inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTROL_LABEL_CLASS} w-full items-center justify-center rounded-full bg-[#151515] px-2.5 whitespace-nowrap text-white transition-opacity hover:opacity-90`}
+                  >
+                    Create account
+                  </button>
+                  <button
+                    type="button"
+                    onClick={close}
+                    className={`inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTROL_LABEL_CLASS} w-full items-center justify-center rounded-full border border-grey-02 px-2.5 whitespace-nowrap text-[rgba(21,21,21,0.7)] transition-colors hover:border-text hover:text-text`}
+                  >
+                    Skip
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           // `noValidate`, and the field below is a text input rather than `type="email"`. Native
@@ -299,7 +394,7 @@ function EmailCapturePopup() {
                 aria-invalid={status === 'invalid-email'}
                 disabled={status === 'submitting'}
                 className={cx(
-                  'h-7 w-full min-w-0 rounded-full border bg-white px-3 text-left text-[17px] leading-[19px] text-text outline-hidden transition-colors placeholder:text-grey-03 disabled:text-grey-03 sm:text-center',
+                  `${CONTROL_HEIGHT_CLASS} w-full min-w-0 rounded-full border bg-white px-3 text-left text-[17px] leading-[19px] text-text outline-hidden transition-colors placeholder:text-grey-03 disabled:text-grey-03 sm:text-center`,
                   status === 'invalid-email' ? 'border-red-01' : 'border-grey-02 focus:border-text'
                 )}
               />
@@ -309,7 +404,7 @@ function EmailCapturePopup() {
               <button
                 type="submit"
                 disabled={status === 'submitting'}
-                className="inline-flex h-7 w-full items-center justify-center rounded-full bg-[#151515] px-2.5 text-[16px] leading-none tracking-[-0.35px] whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                className={`inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTROL_LABEL_CLASS} w-full items-center justify-center rounded-full bg-[#151515] px-2.5 whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60`}
               >
                 {status === 'submitting' ? 'Subscribing…' : 'Subscribe'}
               </button>
@@ -328,18 +423,6 @@ function EmailCapturePopup() {
     </div>
   );
 }
-
-/**
- * 15px leading under 24px glyphs is the design's cap-height trim, and it only holds while the line
- * does not wrap. On the mobile frame the heading is 26px (16px trimmed) and 277 wide, inside a sheet
- * with 20px gutters, so it wraps below about 318px — a folded Galaxy Fold is 280 — at which point
- * the trimmed leading would put the second line inside the first. 28px clears it.
- */
-const HEADING_CLASS =
-  'text-[24px] leading-[15px] font-medium tracking-[-0.72px] text-[#151515] sm:text-[26px] sm:leading-[16px] sm:tracking-[-0.78px] sm:max-[319px]:leading-[28px]';
-
-/** 14px on both layouts, the desktop frame's size. The mobile frame sets it at 16px; it was matched to desktop on request. */
-const SUBTEXT_CLASS = 'mt-2 text-[14px] leading-[17px] tracking-[-0.42px] text-[rgba(21,21,21,0.7)]';
 
 const ASSET = '/explore-email-capture';
 
