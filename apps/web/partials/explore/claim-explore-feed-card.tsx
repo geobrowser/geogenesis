@@ -57,6 +57,7 @@ export function ClaimExploreFeedCard({
   hideSpaceLink = false,
   hideJoinButton = false,
   titleOpensSidePanel = false,
+  matchDebatePanelClaimCardsOnMobile = false,
   responseNote,
 }: {
   item: ExploreFeedItem;
@@ -71,6 +72,8 @@ export function ClaimExploreFeedCard({
    * existing.
    */
   titleOpensSidePanel?: boolean;
+  /** Use the debates side-panel card shell at phone widths (Explore only). */
+  matchDebatePanelClaimCardsOnMobile?: boolean;
   /**
    * A note about how somebody *else* answered this claim, for a surface that is
    * a record of one person (GEO-2859).
@@ -184,13 +187,17 @@ export function ClaimExploreFeedCard({
     // element that is actually a sibling of the other cards — inside a wrapper every card is an
     // only child, so `:last-child` matches all of them.
     //
-    // That rules out giving the phone a boxed card here: box, spacing and border are all rules that
-    // would have to sit on this element, and a container query never matches the element declaring
-    // the container. The phone still gets the panel's *contents* — pills above, the grey summary
-    // band below — through descendants, which is where the width question can actually be asked.
+    // The mobile Explore shell is selected by a viewport query rather than this article's container
+    // query. That lets the root itself take the debates panel's border, radius and padding while the
+    // card's internal wide/narrow decision remains local to the space it actually has.
     <article
       ref={setContainer}
-      className={cx('@container flex flex-col gap-4', 'border-b border-divider py-4 last:border-b-0')}
+      className={cx(
+        '@container flex flex-col gap-4',
+        'border-b border-divider py-4 last:border-b-0',
+        matchDebatePanelClaimCardsOnMobile &&
+          'md:my-2 md:rounded-lg md:border md:border-grey-02 md:bg-white md:p-3 md:last:border-b'
+      )}
     >
       {/*
         Two zones, divided by a rule that runs the whole height: everything you can *do* to the claim
@@ -221,6 +228,10 @@ export function ClaimExploreFeedCard({
       <div
         className={cx(
           'grid claim-card-narrow:grid-cols-1 claim-card-narrow:gap-y-4',
+          // The container-query variant is emitted after viewport variants, so this is important:
+          // at phone width both match, and the panel rhythm (explicit margins on header/title/
+          // footer) must win over the feed card's generic 16px row gap.
+          matchDebatePanelClaimCardsOnMobile && 'md:gap-y-0!',
           // No verdict, no column, no rule. A claim nobody has answered has nothing to report, and
           // an empty 220px cell behind a vertical line reads as something having failed to load —
           // where the claim simply taking the full width reads as a claim nobody has answered.
@@ -236,6 +247,7 @@ export function ClaimExploreFeedCard({
           hideSpaceLink={hideSpaceLink}
           hideJoinButton={hideJoinButton}
           extraSegments={extraSegments}
+          compactOnMobile={matchDebatePanelClaimCardsOnMobile}
           endSlot={
             <ClaimEndSlot
               claimId={item.entityId}
@@ -247,7 +259,10 @@ export function ClaimExploreFeedCard({
               className="ml-auto"
             />
           }
-          className="col-start-1 row-start-1 mb-3 claim-card-narrow:mb-0"
+          className={cx(
+            'col-start-1 row-start-1 mb-3 claim-card-narrow:mb-0',
+            matchDebatePanelClaimCardsOnMobile && 'md:mb-2!'
+          )}
         />
 
         {/* No thumbnail: claims carry no image, so the generic card's 60px well is either an empty
@@ -258,7 +273,13 @@ export function ClaimExploreFeedCard({
           opensSidePanel={titleOpensSidePanel}
           className="group/title col-start-1 row-start-2 min-w-0"
         >
-          <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-pretty text-text group-hover/title:underline">
+          <h2
+            className={cx(
+              'mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-pretty text-text group-hover/title:underline',
+              matchDebatePanelClaimCardsOnMobile &&
+                'md:mb-3! md:line-clamp-3 md:text-metadataMedium! md:leading-snug! md:tracking-normal!'
+            )}
+          >
             {item.title}
           </h2>
         </ExploreCardEntityLink>
@@ -300,6 +321,7 @@ export function ClaimExploreFeedCard({
               spaceId={item.spaceId}
               responseKind={responseKind}
               summary={summary}
+              matchDebatePanelOnMobile={matchDebatePanelClaimCardsOnMobile}
             />
           </div>
         ) : null}
@@ -333,11 +355,13 @@ function ClaimVerdictColumn({
   spaceId,
   responseKind,
   summary,
+  matchDebatePanelOnMobile,
 }: {
   entityId: string;
   spaceId: string;
   responseKind: 'stance' | 'veracity';
   summary: ClaimResponseSummary;
+  matchDebatePanelOnMobile: boolean;
 }) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
 
@@ -379,8 +403,8 @@ function ClaimVerdictColumn({
       </div>
 
       {/* Narrow: the debates panel's footer band — share, split and faces on one line, on grey.
-          Full width of the row rather than bled past it: the feed row carries no horizontal
-          padding, so a negative margin here would hang 16px outside the card. */}
+          The ordinary feed row keeps it within the row; the boxed mobile Explore variant bleeds it
+          through its new padding to the border, exactly as the panel card does. */}
       <div className="hidden claim-card-narrow:block">
         <ClaimSummary
           entityId={entityId}
@@ -388,7 +412,10 @@ function ClaimVerdictColumn({
           responseKind={responseKind}
           summary={summary}
           layout="inline"
-          className="border-t border-divider bg-grey-01 px-3 py-2"
+          className={cx(
+            'border-t border-divider bg-grey-01 px-3 py-2',
+            matchDebatePanelOnMobile && 'md:-mx-3 md:mt-3 md:-mb-3 md:rounded-b-lg'
+          )}
         />
       </div>
     </>

@@ -37,6 +37,7 @@ export function ExploreMetaRow({
   extraSegments,
   endSlot,
   className,
+  compactOnMobile = false,
 }: {
   item: ExploreFeedItem;
   hideSpaceLink?: boolean;
@@ -56,6 +57,8 @@ export function ExploreMetaRow({
    */
   endSlot?: React.ReactNode;
   className?: string;
+  /** On mobile, keep only the space and caller-supplied segments, matching the debates card. */
+  compactOnMobile?: boolean;
 }) {
   // Deduped by normalized id and named only where the type has a name — an unnamed one renders as a
   // raw id, which says less than nothing.
@@ -114,17 +117,8 @@ export function ExploreMetaRow({
   const showSpace = !hideSpaceLink;
   if (!showSpace && segments.length === 0 && !endSlot) return null;
 
-  return (
-    <div className={`flex min-w-0 flex-wrap items-center gap-y-2 ${className ?? ''}`}>
-      {showSpace ? (
-        <Link
-          href={NavUtils.toSpace(item.spaceId)}
-          className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
-        >
-          <SpaceThumb image={item.spaceImage} name={item.spaceName} />
-          <span className="min-w-0 truncate">{item.spaceName}</span>
-        </Link>
-      ) : null}
+  const allSegments = (
+    <>
       {/* A 6px spacer rather than a dot: the space is the row's subject, not one of its facts. */}
       {showSpace && segments.length > 0 ? <span className="w-1.5 shrink-0" /> : null}
       {segments.map((segment, index) => (
@@ -133,6 +127,48 @@ export function ExploreMetaRow({
           {segment}
         </React.Fragment>
       ))}
+    </>
+  );
+
+  const compactSegments = extraSegments?.length ? (
+    <>
+      {showSpace ? <span className="w-1.5 shrink-0" /> : null}
+      {extraSegments.map((segment, index) => (
+        <React.Fragment key={index}>
+          {index > 0 ? <MetaDot /> : null}
+          {segment}
+        </React.Fragment>
+      ))}
+    </>
+  ) : null;
+
+  return (
+    <div
+      className={`flex min-w-0 flex-wrap items-center gap-y-2 ${compactOnMobile ? 'md:items-start' : ''} ${className ?? ''}`}
+    >
+      {showSpace ? (
+        <Link
+          href={NavUtils.toSpace(item.spaceId)}
+          className={`flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline ${compactOnMobile ? 'md:text-footnoteMedium md:tracking-normal md:text-grey-04' : ''}`}
+        >
+          <SpaceThumb
+            image={item.spaceImage}
+            name={item.spaceName}
+            className={compactOnMobile ? 'md:size-4 md:rounded-sm' : undefined}
+          />
+          <span className="min-w-0 truncate">{item.spaceName}</span>
+        </Link>
+      ) : null}
+      {compactOnMobile ? (
+        <>
+          {/* Explore's desktop row keeps its type and age. The debates panel has neither, so the
+              mobile card keeps only the space and Claim-specific flags such as Controversial. */}
+          <span className="contents md:hidden">{allSegments}</span>
+          <span className="hidden md:contents">{compactSegments}</span>
+        </>
+      ) : (
+        allSegments
+      )}
       {endSlot}
     </div>
   );

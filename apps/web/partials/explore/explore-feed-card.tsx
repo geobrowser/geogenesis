@@ -35,6 +35,8 @@ type ExploreFeedCardProps = {
    * Explore turns this on; the other surfaces this card serves keep navigating.
    */
   titleOpensSidePanel?: boolean;
+  /** Whether Claim rows use the debates-panel card chrome at phone widths. */
+  matchDebatePanelClaimCardsOnMobile?: boolean;
   /** See `ClaimExploreFeedCard`. Only a claim can carry one. */
   responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
 };
@@ -146,6 +148,7 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
         hideSpaceLink={props.hideSpaceLink}
         hideJoinButton={props.hideJoinButton}
         titleOpensSidePanel={props.titleOpensSidePanel}
+        matchDebatePanelClaimCardsOnMobile={props.matchDebatePanelClaimCardsOnMobile}
       />
     );
   }

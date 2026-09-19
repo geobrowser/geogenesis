@@ -393,6 +393,16 @@ describe('EntityFeed Explore type filter', () => {
 
       expect(mocks.cardProps?.titleOpensSidePanel).toBe(false);
     });
+
+    it('hands the mobile debates-panel Claim variant to cards only when requested', () => {
+      mocks.pages = [{ items: [item] }];
+      const { rerender } = render(<EntityFeed apiEndpoint="/api/explore/feed" matchDebatePanelClaimCardsOnMobile />);
+
+      expect(mocks.cardProps?.matchDebatePanelClaimCardsOnMobile).toBe(true);
+
+      rerender(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" />);
+      expect(mocks.cardProps?.matchDebatePanelClaimCardsOnMobile).toBe(false);
+    });
   });
 });
 

@@ -75,6 +75,7 @@ export function ExplorePage({
           showTypeFilter
           dividerBeforeFeed
           titleOpensSidePanel
+          matchDebatePanelClaimCardsOnMobile
           feedTopSpacingClassName=""
         />
       </main>
