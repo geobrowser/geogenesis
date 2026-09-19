@@ -56,6 +56,7 @@ export const EditableCoverAvatarHeader = ({
   contentMaxWidth = ENTITY_PAGE_CONTENT_MAX_WIDTH,
   coverUrl,
   fitImage = false,
+  withAvatar = false,
 }: {
   avatarUrl: string | null;
   /**
@@ -66,6 +67,8 @@ export const EditableCoverAvatarHeader = ({
   contentMaxWidth?: number;
   coverUrl: string | null;
   fitImage?: boolean;
+  /** Whether the fitted header shows the avatar too — see the `fitImage` branch. */
+  withAvatar?: boolean;
 }) => {
   const { spaceId, id } = useEntityStoreInstance();
   const editable = useUserIsEditing(spaceId);
@@ -86,17 +89,51 @@ export const EditableCoverAvatarHeader = ({
   const hasCoverImage = !!coverUrl;
   const hasAvatar = !!showAvatar;
 
+  /*
+   * The fitted header: a cover sized to the column it is in rather than cropped
+   * to a fixed height. The side panel uses it.
+   *
+   * `withAvatar` is off by default and that is deliberate. This branch drew the
+   * cover alone, which is right for most entities — an entity's avatar is a
+   * thumbnail for lists, and a panel that is already showing the thing itself
+   * has no use for one. A *person* is the exception the rule cannot survive: the
+   * avatar is their face, and a profile that opens without it is missing the one
+   * thing a reader recognises. So the caller says.
+   */
   if (fitImage) {
-    if (!hasCoverImage) return null;
+    if (!hasCoverImage && !(withAvatar && hasAvatar)) return null;
+
     return (
-      <div className="relative mx-auto mb-8 w-full">
-        <AvatarCoverInput
-          entityId={id}
-          typeOfId={SystemIds.COVER_PROPERTY}
-          inputId="cover-input"
-          imgUrl={coverUrl}
-          fitImage
-        />
+      <div className={cx('relative mx-auto w-full', withAvatar && hasAvatar ? 'mb-14' : 'mb-8')}>
+        {hasCoverImage && (
+          <AvatarCoverInput
+            entityId={id}
+            typeOfId={SystemIds.COVER_PROPERTY}
+            inputId="cover-input"
+            imgUrl={coverUrl}
+            fitImage
+          />
+        )}
+        {withAvatar && hasAvatar && (
+          <div
+            // Overhanging the cover's bottom-left by the same 40px the full
+            // header uses, so a profile reads the same in the panel as on its
+            // page. Aligned to this container rather than to a text column:
+            // the panel has one width, so the cover and the name below it
+            // already start in the same place.
+            className={cx('flex justify-start', hasCoverImage && 'absolute left-0')}
+            style={hasCoverImage ? { bottom: -AVATAR_OVERFLOW } : undefined}
+          >
+            <div className="flex h-20 w-20 items-center justify-center rounded-lg">
+              <AvatarCoverInput
+                typeOfId={ContentIds.AVATAR_PROPERTY}
+                entityId={id}
+                inputId="avatar-input"
+                imgUrl={avatarUrl}
+              />
+            </div>
+          </div>
+        )}
       </div>
     );
   }

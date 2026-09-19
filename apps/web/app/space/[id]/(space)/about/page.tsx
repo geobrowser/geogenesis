@@ -2,7 +2,7 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
-import { profileLinks } from '~/core/profile/profile-links';
+import { profileRailFacts } from '~/core/profile/profile-rail-facts';
 import { Spaces } from '~/core/utils/space';
 
 import { ProfileRailSections } from '~/partials/profile/profile-rail';
@@ -51,17 +51,7 @@ export default async function AboutPage(props: Props) {
      * reader was going to look for them anyway.
      */
     <div className="hidden lg:block">
-      <ProfileRailSections
-        spaceId={space.id}
-        personEntityId={space.entity.id}
-        types={(space.entity.types ?? []).map(type => ({ id: type.id, name: type.name ?? null }))}
-        links={profileLinks(
-          (space.entity.values ?? []).map(value => ({ property: { id: value.property.id }, value: value.value }))
-        )}
-        systemEntityId={space.entity.id}
-        address={space.address ?? null}
-        spaceType={space.type}
-      />
+      <ProfileRailSections spaceId={space.id} personEntityId={space.entity.id} {...profileRailFacts(space, space.id)} />
     </div>
   );
 }
