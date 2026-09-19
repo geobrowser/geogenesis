@@ -5,16 +5,20 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+
 import { EntityPageBody } from './entity-page-body';
 
 const mocks = vi.hoisted(() => ({
   actions: null as Record<string, unknown> | null,
+  cover: null as Record<string, unknown> | null,
+  entity: { id: 'entity-1', types: [] as { id: string }[] },
   heading: null as Record<string, unknown> | null,
 }));
 
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => false }));
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntity: () => ({ entity: { id: 'entity-1', types: [] }, isLoading: false }),
+  useQueryEntity: () => ({ entity: mocks.entity, isLoading: false }),
 }));
 // `useCustomBrowseView` asks for the space to tell a person's profile from an
 // ordinary entity. This file renders without a QueryClient on purpose — it is
@@ -47,7 +51,12 @@ vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
 
 // Everything below the header row. Each reaches for the sync engine, the editor or geo-chat, and
 // none of it is what this file asserts.
-vi.mock('~/partials/entity-page/entity-page-cover', () => ({ EntityPageCover: () => null }));
+vi.mock('~/partials/entity-page/entity-page-cover', () => ({
+  EntityPageCover: (props: Record<string, unknown>) => {
+    mocks.cover = props;
+    return <div data-testid="cover" />;
+  },
+}));
 vi.mock('~/partials/entity-page/entity-page-content-container', () => ({
   EntityPageContentContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -59,8 +68,11 @@ vi.mock('~/partials/entity-page/type-schema-inline', () => ({ TypeSchemaInline: 
 vi.mock('~/partials/entity-page/entity-page-header', () => ({ EntityPageHeader: () => null }));
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => null }));
 vi.mock('~/partials/comments/comments-section', () => ({ CommentSection: () => null }));
-vi.mock('~/core/claims/browse/claim-page-view', () => ({ ClaimPageView: () => null }));
+vi.mock('~/core/claims/browse/claim-page-view', () => ({
+  ClaimPageView: () => <div data-testid="claim-page" />,
+}));
 vi.mock('~/core/topics/browse/topic-page-view', () => ({ TopicPageView: () => null }));
+vi.mock('~/partials/profile/person-profile-view', () => ({ PersonProfileView: () => null }));
 
 const SHARED = {
   entityId: 'entity-1',
@@ -77,6 +89,8 @@ function renderPanel(overrides?: { isRelationPage?: boolean; previewName?: strin
 
 beforeEach(() => {
   mocks.actions = null;
+  mocks.cover = null;
+  mocks.entity = { id: 'entity-1', types: [] };
   mocks.heading = null;
 });
 
@@ -129,5 +143,29 @@ describe('EntityPageBody relation side panel', () => {
 
     expect(screen.getByTestId('title')).toBeInTheDocument();
     expect(mocks.heading).toMatchObject({ entityId: 'entity-1', spaceId: 'space-1', fallbackName: 'Preview name' });
+  });
+});
+
+describe('EntityPageBody claim side panel', () => {
+  it('shows both configured claim images above the custom view', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
+
+    render(
+      <EntityPageBody
+        variant="sidePanel"
+        {...SHARED}
+        avatarUrl="https://example.com/avatar.png"
+        coverUrl="https://example.com/cover.png"
+      />
+    );
+
+    expect(screen.getByTestId('cover')).toBeInTheDocument();
+    expect(screen.getByTestId('claim-page')).toBeInTheDocument();
+    expect(mocks.cover).toMatchObject({
+      avatarUrl: 'https://example.com/avatar.png',
+      coverUrl: 'https://example.com/cover.png',
+      fitImage: true,
+      withAvatar: true,
+    });
   });
 });

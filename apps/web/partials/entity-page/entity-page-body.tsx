@@ -294,7 +294,32 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   if (customView === 'pending') return null;
 
   if (customView === 'claim') {
-    return <ClaimPageView entityId={entityId} spaceId={spaceId} />;
+    const claimAvatarUrl =
+      props.variant === 'sidePanel'
+        ? (props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null)
+        : props.avatarUrl;
+    const showClaimMedia = props.variant === 'sidePanel' || props.showCover !== false;
+
+    return (
+      <>
+        {showClaimMedia ? (
+          props.variant === 'route' && props.coverSlot ? (
+            props.coverSlot
+          ) : (
+            <EntityPageCover
+              avatarUrl={claimAvatarUrl}
+              coverUrl={props.coverUrl}
+              fitImage={props.variant === 'sidePanel'}
+              // Claims use both media properties as part of their identity. The generic fitted
+              // side-panel header suppresses avatars because they are usually just list
+              // thumbnails, but doing that here would make a claim's configured avatar vanish.
+              withAvatar
+            />
+          )
+        ) : null}
+        <ClaimPageView entityId={entityId} spaceId={spaceId} />
+      </>
+    );
   }
 
   if (customView === 'topic') {
