@@ -17,6 +17,10 @@ const mocks = vi.hoisted(() => ({
   /** Privy's answer; the tab's signed-out paths hang off it. */
   authenticated: true,
   people: [] as DebatePerson[],
+  peopleDataAvailable: true,
+  peopleLoading: false,
+  peopleError: null as Error | null,
+  peopleRefetch: vi.fn(),
   challenge: null as DebateChallenge | null,
   outboundRequest: null as unknown,
   activeDebate: null as unknown,
@@ -71,7 +75,13 @@ vi.mock('../hooks', () => ({
 }));
 
 vi.mock('./hooks', () => ({
-  useDebatePeople: () => ({ data: { people: mocks.people }, isLoading: false, error: null }),
+  useDebatePeople: () => ({
+    data: mocks.peopleDataAvailable ? { people: mocks.people } : undefined,
+    isLoading: mocks.peopleLoading,
+    error: mocks.peopleError,
+    failureReason: mocks.peopleError,
+    refetch: mocks.peopleRefetch,
+  }),
   useDebateRequests: () => ({ data: { incoming: [], outbound: null }, isLoading: false, error: null }),
 }));
 
@@ -178,6 +188,10 @@ beforeEach(() => {
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
   mocks.people = [person('user-them', 'Arturas'), person('user-other', 'Vytautas')];
+  mocks.peopleDataAvailable = true;
+  mocks.peopleLoading = false;
+  mocks.peopleError = null;
+  mocks.peopleRefetch.mockReset();
   mocks.challenge = null;
   mocks.outboundRequest = null;
   mocks.activeDebate = null;
@@ -721,6 +735,41 @@ describe('PeopleTab filters', () => {
     expect(screen.getByText('Active in')).toBeInTheDocument();
   });
 
+  it('preserves a remembered space until the current roster has answered', async () => {
+    mocks.peopleDataAvailable = false;
+    mocks.peopleLoading = true;
+    const store = createStore();
+    store.set(debatesHubPeopleSpaceIdsAtom, ['spacea']);
+
+    const view = render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual(['spacea']);
+    expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
+
+    // A failed cold load still has no roster answer, so it must not be allowed to invalidate the
+    // selection either. The retry can later produce the evidence needed to keep or remove it.
+    mocks.peopleLoading = false;
+    mocks.peopleError = new Error('Roster unavailable');
+    view.rerender(
+      <Provider store={store}>
+        <PeopleTab onTabChange={mocks.onTabChange} />
+      </Provider>
+    );
+    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual(['spacea']);
+
+    mocks.peopleDataAvailable = true;
+    mocks.peopleError = null;
+    view.rerender(
+      <Provider store={store}>
+        <PeopleTab onTabChange={mocks.onTabChange} />
+      </Provider>
+    );
+
+    expect(await screen.findByText('Arturas')).toBeInTheDocument();
+    expect(screen.queryByText('Vytautas')).not.toBeInTheDocument();
+    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual(['spacea']);
+  });
+
   // A space filter alone can never empty the list — a facet only offers spaces somebody is active in — so
   // the case this wording exists for is a space plus something else.
   //
@@ -810,6 +859,7 @@ describe('PeopleTab filters', () => {
     fireEvent.click(trigger);
 
     const list = await screen.findByRole('list', { name: 'Active spaces' });
+    expect(list.closest('[role="dialog"]')).toHaveAttribute('aria-label', 'Active in');
     const options = within(list).getAllByTestId('person-space-option');
     await waitFor(() => expect(options[0]).toHaveFocus());
     expect(options[0]).toHaveAttribute('href', NavUtils.toSpace('spacea'));

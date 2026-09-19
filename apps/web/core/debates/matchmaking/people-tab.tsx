@@ -84,7 +84,11 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
 
   const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces();
   const publishableSpacesPending = publishableSpaceIds === null && publishableSpacesLoading;
-  const spaceActivityPending = publishableSpacesPending || personRecordsPending;
+  // `allPeople` deliberately falls back to an empty list for rendering, but that fallback is not a
+  // roster answer. On a cold load or terminal error, treating it as settled would reconcile a
+  // remembered selection against no people and erase it before there is evidence it became invalid.
+  const rosterUnavailable = peopleQuery.data === undefined;
+  const spaceActivityUnavailable = rosterUnavailable || publishableSpacesPending || personRecordsPending;
 
   // "Active in" means evidence of activity, not membership: at least one distinct claim answered
   // or one recorded debate in that space. The same map drives both the row and the filter so a
@@ -92,11 +96,11 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // gate is still the claim picker's authoritative acceptor-editor set. A settled lookup with no
   // answer deliberately fails open, matching `isSpaceDebatePublishable` elsewhere; an in-flight
   // lookup is different, because drawing its unverified spaces would briefly make them selectable.
-  // Person records get the same treatment: a partial batch must not filter out people whose row has
-  // not landed yet.
+  // The roster and person records get the same treatment: an absent roster or partial batch must
+  // not erase a remembered selection or filter out people whose row has not landed yet.
   const debateSpacesByPerson = React.useMemo(() => {
     const byPerson = new Map<string, string[]>();
-    if (spaceActivityPending) return byPerson;
+    if (spaceActivityUnavailable) return byPerson;
 
     for (const [personId, record] of records) {
       const activeIds = new Set<string>();
@@ -108,7 +112,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
       byPerson.set(personId, [...activeIds]);
     }
     return byPerson;
-  }, [publishableSpaceIds, records, spaceActivityPending]);
+  }, [publishableSpaceIds, records, spaceActivityUnavailable]);
 
   const activeSpaceIds = React.useMemo(() => {
     return new Set(allPeople.flatMap(person => debateSpacesByPerson.get(person.profile_space_id) ?? []));
@@ -118,20 +122,21 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // not-yet-verified value affect the current render. Filtering it synchronously also closes the
   // render between a gate settling and the reconciliation effect below committing its cleanup.
   const effectiveSpaceIds = React.useMemo(
-    () => (spaceActivityPending ? EMPTY_SPACE_IDS : spaceIds.filter(spaceId => activeSpaceIds.has(normId(spaceId)))),
-    [activeSpaceIds, spaceActivityPending, spaceIds]
+    () =>
+      spaceActivityUnavailable ? EMPTY_SPACE_IDS : spaceIds.filter(spaceId => activeSpaceIds.has(normId(spaceId))),
+    [activeSpaceIds, spaceActivityUnavailable, spaceIds]
   );
 
   // A remembered selection can outlive the panel, the activity set, or the publishable set.
   // Reconcile against the exact options this tab is allowed to offer so `keepSelectedVisible`
   // cannot put a disabled, membership-only, or zero-activity space back into the dropdown.
   React.useEffect(() => {
-    if (spaceActivityPending) return;
+    if (spaceActivityUnavailable) return;
     setSpaceIds(current => {
       const kept = current.filter(spaceId => activeSpaceIds.has(normId(spaceId)));
       return kept.length === current.length ? current : kept;
     });
-  }, [activeSpaceIds, setSpaceIds, spaceActivityPending]);
+  }, [activeSpaceIds, setSpaceIds, spaceActivityUnavailable]);
 
   // Filtered here rather than through the query: this endpoint takes no parameters at all and
   // returns whoever is available right now in one unpaginated list, so there is nothing to page
@@ -175,7 +180,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     spaceIds: effectiveSpaceIds,
     setSpaceIds,
     memberSpaceIds: null,
-    pending: peopleQuery.isLoading || spaceActivityPending,
+    pending: peopleQuery.isLoading || spaceActivityUnavailable,
     seedSpent: true,
   });
 
@@ -254,7 +259,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
           onSpaceToggle={onSpaceToggle}
           onSpacesClear={onSpacesClear}
           facetSpaces={facetSpaces}
-          countsPending={spaceActivityPending}
+          countsPending={peopleQuery.isLoading || publishableSpacesPending || personRecordsPending}
         />
       </HubStickyControls>
 

@@ -94,6 +94,7 @@ export function PersonSpaceIcons({
               sideOffset={8}
               collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
               hideWhenDetached
+              aria-label="Active in"
               onOpenAutoFocus={event => {
                 event.preventDefault();
                 firstSpaceLinkRef.current?.focus();
