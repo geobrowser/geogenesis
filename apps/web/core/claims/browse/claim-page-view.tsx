@@ -44,7 +44,7 @@ import { type ClaimResponseState, useClaimResponseState } from './use-claim-resp
 
 type ClaimTab = 'overview' | 'debates' | 'claims' | 'sources' | 'custom';
 
-const SYSTEM_TAB_LABELS = ['Overview', 'Debates', 'Claims', 'Sources'];
+const SYSTEM_TAB_LABELS = ['Overview', 'Debates', 'Related claims', 'Sources'];
 
 /**
  * The browse-mode read view for a Claim.
@@ -131,7 +131,7 @@ export function ClaimPageView({
   const systemTabs = [
     { label: 'Overview', href: overviewHref, sidePanelKey: 'overview' },
     ...(hasDebates ? [{ label: 'Debates', href: hrefs.debates, sidePanelKey: 'debates' }] : []),
-    ...(hasClaims ? [{ label: 'Claims', href: hrefs.claims, sidePanelKey: 'claims' }] : []),
+    ...(hasClaims ? [{ label: 'Related claims', href: hrefs.claims, sidePanelKey: 'claims' }] : []),
     ...(hasSources ? [{ label: 'Sources', href: hrefs.sources, sidePanelKey: 'sources' }] : []),
   ];
   const activeTab: ClaimTab =

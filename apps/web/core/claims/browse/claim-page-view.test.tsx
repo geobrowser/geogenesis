@@ -158,12 +158,12 @@ describe('ClaimPageView record', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(mocks.tabs).toMatchObject({
-      reservedSystemLabels: ['Overview', 'Debates', 'Claims', 'Sources'],
+      reservedSystemLabels: ['Overview', 'Debates', 'Related claims', 'Sources'],
       divideBeforeAuthored: true,
     });
     expect(mocks.tabs?.systemTabsBefore).toEqual([
       expect.objectContaining({ label: 'Overview', sidePanelKey: 'overview' }),
-      expect.objectContaining({ label: 'Claims', sidePanelKey: 'claims' }),
+      expect.objectContaining({ label: 'Related claims', sidePanelKey: 'claims' }),
     ]);
   });
 
@@ -179,7 +179,7 @@ describe('ClaimPageView record', () => {
     expect((mocks.tabs?.systemTabsBefore as Array<{ label: string }>).map(tab => tab.label)).toEqual([
       'Overview',
       'Debates',
-      'Claims',
+      'Related claims',
       'Sources',
     ]);
   });
