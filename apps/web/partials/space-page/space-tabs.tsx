@@ -4,6 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import { hasRecordToShow } from '~/core/profile/profile-proposer';
 import { useEditable } from '~/core/state/editable-store';
 import { useDebugDebatesPageEnabled } from '~/core/state/feature-flags';
 import { useRelations, useValues } from '~/core/sync/use-store';
@@ -156,10 +157,7 @@ export function buildSpaceTabs({
       { label: 'Positions', href: `/space/${spaceId}/positions`, priority: 4 },
       { label: 'Proposals', href: `/space/${spaceId}/proposals`, priority: 4 },
     ] satisfies BuiltSpaceTab[]
-  ).filter(tab => {
-    const count = countFor[tab.label];
-    return count === undefined || count > 0;
-  });
+  ).filter(tab => hasRecordToShow(countFor[tab.label]));
 
   tabs.push(...ALL_SPACES_TABS);
 

@@ -17,6 +17,7 @@ import { ID } from '~/core/id';
 import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-facts';
 import { type ProfileLinkField, changedLinkFields, profileLinkFields } from '~/core/profile/profile-link-fields';
 import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
+import type { ProfileRailFacts } from '~/core/profile/profile-rail-facts';
 import { heldPositionsCount, usePersonResponses } from '~/core/profile/use-person-positions';
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils } from '~/core/utils/utils';
@@ -35,18 +36,11 @@ import { ProfileLinksEditor, linkValueRows } from './profile-links-editor';
 /** The profile modal's "leave this field alone" sentinel, as the record dialog uses it. */
 const UNCHANGED = { kind: 'unchanged' } as const;
 
-export type ProfileRailProps = {
+export type ProfileRailProps = ProfileRailFacts & {
   /** The personal space being viewed. */
   spaceId: string;
   /** The person entity, for the join date. */
   personEntityId: string | null;
-  /** Types on the person entity — Person and Space, on one entity. */
-  types: { id: string; name: string | null }[];
-  links: ProfileLink[];
-  /** Where the space's own record is shown, folded away. */
-  systemEntityId: string;
-  address: string | null;
-  spaceType: 'DAO' | 'PERSONAL';
 };
 
 /**

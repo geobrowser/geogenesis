@@ -9,7 +9,7 @@ import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collecti
 import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
 import { fetchProfileFacts } from '~/core/io/subgraph/fetch-profile-facts';
 import { EntityId } from '~/core/io/substream-schema';
-import { profileLinks } from '~/core/profile/profile-links';
+import { profileRailFacts } from '~/core/profile/profile-rail-facts';
 import { SpaceVerifyButton } from '~/core/space/space-verify-button';
 import { RouteEditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -108,17 +108,7 @@ export default async function Layout(props0: LayoutProps) {
    * Overview page used to do by hand.
    */
   const profileRail = isProfile ? (
-    <ProfileRail
-      spaceId={spaceId}
-      personEntityId={props.id}
-      types={(props.space?.entity?.types ?? []).map(type => ({ id: type.id, name: type.name ?? null }))}
-      links={profileLinks(
-        (props.space?.entity?.values ?? []).map(value => ({ property: { id: value.property.id }, value: value.value }))
-      )}
-      systemEntityId={props.space?.entity?.id ?? spaceId}
-      address={props.space?.address ?? null}
-      spaceType={props.space?.type ?? 'PERSONAL'}
-    />
+    <ProfileRail spaceId={spaceId} personEntityId={props.id} {...profileRailFacts(props.space, spaceId)} />
   ) : null;
 
   return (
