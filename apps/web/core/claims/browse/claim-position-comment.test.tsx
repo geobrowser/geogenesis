@@ -32,13 +32,11 @@ describe('ClaimPositionCommentControl', () => {
     viewerPosition = null,
     promptForComment = true,
     onRespond = vi.fn(),
-    onRespondAsync = vi.fn().mockResolvedValue(true),
     responseKind = 'stance',
   }: {
     viewerPosition?: boolean | null;
     promptForComment?: boolean;
     onRespond?: (position: boolean) => void;
-    onRespondAsync?: (position: boolean) => Promise<boolean>;
     responseKind?: 'stance' | 'veracity';
   } = {}) {
     render(
@@ -49,79 +47,71 @@ describe('ClaimPositionCommentControl', () => {
         responseKind={responseKind}
         viewerPosition={viewerPosition}
         onRespond={onRespond}
-        onRespondAsync={onRespondAsync}
         promptForComment={promptForComment}
       />
     );
-    return { onRespond, onRespondAsync };
+    return { onRespond };
   }
 
-  it('offers an optional explanation before taking a new position', () => {
+  it('records a new position immediately and keeps the buttons visible above the optional explanation', () => {
     const { onRespond } = renderControl();
 
     fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
 
+    expect(onRespond).toHaveBeenCalledWith(true);
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Disagree' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Why do you agree?' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Skip' })).toBeInTheDocument();
-    expect(onRespond).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Comment' })).toBeDisabled();
   });
 
-  it('returns to the position buttons without publishing when Back is pressed', () => {
-    const { onRespond, onRespondAsync } = renderControl();
+  it('dismisses the comment invitation without another position write when Skip is pressed', () => {
+    const { onRespond } = renderControl();
 
     fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
-
-    expect(screen.getByRole('button', { name: 'Agree' })).toBeInTheDocument();
-    expect(onRespond).not.toHaveBeenCalled();
-    expect(onRespondAsync).not.toHaveBeenCalled();
-  });
-
-  it('publishes the position without a comment when Skip is pressed', async () => {
-    const { onRespondAsync } = renderControl();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Disagree' }));
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
 
-    await waitFor(() => expect(onRespondAsync).toHaveBeenCalledWith(false));
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(onRespond).toHaveBeenCalledTimes(1);
     expect(mocks.createComment).not.toHaveBeenCalled();
   });
 
-  it('publishes the response first, then adds the explanation to the claim thread', async () => {
+  it('adds the optional explanation to the claim thread without submitting the position again', async () => {
     const order: string[] = [];
-    const onRespondAsync = vi.fn(async () => {
+    const onRespond = vi.fn(() => {
       order.push('response');
-      return true;
     });
     mocks.createComment.mockImplementation(async () => {
       order.push('comment');
       return { id: 'comment-1', published: true };
     });
-    renderControl({ onRespondAsync });
+    renderControl({ onRespond });
 
     fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Because the evidence supports it.' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
 
     await waitFor(() => expect(mocks.createComment).toHaveBeenCalledTimes(1));
     expect(mocks.createComment).toHaveBeenCalledWith({
       text: 'Because the evidence supports it.',
       targetSpaceId: 'space-1',
     });
+    expect(onRespond).toHaveBeenCalledTimes(1);
     expect(order).toEqual(['response', 'comment']);
   });
 
-  it('keeps the explanation open when the response fails and does not publish the comment', async () => {
-    const onRespondAsync = vi.fn().mockResolvedValue(false);
-    renderControl({ onRespondAsync });
+  it('lets the buttons change the recorded side while the optional prompt is open', () => {
+    const { onRespond } = renderControl();
 
     fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'My reason' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'A draft reason' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Disagree' }));
 
-    await waitFor(() => expect(onRespondAsync).toHaveBeenCalledWith(true));
-    expect(screen.getByRole('textbox')).toHaveValue('My reason');
+    expect(onRespond).toHaveBeenNthCalledWith(1, true);
+    expect(onRespond).toHaveBeenNthCalledWith(2, false);
+    expect(screen.getByRole('textbox', { name: 'Why do you disagree?' })).toHaveValue('');
     expect(mocks.createComment).not.toHaveBeenCalled();
   });
 
@@ -141,6 +131,7 @@ describe('ClaimPositionCommentControl', () => {
 
     expect(screen.getByRole('textbox', { name: 'Why do you dispute?' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Dispute' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Comment' })).toBeDisabled();
   });
 
   it('preserves the sign-in flow instead of opening a composer while signed out', () => {

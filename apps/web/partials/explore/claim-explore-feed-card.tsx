@@ -285,7 +285,7 @@ export function ClaimExploreFeedCard({
 
         <div
           className={cx(
-            'col-start-1 row-start-3 mt-4 max-w-[360px] has-[textarea]:max-w-none claim-card-narrow:mt-0'
+            'col-start-1 row-start-3 mt-4 claim-card-narrow:mt-0'
             // Nothing to add on a phone: the pills hold row 3 either way, and the verdict below
             // them takes row 4. That is the debates panel's order — what you can *do* to the claim
             // before what everyone else did with it — and on a wide card the verdict is a column
@@ -299,11 +299,11 @@ export function ClaimExploreFeedCard({
             responseKind={responseKind}
             viewerPosition={control.viewerPosition}
             onRespond={control.respond}
-            onRespondAsync={control.respondAsync}
             promptForComment={control.isConnected}
             disabled={!control.canRespond}
             titleFor={control.actionTitle}
             noteFor={responseNote ? noteFor : undefined}
+            positionRowClassName="max-w-[360px]"
           />
           {control.responseError ? (
             <div role="alert" className="mt-2">

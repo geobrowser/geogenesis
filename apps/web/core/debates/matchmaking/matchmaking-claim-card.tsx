@@ -424,7 +424,7 @@ export function useClaimPositionControl({
     spaceId: claim.space_id,
     responseKind: readiness.response_kind,
   };
-  const { submitResponse, submitResponseAsync, isConnected, personalSpaceId } = useEntityResponse(target);
+  const { submitResponse, isConnected, personalSpaceId } = useEntityResponse(target);
   const responseIndexing = useEntityResponseIndexingSnapshot(target);
   const resetResponseIndexing = useResetEntityResponseIndexingSnapshot(target);
   // Publishing before the personal space finishes registering fails, so wait it out the same way
@@ -523,27 +523,6 @@ export function useClaimPositionControl({
     });
   };
 
-  /**
-   * Promise-returning sibling of `respond`, for flows that have a second write to sequence after
-   * the response transaction. A position explanation is a regular claim comment, so it must not be
-   * published first and leave behind reasoning for a position that failed to land.
-   */
-  const respondAsync = async (position: boolean): Promise<boolean> => {
-    if (!isConnected) {
-      onRequireSignIn?.();
-      return false;
-    }
-    if (isAccountSetupPending) return false;
-    setResponseError(null);
-    try {
-      await submitResponseAsync(viewerPosition === position ? 'clear' : position ? 'positive' : 'negative');
-      return true;
-    } catch (error) {
-      setResponseError(error instanceof Error ? error.message : 'Could not publish your response. Try again.');
-      return false;
-    }
-  };
-
   const actionTitle = (position: boolean) => {
     // First of all, because it is the only one with an action in it. The others describe a state
     // the reader waits out; this one names the thing they can go and do.
@@ -561,7 +540,6 @@ export function useClaimPositionControl({
     viewerPosition,
     optimisticPositions,
     respond,
-    respondAsync,
     actionTitle,
     responseError,
     isConnected,

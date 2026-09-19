@@ -214,7 +214,6 @@ function ClaimPositionSection({
         responseKind={readiness.response_kind}
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
-        onRespondAsync={control.respondAsync}
         promptForComment={control.isConnected}
         disabled={!control.canRespond}
         titleFor={control.actionTitle}
