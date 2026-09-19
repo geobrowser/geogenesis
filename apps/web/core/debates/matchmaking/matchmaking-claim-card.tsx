@@ -223,11 +223,7 @@ export function MatchmakingClaimCard({
   return (
     // `w-full` matters: popLayout absolutely positions an exiting card, which would otherwise
     // collapse to its content width as it fades.
-    <motion.article
-      ref={setCardRef}
-      {...hubCardMotion}
-      className="w-full rounded-lg border border-grey-02 bg-white p-3"
-    >
+    <motion.article ref={setCardRef} {...hubCardMotion} className="w-full claim-card-panel-surface">
       {isOnGraph ? (
         <RespondableControls
           noteFor={noteFor}
@@ -291,7 +287,7 @@ function ClaimHeader({
   isControversial?: boolean;
   onOpenClaim?: () => void;
 }) {
-  const claimTextClassName = 'mb-3 block text-metadataMedium leading-snug text-pretty line-clamp-3';
+  const claimTextClassName = 'claim-card-panel-title';
 
   const openable = isOnGraph ? (
     onOpenClaim ? (
@@ -315,7 +311,7 @@ function ClaimHeader({
       {/* `items-start` so the chip stays put when the slot stacks a blocked reason beneath it. No
           reserved height: the slot is now the height of the chip beside it, so the row does not grow
           when the match lookup answers. */}
-      <div className="mb-2 flex items-start justify-between gap-3">
+      <div className="claim-card-panel-header">
         <span className="flex min-w-0 items-center gap-1.5">
           <SpaceChip spaceId={claim.space_id} />
           {isControversial ? <ControversialTag /> : null}
@@ -786,7 +782,7 @@ function RespondableControls({
           summary={summary}
           layout="inline"
           className={cx(
-            '-mx-3 mt-3 border-t border-divider bg-grey-01 px-3 py-2',
+            '-mx-3 mt-3 claim-card-summary-band',
             // Only reaches the card's base when nothing follows it. A host that passes a footer —
             // the rematch picker's error alert — renders after this, and a band bled past the
             // padding would sit under it.
