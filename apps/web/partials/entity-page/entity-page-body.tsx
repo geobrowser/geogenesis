@@ -153,7 +153,6 @@ export function customBrowseView({
   isLoadingSpace: boolean;
   isEditing: boolean;
 }): CustomBrowseView {
-  if (isEditing) return 'generic';
   // The types decide which page this is, so until they are known there is no page to draw. Falling
   // through to the generic one meanwhile rendered the value sheet for a claim or a topic and then
   // replaced it a moment later, which read as the page loading twice.
@@ -162,6 +161,7 @@ export function customBrowseView({
   const byType = viewFromTypes(entity);
 
   if (byType === 'claim') return 'claim';
+  if (isEditing) return 'generic';
   if (byType === 'topic') return 'topic';
 
   /*
@@ -232,15 +232,16 @@ export function needsSpaceForView({
 /**
  * Which custom read view this entity gets, if any.
  *
- * Editing always falls through to the generic page: these are read surfaces with no property editor
- * behind them, so an editor who lost the value sheet would have no way to change the entity.
+ * Claims keep their custom surface while editing, matching personal-space profiles: product-owned
+ * tabs stay visible and fixed while authored tabs can be managed. `EntityPageBody` appends the
+ * property editor beneath the claim surface, so keeping the custom UI does not hide raw fields.
+ * Other custom views still fall through to the generic editor.
  *
  * Unscoped, matching how `EntityVoteButtons` reads the same flag. `types` is
  * derived across every space either way, so this is about consistency with the controls the pages
  * render rather than about reaching a type a scoped read would miss.
  */
-function useCustomBrowseView(entityId: string, spaceId: string): CustomBrowseView {
-  const isEditing = useUserIsEditing(spaceId);
+function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boolean): CustomBrowseView {
   const { entity, isLoading } = useQueryEntity({ id: entityId });
 
   /*
@@ -269,7 +270,8 @@ function useCustomBrowseView(entityId: string, spaceId: string): CustomBrowseVie
 
 export function EntityPageBody(props: EntityPageBodyProps) {
   const { entityId, spaceId, initialTabRelations, tabEntities } = props;
-  const customView = useCustomBrowseView(entityId, spaceId);
+  const isEditing = useUserIsEditing(spaceId);
+  const customView = useCustomBrowseView(entityId, spaceId, isEditing);
 
   const previewImageUrl = props.variant === 'sidePanel' ? props.previewImageUrl : undefined;
   const entityMediaUrl = useEntityMediaUrl(entityId, spaceId);
@@ -322,6 +324,8 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           spaceId={spaceId}
           initialTabRelations={initialTabRelations}
           tabEntities={tabEntities}
+          isEditing={isEditing}
+          footer={isEditing && !props.hideProperties ? <ToggleEntityPage id={entityId} spaceId={spaceId} /> : undefined}
         />
       </>
     );

@@ -14,9 +14,11 @@ const mocks = vi.hoisted(() => ({
   cover: null as Record<string, unknown> | null,
   entity: { id: 'entity-1', types: [] as { id: string }[] },
   heading: null as Record<string, unknown> | null,
+  editing: false,
+  claimPage: null as Record<string, unknown> | null,
 }));
 
-vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => false }));
+vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => mocks.editing }));
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntity: () => ({ entity: mocks.entity, isLoading: false }),
 }));
@@ -61,7 +63,9 @@ vi.mock('~/partials/entity-page/entity-page-content-container', () => ({
   EntityPageContentContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('~/partials/entity-page/entity-tabs', () => ({ EntityTabs: () => null }));
-vi.mock('~/partials/entity-page/toggle-entity-page', () => ({ ToggleEntityPage: () => null }));
+vi.mock('~/partials/entity-page/toggle-entity-page', () => ({
+  ToggleEntityPage: () => <div data-testid="properties" />,
+}));
 vi.mock('~/partials/entity-page/automatic-mode-toggle', () => ({ AutomaticModeToggle: () => null }));
 vi.mock('~/partials/entity-page/backlinks-client-container', () => ({ BacklinksClientContainer: () => null }));
 vi.mock('~/partials/entity-page/type-schema-inline', () => ({ TypeSchemaInline: () => null }));
@@ -69,7 +73,10 @@ vi.mock('~/partials/entity-page/entity-page-header', () => ({ EntityPageHeader: 
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => null }));
 vi.mock('~/partials/comments/comments-section', () => ({ CommentSection: () => null }));
 vi.mock('~/core/claims/browse/claim-page-view', () => ({
-  ClaimPageView: () => <div data-testid="claim-page" />,
+  ClaimPageView: (props: Record<string, unknown>) => {
+    mocks.claimPage = props;
+    return <div data-testid="claim-page">{props.footer as React.ReactNode}</div>;
+  },
 }));
 vi.mock('~/core/topics/browse/topic-page-view', () => ({ TopicPageView: () => null }));
 vi.mock('~/partials/profile/person-profile-view', () => ({ PersonProfileView: () => null }));
@@ -92,6 +99,8 @@ beforeEach(() => {
   mocks.cover = null;
   mocks.entity = { id: 'entity-1', types: [] };
   mocks.heading = null;
+  mocks.editing = false;
+  mocks.claimPage = null;
 });
 
 afterEach(cleanup);
@@ -167,5 +176,17 @@ describe('EntityPageBody claim side panel', () => {
       fitImage: true,
       withAvatar: true,
     });
+  });
+
+  it('keeps the custom claim view and appends properties while editing', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
+    mocks.editing = true;
+
+    render(<EntityPageBody variant="sidePanel" {...SHARED} />);
+
+    expect(screen.getByTestId('claim-page')).toBeInTheDocument();
+    expect(screen.getByTestId('properties')).toBeInTheDocument();
+    expect(mocks.claimPage?.isEditing).toBe(true);
+    expect(mocks.claimPage?.footer).toBeTruthy();
   });
 });

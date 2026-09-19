@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
+import { SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
 
 import { ClaimPageView } from './claim-page-view';
 
@@ -17,6 +18,17 @@ const mocks = vi.hoisted(() => ({
   /** Props the chip section received, or null if the page rendered none. */
   chipSection: null as Record<string, unknown> | null,
   tabs: null as Record<string, unknown> | null,
+  record: {
+    claimIds: ['claim-1'],
+    claimRows: [],
+    debateRows: [],
+    claimsTotal: 1,
+    debatesTotal: 0,
+    claimsLoading: false,
+    debatesLoading: false,
+    claimsError: false,
+    debatesError: false,
+  },
   /**
    * Deliberately not 3.
    *
@@ -35,6 +47,10 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
   ENTITY_DESCRIPTION_MAX_LINES: mocks.maxLines,
+  EntityPageInlineDescription: () => <div data-testid="editable-description" />,
+}));
+vi.mock('~/partials/entity-page/editable-entity-header', () => ({
+  EditableHeading: () => <div data-testid="editable-heading" />,
 }));
 
 // jsdom has no layout, so the real clamp can never measure an overflow. What this file is about is
@@ -99,17 +115,7 @@ vi.mock('./claim-sources-tab', () => ({ ClaimSourcesTab: () => <div data-testid=
 vi.mock('./claim-end-slot', () => ({ ClaimEndSlot: () => null }));
 vi.mock('./claim-summary', () => ({ ControversialTag: () => null }));
 vi.mock('./use-claim-record', () => ({
-  useClaimRecord: () => ({
-    claimIds: ['claim-1'],
-    claimRows: [],
-    debateRows: [],
-    claimsTotal: 1,
-    debatesTotal: 0,
-    claimsLoading: false,
-    debatesLoading: false,
-    claimsError: false,
-    debatesError: false,
-  }),
+  useClaimRecord: () => mocks.record,
 }));
 vi.mock('~/core/state/entity-side-panel-active-tab', () => ({ useEntitySidePanelActiveTab: () => null }));
 vi.mock('~/partials/entity-page/entity-tabs', () => ({
@@ -142,6 +148,9 @@ beforeEach(() => {
   mocks.clamp = null;
   mocks.chipSection = null;
   mocks.tabs = null;
+  mocks.record.debatesTotal = 0;
+  mocks.record.debatesLoading = false;
+  mocks.record.debatesError = false;
 });
 
 describe('ClaimPageView record', () => {
@@ -154,13 +163,28 @@ describe('ClaimPageView record', () => {
     });
     expect(mocks.tabs?.systemTabsBefore).toEqual([
       expect.objectContaining({ label: 'Overview', sidePanelKey: 'overview' }),
-      expect.objectContaining({ label: 'Debates', sidePanelKey: 'debates' }),
       expect.objectContaining({ label: 'Claims', sidePanelKey: 'claims' }),
-      expect.objectContaining({ label: 'Sources', sidePanelKey: 'sources' }),
     ]);
   });
 
-  it('orders Overview as position, response summary, activity, then comments', () => {
+  it('hides empty system tabs and shows them once they have content', () => {
+    mocks.record.debatesTotal = 1;
+    mocks.entity = {
+      ...claimEntity('Anything'),
+      relations: [{ id: 'source-relation', type: { id: SOURCES_PROPERTY_ID }, toEntity: { id: 'source-1' } }],
+    };
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect((mocks.tabs?.systemTabsBefore as Array<{ label: string }>).map(tab => tab.label)).toEqual([
+      'Overview',
+      'Debates',
+      'Claims',
+      'Sources',
+    ]);
+  });
+
+  it('orders Overview as response summary, position, activity, then comments', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     const position = screen.getByTestId('position');
@@ -168,9 +192,16 @@ describe('ClaimPageView record', () => {
     const activity = screen.getByTestId('activity');
     const comments = screen.getByTestId('comments');
 
-    expect(position.compareDocumentPosition(verdict) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(verdict.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(verdict.compareDocumentPosition(position) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(position.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(activity.compareDocumentPosition(comments) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('keeps the claim heading and description editable on the custom surface', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" isEditing />);
+
+    expect(screen.getByTestId('editable-heading')).toBeInTheDocument();
+    expect(screen.getByTestId('editable-description')).toBeInTheDocument();
   });
 });
 

@@ -10,6 +10,7 @@ import type { DebateClaim } from '~/core/debates/api';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
@@ -23,7 +24,11 @@ import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
-import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
+import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import {
+  ENTITY_DESCRIPTION_MAX_LINES,
+  EntityPageInlineDescription,
+} from '~/partials/entity-page/entity-page-inline-description';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS, RelationChipSection } from '~/partials/entity-page/relation-chip-section';
 import { SectionTitle } from '~/partials/entity-page/section-title';
@@ -62,11 +67,15 @@ export function ClaimPageView({
   spaceId,
   initialTabRelations = [],
   tabEntities = [],
+  footer,
+  isEditing = false,
 }: {
   entityId: string;
   spaceId: string;
   initialTabRelations?: Relation[];
   tabEntities?: TabEntity[];
+  footer?: React.ReactNode;
+  isEditing?: boolean;
 }) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
   const pathname = usePathname();
@@ -89,11 +98,18 @@ export function ClaimPageView({
   const topics = React.useMemo(() => relationsOfType(entity?.relations, TOPICS_PROPERTY_ID), [entity?.relations]);
   const tags = React.useMemo(() => relationsOfType(entity?.relations, TAG_PROPERTY_ID), [entity?.relations]);
   const topicIds = React.useMemo(() => topics.map(topic => topic.toEntity.id), [topics]);
+  const hasSources = React.useMemo(
+    () =>
+      (entity?.relations ?? []).some(
+        relation => relation.isDeleted !== true && ID.equals(relation.type.id, SOURCES_PROPERTY_ID)
+      ),
+    [entity?.relations]
+  );
   // Named types only: an unnamed one would render as a raw id, which says less than no chip.
   const typeName = entity?.types.find(type => type.name)?.name ?? null;
   const record = useClaimRecord({ claimId: entityId, spaceId, topicIds });
 
-  const activeTab: ClaimTab =
+  const requestedTab: ClaimTab =
     sidePanelTab?.activeTabId || searchParams.get('tabId')
       ? 'custom'
       : sidePanelTab?.activeSystemTab === 'debates' || pathname.endsWith('/debates')
@@ -105,12 +121,25 @@ export function ClaimPageView({
             : 'overview';
 
   const overviewHref = NavUtils.toEntity(spaceId, entityId);
+  const hrefs = {
+    debates: `${overviewHref}/debates`,
+    claims: `${overviewHref}/claims`,
+    sources: `${overviewHref}/sources`,
+  };
+  const hasDebates = record.debatesLoading || record.debatesError || record.debatesTotal > 0;
+  const hasClaims = record.claimsLoading || record.claimsError || record.claimsTotal > 0;
   const systemTabs = [
     { label: 'Overview', href: overviewHref, sidePanelKey: 'overview' },
-    { label: 'Debates', href: `${overviewHref}/debates`, sidePanelKey: 'debates' },
-    { label: 'Claims', href: `${overviewHref}/claims`, sidePanelKey: 'claims' },
-    { label: 'Sources', href: `${overviewHref}/sources`, sidePanelKey: 'sources' },
+    ...(hasDebates ? [{ label: 'Debates', href: hrefs.debates, sidePanelKey: 'debates' }] : []),
+    ...(hasClaims ? [{ label: 'Claims', href: hrefs.claims, sidePanelKey: 'claims' }] : []),
+    ...(hasSources ? [{ label: 'Sources', href: hrefs.sources, sidePanelKey: 'sources' }] : []),
   ];
+  const activeTab: ClaimTab =
+    (requestedTab === 'debates' && !hasDebates) ||
+    (requestedTab === 'claims' && !hasClaims) ||
+    (requestedTab === 'sources' && !hasSources)
+      ? 'overview'
+      : requestedTab;
 
   if (isLoading && !entity) {
     return (
@@ -133,9 +162,13 @@ export function ClaimPageView({
               which on a claim — a full sentence running to three or four lines — leaves each one
               breaking well short of the measure and reads as wrapping early. Pretty only avoids a
               stranded last word, so the lines fill. */}
-          <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
-            {entity.name ?? entity.id}
-          </h1>
+          {isEditing ? (
+            <EditableHeading entityId={entityId} spaceId={spaceId} fallbackName={entity.name ?? entity.id} />
+          ) : (
+            <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
+              {entity.name ?? entity.id}
+            </h1>
+          )}
 
           {/* Clamped, like entity pages and the side panel (GEO-2772). What is shared is the line
               budget, not the cut: wrapping differs with width, so the route, the side panel and a
@@ -147,13 +180,21 @@ export function ClaimPageView({
               `ClampedText` measures an unclamped clone, so the toggle appears only when something
               is genuinely hidden, and it is unaffected by the naive-overflow bug GEO-2756 fixed in
               the feed's own title. */}
-          {entity.description && (
-            <ClampedText
-              text={entity.description}
-              maxLines={ENTITY_DESCRIPTION_MAX_LINES}
-              variant="body"
-              textClassName="wrap-break-word text-grey-04"
+          {isEditing ? (
+            <EntityPageInlineDescription
+              entityId={entityId}
+              spaceId={spaceId}
+              fallbackDescription={entity.description}
             />
+          ) : (
+            entity.description && (
+              <ClampedText
+                text={entity.description}
+                maxLines={ENTITY_DESCRIPTION_MAX_LINES}
+                variant="body"
+                textClassName="wrap-break-word text-grey-04"
+              />
+            )
           )}
 
           {/* What this is. Topics — what it is *about* — used to sit opposite these, pushed to the
@@ -198,8 +239,9 @@ export function ClaimPageView({
           state={state}
           row={row}
           record={record}
-          hrefs={{ debates: systemTabs[1]!.href, claims: systemTabs[2]!.href }}
+          hrefs={{ debates: hrefs.debates, claims: hrefs.claims }}
         />
+        {footer}
       </div>
     </div>
   );
@@ -287,12 +329,11 @@ function ClaimTabPanel({
 
   return (
     <>
-      {/* The response control is the first Overview section. Its summary is grouped with it because
-          it is the result of the same choice, rather than an activity module between the position
-          options and Activity. */}
+      <ClaimVerdict entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
+      {/* The response control follows the aggregate result, so a reader understands the current
+          split before being asked to add their own position. */}
       <section aria-label="Position response options" className="flex flex-col gap-3">
         <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
-        <ClaimVerdict entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
       </section>
       <ProfileActivitySection kinds={kinds} />
       {/* Last, like the ordinary entity page. An empty thread is an invitation, not absence. */}

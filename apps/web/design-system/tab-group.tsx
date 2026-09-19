@@ -45,6 +45,38 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   const dragStartX = useRef<number>(0);
   const scrollStartLeft = useRef<number>(0);
   const pointerUpHandler = useRef<((e: PointerEvent) => void) | null>(null);
+  const activeTabElement = useRef<HTMLElement | null>(null);
+  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
+
+  const measureActiveTab = React.useCallback(() => {
+    const element = activeTabElement.current;
+    if (!element) {
+      setIndicator(null);
+      return;
+    }
+
+    setIndicator(previous => {
+      const next = { left: element.offsetLeft, width: element.offsetWidth };
+      return previous?.left === next.left && previous.width === next.width ? previous : next;
+    });
+  }, []);
+
+  const registerActiveTab = React.useCallback(
+    (element: HTMLElement | null) => {
+      activeTabElement.current = element;
+      measureActiveTab();
+    },
+    [measureActiveTab]
+  );
+
+  // Re-measure when available tabs settle or responsive tabs appear. The marker stays inside the
+  // scrolling row, so these are the only layout changes that can move it without changing active.
+  React.useLayoutEffect(() => measureActiveTab(), [measureActiveTab, tabs]);
+
+  useEffect(() => {
+    window.addEventListener('resize', measureActiveTab);
+    return () => window.removeEventListener('resize', measureActiveTab);
+  }, [measureActiveTab]);
 
   useEffect(() => {
     const checkScroll = () => {
@@ -145,6 +177,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
                     disabled={t.disabled}
                     hidden={t.hidden}
                     sidePanelKey={t.sidePanelKey}
+                    activeRef={registerActiveTab}
                   />
                 </span>
               ) : (
@@ -155,10 +188,20 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
                   disabled={t.disabled}
                   hidden={t.hidden}
                   sidePanelKey={t.sidePanelKey}
+                  activeRef={registerActiveTab}
                 />
               )}
             </React.Fragment>
           ))}
+          {indicator && (
+            <motion.div
+              aria-hidden
+              initial={false}
+              animate={{ x: indicator.left, width: indicator.width }}
+              transition={{ duration: 0.2 }}
+              className="absolute bottom-0 left-0 z-100 h-px bg-text"
+            />
+          )}
         </div>
         <div className="sticky right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
       </div>
@@ -179,6 +222,7 @@ interface TabProps {
   disabled?: boolean;
   hidden?: boolean;
   sidePanelKey?: string;
+  activeRef: (element: HTMLElement | null) => void;
 }
 
 /** Shared with entity/space `TabGroup` and governance home tab rows (same underline behavior). */
@@ -208,7 +252,7 @@ function tabIdFromEntityTabHref(href: string): string | null {
   return validateEntityId(raw) ? raw : null;
 }
 
-function Tab({ href, label, badge, disabled, hidden, sidePanelKey }: TabProps) {
+function Tab({ href, label, badge, disabled, hidden, sidePanelKey, activeRef }: TabProps) {
   const { editable } = useEditable();
 
   const path = usePathname();
@@ -230,7 +274,7 @@ function Tab({ href, label, badge, disabled, hidden, sidePanelKey }: TabProps) {
 
   if (disabled) {
     return (
-      <div className={tabGroupTabLinkStyles({ active, disabled })}>
+      <div ref={active ? activeRef : undefined} className={tabGroupTabLinkStyles({ active, disabled })}>
         {label}
         {badge && <Badge>{badge}</Badge>}
       </div>
@@ -242,6 +286,7 @@ function Tab({ href, label, badge, disabled, hidden, sidePanelKey }: TabProps) {
   if (sidePanelTab) {
     return (
       <button
+        ref={active ? activeRef : undefined}
         type="button"
         className={tabGroupTabLinkStyles({ active, disabled })}
         onClick={() =>
@@ -250,15 +295,6 @@ function Tab({ href, label, badge, disabled, hidden, sidePanelKey }: TabProps) {
       >
         {label}
         {badge && <Badge>{badge}</Badge>}
-        {active && (
-          <motion.div
-            layoutId="tab-group-active-border"
-            layout
-            initial={false}
-            transition={{ duration: 0.2 }}
-            className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
-          />
-        )}
       </button>
     );
   }
@@ -269,24 +305,16 @@ function Tab({ href, label, badge, disabled, hidden, sidePanelKey }: TabProps) {
     // preserving the offset for all of them lands a reader who switched tabs
     // near the bottom of a long list somewhere past the end of a shorter one.
     //
-    // What it was added for is real — Next's jump to the top makes the underline
-    // fly up through the label, because the shared-layout animation measures the
-    // marker before and after and animates through the scroll delta. That wants
-    // scrolling *to the tab bar* rather than to the top or not at all, which is
-    // a behaviour to design alongside the sticky bar in GEO-2923 rather than a
-    // flag to set here.
-    <Link className={tabGroupTabLinkStyles({ active, disabled })} href={href} prefetch>
+    // The underline is one sibling owned by `TabGroup`, animated with x + width only. A shared
+    // layout marker measured the page's vertical scroll between routes and flew through the label.
+    <Link
+      ref={active ? activeRef : undefined}
+      className={tabGroupTabLinkStyles({ active, disabled })}
+      href={href}
+      prefetch
+    >
       {label}
       {badge && <Badge>{badge}</Badge>}
-      {active && (
-        <motion.div
-          layoutId="tab-group-active-border"
-          layout
-          initial={false}
-          transition={{ duration: 0.2 }}
-          className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
-        />
-      )}
     </Link>
   );
 }

@@ -44,9 +44,9 @@ export function ClaimSourcesTab({
     staleTime: 30_000,
   });
 
-  if (sourceIds.length === 0) {
-    return <p className="py-6 text-metadata text-grey-04">No sources have been linked to this claim yet.</p>;
-  }
+  // The parent removes the Sources tab when this is empty. Keep the panel empty too in case a
+  // stale route or side-panel selection briefly asks for it while relations are changing.
+  if (sourceIds.length === 0) return null;
 
   return (
     <div className="flex flex-col gap-4">
