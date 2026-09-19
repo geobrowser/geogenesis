@@ -88,71 +88,187 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   // cannot shift the selection out from under them.
   const selected = available.find(kind => kind.key === selectedKey) ?? available[0];
 
+  const { sectionRef, reserveRef, prepareSwitch } = useMobileActivityHeightReserve(selected?.key);
+
   // Nothing at all rather than an empty card. A heading over a blank space reads
   // as a page that failed to load, and most accounts have never been in a debate.
   if (kinds.some(kind => kind.isLoading) || available.length === 0 || !selected) return null;
 
   return (
-    <section className="flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white">
-      {/* The toggles sit to the right of the heading, and wrap below it rather
-          than squeezing into it on a narrow screen. */}
-      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-divider px-4 py-3">
-        <h3 className="text-metadataMedium text-text">Activity</h3>
-
-        {/* Only when there is a choice to make. One pill on its own is a label
-            dressed up as a control. */}
-        {available.length > 1 && (
-          <div className="flex flex-wrap items-center gap-2">
-            {available.map(kind => {
-              const isSelected = kind.key === selected.key;
-
-              return (
-                <button
-                  key={kind.key}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => setSelectedKey(kind.key)}
-                  className={cx(
-                    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-smallButton transition-colors',
-                    isSelected
-                      ? 'border-text bg-text text-white'
-                      : 'border-grey-02 text-grey-04 hover:border-text hover:text-text'
-                  )}
-                >
-                  {kind.label}
-                  <span className={cx('tabular-nums', isSelected ? 'text-white/70' : 'text-grey-03')}>
-                    {kind.isCountUnavailable ? '—' : kind.total.toLocaleString()}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </header>
-
-      {selected.isError && selected.rows.length === 0 ? (
-        /*
-         * No retry here on purpose. This card is a summary; the tab its count
-         * links to holds the authoritative list and offers the retry, so a
-         * second control here would be a second thing to keep in step.
-         */
-        <p className="px-4 py-6 text-metadata text-grey-04">Couldn’t load {selected.label.toLowerCase()}.</p>
-      ) : (
-        <ActivityGallery
-          rows={selected.rows}
-          responseByClaimId={selected.responseByClaimId}
-          personName={selected.personName}
-        />
-      )}
-      <Link
-        href={selected.href}
-        className="flex items-center justify-center gap-2 border-t border-divider py-3 text-metadataMedium text-grey-04 transition-colors hover:text-text"
+    <div>
+      <section
+        ref={sectionRef}
+        data-activity-section
+        className="flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white"
       >
-        {selected.seeAllLabel}
-        <RightArrowLongSmall />
-      </Link>
-    </section>
+        {/* The toggles sit to the right of the heading, and wrap below it rather
+          than squeezing into it on a narrow screen. */}
+        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-divider px-4 py-3">
+          <h3 className="text-metadataMedium text-text">Activity</h3>
+
+          {/* Only when there is a choice to make. One pill on its own is a label
+            dressed up as a control. */}
+          {available.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {available.map(kind => {
+                const isSelected = kind.key === selected.key;
+
+                return (
+                  <button
+                    key={kind.key}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => {
+                      if (isSelected) return;
+
+                      // Put the reserve in the document before React replaces
+                      // the tall view. Waiting for the next layout effect would
+                      // let the shorter DOM clamp `scrollY` while it is being
+                      // measured, before the reserve could help.
+                      prepareSwitch();
+                      setSelectedKey(kind.key);
+                    }}
+                    className={cx(
+                      'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-smallButton transition-colors',
+                      isSelected
+                        ? 'border-text bg-text text-white'
+                        : 'border-grey-02 text-grey-04 hover:border-text hover:text-text'
+                    )}
+                  >
+                    {kind.label}
+                    <span className={cx('tabular-nums', isSelected ? 'text-white/70' : 'text-grey-03')}>
+                      {kind.isCountUnavailable ? '—' : kind.total.toLocaleString()}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </header>
+
+        {selected.isError && selected.rows.length === 0 ? (
+          /*
+           * No retry here on purpose. This card is a summary; the tab its count
+           * links to holds the authoritative list and offers the retry, so a
+           * second control here would be a second thing to keep in step.
+           */
+          <p className="px-4 py-6 text-metadata text-grey-04">Couldn’t load {selected.label.toLowerCase()}.</p>
+        ) : (
+          <ActivityGallery
+            rows={selected.rows}
+            responseByClaimId={selected.responseByClaimId}
+            personName={selected.personName}
+          />
+        )}
+        <Link
+          href={selected.href}
+          className="flex items-center justify-center gap-2 border-t border-divider py-3 text-metadataMedium text-grey-04 transition-colors hover:text-text"
+        >
+          {selected.seeAllLabel}
+          <RightArrowLongSmall />
+        </Link>
+      </section>
+
+      {/*
+       * On narrow screens this supplies only the document height missing below
+       * the current viewport. The reserve sits outside the card, so Claims
+       * stays compact while switching away from the taller Debates view cannot
+       * clamp the viewport upward. Profiles with content below Activity need no
+       * reserve at all, and desktop keeps its natural layout.
+       */}
+      <div ref={reserveRef} data-activity-scroll-reserve aria-hidden className="pointer-events-none md:hidden" />
+    </div>
   );
+}
+
+/**
+ * Preserve the mobile scroll range while Activity views of different heights
+ * are swapped. There is no scroll position to restore when the new document is
+ * shorter than the viewport's old bottom; keeping only that missing height in
+ * the document is what prevents the browser from clamping `scrollY`.
+ *
+ * The reserve is a sibling of the card rather than a `min-height` on it. That
+ * leaves the selected gallery and its footer at their natural height instead
+ * of putting a short Claims row inside a debate-sized white card.
+ */
+function useMobileActivityHeightReserve(selectedKey: string | undefined) {
+  const sectionRef = React.useRef<HTMLElement | null>(null);
+  const reserveRef = React.useRef<HTMLDivElement | null>(null);
+  const swapRef = React.useRef<{
+    width: number;
+    sectionHeight: number;
+    naturalDocumentHeight: number;
+    viewportBottom: number;
+  } | null>(null);
+
+  const prepareSwitch = React.useCallback(() => {
+    const section = sectionRef.current;
+    const reserve = reserveRef.current;
+    if (!section || !reserve) return;
+
+    const { width, height } = section.getBoundingClientRect();
+    const currentReserve = reserve.getBoundingClientRect().height;
+    swapRef.current = {
+      width,
+      sectionHeight: height,
+      naturalDocumentHeight: document.documentElement.scrollHeight - currentReserve,
+      viewportBottom: window.scrollY + window.innerHeight,
+    };
+
+    // Deliberately over-reserve before the swap. The layout effect replaces
+    // this with the exact missing scroll range before the browser paints the
+    // new view.
+    reserve.style.height = `${height}px`;
+  }, []);
+
+  React.useLayoutEffect(() => {
+    const section = sectionRef.current;
+    const reserve = reserveRef.current;
+    if (!section || !reserve) return;
+
+    const sync = () => {
+      const { width, height } = section.getBoundingClientRect();
+      const swap = swapRef.current;
+
+      // A new layout width (rotation, resized side panel, breakpoint change)
+      // has different card wrapping. Drop the old calculation; the next tab
+      // switch will establish one for the new layout.
+      if (!swap || Math.abs(swap.width - width) > 1) {
+        swapRef.current = null;
+        reserve.style.height = '0px';
+        return;
+      }
+
+      const naturalDocumentHeight = swap.naturalDocumentHeight - swap.sectionHeight + height;
+      const missingScrollRange = Math.max(0, swap.viewportBottom - naturalDocumentHeight);
+
+      reserve.style.height = `${missingScrollRange}px`;
+    };
+
+    sync();
+
+    // Claim cards grow as their queries land. Shrink the reserve by the same
+    // amount so the overall document height stays steady rather than drifting.
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(sync);
+    observer.observe(section);
+    const onScroll = () => {
+      const swap = swapRef.current;
+      if (!swap) return;
+
+      // Once the reader moves up, do not retain space they no longer need.
+      swap.viewportBottom = Math.min(swap.viewportBottom, window.scrollY + window.innerHeight);
+      sync();
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, [selectedKey]);
+
+  return { sectionRef, reserveRef, prepareSwitch };
 }
 
 function ActivityGallery({

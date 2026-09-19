@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -47,6 +47,48 @@ const kind = (over: Partial<React.ComponentProps<typeof ProfileActivitySection>[
   ...over,
 });
 
+const rect = (width: number, height: number): DOMRect => ({
+  x: 0,
+  y: 0,
+  top: 0,
+  right: width,
+  bottom: height,
+  left: 0,
+  width,
+  height,
+  toJSON: () => ({}),
+});
+
+/** A 390×600 mobile viewport sitting 400px down a synthetic profile page. */
+function mockMobileActivityGeometry(pageHeightWithoutActivity: number) {
+  const originalRect = HTMLElement.prototype.getBoundingClientRect;
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    if ('activitySection' in this.dataset) {
+      const debatesSelected =
+        this.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.textContent?.includes('Debates');
+      return rect(390, debatesSelected ? 500 : 250);
+    }
+
+    if ('activityScrollReserve' in this.dataset) {
+      return rect(390, Number.parseFloat(this.style.height) || 0);
+    }
+
+    return originalRect.call(this);
+  });
+
+  vi.spyOn(window, 'scrollY', 'get').mockReturnValue(400);
+  vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(600);
+  vi.spyOn(document.documentElement, 'scrollHeight', 'get').mockImplementation(() => {
+    const section = document.querySelector<HTMLElement>('[data-activity-section]');
+    const reserve = document.querySelector<HTMLElement>('[data-activity-scroll-reserve]');
+    return (
+      pageHeightWithoutActivity +
+      (section?.getBoundingClientRect().height ?? 0) +
+      (reserve?.getBoundingClientRect().height ?? 0)
+    );
+  });
+}
+
 /**
  * What the Activity card says when half of it did not arrive (GEO-2859).
  *
@@ -56,7 +98,10 @@ const kind = (over: Partial<React.ComponentProps<typeof ProfileActivitySection>[
  * no positions, while the rail beside it counted 208.
  */
 describe('ProfileActivitySection', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
 
   it('renders nothing when both kinds are genuinely empty', () => {
     // Most accounts have never been in a debate; a heading over blank space
@@ -101,5 +146,38 @@ describe('ProfileActivitySection', () => {
     );
 
     expect(screen.getByRole('button', { name: /Debates/ })).toHaveTextContent('—');
+  });
+
+  it('reserves the lost mobile document height while switching between kinds', () => {
+    mockMobileActivityGeometry(600);
+
+    const { container } = render(
+      <ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />
+    );
+    const reserve = container.querySelector<HTMLElement>('[data-activity-scroll-reserve]');
+
+    expect(reserve).toHaveStyle({ height: '0px' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(reserve).toHaveStyle({ height: '150px' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Debates/ }));
+    expect(reserve).toHaveStyle({ height: '0px' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(reserve).toHaveStyle({ height: '150px' });
+  });
+
+  it('adds no reserve when content below Activity already preserves the scroll range', () => {
+    mockMobileActivityGeometry(900);
+
+    const { container } = render(
+      <ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />
+    );
+    const reserve = container.querySelector<HTMLElement>('[data-activity-scroll-reserve]');
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+
+    expect(reserve).toHaveStyle({ height: '0px' });
   });
 });
