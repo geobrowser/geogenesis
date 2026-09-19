@@ -288,9 +288,17 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
           centre on the seam rather than the box that contains them. Calibre's metrics are
           asymmetric, so a plainly-centred pill puts the type about 2px low — visible on a rule the
           eye is already using the seam as. Figma's own frame specifies the same trim. Browsers
-          without it fall back to the box being centred, which is where this started. */}
+          without it fall back to the box being centred, which is where this started.
+
+          90% of the width on a phone, 70% above it. A subtitle is one whole transcript segment and
+          those are short: across 7,359 of them the median is 27 characters, the 99th is 33, and the
+          longest in the corpus is 41. At the explore card's 484px tile 70% leaves 327px of line and
+          the longest segment measures 284, so on a desktop they already never wrap and widening
+          would only loosen the pill around the same one line. A ~355px phone tile leaves 236px,
+          which is where a segment starts folding onto a second line and taking the caption off the
+          seam. */}
       {subtitle && (
-        <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic]">
+        <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
           {subtitle}
         </span>
       )}
