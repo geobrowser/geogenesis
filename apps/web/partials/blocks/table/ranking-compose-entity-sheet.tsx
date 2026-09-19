@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-panel-popover-portal';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
+import { preventMobileSheetPullToRefresh, shouldStartMobileSheetDrag } from '~/core/utils/mobile-sheet-drag';
 
 import { EntitySidePanelSurface } from '~/partials/entity-page/entity-side-panel';
 
@@ -34,31 +35,11 @@ type Props = {
 };
 
 const ENTITY_SHEET_TOP_OFFSET_PX = 200;
-const ENTITY_SHEET_SCROLL_SELECTOR = '[data-entity-side-panel-scroll]';
-
-function isInteractiveDragTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
-  return Boolean(
-    target.closest(
-      'button, a, input, textarea, select, [role="button"], [contenteditable="true"], [data-no-sheet-drag]'
-    )
-  );
-}
-
-function shouldStartEntitySheetDrag(event: React.PointerEvent, root: HTMLElement): boolean {
-  if (isInteractiveDragTarget(event.target)) return false;
-
-  const scrollEl = root.querySelector<HTMLElement>(ENTITY_SHEET_SCROLL_SELECTOR);
-  if (scrollEl?.contains(event.target as Node) && scrollEl.scrollTop > 0) {
-    return false;
-  }
-
-  return true;
-}
 
 export function RankingComposeEntitySheet({ target, onClose }: Props) {
   const isMobile = useIsMobileLayout();
   const setRemoveScrollShard = useSetAtom(rankingComposeRemoveScrollShardAtom);
+  const mobileOverlayRef = React.useRef<HTMLDivElement | null>(null);
 
   const [portalTarget, setPortalTarget] = React.useState<HTMLElement | null>(null);
 
@@ -66,6 +47,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
 
   const overlayRef = React.useCallback(
     (node: HTMLDivElement | null) => {
+      mobileOverlayRef.current = node;
       setRemoveScrollShard(node);
     },
     [setRemoveScrollShard]
@@ -74,6 +56,11 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
   React.useLayoutEffect(() => {
     return () => setRemoveScrollShard(null);
   }, [setRemoveScrollShard]);
+
+  React.useEffect(() => {
+    if (!isMobile || !target || !mobileOverlayRef.current) return;
+    return preventMobileSheetPullToRefresh(mobileOverlayRef.current);
+  }, [isMobile, portalTarget, target]);
 
   React.useLayoutEffect(() => {
     setPortalTarget(document.body);
@@ -108,7 +95,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
   };
 
   const handleOverlayPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!isMobile || !shouldStartEntitySheetDrag(event, event.currentTarget)) return;
+    if (!isMobile || !shouldStartMobileSheetDrag(event.target, event.currentTarget)) return;
     dragControls.start(event);
   };
 
@@ -122,7 +109,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
         <motion.div
           key={`${target.spaceId}:${target.entityId}`}
           ref={overlayRef}
-          className="fixed inset-0 z-[210]"
+          className="fixed inset-0 z-[210] overscroll-none"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -153,14 +140,18 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
             className={cx(
               'shadow-2xl absolute z-1 flex flex-col overflow-hidden bg-white',
               isMobile
-                ? 'rounded-t-2xl inset-x-0 bottom-0'
+                ? 'rounded-t-2xl inset-x-0 bottom-0 overscroll-none'
                 : 'rounded-l-2xl inset-y-0 right-0 w-[min(600px,100vw)] border-l border-grey-02'
             )}
             style={isMobile ? { top: ENTITY_SHEET_TOP_OFFSET_PX } : undefined}
             onClick={event => event.stopPropagation()}
           >
             {isMobile ? (
-              <div className="flex shrink-0 justify-center pt-2 pb-1" aria-hidden>
+              <div
+                className="flex shrink-0 cursor-grab touch-none justify-center pt-2 pb-1 active:cursor-grabbing"
+                data-mobile-sheet-drag-handle
+                aria-hidden
+              >
                 <div className="h-1 w-10 rounded-full bg-grey-02" />
               </div>
             ) : null}

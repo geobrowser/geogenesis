@@ -707,6 +707,13 @@ body[data-slide-up-open] [data-radix-popper-content-wrapper] {
 
 /* Ranking compose edit mode (mobile): hide app navbar and use full viewport. */
 @media (max-width: 1023px) {
+  html[data-entity-side-panel-open],
+  html[data-entity-side-panel-open] body,
+  html[data-ranking-compose-entity-sheet-open],
+  html[data-ranking-compose-entity-sheet-open] body {
+    overscroll-behavior-y: none;
+  }
+
   html[data-ranking-compose-edit] [data-app-navbar],
   body[data-ranking-compose-edit] [data-app-navbar] {
     display: none !important;
