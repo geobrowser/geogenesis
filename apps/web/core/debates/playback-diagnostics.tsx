@@ -96,12 +96,14 @@ function shownFraction(element: Element) {
 
 const isReallyVisible = (element: Element) => shownFraction(element) > 0;
 
-function describe(video: HTMLVideoElement, index: number) {
+const DEBATE_PLAYER_SELECTOR = '[data-debate-ready]';
+
+function describe(video: HTMLVideoElement, label: string) {
   const shown = shownFraction(video);
   const calls = traces.get(video) ?? [];
 
   return [
-    `v${index}`,
+    label,
     `${Math.round(shown * 100)}% shown`,
     video.paused ? 'PAUSED' : 'playing',
     `t=${video.currentTime.toFixed(1)}`,
@@ -138,29 +140,42 @@ export function PlaybackDiagnostics() {
     const read = () => {
       const all = [...document.querySelectorAll('video')];
       const visible = all.filter(isReallyVisible);
+      const players = [...document.querySelectorAll(DEBATE_PLAYER_SELECTOR)].filter(isReallyVisible).slice(0, 2);
 
       /*
-       * The player's own conclusion, read off the attributes it publishes.
+       * Each card reports its own videos, underneath it.
        *
-       * The trace above says what the browser did; this says what the app made
-       * of it, and the gap between the two is where these faults live.
+       * The conclusion and the videos it is about used to be two lists built independently and
+       * lined up by position — `card0` beside `v0`, which was whatever came first in the
+       * document. Explore opens with a hero carousel above the feed, and any entity page can
+       * carry video of its own, so `v0` was regularly some unrelated element while `card0`
+       * described a debate below it. That reads as a card playing a video it has never touched,
+       * and this readout exists precisely because wrong measurements sent this investigation
+       * after causes that were never there.
+       *
+       * So the pairing is structural now: a card's videos are the ones inside it.
        */
-      const players = [...document.querySelectorAll('[data-debate-ready]')]
-        .filter(isReallyVisible)
-        .slice(0, 2)
-        .map(
-          (player, index) =>
-            `card${index} · ready=${player.getAttribute('data-debate-ready')}` +
-            ` active=${player.getAttribute('data-debate-active')}` +
-            ` playing=${player.getAttribute('data-debate-playing')}` +
-            ` blocked=${player.getAttribute('data-debate-autoplay-blocked')}` +
-            ` playBtn=${player.querySelectorAll('[aria-label="Resume debate"]').length}`
-        );
+      const cards = players.flatMap((player, index) => [
+        `card${index} · ready=${player.getAttribute('data-debate-ready')}` +
+          ` active=${player.getAttribute('data-debate-active')}` +
+          ` playing=${player.getAttribute('data-debate-playing')}` +
+          ` blocked=${player.getAttribute('data-debate-autoplay-blocked')}` +
+          ` playBtn=${player.querySelectorAll('[aria-label="Resume debate"]').length}`,
+        ...[...player.querySelectorAll('video')].map((video, slot) => `  ${describe(video, `card${index}.v${slot}`)}`),
+      ]);
+
+      // Media the debate feed does not own still matters — it competes for the same decoders —
+      // but it is counted, not described, so it can never be mistaken for a card's own video.
+      const strays = visible.filter(video => video.closest(DEBATE_PLAYER_SELECTOR) === null);
 
       setLines([
         `${all.length} video(s) on the page, ${visible.length} on screen, ${all.filter(v => !v.paused).length} playing`,
-        ...(players.length > 0 ? players : ['no debate player on screen']),
-        ...visible.slice(0, 4).map((video, index) => describe(video, index)),
+        ...(cards.length > 0 ? cards : ['no debate player on screen']),
+        ...(strays.length > 0
+          ? [
+              `${strays.length} other video(s) on screen, outside any debate card (${strays.filter(v => !v.paused).length} playing)`,
+            ]
+          : []),
         // A video running where nobody can see it is its own fault and worth
         // naming separately.
         ...all
@@ -200,8 +215,10 @@ export function PlaybackDiagnostics() {
           {copied ? 'copied' : 'copy'}
         </button>
       </div>
-      {lines.map(line => (
-        <div key={line}>{line}</div>
+      {lines.map((line, index) => (
+        // Keyed by position: this is a readout regenerated whole every 500ms, and two cards in
+        // the same state produce byte-identical rows.
+        <div key={index}>{line}</div>
       ))}
     </div>
   );
