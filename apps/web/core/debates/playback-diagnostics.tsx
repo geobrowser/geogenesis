@@ -36,7 +36,9 @@ let patched = false;
  *
  * Patched once on the prototype rather than per element: the cards mount and
  * unmount as the feed scrolls, and an element that was never wrapped is exactly
- * the one whose silence needs explaining.
+ * the one whose silence needs explaining. Never unpatched — turning the flag off
+ * leaves the wrapper in place until the next page load, which costs a push to a
+ * `WeakMap` per call and keeps the trace intact for a reading taken right after.
  */
 function patchMediaElement() {
   if (patched || typeof HTMLMediaElement === 'undefined') return;
@@ -114,6 +116,16 @@ export function PlaybackDiagnostics() {
   const enabled = usePlaybackDiagnosticsEnabled();
   const [lines, setLines] = React.useState<string[]>([]);
   const [copied, setCopied] = React.useState(false);
+
+  // The confirmation has to expire, or the button reads "copied" over a readout that has moved on
+  // since — and this one repaints every 500ms.
+  React.useEffect(() => {
+    if (!copied) return;
+
+    const timeout = window.setTimeout(() => setCopied(false), 1_500);
+
+    return () => window.clearTimeout(timeout);
+  }, [copied]);
 
   React.useEffect(() => {
     if (!enabled) return;

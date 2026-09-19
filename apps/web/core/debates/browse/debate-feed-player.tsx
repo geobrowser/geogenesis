@@ -84,6 +84,15 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     seekBothRaw(seconds);
   };
 
+  /**
+   * Stopped, and only a tap will start it.
+   *
+   * The two ways in are different facts — the viewer paused, or the browser
+   * refused — and identical from here: the video is not running and the control
+   * is the only answer either accepts.
+   */
+  const awaitingTap = userPaused || autoplayBlocked;
+
   // Autoplay the debate that's in view; pause the rest. Respect an explicit
   // user pause so scrolling back doesn't fight the viewer, and don't resume
   // mid-scrub.
@@ -97,15 +106,6 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
       suspend();
     }
   }, [active, autoplayBlocked, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend, userPaused]);
-
-  /**
-   * Stopped, and only a tap will start it.
-   *
-   * The two ways in are different facts — the viewer paused, or the browser
-   * refused — and identical from here: the video is not running and the control
-   * is the only answer either accepts.
-   */
-  const awaitingTap = userPaused || autoplayBlocked;
 
   const showControls = ready && (awaitingTap || (playbackEnded && !hasVoted));
   // End of an unvoted debate offers a replay; a stopped one shows the paused glyph.

@@ -500,12 +500,6 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
   });
 
   /**
-   * The retry is the only point where this function starts something it did not start, and it is
-   * reached after a confirm window it spent asleep — so a pause or a scroll-away routinely lands
-   * in between. A caller that checks ownership only once this returns is too late: `play()` has
-   * already been called, and no state check can take it back.
-   */
-  /**
    * The element iOS actually gives you when it refuses (GEO-2978).
    *
    * `play()` sets `paused` false synchronously and only then rejects; the user agent pauses it
@@ -536,7 +530,7 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
     const a = refusingVideo();
     const b = refusingVideo();
 
-    expect(await playBothWithMutedFallback(a, b)).toBe('blocked');
+    expect(await playBothWithMutedFallback(a, b)).toBe('refused');
   });
 
   /**
@@ -558,7 +552,7 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
       return video;
     };
 
-    expect(await playBothWithMutedFallback(stuck(), stuck())).toBe('blocked');
+    expect(await playBothWithMutedFallback(stuck(), stuck())).toBe('refused');
   });
 
   /**
@@ -578,7 +572,26 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
     };
     b.play = a.play.bind(b);
 
-    expect(await playBothWithMutedFallback(a, b, { isCancelled: () => true })).toBe('blocked');
+    expect(await playBothWithMutedFallback(a, b, { isCancelled: () => true })).toBe('refused');
+  });
+
+  /**
+   * A start that never confirms is not a refusal, and the difference is the caller's whole
+   * behaviour: 'refused' latches a tap control and stops the autoplay effect retrying, so
+   * reporting it for a stall would leave a buffering card behind a dead button with nothing to
+   * say for itself.
+   */
+  it('reports a stalled start as blocked, not refused', async () => {
+    // Resolves, never un-pauses: a stall, a missing recording, a decode failure.
+    const stalled = () => {
+      const video = fakeVideo({ muted: true, blockUnmuted: false });
+      video.play = async () => {
+        video.plays += 1;
+      };
+      return video;
+    };
+
+    expect(await playBothWithMutedFallback(stalled(), stalled())).toBe('blocked');
   });
 
   /** But an interruption of ours is still a cancellation, not a refusal. */
@@ -594,6 +607,12 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
     expect(await playBothWithMutedFallback(a, b, { isCancelled: () => true })).toBe('cancelled');
   });
 
+  /**
+   * The retry is the only point where this function starts something it did not start, and it is
+   * reached after a confirm window it spent asleep — so a pause or a scroll-away routinely lands
+   * in between. A caller that checks ownership only once this returns is too late: `play()` has
+   * already been called, and no state check can take it back.
+   */
   it('does not retry when the attempt was cancelled while confirming', async () => {
     const a = fakeVideo({ muted: false });
     const b = fakeVideo({ muted: false });

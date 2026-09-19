@@ -171,6 +171,24 @@ function fakeVideo() {
     browserResume() {
       video.paused = false;
     },
+    /** Resolve the play() without the element ever starting — a stall, or a recording that 404s. */
+    stallPlay() {
+      video.pending?.resolve();
+      video.pending = null;
+    },
+    /**
+     * Take the in-flight play() aside and hand back the way to refuse it later.
+     *
+     * A real element only tracks its newest `play()`, and so does this one. Detaching is how a
+     * test can start a second attempt over the first and still let the first answer afterwards,
+     * which is the ordering that matters here: attempts overlap by design, and the later answer
+     * is not always the later attempt's.
+     */
+    detachPlay() {
+      const detached = video.pending;
+      video.pending = null;
+      return () => detached?.reject(new Error('play() failed because the user agent does not allow it'));
+    },
   };
   return video as unknown as HTMLVideoElement & {
     plays: number;
@@ -178,6 +196,8 @@ function fakeVideo() {
     rejectPlay: () => void;
     browserPause: () => void;
     browserResume: () => void;
+    stallPlay: () => void;
+    detachPlay: () => () => void;
   };
 }
 
@@ -312,6 +332,62 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
 
     expect(result.current.autoplayBlocked).toBe(false);
     expect(result.current.playing).toBe(true);
+  });
+
+  /**
+   * The other side of letting a refusal outlive its attempt (GEO-2978).
+   *
+   * Recording it above the ownership check is what makes it reach the card at all, but it also
+   * lets a stale attempt speak after a newer one has won. Here the refused attempt answers last,
+   * with the video already running — and if that answer latched, the card would draw the tap
+   * control over a playing video and the tap would stop it, which is the symptom this whole
+   * change exists to remove.
+   */
+  it('does not let a stale refusal contradict a newer resume that started', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      // Hold the first attempt's play() aside so the second can run over it.
+      const refuseFirst1 = slot1.detachPlay();
+      const refuseFirst2 = slot2.detachPlay();
+
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+
+      // Only now does the browser answer the attempt it was asked first.
+      refuseFirst1();
+      refuseFirst2();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.playing).toBe(true);
+    expect(result.current.autoplayBlocked).toBe(false);
+  });
+
+  /**
+   * A start that never confirms is not the browser refusing, and the two cannot share an
+   * outcome: a refusal latches the tap control and stops the autoplay effect retrying, so a
+   * stalled card would sit behind a button that does nothing, with no reason given.
+   */
+  it('keeps the error, and the retry, for a start that stalls rather than being refused', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.stallPlay();
+      slot2.stallPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.playing).toBe(false);
+    expect(result.current.autoplayBlocked).toBe(false);
+    expect(result.current.error).toBe('Could not play both videos. Try Play again.');
   });
 
   /** The positive control: an uninterrupted resume still reports playback. */

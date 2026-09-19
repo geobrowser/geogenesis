@@ -240,7 +240,17 @@ export function speakerLabel(participant: Pick<DebateParticipant, 'display_name'
 /** The two elements this helper needs, so tests do not have to build a whole `HTMLVideoElement`. */
 export type PlayableVideo = Pick<HTMLVideoElement, 'muted' | 'paused'> & { play: () => Promise<void> };
 
-export type PlayBothOutcome = 'playing' | 'playing-muted' | 'blocked' | 'cancelled';
+/**
+ * `'refused'` and `'blocked'` are both "it did not start", and the difference between them is
+ * whether trying again could ever work.
+ *
+ * `'refused'` is the browser's answer — `NotAllowedError`, autoplay policy, iOS in Low Power Mode
+ * — and it will be the same answer to the same question, so the only way forward is a control the
+ * viewer taps. `'blocked'` is everything else that failed to confirm: a stalled buffer, a missing
+ * recording, a decode failure. Those are worth retrying and worth saying out loud, so folding them
+ * into `'refused'` would leave a card sitting silently behind a play button that does nothing.
+ */
+export type PlayBothOutcome = 'playing' | 'playing-muted' | 'refused' | 'blocked' | 'cancelled';
 
 export type PlayBothOptions = {
   /** Injectable so tests do not wait on real timers. */
@@ -367,7 +377,7 @@ export async function playBothWithMutedFallback(
    * below is the thing that usually turns a refusal into playback, and skipping
    * it to report early would lose real playback to protect a flag.
    */
-  if (first.refused && primary.muted && secondary.muted) return 'blocked';
+  if (first.refused && primary.muted && secondary.muted) return 'refused';
 
   // Someone paused these, or scrolled them off screen, while the confirm above was polling. The
   // retry would start them again — and the caller checking ownership after this returns cannot
@@ -393,5 +403,7 @@ export async function playBothWithMutedFallback(
 
   const retry = await attempt();
 
-  return retry.running && !retry.refused ? 'playing-muted' : 'blocked';
+  if (retry.running && !retry.refused) return 'playing-muted';
+
+  return first.refused || retry.refused ? 'refused' : 'blocked';
 }
