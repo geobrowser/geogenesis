@@ -284,6 +284,7 @@ describe('ClaimPageView topics', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(screen.getByTestId('chip-section')).toHaveAttribute('data-label', 'Topics');
+    expect(screen.getByTestId('activity').nextElementSibling).toBe(screen.getByTestId('chip-section'));
   });
 
   it('hands the section the topic relations, scoped to the viewing space', () => {

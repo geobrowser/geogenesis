@@ -224,12 +224,6 @@ export function ClaimPageView({
           </div>
         </header>
 
-        {/* The topic view's Subtopics, drawing a claim's Topics (GEO-2781) — same question for the
-            reader, so the same answer rather than two that look alike until one of them changes.
-            Directly under the header, where the topic view puts its own: on a claim the thing worth
-            offering before the argument itself is somewhere else to take it. */}
-        <RelationChipSection label="Topics" relations={topics} spaceId={spaceId} />
-
         <EntityTabs
           entityId={entityId}
           spaceId={spaceId}
@@ -250,6 +244,7 @@ export function ClaimPageView({
           state={state}
           row={row}
           record={record}
+          topics={topics}
           hrefs={{ debates: hrefs.debates, claims: hrefs.claims }}
         />
         {footer}
@@ -268,6 +263,7 @@ function ClaimTabPanel({
   state,
   row,
   record,
+  topics,
   hrefs,
 }: {
   activeTab: ClaimTab;
@@ -279,6 +275,7 @@ function ClaimTabPanel({
   state: ClaimResponseState;
   row: DebateClaim | null;
   record: ReturnType<typeof useClaimRecord>;
+  topics: Relation[];
   hrefs: { debates: string; claims: string };
 }) {
   if (activeTab === 'custom') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
@@ -347,6 +344,10 @@ function ClaimTabPanel({
         <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
       </section>
       <ProfileActivitySection kinds={kinds} />
+      {/* The topic view's Subtopics, drawing a claim's Topics (GEO-2781) — same question for the
+          reader, so the same shared section rather than two implementations. On a claim, Topics
+          belong to the Overview's supporting context and follow its Activity record. */}
+      <RelationChipSection label="Topics" relations={topics} spaceId={spaceId} />
       {/* Last, like the ordinary entity page. An empty thread is an invitation, not absence. */}
       <CommentSection entityId={entityId} spaceId={spaceId} />
     </>
