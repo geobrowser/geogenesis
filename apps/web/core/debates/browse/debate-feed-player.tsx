@@ -134,17 +134,74 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   // Held open by the chip rather than by the pointer — the only way in on a touch screen, where
   // there is no hover to end and so no hover to hold it.
   const [pinnedSlot, setPinnedSlot] = React.useState<number | null>(null);
+  /** Whether the pointer is over the video *above* this slot's live card — see `claimsOpenFor`. */
+  const [aboveCornerSlot, setAboveCornerSlot] = React.useState<number | null>(null);
 
   /** The same condition the stack is given, so the corner's box can cap itself only when open. */
   const claimsOpenFor = (slot: number) => {
     // A backlog opened on purpose stays open, and a claim arriving lands at the bottom of it —
-    // that is the whole point of having opened it.
-    if (pinnedSlot === slot) return true;
-    // Hover does not get to do that. A claim being presented is the thing the viewer came for, and
-    // swapping it for a scrollable list the moment the pointer crosses the tile takes it away
-    // mid-sentence. The backlog is what the corner offers in the silences.
-    const live = ticker.cardsBySlot.get(slot)?.length ?? 0;
-    return live === 0 && (pointerOverSlot === slot || focusedSlot === slot);
+    // that is the whole point of having opened it. Same for a keyboard that has tabbed into it.
+    if (pinnedSlot === slot || focusedSlot === slot) return true;
+    if (pointerOverSlot !== slot) return false;
+    // With nothing live, anywhere over the tile asks for the backlog. With a claim on screen, only
+    // the video *above* it does: the card's own band belongs to the card, so a pointer resting
+    // there — or travelling through it — cannot swap the claim out mid-sentence.
+    const live = (ticker.cardsBySlot.get(slot)?.length ?? 0) > 0;
+    return !live || aboveCornerSlot === slot;
+  };
+
+  /**
+   * The top edge of the live card, in viewport coordinates, per slot.
+   *
+   * Remembered rather than measured live, because opening the backlog makes the corner taller and
+   * moves its top edge up past the pointer. Test against that and the pointer would be above the
+   * corner, then inside it, then above it again — the list would flicker open and shut under a
+   * stationary mouse. The line stays where the *card* drew it.
+   */
+  const liveCornerTop = React.useRef(new Map<number, number>());
+
+  /**
+   * The pointer moving over, or leaving, one debater's tile.
+   *
+   * Filtered to a real mouse. Touch browsers synthesise `pointerenter` from a tap, so without this
+   * every tap on the video — including the tap that pauses it — would throw the claim corner open,
+   * and nothing would close it again since there is no corresponding leave. On touch the chip is
+   * the way in, deliberately and only.
+   *
+   * Leaving also clears the pin, so a mouse user who clicked the chip and then moved away does not
+   * leave the corner stuck open behind them.
+   */
+  const onTileHover = (slot: number) => (event: React.PointerEvent, hovered: boolean) => {
+    if (event.pointerType !== 'mouse') return;
+    const clearSlot = (current: number | null) => (current === slot ? null : current);
+
+    if (!hovered) {
+      setPointerOverSlot(clearSlot);
+      setAboveCornerSlot(clearSlot);
+      setPinnedSlot(clearSlot);
+      liveCornerTop.current.delete(slot);
+      return;
+    }
+
+    setPointerOverSlot(slot);
+
+    // Nothing live to protect, which is most of a debate: the backlog answers to the tile as a
+    // whole, and there is no edge to measure or remember.
+    if ((ticker.cardsBySlot.get(slot)?.length ?? 0) === 0) {
+      liveCornerTop.current.delete(slot);
+      setAboveCornerSlot(clearSlot);
+      return;
+    }
+
+    // Measured only while the card itself is what the corner is drawing. Once the backlog is open
+    // the remembered edge is the one that counts, and reading the box again would move the line.
+    if (!claimsOpenFor(slot)) {
+      const corner = event.currentTarget.querySelector('[data-claim-corner]');
+      if (corner) liveCornerTop.current.set(slot, corner.getBoundingClientRect().top);
+    }
+
+    const edge = liveCornerTop.current.get(slot);
+    setAboveCornerSlot(edge !== undefined && event.clientY < edge ? slot : clearSlot);
   };
 
   const claimsFor = (slot: number) => {
@@ -169,24 +226,6 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         onAnswered={ticker.onAnswered}
       />
     );
-  };
-
-  /**
-   * The pointer entering or leaving one debater's tile.
-   *
-   * Filtered to a real mouse. Touch browsers synthesise `pointerenter` from a tap, so without this
-   * every tap on the video — including the tap that pauses it — would also throw the claim corner
-   * open, and nothing would close it again since there is no corresponding leave. On touch the chip
-   * is the way in, deliberately and only.
-   *
-   * Leaving also clears the pin, so a mouse user who clicked the chip and then moved away does not
-   * leave the corner stuck open behind them.
-   */
-  const onTileHover = (slot: number) => (event: React.PointerEvent, hovered: boolean) => {
-    if (event.pointerType !== 'mouse') return;
-    const clearSlot = (current: number | null) => (current === slot ? null : current);
-    setPointerOverSlot(current => (hovered ? slot : clearSlot(current)));
-    if (!hovered) setPinnedSlot(clearSlot);
   };
 
   return (
@@ -404,6 +443,7 @@ function DebaterVideo({
   return (
     <div
       onPointerEnter={event => onClaimsHoverChange?.(event, true)}
+      onPointerMove={event => onClaimsHoverChange?.(event, true)}
       onPointerLeave={event => onClaimsHoverChange?.(event, false)}
       className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
     >
@@ -503,6 +543,7 @@ function DebaterVideo({
           content can exceed. */}
       {claims && (
         <div
+          data-claim-corner
           className={cx(
             'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end transition-[padding-bottom] duration-150',
             // Two widths, by state rather than by screen. A live claim takes the whole tile,
