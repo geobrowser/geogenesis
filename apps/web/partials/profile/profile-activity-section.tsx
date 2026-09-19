@@ -9,7 +9,6 @@ import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import { type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import type { ClaimResponse } from '~/core/profile/use-person-positions';
-import { useActivityDiagnosticsEnabled } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
@@ -17,7 +16,6 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
-import { ActivityDiagnostics } from './activity-diagnostics';
 import { GalleryClaimCard } from './gallery-claim-card';
 
 /** How many cards a gallery holds before the reader is sent to the tab. */
@@ -91,7 +89,6 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   const selected = available.find(kind => kind.key === selectedKey) ?? available[0];
 
   const { galleryRef, contentRef, heldHeight, holdHeight } = useHeldHeight(selected?.key);
-  const showDiagnostics = useActivityDiagnosticsEnabled();
 
   // Nothing at all rather than an empty card. A heading over a blank space reads
   // as a page that failed to load, and most accounts have never been in a debate.
@@ -171,8 +168,6 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
           )}
         </div>
       </div>
-
-      {showDiagnostics && <ActivityDiagnostics galleryRef={galleryRef} />}
 
       <Link
         href={selected.href}

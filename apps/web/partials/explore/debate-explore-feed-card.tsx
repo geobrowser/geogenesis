@@ -7,7 +7,7 @@ import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
-import { useDebatePlaybackAllowed, useIsDebatePlaybackGated } from '~/core/debates/debate-playback-gate';
+import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
@@ -33,16 +33,6 @@ import { SpaceThumb } from './space-thumb';
  * before it gives it up. Strictly between them the card keeps whatever state it had. */
 const ACTIVATE_RATIO = 0.6;
 const DEACTIVATE_RATIO = 0.4;
-
-/**
- * The same hysteresis, asked of a card that is not competing for the turn.
- *
- * Where a gate names the one card allowed to play, this card's ratio only has to
- * say whether it is worth playing *to* — so it is a visibility test rather than
- * a contest, and the thresholds are what "on screen at all" means.
- */
-const GATED_ACTIVATE_RATIO = 0.25;
-const GATED_DEACTIVATE_RATIO = 0.1;
 
 type DebateExploreFeedCardProps = {
   item: ExploreFeedItem;
@@ -96,12 +86,6 @@ export function DebateExploreFeedCard({
   // already was strictly between them. The lower edge is inclusive so that the observer's
   // report at the 0.4 threshold deactivates rather than landing ambiguously inside the band —
   // a ratio reported exactly at a threshold is the normal case, not an edge case.
-  // Which pair applies depends on whether anything else is deciding — see
-  // `useIsDebatePlaybackGated`.
-  const isGated = useIsDebatePlaybackGated();
-  const activateAt = isGated ? GATED_ACTIVATE_RATIO : ACTIVATE_RATIO;
-  const deactivateAt = isGated ? GATED_DEACTIVATE_RATIO : DEACTIVATE_RATIO;
-
   const [active, setActive] = React.useState(false);
   React.useEffect(() => {
     if (!container) return;
@@ -110,17 +94,17 @@ export function DebateExploreFeedCard({
         for (const entry of entries) {
           setActive(current => {
             if (!entry.isIntersecting) return false;
-            if (entry.intersectionRatio >= activateAt) return true;
-            if (entry.intersectionRatio <= deactivateAt) return false;
+            if (entry.intersectionRatio >= ACTIVATE_RATIO) return true;
+            if (entry.intersectionRatio <= DEACTIVATE_RATIO) return false;
             return current;
           });
         }
       },
-      { threshold: [deactivateAt, activateAt] }
+      { threshold: [DEACTIVATE_RATIO, ACTIVATE_RATIO] }
     );
     observer.observe(container);
     return () => observer.disconnect();
-  }, [activateAt, container, deactivateAt]);
+  }, [container]);
 
   // A veto, not a replacement: where a surface holds playback to one debate —
   // a row of cards, all of them fully on screen at once — this says whether it

@@ -37,21 +37,3 @@ export function useDebatePlaybackAllowed(debateId: string): boolean {
   if (allowed === undefined) return true;
   return allowed !== null && ID.equals(allowed, debateId);
 }
-
-/**
- * Whether a gate is deciding at all, which changes what a card's own judgement
- * is *for*.
- *
- * Ungated, a card's intersection ratio answers "should I be the one playing" —
- * it is the only thing standing between a feed of cards and all of them playing
- * at once, so it is strict on purpose: 0.6 to start.
- *
- * Gated, that question is already answered, and a second stricter test can only
- * subtract. A card the gate has chosen but whose ratio sits in the dead band
- * never starts, and tapping is the reader's only way out — which is what a
- * 520px card in a 664px viewport spends much of its time doing. So a gated card
- * asks the easier question instead: am I on screen at all.
- */
-export function useIsDebatePlaybackGated(): boolean {
-  return React.useContext(DebatePlaybackContext) !== undefined;
-}

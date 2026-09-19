@@ -21,13 +21,6 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
-    id: 'activityDiagnostics',
-    label: 'Activity gallery diagnostics',
-    description:
-      "Show what the profile's Activity gallery is doing — scroll offsets, its height, and each video's real playback state. For faults that only happen on a phone (GEO-2974).",
-    enabledByDefault: false,
-  },
-  {
     id: 'debugDebatesPage',
     label: 'Debates debug tab per space',
     description: 'Enable per-space debate processing diagnostics.',
@@ -116,10 +109,6 @@ export function useFeatureFlag(id: FeatureFlagId) {
 
 export function useDebugDebatesPageEnabled() {
   return useFeatureFlag('debugDebatesPage');
-}
-
-export function useActivityDiagnosticsEnabled() {
-  return useFeatureFlag('activityDiagnostics');
 }
 
 /**
