@@ -58,6 +58,7 @@ import {
   useMarkDebateReady,
 } from '~/core/debates/hooks';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
+import { didLocallyLeaveDebate, didLocallyLeaveRematch } from '~/core/debates/local-debate-leave';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
   DebateMediaSessionBoundary,
@@ -65,6 +66,7 @@ import {
   debateMediaSessionKey,
   useDebateMediaSession,
 } from '~/core/debates/media-session';
+import { OpponentLeftDialog } from '~/core/debates/opponent-left-dialog';
 import { RecordingCountdownRing } from '~/core/debates/recording-countdown-ring';
 import { type LiveRecordingStream, putRecordingPart, startLiveRecordingStream } from '~/core/debates/recording-stream';
 import {
@@ -364,6 +366,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const rematchLeaveRequestedRef = React.useRef(false);
   const rematchLeavePublishedRef = React.useRef(false);
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
+  const [localLeaveStarted, setLocalLeaveStarted] = React.useState(false);
+  const [opponentLeftAcknowledged, setOpponentLeftAcknowledged] = React.useState(false);
+  const lastActiveDebateStatusRef = React.useRef<Debate['status'] | null>(null);
   const [audioMuted, setAudioMuted] = React.useState(false);
   const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
@@ -697,6 +702,32 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     countdown.remainingSeconds > rematchAutoConsentLeadSeconds &&
     liveRematchDestination !== null;
 
+  // One dialog for every stage the ticket covers: Ready / recording abort (`cancelled`), and Debate
+  // again while still on the thank-you screen (`rematch` ended).
+  const opponentLeftFromDebateCancel = Boolean(
+    debate &&
+    debate.status === 'cancelled' &&
+    debate.cancellation_reason !== 'connection_timeout' &&
+    recordingCancelledBy === null &&
+    !localLeaveStarted &&
+    !didLocallyLeaveDebate(debate.id) &&
+    !opponentLeftAcknowledged
+  );
+  const opponentLeftFromRematchEnd = Boolean(
+    debate &&
+    debate.rematch_session_id &&
+    rematchSessionStatus === 'ended' &&
+    !localLeaveStarted &&
+    !didLocallyLeaveRematch(debate.rematch_session_id) &&
+    !opponentLeftAcknowledged &&
+    (debate.status === 'thanking' || debate.status === 'complete')
+  );
+  const showOpponentLeftDialog = opponentLeftFromDebateCancel || opponentLeftFromRematchEnd;
+  const opponentLeftDiscardedRecording =
+    opponentLeftFromDebateCancel &&
+    (lastActiveDebateStatusRef.current === 'preflight' ||
+      lastActiveDebateStatusRef.current === 'in_progress' ||
+      lastActiveDebateStatusRef.current === 'thanking');
   // A completed debate with a live rematch session is a dead end while the room is idle:
   // DebateCoordinator defers to this page so the recording finalizes first, but finalization only
   // runs with a live connection, and an idle room has nothing left to save. Mobile reaches this
@@ -716,7 +747,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     roomError
   );
   const shouldHideTerminalDebate =
-    (shouldExitTerminalDebate && !hasRecordingPersistenceError) ||
+    (shouldExitTerminalDebate && !hasRecordingPersistenceError && !showOpponentLeftDialog) ||
     (recordingCancelledBy !== null && !opponentCancelledRecording && !rematchSurvivesCancellation);
   // A disconnected or reloaded room can discover that it should enter an already-live rematch.
   // Keep the recording surface over the app while that prefetched route replaces it; swapping to
@@ -1945,11 +1976,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         router.replace(destination);
         return;
       }
+      // Opponent left the rematch while this tab was still on thank-you / Debate again.
+      if (session?.status === 'ended' && !localLeaveStarted && !didLocallyLeaveRematch(session.id)) {
+        disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+        localMediaStreamRef.current = null;
+        setRemoteVideoReady(false);
+        setRoomState('idle');
+        return;
+      }
       returnFromDebate();
     },
     [
       debate,
       finishAndPersist,
+      localLeaveStarted,
       localMediaStreamRef,
       localTracksRef,
       locallyThanking,
@@ -2111,6 +2151,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const leave = React.useCallback(async () => {
     if (!debate) return;
+    setLocalLeaveStarted(true);
     setRoomError(null);
     try {
       const leavingLiveRematch =
@@ -2160,7 +2201,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         setRemoteVideoReady(false);
         await abortDebate.mutateAsync();
       }
-      returnFromDebate();
+      returnFromDebate({ forwardOnly: true });
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not leave the debate.');
     }
@@ -2282,8 +2323,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     if (!shouldReturnFromTerminalDebate) return;
+    if (debate?.status === 'cancelled' && !localLeaveStarted && !didLocallyLeaveDebate(debate.id)) return;
     returnFromDebate();
-  }, [returnFromDebate, shouldReturnFromTerminalDebate]);
+  }, [debate, localLeaveStarted, returnFromDebate, shouldReturnFromTerminalDebate]);
+
+  React.useEffect(() => {
+    if (!debate || debate.status === 'cancelled') return;
+    lastActiveDebateStatusRef.current = debate.status;
+  }, [debate]);
 
   React.useEffect(() => {
     if (!idleRematchDestination) return;
@@ -2492,10 +2539,22 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       />
     ) : null;
 
+  const opponentLeftNotice = showOpponentLeftDialog ? (
+    <OpponentLeftDialog
+      recordingDiscarded={opponentLeftDiscardedRecording}
+      onAcknowledge={() => {
+        setOpponentLeftAcknowledged(true);
+        returnFromDebate({ forwardOnly: true });
+      }}
+    />
+  ) : null;
+
   // With no rematch the room behind this notice is already being torn down, so it stands alone.
   // With one, it is a dialog over the thank-you screen the opponent is about to return to, and
   // returning it here instead would unmount that screen and leave the backdrop on the app shell.
   if (recordingRemovalNotice && !rematchSurvivesCancellation) return recordingRemovalNotice;
+
+  if (opponentLeftNotice) return opponentLeftNotice;
 
   // The exit navigation is still running, and nothing else covers the app shell on this route.
   if (shouldHideTerminalDebate)
