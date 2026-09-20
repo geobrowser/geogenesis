@@ -404,6 +404,31 @@ describe('ProfileActivitySection', () => {
   });
 
   /**
+   * A viewport that shrinks comes back. On iOS the URL bar returning takes height away and hiding
+   * it again gives the height back, so a shrink that happens to need nothing held must not retire
+   * the swap — there would be nothing left to rebuild the reserve when the height returns, and the
+   * reader would be clamped by the difference.
+   */
+  it('keeps holding across a viewport that shrinks and grows back', () => {
+    const { viewport } = mockMobileActivityGeometry(600);
+    const { reserve } = renderActivity();
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(reserve).toHaveStyle({ height: '150px' });
+
+    // The URL bar comes back, far enough that 400 + 450 is exactly the natural 850 and nothing
+    // needs holding — which is a fact about this instant, not about the switch being over.
+    viewport.height = 450;
+    fireEvent.resize(window);
+    expect(reserve).toHaveStyle({ height: '0px' });
+
+    // It hides again.
+    viewport.height = 700;
+    fireEvent.resize(window);
+    expect(reserve).toHaveStyle({ height: '250px' });
+  });
+
+  /**
    * The swap is over once the page can hold the reader without help, and it has to actually end.
    * Left armed, `holdY` outlives the switch it belongs to: a shrink long afterwards would size a
    * reserve from a position the reader left, and hand them a screen of blank space to scroll into.

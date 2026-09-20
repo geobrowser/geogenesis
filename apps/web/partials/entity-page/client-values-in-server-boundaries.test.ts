@@ -23,6 +23,11 @@ import { describe, expect, it } from 'vitest';
  * hook imported next to a server-safe constant and only ever called from a client component is
  * inert. So the allowlist below is not a list of things that are fine — it is a list of things
  * checked by hand, each with what was found.
+ *
+ * Nor does it follow `import()` or a bare `import './x'`. Neither reaches a source module from the
+ * server graph today — checked, not assumed: the 85 files calling `import()` are client modules
+ * reaching for `next/dynamic`, and every bare import in the graph resolves to CSS or a package.
+ * Worth adding the day either stops being true.
  */
 
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -54,7 +59,14 @@ const NAMESPACE_IMPORT = /^import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+['"]([
 
 /** `export { a } from '…'` and `export * from '…'`, which hand a client reference straight on. */
 const NAMED_REEXPORT = /^export\s+(?!type\s)\{([^}]*)\}\s+from\s+['"]([^'"]+)['"]/gm;
-const STAR_REEXPORT = /^export\s+\*\s+from\s+['"]([^'"]+)['"]/gm;
+
+/**
+ * `export * from '…'` and `export * as Name from '…'`.
+ *
+ * The named form is the common one here — 11 files against 4 — so a matcher that only knew the
+ * bare `export *` was blind to most of the barrels in the tree.
+ */
+const STAR_REEXPORT = /^export\s+\*\s+(?:as\s+([A-Za-z_$][\w$]*)\s+)?from\s+['"]([^'"]+)['"]/gm;
 
 /**
  * Pre-existing, each one read before being listed. None of them is this PR's, and all of them are
@@ -121,13 +133,22 @@ function resolveImport(specifier: string, importingFile: string): string | null 
   return null;
 }
 
-/** `A` or `A as B` inside a named import block, skipping inline `type` specifiers. */
+/**
+ * `A` or `A as B` inside a named import block, skipping inline `type` specifiers.
+ *
+ * The exported name is what identifies the export, so `foo as bar` is judged as `foo`. `default as
+ * Bar` is the exception: `default` says nothing about what it is, so the local name is the only
+ * signal there — the same reasoning as a default import.
+ */
 function parseNamedBindings(block: string): string[] {
   return block
     .split(',')
     .map(entry => entry.trim())
     .filter(entry => entry.length > 0 && !entry.startsWith('type '))
-    .map(entry => entry.split(/\s+as\s+/)[0].trim())
+    .map(entry => {
+      const [exported, local] = entry.split(/\s+as\s+/).map(part => part.trim());
+      return exported === 'default' && local ? local : exported;
+    })
     .filter(Boolean);
 }
 
@@ -215,9 +236,9 @@ describe('server components take only components from client modules', () => {
         }
       }
 
-      for (const [, specifier] of contents.matchAll(STAR_REEXPORT)) {
+      for (const [, namespace, specifier] of contents.matchAll(STAR_REEXPORT)) {
         const target = fromClientModule(specifier);
-        if (target) yield [`${from} -> re-exports *`, target];
+        if (target) yield [`${from} -> re-exports ${namespace ? `* as ${namespace}` : '*'}`, target];
       }
     }
   }

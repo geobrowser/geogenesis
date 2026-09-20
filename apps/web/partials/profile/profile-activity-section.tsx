@@ -286,6 +286,12 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
      * Zero is the safe moment to let go precisely because nothing is being held at it, so dropping
      * the swap cannot move anybody. Not on the first sizing though — that one runs before the
      * correction below, and the correction needs the swap it belongs to.
+     *
+     * Only for changes that do not come back. Cards growing and the reader scrolling up both leave
+     * the page needing less than it did, and go on needing less. A viewport is not like that: it
+     * shrinks and grows again as the URL bar returns and hides, so settling on a shrink would
+     * retire the swap during the half of that cycle where nothing is needed, and leave nothing to
+     * rebuild the reserve on the half where it is. Resizes size, and do not settle.
      */
     const sizeAndSettle = () => {
       if (sizeReserve() === 0) swapRef.current = null;
@@ -340,14 +346,15 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
     // `innerHeight` never moves there and there is nothing to react to.
     //
     // `resize` rather than `visualViewport`, because `window.innerHeight` is the figure the sum
-    // above uses and the two do not always agree.
-    window.addEventListener('resize', sizeAndSettle);
+    // above uses and the two do not always agree. And `sizeReserve` rather than `sizeAndSettle`:
+    // see there for why a reversible change must not retire the swap.
+    window.addEventListener('resize', sizeReserve);
 
     return () => {
       cancelAnimationFrame(arm);
       observer.disconnect();
       window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', sizeAndSettle);
+      window.removeEventListener('resize', sizeReserve);
     };
   }, [selectedKey]);
 
