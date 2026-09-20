@@ -9,6 +9,8 @@ import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { useCreateComment } from '~/core/hooks/use-create-comment';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 
+const MAX_COMMENT_HEIGHT_PX = 120;
+
 /**
  * Position controls for the two surfaces where GEO-2979 invites an explanation.
  *
@@ -53,7 +55,9 @@ export function ClaimPositionCommentControl({
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = 'auto';
-    textarea.style.height = `${textarea.scrollHeight}px`;
+    const contentHeight = textarea.scrollHeight;
+    textarea.style.height = `${Math.min(contentHeight, MAX_COMMENT_HEIGHT_PX)}px`;
+    textarea.style.overflowY = contentHeight > MAX_COMMENT_HEIGHT_PX ? 'auto' : 'hidden';
   }, [comment, promptedPosition]);
 
   const choosePosition = (position: boolean) => {
@@ -101,7 +105,7 @@ export function ClaimPositionCommentControl({
         />
       </div>
       {action ? (
-        <div className="flex flex-col gap-5 rounded-xl border border-grey-02 bg-white p-3">
+        <div className="@container flex flex-col gap-2 rounded-xl border border-grey-02 bg-white p-3 @[360px]:flex-row @[360px]:items-center">
           <textarea
             ref={textareaRef}
             value={comment}
@@ -122,9 +126,9 @@ export function ClaimPositionCommentControl({
             autoFocus
             rows={1}
             disabled={isSubmitting}
-            className="min-h-5 w-full resize-none overflow-hidden bg-transparent text-body text-text outline-none placeholder:text-grey-03 disabled:opacity-60"
+            className="min-h-5 w-full min-w-0 flex-1 resize-none bg-transparent text-body text-text outline-none placeholder:text-grey-03 disabled:opacity-60"
           />
-          <div className="flex items-center justify-end gap-1">
+          <div className="flex shrink-0 items-center justify-end gap-1">
             <button
               type="button"
               onClick={() => {

@@ -64,6 +64,25 @@ describe('ClaimPositionCommentControl', () => {
     expect(screen.getByRole('textbox', { name: 'Why do you agree?' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Skip' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Comment' })).toBeDisabled();
+
+    const composer = screen.getByRole('textbox').parentElement as HTMLElement;
+    expect(composer).toHaveClass('flex-col', '@[360px]:flex-row');
+  });
+
+  it('grows with the comment until the height cap, then scrolls inside the textarea', () => {
+    renderControl();
+    fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 80 });
+    fireEvent.change(textarea, { target: { value: 'A few lines of explanation' } });
+    expect(textarea.style.height).toBe('80px');
+    expect(textarea.style.overflowY).toBe('hidden');
+
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 200 });
+    fireEvent.change(textarea, { target: { value: 'A much longer explanation that exceeds the visible limit' } });
+    expect(textarea.style.height).toBe('120px');
+    expect(textarea.style.overflowY).toBe('auto');
   });
 
   it('dismisses the comment invitation without another position write when Skip is pressed', () => {
