@@ -51,6 +51,8 @@ import type { CommentFilter, CommentSortOrder, CommentWithReplies } from './type
 
 const CommentDensityContext = React.createContext<CommentDensity>(PAGE_DENSITY);
 
+const NO_REPLIES: never[] = [];
+
 function useCommentDensity(): CommentDensity {
   return React.useContext(CommentDensityContext);
 }
@@ -1081,7 +1083,11 @@ function CommentItem({
   }, [comment.createdAt]);
 
   const density = useCommentDensity();
-  const replies = Array.isArray(comment.replies) ? comment.replies : [];
+  // Memoised: the empty branch was a new array each render, and `sortedReplies` below is keyed on it.
+  const replies = React.useMemo(
+    () => (Array.isArray(comment.replies) ? comment.replies : NO_REPLIES),
+    [comment.replies]
+  );
   const sortedReplies = React.useMemo(() => sortReplies(replies), [replies, sortReplies]);
   const hasReplies = replies.length > 0;
   const nestedSpineLeftPx = -threadSpineOffsetPx(density);
@@ -1115,6 +1121,9 @@ function CommentItem({
       // The spine starts below the avatar, so drop that much off its length.
       setParentLineHeight(repliesRect.top - commentRect.top - avatarBottomInRowPx(density));
     }
+    // `density.avatarPx` rather than `density`: the object is rebuilt each render, and the pixel is
+    // the only part of it this measurement reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasReplies, threadCollapsed, replies.length, isEditing, isReplying, density.avatarPx]);
 
   const expandedHeaderRow = (

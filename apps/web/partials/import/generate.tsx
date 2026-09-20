@@ -262,6 +262,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       if (fileInputRef.current) fileInputRef.current.value = '';
     },
     [
+      MAX_FILE_SIZE_BYTES,
       resetSessionState,
       setFileName,
       setStep,
