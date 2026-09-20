@@ -49,15 +49,12 @@ export function EntityPageActions({ entityId, spaceId, isVoteable = false }: Ent
           (`editable-space-header.tsx`). The row these moved into is new; the order within it is
           not, and flipping it put the menu holding "Delete entity" where history used to sit. */}
       {editable && (
-        // NB: breakpoints here are desktop-first (`sm` = max-width 639px), so `sm:hidden` hides
-        // this on phones and shows it everywhere else — that class is master's and unchanged.
-        // New here: the label, since an icon-only link otherwise announces as its bare URL, and
-        // `PrefetchLink` in place of `next/link`, matching the space header (hover prefetch
-        // rather than Next's default).
+        // The label keeps this icon-only link from announcing as its bare URL. `PrefetchLink`
+        // matches the space header and includes hover prefetching.
         <Link
           href={NavUtils.toEntity(spaceId, ID.createEntityId())}
           aria-label="Create new entity"
-          className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
+          className="stroke-grey-04 transition-colors duration-75 hover:stroke-text mobile:hidden"
         >
           <Create />
         </Link>

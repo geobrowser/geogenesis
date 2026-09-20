@@ -36,6 +36,6 @@ describe('GeoConnectButton', () => {
   it('matches the Debate button height on mobile', () => {
     render(<GeoConnectButton />);
 
-    expect(screen.getByRole('button', { name: 'Log in' })).toHaveClass('sm:h-7', 'sm:py-0');
+    expect(screen.getByRole('button', { name: 'Log in' })).toHaveClass('mobile:h-7', 'mobile:py-0');
   });
 });

@@ -127,7 +127,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <React.Suspense fallback={null}>
           <PageViewTracker />
         </React.Suspense>
-        <div className="sm:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
+        <div className="mobile:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
         <div className="flex min-w-0 flex-1 flex-col">
           <Navbar onSearchClick={() => setOpen(true)} hideLogo={sidebarOpen && !fullscreenActive} />
           <SearchDialog open={open} onDone={() => setOpen(false)} />

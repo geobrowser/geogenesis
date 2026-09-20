@@ -363,7 +363,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     const avatarUrl = props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null;
 
     return (
-      <div className="px-4 pt-6 pb-12 sm:px-5">
+      <div className="px-4 pt-6 pb-12 mobile:px-5">
         {/* A profile brings its avatar: it is the person's face, and the panel
             opened on a cover with nobody in it. Everything else keeps the
             cover-only header — see `EditableCoverAvatarHeader`. */}

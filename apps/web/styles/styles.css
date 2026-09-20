@@ -279,7 +279,7 @@
 }
 
 /* Desktop-first breakpoints (max-width) */
-@custom-variant sm (@media (max-width: 639px));
+@custom-variant mobile (@media (max-width: 639px));
 @custom-variant md (@media (max-width: 767px));
 @custom-variant lg (@media (max-width: 1023px));
 @custom-variant xl (@media (max-width: 1279px));

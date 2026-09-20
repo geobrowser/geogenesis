@@ -169,7 +169,7 @@ describe('NavbarActions profile menu', () => {
     // shrinking it. The base is viewport-calculated with 322 as a ceiling, which is what phones
     // want — so the assertion is that the override is gone.
     expect(screen.getByTestId('profile-menu')).toHaveClass('w-[calc(100vw-16px)]', 'max-w-[322px]');
-    expect(screen.getByTestId('profile-menu').className).not.toContain('sm:w-[322px]');
+    expect(screen.getByTestId('profile-menu').className).not.toContain('mobile:w-[322px]');
     const identityLink = screen.getByRole('link', { name: /Max max@example\.com/ });
     expect(identityLink).toHaveAttribute('href', '/space/personal-space');
     expect(identityLink).toHaveClass('gap-3', 'px-3', 'py-2.5');
@@ -299,11 +299,11 @@ describe('NavbarActions profile menu', () => {
 
       const avatar = await screen.findByTestId('fallback-avatar');
 
-      // Both dimensions on the same ancestor. Height alone passed with `sm:w-11` removed, which
+      // Both dimensions on the same ancestor. Height alone passed with `mobile:w-11` removed, which
       // leaves a 44px-tall sliver 28px wide — not the thumb-sized area the test claims.
-      const tapArea = avatar.closest('[class*="sm:h-11"]');
+      const tapArea = avatar.closest('[class*="mobile:h-11"]');
       expect(tapArea).not.toBeNull();
-      expect(tapArea?.className ?? '').toContain('sm:w-11');
+      expect(tapArea?.className ?? '').toContain('mobile:w-11');
       // The avatar itself is untouched — the area around it grew, not the picture.
       expect(avatar.closest('.h-7')).not.toBeNull();
     });

@@ -825,8 +825,8 @@ describe('ExploreEmailCapturePopup', () => {
       mocks.otpState = { status: 'awaiting-code-input' };
       view.rerender(<ExploreEmailCapturePopup />);
 
-      expect(screen.getByRole('textbox', { name: 'Verification code' }).className).toContain('sm:h-11');
-      expect(screen.getByRole('button', { name: 'Continue' }).className).toContain('sm:h-11');
+      expect(screen.getByRole('textbox', { name: 'Verification code' }).className).toContain('mobile:h-11');
+      expect(screen.getByRole('button', { name: 'Continue' }).className).toContain('mobile:h-11');
     });
 
     // Reports its own sign-in. Leaving it to the navbar looked tidy and was not: that button is

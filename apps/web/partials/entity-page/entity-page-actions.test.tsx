@@ -143,7 +143,7 @@ describe('EntityPageActions', () => {
   });
 
   // Icon-only, so without a label it reaches a screen reader as the bare URL it points at.
-  // (It is hidden on phones, not shown only there — `sm` is max-width 639px in this repo.)
+  // It is hidden on phones by the explicit `mobile` variant.
   it('gives the create link an accessible name while editing', () => {
     mocks.isEditing = true;
     render(<EntityPageActions entityId="entity-1" spaceId="space-1" />);

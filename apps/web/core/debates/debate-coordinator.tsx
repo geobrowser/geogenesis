@@ -295,7 +295,7 @@ export function DebateCoordinator() {
           // Exposed in the DOM so a report can name the cause without needing the console. Two
           // weeks of GEO-2670 went into establishing which of six pauses a screenshot meant.
           data-pause-reason={gateway.pauseReason ?? 'unknown'}
-          className="pointer-events-none fixed top-3 left-1/2 z-[1400] w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-full bg-text px-4 py-2 text-center text-sm text-white shadow-card sm:w-auto"
+          className="pointer-events-none fixed top-3 left-1/2 z-[1400] w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-full bg-text px-4 py-2 text-center text-sm text-white shadow-card mobile:w-auto"
         >
           {pausedBannerText(gateway.pauseReason)}
         </div>

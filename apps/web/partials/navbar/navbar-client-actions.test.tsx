@@ -26,10 +26,10 @@ afterEach(cleanup);
 
 describe('NavbarClientActions', () => {
   /**
-   * `sm` is max-width 639px here (`styles.css`, `@custom-variant sm`), not Tailwind's usual
-   * min-width — so `sm:hidden` on this row hid the account surface on phones while reading like the
-   * opposite. That is signing in when logged out, and the avatar, personal space link and sign out
-   * when logged in: a phone had no way to reach an account at all.
+   * `mobile` is max-width 639px here (`styles.css`, `@custom-variant mobile`), not Tailwind's usual
+   * min-width — so `mobile:hidden` on this row hides the account surface on phones. That is signing
+   * in when logged out, and the avatar, personal space link and sign out when logged in: a phone had
+   * no way to reach an account at all.
    *
    * The width itself cannot be asserted — jsdom does not evaluate media queries — so this checks
    * that the account surface renders and that nothing between it and the root hides it.

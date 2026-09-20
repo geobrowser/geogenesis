@@ -52,7 +52,7 @@ const SpaceBreadcrumb = ({ spaceId }: SpaceBreadcrumbProps) => {
         <ThumbGeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" loading="eager" fetchPriority="high" />
       </div>
       <Divider type="vertical" className="inline-block h-4 w-px shrink-0" />
-      <div className="min-w-0 truncate sm:max-w-[20ch]">
+      <div className="min-w-0 truncate mobile:max-w-[20ch]">
         <Text variant="button" className="hover:text-text!">
           {spaceName.slice(0, 48) + (spaceName.length > 48 ? '...' : '')}
         </Text>
@@ -112,7 +112,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
           <ThumbGeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" loading="eager" fetchPriority="high" />
         </div>
         <Divider type="vertical" className="inline-block h-4 w-px shrink-0" />
-        <div className="min-w-0 truncate sm:max-w-[20ch]">
+        <div className="min-w-0 truncate mobile:max-w-[20ch]">
           <Text variant="button" className="hover:text-text!">
             {spaceName.slice(0, 48) + (spaceName.length > 48 ? '...' : '')}
           </Text>
@@ -134,7 +134,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
         </Link>
         <Divider type="vertical" className="inline-block h-4 w-px shrink-0" />
         <Popover.Trigger className="flex min-w-0 items-center gap-1.5">
-          <div className="min-w-0 truncate sm:max-w-[20ch]">
+          <div className="min-w-0 truncate mobile:max-w-[20ch]">
             <Text variant="button" className="hover:text-text!">
               {shorten(spaceName)}
             </Text>
