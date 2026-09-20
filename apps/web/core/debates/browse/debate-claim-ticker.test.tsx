@@ -694,6 +694,26 @@ describe('DebateClaimTickerStack', () => {
     expect(onFocusChange).not.toHaveBeenCalledWith(true);
   });
 
+  /**
+   * The chip is a sibling of the scroll box, so a boundary drawn around the box alone reported
+   * focus *gone* the moment a keyboard tabbed from the last card out to the chip. The player then
+   * closed the backlog, `showChip` went false with a live card present, and the chip unmounted
+   * mid-tab — dropping focus to the body, with the one control that reopens the list now missing.
+   */
+  it('keeps reporting focus when a keyboard tabs from a card out to the chip', async () => {
+    const onFocusChange = vi.fn();
+    renderStack({ onFocusChange, open: true, pinned: true, onTogglePinned: vi.fn() });
+    const user = userEvent.setup();
+
+    // Into the stack, then on until the chip has it. The cards' own controls come first.
+    const chip = screen.getByRole('button', { name: /claims said so far|Hide the claims/i });
+    for (let i = 0; i < 12 && document.activeElement !== chip; i += 1) await user.tab();
+
+    expect(chip).toHaveFocus();
+    expect(onFocusChange).toHaveBeenLastCalledWith(true);
+    expect(onFocusChange).not.toHaveBeenCalledWith(false);
+  });
+
   // Same for the thumbs, which is the other thing a pointer comes to a live card to do.
   it('does not report focus when a thumb is clicked', async () => {
     const onFocusChange = vi.fn();
@@ -748,6 +768,52 @@ describe('useDebateClaimTicker', () => {
     expect(ticker.markers).toEqual([]);
     expect(ticker.historyBySlot.size).toBe(0);
     expect(ticker.cardsBySlot.size).toBe(0);
+  });
+
+  /**
+   * Two claim entities can carry the same text and the same published moment — measured at 11
+   * claims in one corpus debate, apparently published twice. Everything downstream then doubles:
+   * two identical cards in the backlog, a chip counting both, and two markers at one spot where the
+   * later covers the earlier, so the first cannot be reached with a pointer.
+   */
+  it('shows a claim once when two entities carry the same text at the same moment', () => {
+    const ticker = renderTicker(
+      [published(), published({ id: 'claim-2' })],
+      [{ id: 'block-1', authorSpaceId: SPEAKER_SPACE }]
+    );
+
+    expect(ticker.markers.map(m => m.id)).toEqual(['claim-1']);
+    expect(ticker.historyBySlot.get(1)).toHaveLength(1);
+  });
+
+  // A debater who repeats themselves later has said something new, so both moments keep a card.
+  it('keeps both when the same words are said at a different moment', () => {
+    const ticker = renderTicker(
+      [published(), published({ id: 'claim-2', publishedTiming: { startMs: 200_000, endMs: 204_000 } })],
+      [{ id: 'block-1', authorSpaceId: SPEAKER_SPACE }]
+    );
+
+    expect(ticker.markers.map(m => m.id).sort()).toEqual(['claim-1', 'claim-2']);
+  });
+
+  /**
+   * A disabled ticker still reads a warm cache — the feed card and the explore card fetch the same
+   * query ungated. The cards and backlog already refused to build from it; the markers did not, so
+   * an inactive feed card could draw a hash that seeks to a claim it will never show.
+   */
+  it('offers nothing at all while switched off', () => {
+    mocks.transcriptClaims = {
+      all: [published()],
+      blocks: [{ id: 'block-1', authorSpaceId: SPEAKER_SPACE }],
+      byAuthorSpaceId: new Map(),
+    };
+    const ticker = renderHook(() =>
+      useDebateClaimTicker(debate, { playheadMs: 200_000, timelineMs: 300_000, enabled: false })
+    ).result.current;
+
+    expect(ticker.markers).toEqual([]);
+    expect(ticker.cardsBySlot.size).toBe(0);
+    expect(ticker.historyBySlot.size).toBe(0);
   });
 
   // `DebateClaimTickerCard` returns null without a space — there is nowhere to record an answer.

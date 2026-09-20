@@ -140,13 +140,40 @@ export function useDebateClaimTicker(
    * counted them, so both promised a card that could never appear. A hash nothing is behind is the
    * same broken promise {@link claimMarkers} already turns low-confidence matches away to avoid.
    *
-   * Nothing in the corpus trips this today — measured over all 854 published claims, every one has
-   * a space and an authored block. It is for the debates recorded after this one.
+   * Neither of those trips in the corpus today — measured over all 854 published claims, every one
+   * has a space and an authored block. They are for the debates recorded after this one.
+   *
+   * **Empty while the ticker is switched off.** `useDebateTranscriptClaims` is gated on `enabled`,
+   * but the feed card and the explore card fetch the same query ungated, so a disabled ticker reads
+   * a full claim list out of a warm cache. `groupBySlot` already refused to build cards from it;
+   * the markers did not, so an inactive feed card could draw a clickable hash that seeks to a claim
+   * whose card and backlog are both deliberately empty. One gate now, not two half-gates.
+   *
+   * **The third rule is about what a viewer can tell apart.** Two claim entities can carry the same
+   * text *and* the same published moment, and then everything downstream doubles: two identical
+   * cards in the backlog, a chip counting them twice, and two markers at one spot where the later
+   * one covers the earlier so the first is unreachable by pointer. Measured: 11 such claims, all in
+   * one debate, whose claims appear to have been published twice; and zero cases of the same text
+   * at *different* moments, which is why the key is text **and** moment rather than text alone — a
+   * debater who genuinely repeats themselves later has said something new, and keeps their card.
+   *
+   * What the collapse cannot fix is that the twin is a separate entity with its own responses, so
+   * an answer lands on whichever copy survived here. That is an argument for de-duplicating on
+   * publish, not for showing the same sentence twice.
    */
-  const renderableClaims = React.useMemo(
-    () => timedClaims.filter(claim => claim.spaceId !== null && participantByClaimId.has(claim.id)),
-    [participantByClaimId, timedClaims]
-  );
+  const renderableClaims = React.useMemo(() => {
+    if (!enabled) return [];
+
+    const seen = new Set<string>();
+    return timedClaims.filter(claim => {
+      if (claim.spaceId === null || !participantByClaimId.has(claim.id)) return false;
+
+      const key = `${claim.timing?.endMs ?? 'unplaced'} ${claim.text.trim().toLowerCase()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [enabled, participantByClaimId, timedClaims]);
 
   // Two lists, because the live layer and the backlog answer different questions — see
   // `backlogWindows`. Cards and markers assert a moment; the backlog only says "already said".
@@ -206,6 +233,8 @@ export function useDebateClaimTicker(
   const groupBySlot = React.useCallback(
     (source: TickerWindow[]) => {
       const bySlot = new Map<number, TickerWindow[]>();
+      // Belt and braces: `renderableClaims` is empty while disabled, so `source` already is. Kept
+      // because this is a public-ish shape and a future caller could pass windows from elsewhere.
       if (!enabled) return bySlot;
 
       for (const window of source) {
@@ -584,7 +613,39 @@ export function DebateClaimTickerStack({
   if (shown.length === 0 && !showChip) return null;
 
   return (
-    <div className="flex min-h-0 w-full flex-col items-end gap-1.5">
+    <div
+      className="flex min-h-0 w-full flex-col items-end gap-1.5"
+      /**
+       * The focus boundary is the whole stack, chip included, and it has to be.
+       *
+       * These lived on the scroll box, which is the chip's *sibling*. Tabbing from the last card to
+       * the chip therefore left the box — `relatedTarget` outside `currentTarget` — and reported
+       * focus gone. The player closed the backlog, `showChip` went false with a live card present,
+       * and the chip unmounted underneath the keyboard mid-tab, dropping focus to the body. The one
+       * control that can reopen the list was the one that could not be reached from inside it.
+       */
+      onFocus={event => {
+        // A keyboard arriving, not a click landing.
+        //
+        // The player opens the backlog on this, and the backlog is drawn narrower than a live card
+        // — so when any focus counted, clicking the expand toggle on a clamped claim swapped the
+        // card the reader was halfway through for the list, at the list's width. They asked for
+        // more of the sentence in front of them and got it somewhere else, in a different column.
+        // Pressing a thumb on a live card did the same thing.
+        //
+        // `:focus-visible` is the browser's own answer to "did this focus come from a pointer",
+        // which is exactly the question, and the same signal the backlog chip already uses to
+        // decide when it is reachable. A click still focuses the control it landed on — it just no
+        // longer reads as having tabbed in.
+        if (event.target instanceof Element && !event.target.matches(':focus-visible')) return;
+        onFocusChange?.(true);
+      }}
+      // Only when focus leaves the stack entirely — moving between two cards, or out to the chip,
+      // must not collapse the list out from under the keyboard.
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onFocusChange?.(false);
+      }}
+    >
       <div
         ref={scrollRef}
         onScroll={onScroll}
@@ -592,29 +653,6 @@ export function DebateClaimTickerStack({
         // this list that a thumb aiming at a card can find. The cards stop their own clicks; this
         // catches the misses.
         onClick={event => event.stopPropagation()}
-        /**
-         * A keyboard arriving, not a click landing.
-         *
-         * The player opens the backlog on this, and the backlog is drawn narrower than a live card
-         * — so when any focus counted, clicking the expand toggle on a clamped claim swapped the
-         * card the reader was halfway through for the list, at the list's width. They asked for
-         * more of the sentence in front of them and got it somewhere else, in a different column.
-         * Pressing a thumb on a live card did the same thing.
-         *
-         * `:focus-visible` is the browser's own answer to "did this focus come from a pointer",
-         * which is exactly the question, and the same signal the backlog chip already uses to
-         * decide when it is reachable. A click still focuses the control it landed on — it just no
-         * longer reads as having tabbed in.
-         */
-        onFocus={event => {
-          if (event.target instanceof Element && !event.target.matches(':focus-visible')) return;
-          onFocusChange?.(true);
-        }}
-        // Only when focus leaves the stack entirely — moving between two cards inside it must not
-        // collapse the list out from under the keyboard.
-        onBlur={event => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onFocusChange?.(false);
-        }}
         className={cx(
           'pointer-events-auto flex w-full flex-col gap-1.5',
           // Nothing live and nothing open: the chip is on its own, and an empty box between it and
