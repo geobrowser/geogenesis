@@ -57,6 +57,15 @@ function entityIds(entities: Pick<Entity, 'id'>[]): string[] {
   return [...new Map(entities.map(entity => [normId(entity.id), entity.id])).values()];
 }
 
+/** A fixed Best record must not degrade to its input order when ranking cannot be read. */
+export function bestRecordRows<T extends { entityId: string }>(
+  rows: readonly T[],
+  rankings: ReadonlyMap<string, number>,
+  isRankingError: boolean
+): T[] {
+  return isRankingError ? [] : sortRows(rows, 'best', { rankings });
+}
+
 /**
  * The Debates and Related claims record shared by the claim Overview summary and its two full tabs.
  *
@@ -142,22 +151,15 @@ export function useClaimRecord({
   const claimScores = useEntityScores({ ids: relatedIds });
   const debateScores = useEntityScores({ ids: debateIds });
 
-  const claimRanks = React.useMemo(
-    () => ({ scores: claimScores.scores, rankings: claimScores.rankings }),
-    [claimScores.rankings, claimScores.scores]
-  );
-  const debateRanks = React.useMemo(
-    () => ({ scores: debateScores.scores, rankings: debateScores.rankings }),
-    [debateScores.rankings, debateScores.scores]
-  );
-
   const claimRows = React.useMemo(
-    () => sortRows(claimsRowsQuery.data ?? NO_ROWS, 'best', claimRanks),
-    [claimRanks, claimsRowsQuery.data]
+    // This record has one fixed order: Best. A score failure cannot silently become UpdatedAt,
+    // because the Overview and full tab would then present a different claim as the best one.
+    () => bestRecordRows(claimsRowsQuery.data ?? NO_ROWS, claimScores.rankings, claimScores.isError),
+    [claimScores.isError, claimScores.rankings, claimsRowsQuery.data]
   );
   const debateRows = React.useMemo(
-    () => sortRows(debatesRowsQuery.data ?? NO_ROWS, 'best', debateRanks),
-    [debateRanks, debatesRowsQuery.data]
+    () => bestRecordRows(debatesRowsQuery.data ?? NO_ROWS, debateScores.rankings, debateScores.isError),
+    [debateScores.isError, debateScores.rankings, debatesRowsQuery.data]
   );
 
   return {
@@ -168,7 +170,11 @@ export function useClaimRecord({
     debatesTotal: debateIds.length,
     claimsLoading: !claimsReady || claimsRowsQuery.isLoading || (claimScores.isLoading && !claimScores.isError),
     debatesLoading: !debatesReady || debatesRowsQuery.isLoading || (debateScores.isLoading && !debateScores.isError),
-    claimsError: Boolean(related.error ?? claimDebates.error ?? extractedClaims.error ?? claimsRowsQuery.error),
-    debatesError: Boolean(related.error ?? claimDebates.error ?? relatedDebates.error ?? debatesRowsQuery.error),
+    claimsError:
+      claimScores.isError ||
+      Boolean(related.error ?? claimDebates.error ?? extractedClaims.error ?? claimsRowsQuery.error),
+    debatesError:
+      debateScores.isError ||
+      Boolean(related.error ?? claimDebates.error ?? relatedDebates.error ?? debatesRowsQuery.error),
   };
 }

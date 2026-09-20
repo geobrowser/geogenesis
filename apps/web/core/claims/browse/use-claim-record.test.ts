@@ -3,7 +3,21 @@ import { describe, expect, it } from 'vitest';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
 
-import { claimsExtractedFromDebatesWhere, relatedClaimIds } from './use-claim-record';
+import { bestRecordRows, claimsExtractedFromDebatesWhere, relatedClaimIds } from './use-claim-record';
+
+describe('bestRecordRows', () => {
+  const claimA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const claimB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+  const rows = [{ entityId: claimA }, { entityId: claimB }];
+
+  it('orders a complete record by ranking score', () => {
+    expect(bestRecordRows(rows, new Map([[claimB, 2]]), false)).toEqual([{ entityId: claimB }, { entityId: claimA }]);
+  });
+
+  it('withholds an unranked fallback when the fixed Best lookup fails', () => {
+    expect(bestRecordRows(rows, new Map(), true)).toEqual([]);
+  });
+});
 
 describe('relatedClaimIds', () => {
   it('drops the source before counting its related claims', () => {

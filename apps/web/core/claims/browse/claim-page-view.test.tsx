@@ -18,6 +18,12 @@ const mocks = vi.hoisted(() => ({
   /** Props the chip section received, or null if the page rendered none. */
   chipSection: null as Record<string, unknown> | null,
   tabs: null as Record<string, unknown> | null,
+  activity: null as Record<string, unknown> | null,
+  sidePanel: null as {
+    activeTabId: string | null;
+    activeSystemTab: string | null;
+    setActiveSystemTab: ReturnType<typeof vi.fn>;
+  } | null,
   record: {
     relatedClaimIds: [],
     claimRows: [],
@@ -117,7 +123,9 @@ vi.mock('./claim-summary', () => ({ ControversialTag: () => null }));
 vi.mock('./use-claim-record', () => ({
   useClaimRecord: () => mocks.record,
 }));
-vi.mock('~/core/state/entity-side-panel-active-tab', () => ({ useEntitySidePanelActiveTab: () => null }));
+vi.mock('~/core/state/entity-side-panel-active-tab', () => ({
+  useEntitySidePanelActiveTab: () => mocks.sidePanel,
+}));
 vi.mock('~/partials/entity-page/entity-tabs', () => ({
   EntityTabs: (props: Record<string, unknown>) => {
     mocks.tabs = props;
@@ -125,7 +133,10 @@ vi.mock('~/partials/entity-page/entity-tabs', () => ({
   },
 }));
 vi.mock('~/partials/profile/profile-activity-section', () => ({
-  ProfileActivitySection: () => <div data-testid="activity" />,
+  ProfileActivitySection: (props: Record<string, unknown>) => {
+    mocks.activity = props;
+    return <div data-testid="activity" />;
+  },
 }));
 vi.mock('~/partials/profile/person-record-feed', () => ({ PersonRecordFeed: () => <div data-testid="feed" /> }));
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
@@ -148,6 +159,8 @@ beforeEach(() => {
   mocks.clamp = null;
   mocks.chipSection = null;
   mocks.tabs = null;
+  mocks.activity = null;
+  mocks.sidePanel = null;
   mocks.record.claimsTotal = 0;
   mocks.record.claimsLoading = false;
   mocks.record.claimsError = false;
@@ -214,6 +227,20 @@ describe('ClaimPageView record', () => {
 
     expect(screen.getByTestId('editable-heading')).toBeInTheDocument();
     expect(screen.getByTestId('editable-description')).toBeInTheDocument();
+  });
+
+  it('makes Activity select claim record tabs inside a side panel', () => {
+    const setActiveSystemTab = vi.fn();
+    mocks.sidePanel = { activeTabId: null, activeSystemTab: null, setActiveSystemTab };
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const kinds = mocks.activity?.kinds as Array<{ key: string; onSeeAll?: () => void }>;
+    kinds.find(kind => kind.key === 'debates')?.onSeeAll?.();
+    kinds.find(kind => kind.key === 'claims')?.onSeeAll?.();
+
+    expect(setActiveSystemTab).toHaveBeenNthCalledWith(1, 'debates');
+    expect(setActiveSystemTab).toHaveBeenNthCalledWith(2, 'claims');
   });
 });
 

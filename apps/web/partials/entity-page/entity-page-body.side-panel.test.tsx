@@ -1,3 +1,4 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
@@ -16,6 +17,9 @@ const mocks = vi.hoisted(() => ({
   heading: null as Record<string, unknown> | null,
   editing: false,
   claimPage: null as Record<string, unknown> | null,
+  entityMediaUrl: null as string | null,
+  previewImageUrl: null as string | null,
+  space: null as { type: string; entity: { id: string; types: { id: string }[] } } | null,
 }));
 
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => mocks.editing }));
@@ -25,10 +29,10 @@ vi.mock('~/core/sync/use-store', () => ({
 // `useCustomBrowseView` asks for the space to tell a person's profile from an
 // ordinary entity. This file renders without a QueryClient on purpose — it is
 // about the header row, not about data — so the space is stubbed like the rest.
-vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: null, isLoading: false }) }));
+vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: mocks.space, isLoading: false }) }));
 vi.mock('~/core/utils/use-entity-media', () => ({
-  useEntityMediaUrl: () => null,
-  useImageUrlFromEntity: () => null,
+  useEntityMediaUrl: () => mocks.entityMediaUrl,
+  useImageUrlFromEntity: () => mocks.previewImageUrl,
 }));
 
 vi.mock('~/partials/entity-page/entity-page-actions', () => ({
@@ -102,6 +106,9 @@ beforeEach(() => {
   mocks.heading = null;
   mocks.editing = false;
   mocks.claimPage = null;
+  mocks.entityMediaUrl = null;
+  mocks.previewImageUrl = null;
+  mocks.space = null;
 });
 
 afterEach(cleanup);
@@ -177,6 +184,50 @@ describe('EntityPageBody claim side panel', () => {
       fitImage: true,
       withAvatar: true,
       contentMaxWidth: 720,
+    });
+  });
+
+  it('does not render a cover or preview fallback as the claim avatar', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
+    mocks.entityMediaUrl = 'https://example.com/cover-fallback.png';
+    mocks.previewImageUrl = 'https://example.com/preview-fallback.png';
+
+    render(
+      <EntityPageBody
+        variant="sidePanel"
+        {...SHARED}
+        coverUrl="https://example.com/cover.png"
+        previewImageUrl="image-entity-id"
+      />
+    );
+
+    expect(mocks.cover).toMatchObject({
+      avatarUrl: null,
+      coverUrl: 'https://example.com/cover.png',
+      withAvatar: true,
+    });
+  });
+
+  it('does not render a cover or preview fallback as a person avatar either', () => {
+    const personType = { id: SystemIds.PERSON_TYPE };
+    mocks.entity = { id: 'entity-1', types: [personType] };
+    mocks.space = { type: 'PERSONAL', entity: { id: 'entity-1', types: [personType] } };
+    mocks.entityMediaUrl = 'https://example.com/cover-fallback.png';
+    mocks.previewImageUrl = 'https://example.com/preview-fallback.png';
+
+    render(
+      <EntityPageBody
+        variant="sidePanel"
+        {...SHARED}
+        coverUrl="https://example.com/cover.png"
+        previewImageUrl="image-entity-id"
+      />
+    );
+
+    expect(mocks.cover).toMatchObject({
+      avatarUrl: null,
+      coverUrl: 'https://example.com/cover.png',
+      withAvatar: true,
     });
   });
 

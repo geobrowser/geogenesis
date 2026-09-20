@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -101,5 +101,17 @@ describe('ProfileActivitySection', () => {
     );
 
     expect(screen.getByRole('button', { name: /Debates/ })).toHaveTextContent('—');
+  });
+
+  it('selects an in-place record tab instead of navigating when given an action', () => {
+    const onSeeAll = vi.fn();
+    render(<ProfileActivitySection kinds={[kind({ onSeeAll })]} />);
+
+    const seeAll = screen.getByRole('button', { name: 'See all debates' });
+    expect(screen.queryByRole('link', { name: 'See all debates' })).not.toBeInTheDocument();
+
+    fireEvent.click(seeAll);
+
+    expect(onSeeAll).toHaveBeenCalledOnce();
   });
 });

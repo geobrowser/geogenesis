@@ -45,6 +45,7 @@ import { useClaimRecord } from './use-claim-record';
 import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
 
 type ClaimTab = 'overview' | 'debates' | 'claims' | 'sources' | 'custom';
+type ClaimSystemTab = Exclude<ClaimTab, 'custom'>;
 
 /** Shared with the cover/avatar header so its left edge stays aligned with the claim column. */
 export const CLAIM_PAGE_CONTENT_MAX_WIDTH = 720;
@@ -252,6 +253,7 @@ export function ClaimPageView({
           record={record}
           topics={topics}
           hrefs={{ debates: hrefs.debates, claims: hrefs.claims }}
+          onSelectSystemTab={sidePanelTab?.setActiveSystemTab}
         />
         {footer}
       </div>
@@ -271,6 +273,7 @@ function ClaimTabPanel({
   record,
   topics,
   hrefs,
+  onSelectSystemTab,
 }: {
   activeTab: ClaimTab;
   entityId: string;
@@ -283,6 +286,7 @@ function ClaimTabPanel({
   record: ReturnType<typeof useClaimRecord>;
   topics: Relation[];
   hrefs: { debates: string; claims: string };
+  onSelectSystemTab?: (tab: ClaimSystemTab) => void;
 }) {
   if (activeTab === 'custom') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
 
@@ -328,6 +332,7 @@ function ClaimTabPanel({
       isError: record.debatesError,
       href: hrefs.debates,
       seeAllLabel: 'See all debates',
+      onSeeAll: onSelectSystemTab ? () => onSelectSystemTab('debates') : undefined,
     },
     {
       key: 'claims',
@@ -338,6 +343,7 @@ function ClaimTabPanel({
       isError: record.claimsError,
       href: hrefs.claims,
       seeAllLabel: 'See all claims',
+      onSeeAll: onSelectSystemTab ? () => onSelectSystemTab('claims') : undefined,
     },
   ];
 

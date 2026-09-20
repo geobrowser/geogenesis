@@ -20,6 +20,8 @@ import { GalleryClaimCard } from './gallery-claim-card';
 
 /** How many cards a gallery holds before the reader is sent to the tab. */
 const SHOWN = 6;
+const SEE_ALL_CLASS =
+  'flex items-center justify-center gap-2 border-t border-divider py-3 text-metadataMedium text-grey-04 transition-colors hover:text-text';
 
 export type ActivityKind = {
   key: string;
@@ -59,6 +61,8 @@ export type ActivityKind = {
   /** The tab holding the rest. */
   href: string;
   seeAllLabel: string;
+  /** Selects an in-place tab when the record is rendered inside a side panel. */
+  onSeeAll?: () => void;
 };
 
 /**
@@ -145,14 +149,31 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
         />
       )}
 
-      <Link
-        href={selected.href}
-        className="flex items-center justify-center gap-2 border-t border-divider py-3 text-metadataMedium text-grey-04 transition-colors hover:text-text"
-      >
-        {selected.seeAllLabel}
-        <RightArrowLongSmall />
-      </Link>
+      <ActivitySeeAll kind={selected} />
     </section>
+  );
+}
+
+function ActivitySeeAll({ kind }: { kind: ActivityKind }) {
+  const content = (
+    <>
+      {kind.seeAllLabel}
+      <RightArrowLongSmall />
+    </>
+  );
+
+  if (kind.onSeeAll) {
+    return (
+      <button type="button" onClick={kind.onSeeAll} className={SEE_ALL_CLASS}>
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <Link href={kind.href} className={SEE_ALL_CLASS}>
+      {content}
+    </Link>
   );
 }
 

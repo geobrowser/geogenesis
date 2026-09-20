@@ -274,10 +274,6 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   if (customView === 'pending') return null;
 
   if (customView === 'claim') {
-    const claimAvatarUrl =
-      props.variant === 'sidePanel'
-        ? (props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null)
-        : props.avatarUrl;
     const showClaimMedia = props.variant === 'sidePanel' || props.showCover !== false;
 
     return (
@@ -287,7 +283,9 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             props.coverSlot
           ) : (
             <EntityPageCover
-              avatarUrl={claimAvatarUrl}
+              // Only an actual Avatar relation belongs in the circular treatment. The generic
+              // media and preview fallbacks may be a cover image, which remains a cover here.
+              avatarUrl={props.avatarUrl}
               coverUrl={props.coverUrl}
               fitImage={props.variant === 'sidePanel'}
               contentMaxWidth={CLAIM_PAGE_CONTENT_MAX_WIDTH}
@@ -381,7 +379,9 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             opened on a cover with nobody in it. Everything else keeps the
             cover-only header — see `EditableCoverAvatarHeader`. */}
         <EntityPageCover
-          avatarUrl={avatarUrl}
+          // A person's fitted avatar must follow the same rule as a claim's: a cover-only entity
+          // cannot reuse its rectangular cover/preview as a circular portrait.
+          avatarUrl={customView === 'person' ? props.avatarUrl : avatarUrl}
           coverUrl={props.coverUrl}
           fitImage
           withAvatar={customView === 'person'}
