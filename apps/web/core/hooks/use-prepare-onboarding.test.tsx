@@ -1,6 +1,19 @@
 import { act, cleanup, renderHook } from '@testing-library/react';
 
+import { useAtomValue, useSetAtom } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  avatarAtom,
+  nameAtom,
+  selectedTopicIdsAtom,
+  spaceIdAtom,
+  stepAtom,
+  topicIdAtom,
+} from '~/partials/onboarding/dialog';
+
+import { usePrepareOnboarding } from './use-prepare-onboarding';
+import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 const mocks = vi.hoisted(() => ({ authenticated: false }));
 
@@ -12,21 +25,6 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/space/space-1/debates',
   useSearchParams: () => new URLSearchParams('tab=open&sort=best'),
 }));
-
-import { useAtomValue, useSetAtom } from 'jotai';
-
-import {
-  avatarAtom,
-  nameAtom,
-  selectedTopicIdsAtom,
-  spaceIdAtom,
-  stepAtom,
-  topicIdAtom,
-} from '~/partials/onboarding/dialog';
-
-import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
-
-import { usePrepareOnboarding } from './use-prepare-onboarding';
 
 afterEach(() => {
   cleanup();

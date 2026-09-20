@@ -121,9 +121,7 @@ function decodeCoverage(response: CoverageResponse): TopicCoveragePage {
   // The spaces these rows themselves named, which is the only space list this query can have. It
   // makes the builder prefer a space a reader can actually open over whichever the entity happened
   // to list first — the same preference the old hand-rolled row expressed as `find(validateSpaceId)`.
-  const openableSpaceIds = new Set(
-    entities.flatMap(entity => entity.spaces.filter(validateSpaceId).map(normId))
-  );
+  const openableSpaceIds = new Set(entities.flatMap(entity => entity.spaces.filter(validateSpaceId).map(normId)));
 
   return {
     // No member/editor spaces: Coverage has no membership context, and the card is rendered with

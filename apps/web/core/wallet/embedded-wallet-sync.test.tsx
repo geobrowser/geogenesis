@@ -3,13 +3,13 @@ import { render } from '@testing-library/react';
 
 import { describe, expect, it, vi } from 'vitest';
 
+import { EmbeddedWalletSync } from './embedded-wallet-sync';
+
 const mocks = vi.hoisted(() => ({ useEnsureEmbeddedWallet: vi.fn() }));
 
 vi.mock('@geogenesis/auth', () => ({
   useEnsureEmbeddedWallet: () => mocks.useEnsureEmbeddedWallet(),
 }));
-
-import { EmbeddedWalletSync } from './embedded-wallet-sync';
 
 describe('EmbeddedWalletSync', () => {
   // The whole point is that it is mounted for the life of the app rather than inside whatever
