@@ -16,6 +16,7 @@ import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 
 import { CLAIM_RECORD_PAGE_SIZE, useClaimExploreRows } from './use-claim-explore-rows';
+import { useClaimRecordSummary } from './use-claim-record-summary';
 
 export { CLAIM_RECORD_PAGE_SIZE } from './use-claim-explore-rows';
 
@@ -147,20 +148,29 @@ function useRankedRecordPage({
  * The Debates record retains its existing scope: debates directly on this claim plus debates on
  * its topic-related candidate motions. Both row sets are hydrated through the explore card
  * projection so the summary and tabs render the same cards as the rest of the product.
+ *
+ * Overview reads exact counts and one Best-ranked page from the bounded server summary. The
+ * exhaustive cursor and client-score path below stays disabled until a full record tab is opened;
+ * completeness is worth paying for there, but not for every reader who only opens the claim.
  */
 export function useClaimRecord({
   claimId,
   spaceId,
   topicIds,
+  loadCompleteRecord = false,
 }: {
   claimId: string;
   spaceId: string;
   topicIds: string[];
+  /** Exhaust and client-rank the complete record only after a full record tab is opened. */
+  loadCompleteRecord?: boolean;
 }) {
+  const summary = useClaimRecordSummary({ claimId, spaceId, topicIds, enabled: !loadCompleteRecord });
+
   const related = useQueryAllEntities({
     where: relatedClaimsWhere({ spaceId, topicIds, requireTagId: DEBATE_TAG_ID }),
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: topicIds.length > 0,
+    enabled: loadCompleteRecord && topicIds.length > 0,
   });
 
   const topicRelatedIds = React.useMemo(() => relatedClaimIds(claimId, related.entities), [claimId, related.entities]);
@@ -178,14 +188,14 @@ export function useClaimRecord({
       ],
     },
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: true,
+    enabled: loadCompleteRecord,
   });
 
   const claimDebateIds = React.useMemo(() => entityIds(claimDebates.entities), [claimDebates.entities]);
   const extractedClaims = useQueryAllEntities({
     where: claimsExtractedFromDebatesWhere(spaceId, claimDebateIds),
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: claimDebateIds.length > 0,
+    enabled: loadCompleteRecord && claimDebateIds.length > 0,
   });
 
   const relatedIds = React.useMemo(
@@ -206,15 +216,15 @@ export function useClaimRecord({
       ],
     },
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: topicRelatedIds.length > 0,
+    enabled: loadCompleteRecord && topicRelatedIds.length > 0,
   });
 
   const debateIds = React.useMemo(
     () => entityIds([...claimDebates.entities, ...relatedDebates.entities]),
     [claimDebates.entities, relatedDebates.entities]
   );
-  const claimsReady = !related.isLoading && !claimDebates.isLoading && !extractedClaims.isLoading;
-  const debatesReady = !related.isLoading && !claimDebates.isLoading && !relatedDebates.isLoading;
+  const claimsReady = loadCompleteRecord && !related.isLoading && !claimDebates.isLoading && !extractedClaims.isLoading;
+  const debatesReady = loadCompleteRecord && !related.isLoading && !claimDebates.isLoading && !relatedDebates.isLoading;
   const recordKey = `${normId(spaceId)}:${normId(claimId)}`;
   const claimsCountUnavailable = Boolean(related.error ?? claimDebates.error ?? extractedClaims.error);
   const debatesCountUnavailable = Boolean(related.error ?? claimDebates.error ?? relatedDebates.error);
@@ -235,7 +245,7 @@ export function useClaimRecord({
     recordKey,
   });
 
-  return {
+  const completeRecord = {
     relatedClaimIds: relatedIds,
     claimRows: claimsPage.rows,
     debateRows: debatesPage.rows,
@@ -254,4 +264,6 @@ export function useClaimRecord({
     fetchNextClaimsPage: claimsPage.fetchNextPage,
     fetchNextDebatesPage: debatesPage.fetchNextPage,
   };
+
+  return loadCompleteRecord ? completeRecord : summary;
 }

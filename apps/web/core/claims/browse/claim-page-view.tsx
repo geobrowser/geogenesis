@@ -131,12 +131,17 @@ export function ClaimPageView({
   const sources = React.useMemo(() => getClaimSources(entity?.relations ?? []), [entity?.relations]);
   // Named types only: an unnamed one would render as a raw id, which says less than no chip.
   const typeName = entity?.types.find(type => type.name)?.name ?? null;
-  const record = useClaimRecord({ claimId: entityId, spaceId, topicIds });
 
   const requestedTab = resolveClaimTab({
     pathname,
     authoredTabId: activeAuthoredTabId,
     panel: sidePanelTab,
+  });
+  const record = useClaimRecord({
+    claimId: entityId,
+    spaceId,
+    topicIds,
+    loadCompleteRecord: requestedTab === 'debates' || requestedTab === 'claims',
   });
 
   const overviewHref = NavUtils.toEntity(spaceId, entityId);

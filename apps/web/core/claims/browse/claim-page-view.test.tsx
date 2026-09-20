@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   tabs: null as Record<string, unknown> | null,
   activity: null as Record<string, unknown> | null,
   feed: null as Record<string, unknown> | null,
+  recordOptions: null as Record<string, unknown> | null,
   sidePanel: null as {
     activeTabId: string | null;
     activeSystemTab: string | null;
@@ -130,7 +131,10 @@ vi.mock('./claim-sources-tab', () => ({ ClaimSourcesTab: () => <div data-testid=
 vi.mock('./claim-end-slot', () => ({ ClaimEndSlot: () => null }));
 vi.mock('./claim-summary', () => ({ ControversialTag: () => null }));
 vi.mock('./use-claim-record', () => ({
-  useClaimRecord: () => mocks.record,
+  useClaimRecord: (options: Record<string, unknown>) => {
+    mocks.recordOptions = options;
+    return mocks.record;
+  },
 }));
 vi.mock('~/core/state/entity-side-panel-active-tab', () => ({
   useEntitySidePanelActiveTab: () => mocks.sidePanel,
@@ -175,6 +179,7 @@ beforeEach(() => {
   mocks.tabs = null;
   mocks.activity = null;
   mocks.feed = null;
+  mocks.recordOptions = null;
   mocks.sidePanel = null;
   mocks.record.claimsTotal = 0;
   mocks.record.claimsLoading = false;
@@ -193,6 +198,18 @@ beforeEach(() => {
 });
 
 describe('ClaimPageView record', () => {
+  it('loads the exhaustive record only after a full record tab is opened', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.recordOptions).toMatchObject({ loadCompleteRecord: false });
+
+    cleanup();
+    mocks.sidePanel = { activeTabId: null, activeSystemTab: 'claims', setActiveSystemTab: vi.fn() };
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.recordOptions).toMatchObject({ loadCompleteRecord: true });
+  });
+
   it('offers product tabs before authored claim tabs', () => {
     mocks.record.claimsTotal = 1;
 

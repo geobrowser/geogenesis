@@ -17,14 +17,14 @@ function relation({ id, sourceId, deleted = false }: { id: string; sourceId: str
 describe('getClaimSources', () => {
   it('drops deleted sources and dedupes live targets in relation order', () => {
     const sources = getClaimSources([
-      relation({ id: 'r1', sourceId: 'source-1' }),
-      relation({ id: 'r2', sourceId: 'source-1' }),
+      relation({ id: 'r1', sourceId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }),
+      relation({ id: 'r2', sourceId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }),
       relation({ id: 'r3', sourceId: 'source-2', deleted: true }),
       relation({ id: 'r4', sourceId: 'source-3' }),
     ]);
 
     expect(sources).toEqual([
-      { id: 'source-1', name: 'Source source-1' },
+      { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', name: 'Source aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' },
       { id: 'source-3', name: 'Source source-3' },
     ]);
   });

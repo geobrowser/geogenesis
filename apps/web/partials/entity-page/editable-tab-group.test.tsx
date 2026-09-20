@@ -81,7 +81,11 @@ describe('EditableTabGroup active indicator', () => {
 
     render(<EditableTabGroup entityId="claim-1" spaceId="space-1" editableTabs={editableTabs} overviewHref="/claim" />);
 
+    // dnd-kit's sortable attributes intentionally give this anchor the rendered role `button` so
+    // keyboard users can pick it up. Assert both halves of that contract: its accessible role and
+    // its real navigation target. Querying `link` would not match the DOM rendered in production.
     const activeLink = screen.getByRole('button', { name: 'Authored tab' });
+    expect(activeLink).toHaveAttribute('href', '/claim?tabId=tab-1');
 
     await waitFor(() => expect(document.querySelectorAll('[data-active-tab-indicator]')).toHaveLength(1));
 

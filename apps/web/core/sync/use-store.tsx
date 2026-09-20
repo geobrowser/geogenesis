@@ -85,6 +85,11 @@ function localEntityLatestTimestamp(entity: Entity): string {
   return latest;
 }
 
+/** Store lookups can miss with either nullish spelling; never narrow only one of them. */
+function isMaterializedEntity(entity: Entity | null | undefined): entity is Entity {
+  return entity != null;
+}
+
 /**
  * Prepend unpublished local entities that match the query filter but are not yet in the server page
  */
@@ -98,7 +103,7 @@ function mergeUnpublishedLocalEntities(
   const localIds = getUnpublishedLocalEntityIds().filter(id => !serverIdSet.has(id));
   if (localIds.length === 0) return serverEntities;
 
-  const localEntities = localIds.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
+  const localEntities = localIds.map(id => store.getEntity(id)).filter(isMaterializedEntity);
 
   if (localEntities.length === 0) return serverEntities;
 
@@ -426,7 +431,7 @@ export function useQueryEntities({
       // must fall through to the server-filtered `data.ids`.
       if (where?.id?.in && !sort && Object.keys(where).length === 1) {
         const ids = where.id.in;
-        const entities = ids.map(id => store.getEntity(id)).filter((e): e is Entity => e != null);
+        const entities = ids.map(id => store.getEntity(id)).filter(isMaterializedEntity);
         return first !== undefined ? entities.slice(0, first) : entities;
       }
 
@@ -434,7 +439,7 @@ export function useQueryEntities({
       // from the server-returned ids; store.getEntity still picks up local
       // edits. Falls through to a local EntityQuery only before first fetch.
       if (data?.ids) {
-        const serverEntities = data.ids.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
+        const serverEntities = data.ids.map(id => store.getEntity(id)).filter(isMaterializedEntity);
 
         // Cursor-anchored fetches of later pages arrive as (after, offset:
         // undefined), so a missing offset alone does not mean page one.
@@ -493,8 +498,9 @@ type QueryAllEntitiesOptions = {
 /**
  * Fetches a complete cursor connection before exposing its entities.
  *
- * Use this for bounded record summaries whose totals and client-side ranking must describe the
- * whole set. Ordinary list screens should keep using `useQueryEntities` and expose pagination.
+ * Use this only when the caller explicitly needs the whole connection and can activate it lazily.
+ * Summary/list screens should use a server count plus a bounded page, or `useQueryEntities` with
+ * pagination; exhausting a broad relation filter during initial render scales with the graph.
  */
 export function useQueryAllEntities({ where, pageSize = 100, enabled = true, orderBy }: QueryAllEntitiesOptions) {
   const cache = useQueryClient();
@@ -523,7 +529,7 @@ export function useQueryAllEntities({ where, pageSize = 100, enabled = true, ord
     reactive,
     () => {
       if (!enabled || !data) return [];
-      return data.ids.map(id => store.getEntity(id)).filter((entity): entity is Entity => entity !== null);
+      return data.ids.map(id => store.getEntity(id)).filter(isMaterializedEntity);
     },
     equal
   );
