@@ -27,6 +27,8 @@ import { Input } from '~/design-system/input';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
+const NO_SPACE_IDS: string[] = [];
+
 const listScrollClassName =
   'max-h-[198px] min-h-0 overflow-y-auto overscroll-contain scroll-smooth snap-y snap-mandatory';
 const listRowClassName = 'snap-start min-h-[44px] shrink-0';
@@ -122,7 +124,8 @@ export function DataBlockCreateEntitySpaceDropdown({
     trapWheelToElement(e.currentTarget, e);
   }, []);
 
-  const sourceSpaceIds = source.type === 'SPACES' ? source.value : [];
+  // Memoised because the `[]` branch is a new array each render, and the memo below is keyed on it.
+  const sourceSpaceIds = React.useMemo(() => (source.type === 'SPACES' ? source.value : NO_SPACE_IDS), [source]);
   const { spacesById, isLoading: sourceSpacesLoading } = useSpacesByIds(sourceSpaceIds);
 
   const { data: scopeData, isLoading: scopeListLoading } = useQueryFromSpacesList(
