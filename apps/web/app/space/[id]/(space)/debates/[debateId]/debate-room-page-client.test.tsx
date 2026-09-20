@@ -508,6 +508,43 @@ describe('upcomingTurnLabel', () => {
   });
 });
 
+/**
+ * Open a device settings menu once the intro connection can no longer close it.
+ *
+ * The intro screen opens its own LiveKit connection, and `devicesLocked` — `ready_at`, or
+ * `roomState` being 'connecting'/'reconnecting' — force-closes any open settings menu
+ * (`debate-pre-join-screen.tsx`, "an open popover or sheet keeps its radios clickable"). That
+ * behaviour is deliberate and has its own test. The problem is the race around it: a menu opened
+ * while the intro connection is still in flight gets shut underneath the test, and every query for
+ * a device radio then fails with `Unable to find role="radio"`.
+ *
+ * It reproduces at about one run in six under CPU contention, and deterministically by holding
+ * `roomConnect` pending across the interaction — which is why it surfaced on CI, on this branch
+ * and on master alike, while passing every time on an idle machine. An earlier attempt read it as
+ * a re-render between two clicks and switched to `findByRole`; waiting longer cannot help, because
+ * the menu is closed and stays closed.
+ *
+ * So wait for the connection to have been attempted *and* for the trigger to be enabled, which is
+ * exactly `devicesLocked === false`.
+ */
+/** As {@link openDeviceSettings}, but focused first — for the tests that assert focus return. */
+async function openDeviceSettingsFocused(name: 'Audio settings' | 'Video settings') {
+  await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+  const trigger = await screen.findByRole('button', { name });
+  await waitFor(() => expect(trigger).toBeEnabled());
+  trigger.focus();
+  fireEvent.click(trigger);
+  return trigger;
+}
+
+async function openDeviceSettings(name: 'Audio settings' | 'Video settings') {
+  await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+  const trigger = await screen.findByRole('button', { name });
+  await waitFor(() => expect(trigger).toBeEnabled());
+  fireEvent.click(trigger);
+  return trigger;
+}
+
 describe('DebateRoomPageClient', () => {
   // GEO-2599. The debate-again picker's All tab waits on the claim-space allowlist, which walks the
   // Root space's topic tree — about thirteen sequential round trips cold, and the tab stays empty
@@ -796,7 +833,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
@@ -828,7 +865,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
@@ -1090,7 +1127,7 @@ describe('DebateRoomPageClient', () => {
 
     const audioTrigger = await screen.findByRole('button', { name: 'Audio settings' });
     expect(audioTrigger).toHaveAttribute('data-state', 'closed');
-    fireEvent.click(audioTrigger);
+    await openDeviceSettings('Audio settings');
     const audioSettings = screen.getByRole('dialog', { name: 'Audio settings' });
     expect(audioSettings).toHaveAttribute('data-side', 'top');
     expect(audioSettings.closest('[data-radix-popper-content-wrapper]')?.parentElement).toHaveClass('elevated-popover');
@@ -1180,7 +1217,7 @@ describe('DebateRoomPageClient', () => {
     mocks.selectAudioOutput.mockReturnValueOnce(selectedOutput.promise);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
 
@@ -1225,7 +1262,7 @@ describe('DebateRoomPageClient', () => {
     mocks.supportsAudioOutputSelection.mockReturnValue(false);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
 
     expect(await screen.findByRole('radio', { name: 'System default' })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled();
@@ -1238,7 +1275,7 @@ describe('DebateRoomPageClient', () => {
     mocks.selectAudioOutput.mockRejectedValueOnce(Object.assign(new Error('Not allowed'), { name: 'NotAllowedError' }));
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
 
@@ -1269,7 +1306,7 @@ describe('DebateRoomPageClient', () => {
     );
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     // Awaited, not `getByRole`: the speaker list is populated from `enumerateDevices`, and
     // selecting a speaker re-renders it while that selection is still pending — so a name can be
     // briefly absent between two clicks. A synchronous query here made this test fail about one run
@@ -1298,9 +1335,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
-    trigger.focus();
-    fireEvent.click(trigger);
+    const trigger = await openDeviceSettingsFocused('Audio settings');
     const settings = screen.getByRole('dialog', { name: 'Audio settings' });
 
     fireEvent.keyDown(settings, { key: 'Escape' });
@@ -1313,8 +1348,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
-    fireEvent.click(trigger);
+    const trigger = await openDeviceSettings('Audio settings');
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
     await act(() => new Promise(resolve => window.setTimeout(resolve, 0)));
 
@@ -1329,8 +1363,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
-    fireEvent.click(trigger);
+    const trigger = await openDeviceSettings('Audio settings');
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
 
     fireEvent.click(trigger);
@@ -1342,7 +1375,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
     const selectedCamera = screen.getByRole('radio', { name: 'HD Pro Webcam' });
     selectedCamera.focus();
 
@@ -1361,7 +1394,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     const pendingTracks =
       deferred<
         Array<ReturnType<typeof createLocalAudioTrack> | { mediaStreamTrack: { kind: string }; stop: () => void }>
@@ -1383,7 +1416,7 @@ describe('DebateRoomPageClient', () => {
     setMobileLayout(true);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
 
     expect(screen.getByRole('dialog', { name: 'Video settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
     const videos = document.querySelectorAll('video');
@@ -1400,7 +1433,7 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByText('Speak to test your mic')).toBeInTheDocument();
     expect(screen.getByRole('meter')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Audio settings' }).parentElement).toHaveClass('gap-[6px]');
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
 
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
     expect(screen.getByText('Select a microphone')).toBeInTheDocument();
@@ -1412,8 +1445,7 @@ describe('DebateRoomPageClient', () => {
     setMobileLayout(true);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
-    fireEvent.click(trigger);
+    const trigger = await openDeviceSettings('Audio settings');
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Audio settings' }));
@@ -1426,7 +1458,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     fireEvent.click(await screen.findByRole('radio', { name: 'Studio Mic' }));
     await waitFor(() =>
       expect(mocks.createLocalTracks).toHaveBeenCalledWith({
@@ -1685,7 +1717,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
@@ -1804,7 +1836,7 @@ describe('DebateRoomPageClient', () => {
     const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
     expect(screen.getByRole('radio', { name: 'Desk Camera' })).toBeInTheDocument();
 
     mocks.debate = {
