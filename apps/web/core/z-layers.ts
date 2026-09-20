@@ -30,6 +30,15 @@ export const Z_LAYERS = {
   // Strictly above statusBar: <StatusBar /> renders after <Toast /> in
   // entry.tsx, so an equal z-index would stack the status bar over toasts.
   toast: 10005,
+
+  // The availability calendar, which on a phone is the whole screen. Above the status bar, the
+  // toast and the chat launcher, whose corners would otherwise sit on top of its footer and take
+  // the taps meant for Clear all and Save.
+  //
+  // Renumbered from 10003/10004: master moved statusBar to 10004 and toast to 10005 after this
+  // was written, so the original pair would now sit *below* both -- the opposite of the point.
+  scheduleDialogBackdrop: 10006,
+  scheduleDialog: 10007,
 } as const;
 
 export const Z_LAYER_CLASS = {
@@ -45,4 +54,6 @@ export const Z_LAYER_CLASS = {
   entitySidePanelOverSlideUp: 'z-[10002]',
   statusBar: 'z-status-bar',
   toast: 'z-toast',
+  scheduleDialogBackdrop: 'z-[10006]',
+  scheduleDialog: 'z-[10007]',
 } as const;

@@ -1,5 +1,7 @@
 'use client';
 
+import type { AvailabilityBlock } from '~/core/availability/blocks';
+import { fromPayload, localTimezone, toPayload } from '~/core/availability/blocks';
 import { usePrivy } from '@geogenesis/auth';
 import {
   type Query,
@@ -66,6 +68,8 @@ import {
   rejectDebateRematchRequest,
   requestDebateMediaProcessing,
   retryDebatePhaseBoundaryRequest,
+  getDebateSchedule,
+  replaceDebateSchedule,
   updateDebateAvailability,
 } from './api';
 import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
@@ -118,6 +122,7 @@ export const debateQueryKeys = {
   media: (debateId: string) => ['debates', 'media', debateId] as const,
   transcript: (debateId: string, format: TranscriptFormat) => ['debates', 'transcript', debateId, format] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
+  schedule: (accountKey: string | null) => ['debates', 'account', accountKey, 'schedule'] as const,
   rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,
@@ -566,6 +571,50 @@ export function useDebateActivity(enabled = true) {
   }, [query.data, withAvatar]);
 
   return withQueryData(query, data);
+}
+
+/**
+ * The viewer's saved availability calendar (GEO-2932, GEO-2936).
+ *
+ * Returns blocks rather than the wire payload, so callers never handle the one-based `weekday`
+ * or the absent-when-empty `exceptions` themselves — `fromPayload` is the only place that knows.
+ */
+export function useDebateSchedule() {
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  const query = useQuery({
+    queryKey: debateQueryKeys.schedule(accountKey),
+    // Signed out there is no schedule to fetch, and asking would 401 on every render.
+    enabled: accountKey !== null,
+    queryFn: () => getDebateSchedule(getPrivyIdentityToken, accountKey),
+  });
+
+  return {
+    ...query,
+    blocks: query.data ? fromPayload(query.data.schedule) : undefined,
+    /** Whether they have ever saved one, which several surfaces gate on. */
+    isSet: query.data?.is_set ?? false,
+  };
+}
+
+/**
+ * Saves the whole calendar.
+ *
+ * The timezone is read at save time rather than stored with the editor's state: a schedule means
+ * "18:00 where I am", and the zone that matters is the one they were in when they said so.
+ */
+export function useSaveDebateSchedule() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const scheduleKey = debateQueryKeys.schedule(accountKey);
+
+  return useMutation({
+    mutationFn: (blocks: AvailabilityBlock[]) =>
+      replaceDebateSchedule(toPayload(blocks, localTimezone()), getPrivyIdentityToken, accountKey),
+    // The server answers with the stored form, so take it rather than re-deriving: anything it
+    // normalised on the way in is then what the calendar draws.
+    onSuccess: saved => queryClient.setQueryData(scheduleKey, saved),
+  });
 }
 
 export function useUpdateDebateAvailability() {
