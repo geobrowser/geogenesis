@@ -368,20 +368,31 @@ export async function playBothWithMutedFallback(
   if (first.running && !first.refused) return 'playing';
 
   /*
-   * A refusal outranks the cancellation check below, and that ordering is the
-   * whole fix for GEO-2978.
+   * A refusal outranks the cancellation check below — on the autoplay path, which is the one
+   * GEO-2978 is about.
    *
-   * `resumeBoth` bumps its generation on entry, and its caller re-enters while
-   * `playing` is false — so by the time this returns, `isCancelled` is routinely
-   * true simply because the *next* attempt has started. Reporting 'cancelled'
-   * there threw away the browser's answer, the next attempt threw away its own,
-   * and the card never learned it had been refused: no play control, no error,
-   * just a still frame. Measured against the preview with `play()` forced to
-   * reject — zero play controls on six cards.
+   * `resumeBoth` bumps its generation on entry and its caller re-enters while `playing` is false,
+   * so by the time this returns `isCancelled` is routinely true simply because the *next* attempt
+   * has started. Reporting 'cancelled' there threw away the browser's answer, the next attempt
+   * threw away its own, and the card never learned it had been refused: no play control, no error,
+   * just a still frame. Measured against the preview with `play()` forced to reject — zero play
+   * controls on six cards.
    *
-   * Only when there is nothing left to try. With audio still on, the muted retry
-   * below is the thing that usually turns a refusal into playback, and skipping
-   * it to report early would lose real playback to protect a flag.
+   * **The mute condition is what scopes this to autoplay, and it is deliberate.** A card the feed
+   * is starting is stopped, and `DebateFeedPlayer` derives `muted` as `!audible || mutedByUser`
+   * with `audible` requiring `playing` — so both elements are muted and this check is the one that
+   * fires. A resume of a pair that was already *playing* — `endScrub`, or the return from a
+   * backgrounded tab — has the speaking element unmuted, and there a refusal means only "not
+   * unmuted", which is the ordinary case GEO-2783 exists for. 'refused' is a statement about the
+   * device, and latching it on a card that would play perfectly well muted would take the retry
+   * away from a card that deserves one, so it is not reported until the muted retry has answered.
+   *
+   * The consequence, named because it is a real cost rather than an oversight: an unmuted refusal
+   * that is also cancelled returns 'cancelled' and the browser's answer is lost for that attempt.
+   * It survives because the last attempt in an overlap chain is by definition not cancelled, and
+   * that attempt starts from a stopped card with both elements muted — so it takes this branch.
+   * One attempt's delay, not a lost answer. Pinned by a test, since it rests on reasoning about a
+   * caller rather than on anything visible here.
    */
   if (first.refused && primary.muted && secondary.muted) return 'refused';
 

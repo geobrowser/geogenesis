@@ -184,6 +184,17 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
    */
   const playingGenerationRef = React.useRef(0);
   /**
+   * Which debate the card is showing, so an attempt cannot answer for a different one.
+   *
+   * `resumeGenerationRef` scopes an attempt to the *card*, which was enough while a card meant one
+   * debate. It does not: the feed keys its cards by claim, so a re-rank hands a new debate to this
+   * same hook, and an attempt already in flight goes on to report about a debate nobody is looking
+   * at any more. The refusal write is the case that needed a second counter, because it sits above
+   * the ownership check on purpose — a refusal has to outlive supersession within a debate, and
+   * must not outlive the debate itself.
+   */
+  const debateGenerationRef = React.useRef(0);
+  /**
    * How many resumes are still confirming.
    *
    * `resumeGenerationRef` above answers "is this attempt still the current one"; this answers
@@ -331,6 +342,18 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
      */
     setAutoplayBlocked(false);
     setUserPaused(false);
+    /*
+     * And nothing still in flight may write either of them back.
+     *
+     * Clearing the state is only half of it: `resumeBoth` awaits up to ~600ms, so an attempt
+     * belonging to the debate being replaced can still be inside that window. Bumping both
+     * counters retires it — `resumeGenerationRef` for everything under the ownership check, which
+     * would otherwise set `playing` and a turn for the wrong debate on elements now holding a
+     * different `src`, and `debateGenerationRef` for the refusal write, which deliberately runs
+     * above that check and would re-latch the tap control on a debate nothing has asked about yet.
+     */
+    resumeGenerationRef.current++;
+    debateGenerationRef.current++;
 
     Promise.all([
       getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot1RecordingFilename }),
@@ -596,6 +619,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       // Claim this attempt. Bumping on entry also supersedes an earlier resume that is still
       // awaiting, so two overlapping activations cannot both write state.
       const generation = ++resumeGenerationRef.current;
+      const debateGeneration = debateGenerationRef.current;
       setError(null);
       // Realign the pair so a resume can't leave the recordings drifting. Off the *running*
       // element's clock, not slot 1's unconditionally: a resume on return from a backgrounded tab
@@ -662,7 +686,13 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
        * control over a running video, and the tap would stop it — the two-tap
        * symptom this was written to remove.
        */
-      if (outcome === 'refused' && playingGenerationRef.current < generation) setAutoplayBlocked(true);
+      if (
+        outcome === 'refused' &&
+        debateGenerationRef.current === debateGeneration &&
+        playingGenerationRef.current < generation
+      ) {
+        setAutoplayBlocked(true);
+      }
 
       if (resumeGenerationRef.current !== generation) return;
 

@@ -539,6 +539,55 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
     expect(result.current.userPaused).toBe(false);
   });
 
+  /**
+   * Clearing the state is only half of a debate change.
+   *
+   * `resumeBoth` awaits up to ~600ms, so an attempt belonging to the debate being replaced can
+   * still be inside that window when the new one arrives. Its refusal is written *above* the
+   * ownership check on purpose — a refusal has to outlive supersession within a debate — and so it
+   * came back after the reset and re-latched the tap control on a debate nothing had asked about
+   * yet, which then skipped its first autoplay. The refusal must outlive supersession, not the
+   * debate.
+   */
+  it('lets no attempt from the replaced debate re-latch a refusal on the new one', async () => {
+    const { result, rerender } = renderHook(({ debate }) => useDebatePlayback(debate, true), {
+      initialProps: { debate: debateFixture('debate-1') },
+    });
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    result.current.slot1VideoRef.current = slot1;
+    result.current.slot2VideoRef.current = slot2;
+
+    // An attempt for debate-1 is in flight and has not answered yet.
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+    });
+
+    /*
+     * The feed re-ranks and hands this card a different debate. Its own `act` on purpose: the
+     * replacement's effects have to be fully flushed *before* the old attempt answers, or the new
+     * debate's reset lands afterwards and cleans up the stale latch by accident — which is the
+     * ordering this test passed under before it tested anything.
+     */
+    await act(async () => {
+      rerender({ debate: debateFixture('debate-2') });
+    });
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+
+    // Only now does debate-1's attempt hear back.
+    await act(async () => {
+      slot1.rejectPlay();
+      slot2.rejectPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.autoplayBlocked).toBe(false);
+    expect(result.current.playing).toBe(false);
+  });
+
   /** The positive control: an uninterrupted resume still reports playback. */
   it('reports playing when nothing interrupts it', async () => {
     const { result, slot1, slot2 } = await mounted();

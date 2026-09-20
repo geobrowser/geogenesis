@@ -633,6 +633,31 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
   });
 
   /**
+   * An unmuted refusal waits for the muted retry, even when that costs the answer (GEO-2783).
+   *
+   * Pinned because the reasoning lives in a caller. A refusal on an unmuted pair means only "not
+   * unmuted" — the ordinary case the muted fallback exists for — so reporting 'refused' would
+   * latch a tap control on a card that plays perfectly well muted. Cancelled, there is no retry
+   * left to ask, so the answer is genuinely lost for this attempt; it survives because the last
+   * attempt in an overlap chain is not cancelled and starts from a stopped card, where both
+   * elements are muted and the branch above fires.
+   */
+  it('reports a cancellation, not a refusal, when the refused pair still had audio to give up', async () => {
+    const a = fakeVideo({ muted: false });
+    const b = fakeVideo({ muted: false });
+    a.play = async function refuse(this: { plays: number }) {
+      this.plays += 1;
+      throw new DOMException('The request is not allowed by the user agent or the platform.', 'NotAllowedError');
+    };
+    b.play = a.play.bind(b);
+
+    expect(await playBothWithMutedFallback(a, b, { isCancelled: () => true })).toBe('cancelled');
+    // And crucially it did not start anything while cancelled: one call each, no muted retry.
+    expect(a.plays).toBe(1);
+    expect(b.plays).toBe(1);
+  });
+
+  /**
    * But an interruption of ours is still a cancellation, not a refusal — and the wording is the
    * point. Classification used to fall back to matching the message, where a phrase broad enough
    * for WebKit's "not allowed by the user agent" also caught an interruption that named the user
