@@ -105,7 +105,10 @@ export function RankingTabButton({
       type="button"
       onClick={onClick}
       className={cx(tabGroupTabLinkStyles({ active }), 'h-6 gap-2 !text-smallTitle !font-semibold lg:!font-medium')}
-      aria-selected={active}
+      // `aria-pressed`, not `aria-selected`: these are plain buttons with no `role="tab"` and no
+      // `tablist` around them, and `aria-selected` is not supported on a button — it was being
+      // dropped, so nothing announced which tab was active.
+      aria-pressed={active}
       aria-label={ariaLabel}
     >
       {children}
