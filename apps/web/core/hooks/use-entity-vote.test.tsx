@@ -135,7 +135,13 @@ describe('useEntityResponse indexing reconciliation', () => {
       mocks.fetchResponse.mockReturnValue(direction === 'clear' ? null : direction);
       const { wrapper } = createHarness();
       const { result } = renderHook(
-        () => useEntityResponse({ entityId: 'story-1', entityName: 'A named news story', spaceId: TARGET_SPACE_ID, responseKind: 'curation' }),
+        () =>
+          useEntityResponse({
+            entityId: 'story-1',
+            entityName: 'A named news story',
+            spaceId: TARGET_SPACE_ID,
+            responseKind: 'curation',
+          }),
         { wrapper }
       );
       await act(async () => {

@@ -257,7 +257,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
           relation.isDeleted ? storage.relations.delete(relation) : storage.relations.set(relation)
         );
     },
-    [spaceId, storage]
+    [storage]
   );
 
   /**
@@ -776,6 +776,8 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
     },
     [
       canEdit,
+      current.avatarUrl,
+      current.bannerUrl,
       current.description,
       current.name,
       dispatch,
@@ -786,6 +788,8 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       settleSuccess,
       spaceId,
       stage,
+      storage.relations,
+      storage.values,
       takeDisplaced,
     ]
   );

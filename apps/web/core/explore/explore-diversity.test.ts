@@ -21,10 +21,10 @@ import {
   longestTypeRun,
   targetMixAppliesTo,
 } from './explore-diversity';
+import { decodeExploreWindowCursor, encodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
 
 /** Type keys are compared hyphenless, the same normalisation exploreItemTypeKey applies. */
 const normIdForTest = (id: string) => id.replace(/-/g, '').toLowerCase();
-import { decodeExploreWindowCursor, encodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
 
 type Item = { id: string; types: { id: string }[] };
 

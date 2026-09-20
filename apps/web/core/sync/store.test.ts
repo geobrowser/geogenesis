@@ -624,7 +624,10 @@ describe('GeoStore', () => {
       it('does not resurrect a description the reader just deleted, unscoped', () => {
         syncedEntities.set('entity-1', { ...mockEntity1, name: null, description: 'Server description' });
         reactiveValues.set([
-          { ...textValue('d-root', SystemIds.DESCRIPTION_PROPERTY, ROOT, 'Root description'), isDeleted: true } as never,
+          {
+            ...textValue('d-root', SystemIds.DESCRIPTION_PROPERTY, ROOT, 'Root description'),
+            isDeleted: true,
+          } as never,
         ]);
 
         expect(store.getEntity('entity-1')!.description).toBeNull();

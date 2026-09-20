@@ -11,9 +11,9 @@ describe('proposalTimestampSeconds', () => {
   it('shows the submission time while voting has not started', () => {
     // The case from the report: v2 contracts leave both stamps at 0 until the first
     // vote, so the row had no date at all to show.
-    expect(
-      proposalTimestampSeconds({ status: 'PROPOSED', startTime: 0, endTime: 0, submittedAt: SUBMITTED })
-    ).toBe(SUBMITTED);
+    expect(proposalTimestampSeconds({ status: 'PROPOSED', startTime: 0, endTime: 0, submittedAt: SUBMITTED })).toBe(
+      SUBMITTED
+    );
   });
 
   it('shows the submission time while voting is under way', () => {
