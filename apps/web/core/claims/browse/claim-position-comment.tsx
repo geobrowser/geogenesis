@@ -105,7 +105,7 @@ export function ClaimPositionCommentControl({
         />
       </div>
       {action ? (
-        <div className="@container flex flex-col gap-2 rounded-xl border border-grey-02 bg-white p-3 @[360px]:flex-row @[360px]:items-center">
+        <div className="flex items-center gap-2 rounded-xl border border-grey-02 bg-white p-3">
           <textarea
             ref={textareaRef}
             value={comment}
@@ -121,7 +121,7 @@ export function ClaimPositionCommentControl({
                 setComment('');
               }
             }}
-            placeholder={`Why do you ${action.toLowerCase()}?…`}
+            placeholder={`Why do you ${action.toLowerCase()}?`}
             aria-label={`Why do you ${action.toLowerCase()}?`}
             autoFocus
             rows={1}

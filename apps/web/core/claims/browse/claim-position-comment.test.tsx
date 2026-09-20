@@ -66,7 +66,8 @@ describe('ClaimPositionCommentControl', () => {
     expect(screen.getByRole('button', { name: 'Comment' })).toBeDisabled();
 
     const composer = screen.getByRole('textbox').parentElement as HTMLElement;
-    expect(composer).toHaveClass('flex-col', '@[360px]:flex-row');
+    expect(composer).toHaveClass('flex', 'items-center');
+    expect(composer).not.toHaveClass('flex-col');
   });
 
   it('grows with the comment until the height cap, then scrolls inside the textarea', () => {
