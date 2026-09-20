@@ -23,8 +23,6 @@ const {
   CLAIM_MORE,
   CLAIM_SOURCE,
   CLAIM_FRESH,
-  CRYPTO_SPACE,
-  PODCASTS_SPACE,
   NAME_PROPERTY,
 } = vi.hoisted(() => ({
   SPACE_1: '019fedae-72b6-7ab2-927a-df044d57c566',

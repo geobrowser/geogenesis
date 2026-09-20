@@ -7,7 +7,6 @@ import type { MouseEvent, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Source } from '~/core/blocks/data/source';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';

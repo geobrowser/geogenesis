@@ -1,7 +1,4 @@
-import { Effect, Either } from 'effect';
 
-import { Environment } from '../environment';
-import { graphql } from './subgraph/graphql';
 
 function getFetchProfileQuery(entityId: string) {
   // Have to fetch the profiles as an array as we can't query an individual profile by it's account.

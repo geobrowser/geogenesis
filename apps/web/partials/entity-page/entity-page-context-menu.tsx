@@ -96,7 +96,7 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
     try {
       await navigator.clipboard.writeText(entityId);
       setIsMenuOpen(false);
-    } catch (err) {
+    } catch {
       console.error('Failed to copy entity ID in: ', entityId);
     }
   };

@@ -30,7 +30,6 @@ import type { Relation } from '~/core/types';
 
 import { CheckboxVisual } from '~/design-system/checkbox';
 import { DateTimeInput } from '~/design-system/editable-fields/date-field';
-import { DateOnlyInput } from '~/design-system/editable-fields/date-field';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 

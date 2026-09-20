@@ -149,7 +149,7 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
 
                         try {
                           router.push(NavUtils.toEntity(spaceId, entityId));
-                        } catch (error) {
+                        } catch {
                           // Navigation failed silently
                         }
 
@@ -172,7 +172,7 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
 
                           // Apply the transaction
                           dispatch(transaction);
-                        } catch (error) {
+                        } catch {
                           // Error removing link silently
                         }
 
@@ -195,7 +195,7 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
 
                   // Set up auto-update for position
                   cleanupAutoUpdate = autoUpdate(linkElement, popupElement, updatePosition);
-                } catch (error) {
+                } catch {
                   // GraphLinkHover error silently
                 }
               }, 50); // End setTimeout

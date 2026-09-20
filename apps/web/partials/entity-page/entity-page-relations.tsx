@@ -89,7 +89,7 @@ const Relationship = ({ relation, spaceId }: RelationshipProps) => {
         setHasCopiedId(false);
         setIsMenuOpen(false);
       }, 1500);
-    } catch (err) {
+    } catch {
       console.error('Failed to copy relation ID: ', relation.id);
     }
   };
