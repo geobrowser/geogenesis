@@ -18,14 +18,13 @@ import {
 } from '~/core/governance/proposal-comment-attribution';
 import { useProposalCommentAttribution } from '~/core/governance/use-proposal-comment-attribution';
 import { useComments } from '~/core/hooks/use-comments';
-import { useCreateComment } from '~/core/hooks/use-create-comment';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceRoles } from '~/core/hooks/use-space-editor-ids';
 import { uuidToHex } from '~/core/id/normalize';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
-import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 import { NavUtils } from '~/core/utils/utils';
@@ -235,11 +234,10 @@ interface CommentSectionProps {
 
 export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
-  const { createComment, editComment } = useCreateComment(entityId);
+  const { publishComment, editComment } = usePublishComment(entityId, spaceId);
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const { open: openSignInPrompt } = useSignInPrompt();
-  const enqueuePendingAction = useEnqueuePendingAction();
   const [pendingComposer, setPendingComposer] = useAtom(pendingCommentComposerAtom);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [pendingReplyToId, setPendingReplyToId] = useState<string | null>(null);
@@ -332,36 +330,19 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
   }, []);
 
   // Fire-and-forget: the input boxes close/clear synchronously. The optimistic row appears
-  // in the cache immediately (via useCreateComment) with a "Publishing…" tag; sessionNewIds
+  // in the cache immediately (via usePublishComment) with a "Publishing…" tag; sessionNewIds
   // is updated via the onOptimistic callback so the row pins to the top right away.
   const handleCreateComment = React.useCallback(
     (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => {
       if (!smartAccount) return;
 
-      void createComment({
+      void publishComment({
         text,
-        targetSpaceId: spaceId,
         ancestorComments,
         onOptimistic: markSessionNew,
-      }).then(result => {
-        if (!result || result.published) return;
-        enqueuePendingAction({
-          id: `comment:${entityId}:${result.id}`,
-          label: 'your comment',
-          requires: 'personalSpace',
-          run: () =>
-            createComment({
-              text,
-              targetSpaceId: spaceId,
-              ancestorComments,
-              commentId: result.id,
-            }).then(published => {
-              if (!published?.published) throw new Error('Comment could not be published');
-            }),
-        });
       });
     },
-    [createComment, smartAccount, spaceId, entityId, enqueuePendingAction, markSessionNew]
+    [markSessionNew, publishComment, smartAccount]
   );
 
   const handleEditComment = React.useCallback(

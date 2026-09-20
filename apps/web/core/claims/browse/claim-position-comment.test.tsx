@@ -16,8 +16,8 @@ vi.mock('~/core/state/pending-personal-space', () => ({
   PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
 }));
 
-vi.mock('~/core/hooks/use-create-comment', () => ({
-  useCreateComment: () => ({ createComment: mocks.createComment }),
+vi.mock('~/core/hooks/use-publish-comment', () => ({
+  usePublishComment: () => ({ publishComment: mocks.createComment }),
 }));
 
 describe('ClaimPositionCommentControl', () => {
@@ -163,7 +163,6 @@ describe('ClaimPositionCommentControl', () => {
     await waitFor(() => expect(mocks.createComment).toHaveBeenCalledTimes(1));
     expect(mocks.createComment).toHaveBeenCalledWith({
       text: 'Because the evidence supports it.',
-      targetSpaceId: 'space-1',
     });
     expect(onRespond).toHaveBeenCalledTimes(1);
     expect(order).toEqual(['response', 'comment']);
@@ -179,6 +178,26 @@ describe('ClaimPositionCommentControl', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Comment' })).toBeEnabled());
     expect(screen.getByRole('textbox')).toHaveValue('Keep this draft');
+  });
+
+  it('holds the position controls steady while the comment is publishing', async () => {
+    let finishPublish: ((value: { id: string; published: boolean }) => void) | undefined;
+    mocks.createComment.mockReturnValue(
+      new Promise(resolve => {
+        finishPublish = resolve;
+      })
+    );
+    renderControl();
+    fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'A reason' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Disagree' })).toBeDisabled();
+
+    finishPublish?.({ id: 'comment-1', published: true });
+    await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument());
   });
 
   it('lets the buttons change the recorded side while the optional prompt is open', () => {

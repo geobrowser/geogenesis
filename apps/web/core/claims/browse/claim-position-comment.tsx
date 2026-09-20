@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import type { DebateClaimPositionSummary, MatchmakingReadiness } from '~/core/debates/api';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import { useCreateComment } from '~/core/hooks/use-create-comment';
+import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 
 const MAX_COMMENT_HEIGHT_PX = 120;
@@ -63,7 +63,13 @@ export function ClaimPositionCommentControl({
   const [actionsBelow, setActionsBelow] = React.useState(false);
   const composerRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
-  const { createComment } = useCreateComment(entityId);
+  const { publishComment: submitComment } = usePublishComment(entityId, spaceId);
+
+  const closeComposer = React.useCallback(() => {
+    setPromptedPosition(null);
+    setComment('');
+    setActionsBelow(false);
+  }, []);
 
   React.useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -98,9 +104,7 @@ export function ClaimPositionCommentControl({
     // Pressing the held side withdraws it. Asking why somebody *stopped* holding a position would
     // invert the prompt's meaning, so close any invitation that was open.
     if (viewerPosition === position || !promptForComment) {
-      setPromptedPosition(null);
-      setComment('');
-      setActionsBelow(false);
+      closeComposer();
       return;
     }
     setComment('');
@@ -113,7 +117,7 @@ export function ClaimPositionCommentControl({
     const text = comment.trim();
     if (!text) return;
     setIsSubmitting(true);
-    const result = await createComment({ text, targetSpaceId: spaceId });
+    const result = await submitComment({ text });
 
     // A failed publish leaves the draft available to retry. Successful and queued comments already
     // have an optimistic row in the thread; closing here hands the reader from the composer to it.
@@ -122,9 +126,7 @@ export function ClaimPositionCommentControl({
       return;
     }
 
-    setPromptedPosition(null);
-    setComment('');
-    setActionsBelow(false);
+    closeComposer();
     setIsSubmitting(false);
   };
 
@@ -139,7 +141,7 @@ export function ClaimPositionCommentControl({
           responseKind={responseKind}
           viewerPosition={viewerPosition}
           onRespond={choosePosition}
-          disabled={disabled}
+          disabled={disabled || isSubmitting}
           titleFor={titleFor}
           noteFor={noteFor}
         />
@@ -171,9 +173,7 @@ export function ClaimPositionCommentControl({
                   }
                   if (event.key === 'Escape') {
                     event.preventDefault();
-                    setPromptedPosition(null);
-                    setComment('');
-                    setActionsBelow(false);
+                    closeComposer();
                   }
                 }}
                 placeholder={`Why do you ${action.toLowerCase()}?`}
@@ -190,11 +190,7 @@ export function ClaimPositionCommentControl({
               <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
                 <button
                   type="button"
-                  onClick={() => {
-                    setPromptedPosition(null);
-                    setComment('');
-                    setActionsBelow(false);
-                  }}
+                  onClick={closeComposer}
                   disabled={isSubmitting}
                   className="h-7 rounded-full px-3 text-button text-text/70 disabled:opacity-60"
                 >

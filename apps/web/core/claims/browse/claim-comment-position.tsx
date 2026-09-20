@@ -1,20 +1,13 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import cx from 'classnames';
-import { Effect } from 'effect';
 
 import type { DebateResponseKind } from '~/core/debates/api';
 import { uuidToHex } from '~/core/id/normalize';
-import { getEntityResponders } from '~/core/io/queries';
-import {
-  type ActiveResponseDirection,
-  ENTITY_RESPONSE_COPY,
-  entityRespondersQueryKey,
-} from '~/core/responses/entity-response';
+import { type ActiveResponseDirection, responsePositionLabel } from '~/core/responses/entity-response';
+import { useEntityResponders } from '~/core/responses/use-entity-responders';
 
 import { CLAIM_RESPONSE_OBJECT_TYPE } from './claim-response-summary';
 
@@ -47,27 +40,22 @@ export function ClaimCommentPositionProvider({
   viewerSpaceId: string | null;
   children: React.ReactNode;
 }) {
-  const { data: responders } = useQuery({
-    queryKey: entityRespondersQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
-    queryFn: ({ signal }) =>
-      Effect.runPromise(getEntityResponders(entityId, spaceId, responseKind, CLAIM_RESPONSE_OBJECT_TYPE, signal)),
-    staleTime: 30_000,
+  const { responders } = useEntityResponders({
+    entityId,
+    spaceId,
+    objectType: CLAIM_RESPONSE_OBJECT_TYPE,
+    responseKind,
+    viewerSpaceId,
+    optimisticViewerResponse: viewerDirection,
   });
 
   const directions = React.useMemo(() => {
     const result = new Map<string, ActiveResponseDirection>();
-    for (const responder of responders ?? []) {
+    for (const responder of responders) {
       result.set(uuidToHex(responder.userId), responder.direction);
     }
-
-    if (viewerSpaceId) {
-      const viewerKey = uuidToHex(viewerSpaceId);
-      result.delete(viewerKey);
-      if (viewerDirection) result.set(viewerKey, viewerDirection);
-    }
-
     return result;
-  }, [responders, viewerDirection, viewerSpaceId]);
+  }, [responders]);
 
   const value = React.useMemo(() => ({ directions, responseKind }), [directions, responseKind]);
 
@@ -81,7 +69,6 @@ export function ClaimCommentPositionBadge({ authorSpaceId }: { authorSpaceId: st
   if (!context || !direction) return null;
 
   const positive = direction === 'positive';
-  const copy = ENTITY_RESPONSE_COPY[context.responseKind];
 
   return (
     <span
@@ -90,7 +77,7 @@ export function ClaimCommentPositionBadge({ authorSpaceId }: { authorSpaceId: st
         positive ? 'bg-successTertiary' : 'bg-errorTertiary'
       )}
     >
-      {positive ? copy.positiveAction : copy.negativeAction}
+      {responsePositionLabel(context.responseKind, positive)}
     </span>
   );
 }
