@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  fromPayload,
   type AvailabilityBlock,
   columnFor,
   effectiveAvailability,
   formatTime,
+  fromPayload,
   isoDate,
   mergeBlocks,
   mondayOf,
@@ -262,9 +262,7 @@ describe('fromPayload', () => {
 
     // Ids are regenerated on read, so compare everything else.
     const shape = (blocks: AvailabilityBlock[]) =>
-      blocks
-        .map(({ id: _id, ...rest }) => rest)
-        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+      blocks.map(({ id: _id, ...rest }) => rest).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 
     expect(shape(restored)).toEqual(shape(original));
   });

@@ -616,6 +616,9 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
     return () => window.clearTimeout(retryTimer);
     // `runId` is a dependency so a second response submitted while the first is still delayed
     // reschedules against its own attempt count instead of the previous run's.
+    // The two fields above, not the whole object: `indexingState` is rebuilt on every progress
+    // tick and depending on it would reschedule the retry each time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [indexingState.status, indexingState.runId, retryResponseIndexing]);
 
   const optimisticResponse =

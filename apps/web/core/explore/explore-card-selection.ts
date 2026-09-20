@@ -36,7 +36,6 @@ const CARD_RELATION_TYPE_IDS = [
 const valuePropertyIdList = CARD_VALUE_PROPERTY_IDS.map(id => `"${id}"`).join(', ');
 const relationTypeIdList = CARD_RELATION_TYPE_IDS.map(id => `"${id}"`).join(', ');
 
-
 /**
  * The per-entity selection every Explore feed card decodes, shared by all the feed
  * documents so a field added for one sort cannot silently go missing from another.

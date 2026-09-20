@@ -81,10 +81,10 @@ export function useRankingAccumulatedRows() {
   React.useEffect(() => {
     if (!isFetched || isPlaceholderData) return;
     setRowPages(prev => upsertRowPage(prev, pageIndex, pageRows));
-  // `rowsSignature` is here in place of `pageRows` on purpose: the query hands back a fresh array
-  // on every render, so depending on it would bank a page on each one. The signature changes only
-  // when the row ids do, which is the question this effect is actually asking.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `rowsSignature` is here in place of `pageRows` on purpose: the query hands back a fresh array
+    // on every render, so depending on it would bank a page on each one. The signature changes only
+    // when the row ids do, which is the question this effect is actually asking.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageIndex, rowsSignature, isFetched, isPlaceholderData, resetKey]);
 
   const hasCurrentPage = React.useMemo(() => rowPages.some(p => p.page === pageIndex), [rowPages, pageIndex]);

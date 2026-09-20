@@ -80,7 +80,14 @@ describe('applyInjectOpsToStore — enrich (GEO-2983)', () => {
 
   it('uses a restated name when the enrich does carry one', () => {
     const result = applyInjectOpsToStore(
-      [{ type: 'updateEntity', id: STORY, set: [{ property: SystemIds.NAME_PROPERTY, value: text('Renamed') }], unset: [] }],
+      [
+        {
+          type: 'updateEntity',
+          id: STORY,
+          set: [{ property: SystemIds.NAME_PROPERTY, value: text('Renamed') }],
+          unset: [],
+        },
+      ],
       SPACE
     );
 

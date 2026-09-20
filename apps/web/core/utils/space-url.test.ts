@@ -1,8 +1,8 @@
 import { IdUtils } from '@geoprotocol/geo-sdk/lite';
-import { describe, expect, it } from 'vitest';
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 
 import { SPACE_ROOT_SEGMENTS, SPACE_TAB_SEGMENTS, isPossibleSpacePath, isValidId } from './space-url';
 
