@@ -97,9 +97,10 @@ describe('ClaimPositionCommentControl', () => {
 
     const textarea = screen.getByRole('textbox', { name: 'Why do you disagree?' }) as HTMLTextAreaElement;
     expect(textarea).toHaveAttribute('wrap', 'soft');
-    expect(textarea).toHaveClass('max-w-[132px]', '@[400px]:max-w-none');
+    expect(textarea).toHaveClass('basis-full', 'max-w-none');
     expect(textarea.style.height).toBe('40px');
-    expect(screen.getByRole('button', { name: 'Skip' }).parentElement).toHaveClass('shrink-0');
+    expect(textarea.parentElement).toHaveClass('flex-wrap');
+    expect(screen.getByRole('button', { name: 'Skip' }).parentElement).toHaveClass('ml-auto', 'shrink-0');
   });
 
   it('dismisses the comment invitation without another position write when Skip is pressed', () => {

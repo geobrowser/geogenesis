@@ -10,12 +10,14 @@ import { useCreateComment } from '~/core/hooks/use-create-comment';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 
 const MAX_COMMENT_HEIGHT_PX = 120;
+const SINGLE_LINE_HEIGHT_PX = 20;
 
 function fitCommentTextarea(textarea: HTMLTextAreaElement) {
   textarea.style.height = 'auto';
   const contentHeight = textarea.scrollHeight;
   textarea.style.height = `${Math.min(contentHeight, MAX_COMMENT_HEIGHT_PX)}px`;
   textarea.style.overflowY = contentHeight > MAX_COMMENT_HEIGHT_PX ? 'auto' : 'hidden';
+  return contentHeight > SINGLE_LINE_HEIGHT_PX;
 }
 
 /**
@@ -55,29 +57,33 @@ export function ClaimPositionCommentControl({
   const [promptedPosition, setPromptedPosition] = React.useState<boolean | null>(null);
   const [comment, setComment] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [actionsBelow, setActionsBelow] = React.useState(false);
+  const composerRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const { createComment } = useCreateComment(entityId);
 
   React.useLayoutEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    fitCommentTextarea(textarea);
-  }, [comment, promptedPosition]);
+    const isMultiline = fitCommentTextarea(textarea);
+    if (isMultiline && !actionsBelow) setActionsBelow(true);
+  }, [actionsBelow, comment, promptedPosition]);
 
-  // A hint or draft can wrap when the card changes width without changing its value. Re-measure
-  // on width changes so Agree can remain one line while the longer Disagree hint naturally makes
-  // the textarea two lines on a phone. Ignore height-only observations to avoid a resize loop.
+  // A hint or draft can stop fitting when the card changes width without changing its value.
+  // Re-run the compact layout at the new width; the effect above moves the actions down again if
+  // the text wraps. Observe the composer rather than the textarea so that moving the actions does
+  // not itself trigger another width change and oscillate between layouts.
   React.useLayoutEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea || typeof ResizeObserver === 'undefined') return;
-    let width = textarea.getBoundingClientRect().width;
-    const observer = new ResizeObserver(entries => {
-      const nextWidth = entries[0]?.contentRect.width ?? textarea.getBoundingClientRect().width;
+    const composer = composerRef.current;
+    if (!composer || typeof ResizeObserver === 'undefined') return;
+    let width = composer.clientWidth;
+    const observer = new ResizeObserver(() => {
+      const nextWidth = composer.clientWidth;
       if (nextWidth === width) return;
       width = nextWidth;
-      fitCommentTextarea(textarea);
+      setActionsBelow(false);
     });
-    observer.observe(textarea);
+    observer.observe(composer);
     return () => observer.disconnect();
   }, [promptedPosition]);
 
@@ -91,9 +97,11 @@ export function ClaimPositionCommentControl({
     if (viewerPosition === position || !promptForComment) {
       setPromptedPosition(null);
       setComment('');
+      setActionsBelow(false);
       return;
     }
     setComment('');
+    setActionsBelow(false);
     setPromptedPosition(position);
   };
 
@@ -106,6 +114,7 @@ export function ClaimPositionCommentControl({
 
     setPromptedPosition(null);
     setComment('');
+    setActionsBelow(false);
     setIsSubmitting(false);
   };
 
@@ -126,11 +135,17 @@ export function ClaimPositionCommentControl({
         />
       </div>
       {action ? (
-        <div className="@container flex items-center gap-2 rounded-xl border border-grey-02 bg-white p-3">
+        <div
+          ref={composerRef}
+          className="@container flex flex-wrap items-center gap-2 rounded-xl border border-grey-02 bg-white p-3"
+        >
           <textarea
             ref={textareaRef}
             value={comment}
-            onChange={event => setComment(event.target.value)}
+            onChange={event => {
+              setActionsBelow(false);
+              setComment(event.target.value);
+            }}
             onKeyDown={event => {
               if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                 event.preventDefault();
@@ -140,6 +155,7 @@ export function ClaimPositionCommentControl({
                 event.preventDefault();
                 setPromptedPosition(null);
                 setComment('');
+                setActionsBelow(false);
               }
             }}
             placeholder={`Why do you ${action.toLowerCase()}?`}
@@ -148,7 +164,10 @@ export function ClaimPositionCommentControl({
             wrap="soft"
             rows={1}
             disabled={isSubmitting}
-            className="min-h-5 w-full max-w-[132px] min-w-0 flex-1 resize-none bg-transparent text-body text-text outline-none placeholder:text-grey-03 disabled:opacity-60 @[400px]:max-w-none"
+            className={cx(
+              'min-h-5 w-full min-w-0 flex-1 resize-none bg-transparent text-body text-text outline-none placeholder:text-grey-03 disabled:opacity-60',
+              actionsBelow ? 'max-w-none basis-full' : 'max-w-[145px] @[400px]:max-w-none'
+            )}
           />
           <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
             <button
@@ -156,6 +175,7 @@ export function ClaimPositionCommentControl({
               onClick={() => {
                 setPromptedPosition(null);
                 setComment('');
+                setActionsBelow(false);
               }}
               disabled={isSubmitting}
               className="h-7 rounded-full px-3 text-button text-text/70 disabled:opacity-60"
