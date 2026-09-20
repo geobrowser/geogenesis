@@ -148,8 +148,11 @@ export function arg(name: string): string | undefined {
   // sent it to the fallback, so a trailing `--limit` quietly meant "every debate" and
   // `--out --limit 5` took "--limit" for the output directory — both the same shape as the
   // `NaN` floor {@link numberArg} was written for, and both on scripts that plan writes.
+  // Blank counts as missing, not as a value. `--floor "$FLOOR"` with `FLOOR` unset expands to an
+  // empty argument, which looks present to `indexOf` and coerces to 0 in {@link numberArg} — the
+  // floor disabled by a shell variable nobody set.
   const value = process.argv[index + 1];
-  if (value === undefined || value.startsWith('--')) {
+  if (value === undefined || value.trim() === '' || value.startsWith('--')) {
     console.error(`--${name} needs a value${value === undefined ? '' : `; got "${value}"`}`);
     process.exit(1);
   }
@@ -174,7 +177,10 @@ export function numberArg(
   const raw = arg(name);
   if (raw === undefined) return fallback;
 
-  const value = Number(raw);
+  // `Number('')` and `Number('   ')` are both 0, which every range here admits. Checked again
+  // rather than left to `arg`, because this is the guard the floor's safety rests on and it is
+  // exported on its own.
+  const value = raw.trim() === '' ? Number.NaN : Number(raw);
   if (!Number.isFinite(value) || value < min || value > max) {
     console.error(`--${name} must be a number between ${min} and ${max}; got "${raw}"`);
     process.exit(1);
@@ -189,7 +195,9 @@ export function numberAt(index: number, label: string, fallback: number, min = 0
   const raw = process.argv[index];
   if (raw === undefined) return fallback;
 
-  const value = Number(raw);
+  // As in {@link numberArg}: blank coerces to 0 rather than failing. This one reads `process.argv`
+  // directly, so it cannot lean on `arg`.
+  const value = raw.trim() === '' ? Number.NaN : Number(raw);
   if (!Number.isFinite(value) || value < min) {
     console.error(`${label} must be a number of at least ${min}; got "${raw}"`);
     process.exit(1);

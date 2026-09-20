@@ -507,6 +507,11 @@ describe('published timecodes', () => {
     ['only a start', offsets('1000', null)],
     ['only an end', offsets(null, '2000')],
     ['an unparseable value', offsets('about a minute in', '2000')],
+    // `Number('')` is 0, and 0 is a legal start — so a blank start beside a real end would have
+    // published "said in the first two seconds" as a certainty.
+    ['a blank start', offsets('', '2000')],
+    ['a whitespace start', offsets('   ', '2000')],
+    ['a blank end', offsets('1000', '')],
     ['a negative start', offsets('-500', '2000')],
     ['an end at the start', offsets('2000', '2000')],
     ['an end before the start', offsets('4000', '2000')],

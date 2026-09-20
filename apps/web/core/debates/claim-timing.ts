@@ -218,8 +218,42 @@ const STOPWORDS = new Set([
   'your',
 ]);
 
+/**
+ * The negators English hides inside a verb, pulled back out as their own word.
+ *
+ * `wasn't` tokenises as one opaque word, so it is neither `was` nor `not` — which breaks the rule
+ * the {@link STOPWORDS} doc states: *a word whose opposite is scored must be scored*. The halves of
+ * the pair stop being comparable, and the matcher is free to place a claim over its own opposite.
+ *
+ * It is worse than a tie, because the miss costs twice. Scoring "vaccination was not safe":
+ *
+ * ```
+ * "vaccination was safe"     hits 2/3, precision 2/2 -> 0.6667
+ * "vaccination wasn't safe"  hits 2/3, precision 2/3 -> 0.6111
+ * ```
+ *
+ * The negated window not only fails to match the claim's `not`, it carries an extra content word
+ * that dilutes its precision — so the *affirmative* wins, and the card would quote the speaker
+ * saying the reverse of what they said.
+ *
+ * The corpus makes this one-directional rather than a coin toss. Measured over the 66 task files:
+ * **no claim contracts** — the extractor writes "does not", "did not" — while **248 of 7,633
+ * segments do**, because people speak in contractions. 90 claims say "not" in a turn that contracts
+ * it. So the error only ever ran one way: towards the affirmative.
+ *
+ * Curly apostrophes are folded first for the same reason. `wasn’t` does not even survive
+ * tokenisation — `[a-z0-9']` splits it into `wasn` and `t` — so it would miss this expansion and
+ * contribute a junk content word instead. None appear in the corpus today; the two sources are a
+ * Whisper transcript and an LLM, and neither is under our control.
+ *
+ * `can't` and `won't` leave `ca` and `wo` behind, which are under the length floor and dropped.
+ */
+function expandNegations(text: string): string {
+  return text.replace(/[’‘]/g, "'").replace(/n't\b/g, ' not');
+}
+
 function words(text: string): string[] {
-  return text.toLowerCase().match(/[a-z0-9']+/g) ?? [];
+  return expandNegations(text.toLowerCase()).match(/[a-z0-9']+/g) ?? [];
 }
 
 /** The words worth matching on: not stopwords, and long enough to mean something. */

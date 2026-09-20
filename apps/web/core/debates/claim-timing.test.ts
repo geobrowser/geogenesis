@@ -314,9 +314,11 @@ describe('sortClaimsBySpokenOrder', () => {
     ]);
     const byRank = (x: { id: string }, y: { id: string }) => rank.get(x.id)! - rank.get(y.id)!;
 
-    expect(
-      sortClaimsBySpokenOrder([{ id: 'a' }, { id: 'b' }, { id: 'c' }], timings, byRank).map(c => c.id)
-    ).toEqual(['b', 'c', 'a']);
+    expect(sortClaimsBySpokenOrder([{ id: 'a' }, { id: 'b' }, { id: 'c' }], timings, byRank).map(c => c.id)).toEqual([
+      'b',
+      'c',
+      'a',
+    ]);
   });
 
   it('puts a claim with no moment at all last', () => {
@@ -346,6 +348,29 @@ describe('scoreWindow', () => {
 
   it('scores nothing for a window sharing no content words', () => {
     expect(scoreWindow(['executive', 'orders'], 'the weather today')).toBe(0);
+  });
+
+  /**
+   * The polarity rule, through the other door.
+   *
+   * `wasn't` used to tokenise as one opaque word — neither `was` nor `not` — so a claim's `not` had
+   * nothing to match and the negated window carried a spare content word that cut its precision.
+   * The affirmative therefore *outscored* the negation, 0.6667 to 0.6111, and the matcher would
+   * place the claim over the speaker saying the reverse.
+   */
+  it('scores a negation above its own opposite, however the speaker contracted it', () => {
+    const claim = contentWords('vaccination was not safe');
+
+    for (const spoken of ["vaccination wasn't safe", 'vaccination was not safe', 'vaccination wasn\u2019t safe']) {
+      expect(scoreWindow(claim, spoken)).toBeGreaterThan(scoreWindow(claim, 'vaccination was safe'));
+    }
+  });
+
+  // `can't` and `won't` leave a two-letter stem, which the length floor drops — the negator is what
+  // has to survive.
+  it('recovers the negator from contractions that do not split cleanly', () => {
+    expect(contentWords("we can't regulate it")).toContain('not');
+    expect(contentWords("we won't regulate it")).toContain('not');
   });
 
   // The quarter-weight precision term exists to break ties towards the tightest window: a wide

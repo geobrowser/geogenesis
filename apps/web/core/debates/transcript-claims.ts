@@ -168,6 +168,10 @@ function publishedTiming(
 
   for (const value of values ?? []) {
     if (!value || value.integer === null || value.integer === undefined) continue;
+    // An empty or whitespace `integer` is a missing offset, not offset zero — `Number('')` is 0,
+    // and 0 is a legal `startMs`. A blank start beside a real end would publish "said in the first
+    // few seconds" as a certainty, scored 1.0, over a claim made anywhere in the debate.
+    if (value.integer.trim() === '') continue;
     const parsed = Number(value.integer);
     if (!Number.isFinite(parsed)) continue;
     if (uuidToHex(value.propertyId) === uuidToHex(CLAIM_START_OFFSET_PROPERTY_ID)) startMs = parsed;
