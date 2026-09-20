@@ -101,6 +101,7 @@ export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const [mobileBrowseOpen, setMobileBrowseOpen] = React.useState(false);
   const mobileBrowseButtonRef = React.useRef<HTMLButtonElement>(null);
+  const navbarRef = React.useRef<HTMLElement>(null);
   const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
   const fullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
 
@@ -140,6 +141,7 @@ export function App({ children }: { children: React.ReactNode }) {
           <Navbar
             browseOpen={mobileBrowseOpen && !fullscreenActive}
             browseButtonRef={mobileBrowseButtonRef}
+            navbarRef={navbarRef}
             onBrowseClick={() => setMobileBrowseOpen(true)}
             onSearchClick={() => setOpen(true)}
             hideLogo={sidebarOpen && !fullscreenActive}
@@ -147,6 +149,7 @@ export function App({ children }: { children: React.ReactNode }) {
           />
           <MobileBrowseDrawer
             open={mobileBrowseOpen && !fullscreenActive}
+            fallbackFocusRef={navbarRef}
             onOpenChange={setMobileBrowseOpen}
             triggerRef={mobileBrowseButtonRef}
           />

@@ -31,8 +31,16 @@ describe('MobileBrowseDrawer', () => {
     const onOpenChange = vi.fn();
     const user = userEvent.setup();
     const triggerRef = React.createRef<HTMLButtonElement>();
+    const fallbackFocusRef = React.createRef<HTMLElement>();
 
-    render(<MobileBrowseDrawer open onOpenChange={onOpenChange} triggerRef={triggerRef} />);
+    render(
+      <MobileBrowseDrawer
+        open
+        fallbackFocusRef={fallbackFocusRef}
+        onOpenChange={onOpenChange}
+        triggerRef={triggerRef}
+      />
+    );
 
     expect(screen.getByRole('dialog', { name: 'Browse Geo' })).toBeInTheDocument();
     await user.click(screen.getByRole('link', { name: 'Explore' }));
@@ -43,8 +51,16 @@ describe('MobileBrowseDrawer', () => {
     const onOpenChange = vi.fn();
     const user = userEvent.setup();
     const triggerRef = React.createRef<HTMLButtonElement>();
+    const fallbackFocusRef = React.createRef<HTMLElement>();
 
-    render(<MobileBrowseDrawer open onOpenChange={onOpenChange} triggerRef={triggerRef} />);
+    render(
+      <MobileBrowseDrawer
+        open
+        fallbackFocusRef={fallbackFocusRef}
+        onOpenChange={onOpenChange}
+        triggerRef={triggerRef}
+      />
+    );
 
     await user.click(screen.getByRole('button', { name: 'Close browse menu' }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -56,13 +72,20 @@ describe('MobileBrowseDrawer', () => {
     function DrawerHarness() {
       const [open, setOpen] = React.useState(true);
       const triggerRef = React.useRef<HTMLButtonElement>(null);
+      const fallbackFocusRef = React.useRef<HTMLElement>(null);
 
       return (
         <>
+          <nav ref={fallbackFocusRef} tabIndex={-1} aria-label="Fallback navigation" />
           <button ref={triggerRef} type="button">
             Open browse menu
           </button>
-          <MobileBrowseDrawer open={open} onOpenChange={setOpen} triggerRef={triggerRef} />
+          <MobileBrowseDrawer
+            open={open}
+            fallbackFocusRef={fallbackFocusRef}
+            onOpenChange={setOpen}
+            triggerRef={triggerRef}
+          />
         </>
       );
     }
@@ -73,7 +96,7 @@ describe('MobileBrowseDrawer', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Open browse menu' })).toHaveFocus());
   });
 
-  it('closes when the viewport grows beyond the mobile breakpoint', () => {
+  it('closes and focuses the stable fallback when the viewport grows beyond the mobile breakpoint', async () => {
     let breakpointListener: ((event: MediaQueryListEvent) => void) | undefined;
     vi.stubGlobal(
       'matchMedia',
@@ -85,12 +108,58 @@ describe('MobileBrowseDrawer', () => {
         removeEventListener: vi.fn(),
       }))
     );
-    const onOpenChange = vi.fn();
-    const triggerRef = React.createRef<HTMLButtonElement>();
+    function BreakpointHarness() {
+      const [open, setOpen] = React.useState(true);
+      const triggerRef = React.useRef<HTMLButtonElement>(null);
+      const fallbackFocusRef = React.useRef<HTMLElement>(null);
 
-    render(<MobileBrowseDrawer open onOpenChange={onOpenChange} triggerRef={triggerRef} />);
+      return (
+        <>
+          <nav ref={fallbackFocusRef} tabIndex={-1} aria-label="Fallback navigation" />
+          <button ref={triggerRef} type="button" style={{ display: 'none' }}>
+            Hidden Browse trigger
+          </button>
+          <MobileBrowseDrawer
+            open={open}
+            fallbackFocusRef={fallbackFocusRef}
+            onOpenChange={setOpen}
+            triggerRef={triggerRef}
+          />
+        </>
+      );
+    }
+
+    render(<BreakpointHarness />);
     act(() => breakpointListener?.({ matches: false } as MediaQueryListEvent));
 
-    expect(onOpenChange).toHaveBeenCalledWith(false);
+    await waitFor(() => expect(screen.getByRole('navigation', { name: 'Fallback navigation' })).toHaveFocus());
+  });
+
+  it('focuses the stable fallback when fullscreen unmounts the Browse trigger', async () => {
+    const triggerRef = React.createRef<HTMLButtonElement>();
+    const fallbackFocusRef = React.createRef<HTMLElement>();
+    const onOpenChange = vi.fn();
+
+    const drawer = (fullscreen: boolean) => (
+      <>
+        <nav ref={fallbackFocusRef} tabIndex={-1} aria-label="Fallback navigation" />
+        {fullscreen ? null : (
+          <button ref={triggerRef} type="button">
+            Open browse menu
+          </button>
+        )}
+        <MobileBrowseDrawer
+          open={!fullscreen}
+          fallbackFocusRef={fallbackFocusRef}
+          onOpenChange={onOpenChange}
+          triggerRef={triggerRef}
+        />
+      </>
+    );
+
+    const { rerender } = render(drawer(false));
+    rerender(drawer(true));
+
+    await waitFor(() => expect(screen.getByRole('navigation', { name: 'Fallback navigation' })).toHaveFocus());
   });
 });

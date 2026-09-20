@@ -13,6 +13,7 @@ import { NavbarSpaceMetadata } from './navbar-space-metadata';
 interface Props {
   browseOpen?: boolean;
   browseButtonRef?: React.Ref<HTMLButtonElement>;
+  navbarRef?: React.Ref<HTMLElement>;
   onBrowseClick: () => void;
   onSearchClick: () => void;
   hideLogo?: boolean;
@@ -22,6 +23,7 @@ interface Props {
 export function Navbar({
   browseOpen = false,
   browseButtonRef,
+  navbarRef,
   onBrowseClick,
   onSearchClick,
   hideLogo = false,
@@ -29,8 +31,10 @@ export function Navbar({
 }: Props) {
   return (
     <nav
+      ref={navbarRef}
+      tabIndex={-1}
       data-app-navbar
-      className="sticky top-0 z-60 flex h-11 w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1"
+      className="sticky top-0 z-60 flex h-11 w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-text"
     >
       <div className="flex min-w-0 items-center gap-8 mobile:gap-2 md:gap-4">
         {showBrowseButton ? (

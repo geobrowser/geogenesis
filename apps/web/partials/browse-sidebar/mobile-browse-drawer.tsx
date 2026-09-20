@@ -11,11 +11,19 @@ const MOBILE_BREAKPOINT_QUERY = '(max-width: 639px)';
 
 interface Props {
   open: boolean;
+  fallbackFocusRef: React.RefObject<HTMLElement | null>;
   onOpenChange: (open: boolean) => void;
   triggerRef: React.RefObject<HTMLButtonElement | null>;
 }
 
-export function MobileBrowseDrawer({ open, onOpenChange, triggerRef }: Props) {
+function isVisible(element: HTMLElement | null): element is HTMLElement {
+  if (!element?.isConnected) return false;
+
+  const style = window.getComputedStyle(element);
+  return style.display !== 'none' && style.visibility !== 'hidden';
+}
+
+export function MobileBrowseDrawer({ open, fallbackFocusRef, onOpenChange, triggerRef }: Props) {
   React.useEffect(() => {
     if (!open || typeof window.matchMedia !== 'function') return;
 
@@ -43,7 +51,10 @@ export function MobileBrowseDrawer({ open, onOpenChange, triggerRef }: Props) {
           onClickCapture={closeAfterNavigation}
           onCloseAutoFocus={event => {
             event.preventDefault();
-            triggerRef.current?.focus();
+            const trigger = triggerRef.current;
+            const fallback = fallbackFocusRef.current;
+            const focusTarget = isVisible(trigger) ? trigger : isVisible(fallback) ? fallback : null;
+            focusTarget?.focus();
           }}
           className="fixed inset-y-0 left-0 z-101 hidden w-[min(20rem,calc(100vw-3rem))] bg-white shadow-[4px_0_24px_rgba(32,32,32,0.12)] focus:outline-hidden mobile:flex"
         >

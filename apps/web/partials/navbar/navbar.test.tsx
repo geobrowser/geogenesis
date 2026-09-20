@@ -24,10 +24,19 @@ describe('Navbar mobile browse control', () => {
     const onBrowseClick = vi.fn();
     const user = userEvent.setup();
     const browseButtonRef = React.createRef<HTMLButtonElement>();
+    const navbarRef = React.createRef<HTMLElement>();
 
-    render(<Navbar browseButtonRef={browseButtonRef} onBrowseClick={onBrowseClick} onSearchClick={vi.fn()} />);
+    render(
+      <Navbar
+        browseButtonRef={browseButtonRef}
+        navbarRef={navbarRef}
+        onBrowseClick={onBrowseClick}
+        onSearchClick={vi.fn()}
+      />
+    );
 
     const button = screen.getByRole('button', { name: 'Open browse menu' });
+    expect(navbarRef.current).toBe(screen.getByRole('navigation'));
     expect(browseButtonRef.current).toBe(button);
     expect(button).toHaveAttribute('aria-haspopup', 'dialog');
     expect(button).toHaveAttribute('aria-expanded', 'false');
