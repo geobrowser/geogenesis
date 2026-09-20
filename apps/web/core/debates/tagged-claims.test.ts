@@ -763,7 +763,10 @@ describe('the filter it builds', () => {
     respondWithPages([[node('a1', 'One')]]);
     const { result, rerender } = renderHook(
       ({ filters }: { filters: TaggedClaimFilters }) => useTaggedClaims(TAG, filters, true),
-      { wrapper: Wrapper, initialProps: { filters: { ...NO_TAGGED_CLAIM_FILTERS, eligibleSpaceIds: [SPACE, OTHER_SPACE] } } }
+      {
+        wrapper: Wrapper,
+        initialProps: { filters: { ...NO_TAGGED_CLAIM_FILTERS, eligibleSpaceIds: [SPACE, OTHER_SPACE] } },
+      }
     );
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
 

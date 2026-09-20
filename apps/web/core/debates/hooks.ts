@@ -1,7 +1,5 @@
 'use client';
 
-import type { AvailabilityBlock } from '~/core/availability/blocks';
-import { fromPayload, localTimezone, toPayload } from '~/core/availability/blocks';
 import { usePrivy } from '@geogenesis/auth';
 import {
   type Query,
@@ -16,6 +14,8 @@ import {
 import * as React from 'react';
 
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
+import type { AvailabilityBlock } from '~/core/availability/blocks';
+import { fromPayload, localTimezone, toPayload } from '~/core/availability/blocks';
 
 import {
   type Debate,
@@ -50,6 +50,7 @@ import {
   getDebateMediaArtifactUrl,
   getDebateProfile,
   getDebateRematch,
+  getDebateSchedule,
   getDebateTranscript,
   getLiveKitToken,
   getRecordingUrl,
@@ -66,10 +67,9 @@ import {
   markDebateReady,
   rejectDebateChallenge,
   rejectDebateRematchRequest,
+  replaceDebateSchedule,
   requestDebateMediaProcessing,
   retryDebatePhaseBoundaryRequest,
-  getDebateSchedule,
-  replaceDebateSchedule,
   updateDebateAvailability,
 } from './api';
 import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
@@ -528,6 +528,9 @@ export function useDebateActivity(enabled = true) {
     wasPresent.current = present;
     wasAttentive.current = attentive;
     if (returned && queryEnabled) void query.refetch();
+    // `query.refetch` is the stable handle; the `query` object itself is rebuilt whenever its data
+    // changes, so depending on it would re-run this on every refetch it caused.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attentive, present, query.refetch, queryEnabled]);
 
   // Everyone this payload names. The challenge rides here rather than on `useDebateRequests`, and
@@ -1151,6 +1154,9 @@ export function useDebateProfile(profileSpaceId: string, enabled = true) {
     const returnedToForeground = foreground && !wasForeground.current;
     wasForeground.current = foreground;
     if (returnedToForeground && queryEnabled) void query.refetch();
+    // `query.refetch` is the stable handle; the `query` object itself is rebuilt whenever its data
+    // changes, so depending on it would re-run this on every refetch it caused.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [foreground, query.refetch, queryEnabled]);
 
   return query;
