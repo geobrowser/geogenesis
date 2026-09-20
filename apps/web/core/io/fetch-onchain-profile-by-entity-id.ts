@@ -1,4 +1,20 @@
-
+// This file is a parked implementation: `fetchOnchainProfileByEntityId` returns null and its body
+// is commented out until the profile-subgraph endpoint exists again. `getFetchProfileQuery`,
+// `NetworkResult` and the `entityId` parameter are all used by that commented-out body, so they
+// read as dead and are not — deleting them would mean rewriting the query to switch this back on.
+/* eslint-disable @typescript-eslint/no-unused-vars */
+function getFetchProfileQuery(entityId: string) {
+  // Have to fetch the profiles as an array as we can't query an individual profile by it's account.
+  // account_starts_with_nocase is also a hack since our subgraph does not store the account the same
+  // way as the profiles. Profiles are a string but `createdBy` in our subgraph is stored as Bytes.
+  return `query {
+    onchainProfile(id: "${entityId}") {
+      id
+      homeSpaceId
+      accountId
+    }
+  }`;
+}
 
 interface OnchainGeoProfile {
   id: string;
@@ -6,7 +22,11 @@ interface OnchainGeoProfile {
   accountId: string;
 }
 
-export async function fetchOnchainProfileByEntityId(_entityId: string): Promise<OnchainGeoProfile | null> {
+interface NetworkResult {
+  onchainProfile: OnchainGeoProfile | null;
+}
+
+export async function fetchOnchainProfileByEntityId(entityId: string): Promise<OnchainGeoProfile | null> {
   // Temporarily disabled until profile-subgraph endpoint is available
   return null;
 
