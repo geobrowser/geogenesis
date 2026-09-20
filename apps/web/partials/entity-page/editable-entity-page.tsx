@@ -123,16 +123,23 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
   const visibleFlatPropertiesEntries = useVisiblePropertiesEntries(id, spaceId, {
     hideTypeGroupingFields: isTypeEntity,
   });
-  const effectiveSections = isTypeEntity
-    ? [
-        {
-          id: 'type-flat-properties',
-          isGroup: false,
-          defaultCollapsed: false,
-          entries: visibleFlatPropertiesEntries,
-        } satisfies VisiblePropertySection,
-      ]
-    : visiblePropertySections.sections;
+  // Memoised because the type-entity branch builds a fresh array every render, and the effect
+  // below is keyed on this — so for a type entity it re-ran on every render. The other branch
+  // passes `visiblePropertySections.sections` straight through.
+  const effectiveSections = React.useMemo(
+    () =>
+      isTypeEntity
+        ? [
+            {
+              id: 'type-flat-properties',
+              isGroup: false,
+              defaultCollapsed: false,
+              entries: visibleFlatPropertiesEntries,
+            } satisfies VisiblePropertySection,
+          ]
+        : visiblePropertySections.sections,
+    [isTypeEntity, visibleFlatPropertiesEntries, visiblePropertySections.sections]
+  );
   const effectiveHasGroups = !isTypeEntity && visiblePropertySections.hasGroups;
   const effectiveTotalProperties = isTypeEntity
     ? visibleFlatPropertiesEntries.length
@@ -156,7 +163,10 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
       const sameValues = Object.entries(next).every(([groupId, value]) => previous[groupId] === value);
       return sameKeys && sameValues ? previous : next;
     });
-  }, [effectiveSections]);
+    // Both: the body iterates `visiblePropertySections.sections` to work out the collapse
+    // defaults, while what is rendered comes from `effectiveSections`. For a type entity those
+    // are different lists, so naming only one of them left the defaults stale.
+  }, [effectiveSections, visiblePropertySections.sections]);
 
   // Get schema properties from the entity's types - these are placeholders that can't be deleted
   const schemaProperties = useEntitySchema(id, spaceId);
