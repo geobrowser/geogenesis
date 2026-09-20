@@ -102,12 +102,15 @@ function mockMobileActivityGeometry(pageHeightWithoutActivity: number) {
     if (scroll.moveAfterFirstRead !== undefined && reads > 1) return scroll.moveAfterFirstRead;
     return scroll.y;
   });
-  vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(600);
+  const viewport = { height: 600 };
+  vi.spyOn(window, 'innerHeight', 'get').mockImplementation(() => viewport.height);
+
+  const page = { withoutActivity: pageHeightWithoutActivity };
   vi.spyOn(document.documentElement, 'scrollHeight', 'get').mockImplementation(() => {
     const section = document.querySelector<HTMLElement>('[data-activity-section]');
     const reserve = document.querySelector<HTMLElement>('[data-activity-scroll-reserve]');
     return (
-      pageHeightWithoutActivity +
+      page.withoutActivity +
       (section?.getBoundingClientRect().height ?? 0) +
       (reserve?.getBoundingClientRect().height ?? 0)
     );
@@ -121,6 +124,10 @@ function mockMobileActivityGeometry(pageHeightWithoutActivity: number) {
     // path runs after a switch. Move `sectionHeight` first; the observer reads it.
     sectionResized: () => notifyResize?.(),
     sectionHeight,
+    // The viewport, which a phone changes on its own as its chrome collapses, and the rest of the
+    // page, which goes on loading after the switch.
+    viewport,
+    page,
   };
 }
 
@@ -347,6 +354,52 @@ describe('ProfileActivitySection', () => {
     scroll.y = 0;
     fireEvent.scroll(window);
 
+    expect(reserve).toHaveStyle({ height: '0px' });
+  });
+
+  /**
+   * A phone changes its own viewport height: the browser chrome collapses as the reader scrolls and
+   * comes back when they stop, with nothing on the page moving. The held height is measured against
+   * that viewport, so a taller one needs more below it — and before this was watched, the reader
+   * could be clamped upward by exactly the height of a hidden URL bar.
+   */
+  it('re-sizes the reserve when the viewport height changes', () => {
+    const { viewport } = mockMobileActivityGeometry(600);
+    const { reserve } = renderActivity();
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(reserve).toHaveStyle({ height: '150px' });
+
+    // 600 → 700 of viewport. Held at 400, the page now has to reach 1100 rather than 1000, against
+    // a natural 850.
+    viewport.height = 700;
+    fireEvent.resize(window);
+
+    expect(reserve).toHaveStyle({ height: '250px' });
+  });
+
+  /**
+   * The section is not the only thing on the page that moves after a switch. A cover image landing
+   * above Activity changes the document height without changing the section at all, so a natural
+   * height remembered from the switch is wrong — and wrong in the direction that leaves the reader
+   * scrolling into space the page no longer needs.
+   */
+  it('measures the rest of the page rather than remembering it', () => {
+    const { page, sectionHeight, sectionResized } = mockMobileActivityGeometry(600);
+    const { reserve } = renderActivity();
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(reserve).toHaveStyle({ height: '150px' });
+
+    // The cards grow, and the cover lands above them in the same frame.
+    page.withoutActivity = 700;
+    sectionHeight.claims = 300;
+    act(() => {
+      sectionResized();
+    });
+
+    // 700 + 300 reaches the reader's 1000 exactly. Carried from the switch instead, the page above
+    // is still believed to be 600 and 100px would be held for no one.
     expect(reserve).toHaveStyle({ height: '0px' });
   });
 

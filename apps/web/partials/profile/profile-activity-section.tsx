@@ -223,9 +223,8 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
   const sectionRef = React.useRef<HTMLElement | null>(null);
   const reserveRef = React.useRef<HTMLDivElement | null>(null);
   const swapRef = React.useRef<{
+    /** The layout this was calculated for. A different one invalidates it — see `sizeReserve`. */
     width: number;
-    sectionHeight: number;
-    naturalDocumentHeight: number;
     /** The position being held for the reader, which only ever moves up. */
     holdY: number;
   } | null>(null);
@@ -235,13 +234,7 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
     if (!section || !reserve) return;
 
     const { width, height } = section.getBoundingClientRect();
-    const currentReserve = reserve.getBoundingClientRect().height;
-    swapRef.current = {
-      width,
-      sectionHeight: height,
-      naturalDocumentHeight: document.documentElement.scrollHeight - currentReserve,
-      holdY: window.scrollY,
-    };
+    swapRef.current = { width, holdY: window.scrollY };
 
     // Hold the outgoing view's whole height before React replaces it. Waiting for the layout effect
     // would leave a window where the document is short and the position is already gone; over-
@@ -259,7 +252,7 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
     // both sizes the reserve and corrects the position will correct it every time they scroll —
     // which reads as the page refusing to move (GEO-2974).
     const sizeReserve = () => {
-      const { width, height } = section.getBoundingClientRect();
+      const { width } = section.getBoundingClientRect();
       const swap = swapRef.current;
 
       // A new layout width (rotation, resized side panel, breakpoint change) has different card
@@ -271,7 +264,11 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
         return 0;
       }
 
-      const naturalDocumentHeight = swap.naturalDocumentHeight - swap.sectionHeight + height;
+      // Measured now rather than carried from the switch. The page keeps moving afterwards — the
+      // cards grow as their queries land, a cover image arrives above, the rail settles — and a
+      // figure taken once is wrong for every one of those. Subtracting what the reserve is
+      // currently contributing is what makes this the height the page would have without it.
+      const naturalDocumentHeight = document.documentElement.scrollHeight - reserve.getBoundingClientRect().height;
       const held = Math.max(0, swap.holdY + window.innerHeight - naturalDocumentHeight);
       reserve.style.height = `${held}px`;
 
@@ -334,10 +331,19 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
     };
     window.addEventListener('scroll', onScroll, { passive: true });
 
+    // `held` is measured against the viewport, and on a phone the viewport changes without anything
+    // else on the page moving: the browser chrome collapses as the reader scrolls and comes back
+    // when they stop. A taller viewport needs more held below it, and nothing here was watching —
+    // so the reader could be clamped upward by exactly the height of a hidden URL bar. `resize` and
+    // not `visualViewport`, because `window.innerHeight` is the figure the sum above uses and the
+    // two do not always agree.
+    window.addEventListener('resize', sizeAndSettle);
+
     return () => {
       cancelAnimationFrame(arm);
       observer.disconnect();
       window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', sizeAndSettle);
     };
   }, [selectedKey]);
 

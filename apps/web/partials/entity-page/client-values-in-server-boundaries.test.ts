@@ -31,7 +31,30 @@ const SOURCE_DIRS = ['app', 'core', 'partials', 'design-system'];
 /** The files Next renders on the server by definition. Everything they reach is the server graph. */
 const SERVER_ENTRY = /\/(layout|page|template|default|loading|error|not-found|route|opengraph-image)\.tsx?$/;
 
+/**
+ * Every way one module reaches another *at runtime*, because a traversal that follows only one of
+ * them walks a smaller graph than the server actually renders and quietly stops guarding the rest
+ * of it. The tree uses all of these: ~9800 named imports, ~340 default, ~870 namespace, 53
+ * re-exports.
+ *
+ * `import type` is excluded, and it matters: the only route into `core/blocks/data/filters.ts` is a
+ * type import from `core/chat/edit-types.ts`, so counting it walks into the sync store and reports
+ * three modules that TypeScript erases before anything runs.
+ */
+const MODULE_EDGE = /^(?:import|export)\s+(?!type\s)[\s\S]*?from\s+['"]([^'"]+)['"]/gm;
+
+/** `import { a, b as c } from '…'`, with or without a default binding in front. */
 const NAMED_IMPORT_BLOCK = /^import\s+(?!type\s)(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s+from\s+['"]([^'"]+)['"]/gm;
+
+/** `import Local from '…'`, ignoring the `import type` and `import * as` forms. */
+const DEFAULT_IMPORT = /^import\s+(?!type\s)([A-Za-z_$][\w$]*)\s*(?:,\s*\{[^}]*\})?\s+from\s+['"]([^'"]+)['"]/gm;
+
+/** `import * as Local from '…'`, where every property read is a client reference. */
+const NAMESPACE_IMPORT = /^import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+['"]([^'"]+)['"]/gm;
+
+/** `export { a } from '…'` and `export * from '…'`, which hand a client reference straight on. */
+const NAMED_REEXPORT = /^export\s+(?!type\s)\{([^}]*)\}\s+from\s+['"]([^'"]+)['"]/gm;
+const STAR_REEXPORT = /^export\s+\*\s+from\s+['"]([^'"]+)['"]/gm;
 
 /**
  * Pre-existing, each one read before being listed. None of them is this PR's, and all of them are
@@ -86,7 +109,12 @@ function resolveImport(specifier: string, importingFile: string): string | null 
   }
 
   const relative = path.relative(ROOT, absolute);
-  for (const candidate of [`${relative}.tsx`, `${relative}.ts`, path.join(relative, 'index.tsx')]) {
+  for (const candidate of [
+    `${relative}.tsx`,
+    `${relative}.ts`,
+    path.join(relative, 'index.tsx'),
+    path.join(relative, 'index.ts'),
+  ]) {
     if (!SOURCE_DIRS.some(dir => candidate.startsWith(`${dir}${path.sep}`))) continue;
     if (existsSync(path.join(ROOT, candidate))) return candidate;
   }
@@ -135,8 +163,8 @@ describe('server components take only components from client modules', () => {
     if (serverGraph.has(file) || clientFiles.has(file)) continue;
     serverGraph.add(file);
 
-    for (const match of (contentsByFile.get(file) ?? '').matchAll(NAMED_IMPORT_BLOCK)) {
-      const target = resolveImport(match[2], file);
+    for (const match of (contentsByFile.get(file) ?? '').matchAll(MODULE_EDGE)) {
+      const target = resolveImport(match[1], file);
       if (target && !clientFiles.has(target) && !serverGraph.has(target)) queue.push(target);
     }
   }
@@ -145,22 +173,59 @@ describe('server components take only components from client modules', () => {
     expect(serverGraph.size).toBeGreaterThan(100);
   });
 
-  it('finds no non-component value taken from a "use client" module', () => {
-    const offences: string[] = [];
-
+  /**
+   * Every value a server-graph module takes from a client module, in any of the shapes it can
+   * arrive in, as `[offence, source]` pairs. A default binding is judged by its local name — the
+   * only signal a default import carries — and a namespace binding is reported whole, since every
+   * property read off it is a client reference.
+   */
+  function* clientValuesInServerGraph(): Generator<[string, string]> {
     for (const file of serverGraph) {
-      for (const match of contentsByFile.get(file)!.matchAll(NAMED_IMPORT_BLOCK)) {
-        const [, block, specifier] = match;
-        const target = resolveImport(specifier, file);
-        if (!target || !clientFiles.has(target)) continue;
+      const contents = contentsByFile.get(file)!;
+      const from = file.split(path.sep).join('/');
 
+      const fromClientModule = (specifier: string) => {
+        const target = resolveImport(specifier, file);
+        return target && clientFiles.has(target) ? target.split(path.sep).join('/') : null;
+      };
+
+      for (const [, block, specifier] of contents.matchAll(NAMED_IMPORT_BLOCK)) {
+        const target = fromClientModule(specifier);
+        if (!target) continue;
         for (const name of parseNamedBindings(block)) {
-          if (looksLikeComponent(name)) continue;
-          const offence = `${file.split(path.sep).join('/')} -> ${name}`;
-          if (!KNOWN.has(offence)) offences.push(`${offence}  (from ${target.split(path.sep).join('/')})`);
+          if (!looksLikeComponent(name)) yield [`${from} -> ${name}`, target];
         }
       }
+
+      for (const [, local, specifier] of contents.matchAll(DEFAULT_IMPORT)) {
+        const target = fromClientModule(specifier);
+        if (target && !looksLikeComponent(local)) yield [`${from} -> default as ${local}`, target];
+      }
+
+      for (const [, local, specifier] of contents.matchAll(NAMESPACE_IMPORT)) {
+        const target = fromClientModule(specifier);
+        if (target) yield [`${from} -> * as ${local}`, target];
+      }
+
+      for (const [, block, specifier] of contents.matchAll(NAMED_REEXPORT)) {
+        const target = fromClientModule(specifier);
+        if (!target) continue;
+        for (const name of parseNamedBindings(block)) {
+          if (!looksLikeComponent(name)) yield [`${from} -> re-exports ${name}`, target];
+        }
+      }
+
+      for (const [, specifier] of contents.matchAll(STAR_REEXPORT)) {
+        const target = fromClientModule(specifier);
+        if (target) yield [`${from} -> re-exports *`, target];
+      }
     }
+  }
+
+  it('finds no non-component value taken from a "use client" module', () => {
+    const offences = [...clientValuesInServerGraph()]
+      .filter(([offence]) => !KNOWN.has(offence))
+      .map(([offence, target]) => `${offence}  (from ${target})`);
 
     expect(offences).toEqual([]);
   });
@@ -168,17 +233,7 @@ describe('server components take only components from client modules', () => {
   it('keeps the known list honest', () => {
     // An entry that no longer matches anything has been fixed, and leaving it here would quietly
     // re-permit the same import later.
-    const live = new Set<string>();
-
-    for (const file of serverGraph) {
-      for (const match of contentsByFile.get(file)!.matchAll(NAMED_IMPORT_BLOCK)) {
-        const target = resolveImport(match[2], file);
-        if (!target || !clientFiles.has(target)) continue;
-        for (const name of parseNamedBindings(match[1])) {
-          if (!looksLikeComponent(name)) live.add(`${file.split(path.sep).join('/')} -> ${name}`);
-        }
-      }
-    }
+    const live = new Set([...clientValuesInServerGraph()].map(([offence]) => offence));
 
     expect([...KNOWN].filter(entry => !live.has(entry))).toEqual([]);
   });
