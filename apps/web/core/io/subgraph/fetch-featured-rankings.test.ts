@@ -182,7 +182,9 @@ describe('fetchFeaturedRankings', () => {
   });
 
   it('resolves the window from the legacy date properties when the current ones are absent', async () => {
-    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({ startDate: PAST, endDate: FUTURE, legacy: true })]));
+    getBatchEntitiesMock.mockReturnValue(
+      Effect.succeed([blockEntity({ startDate: PAST, endDate: FUTURE, legacy: true })])
+    );
 
     const result = await fetchFeaturedRankings();
 
@@ -286,7 +288,7 @@ describe('fetchFeaturedRankings', () => {
     expect(getBatchEntitiesMock).toHaveBeenCalledTimes(2);
   });
 
-  it('takes each placement from the block\'s own space, not whichever the batch returned first', async () => {
+  it("takes each placement from the block's own space, not whichever the batch returned first", async () => {
     // Dropping the per-query space filter widens the response to every space, so a block that is
     // also embedded elsewhere can come back with a foreign placement listed first. The per-block
     // query could never do that; here it has to be excluded by hand.
@@ -314,7 +316,7 @@ describe('fetchFeaturedRankings', () => {
     expect(await fetchFeaturedRankings()).toEqual([]);
   });
 
-  it('keeps one space\'s entity lookup failing from dropping another space\'s rankings', async () => {
+  it("keeps one space's entity lookup failing from dropping another space's rankings", async () => {
     twoBlocksInDifferentSpaces();
     // Batching makes a failure shared by default. It has to stay scoped to the space that failed.
     getBatchEntitiesMock.mockImplementation((ids: string[], spaceId?: string) =>
@@ -377,7 +379,9 @@ describe('fetchFeaturedRankings', () => {
     );
 
     getRelationsByToEntityIdsMock.mockReturnValue(
-      Effect.succeed(BLOCKS.map((id, i) => ({ id: `rel${i}`, fromEntityId: `parent${i}`, toEntityId: id, spaceId: SPACES[i] })))
+      Effect.succeed(
+        BLOCKS.map((id, i) => ({ id: `rel${i}`, fromEntityId: `parent${i}`, toEntityId: id, spaceId: SPACES[i] }))
+      )
     );
 
     const result = await fetchFeaturedRankings();

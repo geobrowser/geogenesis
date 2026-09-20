@@ -20,11 +20,6 @@ export type ProposalTimestampInput = {
  * and its row read as undated. Submission time is the one moment such a proposal
  * definitely has, so that is what open rows show.
  */
-export function proposalTimestampSeconds({
-  status,
-  endTime,
-  startTime,
-  submittedAt,
-}: ProposalTimestampInput): number {
+export function proposalTimestampSeconds({ status, endTime, startTime, submittedAt }: ProposalTimestampInput): number {
   return getIsProposalEnded(status, endTime) ? startTime : submittedAt;
 }
