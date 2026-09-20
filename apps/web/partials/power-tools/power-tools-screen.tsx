@@ -951,6 +951,11 @@ export function PowerToolsScreen() {
 
   const isLoading = data.isInitialLoading;
 
+  // Above the early return, because it is a hook. `data.sourceType` changes when the block's data
+  // source does, and a component that called `useMemo` on one render and not the next would make
+  // React throw rather than re-render.
+  const filterGroups = React.useMemo(() => groupFilters(effectiveFilterState), [effectiveFilterState]);
+
   if (data.sourceType === 'RELATIONS') {
     return (
       <div className="fixed inset-0 z-50 bg-white" style={{ top: '44px' }}>
@@ -969,7 +974,6 @@ export function PowerToolsScreen() {
   const showBrowseDropdownsRow = !isEditing && supportsDropdowns && browseDropdowns.appliedColumnIds.length > 0;
   const showPillsRow = hasActiveFilters || (isEditing && supportsDropdowns && browseDropdowns.configs.length > 0);
 
-  const filterGroups = React.useMemo(() => groupFilters(effectiveFilterState), [effectiveFilterState]);
 
   return (
     <div

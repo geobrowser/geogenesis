@@ -798,6 +798,11 @@ function CommentList({
     };
   }, [listLayoutKey, updateLastReplyTop]);
 
+  // Above the early return, because it is a hook: `depth` is a prop, so a list rendered at depth 0
+  // on one pass and deeper on the next would change how many hooks this component calls and React
+  // would throw. Cheap enough to read on every render.
+  const density = useCommentDensity();
+
   if (depth === 0) {
     return (
       <div>
@@ -834,7 +839,6 @@ function CommentList({
   // The elbow lands on the reply avatar's vertical centre, so its geometry
   // follows the density's avatar size rather than the 32px avatar these paths
   // were originally drawn against.
-  const density = useCommentDensity();
   const spineOffsetPx = threadSpineOffsetPx(density);
   const armCenterPx = threadArmCenterPx(density);
   const armY = armCenterPx - 0.5;
