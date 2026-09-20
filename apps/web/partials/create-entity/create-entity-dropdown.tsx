@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
-// import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSpaceId } from '~/core/hooks/use-space-id';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -16,12 +16,10 @@ import { useOpenCreateSpaceDialog } from '../create-space/create-space-dialog';
 
 export function CreateEntityDropdown() {
   const router = useRouter();
-  const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const openCreateSpaceDialog = useOpenCreateSpaceDialog();
 
-  const spaceId = pathname?.startsWith('/space/') ? pathname.split('/space/')[1].split('/')[0] : null;
-  // const { isEditor, isMember } = useAccessControl(spaceId ?? '');
+  const spaceId = useSpaceId();
   const { smartAccount } = useSmartAccount();
 
   if (!smartAccount?.account.address) {
