@@ -67,8 +67,11 @@ const rect = (width: number, height: number): DOMRect => ({
  * passed for the wrong reason, whatever the code did.
  */
 function mockMobileActivityGeometry(pageHeightWithoutActivity: number) {
+  let notifyResize: (() => void) | null = null;
   class TestResizeObserver {
-    constructor(private readonly callback: ResizeObserverCallback) {}
+    constructor(callback: ResizeObserverCallback) {
+      notifyResize = () => callback([], this as unknown as ResizeObserver);
+    }
     observe() {}
     unobserve() {}
     disconnect() {}
@@ -108,9 +111,40 @@ function mockMobileActivityGeometry(pageHeightWithoutActivity: number) {
     );
   });
 
-  // Returned so a test can stand in for the browser moving the reader — there is no real layout
-  // here to clamp a scroll position, and the recovery path exists for exactly that case.
-  return scroll;
+  return {
+    // Stands in for the browser moving the reader: there is no real layout here to clamp a scroll
+    // position, and the recovery path exists for exactly that case.
+    scroll,
+    // And for the claim cards growing as their queries land, which is the other way the sizing
+    // path runs after a switch.
+    sectionResized: () => notifyResize?.(),
+  };
+}
+
+/**
+ * The card with both kinds, and the reserve element the tests below assert on.
+ *
+ * Every reserve test wants the same two kinds — a tall Debates view and a short Claims one — since
+ * what they are about is the switch between them, not what is in either.
+ */
+function renderActivity() {
+  const { container } = render(
+    <ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />
+  );
+
+  return { reserve: container.querySelector<HTMLElement>('[data-activity-scroll-reserve]') };
+}
+
+/**
+ * Wait for the scroll listener to arm.
+ *
+ * It arms a frame after a swap, so the swap's own scroll events are not read as the reader moving —
+ * a test that scrolls straight after a switch is testing the disarmed frame and nothing else.
+ */
+function armScrollListener() {
+  return act(async () => {
+    await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
+  });
 }
 
 /**
@@ -200,10 +234,7 @@ describe('ProfileActivitySection', () => {
   it('reserves the lost mobile document height while switching between kinds', () => {
     mockMobileActivityGeometry(600);
 
-    const { container } = render(
-      <ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />
-    );
-    const reserve = container.querySelector<HTMLElement>('[data-activity-scroll-reserve]');
+    const { reserve } = renderActivity();
 
     expect(reserve).toHaveStyle({ height: '0px' });
 
@@ -230,10 +261,7 @@ describe('ProfileActivitySection', () => {
   it('keeps the reserve displayed at the mobile breakpoint, where it is the only thing holding the page', () => {
     mockMobileActivityGeometry(600);
 
-    const { container } = render(
-      <ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />
-    );
-    const reserve = container.querySelector<HTMLElement>('[data-activity-scroll-reserve]');
+    const { reserve } = renderActivity();
 
     // `md:hidden` would switch it off below 768px, which is every phone.
     expect(reserve?.className).not.toMatch(/(^|\s)md:hidden(\s|$)/);
@@ -250,10 +278,7 @@ describe('ProfileActivitySection', () => {
     // 40px of page besides the card: a name and an avatar, no sections after it.
     mockMobileActivityGeometry(40);
 
-    const { container } = render(
-      <ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />
-    );
-    const reserve = container.querySelector<HTMLElement>('[data-activity-scroll-reserve]');
+    const { reserve } = renderActivity();
 
     // Nothing to hold before a switch: the page is however tall it is.
     expect(reserve).toHaveStyle({ height: '0px' });
@@ -261,13 +286,8 @@ describe('ProfileActivitySection', () => {
     fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
 
     // Claims: 40 + 250 = 290 natural, and the reader's viewport bottom is at 1000.
+    // That it is also allowed to render at this width is the test above.
     expect(reserve).toHaveStyle({ height: '710px' });
-
-    // And it has to be on screen to mean anything. On this profile the reserve is the only thing
-    // between the reader and the top of the page, so a height it is not allowed to render is the
-    // same as no fix at all — which is how this shipped once already.
-    expect(reserve?.className).toMatch(/(^|\s)md:block(\s|$)/);
-    expect(reserve?.className).not.toMatch(/(^|\s)md:hidden(\s|$)/);
   });
 
   /**
@@ -276,10 +296,10 @@ describe('ProfileActivitySection', () => {
    * with it. Where that happens they are put back, before the browser paints.
    */
   it('puts the reader back when a shrink beat the reserve to it', () => {
-    const scroll = mockMobileActivityGeometry(600);
+    const { scroll } = mockMobileActivityGeometry(600);
     const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
 
-    render(<ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />);
+    renderActivity();
 
     // The switch reads the position once on the way in; by the time the effect looks again the
     // browser has moved the reader, which is the ordering this recovery exists for.
@@ -296,18 +316,14 @@ describe('ProfileActivitySection', () => {
    * as refusing to move (GEO-2974).
    */
   it('lets the reader scroll down after a switch', async () => {
-    const scroll = mockMobileActivityGeometry(600);
+    const { scroll } = mockMobileActivityGeometry(600);
     const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
 
-    render(<ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />);
+    renderActivity();
     fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
     scrollTo.mockClear();
 
-    // The scroll listener is armed a frame after the swap, so that the swap's own events are not
-    // read as the reader moving. Wait for it, then scroll down.
-    await act(async () => {
-      await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
-    });
+    await armScrollListener();
 
     scroll.y = 700;
     fireEvent.scroll(window);
@@ -316,18 +332,13 @@ describe('ProfileActivitySection', () => {
   });
 
   it('stops holding height the reader has scrolled back above', async () => {
-    const scroll = mockMobileActivityGeometry(600);
-    const { container } = render(
-      <ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />
-    );
-    const reserve = container.querySelector<HTMLElement>('[data-activity-scroll-reserve]');
+    const { scroll } = mockMobileActivityGeometry(600);
+    const { reserve } = renderActivity();
 
     fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
     expect(reserve).toHaveStyle({ height: '150px' });
 
-    await act(async () => {
-      await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
-    });
+    await armScrollListener();
 
     // Back up to the top: nothing below the viewport needs holding any more.
     scroll.y = 0;
@@ -336,11 +347,33 @@ describe('ProfileActivitySection', () => {
     expect(reserve).toHaveStyle({ height: '0px' });
   });
 
+  /**
+   * The other caller of the sizing path. A claim card grows when its queries land, which resizes
+   * the section — and resizing the reserve is the whole response to that. Moving the reader is not,
+   * wherever they have got to by then: the correction belongs to the swap that asked for it.
+   */
+  it('leaves the reader alone when the cards grow after a switch', async () => {
+    const { scroll, sectionResized } = mockMobileActivityGeometry(600);
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+    renderActivity();
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    scrollTo.mockClear();
+    await armScrollListener();
+
+    scroll.y = 700;
+    act(() => {
+      sectionResized();
+    });
+
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
   it('leaves the reader alone when the reserve did its job', () => {
     mockMobileActivityGeometry(600);
     const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
 
-    render(<ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />);
+    renderActivity();
 
     fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
 
@@ -350,10 +383,7 @@ describe('ProfileActivitySection', () => {
   it('adds no reserve when content below Activity already preserves the scroll range', () => {
     mockMobileActivityGeometry(900);
 
-    const { container } = render(
-      <ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [row('c1')] })]} />
-    );
-    const reserve = container.querySelector<HTMLElement>('[data-activity-scroll-reserve]');
+    const { reserve } = renderActivity();
 
     fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
 

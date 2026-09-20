@@ -187,7 +187,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
 
       {/*
        * On narrow screens this supplies only the document height missing below
-       * the current viewport. The reserve sits outside the card, so Claims
+       * the current viewport. The reserve sits outside the section, so Claims
        * stays compact while switching away from the taller Debates view cannot
        * clamp the viewport upward. Profiles with content below Activity need no
        * reserve at all, and desktop keeps its natural layout.
@@ -214,7 +214,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
  *
  *  1. A sibling reserve supplies exactly the document height missing below the viewport, so the
  *     shorter view never shortens the scrollable range. It is a sibling rather than a `min-height`
- *     on the card, which keeps a three-row Claims gallery from sitting inside a debate-sized box.
+ *     on the section, which keeps a three-row Claims gallery from sitting inside a debate-sized box.
  *  2. If the position is lost anyway — the gallery can paint empty for a frame before its queries
  *     land, which shortens the document below even the reserve's reach — it is put back before the
  *     browser paints.
@@ -349,25 +349,29 @@ function ActivityGallery({
     // start. The gate names the one nearest the middle.
     <DebatePlaybackGate allowedId={centredId}>
       {/*
-       * `snap-x` so a flick lands on a card rather than between two.
+       * The wrapper, not the scroller, carries both of these.
        *
-       * The gap at either end is a spacer element rather than padding on the
-       * scroller: a scroll container's trailing padding is dropped by every
-       * browser that matters, so `p-4` gave 16px on the left and nothing on the
-       * right. Spacers are honoured on both sides, and `scroll-px` keeps a
-       * snapped card off the edge it lands against.
+       * `@container`, because the container types imply `contain: inline-size`, and containing the
+       * element whose overflow is the whole point is a bad trade for one class. The wrapper is also
+       * the width the reader actually sees, which is what the cards want to measure — `cqw` below
+       * reads this element, so widening only what scrolls would give the reader more to look at
+       * without giving the cards any more to size against.
+       *
+       * The bleed takes it out through the app shell's own gutter on a phone, so a card can use the
+       * full width and the one behind it is cut off by the screen edge rather than by a panel. `2ch`
+       * is the shell's figure (`2xl:px-[2ch]` in `app/entry.tsx`) and the two have to stay equal, or
+       * the gallery hangs off the side of the document and every profile scrolls sideways. `md` is
+       * inside `2xl` in a desktop-first scale, so the gutter is always there to cancel.
        */}
-      {/* `@container` on a wrapper rather than on the scroller itself: the
-          container types imply `contain: inline-size`, and containing the
-          element whose overflow is the whole point is a bad trade for one class.
-          The wrapper is the width the reader actually sees, which is what the
-          cards want to measure — see `GalleryCard`. */}
-      {/* The bleed is on the container rather than the scroller, because `cqw` below measures this
-          element: widening only what scrolls would give the reader more to look at without giving the
-          cards any more to size against. Out through the app shell's own gutter (`2ch`, see the
-          layout) on a phone, so a card can use the full width and the one behind it is cut off by the
-          screen edge rather than by a panel. */}
       <div className="@container md:-mr-[2ch]">
+        {/*
+         * `snap-x` so a flick lands on a card rather than between two.
+         *
+         * The gap at either end is a spacer element rather than padding on the scroller: a scroll
+         * container's trailing padding is dropped by every browser that matters, so `p-4` gave 16px
+         * on the left and nothing on the right. Spacers are honoured on both sides, and `scroll-px`
+         * keeps a snapped card off the edge it lands against.
+         */}
         <div
           ref={scrollerRef}
           className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 items-start gap-4 overflow-x-auto py-2 md:scroll-px-0"
@@ -393,7 +397,7 @@ function ActivityGallery({
  * Which card is nearest the middle of the row.
  *
  * Measured rather than derived from the scroll offset over a card width: the
- * cards are `min(420px, 80vw)` and the spacers at either end are not cards at
+ * cards are `min(420px, 84cqw)` and the spacers at either end are not cards at
  * all, so arithmetic on a nominal width would drift. Read on scroll through a
  * rAF, which is what keeps a flick from measuring on every frame it fires.
  */
@@ -492,9 +496,9 @@ function GalleryCard({
       className={cx(
         // `cqw`, not `vw`. The viewport is the wrong ruler for a card in a side
         // panel: the panel is a column of its own width inside a window that may
-        // be three times wider, so `80vw` there is not 80% of anything the reader
-        // can see. The scroller establishes the container this measures — see
-        // `ActivityGallery`.
+        // be three times wider, so `84vw` there is not 84% of anything the reader
+        // can see. The wrapper around the scroller establishes the container this
+        // measures — see `ActivityGallery`.
         // Sized so the pill row clears the 272px that `claim-pills-wide` needs to put Agree and
         // Disagree side by side — the card's own padding takes 26px off whatever this is — while
         // leaving a clear sliver of the next card. Narrower phones still stack, which is the
