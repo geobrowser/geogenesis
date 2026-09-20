@@ -73,6 +73,18 @@ describe('ClaimPositionCommentControl', () => {
     expect(composer).not.toHaveClass('flex-col');
   });
 
+  it('keeps the actions inline when the hint fits in the available text width', () => {
+    vi.spyOn(HTMLTextAreaElement.prototype, 'clientHeight', 'get').mockReturnValue(29);
+    vi.spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get').mockReturnValue(29);
+    renderControl();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
+
+    const textarea = screen.getByRole('textbox', { name: 'Why do you agree?' });
+    expect(textarea).not.toHaveClass('basis-full');
+    expect(screen.getByRole('button', { name: 'Skip' }).parentElement).toHaveClass('ml-auto', 'shrink-0');
+  });
+
   it('grows with the comment until the height cap, then scrolls inside the textarea', () => {
     renderControl();
     fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
@@ -89,7 +101,8 @@ describe('ClaimPositionCommentControl', () => {
     expect(textarea.style.overflowY).toBe('auto');
   });
 
-  it('lets a wrapping mobile hint grow the textarea to two lines without moving the buttons', () => {
+  it('gives a wrapping mobile hint the full row and moves the actions beneath it', () => {
+    vi.spyOn(HTMLTextAreaElement.prototype, 'clientHeight', 'get').mockReturnValue(20);
     vi.spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get').mockReturnValue(40);
     renderControl();
 

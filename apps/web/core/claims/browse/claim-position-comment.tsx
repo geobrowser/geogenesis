@@ -10,14 +10,16 @@ import { useCreateComment } from '~/core/hooks/use-create-comment';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 
 const MAX_COMMENT_HEIGHT_PX = 120;
-const SINGLE_LINE_HEIGHT_PX = 20;
 
 function fitCommentTextarea(textarea: HTMLTextAreaElement) {
   textarea.style.height = 'auto';
+  // `text-body` has a taller line-height than the old fixed 20px threshold. Compare the content
+  // with the textarea's actual one-row box so a normal desktop hint is not mistaken for wrapping.
+  const singleLineHeight = textarea.clientHeight;
   const contentHeight = textarea.scrollHeight;
   textarea.style.height = `${Math.min(contentHeight, MAX_COMMENT_HEIGHT_PX)}px`;
   textarea.style.overflowY = contentHeight > MAX_COMMENT_HEIGHT_PX ? 'auto' : 'hidden';
-  return contentHeight > SINGLE_LINE_HEIGHT_PX;
+  return contentHeight > singleLineHeight;
 }
 
 /**
