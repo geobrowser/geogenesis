@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 
 import { DebateCoordinator } from '~/core/debates/debate-coordinator';
 import { DebateMediaSessionProvider } from '~/core/debates/media-session';
+import { PlaybackDiagnostics } from '~/core/debates/playback-diagnostics';
 import { DebateRecordingUploadCoordinator } from '~/core/debates/recording-upload-coordinator';
 import { useGeoLogoutCleanup } from '~/core/hooks/use-geo-logout';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -137,6 +138,7 @@ export function App({ children }: { children: React.ReactNode }) {
         </div>
         <SlideUpBodyState />
         <EntitySidePanel />
+        <PlaybackDiagnostics />
         <EntityCommentsPanelHost />
         {/* Client-side rendered due to `window.localStorage` usage */}
         <ClientOnly>

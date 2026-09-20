@@ -109,6 +109,22 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const [error, setError] = React.useState<string | null>(null);
   const [playing, setPlaying] = React.useState(false);
   const [userPaused, setUserPaused] = React.useState(false);
+  /**
+   * The browser refused to start this pair, so the viewer has to.
+   *
+   * Distinct from `userPaused`, which is a decision somebody made. This is a
+   * decision made *for* them — and measured on a phone rather than guessed at
+   * (GEO-2978): `play()` comes back `NotAllowedError` with the elements muted,
+   * inline and fully buffered, which is iOS in Low Power Mode, or with
+   * auto-play turned off for the site. Both are ordinary states a reader can be
+   * in, not faults.
+   *
+   * It drives the same two things `userPaused` does — show the play control,
+   * and stop the autoplay effect trying again — because a refusal that keeps
+   * being retried is a refusal every time, and the viewer's tap is the one
+   * thing that will be allowed.
+   */
+  const [autoplayBlocked, setAutoplayBlocked] = React.useState(false);
   const [isScrubbing, setIsScrubbing] = React.useState(false);
   const isScrubbingRef = React.useRef(false);
   const wasPlayingBeforeScrubRef = React.useRef(false);
@@ -158,6 +174,26 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
    *   - `setUserPaused(false)` could erase a pause the viewer made during the await.
    */
   const resumeGenerationRef = React.useRef(0);
+  /**
+   * The newest attempt that confirmed playback, so an older one cannot contradict it.
+   *
+   * `resumeGenerationRef` alone cannot settle this. It says which attempt *owns* the elements now,
+   * and the refusal above it is recorded precisely because that ownership has usually moved on by
+   * the time an attempt reports. This says which attempt last won, which is the only thing that
+   * makes a stale refusal safe to drop.
+   */
+  const playingGenerationRef = React.useRef(0);
+  /**
+   * Which debate the card is showing, so an attempt cannot answer for a different one.
+   *
+   * `resumeGenerationRef` scopes an attempt to the *card*, which was enough while a card meant one
+   * debate. It does not: the feed keys its cards by claim, so a re-rank hands a new debate to this
+   * same hook, and an attempt already in flight goes on to report about a debate nobody is looking
+   * at any more. The refusal write is the case that needed a second counter, because it sits above
+   * the ownership check on purpose — a refusal has to outlive supersession within a debate, and
+   * must not outlive the debate itself.
+   */
+  const debateGenerationRef = React.useRef(0);
   /**
    * How many resumes are still confirming.
    *
@@ -297,6 +333,29 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // at the old one's position.
     lastRunningPlayheadRef.current = null;
     setError(null);
+    /*
+     * And so does everything the viewer's last debate concluded about itself.
+     *
+     * The feed keys its cards by claim rather than by debate id, so a re-rank that changes which
+     * debate represents a claim hands a new one to the same hook. A refusal describes the device
+     * and would be true again, but nothing here has asked yet — leaving it set puts the tap
+     * control on a card that was never refused and stops the autoplay this debate is owed. A
+     * pause is worse: it belongs to a debate the viewer is no longer looking at.
+     */
+    setAutoplayBlocked(false);
+    setUserPaused(false);
+    /*
+     * And nothing still in flight may write either of them back.
+     *
+     * Clearing the state is only half of it: `resumeBoth` awaits up to ~600ms, so an attempt
+     * belonging to the debate being replaced can still be inside that window. Bumping both
+     * counters retires it — `resumeGenerationRef` for everything under the ownership check, which
+     * would otherwise set `playing` and a turn for the wrong debate on elements now holding a
+     * different `src`, and `debateGenerationRef` for the refusal write, which deliberately runs
+     * above that check and would re-latch the tap control on a debate nothing has asked about yet.
+     */
+    resumeGenerationRef.current++;
+    debateGenerationRef.current++;
 
     Promise.all([
       getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot1RecordingFilename }),
@@ -576,6 +635,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       // Claim this attempt. Bumping on entry also supersedes an earlier resume that is still
       // awaiting, so two overlapping activations cannot both write state.
       const generation = ++resumeGenerationRef.current;
+      const debateGeneration = debateGenerationRef.current;
       setError(null);
       // Realign the pair so a resume can't leave the recordings drifting. Off the *running*
       // element's clock, not slot 1's unconditionally: a resume on return from a backgrounded tab
@@ -622,21 +682,79 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       // thing noticed from inside, and is spelled out rather than left to the generation check so
       // that a future caller cannot accidentally read it as a successful start.
       if (outcome === 'cancelled') return;
+
+      /*
+       * A refusal outlives the attempt that discovered it.
+       *
+       * It describes the device — this browser will not autoplay right now — so
+       * it is recorded above the ownership check, which exists to stop a
+       * superseded attempt writing *playback* state. And superseded is the norm
+       * rather than the exception: `resumeBoth` bumps the generation on entry
+       * and the autoplay effect re-enters while `playing` is false, so an
+       * attempt is routinely overtaken before it reports. Recorded below the
+       * check, the refusal was discarded every time and the card never learned
+       * of it.
+       *
+       * It also ends that loop, because the effect reads the flag.
+       *
+       * The one thing that does overrule it is a later attempt that actually
+       * started. A refusal reported after that attempt won would put the tap
+       * control over a running video, and the tap would stop it — the two-tap
+       * symptom this was written to remove.
+       */
+      if (
+        outcome === 'refused' &&
+        debateGenerationRef.current === debateGeneration &&
+        playingGenerationRef.current < generation
+      ) {
+        setAutoplayBlocked(true);
+      }
+
       if (resumeGenerationRef.current !== generation) return;
-      if (outcome === 'blocked') {
+
+      if (outcome === 'refused' || outcome === 'blocked') {
+        // The elements and the playback state belong to *this* attempt, so they stay under the
+        // ownership check — pausing elements a newer resume has started would undo it.
         primaryVideo.pause();
         secondaryVideo.pause();
         setPlaying(false);
         setTurnState(null);
-        setError('Could not play both videos. Try Play again.');
+        /*
+         * Only the unexplained failure says so out loud.
+         *
+         * 'blocked' is a stall, a missing recording, a decode failure — the viewer is owed both a
+         * reason and a retry, and the autoplay effect keeps retrying because nothing latched.
+         * 'refused' is the browser declining, where this copy was actively wrong: it named a
+         * control that was not on screen and a failure that had not happened. The videos are fine;
+         * the device simply wants to be asked by a person, and `autoplayBlocked` puts that
+         * question on the card as a control instead of a sentence.
+         */
+        if (outcome === 'blocked') {
+          /*
+           * A block releases the latch, and that omission is what this fixes.
+           *
+           * 'blocked' from an attempt we still own is positive evidence that the browser is no
+           * longer refusing: it let `play()` through and the media did not confirm. Leaving
+           * `autoplayBlocked` set from an earlier refusal left `awaitingTap` true, which is what
+           * the feed's autoplay effect reads — so the retry this outcome exists to allow never
+           * happened, and the card sat behind the manual control saying "Try Play again" about a
+           * control that would not have helped. A latch is only as good as the conditions that
+           * release it.
+           */
+          setAutoplayBlocked(false);
+          setError('Could not play both videos. Try Play again.');
+        }
         return;
       }
       // The browser only allowed it muted (GEO-2783) — record that so the unmute control is honest
       // and later autoplays stop being blocked the same way. The viewer's next tap is a gesture and
       // will be allowed.
       if (outcome === 'playing-muted') setMutedByUser(true);
+      playingGenerationRef.current = generation;
       setPlaying(true);
       setUserPaused(false);
+      // Whatever refused last time has stopped refusing.
+      setAutoplayBlocked(false);
     },
     [offsets, seekVideosTo, setMutedByUser, timelineSeconds]
   );
@@ -856,6 +974,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     error,
     playing,
     userPaused,
+    autoplayBlocked,
     isScrubbing,
     isResuming,
     playbackEnded,
