@@ -235,18 +235,33 @@ describe('claimMarkers seek target', () => {
   const windows = tickerWindows([timed('a', confident(10_000, 14_000))]);
 
   /**
-   * Three of 51 debates end on their last claim. Seeking past the timeline there finishes playback,
-   * and the player takes the whole corner down — the blank this offset exists to prevent.
+   * Three of 51 debates end on their last claim, and a hash there can only ever be a broken
+   * promise: the seek has to stay out of the stretch `playbackEnded` calls the end, which is
+   * earlier than the claim's own window opens, and both the stack and the backlog start at that
+   * window. So the claim is in neither, wherever the click lands.
+   */
+  it('draws no hash for a claim that ends on the final frame', () => {
+    expect(claimMarkers([timed('a', confident(10_000, 30_000))], 30_000)).toEqual([]);
+  });
+
+  /**
+   * A claim ending just inside the reachable stretch keeps its hash, and the seek is clamped rather
+   * than dropped — the card is visible where the click lands, which is the whole contract.
    *
    * Against the shared threshold, not the duration: `playbackEnded` calls the last
    * `PLAYBACK_END_EPSILON_MS` the end, so the first version of this clamp — a millisecond short of
    * `timelineMs` — was still inside it and took the corner down exactly as before.
    */
-  it('never seeks into the stretch the player calls the end', () => {
-    const [marker] = claimMarkers([timed('a', confident(10_000, 30_000))], 30_000);
+  it('clamps rather than drops a claim ending just short of it', () => {
+    const endMs = 30_000 - PLAYBACK_END_EPSILON_MS - 100;
+    const [marker] = claimMarkers([timed('a', confident(10_000, endMs))], 30_000);
+    const [window] = tickerWindows([timed('a', confident(10_000, endMs))]);
 
-    expect(marker.atMs).toBe(30_000);
+    expect(marker.atMs).toBe(endMs);
     expect(marker.seekMs).toBeLessThan(30_000 - PLAYBACK_END_EPSILON_MS);
+    // Short of the full fade, so partly drawn — but on screen, and inside its own window.
+    expect(marker.seekMs).toBeGreaterThan(marker.atMs);
+    expect(cardOpacity(window, marker.seekMs)).toBeGreaterThan(0);
   });
 
   // Every instant of a recording this short is already "the end", so there is nowhere to put the

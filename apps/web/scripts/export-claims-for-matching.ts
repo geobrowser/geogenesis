@@ -16,7 +16,7 @@
  * Usage:
  *   bun scripts/export-claims-for-matching.ts --out ./claim-matching-tasks [--limit N]
  */
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { DebateTranscriptSegment } from '../core/debates/api';
@@ -37,6 +37,30 @@ const LIMIT = numberArg('limit', { fallback: Infinity, min: 1 });
 const SKIP_PUBLISHED = process.argv.includes('--skip-published');
 
 await mkdir(OUT, { recursive: true });
+
+/**
+ * Task files from an earlier run, cleared before this one writes.
+ *
+ * `build-plan-from-matches.ts` reads *every* JSON file in this directory, so anything left behind
+ * is still planning writes. A second run with a lower `--limit`, or one after some of the corpus
+ * was published, leaves files for debates this run deliberately did not export — and the plan then
+ * quietly contains them, built from whatever the graph looked like the first time.
+ *
+ * Only files this script recognises as its own output go: read, parsed, and required to carry a
+ * `debateEntityId` and `turns`. Anything else in the directory is somebody's, and an `--out` that
+ * happens to point at a directory holding the reader's answers must not eat them.
+ */
+const stale: string[] = [];
+for (const name of (await readdir(OUT)).filter(name => name.endsWith('.json'))) {
+  try {
+    const parsed = JSON.parse(await readFile(join(OUT, name), 'utf8'));
+    if (typeof parsed?.debateEntityId === 'string' && Array.isArray(parsed?.turns)) stale.push(name);
+  } catch {
+    // Unreadable, so not recognisably ours. Left alone rather than guessed at.
+  }
+}
+for (const name of stale) await rm(join(OUT, name));
+if (stale.length > 0) console.log(`cleared ${stale.length} task files from an earlier run`);
 
 const inTimeOrder = (segments: DebateTranscriptSegment[]) =>
   [...segments].sort((a, b) =>

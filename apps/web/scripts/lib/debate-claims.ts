@@ -117,11 +117,21 @@ export async function fetchTranscriptSegments(debateEntityId: string): Promise<D
   if (response.status === 404) return [];
   if (!response.ok) throw new Error(`transcript for ${debateEntityId} returned ${response.status}`);
 
+  let body: unknown;
   try {
-    return (await response.json())?.segments ?? [];
+    body = await response.json();
   } catch (cause) {
     throw new Error(`transcript for ${debateEntityId} was not valid JSON`, { cause });
   }
+
+  // A 200 whose body is not a transcript is not an empty transcript. `?.segments ?? []` said it
+  // was, so an error payload or a schema change came back as "this debate was never recorded" —
+  // the same lie as the swallowed 500 above, arriving through the one door left open.
+  const segments = (body as { segments?: unknown } | null)?.segments;
+  if (!Array.isArray(segments)) {
+    throw new Error(`transcript for ${debateEntityId} came back without a segments array`);
+  }
+  return segments as DebateTranscriptSegment[];
 }
 
 /**
@@ -132,7 +142,18 @@ export async function fetchTranscriptSegments(debateEntityId: string): Promise<D
  */
 export function arg(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
-  return index === -1 ? undefined : process.argv[index + 1];
+  if (index === -1) return undefined;
+
+  // A flag that is present but has no value is a mistake, not an absence. Returning `undefined`
+  // sent it to the fallback, so a trailing `--limit` quietly meant "every debate" and
+  // `--out --limit 5` took "--limit" for the output directory — both the same shape as the
+  // `NaN` floor {@link numberArg} was written for, and both on scripts that plan writes.
+  const value = process.argv[index + 1];
+  if (value === undefined || value.startsWith('--')) {
+    console.error(`--${name} needs a value${value === undefined ? '' : `; got "${value}"`}`);
+    process.exit(1);
+  }
+  return value;
 }
 
 /**

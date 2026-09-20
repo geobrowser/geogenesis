@@ -115,6 +115,31 @@ for (const file of (await readdir(TASKS)).filter(name => name.endsWith('.json'))
     byClaimId.set(answer.claimId, answer);
   }
 
+  /**
+   * The same pre-scan on the *task* side: a claim listed in two of this file's turns.
+   *
+   * Checked against `writes` as they accumulated, which was too late to work. By the second
+   * occurrence the first had already been pushed — or had been counted as confirmed or declined,
+   * which pushes no write at all and so never tripped the check — so the file could report the
+   * claim rejected and plan it anyway. Neither occurrence is trustworthy: two turns disagree about
+   * where the claim was said, and nothing here can tell which is right, so both go.
+   *
+   * The export should not produce this — a claim carries one `blockId` — which is exactly why the
+   * guard has to be correct rather than plausible. Measured over the 66 task files on disk: none.
+   */
+  const claimedTwice = new Set<string>();
+  const seenInTask = new Set<string>();
+  for (const turn of task.turns) {
+    for (const claim of turn.claims) {
+      if (seenInTask.has(claim.claimId)) claimedTwice.add(claim.claimId);
+      seenInTask.add(claim.claimId);
+    }
+  }
+  // Once per claim, not once per occurrence, so the count matches the number of claims dropped.
+  for (const claimId of claimedTwice) {
+    rejected.push(`${claimId}: appears in more than one turn of this task file`);
+  }
+
   const writes: (typeof plans)[number]['writes'] = [];
 
   for (const turn of task.turns) {
@@ -123,6 +148,8 @@ for (const file of (await readdir(TASKS)).filter(name => name.endsWith('.json'))
         rejected.push(`${claim.claimId}: answered more than once`);
         continue;
       }
+      // Already reported above, once, whichever occurrence this is.
+      if (claimedTwice.has(claim.claimId)) continue;
 
       const answer = byClaimId.get(claim.claimId);
       if (!answer) {
@@ -156,11 +183,6 @@ for (const file of (await readdir(TASKS)).filter(name => name.endsWith('.json'))
         rejected.push(`${claim.claimId}: no relation entity to write to`);
         continue;
       }
-      if (writes.some(write => write.claimId === claim.claimId)) {
-        rejected.push(`${claim.claimId}: appears in more than one turn of this task file`);
-        continue;
-      }
-
       // A published claim the reader agrees with needs no write. Republishing the same numbers
       // would spend a transaction to change nothing.
       if (claim.published && claim.published.startMs === start.startMs && claim.published.endMs === end.endMs) {
