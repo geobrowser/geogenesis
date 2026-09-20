@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import type { ReactElement } from 'react';
 
@@ -224,6 +225,15 @@ function renderCard(card: ReactElement) {
 }
 
 beforeEach(() => {
+  // The disabled-state tooltip uses Radix positioning, which observes its content in the browser.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   mocks.submitResponse.mockReset();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.spaceName = 'Crypto';
@@ -973,15 +983,33 @@ describe('MatchmakingClaimCard', () => {
     expect(reserved).not.toHaveTextContent(/\S/);
   });
 
-  it('says why the offer cannot be taken rather than dimming it silently', () => {
+  it('says why the offer cannot be taken when its wrapper receives keyboard focus', async () => {
     mocks.match = { id: 'match-1', viewer_position: true };
     mocks.blockedReason = 'Withdraw your open request to send another.';
     renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
-    // Shown, not left to a `title`: native tooltips never appear on touch and are unreliable on a
-    // disabled button, which is exactly when the explanation matters.
-    expect(screen.getByText('Withdraw your open request to send another.')).toBeInTheDocument();
+    const request = screen.getByRole('button', { name: 'Request debate' });
+    const trigger = request.parentElement!;
+    expect(request).toBeDisabled();
+    expect(screen.queryByText('Withdraw your open request to send another.')).not.toBeInTheDocument();
+
+    await userEvent.tab();
+
+    expect(trigger).toHaveFocus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Withdraw your open request to send another.');
+  });
+
+  it('says why the offer cannot be taken when its wrapper is tapped', async () => {
+    mocks.match = { id: 'match-1', viewer_position: true };
+    mocks.blockedReason = 'Withdraw your open request to send another.';
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+    const request = screen.getByRole('button', { name: 'Request debate' });
+    expect(request).toBeDisabled();
+
+    fireEvent.pointerDown(request.parentElement!, { pointerType: 'touch' });
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Withdraw your open request to send another.');
   });
 
   it('opens the room when a debate is running', () => {
