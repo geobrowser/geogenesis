@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
@@ -7,14 +8,38 @@ import type React from 'react';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ClaimCommentPositionBadge, ClaimCommentPositionProvider } from './claim-comment-position';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
+
+import {
+  ClaimCommentPositionBadge,
+  ClaimCommentPositionBoundary,
+  ClaimCommentPositionProvider,
+} from './claim-comment-position';
 
 const mocks = vi.hoisted(() => ({
   getEntityResponders: vi.fn(),
+  entity: null as null | Record<string, unknown>,
+  summary: {
+    viewerDirection: null as 'positive' | 'negative' | null,
+    viewerSpaceId: null as string | null,
+  },
+  summaryArgs: null as unknown[] | null,
 }));
 
 vi.mock('~/core/io/queries', () => ({
   getEntityResponders: mocks.getEntityResponders,
+}));
+
+vi.mock('~/core/sync/use-store', () => ({
+  useQueryEntity: () => ({ entity: mocks.entity, isLoading: false }),
+}));
+
+vi.mock('./claim-response-summary', () => ({
+  CLAIM_RESPONSE_OBJECT_TYPE: 0,
+  useClaimResponseSummary: (...args: unknown[]) => {
+    mocks.summaryArgs = args;
+    return mocks.summary;
+  },
 }));
 
 function wrapper(client: QueryClient, children: React.ReactNode) {
@@ -27,6 +52,9 @@ describe('claim comment position badges', () => {
   beforeEach(() => {
     client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     mocks.getEntityResponders.mockReset();
+    mocks.entity = null;
+    mocks.summary = { viewerDirection: null, viewerSpaceId: null };
+    mocks.summaryArgs = null;
   });
 
   afterEach(() => {
@@ -79,5 +107,41 @@ describe('claim comment position badges', () => {
 
     expect(await screen.findByText('Verify')).toBeInTheDocument();
     expect(screen.queryByText('Dispute')).not.toBeInTheDocument();
+  });
+
+  it('supplies claim position context to a generic comments surface', async () => {
+    mocks.entity = {
+      relations: [
+        {
+          isDeleted: false,
+          type: { id: SystemIds.TYPES_PROPERTY },
+          toEntity: { id: CLAIM_TYPE_ID },
+        },
+      ],
+      values: [
+        {
+          isDeleted: false,
+          property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID },
+          spaceId: 'space-1',
+          value: '1',
+        },
+      ],
+    };
+    mocks.summary = { viewerDirection: 'positive', viewerSpaceId: 'viewer-space' };
+    mocks.getEntityResponders.mockReturnValue(
+      Effect.succeed([{ userId: 'author-space', direction: 'negative' as const }])
+    );
+
+    render(
+      wrapper(
+        client,
+        <ClaimCommentPositionBoundary entityId="claim-1" spaceId="space-1">
+          <ClaimCommentPositionBadge authorSpaceId="author-space" />
+        </ClaimCommentPositionBoundary>
+      )
+    );
+
+    expect(await screen.findByText('Dispute')).toBeInTheDocument();
+    expect(mocks.summaryArgs).toEqual(['claim-1', 'space-1', 'veracity', true]);
   });
 });

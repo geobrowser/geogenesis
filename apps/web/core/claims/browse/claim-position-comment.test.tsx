@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -29,6 +29,7 @@ describe('ClaimPositionCommentControl', () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   function renderControl({
@@ -131,6 +132,56 @@ describe('ClaimPositionCommentControl', () => {
     fireEvent.change(textarea, { target: { value: 'An A' } });
 
     expect(textarea).toHaveClass('basis-full', 'max-w-none');
+  });
+
+  it('remeasures on container shrink and keeps the resulting two-row layout latched', () => {
+    let runResize: ResizeObserverCallback | null = null;
+    let contentHeight = 20;
+    let composerWidth = 0;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          runResize = callback;
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    vi.spyOn(HTMLTextAreaElement.prototype, 'clientHeight', 'get').mockReturnValue(20);
+    vi.spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get').mockImplementation(() => contentHeight);
+    renderControl();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disagree' }));
+    const textarea = screen.getByRole('textbox', { name: 'Why do you disagree?' });
+    const composer = textarea.parentElement as HTMLDivElement;
+    Object.defineProperty(composer, 'clientWidth', { configurable: true, get: () => composerWidth });
+    expect(textarea).not.toHaveClass('basis-full');
+
+    contentHeight = 40;
+    composerWidth = 260;
+    act(() => runResize?.([], {} as ResizeObserver));
+    expect(textarea).toHaveClass('basis-full', 'max-w-none');
+
+    contentHeight = 20;
+    composerWidth = 520;
+    act(() => runResize?.([], {} as ResizeObserver));
+    expect(textarea).toHaveClass('basis-full', 'max-w-none');
+  });
+
+  it('ignores close and publish shortcuts while an IME composition is active', () => {
+    renderControl();
+    fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: 'Partially composed draft' } });
+
+    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true, isComposing: true });
+    fireEvent.keyDown(textarea, { key: 'Escape', isComposing: true });
+
+    expect(mocks.createComment).not.toHaveBeenCalled();
+    expect(textarea).toHaveValue('Partially composed draft');
+    expect(textarea).toBeInTheDocument();
   });
 
   it('dismisses the comment invitation without another position write when Skip is pressed', async () => {

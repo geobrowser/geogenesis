@@ -79,9 +79,12 @@ export function ClaimPositionCommentControl({
   }, [actionsBelow, comment, promptedPosition]);
 
   // A hint or draft can stop fitting when the card changes width without changing its value.
-  // Re-run the compact layout at the new width; the effect above moves the actions down again if
-  // the text wraps. Observe the composer rather than the textarea so that moving the actions does
-  // not itself trigger another width change and oscillate between layouts.
+  // Measure directly on width changes rather than trying to wake the value-driven effect above:
+  // setting an already-false boolean is a no-op, so a compact composer would otherwise miss a
+  // shrink. Once wrapping has moved the actions down, only ever latch the state on — widening the
+  // card must not make the controls jump back into the first row during the same composer session.
+  // Observe the composer rather than the textarea so changing the textarea height cannot create a
+  // resize loop.
   React.useLayoutEffect(() => {
     const composer = composerRef.current;
     if (!composer || typeof ResizeObserver === 'undefined') return;
@@ -90,7 +93,8 @@ export function ClaimPositionCommentControl({
       const nextWidth = composer.clientWidth;
       if (nextWidth === width) return;
       width = nextWidth;
-      setActionsBelow(false);
+      const textarea = textareaRef.current;
+      if (textarea && fitCommentTextarea(textarea)) setActionsBelow(true);
     });
     observer.observe(composer);
     return () => observer.disconnect();
@@ -167,6 +171,10 @@ export function ClaimPositionCommentControl({
                   setComment(event.target.value);
                 }}
                 onKeyDown={event => {
+                  // Escape dismisses an active IME candidate before it means "close", and the
+                  // composed value is not final until composition ends. Neither shortcut should
+                  // clear or publish a partially composed draft.
+                  if (event.nativeEvent.isComposing) return;
                   if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                     event.preventDefault();
                     void publishComment();
