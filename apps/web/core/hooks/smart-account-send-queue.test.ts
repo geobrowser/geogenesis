@@ -5,7 +5,7 @@ import { QueuedSendTimeoutError, enqueueFor, withSubmissionRetry } from './smart
 const reportError = vi.hoisted(() => vi.fn());
 vi.mock('~/core/telemetry/logger', () => ({ reportError }));
 
-const deferred = <T,>() => {
+const deferred = <T>() => {
   let resolve!: (value: T) => void;
   let reject!: (error: unknown) => void;
   const promise = new Promise<T>((res, rej) => {

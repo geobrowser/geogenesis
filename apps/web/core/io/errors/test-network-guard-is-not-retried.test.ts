@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  TEST_UNMOCKED_NETWORK_CODE,
-  classifyTransportFailure,
-  isRetryableCategory,
-} from './retry-utils';
+import { TEST_UNMOCKED_NETWORK_CODE, classifyTransportFailure, isRetryableCategory } from './retry-utils';
 
 /**
  * The test-run network guard in `vitest.setup.ts` must fail *once*, immediately.
