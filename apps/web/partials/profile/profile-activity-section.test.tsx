@@ -116,7 +116,15 @@ function mockMobileActivityGeometry(pageHeightWithoutActivity: number) {
     );
   });
 
+  // Moves the mocked position, the way a real one does. Mocked as a no-op it silently turned
+  // every "and then the reader is back at 400" into a page still sitting where it was, which is
+  // how a viewport resize could lose the reader with the tests all passing.
+  const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(((_x: number, y: number) => {
+    scroll.y = y;
+  }) as typeof window.scrollTo);
+
   return {
+    scrollTo,
     // Stands in for the browser moving the reader: there is no real layout here to clamp a scroll
     // position, and the recovery path exists for exactly that case.
     scroll,
@@ -306,8 +314,7 @@ describe('ProfileActivitySection', () => {
    * with it. Where that happens they are put back, before the browser paints.
    */
   it('puts the reader back when a shrink beat the reserve to it', () => {
-    const { scroll } = mockMobileActivityGeometry(600);
-    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const { scroll, scrollTo } = mockMobileActivityGeometry(600);
 
     renderActivity();
 
@@ -326,8 +333,7 @@ describe('ProfileActivitySection', () => {
    * as refusing to move (GEO-2974).
    */
   it('lets the reader scroll down after a switch', async () => {
-    const { scroll } = mockMobileActivityGeometry(600);
-    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const { scroll, scrollTo } = mockMobileActivityGeometry(600);
 
     renderActivity();
     fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
@@ -404,6 +410,35 @@ describe('ProfileActivitySection', () => {
   });
 
   /**
+   * A growing viewport moves the reader before this hook hears about it, and by construction rather
+   * than by chance: while the reserve holds anything it sizes the document so `holdY` is exactly the
+   * furthest the page can scroll, so 100px more viewport is 100px less maximum, every time. Sizing
+   * the reserve back up returns the range but not the reader.
+   */
+  it('puts the reader back when a growing viewport clamps them', () => {
+    const { scroll, viewport, scrollTo } = mockMobileActivityGeometry(600);
+    const { reserve } = renderActivity();
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(reserve).toHaveStyle({ height: '150px' });
+    scrollTo.mockClear();
+
+    // The URL bar hides. The document is 1000 tall, so the furthest it can scroll drops from 400 to
+    // 300 and the browser takes the reader with it before the resize handler runs.
+    viewport.height = 700;
+    scroll.y = 300;
+    fireEvent.resize(window);
+
+    expect(reserve).toHaveStyle({ height: '250px' });
+    expect(scrollTo).toHaveBeenCalledWith(0, 400);
+
+    // And the clamp arrives as a scroll event afterwards. Read as the reader moving up it would
+    // lower the hold to 300 and shrink the reserve to 150, undoing the restore that just happened.
+    fireEvent.scroll(window);
+    expect(reserve).toHaveStyle({ height: '250px' });
+  });
+
+  /**
    * A viewport that shrinks comes back. On iOS the URL bar returning takes height away and hiding
    * it again gives the height back, so a shrink that happens to need nothing held must not retire
    * the swap — there would be nothing left to rebuild the reserve when the height returns, and the
@@ -461,8 +496,7 @@ describe('ProfileActivitySection', () => {
    * wherever they have got to by then: the correction belongs to the swap that asked for it.
    */
   it('leaves the reader alone when the cards grow after a switch', async () => {
-    const { scroll, sectionResized } = mockMobileActivityGeometry(600);
-    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const { scroll, sectionResized, scrollTo } = mockMobileActivityGeometry(600);
 
     renderActivity();
     fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
@@ -478,8 +512,7 @@ describe('ProfileActivitySection', () => {
   });
 
   it('leaves the reader alone when the reserve did its job', () => {
-    mockMobileActivityGeometry(600);
-    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const { scrollTo } = mockMobileActivityGeometry(600);
 
     renderActivity();
 

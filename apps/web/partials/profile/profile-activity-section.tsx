@@ -346,15 +346,38 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
     // `innerHeight` never moves there and there is nothing to react to.
     //
     // `resize` rather than `visualViewport`, because `window.innerHeight` is the figure the sum
-    // above uses and the two do not always agree. And `sizeReserve` rather than `sizeAndSettle`:
-    // see there for why a reversible change must not retire the swap.
-    window.addEventListener('resize', sizeReserve);
+    // above uses and the two do not always agree. And it sizes without settling: see
+    // `sizeAndSettle` for why a reversible change must not retire the swap.
+    //
+    // Sizing alone is not enough, because a growing viewport has already moved the reader by the
+    // time this runs. While the reserve holds anything, it sizes the document so that `holdY` is
+    // *exactly* the furthest the page can scroll — that is what holding the position means — so a
+    // viewport 100px taller drops the maximum by 100 and the browser takes the reader with it,
+    // every time rather than occasionally. Restoring afterwards is the same one-shot correction the
+    // swap itself gets, for the same reason.
+    const onViewportResize = () => {
+      const swap = swapRef.current;
+      if (!swap) {
+        sizeReserve();
+        return;
+      }
+
+      // Synchronously, inside the resize handler, and that ordering is the whole guard. The clamp
+      // also arrives as a scroll event, which is dispatched after this runs — so by the time
+      // `onScroll` reads the position it is the restored one, and there is nothing there for it to
+      // mistake for the reader moving up.
+      const target = swap.holdY;
+      sizeReserve();
+
+      if (Math.abs(window.scrollY - target) > 1) window.scrollTo(0, target);
+    };
+    window.addEventListener('resize', onViewportResize);
 
     return () => {
       cancelAnimationFrame(arm);
       observer.disconnect();
       window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', sizeReserve);
+      window.removeEventListener('resize', onViewportResize);
     };
   }, [selectedKey]);
 
