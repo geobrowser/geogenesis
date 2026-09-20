@@ -364,17 +364,38 @@ export function getVotingSettingsProposalDetails(actions: readonly ApiAction[]):
  * anywhere in the list wins over whatever happens to be first.
  */
 export function mapApiActionsToProposalType(actions: readonly ApiAction[]): ProposalType {
-  if (actions.some(a => a.actionType === 'PUBLISH')) {
+  return proposalTypeFromActionTypes(actions.map(action => action.actionType));
+}
+
+/**
+ * What a proposal *is*, from the action types it carries, in precedence order.
+ *
+ * The precedence is the point, and the reason this is not a lookup of the first
+ * action: **no source guarantees action order.** `findMembershipAction` above
+ * says so for the REST schema, and `proposalActionsConnection` on the graph is
+ * the same — so first-wins gives a multi-action proposal an arbitrary identity,
+ * and for an unnamed one the identity *is* the title.
+ *
+ * Split out from `mapApiActionsToProposalType` so a caller holding action types
+ * without the rest of an `ApiAction` gets the same answer. The profile's
+ * Proposals tab is one: its types come from the graph, two columns wide, and it
+ * had reimplemented this as "keep the first" (GEO-2859).
+ */
+export function proposalTypeFromActionTypes(actionTypes: readonly string[]): ProposalType {
+  if (actionTypes.includes('PUBLISH')) {
     return 'ADD_EDIT';
   }
-  const membershipAction = findMembershipAction(actions);
-  if (membershipAction) {
-    return mapActionTypeToProposalType(membershipAction.actionType);
+
+  const membership = actionTypes.find(actionType => (MEMBERSHIP_ACTION_TYPES as ReadonlySet<string>).has(actionType));
+  if (membership) {
+    return mapActionTypeToProposalType(membership);
   }
-  if (actions.some(a => a.actionType === 'UPDATE_VOTING_SETTINGS')) {
+
+  if (actionTypes.includes('UPDATE_VOTING_SETTINGS')) {
     return 'UPDATE_VOTING_SETTINGS';
   }
-  return mapActionTypeToProposalType(actions[0]?.actionType ?? 'UNKNOWN');
+
+  return mapActionTypeToProposalType(actionTypes[0] ?? 'UNKNOWN');
 }
 
 export function mapActionTypeToProposalType(actionType: string): ProposalType {

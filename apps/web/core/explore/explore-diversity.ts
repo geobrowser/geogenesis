@@ -1,7 +1,7 @@
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
-import { EXPLORE_ENTITY_TYPE_IDS, EXPLORE_PAGE_SIZE } from './explore-constants';
+import { EXPLORE_ENTITY_TYPE_IDS, EXPLORE_PAGE_SIZE, NEWS_STORY_TYPE_ID } from './explore-constants';
 
 /**
  * Read-time diversity cap for the "Best" feed (GEO-2690).
@@ -272,4 +272,120 @@ export function longestTypeRun<T>(items: readonly T[], keyOf: (item: T) => strin
     if (runLength > longest) longest = runLength;
   }
   return longest;
+}
+
+/**
+ * The composition Explore aims for, as parts per cycle (GEO-2950).
+ *
+ * Preston, 2026-09-17: *"I kinda thought it was nice when per 10 entities there was 6 claims,
+ * 3 debates, and 1 news story."*
+ *
+ * WHY A RATIO AND NOT A RUN CAP. {@link applyDiversityCap} bounds how many of one type may sit
+ * *consecutively*; it says nothing about how much of the page each type gets. Those come apart
+ * badly once the window is mixed. Measured on production the same day, featured spaces, the
+ * default three types:
+ *
+ *   per 10 items      window (pre-cap)   rendered page (post-cap)
+ *   Claim                   4.1                  1.8
+ *   Debate                  2.0                  5.9
+ *   News story              3.9                  2.3
+ *
+ * The cap does not change what is *in* the window — it changes which 22 of the 66 reach the
+ * first page. Claims are the most common type, so they form runs constantly, and every filled
+ * run promotes a scarcer item past them. Claims are pushed off page one as a side effect of a
+ * rule that was never about shares.
+ *
+ * That was the right medicine when it was written: GEO-2690 measured a window that was **100%
+ * Claim**, where any promotion was an improvement. The participation retune in gaia #948/#949
+ * changed the input, and the cap kept promoting as though nothing had.
+ *
+ * SUPPLY IS THE CEILING, NOT THIS CONSTANT. There are ~82 debate entities in the whole feed, so
+ * 3-per-10 holds for roughly 270 ranked items and must thin after that. {@link applyTargetMix}
+ * degrades by falling back to rank order rather than serving a short page.
+ */
+export const EXPLORE_TARGET_MIX: ReadonlyArray<{ typeId: string; share: number }> = [
+  { typeId: CLAIM_TYPE_ID, share: 6 },
+  { typeId: DEBATE_TYPE_ID, share: 3 },
+  { typeId: NEWS_STORY_TYPE_ID, share: 1 },
+];
+
+/** True when every selected type has a target share, so the mix is meaningful for this request. */
+export function targetMixAppliesTo(typeIds: readonly string[] | undefined): boolean {
+  if (!typeIds || typeIds.length < 2) return false;
+  const targeted = new Set(EXPLORE_TARGET_MIX.map(entry => normId(entry.typeId)));
+  return typeIds.every(id => targeted.has(normId(id)));
+}
+
+/**
+ * Reorder a ranked list toward {@link EXPLORE_TARGET_MIX}, preserving rank order within a type.
+ *
+ * Shares are renormalised over the types actually present, so unticking News story turns 6:3:1
+ * into 6:3 rather than leaving a gap the ratio cannot fill.
+ *
+ * Selection is by largest *deficit* — the type furthest below the share it should hold by now —
+ * which spreads each type through the page instead of emitting it in blocks. A 6:3:1 cycle comes
+ * out interleaved (claim, claim, debate, claim, …), not six claims and then three debates.
+ *
+ * The two properties {@link applyDiversityCap} guarantees are kept, because the window cursor
+ * depends on both:
+ *
+ *   * **Nothing is dropped.** When every targeted bucket is empty the remainder is appended in
+ *     rank order, so a page is never short and a type running dry degrades to plain ranking.
+ *   * **Pure function of the input list**, so the same window re-derives identically on a later
+ *     request and can be sliced deeper without items repeating or going missing.
+ *
+ * Items whose type carries no share (an entity classified as something outside the mix) are
+ * residual: they keep rank order and are emitted once the targeted buckets are exhausted. In
+ * practice {@link targetMixAppliesTo} keeps them rare — it only lets this run when every selected
+ * type is in the mix.
+ */
+export function applyTargetMix<T>(
+  items: readonly T[],
+  keyOf: (item: T) => string,
+  mix: ReadonlyArray<{ typeId: string; share: number }> = EXPLORE_TARGET_MIX
+): T[] {
+  const shareOf = new Map(mix.map(entry => [normId(entry.typeId), entry.share]));
+
+  const buckets = new Map<string, T[]>();
+  const residual: T[] = [];
+  for (const item of items) {
+    const key = keyOf(item);
+    if (!shareOf.has(key)) {
+      residual.push(item);
+      continue;
+    }
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(item);
+    else buckets.set(key, [item]);
+  }
+
+  // Renormalise over the types actually present; absent types must not reserve slots.
+  const present = [...buckets.keys()];
+  const total = present.reduce((sum, key) => sum + (shareOf.get(key) ?? 0), 0);
+  if (total <= 0) return [...items];
+
+  const emitted = new Map(present.map(key => [key, 0]));
+  const ordered: T[] = [];
+
+  while (true) {
+    const candidates = present.filter(key => (buckets.get(key)?.length ?? 0) > 0);
+    if (candidates.length === 0) break;
+
+    let bestKey = candidates[0];
+    let bestDeficit = -Infinity;
+    for (const key of candidates) {
+      const target = ((shareOf.get(key) ?? 0) / total) * (ordered.length + 1);
+      const deficit = target - (emitted.get(key) ?? 0);
+      // Ties go to the larger share, so the dominant type leads a fresh cycle.
+      if (deficit > bestDeficit || (deficit === bestDeficit && (shareOf.get(key) ?? 0) > (shareOf.get(bestKey) ?? 0))) {
+        bestDeficit = deficit;
+        bestKey = key;
+      }
+    }
+
+    ordered.push((buckets.get(bestKey) as T[]).shift() as T);
+    emitted.set(bestKey, (emitted.get(bestKey) ?? 0) + 1);
+  }
+
+  return [...ordered, ...residual];
 }

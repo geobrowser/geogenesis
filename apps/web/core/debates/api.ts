@@ -1,5 +1,6 @@
 'use client';
 
+import type { AvailabilityPayload } from '~/core/availability/blocks';
 import { capSearchQuery } from '~/core/io/search-query';
 
 export type ParticipantSlot = 1 | 2;
@@ -124,10 +125,27 @@ export type DebateMediaArtifact = {
   created_at: string;
 };
 
+/**
+ * One turn as the render actually cut it, rather than as the format allowed for.
+ *
+ * `output_*` is the debate timeline the per-slot recordings play on. `countdown_start_ms` sits
+ * later than `output_start_ms` by the handoff grace window — seconds the incoming speaker is
+ * already talking through but their clock has not started (GEO-2754). Older API replicas omit it.
+ */
+export type DebateMediaTurnSegment = {
+  turn_index: number;
+  participant_slot: ParticipantSlot;
+  output_start_ms: number;
+  output_end_ms: number;
+  duration_ms: number;
+  countdown_start_ms?: number;
+};
+
 export type DebateMediaResponse = {
   job: DebateMediaJobSummary | null;
   artifacts: DebateMediaArtifact[];
   transcript_segment_count: number;
+  turn_segments?: DebateMediaTurnSegment[];
   layout: DebateMediaRenderLayout;
   whisper_model_id: string;
 };
@@ -760,6 +778,46 @@ export async function getDebateActivity(
     getPrivyIdentityToken,
     accountKey,
     signal,
+  });
+}
+
+
+/** What `/me/debate-schedule` answers. `is_set` is false for somebody who never saved one. */
+export type DebateScheduleResponse = {
+  is_set: boolean;
+  schedule: AvailabilityPayload;
+};
+
+/**
+ * The viewer's saved debate schedule (GEO-2932).
+ *
+ * Distinct from `/me/debate-availability` below, which is the "available to debate right now"
+ * toggle. This is the calendar: when someone is generally free. The paths differ by one word and
+ * mean unrelated things, which is why they are documented together.
+ */
+export async function getDebateSchedule(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateScheduleResponse>('/me/debate-schedule', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Replaces the whole schedule; the modal holds all of it and saves all of it. */
+export async function replaceDebateSchedule(
+  schedule: AvailabilityPayload,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateScheduleResponse>('/me/debate-schedule', {
+    method: 'PUT',
+    body: schedule,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
   });
 }
 
@@ -1630,13 +1688,88 @@ async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Pr
 export class GeoChatRequestError extends Error {
   code: string | null;
   status: number;
+  /** From `Retry-After`, where geo-chat sent one. */
+  retryAfterMs: number | null;
 
-  constructor(message: string, code: string | null, status: number) {
+  constructor(message: string, code: string | null, status: number, retryAfterMs: number | null = null) {
     super(message);
     this.name = 'GeoChatRequestError';
     this.code = code;
     this.status = status;
+    this.retryAfterMs = retryAfterMs;
   }
+}
+
+/**
+ * A refusal from the session exchange itself, rather than from a resource.
+ *
+ * The two are the same status and opposite problems, and the rest of this codebase already knows
+ * it: `debate-gateway` reads a 401 off a *resource* as `reauthenticate` and calls
+ * {@link resetGeoChatSession}, because the stored session is handed back until it is close to
+ * expiry and a server that rejected those credentials will go on rejecting them. A 401 from
+ * `/auth/session` is the opposite — the credentials are fine and geo-chat does not have the account
+ * yet.
+ *
+ * Only the second is worth waiting out, so only the second is {@link isAccountWarmingUp}. Told apart
+ * by type rather than by status, because the status cannot tell them apart and the call site that
+ * has to decide is a query's `retry`, a long way from either endpoint.
+ *
+ * Extends rather than replaces, so every `instanceof GeoChatRequestError` that already exists keeps
+ * matching.
+ */
+export class GeoChatSessionError extends GeoChatRequestError {
+  constructor(error: GeoChatRequestError) {
+    super(error.message, error.code, error.status, error.retryAfterMs);
+    this.name = 'GeoChatSessionError';
+  }
+}
+
+/**
+ * geo-chat declining to serve a read at all.
+ *
+ * The mechanical fact, with no claim about why. It has exactly two readings and they are the same
+ * status: the viewer is not signed in, or geo-chat has not finished registering an account that is.
+ * Both are named below and in `hub-states`, and both defer to this so the statuses are stated once.
+ */
+export function isGeoChatRefusal(error: unknown) {
+  return error instanceof GeoChatRequestError && (error.status === 401 || error.status === 403);
+}
+
+/**
+ * That refusal read as "not yet" rather than "not you".
+ *
+ * geo-chat does not know an account for a minute or two after it is created and refuses every
+ * viewer-relative read until it does. Signed *out* produces the same status, so the two are told
+ * apart by who is asking rather than by the status — see `isSignInRequired`, the other reading.
+ *
+ * 401 only, and not the 403 its sibling also accepts. The registration window answers 401; a 403 is
+ * geo-chat saying this viewer may not read *this*, which is a standing fact about a space they are
+ * not in rather than a wait. Reading both as "not yet" was worse than imprecise: callers act on it.
+ * The claim-rows lookup would have polled a forbidden space every ten seconds for the life of the
+ * tab, the matchmaking reads would have sat through a minute of retries before showing a refusal
+ * that was never going to change, and the hub would have told the viewer their account was being
+ * set up when it had been set up for months.
+ *
+ * And from the session exchange only — see {@link GeoChatSessionError}. A 401 off a resource is a
+ * session the server has stopped accepting, which waiting cannot fix and which this would otherwise
+ * have spent nine retries on before telling the viewer their account was being set up.
+ *
+ * Lives beside the error it reads because both layers need it: the hub to say what is happening,
+ * and the query layer to know a failure is worth asking about again.
+ */
+export function isAccountWarmingUp(error: unknown) {
+  return error instanceof GeoChatSessionError && error.status === 401;
+}
+
+/**
+ * The same refusal behind an attempt react-query is still retrying, as well as a settled one.
+ *
+ * Both callers want the same thing and had each spelled it out, differently: one `||`-ing the two
+ * fields and one `??`-ing them, which are not the same answer when a settled error is present and
+ * is *not* a refusal. Asked once, here.
+ */
+export function isAccountWarmingUpQuery(query: { error?: unknown; failureReason?: unknown }) {
+  return isAccountWarmingUp(query.error) || isAccountWarmingUp(query.failureReason);
 }
 
 const debatePhaseBoundaryRetryCodes = new Set([
@@ -1645,9 +1778,10 @@ const debatePhaseBoundaryRetryCodes = new Set([
   'recording_not_ready',
 ]);
 
+// A 429 is not retried here: its window is a minute, and the notifier waits out `Retry-After`.
 function isTransientResponseNotificationError(error: unknown) {
   if (error instanceof GeoChatRequestError) {
-    return error.status === 429 || error.status >= 500;
+    return error.status >= 500;
   }
   return !(error instanceof DOMException && error.name === 'AbortError');
 }
@@ -1699,7 +1833,16 @@ async function requestError(response: Response) {
   } catch {
     // fall back to the status line built above
   }
-  return new GeoChatRequestError(message, code, response.status);
+  return new GeoChatRequestError(message, code, response.status, retryAfterMs(response.headers?.get('retry-after')));
+}
+
+/** `Retry-After` in milliseconds, given as delay-seconds or an HTTP date. */
+function retryAfterMs(header: string | null | undefined): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const date = Date.parse(header);
+  return Number.isNaN(date) ? null : Math.max(0, date - Date.now());
 }
 
 async function accessTokenForRequest(options: RequestOptions) {
@@ -1792,7 +1935,11 @@ async function createGeoChatSession(privyToken: string): Promise<GeoChatSession>
     headers: { Authorization: `Bearer ${privyToken}` },
   });
 
-  if (!response.ok) throw new Error(await errorMessage(response));
+  // `requestError`, not a bare `Error`: the status is the only thing that tells a caller what kind
+  // of failure this is, and throwing it away made every one of them "Something went wrong". A 401
+  // here is geo-chat saying it does not know this account *yet* — which it says to a viewer who has
+  // only just signed up, for as long as it takes to register them.
+  if (!response.ok) throw new GeoChatSessionError(await requestError(response));
   return response.json() as Promise<GeoChatSession>;
 }
 
@@ -1803,7 +1950,7 @@ async function refreshGeoChatSession(refreshToken: string): Promise<GeoChatSessi
     body: JSON.stringify({ refresh_token: refreshToken }),
   });
 
-  if (!response.ok) throw new Error(await errorMessage(response));
+  if (!response.ok) throw new GeoChatSessionError(await requestError(response));
   return response.json() as Promise<GeoChatSession>;
 }
 
@@ -1877,14 +2024,5 @@ function decodeGeoChatAccessToken(token: string | undefined): { user_id?: string
     return JSON.parse(window.atob(padded)) as { user_id?: string };
   } catch {
     return null;
-  }
-}
-
-async function errorMessage(response: Response) {
-  try {
-    const body = (await response.json()) as { error?: { message?: string } };
-    return body.error?.message || `${response.status} ${response.statusText}`;
-  } catch {
-    return `${response.status} ${response.statusText}`;
   }
 }

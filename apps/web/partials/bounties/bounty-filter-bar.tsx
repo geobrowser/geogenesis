@@ -125,118 +125,140 @@ export function BountyFilterBar({ filters, onChange, bounties, spaces, skills }:
     !isDefaultStatuses(filters.statuses);
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2" data-testid="bounty-filter-bar">
-      {/* The text search is a filter like the dropdowns: same group, same pill geometry. */}
-      <div className="flex flex-wrap items-center gap-2" data-testid="bounty-filters">
-        <label
-          className={`${FILTER_PILL_CLASS} w-[220px] cursor-text gap-1.5 focus-within:border-grey-03 hover:bg-white`}
-        >
-          <Search />
-          <input
-            value={query}
-            onChange={event => setQuery(event.target.value)}
-            placeholder="Search bounties"
-            aria-label="Search bounties"
-            className="min-w-0 flex-1 bg-transparent text-[16px] leading-[20px] outline-none placeholder:text-grey-03"
-          />
-        </label>
-        {spaces && spaces.length > 1 ? (
-          <FilterMenu
-            label={spaceLabel}
-            multiple
-            options={withDisabledZeros(spaceOptions)}
-            selectedKeys={new Set(filters.spaceIds)}
-            onToggle={key => onChange({ ...filters, spaceIds: toggle(filters.spaceIds, key) })}
-            allLabel="All spaces"
-            onSelectAll={() => onChange({ ...filters, spaceIds: [] })}
-            emptyMeansAll
-            maxHeightClass="max-h-[400px] overflow-y-auto"
-          />
-        ) : null}
+    <div
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:gap-x-1.5 lg:[&_button]:px-2"
+      data-testid="bounty-filter-bar"
+    >
+      {/* Wide: search anchors the board's left gutter and `ml-auto` pushes everything that narrows
+          or reorders the board to the right edge. An auto margin rather than `justify-between`,
+          which would strand the right group at flex-start on any line it wrapped onto.
 
-        <FilterMenu
-          label={filters.featuredOnly ? 'Featured' : 'All'}
-          multiple
-          options={[{ key: 'featured', label: 'Featured', count: bounties.filter(b => b.isFeatured).length }]}
-          selectedKeys={new Set(filters.featuredOnly ? ['featured'] : [])}
-          onToggle={() => onChange({ ...filters, featuredOnly: !filters.featuredOnly })}
-          allLabel="All"
-          onSelectAll={() => onChange({ ...filters, featuredOnly: false })}
-          emptyMeansAll
-        />
+          Narrow: that arrangement only reads as alignment while the bar fits on one line, so under
+          `lg` it comes apart instead of wrapping. Search takes a full-width row, and the wrapper
+          and both groups go `display: contents` — nesting is what stranded a pill, since separate
+          flex items cannot share a row however much room is going spare beside them. Flattened,
+          the pills pack, and the divider goes with the box that drew it.
 
-        <FilterMenu
-          label={statusLabel}
-          multiple
-          options={withDisabledZeros(statusOptions)}
-          selectedKeys={new Set(filters.statuses)}
-          onToggle={key => {
-            const next = toggle(filters.statuses, key as WorkflowStatusKey);
-            // Never allow an empty set (it would show nothing); fall back to the toggled key alone.
-            onChange({ ...filters, statuses: next.length === 0 ? [key as WorkflowStatusKey] : next });
-          }}
-          allLabel="All statuses"
-          onSelectAll={() => onChange({ ...filters, statuses: WORKFLOW_STATUSES.map(status => status.key) })}
-        />
+          The pills also lose 2px of side padding and the row 2px of gap here, which is what settles
+          all seven into two rows on a phone rather than three: measured in Calibre at 355px, the
+          second row needed one more pixel than it had. That padding is scoped to descendants of
+          this bar, leaving `FILTER_PILL_CLASS` as it is for the surfaces that share it; menu
+          contents are portaled out, so it reaches the triggers and Clear filters only.
 
-        <FilterMenu
-          label={difficultyLabel}
-          multiple
-          options={withDisabledZeros(difficultyOptions)}
-          selectedKeys={new Set(filters.difficulties)}
-          onToggle={key => onChange({ ...filters, difficulties: toggle(filters.difficulties, key as DifficultyKey) })}
-          allLabel="Any difficulty"
-          onSelectAll={() => onChange({ ...filters, difficulties: [] })}
-          emptyMeansAll
-        />
-
-        {skills.length > 0 ? (
-          <FilterMenu
-            label={skillLabel}
-            multiple
-            options={withDisabledZeros(skillOptions)}
-            selectedKeys={new Set(filters.skillIds)}
-            onToggle={key => onChange({ ...filters, skillIds: toggle(filters.skillIds, key) })}
-            allLabel="Any skill"
-            onSelectAll={() => onChange({ ...filters, skillIds: [] })}
-            emptyMeansAll
-            maxHeightClass="max-h-[400px] overflow-y-auto"
-          />
-        ) : null}
-
-        {isFiltered ? (
-          <button
-            type="button"
-            onClick={() => onChange({ ...DEFAULT_BOUNTY_FILTERS, sort: filters.sort, groupBy: filters.groupBy })}
-            className={FILTER_PILL_CLASS}
-          >
-            Clear filters
-          </button>
-        ) : null}
-      </div>
-
-      {/* Sorting and grouping are view options, not filters — same row, own group behind the divider. */}
-      <div
-        className="flex flex-wrap items-center gap-2 border-l border-grey-02 pl-3"
-        data-testid="bounty-view-options"
-        aria-label="Sort and group"
+          Breakpoints here are max-width (styles.css): `lg` is ≤1023px. */}
+      <label
+        className={`${FILTER_PILL_CLASS} w-[220px] cursor-text gap-1.5 focus-within:border-grey-03 hover:bg-white lg:w-full`}
       >
-        <FilterMenu
-          label={SORT_LABELS[filters.sort]}
-          options={(Object.keys(SORT_LABELS) as BountySort[]).map(sort => ({ key: sort, label: SORT_LABELS[sort] }))}
-          selectedKey={filters.sort}
-          onSelect={key => onChange({ ...filters, sort: key as BountySort })}
+        <Search />
+        <input
+          value={query}
+          onChange={event => setQuery(event.target.value)}
+          placeholder="Search bounties"
+          aria-label="Search bounties"
+          className="min-w-0 flex-1 bg-transparent text-[16px] leading-[20px] outline-none placeholder:text-grey-03"
         />
+      </label>
 
-        <FilterMenu
-          label={GROUP_BY_LABELS[filters.groupBy]}
-          options={(Object.keys(GROUP_BY_LABELS) as BountyGroupBy[]).map(groupBy => ({
-            key: groupBy,
-            label: GROUP_BY_LABELS[groupBy],
-          }))}
-          selectedKey={filters.groupBy}
-          onSelect={key => onChange({ ...filters, groupBy: key as BountyGroupBy })}
-        />
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2 lg:contents">
+        <div className="flex flex-wrap items-center justify-end gap-2 lg:contents" data-testid="bounty-filters">
+          {spaces && spaces.length > 1 ? (
+            <FilterMenu
+              label={spaceLabel}
+              multiple
+              options={withDisabledZeros(spaceOptions)}
+              selectedKeys={new Set(filters.spaceIds)}
+              onToggle={key => onChange({ ...filters, spaceIds: toggle(filters.spaceIds, key) })}
+              allLabel="All spaces"
+              onSelectAll={() => onChange({ ...filters, spaceIds: [] })}
+              emptyMeansAll
+              maxHeightClass="max-h-[400px] overflow-y-auto"
+            />
+          ) : null}
+
+          <FilterMenu
+            label={filters.featuredOnly ? 'Featured' : 'All'}
+            multiple
+            options={[{ key: 'featured', label: 'Featured', count: bounties.filter(b => b.isFeatured).length }]}
+            selectedKeys={new Set(filters.featuredOnly ? ['featured'] : [])}
+            onToggle={() => onChange({ ...filters, featuredOnly: !filters.featuredOnly })}
+            allLabel="All"
+            onSelectAll={() => onChange({ ...filters, featuredOnly: false })}
+            emptyMeansAll
+          />
+
+          <FilterMenu
+            label={statusLabel}
+            multiple
+            options={withDisabledZeros(statusOptions)}
+            selectedKeys={new Set(filters.statuses)}
+            onToggle={key => {
+              const next = toggle(filters.statuses, key as WorkflowStatusKey);
+              // Never allow an empty set (it would show nothing); fall back to the toggled key alone.
+              onChange({ ...filters, statuses: next.length === 0 ? [key as WorkflowStatusKey] : next });
+            }}
+            allLabel="All statuses"
+            onSelectAll={() => onChange({ ...filters, statuses: WORKFLOW_STATUSES.map(status => status.key) })}
+          />
+
+          <FilterMenu
+            label={difficultyLabel}
+            multiple
+            options={withDisabledZeros(difficultyOptions)}
+            selectedKeys={new Set(filters.difficulties)}
+            onToggle={key => onChange({ ...filters, difficulties: toggle(filters.difficulties, key as DifficultyKey) })}
+            allLabel="Any difficulty"
+            onSelectAll={() => onChange({ ...filters, difficulties: [] })}
+            emptyMeansAll
+          />
+
+          {skills.length > 0 ? (
+            <FilterMenu
+              label={skillLabel}
+              multiple
+              options={withDisabledZeros(skillOptions)}
+              selectedKeys={new Set(filters.skillIds)}
+              onToggle={key => onChange({ ...filters, skillIds: toggle(filters.skillIds, key) })}
+              allLabel="Any skill"
+              onSelectAll={() => onChange({ ...filters, skillIds: [] })}
+              emptyMeansAll
+              maxHeightClass="max-h-[400px] overflow-y-auto"
+            />
+          ) : null}
+
+          {isFiltered ? (
+            <button
+              type="button"
+              onClick={() => onChange({ ...DEFAULT_BOUNTY_FILTERS, sort: filters.sort, groupBy: filters.groupBy })}
+              className={FILTER_PILL_CLASS}
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </div>
+
+        {/* Sorting and grouping are view options, not filters — same row, own group behind the divider. */}
+        <div
+          className="flex flex-wrap items-center gap-2 border-l border-grey-02 pl-3 lg:contents"
+          data-testid="bounty-view-options"
+          aria-label="Sort and group"
+        >
+          <FilterMenu
+            label={SORT_LABELS[filters.sort]}
+            options={(Object.keys(SORT_LABELS) as BountySort[]).map(sort => ({ key: sort, label: SORT_LABELS[sort] }))}
+            selectedKey={filters.sort}
+            onSelect={key => onChange({ ...filters, sort: key as BountySort })}
+          />
+
+          <FilterMenu
+            label={GROUP_BY_LABELS[filters.groupBy]}
+            options={(Object.keys(GROUP_BY_LABELS) as BountyGroupBy[]).map(groupBy => ({
+              key: groupBy,
+              label: GROUP_BY_LABELS[groupBy],
+            }))}
+            selectedKey={filters.groupBy}
+            onSelect={key => onChange({ ...filters, groupBy: key as BountyGroupBy })}
+          />
+        </div>
       </div>
     </div>
   );

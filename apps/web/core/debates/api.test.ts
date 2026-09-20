@@ -4,6 +4,7 @@ import { MAX_SEARCH_QUERY_LENGTH } from '~/core/io/search-query';
 
 import {
   GeoChatRequestError,
+  GeoChatSessionError,
   blockDebateUser,
   completeLocalRecordingUpload,
   createDebateRequest,
@@ -12,6 +13,7 @@ import {
   getDebateActivity,
   getGeoChatSession,
   getRematchLiveKitToken,
+  isAccountWarmingUp,
   joinDebateQueue,
   listDebateClaims,
   listDebatePeople,
@@ -109,6 +111,30 @@ describe('geo-chat request errors', () => {
       code: null,
       status: 503,
     });
+  });
+
+  it('reads Retry-After from a 429 as seconds or an HTTP date, without retrying the request', async () => {
+    const rateLimited = (retryAfter: string) =>
+      new Response(JSON.stringify({ error: { code: 'rate_limited', message: 'Too many requests' } }), {
+        status: 429,
+        statusText: 'Too Many Requests',
+        headers: { 'Content-Type': 'application/json', 'Retry-After': retryAfter },
+      });
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(rateLimited('7'))
+      .mockResolvedValueOnce(rateLimited(new Date(Date.now() + 30_000).toUTCString()));
+    vi.stubGlobal('fetch', fetch);
+    const notify = () => notifyClaimResponseIndexed('space-1', 'claim-1', 'stance', true, vi.fn(), 'user-a');
+
+    await expect(notify()).rejects.toMatchObject({ status: 429, retryAfterMs: 7_000 });
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    const error = await notify().catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(GeoChatRequestError);
+    expect((error as GeoChatRequestError).retryAfterMs).toBeGreaterThan(28_000);
+    expect((error as GeoChatRequestError).retryAfterMs).toBeLessThanOrEqual(30_000);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -709,6 +735,53 @@ describe('turn yields', () => {
   });
 });
 
+describe('a refused session exchange', () => {
+  /**
+   * The seam every other test on this branch assumes and none of them touched.
+   *
+   * The retries, the poll and the hub's setup message all key off `isAccountWarmingUp`, and they
+   * were tested against a `GeoChatSessionError` built by hand. So unwrapping the throw in
+   * `createGeoChatSession` would have left all of them green while putting the original bug back:
+   * a real refusal would arrive as a plain `GeoChatRequestError`, classify as an ordinary failure,
+   * and the hub would go back to saying something went wrong. This asks the real endpoint.
+   */
+  it('is classified as an account geo-chat has not registered yet', async () => {
+    window.localStorage.clear();
+    resetGeoChatSession();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 'account_not_found', message: 'Unknown account' } }), {
+          status: 401,
+          statusText: 'Unauthorized',
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const error = await getGeoChatSession(vi.fn().mockResolvedValue('privy-token'), 'user-a').catch(
+      (thrown: unknown) => thrown
+    );
+
+    expect(isAccountWarmingUp(error)).toBe(true);
+    expect(error).toMatchObject({ name: 'GeoChatSessionError', status: 401, code: 'account_not_found' });
+  });
+
+  /**
+   * And the other 401, from the other side of the same seam. A resource refusing the stored session
+   * is a session the server has stopped accepting — `debate-gateway` resets it — and waiting that
+   * out re-offers rejected credentials for ninety seconds before saying the account is being set up.
+   */
+  it('is not what a resource refusing the stored session means', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 401, statusText: 'Unauthorized' })));
+
+    const error = await getDebateActivity(vi.fn(), 'user-a').catch((thrown: unknown) => thrown);
+
+    expect(error).toBeInstanceOf(GeoChatRequestError);
+    expect(isAccountWarmingUp(error)).toBe(false);
+  });
+});
+
 describe('geo-chat session sharing', () => {
   it('exposes the fresh session and its expiry to websocket callers', async () => {
     await expect(getGeoChatSession(vi.fn(), 'user-a')).resolves.toEqual({
@@ -900,5 +973,12 @@ describe('geo-chat session sharing', () => {
 
     await result;
     expect((requestSignal as AbortSignal | null)?.aborted).toBe(true);
+  });
+});
+
+describe('GeoChatSessionError', () => {
+  it('keeps the Retry-After delay of the error it wraps', () => {
+    const wrapped = new GeoChatSessionError(new GeoChatRequestError('Too many requests', 'rate_limited', 429, 1_500));
+    expect(wrapped.retryAfterMs).toBe(1_500);
   });
 });

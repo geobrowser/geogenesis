@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import cx from 'classnames';
-import { MotionConfig, type PanInfo, motion, useDragControls } from 'framer-motion';
+import { MotionConfig, motion } from 'framer-motion';
 import { useAtom, useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
@@ -11,8 +11,10 @@ import { createPortal } from 'react-dom';
 import { DEBATES_MODAL } from '~/core/debates/debates-panel-deep-link';
 import { requestsModal } from '~/core/deep-links/modal-deep-link';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
+import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
 import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
@@ -25,6 +27,7 @@ import { HubMessage } from './hub-states';
 import { LobbyTab } from './lobby-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
+import { SetScheduleBanner } from './set-schedule-banner';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
 import { useUnexpiredRequests } from './use-request-countdown';
@@ -33,7 +36,6 @@ import { type DebatesHubTab, debatesHubFiltersOwnerAtom, resetDebatesHubFiltersA
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
 const MOBILE_SHEET_TOP_OFFSET_PX = 120;
-const PANEL_SCROLL_SELECTOR = '[data-debates-hub-scroll]';
 
 // Reading order, widest to narrowest: everything you could debate, then who is around, then the
 // two lists that only exist once matchmaking has produced something. The landing tab is set
@@ -43,16 +45,18 @@ const TABS: { id: DebatesHubTab; label: string }[] = [
   { id: 'lobby', label: 'Lobby' },
   { id: 'people', label: 'People' },
   { id: 'explore', label: 'Explore' },
+  { id: 'positions', label: 'Positions' },
   { id: 'requests', label: 'Requests' },
 ];
 
 /**
- * GEO-2725. Lobby and Requests are a particular person's, so signed out they have no possible
- * contents — not an empty list but a meaningless one. Both of Lobby's lists are viewer-relative:
+ * GEO-2725. Lobby, Positions and Requests are a particular person's, so signed out they have no
+ * possible contents — not an empty list but a meaningless one. Both of Lobby's lists are viewer-relative:
  * geo-chat scores `debate_now` on who is available to debate *you*, and a match is a claim you hold
  * a side on. Explore and People describe the world rather than the viewer, so both read fine
- * anonymously and are what the hub offers before sign-in (GEO-2861) — Explore's own viewer-relative
- * source, "My positions", leaves its menu signed out for the same reason.
+ * anonymously and are what the hub offers before sign-in (GEO-2861). Positions is the third of the
+ * viewer's own: it was a source inside Explore's picker and left that menu signed out for exactly
+ * this reason, so promoting it to a tab (GEO-2863) promotes the rule with it.
  *
  * In the order the anonymous row draws them, and it is read that way below rather than used to
  * filter the signed-in order. Filtered, this list said what the row contained and `TABS` quietly
@@ -76,26 +80,13 @@ function visibleTab(activeTab: DebatesHubTab, authenticated: boolean): DebatesHu
   return 'explore';
 }
 
-function isInteractiveDragTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
-  return Boolean(
-    target.closest(
-      'button, a, input, textarea, select, [role="button"], [contenteditable="true"], [data-no-sheet-drag]'
-    )
-  );
-}
-
-function shouldStartSheetDrag(event: React.PointerEvent, root: HTMLElement): boolean {
-  if (isInteractiveDragTarget(event.target)) return false;
-  const scrollEl = root.querySelector<HTMLElement>(PANEL_SCROLL_SELECTOR);
-  if (scrollEl?.contains(event.target as Node) && scrollEl.scrollTop > 0) return false;
-  return true;
-}
-
 export function DebatesHubPanel() {
   const isMobile = useIsMobileLayout();
-  const dragControls = useDragControls();
   const { isOpen, activeTab, close, setTab } = useDebatesHub();
+  const { dragControls, handleDragEnd, handlePointerDown, setOverlayElement } = useMobileSheetDrag({
+    enabled: isMobile && isOpen,
+    onDismiss: close,
+  });
   // Held here rather than per tab, so switching tabs doesn't drop and re-take the gateway scope.
   useMatchmakingScope(isOpen);
   // Only the mobile sheet claims `aria-modal`; the desktop aside is a non-modal companion panel.
@@ -191,13 +182,12 @@ export function DebatesHubPanel() {
       // animation in the app. `user` keeps opacity fades but drops transform and layout motion.
       <MotionConfig reducedMotion="user">
         <motion.div
-          className="fixed inset-0 z-[200]"
+          ref={setOverlayElement}
+          className="fixed inset-0 z-[200] overscroll-none"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.15 }}
-          onPointerDown={event => {
-            if (shouldStartSheetDrag(event, event.currentTarget)) dragControls.start(event);
-          }}
+          onPointerDown={handlePointerDown}
         >
           {/* Not a button: `aria-modal` hides it from assistive tech anyway, so labelling it
               "Close" only promised a control nobody could hear about — the header's button is the
@@ -207,6 +197,7 @@ export function DebatesHubPanel() {
             ref={sheetRef as React.RefObject<HTMLDivElement>}
             tabIndex={-1}
             data-debates-hub
+            data-mobile-sheet-surface
             role="dialog"
             aria-modal="true"
             aria-label="Debates"
@@ -215,18 +206,14 @@ export function DebatesHubPanel() {
             dragListener={false}
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={0.12}
-            onDragEnd={(_event, info: PanInfo) => {
-              if (info.offset.y > 72 || info.velocity.y > 420) close();
-            }}
+            onDragEnd={handleDragEnd}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-            className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden bg-white"
+            className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
             style={{ top: MOBILE_SHEET_TOP_OFFSET_PX }}
           >
-            <div className="flex shrink-0 justify-center pt-2 pb-1" aria-hidden>
-              <div className="h-1 w-10 rounded-full bg-grey-02" />
-            </div>
+            <MobileSheetGrabHandle />
             {body}
           </motion.div>
         </motion.div>
@@ -299,6 +286,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         </div>
       </div>
 
+      <SetScheduleBanner />
+
       {/* Hidden until Privy resolves, not just the body below it. `authenticated` is false during
           restoration, so a row drawn before then is the signed-out one — a returning viewer would
           watch Matches and Requests appear, and a selected tab of theirs jump to Claims. */}
@@ -350,6 +339,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         layoutScroll
         ref={scrollRef}
         data-debates-hub-scroll
+        data-mobile-sheet-scroll
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6"
       >
         {/* `filtersReconciled` joins the Privy gate rather than becoming a second one: the reset
@@ -358,17 +348,33 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
             picked and fire B's first query with A's space ids, an instant before the effect
             corrects both. One render, but it is the wrong viewer's data. */}
         {!ready || !filtersReconciled ? null : (
-          <HubSwap activeKey={activeTab}>
-            {activeTab === 'requests' ? (
-              <RequestsTab />
-            ) : activeTab === 'lobby' ? (
-              <LobbyTab onTabChange={changeTab} />
-            ) : activeTab === 'explore' ? (
-              <ClaimsTab />
-            ) : (
-              <PeopleTab onTabChange={changeTab} />
-            )}
-          </HubSwap>
+          <>
+            <HubSwap activeKey={activeTab}>
+              {activeTab === 'requests' ? (
+                <RequestsTab />
+              ) : activeTab === 'lobby' ? (
+                <LobbyTab onTabChange={changeTab} />
+              ) : activeTab === 'explore' ? (
+                <ClaimsTab />
+              ) : activeTab === 'positions' ? (
+                <ClaimsTab variant="positions" />
+              ) : (
+                <PeopleTab onTabChange={changeTab} />
+              )}
+            </HubSwap>
+            {/* Explore's four serial round trips, started from whichever tab the viewer is on
+                instead of from the moment they ask for Explore — see `ClaimsTab`'s `warm`. The hub
+                opens on the Lobby and Explore is one press away, so the chain has the whole time
+                the viewer spends reading this tab to finish, and usually has.
+
+                Inside the readiness gate above for the reason that gate exists: warming with the
+                previous account's filter bar would fill the cache under the wrong viewer's query
+                keys, which is worse than not warming at all.
+
+                Dropped once Explore is the open tab, so the real one is the only instance holding
+                the selection atoms and geo-chat's space scopes. */}
+            {activeTab === 'explore' ? null : <ClaimsTab warm />}
+          </>
         )}
       </motion.div>
     </div>

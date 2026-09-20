@@ -1,14 +1,14 @@
 'use server';
 
-import type { GovernanceProposalType } from './governance-proposal-type-filter';
+import type { GovernanceProposalCategory, GovernanceProposalStatusFilter } from './governance-proposal-query';
 import { GovernanceProposalsList } from './governance-proposals-list';
 
 export async function loadMoreProposalsAction(
   spaceId: string,
-  page: number = 0,
-  proposalType?: GovernanceProposalType
+  cursor: string,
+  category: GovernanceProposalCategory = 'all',
+  status: GovernanceProposalStatusFilter = 'pending'
 ) {
-  const nextPage = page + 1;
-  const { node, hasMore } = await GovernanceProposalsList({ spaceId, page: nextPage, proposalType });
-  return [node, nextPage, hasMore] as const;
+  const { node, hasMore, nextCursor } = await GovernanceProposalsList({ spaceId, cursor, category, status });
+  return [node, nextCursor, hasMore] as const;
 }

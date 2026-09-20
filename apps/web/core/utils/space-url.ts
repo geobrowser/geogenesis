@@ -30,8 +30,7 @@
  * for the edge and should not pull the SDK in. `space-url.test.ts` asserts this
  * stays equivalent to `IdUtils.isValid`, so the two cannot drift silently.
  */
-const ID_PATTERN =
-  /^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/;
+const ID_PATTERN = /^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/;
 
 export function isValidId(segment: string): boolean {
   return ID_PATTERN.test(segment);
@@ -50,14 +49,18 @@ export const SPACE_ROOT_SEGMENTS = ['pending'] as const;
  * Also filesystem-checked by the test.
  */
 export const SPACE_TAB_SEGMENTS = [
+  'about',
   'activity',
   'bounties',
   'claims',
   'community',
   'debates',
+  'debug-availability',
   'debug-debates',
   'governance',
   'import',
+  'positions',
+  'proposals',
   'questions',
 ] as const;
 

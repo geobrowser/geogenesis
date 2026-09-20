@@ -38,7 +38,7 @@ export function NavbarClientActions({ onSearchClick }: Props) {
 
       <DebatesHubButton />
 
-      <div className="flex items-center sm:hidden">
+      <div className="flex items-center mobile:hidden">
         <NavbarActions />
       </div>
     </div>

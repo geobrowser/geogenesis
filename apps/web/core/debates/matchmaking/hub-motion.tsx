@@ -16,6 +16,21 @@ export const HUB_LAYOUT_TRANSITION = { duration: 0.15 } as const;
 export const HUB_SWAP_TRANSITION = { duration: 0.1 } as const;
 
 /**
+ * Longer than the two above, and deliberately so.
+ *
+ * A row leaving is the one piece of hub motion the viewer is meant to *read* rather than merely not
+ * notice: it is the only one that says something happened. At 0.12s an opacity fade is a blink, and
+ * a claim folding out of Explore because you just answered it (GEO-2863) looked like the list had
+ * dropped it. Long enough to follow, still inside the window where it reads as a response to the
+ * press rather than as an animation being played at you.
+ *
+ * The gap closes on {@link HUB_LAYOUT_TRANSITION} underneath, which is shorter on purpose: the rows
+ * below should be settled by the time the ghost has finished going, or the list looks like it is
+ * still moving after the thing that moved it has gone.
+ */
+export const HUB_CARD_EXIT_TRANSITION = { duration: 0.22, ease: [0.4, 0, 0.2, 1] } as const;
+
+/**
  * `pointerEvents` is disabled on the way out so a card that is mid-fade can't take a click on a
  * button that is about to disappear.
  */
@@ -23,7 +38,10 @@ export const hubCardMotion = {
   layout: 'position',
   initial: { opacity: 0, y: 4 },
   animate: { opacity: 1, y: 0, pointerEvents: 'auto' },
-  exit: { opacity: 0, pointerEvents: 'none', transition: { duration: 0.12 } },
+  // Scaled as well as faded, because `popLayout` takes the row out of flow the moment it starts
+  // leaving: the gap below it closes on its own, so shrinking is the only thing left that can make
+  // the card read as folding away rather than as having been deleted.
+  exit: { opacity: 0, scale: 0.97, pointerEvents: 'none', transition: HUB_CARD_EXIT_TRANSITION },
   transition: HUB_LAYOUT_TRANSITION,
 } as const;
 

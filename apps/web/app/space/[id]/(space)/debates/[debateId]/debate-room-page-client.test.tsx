@@ -14,6 +14,7 @@ import { DebateRoomPageClient, isDebateInThankYouPeriod, upcomingTurnLabel } fro
 
 const mocks = vi.hoisted(() => ({
   prefetchAllowlist: vi.fn(),
+  warmRelatedClaims: vi.fn(),
   back: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
@@ -66,6 +67,7 @@ const mocks = vi.hoisted(() => ({
   useRealRoomOwnership: false,
   deviceChangeHandler: null as null | (() => void),
   debate: null as Debate | null,
+  debateLoading: false,
   rematch: null as DebateRematchSession | null,
   featureFlags: {
     debateDebugging: false,
@@ -108,7 +110,12 @@ vi.mock('~/core/debates/hooks', () => ({
   useClearTimedOutDebateActivity: () => mocks.clearTimedOutDebateActivity,
   useConsentToDebateRematch: () => ({ mutateAsync: mocks.consentMutateAsync, isPending: false }),
   useEndDebateTurn: () => ({ mutateAsync: mocks.endTurnMutateAsync, isPending: false }),
-  useDebate: () => ({ data: mocks.debate, isLoading: false, error: null, refetch: mocks.refetchDebate }),
+  useDebate: () => ({
+    data: mocks.debate,
+    isLoading: mocks.debateLoading,
+    error: null,
+    refetch: mocks.refetchDebate,
+  }),
   useDebateRematch: () => ({ data: mocks.rematch, isLoading: false, error: null }),
   useLeaveDebateRematch: () => ({ mutateAsync: mocks.leaveRematchMutateAsync, isPending: false }),
   useLiveKitJoin: () => ({ mutateAsync: mocks.liveKitJoinMutateAsync, isPending: false }),
@@ -270,10 +277,21 @@ vi.mock('~/core/debates/use-prefetch-claim-space-allowlist', () => ({
   usePrefetchClaimSpaceAllowlist: (enabled: boolean) => mocks.prefetchAllowlist(enabled),
 }));
 
+// The same arrangement, for the same reason: the room warms this one too and reads nothing back, so
+// the only question here is whether it asks — with the claim being argued, and only once the debate
+// is actually under way. Its real implementation wants a sync engine this suite does not stand up.
+vi.mock('~/core/debates/use-related-debate-claims', () => ({
+  useRelatedDebateClaims: (options: unknown) => {
+    mocks.warmRelatedClaims(options);
+    return { claimIds: [], spaceId: null, enabled: false, isLoading: false, error: null };
+  },
+}));
+
 beforeEach(() => {
   mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: false };
   mocks.setPublishOptOutRequest.mockReset();
   mocks.prefetchAllowlist.mockReset();
+  mocks.warmRelatedClaims.mockReset();
   clearDebateReturnDestination();
   setHistoryLength(1);
   mocks.back.mockReset();
@@ -343,6 +361,7 @@ beforeEach(() => {
   mocks.useRealRoomOwnership = false;
   mocks.deviceChangeHandler = null;
   mocks.debate = completedDebate();
+  mocks.debateLoading = false;
   mocks.rematch = null;
   mocks.featureFlags = {
     debateDebugging: false,
@@ -498,6 +517,37 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(mocks.prefetchAllowlist).toHaveBeenCalledWith(true);
+  });
+
+  // GEO-2758. The picker that opens when this debate ends offers the claims related to the one
+  // being argued, and finding them is three serial requests. Asked from here, they are answered
+  // long before anyone is waiting on them.
+  it('warms the claims related to the one being argued, once the debate is under way', () => {
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.warmRelatedClaims).toHaveBeenCalledWith(
+      expect.objectContaining({ claim: expect.objectContaining({ claim_entity_id: 'claim-entity-1' }), enabled: true })
+    );
+  });
+
+  // A preflight that times out, or a room nobody joins, is a debate that never happens — and a
+  // warm cache for one is a request spent on nothing.
+  it('does not warm them before the debate has started', () => {
+    const now = Date.parse('2026-07-02T00:00:05.000Z');
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'preflight',
+      current_turn_index: 0,
+      current_speaker_slot: null,
+      preflight_ends_at: new Date(now + 5_000).toISOString(),
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.warmRelatedClaims).toHaveBeenCalled();
+    expect(mocks.warmRelatedClaims).not.toHaveBeenCalledWith(expect.objectContaining({ enabled: true }));
   });
 
   it('returns through browser history without rendering an already-completed room', async () => {
@@ -670,16 +720,22 @@ describe('DebateRoomPageClient', () => {
 
     expect(screen.getByRole('dialog', { name: 'Debate readiness' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Audio settings' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Video settings' })).toBeInTheDocument();
-    // No mic or camera toggle on the intro. The screen exists so the two of them see and hear each
-    // other before the debate; muting the person you are about to introduce yourself to is not a
-    // state worth supporting, and every way of reaching it costs the recorder its video track.
-    expect(screen.queryByRole('button', { name: 'Mute microphone' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Turn camera off' })).not.toBeInTheDocument();
+    // The intro carries mic and camera toggles, reversing GEO-2819's decision not to. The concern
+    // that produced that decision — "muting the person you are about to introduce yourself to is
+    // not a state worth supporting" — is answered by the gate below rather than by the absence of
+    // the control: you can mute the introduction, you cannot carry it into a recorded debate.
+    // Toggling still goes through `enabled` rather than LiveKit's `mute()`, so the recorder never
+    // loses the track it captured at publish time.
+    expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
     // The issue asks for this line explicitly, and it has to stay true to when capture starts.
-    expect(screen.getByText(/this part isn't recorded/i)).toBeInTheDocument();
+    // GEO-2819 asked for "this part isn't recorded" in so many words. The sentence is gone from the
+    // copy, but the fact it was there to state is now on the tile the sentence was talking about,
+    // in both of its states — which is the assertion below and the one worth keeping.
+    expect(screen.getByText('Introduce yourselves before debating')).toBeInTheDocument();
     expect(screen.getByText('Speak to test your mic')).toBeInTheDocument();
     expect(screen.getByRole('meter')).toBeInTheDocument();
     expect(screen.queryByText('Ready')).not.toBeInTheDocument();
@@ -827,11 +883,190 @@ describe('DebateRoomPageClient', () => {
       })
     );
     expect(screen.getByText('Requesting camera and mic…')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready to debate" })).not.toBeInTheDocument();
+    // Still laid out, hidden and inert, so the screen does not jump when access is granted.
+    const reservedReadyButton = screen.getByRole('button', { name: "I'm ready to debate", hidden: true });
+    expect(reservedReadyButton.closest('[inert]')).toHaveClass('invisible');
 
     pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
 
-    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
+  });
+
+  // GEO-2770. Each view below replaces a full-screen one, so anything else rendered in between
+  // shows as a flash.
+  describe('screen transitions', () => {
+    const connectingDebate = (): Debate => ({
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    });
+
+    it('shows the route loading state while the debate loads', () => {
+      mocks.debate = null;
+      mocks.debateLoading = true;
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('status')).toHaveTextContent('Opening your debate room…');
+      expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading debate...')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back to debates' })).not.toBeInTheDocument();
+    });
+
+    it('goes straight from the intro to the recording view when the intro connected', async () => {
+      mocks.debate = readyDebate({ localReady: true, remoteReady: false });
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+      await screen.findByRole('button', { name: /Waiting for/ });
+
+      mocks.debate = connectingDebate();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    });
+
+    it('holds a full-screen state while a failed intro reconnects for the debate', async () => {
+      mocks.liveKitJoinMutateAsync.mockRejectedValueOnce(new Error('intro failed'));
+      mocks.debate = readyDebate({ localReady: true, remoteReady: false });
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      expect(await screen.findByText('intro failed')).toBeInTheDocument();
+
+      const ownership = deferred<{ acquired: boolean; waitedForLocalRelease: boolean }>();
+      mocks.ownershipAcquire.mockReturnValueOnce(ownership.promise);
+      mocks.debate = connectingDebate();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.queryByRole('dialog', { name: 'Debate readiness' })).not.toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Connecting to the debate' })).toBeInTheDocument();
+      expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
+      await waitFor(() => expect(mocks.ownershipAcquire).toHaveBeenCalledTimes(2));
+      expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
+
+      await act(async () => ownership.resolve({ acquired: true, waitedForLocalRelease: false }));
+      expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    });
+
+    it('holds a full-screen state while rejoining a debate already under way', async () => {
+      const ownership = deferred<{ acquired: boolean; waitedForLocalRelease: boolean }>();
+      mocks.ownershipAcquire.mockReturnValueOnce(ownership.promise);
+      mocks.debate = { ...completedDebate(), status: 'in_progress', completed_at: null };
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('dialog', { name: 'Connecting to the debate' })).toBeInTheDocument();
+      await waitFor(() => expect(mocks.ownershipAcquire).toHaveBeenCalledOnce());
+      expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
+
+      await act(async () => ownership.resolve({ acquired: true, waitedForLocalRelease: false }));
+      expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    });
+
+    it('keeps the retry reachable once the debate connection has failed', async () => {
+      mocks.liveKitJoinMutateAsync.mockRejectedValue(new Error('join failed'));
+      mocks.debate = { ...connectingDebate(), status: 'preflight', preflight_ends_at: '2099-07-02T00:00:15.000Z' };
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(await screen.findByText('join failed')).toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: 'Connecting to the debate' })).not.toBeInTheDocument();
+    });
+
+    it('holds a full-screen state instead of a blank page while leaving a finished debate', async () => {
+      setHistoryLength(2);
+      mocks.debate = completedDebate();
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('dialog', { name: 'Leaving the debate' })).toBeInTheDocument();
+      await waitFor(() => expect(mocks.back).toHaveBeenCalled());
+      expect(screen.getByRole('dialog', { name: 'Leaving the debate' })).toBeInTheDocument();
+    });
+
+    it('holds a full-screen state while an idle room walks into the rematch', async () => {
+      mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+      mocks.rematch = rematchSession('browsing');
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('dialog', { name: 'Leaving the debate' })).toBeInTheDocument();
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    });
+
+    it('holds focus, the scroll lock and a visible label while the holding screen is up', async () => {
+      mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+      mocks.rematch = rematchSession('browsing');
+
+      const { unmount } = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      const holdingScreen = screen.getByRole('dialog', { name: 'Leaving the debate' });
+      // The screens on either side take focus the same way; without this it falls to `body` and
+      // the app shell behind the overlay stays reachable by keyboard.
+      expect(holdingScreen).toHaveFocus();
+      // `aria-modal` does not contain Tab on its own, and the app shell behind is still in the tab
+      // order. Nothing here is focusable, so both directions are swallowed and focus stays put.
+      expect(fireEvent.keyDown(holdingScreen, { key: 'Tab' })).toBe(false);
+      expect(holdingScreen).toHaveFocus();
+      expect(fireEvent.keyDown(holdingScreen, { key: 'Tab', shiftKey: true })).toBe(false);
+      expect(holdingScreen).toHaveFocus();
+      // Both neighbours lock too, so the scrollbar never returns between them.
+      expect(document.body.style.overflow).toBe('hidden');
+      // Named on screen, not only to assistive tech: leaving and connecting are otherwise identical.
+      expect(holdingScreen).toHaveTextContent('Leaving the debate');
+
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
+      unmount();
+      expect(document.body.style.overflow).toBe('');
+    });
+
+    it('keeps the removal notice reachable when it sits above the holding screen', async () => {
+      const ownership = deferred<{ acquired: boolean; waitedForLocalRelease: boolean }>();
+      mocks.ownershipAcquire.mockReturnValueOnce(ownership.promise);
+      mocks.rematch = rematchSession('browsing');
+      mocks.debate = {
+        ...completedDebate(),
+        status: 'thanking',
+        completed_at: null,
+        rematch_session_id: 'rematch-1',
+        recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+        recording_cancelled_by: 'user-b',
+        recordings: [],
+      };
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('dialog', { name: 'Connecting to the debate' })).toBeInTheDocument();
+      const notice = screen.getByRole('dialog', { name: 'Your debate was removed' });
+      // The notice is the top dialog, so it holds focus rather than the holding screen under it.
+      expect(notice).toHaveFocus();
+      fireEvent.keyDown(notice, { key: 'Tab' });
+      expect(notice).toHaveFocus();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Okay' }));
+      await waitFor(() => expect(screen.queryByText('Your debate was removed')).not.toBeInTheDocument());
+    });
+
+    it('spends the debate auto-connect when the intro connection lands after the debate starts', async () => {
+      const connecting = deferred<void>();
+      mocks.roomConnect.mockReturnValueOnce(connecting.promise);
+      mocks.debate = readyDebate({ localReady: true, remoteReady: false });
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+
+      // The opponent presses ready while this handshake is still running, so the debate has already
+      // left `ready` by the time the intro connection lands.
+      mocks.debate = connectingDebate();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await act(async () => connecting.resolve());
+      expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+
+      act(() => emitRoomEvent('disconnected', 99));
+
+      // The intro connection carried into the debate, so the drop offers a retry instead of reconnecting.
+      expect(await screen.findByRole('button', { name: 'Retry connection' })).toBeInTheDocument();
+      expect(mocks.roomConnect).toHaveBeenCalledOnce();
+    });
   });
 
   it('locks background scrolling while the pre-screen modal is open', () => {
@@ -896,12 +1131,12 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText('Allow access to your camera and microphone to continue.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready to debate" })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Audio settings' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Allow access' }));
 
-    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2);
   });
 
@@ -913,7 +1148,7 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByText('Connect a camera and microphone, then try again.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready to debate" })).not.toBeInTheDocument();
   });
 
   it('cleans up acquired tracks when device enumeration fails', async () => {
@@ -934,7 +1169,7 @@ describe('DebateRoomPageClient', () => {
     ).toBeInTheDocument();
     expect(audioTrack.stop).toHaveBeenCalled();
     expect(videoTrack.stop).toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready to debate" })).not.toBeInTheDocument();
   });
 
   // GEO-2819 moved the room connection into the intro, so `debateRoomOptions` no longer sees a
@@ -992,10 +1227,10 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
 
-    expect(screen.getByRole('radio', { name: 'System default' })).toBeChecked();
+    expect(await screen.findByRole('radio', { name: 'System default' })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled();
     expect(screen.queryByRole('radio', { name: 'Studio Speakers' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: "I'm ready" })).toBeEnabled();
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
   });
 
   it('falls back to System default when speaker authorization is rejected', async () => {
@@ -1035,8 +1270,12 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Display Speakers' }));
+    // Awaited, not `getByRole`: the speaker list is populated from `enumerateDevices`, and
+    // selecting a speaker re-renders it while that selection is still pending — so a name can be
+    // briefly absent between two clicks. A synchronous query here made this test fail about one run
+    // in four, on this branch and on master alike.
+    fireEvent.click(await screen.findByRole('radio', { name: 'Studio Speakers' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Display Speakers' }));
 
     act(() =>
       latestSelection.resolve({
@@ -1132,11 +1371,11 @@ describe('DebateRoomPageClient', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
 
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: "I'm ready" })).toBeDisabled();
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeDisabled();
 
     pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Studio Mic' })).toBeChecked());
-    expect(screen.getByRole('button', { name: "I'm ready" })).toBeEnabled();
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
   });
 
   it('opens mobile video settings as a bottom sheet using the existing preview stream', async () => {
@@ -1188,7 +1427,7 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Studio Mic' }));
     await waitFor(() =>
       expect(mocks.createLocalTracks).toHaveBeenCalledWith({
         audio: { deviceId: 'mic-2' },
@@ -1221,7 +1460,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    await screen.findByRole('button', { name: "I'm ready" });
+    await screen.findByRole('button', { name: "I'm ready to debate" });
     const olderEnumeration = deferred<MediaDeviceInfo[]>();
     mocks.enumerateDevices.mockReturnValueOnce(olderEnumeration.promise).mockResolvedValueOnce([
       { kind: 'audioinput', deviceId: 'mic-2', groupId: 'mic-group-2', label: 'Studio Mic' },
@@ -1258,7 +1497,71 @@ describe('DebateRoomPageClient', () => {
 
     expect(within(debateVideoTile('remote')).getByText('Ready')).toBeInTheDocument();
     expect(within(debateVideoTile('local')).queryByText('Ready')).not.toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: "I'm ready too" })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: "I'm ready to debate too" })).toBeEnabled();
+  });
+
+  it('shows the opponent as not ready rather than showing nothing', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeInTheDocument();
+    expect(within(debateVideoTile('remote')).getByText('Not ready')).toBeInTheDocument();
+    expect(within(debateVideoTile('local')).queryByText('Not ready')).not.toBeInTheDocument();
+  });
+
+  // The intro's answer to GEO-2819's objection to having these toggles at all: the state is
+  // reachable, and it is not a state a recorded debate can start from.
+  it('holds readiness back until the microphone and the camera are both on', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
+
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeDisabled();
+    expect(screen.getByText('Enable audio to start')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
+
+    expect(screen.getByText('Enable video and audio to start')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+
+    expect(screen.getByText('Enable video to start')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
+    expect(screen.queryByText('Enable video to start')).not.toBeInTheDocument();
+  });
+
+  // The room orders its tiles by which side of the claim each speaker holds. The intro does not:
+  // it is about your own setup, so you are on the left of it whichever side you are arguing.
+  it('puts you on the left of the intro screen whichever position you hold', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await screen.findByRole('button', { name: "I'm ready to debate" });
+    // The card wrapping your tile takes the first column; the document order is the mobile one,
+    // where your opponent is on top and you sit directly above your own controls.
+    expect(debateVideoTile('local').parentElement).toHaveClass('order-1');
+    expect(debateVideoTile('remote').parentElement).toHaveClass('order-2');
+  });
+
+  // The neutral state is the assurance, so it has to be somewhere the eye already is: on the tile
+  // showing the camera it is talking about.
+  it('puts the not-recording pill in the local tile on the intro screen', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await screen.findByRole('button', { name: "I'm ready to debate" });
+    expect(within(debateVideoTile('local')).getByText('Not recording')).toBeInTheDocument();
+    expect(within(debateVideoTile('remote')).queryByText('Not recording')).not.toBeInTheDocument();
   });
 
   it('disables the ready button while waiting for the opponent', async () => {
@@ -1267,8 +1570,11 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByRole('button', { name: 'Waiting for Bri…' })).toBeDisabled();
-    expect(within(debateVideoTile('local')).getByText('Ready')).toBeInTheDocument();
-    expect(within(debateVideoTile('remote')).queryByText('Ready')).not.toBeInTheDocument();
+    // Your own readiness is the button, not a badge: the bottom-right of your tile is the recording
+    // indicator, and two different places to read "ready" was the state this screen used to be in.
+    expect(within(debateVideoTile('local')).getByText('Not recording')).toBeInTheDocument();
+    expect(within(debateVideoTile('local')).queryByText('Ready')).not.toBeInTheDocument();
+    expect(within(debateVideoTile('remote')).getByText('Not ready')).toBeInTheDocument();
   });
 
   // The intro screen and the debate room own different media elements, and the status flip swaps
@@ -1488,7 +1794,7 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByRole('button', { name: 'Connecting…' })).toBeDisabled();
 
     act(() => pendingConnect.resolve());
-    await waitFor(() => expect(screen.getByRole('button', { name: "I'm ready" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled());
   });
 
   // Disabling the trigger is not enough: an open picker keeps its radios clickable.
@@ -1518,7 +1824,7 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: "I'm ready" }));
+    fireEvent.click(await screen.findByRole('button', { name: "I'm ready to debate" }));
 
     await waitFor(() => {
       expect(mocks.readyMutateAsync).toHaveBeenCalled();
@@ -2441,8 +2747,11 @@ describe('DebateRoomPageClient', () => {
 
     const heading = screen.getByRole('heading', { name: 'The protocol should ship debates' });
     expect(heading).toBeInTheDocument();
-    expect(heading.closest('main')).toHaveClass('max-w-[430px]');
-    expect(heading).toHaveClass('mb-5', 'max-w-[390px]', 'text-[1.375rem]', 'leading-[1.1]');
+    // The claim is set exactly as the intro screen sets it — wide band, `text-mainPage` on desktop
+    // — so the headline does not resize under you at the swap. Only the video column is still held
+    // to the room's 430px, which is what `main` used to hold everything to.
+    expect(heading).toHaveClass('mb-5', 'max-w-[900px]', 'text-mainPage', 'md:max-w-[390px]', 'md:text-[1.5rem]');
+    expect(debateVideoTile('local').parentElement).toHaveClass('max-w-[430px]');
     expect(screen.queryByRole('button', { name: 'Mute microphone' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Turn camera off' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Disable audio' })).not.toBeInTheDocument();
@@ -2555,6 +2864,18 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
     expect(await screen.findByText('Recording')).toBeInTheDocument();
     expect(screen.queryByText('Not recording')).not.toBeInTheDocument();
+  });
+
+  // It is the local `MediaRecorder` this reports on, so it belongs to the local tile and to no
+  // other. It used to be `fixed` to the top of the viewport, far from either.
+  it('puts the recording pill in the local tile rather than over the screen', async () => {
+    installRecordingMocks();
+
+    await renderLiveDebate();
+
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    await waitFor(() => expect(within(debateVideoTile('local')).getByText('Recording')).toBeInTheDocument());
+    expect(within(debateVideoTile('remote')).queryByText('Recording')).not.toBeInTheDocument();
   });
 
   // A recorder can end without `stopLocalRecorder`: a disconnect stops the local tracks, the
@@ -4002,7 +4323,15 @@ describe('DebateRoomPageClient', () => {
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
+    // GEO-2949. The window now runs RECORDING_POST_ROLL_MS past the final turn's deadline, so
+    // the last speaker is not cut mid-sentence. Still recording one millisecond after the old
+    // cut-off is the whole point of the change.
     vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:01:10.001Z'));
+    mocks.debate = { ...mocks.debate! };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:01:15.001Z'));
     mocks.debate = { ...mocks.debate! };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 

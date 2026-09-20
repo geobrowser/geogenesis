@@ -1,15 +1,10 @@
 'use client';
 
-import { useCallback } from 'react';
-
-import { useAtom } from 'jotai';
-
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
+import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
-
-import { dismissedNoticesAtom } from '~/atoms';
 
 // Persisted alongside the other one-time notices (see `dismissedNoticesAtom`). Once the
 // user dismisses the banner this id is appended to the list and it never renders again.
@@ -33,31 +28,23 @@ export function ExploreWelcomeBanner() {
 }
 
 function WelcomeBanner() {
-  const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
+  const { dismissed, remember: handleDismiss } = useDismissedNotice(WELCOME_BANNER_ID);
   const { isOpen: isDebatesHubOpen, open: openDebatesHub } = useDebatesHub();
 
-  // Functional setter form so concurrent dismissals can't drop each other via a stale
-  // closure, and the guard keeps the id from being appended twice on a repeat click.
-  const handleDismiss = useCallback(() => {
-    setDismissedNotices(prev => (prev.includes(WELCOME_BANNER_ID) ? prev : [...prev, WELCOME_BANNER_ID]));
-  }, [setDismissedNotices]);
-
-  if (dismissedNotices.includes(WELCOME_BANNER_ID)) return null;
+  if (dismissed) return null;
 
   return (
     <div className="relative mb-5 overflow-clip rounded-lg bg-[#151515]">
       {/* Decorative fanned book covers, anchored to the right and bleeding off the top,
-          bottom, and right edges (clipped by overflow-clip). Hidden on narrow screens.
-          NB: breakpoints here are desktop-first (`sm` = max-width 639px), so `sm:hidden`
-          hides the covers on small screens while they show by default. */}
+          bottom, and right edges (clipped by overflow-clip). Hidden on narrow screens. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute top-1/2 right-0 translate-x-3 -translate-y-1/2 sm:hidden"
+        className="pointer-events-none absolute top-1/2 right-0 translate-x-3 -translate-y-1/2 mobile:hidden"
       >
         <img src="/explore-welcome-banner.png" alt="" className="h-[135px] w-auto max-w-none select-none" />
       </div>
 
-      <div className="relative z-10 py-5 pr-48 pl-5 sm:pr-5">
+      <div className="relative z-10 py-5 pr-48 pl-5 mobile:pr-5">
         <h2 className="text-smallTitle text-white">
           <span aria-hidden className="mr-1.5">
             👋

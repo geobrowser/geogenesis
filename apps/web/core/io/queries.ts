@@ -85,6 +85,7 @@ import {
   spaceEditorsPageQuery,
   spaceMembersPageQuery,
   spaceQuery,
+  spaceRolesForParticipantsQuery,
   spacesQuery,
   spacesWhereMemberQuery,
   userEntityResponseQuery,
@@ -816,6 +817,33 @@ export function getIsEditorOfSpace(spaceId: string, memberSpaceId: string, signa
   });
 }
 
+export type SpaceRolesForParticipants = {
+  editorSpaceIds: string[];
+  memberSpaceIds: string[];
+};
+
+/**
+ * Which of `participantSpaceIds` are editors, and which are members, in one request.
+ *
+ * Chunked by the caller; `first` tracks the chunk size because it caps rows rather than filtering
+ * them, so asking about more people than `first` would silently under-report roles.
+ */
+export function getSpaceRolesForParticipants(
+  spaceId: string,
+  participantSpaceIds: string[],
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: spaceRolesForParticipantsQuery,
+    decoder: (data): SpaceRolesForParticipants => ({
+      editorSpaceIds: data.space?.editorsList?.map(e => e.memberSpaceId as string) ?? [],
+      memberSpaceIds: data.space?.membersList?.map(m => m.memberSpaceId as string) ?? [],
+    }),
+    variables: { spaceId, participantSpaceIds, first: Math.max(participantSpaceIds.length, 1) },
+    signal,
+  });
+}
+
 export type SpaceParticipantsPage = {
   memberSpaceIds: string[];
   totalCount: number;
@@ -942,6 +970,19 @@ interface ResultsArgs {
   query: string;
   spaceId?: string;
   typeIds?: string[];
+  /**
+   * Narrow to entities carrying a `Tags` relation to one of these (GEO-2876). ANDed with
+   * `typeIds`, ORed among themselves — so several tags widen the set while a type narrows it.
+   *
+   * The to-entity, not the Tags property: the property id is the same for every tag, and asking
+   * with it would match the entire tagged corpus.
+   *
+   * At most ten, as `typeIds` is: the endpoint answers `400` past that. Deliberately not capped
+   * here. Both lists are ORs, so slicing one would quietly return results for a narrower question
+   * than the caller asked — and the caller cannot tell, where a `400` is a failure it can see. A
+   * caller whose filter can grow past ten has to bound it where the values are chosen.
+   */
+  tagIds?: string[];
   limit?: number;
   offset?: number;
   additionalSpaceIds?: string[];
@@ -1135,6 +1176,11 @@ export function buildSearchPath(args: ResultsArgs): string {
   if (args.typeIds?.length) {
     // REST endpoint expects UUIDs with hyphens
     params.set('type_ids', args.typeIds.map(toUuid).join(','));
+  }
+
+  if (args.tagIds?.length) {
+    // REST endpoint expects UUIDs with hyphens
+    params.set('tag_ids', args.tagIds.map(toUuid).join(','));
   }
 
   const scopesAdditionalSpaces = Boolean(args.additionalSpaceIds?.length) && !args.spaceId;

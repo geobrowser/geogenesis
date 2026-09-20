@@ -210,3 +210,66 @@ describe('a window that does have rows', () => {
     expect(windows.calls).toBe(1);
   });
 });
+
+/**
+ * GEO-2885. Best used to filter by type in this module, on whatever the window happened to
+ * contain. Measured on production, Best's 66-row window holds Claim 47 / Debate 15 /
+ * News story 3 / Bounty 1 — so a News-story-only page yielded 3 of the 22 it wanted. With
+ * gaia #933 the server can do it exactly, so a type selection now goes to the by-type
+ * connection.
+ */
+describe('a type selection filters server-side (GEO-2885)', () => {
+  const sent = () => windows.variables[0] ?? {};
+
+  it('sends the selected types, rather than filtering the window here', async () => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, sort: 'best', typeIds: [CLAIM_TYPE_ID] });
+
+    expect(sent().typeIds).toEqual([CLAIM_TYPE_ID]);
+  });
+
+  it('caps each type at offset + first, the smallest provably exact value', async () => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, sort: 'best', typeIds: [CLAIM_TYPE_ID] });
+
+    // Anything smaller truncates a type's candidate list before the global ordering and the
+    // page silently returns short — the same class of bug this path exists to remove.
+    expect(sent().maxPerType).toBe((sent().offset as number) + (sent().first as number));
+  });
+
+  it('grows the cap as it pages deeper', async () => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: true, endCursor: '66' })];
+
+    // Second window: the cursor carries the server offset, so the cap must move with it. A
+    // fixed cap would be exact on page one and short on every page after it, which is the
+    // failure mode most likely to ship unnoticed.
+    await fetchExploreFeed({ ...feedArgs, sort: 'best', typeIds: [CLAIM_TYPE_ID], cursor: 'w1:0:66' });
+
+    expect(sent().offset).toBe(66);
+    expect(sent().maxPerType).toBe(66 + (sent().first as number));
+  });
+
+  it('keeps the untyped walk when nothing is ticked', async () => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, sort: 'best', typeIds: [] });
+
+    // The by-type connection matches nothing without `typeIds`, and with no type argument the
+    // untyped ranked walk is the right plan anyway (GEO-2793).
+    expect(sent().typeIds).toBeUndefined();
+    expect(sent().maxPerType).toBeUndefined();
+    expect(sent()).toHaveProperty('after');
+  });
+
+  it('still forwards the debate-tag gate on the type-filtered path', async () => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, sort: 'best', typeIds: [CLAIM_TYPE_ID] });
+
+    // Easy to lose when swapping the document: the gate is an argument, not part of the
+    // connection, so nothing would fail loudly if it stopped being sent.
+    expect((sent().filter as { or?: unknown } | undefined)?.or).toEqual(claimsRequireDebateTagFilter([SPACE]).or);
+  });
+});

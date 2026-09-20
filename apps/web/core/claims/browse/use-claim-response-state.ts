@@ -12,7 +12,7 @@ import { hasUnpublishedClaimResponseKindEdit } from '~/core/responses/entity-res
 import type { Entity } from '~/core/types';
 
 import { claimResponseKind } from '../response-kind';
-import { positionSummariesFromCounts, viewerResponseFromDirection } from './claim-position-summaries';
+import { positionSummariesFromCounts, viewerResponseWithIndexedFallback } from './claim-position-summaries';
 import { type ClaimResponseSummary, useClaimResponseSummary } from './claim-response-summary';
 
 export type ClaimResponseState = {
@@ -38,7 +38,7 @@ export type ClaimResponseState = {
    * neither side — and pressing the side they already hold *republishes* it rather than clearing
    * it, because the control reads the same state the display does.
    *
-   * geo-chat's row carries `viewer_response` directly, so a row is an answer on its own. Otherwise
+   * A geo-chat row that names the viewer's side is an answer on its own. Otherwise
    * it takes the on-chain read landing — including under a batch, where "landing" means the batch's
    * own readiness and a failed batch never resolves.
    */
@@ -164,11 +164,16 @@ export function useClaimResponseState({
       // viewer's own side reads as unselected for as long as the row is out — and permanently in a
       // space geo-chat does not index — which turns a click on it into a republish rather than a
       // clear.
-      viewer_response: row?.viewer_response ?? viewerResponseFromDirection(summary.viewerDirection, responseKind),
+      viewer_response: viewerResponseWithIndexedFallback({
+        viewerResponse: row?.viewer_response,
+        indexedDirection: summary.indexedViewerDirection,
+        isIndexedLoading: summary.isViewerResponseLoading,
+        responseKind,
+      }),
       viewer_debate_ready: row?.viewer_debate_ready ?? false,
       readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
     }),
-    [responseKind, row, summary.viewerDirection]
+    [responseKind, row, summary.indexedViewerDirection, summary.isViewerResponseLoading]
   );
 
   return {
@@ -177,13 +182,13 @@ export function useClaimResponseState({
     responseBlockedReason,
     // Both halves of the fallback below, not just the counts.
     //
-    // `viewer_response` falls back to `summary.viewerDirection`, which rides a *second* query —
+    // `viewer_response` falls back to `summary.indexedViewerDirection`, which rides a *second* query —
     // gated on the personal space, itself a smart-account read plus a round trip. It settles after
     // the counts do. Reading only `summary.isLoading` therefore called this resolved during the
     // window where the counts had landed and the viewer's side had not: a signed-in viewer who has
     // already agreed sees both pills unselected, and pressing the one they hold republishes it
     // instead of clearing it — the exact failure this field exists to prevent.
-    isViewerResponseResolved: row !== null || (!summary.isLoading && !summary.isViewerResponseLoading),
+    isViewerResponseResolved: Boolean(row?.viewer_response) || (!summary.isLoading && !summary.isViewerResponseLoading),
     summary,
     claim,
     positions,

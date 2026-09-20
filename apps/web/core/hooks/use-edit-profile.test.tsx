@@ -1167,3 +1167,155 @@ describe('useEditProfile', () => {
     );
   });
 });
+
+/**
+ * The rows the work and education sections hand over at Save.
+ *
+ * They are written into the store here, collected by staging like the header
+ * fields, and rolled back with them — three separate faults have been found in
+ * that path and none of them had a test, because nothing called `publish` with a
+ * second argument at all.
+ */
+describe('the rows the history sections publish alongside', () => {
+  const historyValue = (id: string, overrides: Partial<Value> = {}) =>
+    ({
+      id,
+      entity: { id: 'stint-1' },
+      property: { id: 'start-date' },
+      spaceId: SPACE_ID,
+      value: '2024-01-01Z',
+      isLocal: true,
+      hasBeenPublished: false,
+      ...overrides,
+    }) as unknown as Value;
+
+  const extra = (values: Value[] = [historyValue('history-value-1')]) => ({ values, relations: [] as Relation[] });
+
+  const fail = () =>
+    mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => onError());
+
+  /**
+   * Mirror the store's `set`, which the shared harness leaves as a bare spy.
+   *
+   * Staging collects what it wrote by reading the store back, so without this
+   * every edit here resolves to no rows and settles as a no-op before it ever
+   * reaches `makeProposal`. The rising timestamp matters too: it is what rollback
+   * matches on, and re-stamping it is the thing the retry case is about.
+   */
+  let written = 0;
+
+  beforeEach(() => {
+    written = 0;
+    mocks.setValue.mockImplementation((value: Value) => {
+      written += 1;
+      const stored = { ...value, isLocal: true, hasBeenPublished: false, timestamp: `t${written}` } as Value;
+      mocks.storeValues = [...mocks.storeValues.filter(row => row.id !== value.id), stored];
+    });
+  });
+
+  it('writes them to the store so staging collects them', async () => {
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }), extra());
+    });
+
+    expect(mocks.setValue).toHaveBeenCalledWith(expect.objectContaining({ id: 'history-value-1' }));
+    const [{ values }] = mocks.makeProposal.mock.calls[0]!;
+    expect(values.map((value: Value) => value.id)).toContain('history-value-1');
+  });
+
+  it('takes them back when the edit is abandoned', async () => {
+    mocks.storeValues = [historyValue('history-value-1', { timestamp: 'written' })];
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    fail();
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }), extra());
+    });
+    act(() => result.current.reset());
+
+    const [{ valueIds }] = mocks.clearLocalChangesByIds.mock.calls.at(-1)!;
+    expect(valueIds).toContain('history-value-1');
+  });
+
+  // The rows are already in the store by the time `stage` runs its own snapshot,
+  // so without capturing them first a rollback restored the synced version over
+  // somebody else's unpublished draft.
+  it('puts back a local draft they overwrote', async () => {
+    const theirs = historyValue('history-value-1', { value: 'THEIRS', timestamp: 'before' });
+    mocks.storeValues = [theirs];
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    fail();
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }), extra());
+    });
+    act(() => result.current.reset());
+
+    expect(mocks.setValue).toHaveBeenCalledWith(expect.objectContaining({ id: 'history-value-1', value: 'THEIRS' }));
+  });
+
+  // `set` re-stamps `timestamp`, and rollback clears by the timestamp staging
+  // recorded — so rewriting the rows on a retry made them stop looking like ours.
+  it('does not rewrite them on a retry of the same edit', async () => {
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+    const rows = extra();
+
+    fail();
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }), rows);
+    });
+
+    const writesBefore = mocks.setValue.mock.calls.filter(call => (call[0] as Value).id === 'history-value-1').length;
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }), rows);
+    });
+
+    const writesAfter = mocks.setValue.mock.calls.filter(call => (call[0] as Value).id === 'history-value-1').length;
+    expect(writesAfter).toBe(writesBefore);
+  });
+
+  // The other half of that: a retry is only the same edit while the rows are.
+  // Changed history was written to the store and then skipped — never published,
+  // and never tracked for rollback either.
+  it('stages again when the rows have changed since the failure', async () => {
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    fail();
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }), extra());
+    });
+
+    await act(async () => {
+      await result.current.publish(draft({ name: 'Preston M' }), extra([historyValue('history-value-2')]));
+    });
+
+    const [{ values }] = mocks.makeProposal.mock.calls.at(-1)!;
+    expect(values.map((value: Value) => value.id)).toContain('history-value-2');
+  });
+
+  it('publishes the new payload when a failed row is edited without changing its id', async () => {
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    fail();
+    await act(async () => {
+      await result.current.publish(
+        draft({ name: 'Preston M' }),
+        extra([historyValue('history-value-1', { value: 'first attempt' })])
+      );
+    });
+
+    await act(async () => {
+      await result.current.publish(
+        draft({ name: 'Preston M' }),
+        extra([historyValue('history-value-1', { value: 'edited retry' })])
+      );
+    });
+
+    const [{ values }] = mocks.makeProposal.mock.calls.at(-1)!;
+    expect(values).toContainEqual(expect.objectContaining({ id: 'history-value-1', value: 'edited retry' }));
+  });
+});

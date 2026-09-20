@@ -9,6 +9,7 @@ import { Input } from '~/design-system/input';
 import type { MatchmakingMatch } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateActivity } from '../hooks';
+import { claimRowKey } from './claim-row-key';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests, useMatchmakingMatches } from './hooks';
@@ -23,6 +24,7 @@ import {
   keepSelectedVisible,
   orderFacetOptions,
   toggleId,
+  topicsFor,
 } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
@@ -86,11 +88,7 @@ export function MatchesList({
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
 
   // Same hold as Explore's list: standing down from one claim shouldn't reshuffle the rest.
-  const matches = useStableListOrder(
-    serverMatches,
-    match => `${match.claim.space_id}:${match.claim.claim_entity_id}`,
-    spaceIds.join(',')
-  );
+  const matches = useStableListOrder(serverMatches, claimRowKey, spaceIds.join(','));
 
   // Topics are Knowledge Graph data that `/matchmaking/matches` does not carry — `match.topics` is
   // empty on every row, the same way `MatchmakingClaim.topics` is — and there is no facet beside it
@@ -158,7 +156,8 @@ export function MatchesList({
   );
   const passesTopics = React.useCallback(
     (match: MatchmakingMatch) =>
-      !topicsResolved || carriesEveryTopic(topicsByClaimId.get(match.claim.claim_entity_id), topicIds),
+      !topicsResolved ||
+      carriesEveryTopic(topicsFor(topicsByClaimId, match.claim.claim_entity_id, match.claim.space_id), topicIds),
     [topicIds, topicsByClaimId, topicsResolved]
   );
   const passesSearch = React.useCallback(
@@ -208,7 +207,7 @@ export function MatchesList({
           countBy(
             matches
               .filter(match => passesSpace(match) && passesSearch(match) && passesTopics(match))
-              .flatMap(match => topicsByClaimId.get(match.claim.claim_entity_id) ?? [])
+              .flatMap(match => topicsFor(topicsByClaimId, match.claim.claim_entity_id, match.claim.space_id) ?? [])
           ),
           topicIds
         ),
@@ -266,6 +265,7 @@ export function MatchesList({
           // has — nothing above depends on `activity` then.
           isLoading={matchesQuery.isLoading || (filtered.length === 0 && activityQuery.isLoading)}
           error={matchesQuery.error}
+          failureReason={matchesQuery.failureReason}
           onRetry={() => void matchesQuery.refetch()}
           isEmpty={filtered.length === 0}
           // A match needs three things at once, and the old copy asserted which one was missing
@@ -317,7 +317,7 @@ export function MatchesList({
         >
           <HubCardList>
             {filtered.map(match => (
-              <MatchCard key={`${match.claim.space_id}:${match.claim.claim_entity_id}`} match={match} />
+              <MatchCard key={claimRowKey(match)} match={match} />
             ))}
           </HubCardList>
         </HubQueryState>

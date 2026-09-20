@@ -5,17 +5,14 @@ import { Content, Description, Overlay, Portal, Root, Title } from '@radix-ui/re
 
 import * as React from 'react';
 
-import { useSetAtom } from 'jotai';
-
 import { trackPrivyAuth } from '~/core/analytics';
+import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type SignInPromptAction, useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
-
-import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
 const COPY: Record<SignInPromptAction, { title: string }> = {
   vote: { title: 'Create your personal space to vote on entities' },
@@ -29,11 +26,7 @@ export function SignInPrompt() {
   const { action, close } = useSignInPrompt();
   const { smartAccount } = useSmartAccount();
 
-  const setName = useSetAtom(nameAtom);
-  const setTopicId = useSetAtom(topicIdAtom);
-  const setAvatar = useSetAtom(avatarAtom);
-  const setSpaceId = useSetAtom(spaceIdAtom);
-  const setStep = useSetAtom(stepAtom);
+  const prepareOnboarding = usePrepareOnboarding();
 
   const { login } = useGeoLogin({
     onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
@@ -52,13 +45,9 @@ export function SignInPrompt() {
   const { title } = COPY[action];
 
   const handleSignIn = () => {
-    // Same reset the navbar's GeoConnectButton runs — clears any in-progress
-    // onboarding state before launching Privy.
-    setName('');
-    setTopicId('');
-    setAvatar('');
-    setSpaceId('');
-    setStep('start');
+    // `keepReturnTo` because this prompt has never set a post-onboarding destination, and adding
+    // one here would be a behaviour change smuggled in under a refactor.
+    prepareOnboarding({ keepReturnTo: true });
     close();
     login();
   };

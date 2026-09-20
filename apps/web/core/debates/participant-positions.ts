@@ -446,5 +446,27 @@ export function useParticipantPositions(
     [query.data, ownPending]
   );
 
-  return { byClaim, isLoading: query.isLoading, error: query.error };
+  return {
+    byClaim,
+    isLoading: query.isLoading,
+    /**
+     * Whether an answer for *this* key is still on its way.
+     *
+     * Callers drawing a list can ignore it — holding the last answer is the whole point, and
+     * `participantSidesOn` keeps a departed participant's rows off the screen. Callers *deciding*
+     * something cannot, and this is broader than it first looks, which is why it is `isFetching`
+     * rather than `isPlaceholderData`:
+     *
+     * - A *new* key serves the previous pair's rows, which are then filtered to nothing against the
+     *   current participants — indistinguishable from a pair with no positions unless you ask.
+     * - A *cached* key serves its own rows while the mount refetch runs, which with a 5s stale time
+     *   and a poll behind it is the ordinary case for a returning pair. Neither `isLoading` nor
+     *   `isPlaceholderData` is true then, and the cached answer can be empty where the one arriving
+     *   is not.
+     *
+     * A decision taken once, on either of those, is taken on somebody else's data or on yesterday's.
+     */
+    isFetching: query.isFetching,
+    error: query.error,
+  };
 }

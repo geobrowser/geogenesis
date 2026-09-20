@@ -8,7 +8,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setCachedIdentityToken } from '~/core/auth/identity-token';
 import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
 
-import { type Debate, type DebateActivity, type DebateRematchSession, GeoChatRequestError } from './api';
+import {
+  type Debate,
+  type DebateActivity,
+  type DebateRematchSession,
+  GeoChatRequestError,
+  GeoChatSessionError,
+} from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySpaceScopes } from './debate-gateway';
@@ -67,6 +73,12 @@ vi.mock('@geogenesis/auth', () => ({
   getIdentityToken: mocks.getIdentityToken,
   useIdentityToken: () => ({ identityToken: mocks.identityToken() }),
   usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, user: { id: 'user-a' } }),
+}));
+
+// The coordinator mounts the claim response notifier, which reads the personal space; nothing here
+// is about it.
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: null }),
 }));
 
 // geo-chat only indexes DAO spaces, and the debate hooks hold until they know the space is one.
@@ -195,6 +207,156 @@ describe('useDebateClaimsBySpaces', () => {
     expect(new Set(requestedIds.flat())).toEqual(new Set(ids));
     expect(requestedIds.flat()).toHaveLength(101);
     expect(new Set(result.current.claims.map(claim => claim.claim_entity_id))).toEqual(new Set(ids));
+  });
+
+  /**
+   * Reported: the hub panel's pills all go dead once the space filter is widened.
+   *
+   * geo-chat refuses rows for a space the viewer has no access to, and that refusal never resolves.
+   * `isError` is about the whole fan-out, so callers reading it as "we do not know this viewer's
+   * side" took the entire panel down over one unreadable space — while the same claims in the main
+   * feed stayed pressable, because that surface resolves each claim from its own row.
+   */
+  it('names the spaces it cannot speak for rather than failing as a whole', async () => {
+    mocks.listDebateClaims.mockImplementation((spaceId: string, claimIds: string[]) =>
+      spaceId === 'space-closed'
+        ? Promise.reject(new GeoChatRequestError('Forbidden', null, 403))
+        : Promise.resolve({ claims: claimIds.map(claim_entity_id => ({ claim_entity_id })) })
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(
+      () =>
+        useDebateClaimsBySpaces([
+          { spaceId: 'space-open', claimIds: ['claim-1'] },
+          { spaceId: 'space-closed', claimIds: ['claim-2'] },
+        ]),
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      }
+    );
+
+    // The open space answered, and says so on its own rather than through the fan-out's verdict —
+    // which is `isError`, and stays true for the space that did not.
+    await waitFor(() => expect(result.current.unresolvedSpaceIds.has('space-open')).toBe(false));
+
+    expect(result.current.unresolvedSpaceIds.has('space-closed')).toBe(true);
+    expect(result.current.isError).toBe(true);
+  });
+
+  /**
+   * Reported: a viewer creates an account, and every pill in the hub is dead for the rest of the
+   * visit while the same claims in the main feed take positions perfectly well.
+   *
+   * geo-chat refuses viewer-relative reads until it has registered the account, so this lookup 401s
+   * — and with `retry: false` and nothing to trigger a refetch, the refusal was the last word. The
+   * card's `answersReady` is a "not yet" that is supposed to clear itself, and it had no way to.
+   */
+  it('asks again while geo-chat has not registered the account yet', async () => {
+    vi.useFakeTimers();
+    mocks.listDebateClaims
+      .mockRejectedValueOnce(new GeoChatSessionError(new GeoChatRequestError('Unauthorized', null, 401)))
+      .mockResolvedValue({ claims: [{ claim_entity_id: 'claim-1' }] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(() => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds: ['claim-1'] }]), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await vi.waitFor(() => expect(result.current.isError).toBe(true));
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    await vi.waitFor(() => expect(result.current.isError).toBe(false));
+    expect(result.current.claims).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
+  /**
+   * And it stops. A wait that never ends is not a wait.
+   *
+   * Unbounded, an account that never registered left every failed batch asking every ten seconds
+   * for the life of the tab — once per space, each one a fresh session exchange. The matchmaking
+   * reads cap the same wait at about ninety seconds, and these are waiting for the same event, so a
+   * viewer should not find one half of the hub still trying while the other has given up.
+   */
+  it('gives up on the wait rather than polling for the life of the tab', async () => {
+    vi.useFakeTimers();
+    mocks.listDebateClaims.mockRejectedValue(
+      new GeoChatSessionError(new GeoChatRequestError('Unauthorized', null, 401))
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(() => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds: ['claim-1'] }]), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await vi.waitFor(() => expect(result.current.isError).toBe(true));
+
+    // Well past the window: nine polls at ten seconds, and then nothing.
+    await vi.advanceTimersByTimeAsync(600_000);
+
+    expect(mocks.listDebateClaims.mock.calls.length).toBeLessThanOrEqual(10);
+    vi.useRealTimers();
+  });
+
+  /**
+   * A 403 in particular, which is the one that looks most like the case this polls for.
+   *
+   * Same shape as the registration refusal and the opposite fact: geo-chat saying this viewer may
+   * not read *this space*, which is standing and will not change by being asked again. Polling it
+   * would have meant one request every ten seconds, per forbidden space, for the life of the tab —
+   * and the hub telling a months-old account that it was still being set up.
+   */
+  it('leaves a space the viewer may not read alone', async () => {
+    vi.useFakeTimers();
+    mocks.listDebateClaims.mockRejectedValue(new GeoChatRequestError('Forbidden', null, 403));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(() => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds: ['claim-1'] }]), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await vi.waitFor(() => expect(result.current.isError).toBe(true));
+    mocks.listDebateClaims.mockClear();
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(mocks.listDebateClaims).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  /**
+   * And only for that. A poll that ran on any failure would turn a real outage into a stream of
+   * requests against a server already in trouble — and would be asking a question that has been
+   * answered. This waits for one specific event.
+   */
+  it('lets a lookup that failed for any other reason stay failed', async () => {
+    vi.useFakeTimers();
+    mocks.listDebateClaims.mockRejectedValue(new GeoChatRequestError('Unavailable', 'service_unavailable', 503));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(() => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds: ['claim-1'] }]), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await vi.waitFor(() => expect(result.current.isError).toBe(true));
+    mocks.listDebateClaims.mockClear();
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(mocks.listDebateClaims).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it('keeps existing batches cached when a claim is inserted ahead of them', async () => {

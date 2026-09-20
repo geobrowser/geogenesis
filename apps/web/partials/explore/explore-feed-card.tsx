@@ -17,9 +17,9 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { PublishedRecordingPlayer } from '~/partials/community-calls/published-recording-player';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
-import { ClaimExploreFeedCard } from './claim-explore-feed-card';
+import { type ClaimCardVariant, ClaimExploreFeedCard } from './claim-explore-feed-card';
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
-import { ExploreCardEntityLink } from './explore-card-entity-link';
+import { ExploreCardTitle } from './explore-card-title';
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreMetaRow } from './explore-meta-row';
 import { RankingCardBody } from './explore-ranking-card-body';
@@ -35,6 +35,10 @@ type ExploreFeedCardProps = {
    * Explore turns this on; the other surfaces this card serves keep navigating.
    */
   titleOpensSidePanel?: boolean;
+  /** Presentation used for Claim rows; other entity types ignore it. */
+  claimCardVariant?: ClaimCardVariant;
+  /** See `ClaimExploreFeedCard`. Only a claim can carry one. */
+  responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
 };
 
 function ExploreFeedCommentLink({ href, count }: { href: string; count: number }) {
@@ -49,16 +53,6 @@ function ExploreFeedCommentLink({ href, count }: { href: string; count: number }
 const COMMUNITY_CALL_EVENT_TYPE = normId(EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
 const CLAIM_TYPE = normId(CLAIM_TYPE_ID);
 const RANKING_BLOCK_TYPE = normId(RANKING_BLOCK_TYPE_ID);
-
-function CardTitle({ item, opensSidePanel }: { item: ExploreFeedItem; opensSidePanel: boolean }) {
-  return (
-    <ExploreCardEntityLink item={item} opensSidePanel={opensSidePanel}>
-      <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
-        {item.title}
-      </h2>
-    </ExploreCardEntityLink>
-  );
-}
 
 type CardBodyProps = {
   item: ExploreFeedItem;
@@ -82,7 +76,7 @@ function DefaultCardBody({ item, actions, titleOpensSidePanel }: CardBodyProps) 
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="min-w-0">
-          <CardTitle item={item} opensSidePanel={titleOpensSidePanel} />
+          <ExploreCardTitle item={item} opensSidePanel={titleOpensSidePanel} />
           {item.description ? (
             <p className="mt-1 line-clamp-2 text-[16px]! leading-[20px]! font-normal! tracking-[-0.03em] text-grey-04">
               {item.description}
@@ -106,7 +100,7 @@ function CommunityCallCardBody({ item, actions, titleOpensSidePanel }: CardBodyP
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <CardTitle item={item} opensSidePanel={titleOpensSidePanel} />
+      <ExploreCardTitle item={item} opensSidePanel={titleOpensSidePanel} />
       {sources.length > 0 ? (
         <div className="w-full max-w-[773px]">
           <PublishedRecordingPlayer
@@ -149,10 +143,12 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
   if (isClaim) {
     return (
       <ClaimExploreFeedCard
+        responseNote={props.responseNote}
         item={props.item}
         hideSpaceLink={props.hideSpaceLink}
         hideJoinButton={props.hideJoinButton}
         titleOpensSidePanel={props.titleOpensSidePanel}
+        variant={props.claimCardVariant}
       />
     );
   }
