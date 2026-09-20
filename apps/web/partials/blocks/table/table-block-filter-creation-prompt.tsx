@@ -1179,6 +1179,10 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
           return { type: 'RELATIONS', name: fromName, value: fromId };
         });
       }
+      // `sourceKey` is `sourceStableKey(source)` and stands in for `source` deliberately: the
+      // source is an object rebuilt on render, and this only wants to re-seed when it actually
+      // describes something different.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fromId, fromName, sourceKey]);
 
     React.useEffect(() => {
@@ -1931,7 +1935,7 @@ function TableBlockEntityFilterInput({
     if (active instanceof HTMLElement && interactionRootRef.current?.contains(active)) {
       active.blur();
     }
-  }, [clearBlurTimeout]);
+  }, [clearBlurTimeout, setFocused]);
 
   const handleInputFocus = React.useCallback(() => {
     if (multi) {
@@ -2247,7 +2251,7 @@ function TableBlockSpaceFilterInput({
       const list = (showScopedOnlyPanel ? spaceScopedListRef.current : spaceQueryListRef.current) ?? null;
       trapWheelToElement(list, e);
     },
-    [showQueryPanel, showScopedOnlyPanel]
+    [showScopedOnlyPanel]
   );
   const toggleStagingSpace = React.useCallback((result: { id: string; name: string | null }) => {
     setStagingSelections(prev => {
@@ -2265,7 +2269,7 @@ function TableBlockSpaceFilterInput({
     if (active instanceof HTMLElement && interactionRootRef.current?.contains(active)) {
       active.blur();
     }
-  }, [clearBlurTimeout]);
+  }, [clearBlurTimeout, setFocused, setQuery]);
 
   const handleInputFocus = React.useCallback(() => {
     if (multi) {
@@ -2273,7 +2277,7 @@ function TableBlockSpaceFilterInput({
       setQuery('');
     }
     onFocus();
-  }, [committedSpaceSelections, multi, onFocus]);
+  }, [committedSpaceSelections, multi, onFocus, setQuery]);
 
   React.useEffect(() => {
     if (!multi) return;
