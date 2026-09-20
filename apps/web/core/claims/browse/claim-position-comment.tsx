@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { AnimatePresence, motion } from 'framer-motion';
 
 import type { DebateClaimPositionSummary, MatchmakingReadiness } from '~/core/debates/api';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
@@ -112,7 +113,14 @@ export function ClaimPositionCommentControl({
     const text = comment.trim();
     if (!text) return;
     setIsSubmitting(true);
-    await createComment({ text, targetSpaceId: spaceId });
+    const result = await createComment({ text, targetSpaceId: spaceId });
+
+    // A failed publish leaves the draft available to retry. Successful and queued comments already
+    // have an optimistic row in the thread; closing here hands the reader from the composer to it.
+    if (!result) {
+      setIsSubmitting(false);
+      return;
+    }
 
     setPromptedPosition(null);
     setComment('');
@@ -136,69 +144,80 @@ export function ClaimPositionCommentControl({
           noteFor={noteFor}
         />
       </div>
-      {action ? (
-        <div
-          ref={composerRef}
-          className="@container flex flex-wrap items-center gap-2 rounded-xl border border-grey-02 bg-white p-3"
-        >
-          <textarea
-            ref={textareaRef}
-            value={comment}
-            onChange={event => {
-              setActionsBelow(false);
-              setComment(event.target.value);
-            }}
-            onKeyDown={event => {
-              if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                event.preventDefault();
-                void publishComment();
-              }
-              if (event.key === 'Escape') {
-                event.preventDefault();
-                setPromptedPosition(null);
-                setComment('');
-                setActionsBelow(false);
-              }
-            }}
-            placeholder={`Why do you ${action.toLowerCase()}?`}
-            aria-label={`Why do you ${action.toLowerCase()}?`}
-            autoFocus
-            wrap="soft"
-            rows={1}
-            disabled={isSubmitting}
-            className={cx(
-              'min-h-5 w-full min-w-0 flex-1 resize-none bg-transparent text-body text-text outline-none placeholder:text-grey-03 disabled:opacity-60',
-              actionsBelow ? 'max-w-none basis-full' : 'max-w-[145px] @[400px]:max-w-none'
-            )}
-          />
-          <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                setPromptedPosition(null);
-                setComment('');
-                setActionsBelow(false);
-              }}
-              disabled={isSubmitting}
-              className="h-7 rounded-full px-3 text-button text-text/70 disabled:opacity-60"
+      <AnimatePresence initial={false}>
+        {action ? (
+          <motion.div
+            key="claim-position-comment-composer"
+            initial={{ height: 0, opacity: 0, y: -4 }}
+            animate={{ height: 'auto', opacity: 1, y: 0 }}
+            exit={{ height: 0, opacity: 0, y: -4 }}
+            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+            className="overflow-hidden"
+          >
+            <div
+              ref={composerRef}
+              className="@container flex flex-wrap items-center gap-2 rounded-xl border border-grey-02 bg-white p-3"
             >
-              Skip
-            </button>
-            <button
-              type="button"
-              onClick={() => void publishComment()}
-              disabled={isSubmitting || !comment.trim()}
-              className={cx(
-                'h-7 rounded-full px-3 text-button disabled:opacity-60',
-                comment.trim() ? 'bg-text text-white' : 'border border-grey-02 bg-white text-grey-04',
-                isSubmitting && 'cursor-wait'
-              )}
-            >
-              {isSubmitting ? 'Publishing…' : 'Comment'}
-            </button>
-          </div>
-        </div>
-      ) : null}
+              <textarea
+                ref={textareaRef}
+                value={comment}
+                onChange={event => {
+                  setActionsBelow(false);
+                  setComment(event.target.value);
+                }}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                    event.preventDefault();
+                    void publishComment();
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    setPromptedPosition(null);
+                    setComment('');
+                    setActionsBelow(false);
+                  }
+                }}
+                placeholder={`Why do you ${action.toLowerCase()}?`}
+                aria-label={`Why do you ${action.toLowerCase()}?`}
+                autoFocus
+                wrap="soft"
+                rows={1}
+                disabled={isSubmitting}
+                className={cx(
+                  'min-h-5 w-full min-w-0 flex-1 resize-none bg-transparent text-body text-text outline-none placeholder:text-grey-03 disabled:opacity-60',
+                  actionsBelow ? 'max-w-none basis-full' : 'max-w-[145px] @[400px]:max-w-none'
+                )}
+              />
+              <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPromptedPosition(null);
+                    setComment('');
+                    setActionsBelow(false);
+                  }}
+                  disabled={isSubmitting}
+                  className="h-7 rounded-full px-3 text-button text-text/70 disabled:opacity-60"
+                >
+                  Skip
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void publishComment()}
+                  disabled={isSubmitting || !comment.trim()}
+                  className={cx(
+                    'h-7 rounded-full px-3 text-button disabled:opacity-60',
+                    comment.trim() ? 'bg-text text-white' : 'border border-grey-02 bg-white text-grey-04',
+                    isSubmitting && 'cursor-wait'
+                  )}
+                >
+                  {isSubmitting ? 'Publishing…' : 'Comment'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

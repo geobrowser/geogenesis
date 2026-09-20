@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { ClaimCommentPositionProvider } from '~/core/claims/browse/claim-comment-position';
 import { ClaimPositionCommentControl } from '~/core/claims/browse/claim-position-comment';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
@@ -149,7 +150,15 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
             this way for both the route and the side panel, and only the dedicated comments panel
             asks for the `panel` variant. Unlike the modules above, this one always renders: an
             empty thread is an invitation to start it, not an absence to hide. */}
-        <CommentSection entityId={entityId} spaceId={spaceId} />
+        <ClaimCommentPositionProvider
+          entityId={entityId}
+          spaceId={spaceId}
+          responseKind={responseKind}
+          viewerDirection={summary.viewerDirection}
+          viewerSpaceId={summary.viewerSpaceId}
+        >
+          <CommentSection entityId={entityId} spaceId={spaceId} />
+        </ClaimCommentPositionProvider>
       </div>
     </div>
   );

@@ -71,6 +71,7 @@ describe('ClaimPositionCommentControl', () => {
     const composer = screen.getByRole('textbox').parentElement as HTMLElement;
     expect(composer).toHaveClass('flex', 'items-center');
     expect(composer).not.toHaveClass('flex-col');
+    expect(composer.parentElement).toHaveClass('overflow-hidden');
   });
 
   it('keeps the actions inline when the hint fits in the available text width', () => {
@@ -116,14 +117,14 @@ describe('ClaimPositionCommentControl', () => {
     expect(screen.getByRole('button', { name: 'Skip' }).parentElement).toHaveClass('ml-auto', 'shrink-0');
   });
 
-  it('dismisses the comment invitation without another position write when Skip is pressed', () => {
+  it('dismisses the comment invitation without another position write when Skip is pressed', async () => {
     const { onRespond } = renderControl();
 
     fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
 
     expect(screen.getByRole('button', { name: 'Agree' })).toBeInTheDocument();
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument());
     expect(onRespond).toHaveBeenCalledTimes(1);
     expect(mocks.createComment).not.toHaveBeenCalled();
   });
@@ -150,6 +151,18 @@ describe('ClaimPositionCommentControl', () => {
     });
     expect(onRespond).toHaveBeenCalledTimes(1);
     expect(order).toEqual(['response', 'comment']);
+  });
+
+  it('keeps a failed comment draft open so it can be retried', async () => {
+    mocks.createComment.mockResolvedValue(null);
+    renderControl();
+    fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Keep this draft' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Comment' })).toBeEnabled());
+    expect(screen.getByRole('textbox')).toHaveValue('Keep this draft');
   });
 
   it('lets the buttons change the recorded side while the optional prompt is open', () => {

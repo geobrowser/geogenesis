@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   clamp: null as Record<string, unknown> | null,
   /** Props the chip section received, or null if the page rendered none. */
   chipSection: null as Record<string, unknown> | null,
+  /** Claim response context supplied to the otherwise generic comment thread. */
+  commentPosition: null as Record<string, unknown> | null,
   /**
    * Deliberately not 3.
    *
@@ -61,7 +63,11 @@ vi.mock('~/core/debates/hooks', () => ({
 vi.mock('./use-claim-response-state', () => ({
   useClaimResponseState: () => ({
     responseKind: 'stance',
-    summary: { isControversial: false },
+    summary: {
+      isControversial: false,
+      viewerDirection: 'positive',
+      viewerSpaceId: 'viewer-space',
+    },
     claim: null,
     positions: [],
     readiness: { response_kind: 'stance' },
@@ -85,6 +91,12 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   }),
 }));
 vi.mock('./claim-position-comment', () => ({ ClaimPositionCommentControl: () => null }));
+vi.mock('./claim-comment-position', () => ({
+  ClaimCommentPositionProvider: (props: Record<string, unknown>) => {
+    mocks.commentPosition = props;
+    return <>{props.children as React.ReactNode}</>;
+  },
+}));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => () => {} }));
 vi.mock('~/core/debates/backfill-readiness-for-held-position', () => ({
   useBackfillReadinessForHeldPosition: () => {},
@@ -111,6 +123,7 @@ beforeEach(() => {
   mocks.entity = claimEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
   mocks.chipSection = null;
+  mocks.commentPosition = null;
 });
 
 afterEach(cleanup);
@@ -140,6 +153,20 @@ describe('ClaimPageView description', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(screen.queryByTestId('clamped-description')).toBeNull();
+  });
+});
+
+describe('ClaimPageView comments', () => {
+  it('labels commenters using this claim’s response kind and optimistic viewer position', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.commentPosition).toMatchObject({
+      entityId: 'claim-1',
+      spaceId: 'space-1',
+      responseKind: 'stance',
+      viewerDirection: 'positive',
+      viewerSpaceId: 'viewer-space',
+    });
   });
 });
 

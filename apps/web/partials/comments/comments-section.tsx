@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { useAtom } from 'jotai';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
+import { ClaimCommentPositionBadge } from '~/core/claims/browse/claim-comment-position';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Crown } from '~/core/debates/browse/icons';
 import { useDebateVotesByVoter } from '~/core/debates/use-debate-votes';
@@ -1147,6 +1148,7 @@ function CommentItem({
         <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
           <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
         </a>
+        <ClaimCommentPositionBadge authorSpaceId={comment.author.spaceId} />
         {/* While publishing, this stands in for the timestamp — a just-posted
             comment has no meaningful age yet, and showing both read as noise. */}
         <span className={cx(density.metaClass, 'shrink-0 whitespace-nowrap text-grey-04')}>
@@ -1335,6 +1337,7 @@ function CommentItem({
             <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
               <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
             </a>
+            <ClaimCommentPositionBadge authorSpaceId={comment.author.spaceId} />
             <span className={cx(density.metaClass, 'shrink-0 whitespace-nowrap text-grey-04')}>
               {comment.isPublishing ? 'Publishing…' : relativeTime}
             </span>
