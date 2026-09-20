@@ -1018,17 +1018,28 @@ export function ChatWidget() {
       // applied to the store), so this is the only place we mark the daily upload
       // activity done — not at submission time, where the job could still fail.
       completeDailyUploadActivity(injectJob.spaceId);
+      // An enrich never names its target — the story is already on-chain, so no op restates its
+      // name — but the job does. Falling back to it is what lets an enrich render a pill at all
+      // rather than degrading to a bare count (GEO-2983).
+      const primaryLabel = result.primaryEntityName ?? injectState.name ?? null;
       const primaryPill =
-        result.primaryEntityId && result.primaryEntityName
-          ? `[${result.primaryEntityName.replace(/[\[\]]/g, '')}](geo://entity/${result.primaryEntityId}?space=${injectJob.spaceId})`
+        result.primaryEntityId && primaryLabel
+          ? `[${primaryLabel.replace(/[\[\]]/g, '')}](geo://entity/${result.primaryEntityId}?space=${injectJob.spaceId})`
           : null;
-      const supportingCount = Math.max(0, result.entitiesCreated - (primaryPill ? 1 : 0));
+      // Only discount the primary when this batch created it. On an enrich every created entity
+      // is an addition to a story that already existed, so none of them is the primary.
+      const supportingCount = Math.max(0, result.entitiesCreated - (primaryPill && result.primaryWasCreated ? 1 : 0));
       const supportingClause =
         supportingCount > 0
           ? ` and ${supportingCount} supporting ${supportingCount === 1 ? 'entity' : 'entities'}`
           : '';
+      const enriched = result.entitiesUpdated > 0;
+      const addedClause =
+        supportingCount > 0 ? ` with ${supportingCount} new ${supportingCount === 1 ? 'entity' : 'entities'}` : '';
       const summary = primaryPill
-        ? `Imported ${primaryPill}${supportingClause}. Review and publish when ready.`
+        ? enriched
+          ? `Updated ${primaryPill}${addedClause}. Review and publish when ready.`
+          : `Imported ${primaryPill}${supportingClause}. Review and publish when ready.`
         : `Imported ${result.entitiesCreated} ${result.entitiesCreated === 1 ? 'entity' : 'entities'}. Review and publish when ready.`;
       updateAssistantText(summary);
       setInjectInline(null);
@@ -1036,7 +1047,7 @@ export function ChatWidget() {
       // follow-ups. Fetch equivalent next-step suggestions and append them as a
       // tool-suggestFollowUps part so the existing pill renderer picks them up.
       // Best-effort: failures just mean no pills.
-      const followUpName = result.primaryEntityName ?? injectState.name ?? '';
+      const followUpName = primaryLabel ?? '';
       void appendInjectFollowUps(injectJob.assistantMessageId, followUpName, injectJob.injectType);
       // A clicked follow-up is a normal edit request, not an ingestion turn.
       modeRef.current = 'default';
