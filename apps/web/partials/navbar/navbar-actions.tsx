@@ -112,7 +112,7 @@ export function NavbarActions() {
           open={open}
           onOpenChange={onOpenChange}
           sideOffset={12}
-          className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] sm:w-[322px]"
+          className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] mobile:w-[322px]"
         >
           <IdentityHeader
             address={address}

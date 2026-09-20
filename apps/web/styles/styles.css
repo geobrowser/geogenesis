@@ -69,8 +69,11 @@
   /* Z-index stack — see ~/core/z-layers.ts */
   --z-index-flow-bar: 1000;
   --z-index-slide-up: 10000;
-  --z-index-status-bar: 10001;
-  --z-index-toast: 10002;
+  /* Above the panels at 10001-10002 and the elevated popover at 10003: a publish status bar and a
+     toast have to be visible over whatever is open, and they cannot rely on coming later in the DOM
+     than a panel that is portalled to the body when it opens. */
+  --z-index-status-bar: 10004;
+  --z-index-toast: 10005;
 
   /* Breakpoints (max-width variants defined below) */
   --breakpoint-*: initial;
@@ -276,7 +279,7 @@
 }
 
 /* Desktop-first breakpoints (max-width) */
-@custom-variant sm (@media (max-width: 639px));
+@custom-variant mobile (@media (max-width: 639px));
 @custom-variant md (@media (max-width: 767px));
 @custom-variant lg (@media (max-width: 1023px));
 @custom-variant xl (@media (max-width: 1279px));
@@ -310,6 +313,26 @@
    component already had, so neither set of base rules had to be rewritten. */
 @custom-variant claim-pills-wide (@container (width >= 272px));
 @custom-variant claim-card-narrow (@container (width < 520px));
+
+/* Shared claim-card chrome.
+   The matchmaking card uses these directly; mobile Explore applies the same utilities through the
+   max-width `md:` variant. Keeping the declarations here means the two surfaces cannot drift by
+   copying a nearly-identical Tailwind string into each component. */
+@utility claim-card-panel-surface {
+  @apply rounded-lg border border-grey-02 bg-white p-3;
+}
+
+@utility claim-card-panel-header {
+  @apply mb-2 flex flex-nowrap items-start justify-between gap-3;
+}
+
+@utility claim-card-panel-title {
+  @apply mb-3 line-clamp-3 block text-metadataMedium leading-snug text-pretty;
+}
+
+@utility claim-card-summary-band {
+  @apply border-t border-divider bg-grey-01 px-3 py-2;
+}
 
 /* Lifts the debate and the indicator and settles them back, miming the direction the
    content travels when the viewer scrolls on to the next debate. */
@@ -662,6 +685,33 @@ body[data-entity-side-panel-open] .elevated-popover {
 
 body[data-entity-side-panel-open] [data-radix-popper-content-wrapper] {
   z-index: 10003 !important;
+}
+
+/* The same problem one layer up: a slide-up sits at 10000, and anything radix portals to the body
+   lands there at `z-index: auto`, so a popover opened from inside a sheet — a comment's responder
+   list, for one — paints behind the sheet and reads as not opening at all. 10003 is above both
+   raised panels (10001-10002) and below the status bar and toasts (10004-10005), which should still
+   be visible over everything. Driven by `SlideUpBodyState`. */
+body[data-slide-up-open] {
+  --elevated-popover-z: 10003;
+}
+
+body[data-slide-up-open] .elevated-popover {
+  z-index: 10003;
+  position: relative;
+}
+
+body[data-slide-up-open] [data-radix-popper-content-wrapper] {
+  z-index: 10003 !important;
+}
+
+/* Mobile bottom sheets own downward overscroll so the browser cannot turn it into page refresh. */
+@media (max-width: 1023px) {
+  html[data-mobile-sheet-open],
+  html[data-mobile-sheet-open] body,
+  body[data-mobile-sheet-open] {
+    overscroll-behavior-y: none;
+  }
 }
 
 /* Ranking compose edit mode (mobile): hide app navbar and use full viewport. */

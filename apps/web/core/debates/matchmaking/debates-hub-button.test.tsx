@@ -148,7 +148,7 @@ describe('DebatesHubButton', () => {
     it('drops the visible label on phones without dropping the name', () => {
       renderButton();
 
-      expect(screen.getByText('Debate')).toHaveClass('sm:hidden');
+      expect(screen.getByText('Debate')).toHaveClass('mobile:hidden');
       expect(screen.getByRole('button', { name: 'Debate' })).toBeInTheDocument();
     });
   });
