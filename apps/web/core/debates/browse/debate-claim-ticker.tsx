@@ -901,6 +901,51 @@ function ClaimIconButton({
   );
 }
 
+/**
+ * How wide a marker's hit area may grow, in px.
+ *
+ * WCAG 2.5.8 asks for 24×24 and the hash is 2×10, so the target needed to grow. Height is free —
+ * nothing else is stacked above or below a marker — but width is not, for two separate reasons, and
+ * both were measured rather than guessed.
+ *
+ * **Neighbours.** Markers sit where claims end, and claims cluster. Across the 37 corpus debates
+ * with two or more markers, 34% of adjacent pairs are closer than 24px on a phone-width track. A
+ * flat 24px target would cover the next claim a third of the time, so a tap would jump to the wrong
+ * one — trading an accessibility problem for a correctness one. Each target is therefore clamped to
+ * the distance to its nearest neighbour, so two can touch but never overlap.
+ *
+ * **The scrubber underneath.** These sit above the range input so a click reaches them at all, so
+ * whatever they cover is a place a drag cannot start. At 24px that is a mean 18.5% of the track and
+ * 60% on the densest debate; at 12px it is 10.4% and 44%. 12 keeps the bulk of the bar draggable
+ * and is still a six-fold target, and the height does the rest of the work.
+ */
+const MARKER_HIT_WIDTH_PX = 12;
+/** Full 24px vertically, which costs nothing: the row is 20px and nothing else wants that band. */
+const MARKER_HIT_HEIGHT = 'h-6';
+
+/**
+ * How wide marker `index`'s hit area may be, as a CSS length.
+ *
+ * Its own function because the rule is arithmetic rather than styling, and because a test cannot
+ * read it off the DOM: jsdom's CSS parser drops `clamp()` outright, so `style.width` comes back
+ * empty there whatever we set.
+ *
+ * `markers` is sorted by `atMs`, and `fraction` is `atMs / timelineMs`, so it is sorted by
+ * `fraction` too — the neighbours are the entries either side. A marker alone on the bar has no
+ * neighbour to crowd and takes the full width.
+ *
+ * The `clamp` floor keeps a target at least as wide as the hash it draws. Two claims can end on the
+ * same millisecond, and a zero-width button cannot be pressed or focused at all.
+ */
+export function markerHitWidth(markers: ClaimMarker[], index: number): string {
+  const before = index > 0 ? markers[index].fraction - markers[index - 1].fraction : Infinity;
+  const after = index < markers.length - 1 ? markers[index + 1].fraction - markers[index].fraction : Infinity;
+  const nearest = Math.min(before, after);
+
+  if (!Number.isFinite(nearest)) return `${MARKER_HIT_WIDTH_PX}px`;
+  return `clamp(2px, ${(nearest * 100).toFixed(3)}%, ${MARKER_HIT_WIDTH_PX}px)`;
+}
+
 /** Claim markers on the scrubber, each a place the viewer can jump to. */
 export function ClaimScrubberMarkers({
   markers,
@@ -915,20 +960,31 @@ export function ClaimScrubberMarkers({
 
   return (
     <div className={cx('pointer-events-none absolute inset-x-3 top-1/2 -translate-y-1/2', className)}>
-      {markers.map(marker => (
-        <button
-          key={marker.id}
-          type="button"
-          title={marker.text}
-          aria-label={`Jump to: ${marker.text}`}
-          onClick={event => {
-            event.stopPropagation();
-            onSeek(marker.seekMs);
-          }}
-          style={{ left: `${marker.fraction * 100}%` }}
-          className="pointer-events-auto absolute top-1/2 h-2.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/80 transition-[height,background-color] hover:h-3.5 hover:bg-white"
-        />
-      ))}
+      {markers.map((marker, index) => {
+        return (
+          <button
+            key={marker.id}
+            type="button"
+            title={marker.text}
+            aria-label={`Jump to: ${marker.text}`}
+            onClick={event => {
+              event.stopPropagation();
+              onSeek(marker.seekMs);
+            }}
+            style={{ left: `${marker.fraction * 100}%`, width: markerHitWidth(markers, index) }}
+            // The button is the target and draws nothing; `before:` draws the 2px hash at its
+            // centre, so the hash stays 2px however wide the target around it grows.
+            className={cx(
+              'pointer-events-auto absolute top-1/2 -translate-x-1/2 -translate-y-1/2 bg-transparent',
+              MARKER_HIT_HEIGHT,
+              'before:absolute before:top-1/2 before:left-1/2 before:h-2.5 before:w-0.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full before:bg-white/80 before:transition-[height,background-color] before:content-[""]',
+              'hover:before:h-3.5 hover:before:bg-white',
+              // A control in the tab order has to show where focus is; there was nothing before.
+              'focus-visible:outline-none focus-visible:before:h-3.5 focus-visible:before:bg-white'
+            )}
+          />
+        );
+      })}
     </div>
   );
 }

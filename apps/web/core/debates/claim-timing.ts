@@ -247,13 +247,36 @@ const STOPWORDS = new Set([
  * Whisper transcript and an LLM, and neither is under our control.
  *
  * `can't` and `won't` leave `ca` and `wo` behind, which are under the length floor and dropped.
+ *
+ * `cannot` is the same fault with no apostrophe to find it by, and it runs in both directions:
+ * a claim saying "cannot" scored 0.667 against "can be safe" and 0.611 against "can't be safe",
+ * while a claim saying "can't" scored 0.667 against "can be safe" and 0.611 against "cannot be
+ * safe". Whichever spelling each side picked, the affirmative won. It is folded to "can not".
+ *
+ * The apostrophe suffixes go for a related reason, one door further along. STOPWORDS holds `it`,
+ * `that`, `we`, `there`, `i` — but not `it's`, `that's`, `we're`, `there's`, `i'm`, because the
+ * apostrophe makes them a different token. They therefore survived as *content words*, and only on
+ * the speech side, since the extractor does not contract: `it's` 281 times in the corpus, `that's`
+ * 143, `i'm` 82, `there's` 76, `we're` 66. Each one is a distinct word in the window that no claim
+ * can ever match, so it cut that window's precision — the same one-directional penalty on speech
+ * that sounds like speech. Possessives fold the same way and want to: `person's` is `person`.
  */
-function expandNegations(text: string): string {
-  return text.replace(/[’‘]/g, "'").replace(/n't\b/g, ' not');
+function normalizeWordForms(text: string): string {
+  return (
+    text
+      // Curly to straight, first, or nothing below matches.
+      .replace(/[’‘]/g, "'")
+      // The one negator with no apostrophe to find it by.
+      .replace(/\bcannot\b/g, 'can not')
+      .replace(/n't\b/g, ' not')
+      // Apostrophe suffixes carry no content: the stem is either the word that matters
+      // (`person's` -> `person`) or a stopword that should have been dropped (`it's` -> `it`).
+      .replace(/'(s|re|ve|ll|d|m)\b/g, '')
+  );
 }
 
 function words(text: string): string[] {
-  return expandNegations(text.toLowerCase()).match(/[a-z0-9']+/g) ?? [];
+  return normalizeWordForms(text.toLowerCase()).match(/[a-z0-9']+/g) ?? [];
 }
 
 /** The words worth matching on: not stopwords, and long enough to mean something. */

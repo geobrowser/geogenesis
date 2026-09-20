@@ -373,6 +373,41 @@ describe('scoreWindow', () => {
     expect(contentWords("we won't regulate it")).toContain('not');
   });
 
+  /**
+   * `cannot` is the same fault with no apostrophe to find it by, and it ran in both directions:
+   * whichever of the three spellings each side used, the affirmative outscored the negation.
+   */
+  it('reads every spelling of a negated "can" the same way', () => {
+    const spellings = ['vaccination cannot be safe', "vaccination can't be safe", 'vaccination can not be safe'];
+
+    for (const claimText of spellings) {
+      const claim = contentWords(claimText);
+      for (const spoken of spellings) {
+        expect(scoreWindow(claim, spoken)).toBe(1);
+      }
+      expect(scoreWindow(claim, 'vaccination can be safe')).toBeLessThan(1);
+    }
+  });
+
+  /**
+   * STOPWORDS holds `it` and `that` but not `it's` and `that's`, so the apostrophe smuggled them
+   * past as content words — and only on the speech side, since the extractor does not contract.
+   * Each one was a distinct window word no claim could match, cutting that window's precision.
+   */
+  it('does not let a contracted stopword count as content', () => {
+    expect(contentWords("it's true")).toEqual(['true']);
+    expect(contentWords("that's true")).toEqual(['true']);
+    expect(contentWords("we're right")).toEqual(['right']);
+    expect(contentWords("there's a problem")).toEqual(['problem']);
+    expect(contentWords("i'm certain")).toEqual(['certain']);
+  });
+
+  // Possessives fold to the thing possessed, which is the word that carries the meaning.
+  it('reads a possessive as the word it is built from', () => {
+    // Order follows the sentence, so compare the sets rather than the sequences.
+    expect(contentWords("a person's health").sort()).toEqual(contentWords('the health of a person').sort());
+  });
+
   // The quarter-weight precision term exists to break ties towards the tightest window: a wide
   // window contains everything a narrow one does, so without it the widest always wins.
   it('prefers the tighter of two windows that both contain the claim', () => {

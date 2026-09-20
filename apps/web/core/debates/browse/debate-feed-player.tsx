@@ -758,8 +758,11 @@ function FeedScrubber({
           scrubbed to the pixel instead of seeking to the claim. The comment here used to claim the
           opposite, which is how it survived.
 
-          Only the 2px hashes intercept — their wrapper is `pointer-events-none` — so a drag that
-          starts anywhere else along the bar still reaches the input and scrubs. */}
+          The markers' wrapper is `pointer-events-none`, so only the targets themselves intercept
+          and a drag starting anywhere else along the bar still reaches the input. Those targets are
+          no longer the 2px hashes, though: they are up to 12px wide, clamped to the gap to the next
+          claim — a mean 10% of the track, 44% on the densest debate in the corpus. See
+          {@link MARKER_HIT_WIDTH_PX} for why that ceiling and not 24. */}
       <ClaimScrubberMarkers markers={markers} onSeek={ms => onSeek(ms / 1000)} className="z-3" />
       <span
         className="pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.35)]"

@@ -5,10 +5,16 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateParticipant } from '~/core/debates/api';
-import type { TickerWindow } from '~/core/debates/claim-ticker';
+import type { ClaimMarker, TickerWindow } from '~/core/debates/claim-ticker';
 import type { TimedClaim } from '~/core/debates/claim-timing';
 
-import { DebateClaimTickerCard, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
+import {
+  ClaimScrubberMarkers,
+  DebateClaimTickerCard,
+  DebateClaimTickerStack,
+  markerHitWidth,
+  useDebateClaimTicker,
+} from './debate-claim-ticker';
 
 const CLAIM_SPACE = '52c7ae149838b6d47ce0f3b2a5974546';
 
@@ -750,5 +756,86 @@ describe('useDebateClaimTicker', () => {
 
     expect(ticker.markers).toEqual([]);
     expect(ticker.historyBySlot.size).toBe(0);
+  });
+});
+
+/**
+ * The scrubber hashes are 2px wide and sit above the range input, so their hit area is both the
+ * accessibility problem and the thing that can steal a drag or a neighbour's tap. The width is
+ * computed per marker rather than set in CSS, so it is worth holding.
+ */
+describe('markerHitWidth', () => {
+  const marker = (id: string, fraction: number): ClaimMarker => ({
+    id,
+    text: `Claim ${id}`,
+    atMs: fraction * 100_000,
+    seekMs: fraction * 100_000 + 250,
+    fraction,
+  });
+
+  const widths = (markers: ClaimMarker[]) => markers.map((_, index) => markerHitWidth(markers, index));
+
+  // Nothing to crowd it, so it takes the ceiling — which is 12 rather than WCAG's 24 because these
+  // sit over the scrub bar, and whatever they cover is a place a drag cannot start.
+  it('gives the only marker on the bar the full hit width', () => {
+    expect(widths([marker('a', 0.5)])).toEqual(['12px']);
+  });
+
+  /**
+   * The clamp that stops a wider target covering the next claim: measured over the corpus, 34% of
+   * adjacent pairs sit closer than 24px on a phone. Two markers 1% apart can each be 1% wide — they
+   * meet, and neither reaches the other's centre — but no wider.
+   */
+  it('never lets a target reach past its nearest neighbour', () => {
+    expect(widths([marker('a', 0.5), marker('b', 0.51)])).toEqual([
+      'clamp(2px, 1.000%, 12px)',
+      'clamp(2px, 1.000%, 12px)',
+    ]);
+  });
+
+  // Each marker takes its *nearest* neighbour, not the one before it. The middle marker here is
+  // crowded on one side only; the far one is crowded by nothing and hits the ceiling.
+  it('measures the nearer of the two neighbours', () => {
+    expect(widths([marker('a', 0.1), marker('b', 0.11), marker('c', 0.9)])).toEqual([
+      'clamp(2px, 1.000%, 12px)',
+      'clamp(2px, 1.000%, 12px)',
+      'clamp(2px, 79.000%, 12px)',
+    ]);
+  });
+
+  // Two claims ending on the same millisecond would otherwise compute a zero-width button, which
+  // cannot be pressed or focused at all — the floor keeps it as wide as the hash it draws.
+  it('keeps a floor under markers that land on the same moment', () => {
+    expect(widths([marker('a', 0.5), marker('b', 0.5)])).toEqual([
+      'clamp(2px, 0.000%, 12px)',
+      'clamp(2px, 0.000%, 12px)',
+    ]);
+  });
+});
+
+describe('ClaimScrubberMarkers', () => {
+  const marker = (id: string, fraction: number): ClaimMarker => ({
+    id,
+    text: `Claim ${id}`,
+    atMs: fraction * 100_000,
+    seekMs: fraction * 100_000 + 250,
+    fraction,
+  });
+
+  it('seeks into the claim window rather than to the hash it draws', () => {
+    const onSeek = vi.fn();
+    render(<ClaimScrubberMarkers markers={[marker('a', 0.5)]} onSeek={onSeek} />);
+
+    fireEvent.click(screen.getByLabelText('Jump to: Claim a'));
+
+    expect(onSeek).toHaveBeenCalledWith(50_250);
+  });
+
+  // The hash is drawn by a pseudo-element so the target can grow around it without the mark
+  // growing too. Nothing here can read a pseudo-element, so this holds the button itself empty.
+  it('draws its hash without a child element the target could inherit size from', () => {
+    const { container } = render(<ClaimScrubberMarkers markers={[marker('a', 0.5)]} onSeek={vi.fn()} />);
+
+    expect(container.querySelector('button')?.children).toHaveLength(0);
   });
 });
