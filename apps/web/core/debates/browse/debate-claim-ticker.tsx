@@ -592,7 +592,24 @@ export function DebateClaimTickerStack({
         // this list that a thumb aiming at a card can find. The cards stop their own clicks; this
         // catches the misses.
         onClick={event => event.stopPropagation()}
-        onFocus={() => onFocusChange?.(true)}
+        /**
+         * A keyboard arriving, not a click landing.
+         *
+         * The player opens the backlog on this, and the backlog is drawn narrower than a live card
+         * — so when any focus counted, clicking the expand toggle on a clamped claim swapped the
+         * card the reader was halfway through for the list, at the list's width. They asked for
+         * more of the sentence in front of them and got it somewhere else, in a different column.
+         * Pressing a thumb on a live card did the same thing.
+         *
+         * `:focus-visible` is the browser's own answer to "did this focus come from a pointer",
+         * which is exactly the question, and the same signal the backlog chip already uses to
+         * decide when it is reachable. A click still focuses the control it landed on — it just no
+         * longer reads as having tabbed in.
+         */
+        onFocus={event => {
+          if (event.target instanceof Element && !event.target.matches(':focus-visible')) return;
+          onFocusChange?.(true);
+        }}
         // Only when focus leaves the stack entirely — moving between two cards inside it must not
         // collapse the list out from under the keyboard.
         onBlur={event => {

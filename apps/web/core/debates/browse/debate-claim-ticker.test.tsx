@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -652,18 +653,49 @@ describe('DebateClaimTickerStack', () => {
 
   // Hover is not available to a keyboard, and the backlog is content rather than decoration, so
   // focus reaching the stack has to open it the way the pointer does.
-  it('reports focus entering and leaving so the player can open it', () => {
+  it('reports focus entering and leaving so the player can open it', async () => {
     const onFocusChange = vi.fn();
-    renderStack({ onFocusChange });
-    // Focus lands on a control inside a card — tabbing to a thumb is how a keyboard reaches this —
-    // and React's onFocus bubbles from there to the list.
-    const thumb = screen.getByLabelText('Agree');
+    const { container } = renderStack({ onFocusChange });
 
-    fireEvent.focus(thumb);
+    // A keyboard reaches this stack by landing on the first control inside a card, and React's
+    // onFocus bubbles from there to the list. Which control that is belongs to the card's own
+    // layout, so this asserts only that focus arrived somewhere inside.
+    await userEvent.tab();
+    const focused = document.activeElement as HTMLElement;
+    expect(container.firstElementChild?.contains(focused)).toBe(true);
     expect(onFocusChange).toHaveBeenLastCalledWith(true);
 
-    fireEvent.blur(thumb);
+    fireEvent.blur(focused);
     expect(onFocusChange).toHaveBeenLastCalledWith(false);
+  });
+
+  /**
+   * A click inside a live card is not a request for the backlog.
+   *
+   * The player opens the backlog on focus, and draws it narrower than a live card. Any focus
+   * counting meant clicking the expand toggle on a clamped claim swapped the card for the list
+   * mid-read, and re-laid the claim out at the list's width — so the reader asked for the rest of
+   * the sentence in front of them and got it in a different column.
+   */
+  it('does not report focus when a click lands inside it', async () => {
+    forceClampedOverflow();
+    const onFocusChange = vi.fn();
+    renderStack({ onFocusChange });
+
+    await userEvent.click(screen.getByTitle('Show the whole claim'));
+
+    expect(screen.getByTitle('Show less')).toHaveAttribute('aria-expanded', 'true');
+    expect(onFocusChange).not.toHaveBeenCalledWith(true);
+  });
+
+  // Same for the thumbs, which is the other thing a pointer comes to a live card to do.
+  it('does not report focus when a thumb is clicked', async () => {
+    const onFocusChange = vi.fn();
+    renderStack({ onFocusChange });
+
+    await userEvent.click(screen.getByLabelText('Agree'));
+
+    expect(onFocusChange).not.toHaveBeenCalledWith(true);
   });
 });
 
