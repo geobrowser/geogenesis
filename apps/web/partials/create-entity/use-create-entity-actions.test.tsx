@@ -2,6 +2,8 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ROOT_SPACE } from '~/core/constants';
+
 import { useCreateEntityActions } from './use-create-entity-actions';
 
 const mocks = vi.hoisted(() => ({
@@ -40,8 +42,14 @@ describe('useCreateEntityActions', () => {
     expect(mocks.push).toHaveBeenNthCalledWith(2, '/space/space-1/new-entity?edit=true&type=property');
   });
 
-  it('blocks entity routes for a pending personal-space sentinel while preserving new-space creation', () => {
-    const { result } = renderHook(() => useCreateEntityActions('pending:topic-1'));
+  it.each([
+    { name: 'a missing space ID', spaceId: null },
+    { name: 'an undefined space ID', spaceId: undefined },
+    { name: 'an empty space ID', spaceId: '' },
+    { name: 'a pending personal-space sentinel', spaceId: 'pending:topic-1' },
+    { name: 'the root-space sentinel', spaceId: ROOT_SPACE },
+  ])('blocks entity routes for $name while preserving new-space creation', ({ spaceId }) => {
+    const { result } = renderHook(() => useCreateEntityActions(spaceId));
 
     expect(result.current.canCreateInSpace).toBe(false);
 

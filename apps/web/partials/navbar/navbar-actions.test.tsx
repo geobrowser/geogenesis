@@ -6,6 +6,8 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ROOT_SPACE } from '~/core/constants';
+
 import { NavbarActions } from './navbar-actions';
 
 const address = '0x1234567890abcdef1234567890abcdef12345678';
@@ -442,8 +444,11 @@ describe('NavbarActions profile menu', () => {
       expect(mocks.openCreateSpaceDialog).toHaveBeenCalledWith();
     });
 
-    it('does not build entity URLs from a pending personal-space sentinel', async () => {
-      mocks.spaceId = 'pending:topic-1';
+    it.each([
+      { name: 'a pending personal-space sentinel', spaceId: 'pending:topic-1' },
+      { name: 'the root-space sentinel', spaceId: ROOT_SPACE },
+    ])('does not expose entity creation for $name', async ({ spaceId }) => {
+      mocks.spaceId = spaceId;
       mocks.isMobileNavbar = true;
       const user = userEvent.setup();
       render(<NavbarActions />);
