@@ -59,6 +59,10 @@ vi.mock('../claim-picker-page', () => ({
 }));
 
 vi.mock('../hooks', () => ({
+  // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
+  // exercising it — the schedule itself is covered in core/availability.
+  useDebateSchedule: () => ({ blocks: [], isSet: false }),
+  useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
   useDebateActivity: () => ({
     // Undefined while loading, exactly as react-query reports it — the empty state has to wait for
     // this rather than read `available_to_debate` off nothing.
