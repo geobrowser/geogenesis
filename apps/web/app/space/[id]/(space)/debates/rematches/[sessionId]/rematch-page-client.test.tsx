@@ -1050,6 +1050,19 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
+  it('holds an opponent-left notice until acknowledged before leaving an ended rematch', async () => {
+    mocks.session = session({ status: 'ended' });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+    expect(mocks.replace).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find a match' }));
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`));
+  });
+
   // The pin this used to assert is gone (GEO-2647); what matters is that both claims are listed
   // and a shared preference is still the one you can act on.
   it("lists the session's own claims alongside published ones and enables opposing requests", async () => {

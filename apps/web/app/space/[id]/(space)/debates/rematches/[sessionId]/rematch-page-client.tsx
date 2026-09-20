@@ -39,6 +39,7 @@ import {
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
+import { didLocallyLeaveRematch } from '~/core/debates/local-debate-leave';
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
@@ -64,6 +65,7 @@ import { type NarrowedListState, useNarrowedDefault } from '~/core/debates/match
 import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
+import { OpponentLeftDialog } from '~/core/debates/opponent-left-dialog';
 import {
   type ParticipantPositionsByClaim,
   participantSidesOn,
@@ -177,6 +179,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const viewerIdentityUnresolved = geoChatAuthenticated && currentUserId === null;
   const exitStartedRef = React.useRef(false);
+
+  const [localLeaveStarted, setLocalLeaveStarted] = React.useState(false);
+  const [opponentLeftAcknowledged, setOpponentLeftAcknowledged] = React.useState(false);
   const sessionQuery = useDebateRematch(sessionId);
   const [search, setSearch] = React.useState('');
   const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
@@ -1895,15 +1900,27 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       markEnteringDebate(session.converted_debate_id);
       router.replace(`/space/${session.source_space_id}/debates/${session.converted_debate_id}`);
     } else if (session.status === 'ended' || session.status === 'expired') {
-      returnFromSession(session);
+      if (localLeaveStarted || session.status === 'expired') {
+        returnFromSession(session);
+      }
     }
-  }, [returnFromSession, router, session]);
+  }, [localLeaveStarted, returnFromSession, router, session]);
 
   const leave = () => {
+    setLocalLeaveStarted(true);
     leaveSession.mutate(undefined, {
       onSuccess: returnFromSession,
     });
   };
+
+  // `didLocallyLeaveRematch` covers remounts after this tab's own Leave (gateway `ended` is shared).
+  const showOpponentLeftDialog = Boolean(
+    session &&
+    session.status === 'ended' &&
+    !localLeaveStarted &&
+    !didLocallyLeaveRematch(session.id) &&
+    !opponentLeftAcknowledged
+  );
 
   /** The last request failure, and whether the claim it was sent for is still on screen. */
   const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
@@ -1957,252 +1974,261 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       : [];
 
   return (
-    // Below the entity side panel (z-200) on purpose: a claim opens there rather than navigating,
-    // and the panel has to land on top. Still above the navbar (z-60) and the app's z-100 band, so
-    // the session keeps the screen to itself.
-    // `overflow-x-hidden` is load-bearing, not tidying: CSS computes the other axis to `auto` as
-    // soon as one of them isn't `visible`, so `overflow-y-auto` alone left this layer horizontally
-    // scrollable. Anything wider than the viewport — the tab strip, on a phone — panned the whole
-    // screen sideways instead of scrolling itself.
-    <div data-rematch-scroll className="fixed inset-0 z-[150] overflow-x-hidden overflow-y-auto bg-white text-text">
-      <main className="mx-auto min-h-dvh w-full max-w-[720px] px-5 pt-8 pb-8 mobile:px-8">
-        {/* Pinned together, tabs included. The list pages forever, so both the tab strip and the
+    <>
+      {showOpponentLeftDialog && session ? (
+        <OpponentLeftDialog
+          onAcknowledge={() => {
+            setOpponentLeftAcknowledged(true);
+            returnFromSession(session);
+          }}
+        />
+      ) : null}
+      {/* Below the entity side panel (z-200) on purpose: a claim opens there rather than navigating,
+        and the panel has to land on top. Still above the navbar (z-60) and the app's z-100 band, so
+        the session keeps the screen to itself.
+        `overflow-x-hidden` is load-bearing, not tidying: CSS computes the other axis to `auto` as
+        soon as one of them isn't `visible`, so `overflow-y-auto` alone left this layer horizontally
+        scrollable. Anything wider than the viewport — the tab strip, on a phone — panned the whole
+        screen sideways instead of scrolling itself. */}
+      <div data-rematch-scroll className="fixed inset-0 z-[150] overflow-x-hidden overflow-y-auto bg-white text-text">
+        <main className="mx-auto min-h-dvh w-full max-w-[720px] px-5 pt-8 pb-8 mobile:px-8">
+          {/* Pinned together, tabs included. The list pages forever, so both the tab strip and the
             controls under it were a full scroll away by the time the viewer wanted either — and
             pinning the filters alone would have left them floating over a tab strip scrolling
             past behind them. Bleeds to the layer's edges so the page passes under it rather than
             beside it, and `-mt-8` lets it sit flush at the top once stuck. */}
-        <div className="sticky top-0 z-20 -mx-5 -mt-8 bg-white px-5 pt-8 pb-3 mobile:-mx-8 mobile:px-8">
-          <header className="mb-4 flex items-center justify-between gap-4">
-            <h1 className="sr-only">Rematch {remoteName}</h1>
-            {/* Scrolls on its own: `min-w-0` lets it be narrower than its tabs, `overflow-x-auto`
+          <div className="sticky top-0 z-20 -mx-5 -mt-8 bg-white px-5 pt-8 pb-3 mobile:-mx-8 mobile:px-8">
+            <header className="mb-4 flex items-center justify-between gap-4">
+              <h1 className="sr-only">Rematch {remoteName}</h1>
+              {/* Scrolls on its own: `min-w-0` lets it be narrower than its tabs, `overflow-x-auto`
                 gives those tabs somewhere to go, and `overscroll-x-contain` stops a swipe that
                 reaches the end from chaining into the browser's back gesture. */}
-            <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-5 overflow-x-auto overscroll-x-contain">
-              {/* First, because it is where the pair land: a tab strip that opens on its second
+              <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-5 overflow-x-auto overscroll-x-contain">
+                {/* First, because it is where the pair land: a tab strip that opens on its second
                   item reads as though something moved. Rendered while the count is still out too —
                   see `relatedOffered` for why the slot is held rather than filled late. */}
-              {relatedOffered ? (
-                <TabButton active={tab === 'related'} onClick={() => setTab('related')}>
-                  Related
-                </TabButton>
-              ) : null}
-              <TabButton active={tab === 'opponent'} onClick={() => setTab('opponent')}>
-                <span className="max-w-[10rem] truncate">{firstNamePossessive(remoteName)} positions</span>
-                <span
-                  className={cx(
-                    'inline-flex min-h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-metadataMedium tabular-nums',
-                    tab === 'opponent' ? 'bg-text text-white' : 'bg-grey-01 text-grey-04'
-                  )}
-                >
-                  {/* The badge keeps its size either way, so the strip doesn't reflow when the
+                {relatedOffered ? (
+                  <TabButton active={tab === 'related'} onClick={() => setTab('related')}>
+                    Related
+                  </TabButton>
+                ) : null}
+                <TabButton active={tab === 'opponent'} onClick={() => setTab('opponent')}>
+                  <span className="max-w-[10rem] truncate">{firstNamePossessive(remoteName)} positions</span>
+                  <span
+                    className={cx(
+                      'inline-flex min-h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-metadataMedium tabular-nums',
+                      tab === 'opponent' ? 'bg-text text-white' : 'bg-grey-01 text-grey-04'
+                    )}
+                  >
+                    {/* The badge keeps its size either way, so the strip doesn't reflow when the
                       number lands. See `opponentCountPending`: a skeleton says "still counting",
                       where `0` said "none" and was usually wrong. */}
-                  {opponentCountPending ? (
-                    <Skeleton radius="rounded-full" className="h-3 w-3" aria-label="Counting positions" />
-                  ) : (
-                    opponentPositionCount
-                  )}
-                </span>
-              </TabButton>
-              {/* Named for the hub's browse tab: the wider catalogue you reach for once neither the
+                    {opponentCountPending ? (
+                      <Skeleton radius="rounded-full" className="h-3 w-3" aria-label="Counting positions" />
+                    ) : (
+                      opponentPositionCount
+                    )}
+                  </span>
+                </TabButton>
+                {/* Named for the hub's browse tab: the wider catalogue you reach for once neither the
                   opponent's positions nor the debate you just had is what you want. */}
-              <TabButton active={tab === 'explore'} onClick={() => setTab('explore')}>
-                Explore
-              </TabButton>
+                <TabButton active={tab === 'explore'} onClick={() => setTab('explore')}>
+                  Explore
+                </TabButton>
+              </div>
+              <button
+                type="button"
+                aria-label="Leave debate"
+                title="Leave debate"
+                onClick={leave}
+                disabled={leaveSession.isPending}
+                className="grid size-9 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+              >
+                <LeaveIcon />
+              </button>
+            </header>
+
+            <div className="flex flex-col gap-3">
+              <SpaceTopicFilters
+                spaceIds={spaceIds}
+                onSpaceToggle={onSpaceToggle}
+                onSpacesClear={onSpacesClear}
+                topicIds={topicIds}
+                onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+                onTopicsClear={() => setTopicIds([])}
+                facetSpaces={facetSpaces}
+                facetTopics={facetTopics}
+                // Only the browsed source waits on geo-chat. The other two build their facets from
+                // entities already in hand, so their counts are never behind the *selection*, and a
+                // skeleton there would be describing a wait that isn't happening.
+                //
+                // Search is not like that: every source filters its rows by `debouncedSearch`, so
+                // while the box is unsettled the counts describe the pre-typing query wherever they
+                // came from. That window is ungated for the same reason the others are gated.
+                // Not only the search since GEO-2798. That was true while the menus were built from
+                // claims already in hand — a tick was answered on the same render, with no request
+                // behind it. The tagged sources' menus are their own server requests now, and
+                // `keepPreviousData` deliberately holds the previous filter's numbers rather than
+                // blinking, so without this they read as current for a debounce plus a request.
+                countsPending={
+                  searchSettling ||
+                  (graphFiltered && (topicsSettling || !taggedTopicFacet.settled || !taggedSpaceFacet.settled))
+                }
+                // Only on Claims: the opponent's tab is one fixed source — their own responses — and
+                // a menu offering three others there would read as filtering a list it can't reach.
+                // The switch belongs to the opponent's tab, where it means something; Explore is the
+                // wider catalogue and has its source picker here instead.
+                // One switch per tab, because each tab has exactly one setting worth a switch.
+                // "Matches only" belongs to the opponent's tab, where a match is the thing being
+                // looked for; "Hide my positions" belongs to Explore, where the backlog is what gets
+                // in the way. Neither is drawn on "My positions", which is that backlog itself.
+                trailing={
+                  tab === 'opponent' ? (
+                    <MatchesOnlySwitch
+                      // The effective value, not the stored one — see `useNarrowedDefault`.
+                      checked={matchesNarrowed}
+                      onChange={next => {
+                        rearmMatchesDefault();
+                        setMatchesOnly(next);
+                      }}
+                    />
+                  ) : // Explore's alone, and it has to say so rather than falling through: `hidesAnswered`
+                  // is gated on this tab, so on Related the switch drew a control that could not
+                  // change a single row under it. Never on "My positions" either, which is the list
+                  // it would empty.
+                  tab === 'explore' && source !== 'mine' ? (
+                    <HideMyPositionsSwitch checked={hideMyPositions} onChange={setHideMyPositions} />
+                  ) : null
+                }
+                leading={
+                  tab === 'explore' ? (
+                    <HubFilterMenu
+                      label={CLAIMS_SOURCE_LABELS[source]}
+                      options={sourceOptions}
+                      value={source}
+                      onChange={setChosenSource}
+                    />
+                  ) : null
+                }
+              />
+              <Input
+                withSearchIcon
+                value={search}
+                onChange={event => setSearch(event.currentTarget.value)}
+                placeholder="Search claims"
+                aria-label="Search claims"
+              />
             </div>
-            <button
-              type="button"
-              aria-label="Leave debate"
-              title="Leave debate"
-              onClick={leave}
-              disabled={leaveSession.isPending}
-              className="grid size-9 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
-            >
-              <LeaveIcon />
-            </button>
-          </header>
-
-          <div className="flex flex-col gap-3">
-            <SpaceTopicFilters
-              spaceIds={spaceIds}
-              onSpaceToggle={onSpaceToggle}
-              onSpacesClear={onSpacesClear}
-              topicIds={topicIds}
-              onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-              onTopicsClear={() => setTopicIds([])}
-              facetSpaces={facetSpaces}
-              facetTopics={facetTopics}
-              // Only the browsed source waits on geo-chat. The other two build their facets from
-              // entities already in hand, so their counts are never behind the *selection*, and a
-              // skeleton there would be describing a wait that isn't happening.
-              //
-              // Search is not like that: every source filters its rows by `debouncedSearch`, so
-              // while the box is unsettled the counts describe the pre-typing query wherever they
-              // came from. That window is ungated for the same reason the others are gated.
-              // Not only the search since GEO-2798. That was true while the menus were built from
-              // claims already in hand — a tick was answered on the same render, with no request
-              // behind it. The tagged sources' menus are their own server requests now, and
-              // `keepPreviousData` deliberately holds the previous filter's numbers rather than
-              // blinking, so without this they read as current for a debounce plus a request.
-              countsPending={
-                searchSettling ||
-                (graphFiltered && (topicsSettling || !taggedTopicFacet.settled || !taggedSpaceFacet.settled))
-              }
-              // Only on Claims: the opponent's tab is one fixed source — their own responses — and
-              // a menu offering three others there would read as filtering a list it can't reach.
-              // The switch belongs to the opponent's tab, where it means something; Explore is the
-              // wider catalogue and has its source picker here instead.
-              // One switch per tab, because each tab has exactly one setting worth a switch.
-              // "Matches only" belongs to the opponent's tab, where a match is the thing being
-              // looked for; "Hide my positions" belongs to Explore, where the backlog is what gets
-              // in the way. Neither is drawn on "My positions", which is that backlog itself.
-              trailing={
-                tab === 'opponent' ? (
-                  <MatchesOnlySwitch
-                    // The effective value, not the stored one — see `useNarrowedDefault`.
-                    checked={matchesNarrowed}
-                    onChange={next => {
-                      rearmMatchesDefault();
-                      setMatchesOnly(next);
-                    }}
-                  />
-                ) : // Explore's alone, and it has to say so rather than falling through: `hidesAnswered`
-                // is gated on this tab, so on Related the switch drew a control that could not
-                // change a single row under it. Never on "My positions" either, which is the list
-                // it would empty.
-                tab === 'explore' && source !== 'mine' ? (
-                  <HideMyPositionsSwitch checked={hideMyPositions} onChange={setHideMyPositions} />
-                ) : null
-              }
-              leading={
-                tab === 'explore' ? (
-                  <HubFilterMenu
-                    label={CLAIMS_SOURCE_LABELS[source]}
-                    options={sourceOptions}
-                    value={source}
-                    onChange={setChosenSource}
-                  />
-                ) : null
-              }
-            />
-            <Input
-              withSearchIcon
-              value={search}
-              onChange={event => setSearch(event.currentTarget.value)}
-              placeholder="Search claims"
-              aria-label="Search claims"
-            />
           </div>
-        </div>
 
-        {/* A request error belongs on the card it was sent from; this line is the fallback for when
+          {/* A request error belongs on the card it was sent from; this line is the fallback for when
             that card is no longer drawn — a tab swap, a search, a filter. Losing the message because
             the list moved underneath it is how the failure read as silence (GEO-2807). */}
-        {leaveSession.error instanceof Error ? (
-          <Text color="red-01" className="mb-4">
-            {leaveSession.error.message}
-          </Text>
-        ) : requestError && !requestErrorHasCard ? (
-          <div role="alert" className="mb-4">
-            <Text color="red-01">{requestError}</Text>
-          </div>
-        ) : null}
-        {session?.request?.status === 'expired' && session.request.cancellation_reason && (
-          <Text color="red-01" className="mb-4">
-            {rematchCancellationMessage(session.request.cancellation_reason)}
-          </Text>
-        )}
-
-        <HubQueryState
-          // Only what the visible tab actually draws from, and only while it has nothing to show.
-          // Holding every tab on the slowest query meant the session's own claims — which arrive in
-          // one round trip — sat behind a graph-wide scan they don't come from.
-          // `stillPaging` for the same reason the hub has one: the collapse runs over the page in
-          // hand, so a viewer who has answered everything on it sees the list emptied while the
-          // corpus goes on past them — and the empty state below would announce that as "no other
-          // eligible claims", of rows nobody has fetched. While the sentinel still has somewhere to
-          // go, this is still looking.
-          // `stillPaging` is deliberately not in here. A search that has to walk pages is a thing to
-          // say — see `searchingMessage` below — not a skeleton to sit behind, and with a budget of
-          // a budget this size a skeleton behind it is a minute of nothing.
-          isLoading={tabIsLoading && (showsSections ? visibleSections.length === 0 : visibleClaims.length === 0)}
-          error={tabError}
-          isEmpty={showsSections ? visibleSections.length === 0 : visibleClaims.length === 0}
-          emptyMessage={
-            stillPaging
-              ? searchingMessage
-              : stoppedShortHere
-                ? stoppedShortMessage
-                : collapsedEverything
-                  ? 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
-                  : hasFilters
-                    ? 'No claims match these filters.'
-                    : matchesOnlyHere
-                      ? `You and ${remoteName} haven’t taken opposite sides on anything yet.`
-                      : tab === 'opponent'
-                        ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
-                        : tab === 'related'
-                          ? // Reachable even though the tab only appears when neighbours were found: every
-                            // one of them can still be ruled out by this session — already debated, or in a
-                            // space that cannot carry a published debate.
-                            'No related claims are left to debate.'
-                          : source === 'recommended'
-                            ? `Nothing recommended for you and ${remoteName} yet.`
-                            : source === 'mine'
-                              ? 'You haven’t taken a position on any claims yet.'
-                              : source === 'featured'
-                                ? 'No featured claims are available to debate yet.'
-                                : 'No other eligible claims are available yet.'
-          }
-          // Four dead ends, and each has a different way out. Ordered by how much the viewer has
-          // to give up: clearing their filters, then dropping the toggle, then leaving the tab or
-          // the source they picked.
-          emptyAction={
-            stillPaging
-              ? undefined
-              : stoppedShortHere
-                ? { label: 'Keep looking', onClick: keepLooking }
-                : collapsedEverything
-                  ? { label: 'Show my positions', onClick: () => setHideMyPositions(false) }
-                  : hasFilters
-                    ? {
-                        label: 'Clear filters',
-                        onClick: () => {
-                          setSearch('');
-                          // The menu's own clear row, so this counts as choosing the unfiltered list and
-                          // the default cannot put its spaces back.
-                          onSpacesClear();
-                          setTopicIds([]);
-                        },
-                      }
-                    : matchesOnlyHere
-                      ? { label: 'Show all their positions', onClick: () => setMatchesOnly(false) }
-                      : tab === 'opponent'
-                        ? // GEO-2861. An opponent who has answered nothing is a dead end this tab cannot
-                          // resolve, and the catalogue next door is the whole of the way out of it.
-                          { label: 'Explore claims', onClick: () => setTab('explore') }
-                        : source === 'mine'
-                          ? // The same dead end one level down: a viewer who has answered nothing cannot
-                            // fill this list from here, and the whole corpus is one pick away.
-                            { label: 'Show all claims', onClick: () => setChosenSource('all') }
-                          : undefined
-          }
-        >
-          {showsSections ? (
-            // Each data block on the curator's page is its own section, in page order.
-            <div className="flex flex-col gap-4">
-              {visibleSections.map(section => (
-                <RecommendedSection key={section.id} name={section.name} count={section.claims.length}>
-                  <HubCardList>{section.claims.map(renderClaimCard)}</HubCardList>
-                </RecommendedSection>
-              ))}
+          {leaveSession.error instanceof Error ? (
+            <Text color="red-01" className="mb-4">
+              {leaveSession.error.message}
+            </Text>
+          ) : requestError && !requestErrorHasCard ? (
+            <div role="alert" className="mb-4">
+              <Text color="red-01">{requestError}</Text>
             </div>
-          ) : (
-            <HubCardList>{visibleClaims.map(renderClaimCard)}</HubCardList>
+          ) : null}
+          {session?.request?.status === 'expired' && session.request.cancellation_reason && (
+            <Text color="red-01" className="mb-4">
+              {rematchCancellationMessage(session.request.cancellation_reason)}
+            </Text>
           )}
-        </HubQueryState>
 
-        {/* Explore pages again (GEO-2798), so the sentinel is back — for the tagged sources only.
+          <HubQueryState
+            // Only what the visible tab actually draws from, and only while it has nothing to show.
+            // Holding every tab on the slowest query meant the session's own claims — which arrive in
+            // one round trip — sat behind a graph-wide scan they don't come from.
+            // `stillPaging` for the same reason the hub has one: the collapse runs over the page in
+            // hand, so a viewer who has answered everything on it sees the list emptied while the
+            // corpus goes on past them — and the empty state below would announce that as "no other
+            // eligible claims", of rows nobody has fetched. While the sentinel still has somewhere to
+            // go, this is still looking.
+            // `stillPaging` is deliberately not in here. A search that has to walk pages is a thing to
+            // say — see `searchingMessage` below — not a skeleton to sit behind, and with a budget of
+            // a budget this size a skeleton behind it is a minute of nothing.
+            isLoading={tabIsLoading && (showsSections ? visibleSections.length === 0 : visibleClaims.length === 0)}
+            error={tabError}
+            isEmpty={showsSections ? visibleSections.length === 0 : visibleClaims.length === 0}
+            emptyMessage={
+              stillPaging
+                ? searchingMessage
+                : stoppedShortHere
+                  ? stoppedShortMessage
+                  : collapsedEverything
+                    ? 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
+                    : hasFilters
+                      ? 'No claims match these filters.'
+                      : matchesOnlyHere
+                        ? `You and ${remoteName} haven’t taken opposite sides on anything yet.`
+                        : tab === 'opponent'
+                          ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
+                          : tab === 'related'
+                            ? // Reachable even though the tab only appears when neighbours were found: every
+                              // one of them can still be ruled out by this session — already debated, or in a
+                              // space that cannot carry a published debate.
+                              'No related claims are left to debate.'
+                            : source === 'recommended'
+                              ? `Nothing recommended for you and ${remoteName} yet.`
+                              : source === 'mine'
+                                ? 'You haven’t taken a position on any claims yet.'
+                                : source === 'featured'
+                                  ? 'No featured claims are available to debate yet.'
+                                  : 'No other eligible claims are available yet.'
+            }
+            // Four dead ends, and each has a different way out. Ordered by how much the viewer has
+            // to give up: clearing their filters, then dropping the toggle, then leaving the tab or
+            // the source they picked.
+            emptyAction={
+              stillPaging
+                ? undefined
+                : stoppedShortHere
+                  ? { label: 'Keep looking', onClick: keepLooking }
+                  : collapsedEverything
+                    ? { label: 'Show my positions', onClick: () => setHideMyPositions(false) }
+                    : hasFilters
+                      ? {
+                          label: 'Clear filters',
+                          onClick: () => {
+                            setSearch('');
+                            // The menu's own clear row, so this counts as choosing the unfiltered list and
+                            // the default cannot put its spaces back.
+                            onSpacesClear();
+                            setTopicIds([]);
+                          },
+                        }
+                      : matchesOnlyHere
+                        ? { label: 'Show all their positions', onClick: () => setMatchesOnly(false) }
+                        : tab === 'opponent'
+                          ? // GEO-2861. An opponent who has answered nothing is a dead end this tab cannot
+                            // resolve, and the catalogue next door is the whole of the way out of it.
+                            { label: 'Explore claims', onClick: () => setTab('explore') }
+                          : source === 'mine'
+                            ? // The same dead end one level down: a viewer who has answered nothing cannot
+                              // fill this list from here, and the whole corpus is one pick away.
+                              { label: 'Show all claims', onClick: () => setChosenSource('all') }
+                            : undefined
+            }
+          >
+            {showsSections ? (
+              // Each data block on the curator's page is its own section, in page order.
+              <div className="flex flex-col gap-4">
+                {visibleSections.map(section => (
+                  <RecommendedSection key={section.id} name={section.name} count={section.claims.length}>
+                    <HubCardList>{section.claims.map(renderClaimCard)}</HubCardList>
+                  </RecommendedSection>
+                ))}
+              </div>
+            ) : (
+              <HubCardList>{visibleClaims.map(renderClaimCard)}</HubCardList>
+            )}
+          </HubQueryState>
+
+          {/* Explore pages again (GEO-2798), so the sentinel is back — for the tagged sources only.
             Recommended is a curator's page, and the opponent's positions and the viewer's own are
             whole lists fetched by id; all three arrive complete.
 
@@ -2210,49 +2236,50 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             while it is disabled, so `taggedHasNextPage` still answers true under a source that is
             not paging anything, and the sentinel would sit in view asking a list nobody is looking
             at for its next page. */}
-        {loadingMore ? (
-          // Its own breathing room rather than the column's. The cards above sit `gap-2` apart
-          // inside their list, and this lands a rung further out on the column's `gap-3` — close
-          // enough to read as one more card, clipped, rather than as the list saying it is still
-          // working. Pushed clear, it reads as what it is.
-          <div data-testid="rematch-claims-loading-more" className="pt-2">
-            <HubSkeleton rows={2} />
-          </div>
-        ) : null}
+          {loadingMore ? (
+            // Its own breathing room rather than the column's. The cards above sit `gap-2` apart
+            // inside their list, and this lands a rung further out on the column's `gap-3` — close
+            // enough to read as one more card, clipped, rather than as the list saying it is still
+            // working. Pushed clear, it reads as what it is.
+            <div data-testid="rematch-claims-loading-more" className="pt-2">
+              <HubSkeleton rows={2} />
+            </div>
+          ) : null}
 
-        {mayFetchAhead && graphFiltered ? (
-          <div ref={sentinelRef} data-testid="rematch-claims-scroll-sentinel" className="h-px" />
-        ) : stoppedShortHere && visibleClaims.length > 0 ? (
-          // The empty state carries this offer when the list is empty and cannot when it is not —
-          // `HubQueryState` draws its action instead of the rows. Stopping short with rows on screen
-          // is the ordinary case, and without this the list quietly stopped paging.
-          <div className="flex justify-center pt-1">
-            <HubPillButton onClick={keepLooking}>Keep looking</HubPillButton>
-          </div>
-        ) : null}
-      </main>
+          {mayFetchAhead && graphFiltered ? (
+            <div ref={sentinelRef} data-testid="rematch-claims-scroll-sentinel" className="h-px" />
+          ) : stoppedShortHere && visibleClaims.length > 0 ? (
+            // The empty state carries this offer when the list is empty and cannot when it is not —
+            // `HubQueryState` draws its action instead of the rows. Stopping short with rows on screen
+            // is the ordinary case, and without this the list quietly stopped paging.
+            <div className="flex justify-center pt-1">
+              <HubPillButton onClick={keepLooking}>Keep looking</HubPillButton>
+            </div>
+          ) : null}
+        </main>
 
-      {session && currentUserId && <RematchVoicePill session={session} currentUserId={currentUserId} />}
+        {session && currentUserId && <RematchVoicePill session={session} currentUserId={currentUserId} />}
 
-      {incomingRequest && session && currentUserId && (
-        <DebateRequestDialog
-          claim={incomingRequest.claim.claim}
-          participants={incomingRequestParticipants}
-          currentUserId={currentUserId}
-          formatId={incomingRequest.turn_format_id}
-          busy={acceptRequest.isPending || rejectRequest.isPending}
-          error={
-            acceptRequest.error instanceof Error
-              ? acceptRequest.error.message
-              : rejectRequest.error instanceof Error
-                ? rejectRequest.error.message
-                : null
-          }
-          onAccept={() => acceptRequest.mutate(incomingRequest.id)}
-          onReject={() => rejectRequest.mutate(incomingRequest.id)}
-        />
-      )}
-    </div>
+        {incomingRequest && session && currentUserId && (
+          <DebateRequestDialog
+            claim={incomingRequest.claim.claim}
+            participants={incomingRequestParticipants}
+            currentUserId={currentUserId}
+            formatId={incomingRequest.turn_format_id}
+            busy={acceptRequest.isPending || rejectRequest.isPending}
+            error={
+              acceptRequest.error instanceof Error
+                ? acceptRequest.error.message
+                : rejectRequest.error instanceof Error
+                  ? rejectRequest.error.message
+                  : null
+            }
+            onAccept={() => acceptRequest.mutate(incomingRequest.id)}
+            onReject={() => rejectRequest.mutate(incomingRequest.id)}
+          />
+        )}
+      </div>
+    </>
   );
 }
 

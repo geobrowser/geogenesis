@@ -606,6 +606,12 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(screen.queryByText('Debate cancelled.')).not.toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+    expect(mocks.clearDebateActivity).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find a match' }));
+
     await waitFor(() => expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1'));
     expect(mocks.back).not.toHaveBeenCalled();
     expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
@@ -4215,7 +4221,7 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByRole('button', { name: 'Waiting...' })).toBeDisabled();
   });
 
-  it('returns to the previous page after leaving during the thank-you phase', async () => {
+  it('returns forward after leaving during the thank-you phase', async () => {
     setHistoryLength(2);
     installRecordingMocks();
     const view = await renderLiveDebate();
@@ -4239,8 +4245,9 @@ describe('DebateRoomPageClient', () => {
       mocks.leaveRematchMutateAsync.mock.invocationCallOrder[0]!
     );
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
-    expect(mocks.back).toHaveBeenCalledOnce();
-    expect(mocks.replace).not.toHaveBeenCalled();
+    // Forward-only so a history back cannot remount this ended room and show Opponent left to the leaver.
+    expect(mocks.back).not.toHaveBeenCalled();
+    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
   });
 
   it('does not leave the rematch flow when the local recording cannot be persisted', async () => {
@@ -4345,7 +4352,34 @@ describe('DebateRoomPageClient', () => {
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(screen.queryByText('Debate cancelled.')).not.toBeInTheDocument();
-    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    expect(await screen.findByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+    expect(screen.getByText('Your opponent left the debate. Your recording was discarded.')).toBeInTheDocument();
+    expect(mocks.back).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find a match' }));
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
+    expect(mocks.back).not.toHaveBeenCalled();
+    expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
+  });
+
+  it('holds Opponent left on the thank-you screen when the rematch ends under you', async () => {
+    setHistoryLength(1);
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+    mocks.rematch = rematchSession('ended');
+    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.clearDebateActivity).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find a match' }));
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
   });
 
@@ -4471,7 +4505,7 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
-  it('returns to the previous page after leaving an active debate', async () => {
+  it('returns forward after leaving an active debate', async () => {
     setHistoryLength(2);
     const view = await renderLiveDebate();
 
@@ -4479,8 +4513,9 @@ describe('DebateRoomPageClient', () => {
 
     await waitFor(() => expect(mocks.abortMutateAsync).toHaveBeenCalledOnce());
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
-    expect(mocks.back).toHaveBeenCalledOnce();
-    expect(mocks.replace).not.toHaveBeenCalled();
+
+    expect(mocks.back).not.toHaveBeenCalled();
+    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
     view.unmount();
   });
 
