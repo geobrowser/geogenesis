@@ -11,6 +11,13 @@ import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 
 const MAX_COMMENT_HEIGHT_PX = 120;
 
+function fitCommentTextarea(textarea: HTMLTextAreaElement) {
+  textarea.style.height = 'auto';
+  const contentHeight = textarea.scrollHeight;
+  textarea.style.height = `${Math.min(contentHeight, MAX_COMMENT_HEIGHT_PX)}px`;
+  textarea.style.overflowY = contentHeight > MAX_COMMENT_HEIGHT_PX ? 'auto' : 'hidden';
+}
+
 /**
  * Position controls for the two surfaces where GEO-2979 invites an explanation.
  *
@@ -54,11 +61,25 @@ export function ClaimPositionCommentControl({
   React.useLayoutEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    textarea.style.height = 'auto';
-    const contentHeight = textarea.scrollHeight;
-    textarea.style.height = `${Math.min(contentHeight, MAX_COMMENT_HEIGHT_PX)}px`;
-    textarea.style.overflowY = contentHeight > MAX_COMMENT_HEIGHT_PX ? 'auto' : 'hidden';
+    fitCommentTextarea(textarea);
   }, [comment, promptedPosition]);
+
+  // A hint or draft can wrap when the card changes width without changing its value. Re-measure
+  // on width changes so Agree can remain one line while the longer Disagree hint naturally makes
+  // the textarea two lines on a phone. Ignore height-only observations to avoid a resize loop.
+  React.useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea || typeof ResizeObserver === 'undefined') return;
+    let width = textarea.getBoundingClientRect().width;
+    const observer = new ResizeObserver(entries => {
+      const nextWidth = entries[0]?.contentRect.width ?? textarea.getBoundingClientRect().width;
+      if (nextWidth === width) return;
+      width = nextWidth;
+      fitCommentTextarea(textarea);
+    });
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, [promptedPosition]);
 
   const choosePosition = (position: boolean) => {
     // The position is recorded by the original one-click path first. The composer is an optional
@@ -105,7 +126,7 @@ export function ClaimPositionCommentControl({
         />
       </div>
       {action ? (
-        <div className="flex items-center gap-2 rounded-xl border border-grey-02 bg-white p-3">
+        <div className="@container flex items-center gap-2 rounded-xl border border-grey-02 bg-white p-3">
           <textarea
             ref={textareaRef}
             value={comment}
@@ -124,11 +145,12 @@ export function ClaimPositionCommentControl({
             placeholder={`Why do you ${action.toLowerCase()}?`}
             aria-label={`Why do you ${action.toLowerCase()}?`}
             autoFocus
+            wrap="soft"
             rows={1}
             disabled={isSubmitting}
-            className="min-h-5 w-full min-w-0 flex-1 resize-none bg-transparent text-body text-text outline-none placeholder:text-grey-03 disabled:opacity-60"
+            className="min-h-5 w-full max-w-[132px] min-w-0 flex-1 resize-none bg-transparent text-body text-text outline-none placeholder:text-grey-03 disabled:opacity-60 @[400px]:max-w-none"
           />
-          <div className="flex shrink-0 items-center justify-end gap-1">
+          <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
             <button
               type="button"
               onClick={() => {

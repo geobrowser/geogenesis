@@ -26,7 +26,10 @@ describe('ClaimPositionCommentControl', () => {
     mocks.createComment.mockResolvedValue({ id: 'comment-1', published: true });
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
 
   function renderControl({
     viewerPosition = null,
@@ -84,6 +87,19 @@ describe('ClaimPositionCommentControl', () => {
     fireEvent.change(textarea, { target: { value: 'A much longer explanation that exceeds the visible limit' } });
     expect(textarea.style.height).toBe('120px');
     expect(textarea.style.overflowY).toBe('auto');
+  });
+
+  it('lets a wrapping mobile hint grow the textarea to two lines without moving the buttons', () => {
+    vi.spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get').mockReturnValue(40);
+    renderControl();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disagree' }));
+
+    const textarea = screen.getByRole('textbox', { name: 'Why do you disagree?' }) as HTMLTextAreaElement;
+    expect(textarea).toHaveAttribute('wrap', 'soft');
+    expect(textarea).toHaveClass('max-w-[132px]', '@[400px]:max-w-none');
+    expect(textarea.style.height).toBe('40px');
+    expect(screen.getByRole('button', { name: 'Skip' }).parentElement).toHaveClass('shrink-0');
   });
 
   it('dismisses the comment invitation without another position write when Skip is pressed', () => {
