@@ -87,7 +87,7 @@ describe('smart-account send queue', () => {
     const slow = deferred<string>();
     const guardedTask = vi.fn(async () => 'should-never-run');
 
-    const holding = enqueueFor(address, () => slow.promise);
+    enqueueFor(address, () => slow.promise);
     const abandoned = enqueueFor(address, guardedTask, { maxQueueWaitMs: 45_000 });
     // Attach the rejection expectation before the turn arrives so the rejection is
     // never unhandled.

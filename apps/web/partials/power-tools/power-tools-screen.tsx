@@ -357,7 +357,7 @@ export function PowerToolsScreen() {
     },
     [canEdit, hiddenColumnIds, data.propertiesById, setShownColumnOrder]
   );
-  const [valuesApplyVersion, setValuesApplyVersion] = React.useState(0);
+  const [_valuesApplyVersion, setValuesApplyVersion] = React.useState(0);
 
   const shouldShowPlaceholder =
     isEditing &&

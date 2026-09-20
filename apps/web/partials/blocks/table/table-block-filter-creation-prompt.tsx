@@ -800,23 +800,6 @@ function hasPendingFilterSelections(state: PromptState, options: (Filter & { col
   });
 }
 
-function hasAnyFilterDraftSelections(state: PromptState): boolean {
-  const normalized = normalizePromptState(state);
-  if (
-    normalized.multiEntitySelections.length > 0 ||
-    normalized.multiSpaceSelections.length > 0 ||
-    normalized.multiStringSelections.length > 0
-  ) {
-    return true;
-  }
-  return Object.values(normalized.columnDrafts).some(
-    draft =>
-      draft.multiEntitySelections.length > 0 ||
-      draft.multiSpaceSelections.length > 0 ||
-      draft.multiStringSelections.length > 0
-  );
-}
-
 function popoverDraftsDifferFromSessionBaseline(
   state: PromptState,
   options: (Filter & { columnName: string })[]
@@ -1671,12 +1654,6 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
     </>
   );
 }
-
-type FilterValueDropdownFooterConfig = {
-  showClearAll: boolean;
-  onClearAll: () => void;
-  showDone: boolean;
-};
 
 interface TableBlockEntityFilterInputProps {
   onSelect?: (result: { id: string; name: string | null }) => void;

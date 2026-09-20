@@ -21,7 +21,6 @@ import { PowerToolsData, PowerToolsRow } from '../types';
 const DEFAULT_PAGE_SIZE = 25;
 // Keep a bounded window in memory to avoid re-render costs after long scroll sessions.
 const MAX_PAGES_IN_MEMORY = 6;
-const MAX_FETCH_PAGES = 200;
 
 /**
  * SPACES/GEO: upper bound on how many entity ids `fetchAllIds` pulls over the network.
@@ -102,7 +101,7 @@ export function usePowerToolsData(options?: {
       }>;
     }>
   >([]);
-  const [lastPageCount, setLastPageCount] = React.useState(0);
+  const [_lastPageCount, setLastPageCount] = React.useState(0);
   const [loadedCollectionRelationPages, setLoadedCollectionRelationPages] = React.useState<
     Array<{
       page: number;

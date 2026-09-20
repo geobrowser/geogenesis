@@ -1,29 +1,12 @@
 
 
-function getFetchProfileQuery(entityId: string) {
-  // Have to fetch the profiles as an array as we can't query an individual profile by it's account.
-  // account_starts_with_nocase is also a hack since our subgraph does not store the account the same
-  // way as the profiles. Profiles are a string but `createdBy` in our subgraph is stored as Bytes.
-  return `query {
-    onchainProfile(id: "${entityId}") {
-      id
-      homeSpaceId
-      accountId
-    }
-  }`;
-}
-
 interface OnchainGeoProfile {
   id: string;
   homeSpaceId: string;
   accountId: string;
 }
 
-interface NetworkResult {
-  onchainProfile: OnchainGeoProfile | null;
-}
-
-export async function fetchOnchainProfileByEntityId(entityId: string): Promise<OnchainGeoProfile | null> {
+export async function fetchOnchainProfileByEntityId(_entityId: string): Promise<OnchainGeoProfile | null> {
   // Temporarily disabled until profile-subgraph endpoint is available
   return null;
 

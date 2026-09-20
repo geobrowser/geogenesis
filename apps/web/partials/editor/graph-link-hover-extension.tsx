@@ -23,7 +23,6 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
             let component: ReactRenderer | null = null;
             let popupElement: HTMLDivElement | null = null;
             let currentLinkElement: HTMLAnchorElement | null = null;
-            let lastHoverId: string | null = null;
             let isDestroyed = false;
             let showTimeout: ReturnType<typeof setTimeout> | null = null;
             let cleanupAutoUpdate: (() => void) | null = null;
@@ -201,7 +200,7 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
               }, 50); // End setTimeout
             };
 
-            const hide = (immediate = false) => {
+            const hide = (_immediate = false) => {
               if (showTimeout) {
                 clearTimeout(showTimeout);
                 showTimeout = null;
@@ -224,7 +223,6 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
               }
 
               currentLinkElement = null;
-              lastHoverId = null;
             };
 
             const handleMouseEnter = (event: Event) => {
@@ -239,11 +237,9 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
               // Early exit when link element is null
               if (!linkElement) return;
 
-              const linkId = linkElement.getAttribute('href');
 
               // Always show the tooltip when hovering over a link
               // This fixes the issue where re-hovering the same link wouldn't show the tooltip
-              lastHoverId = linkId;
               const linkUrl = linkElement.getAttribute('href') || '';
               show(linkElement, linkUrl);
             };
@@ -307,7 +303,6 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                   hide(true);
 
                   currentLinkElement = null;
-                  lastHoverId = null;
                 } catch (error) {
                   console.error('Error during cleanup:', error);
                   // Destroy cleanup error silently

@@ -48,7 +48,7 @@ export const DateFormatDropdown = ({ value, format = GeoDate.defaultFormat, onSe
     return formatOptions;
   }, []);
 
-  const handleToggleChange = (e: React.MouseEvent) => {
+  const handleToggleChange = (_e: React.MouseEvent) => {
     onSelect(GeoDate.toggleDateInterval(value), format);
   };
 

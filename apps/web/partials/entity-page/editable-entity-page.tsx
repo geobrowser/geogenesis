@@ -44,7 +44,7 @@ import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableMediaChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import {
-  ImageZoom,
+  
   PageImageField,
   PageStringField,
   PageVideoField,
@@ -997,13 +997,6 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
       )}
     </div>
   );
-}
-
-function ImageRelation({ relationValue, spaceId }: { relationValue: string; spaceId: string }) {
-  // Use the efficient hook to get only the image URL for this specific entity
-  const actualImageSrc = useImageUrlFromEntity(relationValue, spaceId);
-
-  return <ImageZoom imageSrc={actualImageSrc || ''} />;
 }
 
 // Wrapper component for image relations in edit mode
