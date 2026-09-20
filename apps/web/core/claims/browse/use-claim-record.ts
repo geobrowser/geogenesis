@@ -33,7 +33,7 @@ export function relatedClaimIds(claimId: string, ...groups: Array<Pick<Entity, '
   const ids = new Map<string, string>();
 
   for (const entity of groups.flat()) {
-    if (!entity.name || ID.equals(entity.id, claimId)) continue;
+    if (ID.equals(entity.id, claimId)) continue;
     ids.set(normId(entity.id), entity.id);
   }
 

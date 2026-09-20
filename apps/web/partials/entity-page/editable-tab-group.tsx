@@ -17,7 +17,6 @@ import * as Popover from '@radix-ui/react-popover';
 
 import React, { useEffect, useRef, useState } from 'react';
 
-import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -35,7 +34,12 @@ import { ExpandSmall } from '~/design-system/icons/expand-small';
 import { Menu } from '~/design-system/icons/menu';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import type { TabGroupTab } from '~/design-system/tab-group';
+import {
+  ActiveTabIndicator,
+  type TabGroupTab,
+  tabGroupTabLinkStyles,
+  useActiveTabIndicator,
+} from '~/design-system/tab-group';
 
 export type SystemTab = Pick<TabGroupTab, 'label' | 'href' | 'sidePanelKey' | 'onlyWhenNarrow'>;
 
@@ -55,21 +59,6 @@ type EditableTabGroupProps = {
   overviewHref: string;
   className?: string;
 };
-
-const tabStyles = cva(
-  'relative z-10 flex items-center gap-1.5 text-quoteMedium whitespace-nowrap transition-colors duration-100',
-  {
-    variants: {
-      active: {
-        true: 'text-text',
-        false: 'text-grey-04 hover:text-text',
-      },
-    },
-    defaultVariants: {
-      active: false,
-    },
-  }
-);
 
 export function EditableTabGroup({
   entityId,
@@ -273,6 +262,12 @@ export function EditableTabGroup({
   // Key the memo on a joined string so we only allocate a new array when the id set actually changes.
   const sortableIdsKey = editableTabs.map(t => t.relation.id).join(',');
   const sortableIds = React.useMemo(() => (sortableIdsKey === '' ? [] : sortableIdsKey.split(',')), [sortableIdsKey]);
+  const indicatorLayoutKey = [
+    ...systemTabsBefore.map(tab => `${tab.href}:${tab.label}`),
+    ...editableTabs.map(tab => `${tab.relation.id}:${tab.name}`),
+    ...systemTabsAfter.map(tab => `${tab.href}:${tab.label}`),
+  ].join('|');
+  const { indicator, registerActiveTab } = useActiveTabIndicator(indicatorLayoutKey);
 
   return (
     <div className="relative">
@@ -314,6 +309,7 @@ export function EditableTabGroup({
                           : sidePanelTab.setActiveTabId(entityTabIdFromHref(tab.href))
                     : undefined
                 }
+                activeRef={registerActiveTab}
               />
             ))}
 
@@ -331,6 +327,7 @@ export function EditableTabGroup({
                   onDelete={() => handleDeleteTab(tab)}
                   onOpen={() => router.push(NavUtils.toEntity(tab.relation.spaceId, tab.entityId))}
                   onSelect={sidePanelTab ? () => sidePanelTab.setActiveTabId(tab.entityId) : undefined}
+                  activeRef={registerActiveTab}
                 />
               ))}
             </SortableContext>
@@ -357,6 +354,7 @@ export function EditableTabGroup({
                           : sidePanelTab.setActiveTabId(entityTabIdFromHref(tab.href))
                     : undefined
                 }
+                activeRef={registerActiveTab}
               />
             ))}
 
@@ -371,13 +369,14 @@ export function EditableTabGroup({
                 <path d="M1 6H11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </button>
+            <ActiveTabIndicator indicator={indicator} />
           </div>
           <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
         </div>
 
         <DragOverlay>
           {activeId && activeTab ? (
-            <div className={tabStyles({ active: false })} style={{ cursor: 'grabbing' }}>
+            <div className={tabGroupTabLinkStyles({ active: false })} style={{ cursor: 'grabbing' }}>
               {activeTab.name || 'Untitled'}
             </div>
           ) : null}
@@ -393,12 +392,14 @@ function StaticTab({
   active,
   onSelect,
   onlyWhenNarrow,
+  activeRef,
 }: {
   href: string;
   label: string;
   active: boolean;
   onSelect?: () => void;
   onlyWhenNarrow?: boolean;
+  activeRef: (element: HTMLElement | null) => void;
 }) {
   // `contents` rather than `block`, so the wrapper does not become a flex item
   // between the tabs and pull them apart. The same shape `TabGroup` uses.
@@ -406,17 +407,20 @@ function StaticTab({
 
   if (onSelect) {
     return wrap(
-      <button type="button" className={tabStyles({ active })} onClick={onSelect}>
+      <button
+        ref={active ? activeRef : undefined}
+        type="button"
+        className={tabGroupTabLinkStyles({ active })}
+        onClick={onSelect}
+      >
         {label}
-        {active && <div className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text" />}
       </button>
     );
   }
 
   return wrap(
-    <Link className={tabStyles({ active })} href={href} prefetch>
+    <Link ref={active ? activeRef : undefined} className={tabGroupTabLinkStyles({ active })} href={href} prefetch>
       {label}
-      {active && <div className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text" />}
     </Link>
   );
 }
@@ -432,6 +436,7 @@ type SortableTabProps = {
   onDelete: () => void;
   onOpen: () => void;
   onSelect?: () => void;
+  activeRef: (element: HTMLElement | null) => void;
 };
 
 function SortableTab({
@@ -445,6 +450,7 @@ function SortableTab({
   onDelete,
   onOpen,
   onSelect,
+  activeRef,
 }: SortableTabProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: tab.relation.id,
@@ -541,14 +547,21 @@ function SortableTab({
 
   // tab.name already includes the live name via EntityTabs' liveNameMap, so no per-tab subscription needed here.
   const displayName = tab.name;
+  const setTabNodeRef = React.useCallback(
+    (element: HTMLDivElement | null) => {
+      setNodeRef(element);
+      if (active) activeRef(element);
+    },
+    [active, activeRef, setNodeRef]
+  );
 
   return (
-    <div ref={setNodeRef} style={style} className="group/tab relative flex items-center">
+    <div ref={setTabNodeRef} style={style} className="group/tab relative flex items-center">
       {isEditing ? (
         <TabNameInput initialValue={displayName} onSubmit={onRename} onCancel={onCancelEditing} />
       ) : (
         <Link
-          className={cx(tabStyles({ active }), 'cursor-grab touch-none select-none active:cursor-grabbing')}
+          className={cx(tabGroupTabLinkStyles({ active }), 'cursor-grab touch-none select-none active:cursor-grabbing')}
           href={onSelect ? '#' : tab.href}
           prefetch={!onSelect}
           onClick={handleLinkClick}
@@ -556,7 +569,6 @@ function SortableTab({
           {...listeners}
         >
           {displayName || 'Untitled'}
-          {active && <div className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text" />}
         </Link>
       )}
 

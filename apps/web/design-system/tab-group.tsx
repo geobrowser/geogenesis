@@ -39,16 +39,19 @@ interface TabGroupProps {
   className?: string;
 }
 
-export function TabGroup({ tabs, className = '' }: TabGroupProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [scrollPosition, setScrollPosition] = useState<'start' | 'middle' | 'end'>('start');
-  const [isScrollable, setIsScrollable] = useState(false);
-  const isDragging = useRef(false);
-  const dragStartX = useRef<number>(0);
-  const scrollStartLeft = useRef<number>(0);
-  const pointerUpHandler = useRef<((e: PointerEvent) => void) | null>(null);
+export type ActiveTabIndicatorPosition = { left: number; width: number };
+
+/**
+ * Measures one active tab for a row-owned indicator.
+ *
+ * Keeping the marker outside the tab links means route changes only animate its horizontal
+ * position and width. A layout marker inside each link can also interpolate the page's vertical
+ * scroll offset and travel through the labels when Next mounts the destination route.
+ */
+export function useActiveTabIndicator(layoutKey: unknown) {
   const activeTabElement = useRef<HTMLElement | null>(null);
-  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
+  const activeTabObserver = useRef<ResizeObserver | null>(null);
+  const [indicator, setIndicator] = useState<ActiveTabIndicatorPosition | null>(null);
 
   const measureActiveTab = React.useCallback(() => {
     const element = activeTabElement.current;
@@ -65,20 +68,58 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
 
   const registerActiveTab = React.useCallback(
     (element: HTMLElement | null) => {
+      activeTabObserver.current?.disconnect();
+      activeTabObserver.current = null;
       activeTabElement.current = element;
       measureActiveTab();
+
+      if (element && typeof ResizeObserver !== 'undefined') {
+        activeTabObserver.current = new ResizeObserver(measureActiveTab);
+        activeTabObserver.current.observe(element);
+      }
     },
     [measureActiveTab]
   );
 
-  // Re-measure when available tabs settle or responsive tabs appear. The marker stays inside the
-  // scrolling row, so these are the only layout changes that can move it without changing active.
-  React.useLayoutEffect(() => measureActiveTab(), [measureActiveTab, tabs]);
+  // Re-measure when the row's tabs settle or responsive tabs appear. The active element itself is
+  // observed from its ref callback, so switching active tabs also moves the observer immediately.
+  React.useLayoutEffect(() => measureActiveTab(), [layoutKey, measureActiveTab]);
 
   useEffect(() => {
     window.addEventListener('resize', measureActiveTab);
-    return () => window.removeEventListener('resize', measureActiveTab);
+    return () => {
+      window.removeEventListener('resize', measureActiveTab);
+      activeTabObserver.current?.disconnect();
+    };
   }, [measureActiveTab]);
+
+  return { indicator, registerActiveTab };
+}
+
+export function ActiveTabIndicator({ indicator }: { indicator: ActiveTabIndicatorPosition | null }) {
+  if (!indicator) return null;
+
+  return (
+    <motion.div
+      aria-hidden
+      data-active-tab-indicator
+      initial={false}
+      animate={{ x: indicator.left, width: indicator.width }}
+      transition={{ duration: 0.2 }}
+      className="absolute bottom-0 left-0 z-100 h-px bg-text"
+    />
+  );
+}
+
+export function TabGroup({ tabs, className = '' }: TabGroupProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollPosition, setScrollPosition] = useState<'start' | 'middle' | 'end'>('start');
+  const [isScrollable, setIsScrollable] = useState(false);
+  const isDragging = useRef(false);
+  const dragStartX = useRef<number>(0);
+  const scrollStartLeft = useRef<number>(0);
+  const pointerUpHandler = useRef<((e: PointerEvent) => void) | null>(null);
+  const { indicator, registerActiveTab } = useActiveTabIndicator(tabs);
 
   useEffect(() => {
     const checkScroll = () => {
@@ -195,15 +236,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
               )}
             </React.Fragment>
           ))}
-          {indicator && (
-            <motion.div
-              aria-hidden
-              initial={false}
-              animate={{ x: indicator.left, width: indicator.width }}
-              transition={{ duration: 0.2 }}
-              className="absolute bottom-0 left-0 z-100 h-px bg-text"
-            />
-          )}
+          <ActiveTabIndicator indicator={indicator} />
         </div>
         <div className="sticky right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
       </div>

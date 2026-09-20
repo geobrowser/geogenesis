@@ -63,23 +63,27 @@ describe('relatedClaimIds', () => {
     expect(ids).toHaveLength(0);
   });
 
-  it('keeps named neighbours after the source in query order', () => {
+  it('keeps named and unnamed neighbours after the source in query order', () => {
     const ids = relatedClaimIds('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', [
       { id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', name: 'First neighbour' },
       { id: 'cccccccccccccccccccccccccccccccc', name: null },
       { id: 'dddddddddddddddddddddddddddddddd', name: 'Second neighbour' },
     ]);
 
-    expect(ids).toEqual(['bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'dddddddddddddddddddddddddddddddd']);
+    expect(ids).toEqual([
+      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      'cccccccccccccccccccccccccccccccc',
+      'dddddddddddddddddddddddddddddddd',
+    ]);
   });
 
-  it('unions extracted claims with topic-related claims and dedupes normalized ids', () => {
+  it('unions unnamed extracted claims with topic-related claims and dedupes normalized ids', () => {
     const ids = relatedClaimIds(
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       [{ id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', name: 'Topic neighbour' }],
       [
         { id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', name: 'Same extracted claim' },
-        { id: 'cccccccccccccccccccccccccccccccc', name: 'Extracted fact' },
+        { id: 'cccccccccccccccccccccccccccccccc', name: null },
         { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', name: 'Current claim' },
       ]
     );
