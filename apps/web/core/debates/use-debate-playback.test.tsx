@@ -1011,4 +1011,31 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
     expect(slot2.currentTime).toBe(12);
     expect(result.current.playing).toBe(true);
   });
+  // A 204 makes `geoChatRequest` return undefined, so reading `.url` throws rather than the
+  // request rejecting. Claiming the key before that read left it standing over null URLs, and
+  // every later activation took the "already fetched" early return — the permanent "Loading…"
+  // this effect exists to prevent, through a narrower door.
+  it('retries after a malformed answer instead of latching on forever', async () => {
+    const debate = debateFixture();
+    // First attempt answers with nothing where a URL should be; second answers properly.
+    mocks.recordingUrl
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValue({ url: 'https://example.test/recording.webm' });
+
+    const { result, rerender } = renderHook(({ active }) => useDebatePlayback(debate, active), {
+      initialProps: { active: true },
+    });
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.urls.slot1).toBeNull();
+
+    // Scroll away and back: the key must not have been claimed, so this asks again.
+    rerender({ active: false });
+    rerender({ active: true });
+
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    expect(result.current.urls.slot2).not.toBeNull();
+  });
+
 });
