@@ -20,6 +20,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../hooks', () => ({
+  // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
+  // exercising it — the schedule itself is covered in core/availability.
+  useDebateSchedule: () => ({ blocks: [], isSet: false }),
+  useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
   useDebateActivity: () => ({ data: { challenge: mocks.challenge, outbound_request: null } }),
   useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallenge, isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallenge, isPending: false, error: null }),
