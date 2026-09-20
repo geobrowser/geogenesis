@@ -10,6 +10,7 @@ import {
   tickerWindows,
 } from './claim-ticker';
 import type { ClaimTiming, TimedClaim } from './claim-timing';
+import { PLAYBACK_END_EPSILON_MS } from './playback-utils';
 
 function timed(id: string, timing: ClaimTiming | null, text = `Claim ${id}`): TimedClaim {
   return {
@@ -233,13 +234,25 @@ describe('claimHistory', () => {
 describe('claimMarkers seek target', () => {
   const windows = tickerWindows([timed('a', confident(10_000, 14_000))]);
 
-  // Three of 51 debates end on their last claim. Seeking past the timeline there finishes playback,
-  // and the player takes the whole corner down — the blank this offset exists to prevent.
-  it('never seeks to or past the end of the recording', () => {
+  /**
+   * Three of 51 debates end on their last claim. Seeking past the timeline there finishes playback,
+   * and the player takes the whole corner down — the blank this offset exists to prevent.
+   *
+   * Against the shared threshold, not the duration: `playbackEnded` calls the last
+   * `PLAYBACK_END_EPSILON_MS` the end, so the first version of this clamp — a millisecond short of
+   * `timelineMs` — was still inside it and took the corner down exactly as before.
+   */
+  it('never seeks into the stretch the player calls the end', () => {
     const [marker] = claimMarkers([timed('a', confident(10_000, 30_000))], 30_000);
 
     expect(marker.atMs).toBe(30_000);
-    expect(marker.seekMs).toBeLessThan(30_000);
+    expect(marker.seekMs).toBeLessThan(30_000 - PLAYBACK_END_EPSILON_MS);
+  });
+
+  // Every instant of a recording this short is already "the end", so there is nowhere to put the
+  // viewer where a card would draw. No hash is the honest answer.
+  it('draws nothing when the whole recording is inside that stretch', () => {
+    expect(claimMarkers([timed('a', confident(0, 20))], 20)).toEqual([]);
   });
 
   it('seeks past the fade rather than to the hash itself', () => {

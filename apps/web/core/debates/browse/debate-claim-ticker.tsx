@@ -104,13 +104,55 @@ export function useDebateClaimTicker(
     });
   }, []);
 
+  // Attribution rides the *block*, not the claim: a claim's own space is the debate's publication
+  // space, which both debaters share. The block's `Authors` relation points at the speaker's
+  // personal space, which is the id the participant list keys on.
+  const participantByClaimId = React.useMemo(() => {
+    const bySpace = new Map<string, DebateParticipant>();
+    for (const participant of orderedParticipants(debate)) {
+      bySpace.set(uuidToHex(participant.profile_space_id), participant);
+    }
+
+    const byBlock = new Map<string, DebateParticipant>();
+    for (const block of claims.blocks) {
+      const speaker = block.authorSpaceId ? bySpace.get(uuidToHex(block.authorSpaceId)) : undefined;
+      if (speaker) byBlock.set(block.id, speaker);
+    }
+
+    const speakers = new Map<string, DebateParticipant>();
+    for (const claim of claims.all) {
+      const speaker = byBlock.get(claim.blockId);
+      if (!speaker) continue;
+      speakers.set(claim.id, speaker);
+    }
+    return speakers;
+  }, [claims.all, claims.blocks, debate]);
+
   const timedClaims = React.useMemo(() => claimsInSpokenOrder(claims.all, timings), [claims.all, timings]);
+
+  /**
+   * One gate for everything this surface offers, so the three ways it points at a claim agree.
+   *
+   * A claim needs two things before it can be drawn: a speaker the participant list recognises, so
+   * the card can attribute it, and a space to answer in — without either, `DebateClaimTickerCard`
+   * renders nothing. Applied here rather than at each consumer because the consumers were drifting:
+   * cards dropped these claims, while the scrubber drew a clickable hash for them and the chip
+   * counted them, so both promised a card that could never appear. A hash nothing is behind is the
+   * same broken promise {@link claimMarkers} already turns low-confidence matches away to avoid.
+   *
+   * Nothing in the corpus trips this today — measured over all 854 published claims, every one has
+   * a space and an authored block. It is for the debates recorded after this one.
+   */
+  const renderableClaims = React.useMemo(
+    () => timedClaims.filter(claim => claim.spaceId !== null && participantByClaimId.has(claim.id)),
+    [participantByClaimId, timedClaims]
+  );
+
   // Two lists, because the live layer and the backlog answer different questions — see
   // `backlogWindows`. Cards and markers assert a moment; the backlog only says "already said".
-  const windows = React.useMemo(() => tickerWindows(timedClaims), [timedClaims]);
-  const backlog = React.useMemo(() => backlogWindows(timedClaims), [timedClaims]);
-
-  const markers = React.useMemo(() => claimMarkers(timedClaims, timelineMs), [timedClaims, timelineMs]);
+  const windows = React.useMemo(() => tickerWindows(renderableClaims), [renderableClaims]);
+  const backlog = React.useMemo(() => backlogWindows(renderableClaims), [renderableClaims]);
+  const markers = React.useMemo(() => claimMarkers(renderableClaims, timelineMs), [renderableClaims, timelineMs]);
 
   // One batch for every claim, the way the panel does it, so the live card and the end-of-debate
   // stack never issue a lookup per claim as they mount.
@@ -155,34 +197,12 @@ export function useDebateClaimTicker(
     return map;
   }, [rowsQuery.claims]);
 
-  // Attribution rides the *block*, not the claim: a claim's own space is the debate's publication
-  // space, which both debaters share. The block's `Authors` relation points at the speaker's
-  // personal space, which is the id the participant list keys on.
-  const participantByClaimId = React.useMemo(() => {
-    const bySpace = new Map<string, DebateParticipant>();
-    for (const participant of orderedParticipants(debate)) {
-      bySpace.set(uuidToHex(participant.profile_space_id), participant);
-    }
-
-    const byBlock = new Map<string, DebateParticipant>();
-    for (const block of claims.blocks) {
-      const speaker = block.authorSpaceId ? bySpace.get(uuidToHex(block.authorSpaceId)) : undefined;
-      if (speaker) byBlock.set(block.id, speaker);
-    }
-
-    const speakers = new Map<string, DebateParticipant>();
-    for (const claim of claims.all) {
-      const speaker = byBlock.get(claim.blockId);
-      if (!speaker) continue;
-      speakers.set(claim.id, speaker);
-    }
-    return speakers;
-  }, [claims.all, claims.blocks, debate]);
-
   // One stack per debater, over their own tile. A claim whose speaker could not be resolved —
-  // attribution and the participant list can disagree — is left out rather than parked over
-  // whichever half: putting a claim over the wrong face is the misquote this whole layer is
-  // careful about, and now that the corner itself attributes, getting it wrong is louder.
+  // attribution and the participant list can disagree — never reaches here, because
+  // `renderableClaims` has already turned it away rather than letting it be parked over whichever
+  // half: putting a claim over the wrong face is the misquote this whole layer is careful about,
+  // and now that the corner itself attributes, getting it wrong is louder. The lookup stays because
+  // it is how the slot is read, and it is the one place the two could fall out of step.
   const groupBySlot = React.useCallback(
     (source: TickerWindow[]) => {
       const bySlot = new Map<number, TickerWindow[]>();

@@ -89,7 +89,15 @@ for (const file of (await readdir(TASKS)).filter(name => name.endsWith('.json'))
   try {
     const parsed = JSON.parse(await readFile(join(ANSWERS, file), 'utf8'));
     answers = Array.isArray(parsed) ? parsed : (parsed.matches ?? []);
-  } catch {
+  } catch (error) {
+    // A file that is not there is the ordinary case: the reader has not reached this debate yet,
+    // and its claims fall through to the matcher. A file that *is* there and will not parse is the
+    // reader's work sitting unreadable on disk — reporting that as "no answers file" files it under
+    // the benign case and throws the work away with nobody told. Same rule the fetch helpers now
+    // follow: only the expected absence is absence.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw new Error(`answers for ${file} could not be read`, { cause: error });
+    }
     rejected.push(`${task.debateName}: no answers file`);
     continue;
   }

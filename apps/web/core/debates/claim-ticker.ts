@@ -1,4 +1,5 @@
 import { type TimedClaim, isAssertableMoment } from './claim-timing';
+import { PLAYBACK_END_EPSILON_MS } from './playback-utils';
 
 /**
  * How long a claim card stays up once the debater has finished saying it.
@@ -178,10 +179,15 @@ export type ClaimMarker = {
    * entire purpose is to show them that claim. Landing just inside the window costs a quarter of a
    * second of accuracy and is the difference between a card and a blank corner.
    *
-   * Held short of the end of the recording, because the player takes the whole corner down once
-   * playback has finished — so an offset that ran past the timeline produced exactly the blank it
-   * was added to prevent. Measured across 51 debates with published offsets: three have their last
-   * claim ending on the final frame, and the median debate has 45 seconds of tail after it.
+   * Held short of where the player calls the debate over, because it takes the whole corner down
+   * at that point — so an offset that ran past produced exactly the blank it was added to prevent.
+   * Measured across 51 debates with published offsets: three have their last claim ending on the
+   * final frame, and the median debate has 45 seconds of tail after it.
+   *
+   * "Over" is {@link PLAYBACK_END_EPSILON_MS} short of the duration, not the duration itself. The
+   * first version of this clamp used `timelineMs - 1` and still landed inside that window, so on
+   * those same three debates it took the corner down exactly as before — the shared constant is
+   * what stops the two files disagreeing about where the end is.
    *
    * Those three keep a residue this cannot fix: a claim that finishes as the recording does has no
    * frame on which its card could be drawn, since the window opens where the timeline stops. The
@@ -214,7 +220,12 @@ export type ClaimMarker = {
  * answer — its claims are still in the panel, where a list makes no claim about when.
  */
 export function claimMarkers(claims: TimedClaim[], timelineMs: number): ClaimMarker[] {
-  if (timelineMs <= 0) return [];
+  // The last instant the player does not already call the end of the debate. Below zero the whole
+  // recording sits inside that window, so no seek can put a card up and a hash would be promising
+  // something nothing can deliver. It also stands in for the old `timelineMs <= 0` guard, which
+  // this is strictly narrower than, and keeps `fraction` off a zero denominator.
+  const lastSeekableMs = timelineMs - PLAYBACK_END_EPSILON_MS - 1;
+  if (lastSeekableMs < 0) return [];
 
   return claims
     .filter(claim => isAssertableMoment(claim.timing))
@@ -224,9 +235,9 @@ export function claimMarkers(claims: TimedClaim[], timelineMs: number): ClaimMar
         id: claim.id,
         text: claim.text,
         atMs: timing.endMs,
-        // Just inside the card's window, and never at or past the end of the recording — see
+        // Just inside the card's window, and short of where the player calls it over — see
         // `seekMs` for both halves of that.
-        seekMs: Math.min(timing.endMs + FADE_IN_MS, timelineMs - 1),
+        seekMs: Math.min(timing.endMs + FADE_IN_MS, lastSeekableMs),
         fraction: Math.max(0, Math.min(1, timing.endMs / timelineMs)),
       };
     })

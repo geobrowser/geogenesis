@@ -48,6 +48,18 @@ let written = 0;
 let claimsExported = 0;
 let alreadyPublished = 0;
 let noTranscript = 0;
+/**
+ * Spaces whose claims could not be read at all.
+ *
+ * Distinct from a space with no claims in it, which is the ordinary case this loop walks past. A
+ * failed request used to be swallowed into that same `continue`, so a GraphQL error or an outage
+ * dropped the debate from the task files and the run still announced how many it had written — the
+ * export's contract is "every unplaced claim is in here", and a partial set that looks whole is how
+ * a claim silently never gets placed. Mirrors `plan-claim-timecodes.ts`, which counts the same
+ * thing on the same call, and `fetchTranscriptSegments`, which stopped reporting failures as
+ * absence for the same reason.
+ */
+const failedSpaces: string[] = [];
 
 for (const debate of debates) {
   if (written >= LIMIT) break;
@@ -56,7 +68,9 @@ for (const debate of debates) {
     let claims;
     try {
       claims = await fetchDebateClaims(debate.id, spaceId);
-    } catch {
+    } catch (error) {
+      console.error(`  ! ${debate.id} in ${spaceId}: ${String(error).slice(0, 120)}`);
+      failedSpaces.push(`${debate.id} in ${spaceId}`);
       continue;
     }
     if (claims.all.length === 0) continue;
@@ -148,3 +162,8 @@ console.log(
   `  of which already carry offsets: ${SKIP_PUBLISHED ? `0 (${alreadyPublished} skipped)` : alreadyPublished} — confirm or correct these`
 );
 if (noTranscript > 0) console.log(`  debates with no transcript to read: ${noTranscript}`);
+if (failedSpaces.length > 0) {
+  console.error(`  spaces that failed to load: ${failedSpaces.length} — these task files are missing`);
+  for (const where of failedSpaces.slice(0, 10)) console.error(`    ! ${where}`);
+  process.exitCode = 1;
+}

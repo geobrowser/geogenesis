@@ -169,7 +169,13 @@ console.log(`  already carry offsets:                  ${totals.alreadyPublished
 console.log(`  matched but below the floor:            ${totals.belowFloor}`);
 console.log(`  no usable match (turn fallback or none):${totals.noMatch}`);
 if (totals.restated > 0) console.log(`  stated in two turns, left to the matcher: ${totals.restated}`);
-if (failures > 0) console.log(`  debates that failed to load:            ${failures}`);
+// Non-zero exit, not just a line in the summary: this script plans writes to the graph, and a plan
+// missing the debates whose claims would not load is a plan that looks complete. Same rule as
+// `export-claims-for-matching.ts` and `fetchTranscriptSegments` — a failure never reads as absence.
+if (failures > 0) {
+  console.error(`  debates that failed to load:            ${failures} — this plan is incomplete`);
+  process.exitCode = 1;
+}
 
 console.log('\nmatch confidence, all matched claims:');
 for (const key of [...histogram.keys()].sort()) {

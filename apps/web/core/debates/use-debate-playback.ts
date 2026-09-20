@@ -7,6 +7,7 @@ import { atom, useAtom } from 'jotai';
 import type { Debate } from './api';
 import { useDebateMedia, useDebateTranscript, useRecordingUrl } from './hooks';
 import {
+  PLAYBACK_END_EPSILON_SECONDS,
   type PlayBothOutcome,
   type TurnState,
   clampSeconds,
@@ -69,11 +70,6 @@ const MAX_BACKGROUND_RESTART_ATTEMPTS = 5;
 const STALL_AFTER_MS = 500;
 /** Progress smaller than this is float noise on `currentTime`, not playback. */
 const STALL_EPSILON_SECONDS = 0.001;
-/**
- * How close to the timeline's end counts as the end. Shared by `playbackEnded` and the
- * background recovery, so the two cannot disagree about whether a debate has finished.
- */
-const PLAYBACK_END_EPSILON_SECONDS = 0.05;
 
 /**
  * Is this tab off screen?

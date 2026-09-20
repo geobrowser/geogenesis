@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,11 +7,17 @@ import type { DebateParticipant } from '~/core/debates/api';
 import type { TickerWindow } from '~/core/debates/claim-ticker';
 import type { TimedClaim } from '~/core/debates/claim-timing';
 
-import { DebateClaimTickerCard, DebateClaimTickerStack } from './debate-claim-ticker';
+import { DebateClaimTickerCard, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 
 const CLAIM_SPACE = '52c7ae149838b6d47ce0f3b2a5974546';
 
 const mocks = vi.hoisted(() => ({
+  /** What `useDebateTranscriptClaims` hands the hook, for the `useDebateClaimTicker` suite. */
+  transcriptClaims: { all: [], blocks: [], byAuthorSpaceId: new Map() } as {
+    all: TimedClaim[];
+    blocks: Array<{ id: string; authorSpaceId: string | null }>;
+    byAuthorSpaceId: Map<string, unknown>;
+  },
   /** What the shared position control reports the viewer currently holds — a side, not a string. */
   viewerPosition: null as boolean | null,
   /** The crowd's share of positive responses, or null on a claim nobody has answered. */
@@ -62,6 +68,30 @@ vi.mock('~/core/hooks/use-entity-side-panel', () => ({
 vi.mock('~/core/hooks/use-space', () => ({
   useSpace: (spaceId?: string) => ({ space: spaceId ? { entity: { id: `page-${spaceId}` } } : null, isLoading: false }),
 }));
+
+// `useDebateClaimTicker` reads four shared caches. None of them is what the suite below is about —
+// it asks what the hook does with the claims once it has them — so each hands back a fixture.
+vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
+  useDebateTranscriptClaims: () => ({ claims: mocks.transcriptClaims, isLoading: false }),
+}));
+vi.mock('~/core/debates/use-claim-timings', () => ({
+  // The resolver's published path, which is the only one the fixtures below take: a claim already
+  // carrying offsets is timed at full confidence and the transcript is never read. Reproduced
+  // rather than stubbed flat so the suite exercises real timings.
+  useClaimTimings: () => ({
+    timings: new Map(
+      mocks.transcriptClaims.all
+        .filter(entry => entry.publishedTiming !== null)
+        .map(entry => [
+          entry.id,
+          { ...(entry.publishedTiming as { startMs: number; endMs: number }), confidence: 1, source: 'published' },
+        ])
+    ),
+    isLoading: false,
+  }),
+}));
+vi.mock('~/core/sync/use-store', () => ({ useQueryEntities: () => ({ entities: [] }) }));
+vi.mock('~/core/debates/hooks', () => ({ useDebateClaimsBySpaces: () => ({ claims: [] }) }));
 
 function claim(overrides: Partial<TimedClaim> = {}): TimedClaim {
   return {
@@ -634,5 +664,59 @@ describe('DebateClaimTickerStack', () => {
 
     fireEvent.blur(thumb);
     expect(onFocusChange).toHaveBeenLastCalledWith(false);
+  });
+});
+
+/**
+ * One gate decides what the ticker will offer, and all three offers read from it.
+ *
+ * A claim needs a speaker the participant list recognises and a space to answer in before a card
+ * can be drawn for it. The card layer has always enforced that; the scrubber and the chip did not,
+ * so both pointed at claims that could never appear. These assert the three agree.
+ */
+describe('useDebateClaimTicker', () => {
+  const DEBATE_SPACE = '52c7ae149838b6d47ce0f3b2a5974546';
+  const SPEAKER_SPACE = '4582fbbee28a16589154f7e36f1ee3c5';
+
+  const debate = {
+    id: 'debate-1',
+    claim: { space_id: DEBATE_SPACE },
+    participants: [SPEAKER],
+  } as unknown as Parameters<typeof useDebateClaimTicker>[0];
+
+  /** A claim the matcher never has to place, so these tests only exercise the gate. */
+  const published = (overrides: Partial<TimedClaim> = {}) =>
+    claim({ publishedTiming: { startMs: 134_600, endMs: 143_140 }, ...overrides });
+
+  /** `playheadMs` past every claim's end, so the backlog holds whatever the gate let through. */
+  function renderTicker(claims: TimedClaim[], blocks: Array<{ id: string; authorSpaceId: string | null }>) {
+    mocks.transcriptClaims = { all: claims, blocks, byAuthorSpaceId: new Map() };
+    return renderHook(() => useDebateClaimTicker(debate, { playheadMs: 200_000, timelineMs: 300_000, enabled: true }))
+      .result.current;
+  }
+
+  it('offers a claim whose speaker and space both resolve', () => {
+    const ticker = renderTicker([published()], [{ id: 'block-1', authorSpaceId: SPEAKER_SPACE }]);
+
+    expect(ticker.markers.map(marker => marker.id)).toEqual(['claim-1']);
+    expect(ticker.historyBySlot.get(1)).toHaveLength(1);
+  });
+
+  // Attribution and the participant list can disagree. The card refuses to park such a claim over
+  // whichever face is nearer, so nothing else should point at it either.
+  it('offers nothing for a claim whose speaker is not a participant', () => {
+    const ticker = renderTicker([published()], [{ id: 'block-1', authorSpaceId: null }]);
+
+    expect(ticker.markers).toEqual([]);
+    expect(ticker.historyBySlot.size).toBe(0);
+    expect(ticker.cardsBySlot.size).toBe(0);
+  });
+
+  // `DebateClaimTickerCard` returns null without a space — there is nowhere to record an answer.
+  it('offers nothing for a claim with no space to answer in', () => {
+    const ticker = renderTicker([published({ spaceId: null })], [{ id: 'block-1', authorSpaceId: SPEAKER_SPACE }]);
+
+    expect(ticker.markers).toEqual([]);
+    expect(ticker.historyBySlot.size).toBe(0);
   });
 });
