@@ -1,4 +1,9 @@
-import { type WrappedTextFit, fitWrappedText, measureTextWidth, wrapTextToLines } from '~/core/blocks/ranking/ranking-og-image';
+import {
+  type WrappedTextFit,
+  fitWrappedText,
+  measureTextWidth,
+  wrapTextToLines,
+} from '~/core/blocks/ranking/ranking-og-image';
 
 /** Claim band geometry, from the design (GEO-2755). */
 export const CLAIM_MEASURE_PX = 1136;

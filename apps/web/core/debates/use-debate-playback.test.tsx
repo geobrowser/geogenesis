@@ -1408,5 +1408,4 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
     await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
     expect(result.current.urls.slot2).not.toBeNull();
   });
-
 });

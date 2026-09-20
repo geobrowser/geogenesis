@@ -2,11 +2,6 @@ import { renderHook } from '@testing-library/react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  retain: vi.fn(),
-  release: vi.fn(),
-}));
-
 // No module mock: the hook and the gateway singleton are the pair under test, and the singleton
 // opens no socket until `start()`. Spying on `retainScope` is enough to count commands.
 //
@@ -20,6 +15,11 @@ const mocks = vi.hoisted(() => ({
 // singleton.
 import { debateGateway, useDebateGatewaySpaceScopes } from './debate-gateway';
 
+const mocks = vi.hoisted(() => ({
+  retain: vi.fn(),
+  release: vi.fn(),
+}));
+
 describe('useDebateGatewaySpaceScopes', () => {
   beforeEach(() => {
     mocks.retain.mockReset();
@@ -30,8 +30,7 @@ describe('useDebateGatewaySpaceScopes', () => {
     });
   });
 
-  const spaceIdsOf = (calls: unknown[][]) =>
-    calls.map(([scope]) => (scope as { space_id: string }).space_id).sort();
+  const spaceIdsOf = (calls: unknown[][]) => calls.map(([scope]) => (scope as { space_id: string }).space_id).sort();
 
   it('retains one scope per space', () => {
     renderHook(() => useDebateGatewaySpaceScopes(['a', 'b'], true));
