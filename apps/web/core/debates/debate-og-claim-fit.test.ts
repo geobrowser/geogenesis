@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { measureTextWidth } from '~/core/blocks/ranking/ranking-og-image';
 
-import { CLAIM_BAND_HEIGHT_PX, CLAIM_MEASURE_PX, balanceLines, claimLineHeight, fitClaimToBand } from './debate-og-claim-fit';
+import {
+  CLAIM_BAND_HEIGHT_PX,
+  CLAIM_MEASURE_PX,
+  balanceLines,
+  claimLineHeight,
+  fitClaimToBand,
+} from './debate-og-claim-fit';
 
 const SHORT_CLAIM = 'Waking up early improves health and productivity';
 const LONG_CLAIM = 'Crypto will become the primary way people transfer money across borders within the next decade';

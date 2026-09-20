@@ -65,9 +65,7 @@ describe('debateRequestGate', () => {
 
     // Only reachable once the publish has landed, so pointing at the transaction would mislead.
     it('says it is still confirming once the indexer is late', () => {
-      expect(gate({ chatPosition: undefined, indexingDelayed: true }).pendingLabel).toBe(
-        REQUEST_PENDING_DELAYED_LABEL
-      );
+      expect(gate({ chatPosition: undefined, indexingDelayed: true }).pendingLabel).toBe(REQUEST_PENDING_DELAYED_LABEL);
     });
 
     it('names nothing once the gate is open', () => {
@@ -75,4 +73,3 @@ describe('debateRequestGate', () => {
     });
   });
 });
-
