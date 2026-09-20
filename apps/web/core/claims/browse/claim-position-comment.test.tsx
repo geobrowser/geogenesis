@@ -117,6 +117,22 @@ describe('ClaimPositionCommentControl', () => {
     expect(screen.getByRole('button', { name: 'Skip' }).parentElement).toHaveClass('ml-auto', 'shrink-0');
   });
 
+  it('keeps the actions below after typing replaces a wrapping hint with shorter text', () => {
+    let contentHeight = 40;
+    vi.spyOn(HTMLTextAreaElement.prototype, 'clientHeight', 'get').mockReturnValue(20);
+    vi.spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get').mockImplementation(() => contentHeight);
+    renderControl();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disagree' }));
+    const textarea = screen.getByRole('textbox', { name: 'Why do you disagree?' });
+    expect(textarea).toHaveClass('basis-full');
+
+    contentHeight = 20;
+    fireEvent.change(textarea, { target: { value: 'An A' } });
+
+    expect(textarea).toHaveClass('basis-full', 'max-w-none');
+  });
+
   it('dismisses the comment invitation without another position write when Skip is pressed', async () => {
     const { onRespond } = renderControl();
 

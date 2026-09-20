@@ -162,7 +162,6 @@ export function ClaimPositionCommentControl({
                 ref={textareaRef}
                 value={comment}
                 onChange={event => {
-                  setActionsBelow(false);
                   setComment(event.target.value);
                 }}
                 onKeyDown={event => {
