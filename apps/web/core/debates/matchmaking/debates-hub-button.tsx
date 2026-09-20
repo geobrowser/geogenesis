@@ -65,7 +65,7 @@ export function DebatesHubButton() {
           Dropped on phones, where the navbar has the least room to give and the label is the only
           thing here that can be spared. The `aria-label` carries the name through regardless, so
           nothing is lost for anyone reading it that way. */}
-      <span className="text-browseMenu font-normal not-italic sm:hidden">Debate</span>
+      <span className="text-browseMenu font-normal not-italic mobile:hidden">Debate</span>
       {requestCount > 0 ? <span className="text-metadataMedium leading-none">{requestCount}</span> : null}
     </button>
   );

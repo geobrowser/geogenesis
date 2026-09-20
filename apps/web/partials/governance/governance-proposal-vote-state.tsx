@@ -91,9 +91,9 @@ export function GovernanceProposalVoteState({ yesPercentage, noPercentage, user,
     // 32px gap want ~392px before the status chip beside them is counted. The
     // tracks shrink rather than overflow now; above that width there is slack,
     // nothing shrinks, and this renders exactly as it did. (Breakpoints here are
-    // desktop-first — `sm:` applies at 639px and below.)
+    // desktop-first — `mobile:` applies at 639px and below.)
     return (
-      <div className="inline-flex min-w-0 items-center gap-8 sm:gap-4">
+      <div className="inline-flex min-w-0 items-center gap-8 mobile:gap-4">
         <YesRow compactTrack yesPercentage={yesPercentage} userVote={userVote} user={user} />
         <NoRow compactTrack noPercentage={noPercentage} userVote={userVote} user={user} />
       </div>

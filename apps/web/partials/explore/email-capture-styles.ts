@@ -14,7 +14,7 @@
  * inside.
  */
 export const HEADING_CLASS =
-  'text-[24px] leading-[15px] font-medium tracking-[-0.72px] text-[#151515] sm:text-[26px] sm:leading-[16px] sm:tracking-[-0.78px] sm:max-[319px]:leading-[28px]';
+  'text-[24px] leading-[15px] font-medium tracking-[-0.72px] text-[#151515] mobile:text-[26px] mobile:leading-[16px] mobile:tracking-[-0.78px] mobile:max-[319px]:leading-[28px]';
 
 /**
  * 14px on desktop, the frame's size. 16px on the phone, which is what the mobile frame asked for
@@ -22,7 +22,7 @@ export const HEADING_CLASS =
  * same reading experience, and this is the line doing the persuading.
  */
 export const SUBTEXT_CLASS =
-  'mt-2 text-[14px] leading-[17px] tracking-[-0.42px] text-[rgba(21,21,21,0.7)] sm:text-[16px] sm:leading-[20px] sm:tracking-[-0.48px]';
+  'mt-2 text-[14px] leading-[17px] tracking-[-0.42px] text-[rgba(21,21,21,0.7)] mobile:text-[16px] mobile:leading-[20px] mobile:tracking-[-0.48px]';
 
 /**
  * The shared geometry for the card's inputs and buttons.
@@ -34,7 +34,7 @@ export const SUBTEXT_CLASS =
  * One definition because the popup and the account step each draw their own row, and they have
  * already drifted apart once.
  */
-export const CONTROL_HEIGHT_CLASS = 'h-7 sm:h-11';
+export const CONTROL_HEIGHT_CLASS = 'h-7 mobile:h-11';
 
 /** Button label: the frame's 16px, up a point on the phone where the control grew around it. */
-export const CONTROL_LABEL_CLASS = 'text-[16px] leading-none tracking-[-0.35px] sm:text-[17px]';
+export const CONTROL_LABEL_CLASS = 'text-[16px] leading-none tracking-[-0.35px] mobile:text-[17px]';
