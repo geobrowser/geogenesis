@@ -53,6 +53,21 @@ const eslintConfig = defineConfig([
   },
   {
     rules: {
+      // Reported every `_`-prefixed discard — 21 of them — because it carried no options at all.
+      // Naming a binding `_thing` is how this codebase says "I have to destructure it and I am not
+      // using it" (`const { spaceIds: _s, ...rest }`, `([_, error]) => …`). Those are deliberate,
+      // and a rule that flags them trains people to ignore it.
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          args: 'after-used',
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+          ignoreRestSiblings: true,
+        },
+      ],
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/no-empty-interface': 'off',
       '@typescript-eslint/no-explicit-any': 'off',

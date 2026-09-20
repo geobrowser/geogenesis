@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { CURATED_TOPIC_TAG_ID, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID } from '~/core/constants';
 import { ID } from '~/core/id';
 import { useQueryEntity } from '~/core/sync/use-store';

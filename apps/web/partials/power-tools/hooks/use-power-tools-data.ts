@@ -11,10 +11,10 @@ import { filterStateToWhere, useDataBlock, useDataBlockInstance } from '~/core/b
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
-import { getSchemaFromTypeIds, readTypes } from '~/core/database/entities';
+import { getSchemaFromTypeIds} from '~/core/database/entities';
 import { useProperties } from '~/core/hooks/use-properties';
 import { useQueryEntities, useQueryEntitiesAsync } from '~/core/sync/use-store';
-import { Property, Relation } from '~/core/types';
+import { Relation } from '~/core/types';
 
 import { PowerToolsData, PowerToolsRow } from '../types';
 
