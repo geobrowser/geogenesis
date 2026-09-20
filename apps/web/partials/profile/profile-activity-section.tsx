@@ -15,6 +15,7 @@ import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-smal
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
+import { withSpaceTabsAnchor } from '~/partials/space-page/space-tabs';
 
 import { GalleryClaimCard } from './gallery-claim-card';
 
@@ -167,8 +168,16 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
             personName={selected.personName}
           />
         )}
+        {/*
+         * Lands on the tab bar, not the page top.
+         *
+         * A navigation lands at the top of the page, which on a phone is a screenful of cover,
+         * avatar, name, roles and bio — none of it what "See all debates" was clicked for. The
+         * fragment puts the tab row under the navbar instead, so the list opens at the top of the
+         * screen with the underlined tab above it saying where the reader has been sent.
+         */}
         <Link
-          href={selected.href}
+          href={withSpaceTabsAnchor(selected.href)}
           className="flex items-center justify-center gap-2 border-t border-divider py-3 text-metadataMedium text-grey-04 transition-colors hover:text-text"
         >
           {selected.seeAllLabel}

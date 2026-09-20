@@ -172,6 +172,31 @@ describe('ProfileActivitySection', () => {
     expect(screen.getByRole('button', { name: /Debates/ })).toHaveTextContent('—');
   });
 
+  it('sends See all to the tab bar rather than the top of the page', () => {
+    render(
+      <ProfileActivitySection
+        kinds={[
+          kind(),
+          kind({ key: 'claims', label: 'Claims', href: '/space/s/positions', seeAllLabel: 'See all claims' }),
+        ]}
+      />
+    );
+
+    // Without the fragment the reader lands at the top of the profile — a screenful of cover,
+    // avatar, name, roles and bio — rather than on the list they clicked for.
+    expect(screen.getByRole('link', { name: /See all debates/ })).toHaveAttribute(
+      'href',
+      '/space/s/debates#space-tabs'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+
+    expect(screen.getByRole('link', { name: /See all claims/ })).toHaveAttribute(
+      'href',
+      '/space/s/positions#space-tabs'
+    );
+  });
+
   it('reserves the lost mobile document height while switching between kinds', () => {
     mockMobileActivityGeometry(600);
 

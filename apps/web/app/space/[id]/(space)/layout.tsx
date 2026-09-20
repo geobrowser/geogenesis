@@ -35,7 +35,7 @@ import { AddDataPanel } from '~/partials/space-page/add-data-panel';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
-import { SpaceTabs } from '~/partials/space-page/space-tabs';
+import { SPACE_TABS_ANCHOR, SpaceTabs } from '~/partials/space-page/space-tabs';
 import type { PersonRecordCounts } from '~/partials/space-page/space-tabs';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
@@ -209,17 +209,24 @@ export default async function Layout(props0: LayoutProps) {
                 </>
               ) : null}
               <TypeSchemaInline entityId={props.id} spaceId={spaceId} />
-              <React.Suspense fallback={null}>
-                <SpaceTabs
-                  spaceId={spaceId}
-                  entityId={props.id}
-                  initialTabRelations={props.tabRelations ?? []}
-                  tabEntities={props.tabEntities}
-                  typeIds={typeIds}
-                  isProfile={isProfile}
-                  personRecordCounts={personRecordCounts}
-                />
-              </React.Suspense>
+              {/*
+               * The tab bar is a link target, so a link can send the reader to the tabs rather than
+               * to the top of the page — see `withSpaceTabsAnchor`. `scroll-mt-14` clears the sticky
+               * navbar above it, which would otherwise cover the row the link exists to show.
+               */}
+              <div id={SPACE_TABS_ANCHOR} className="scroll-mt-14">
+                <React.Suspense fallback={null}>
+                  <SpaceTabs
+                    spaceId={spaceId}
+                    entityId={props.id}
+                    initialTabRelations={props.tabRelations ?? []}
+                    tabEntities={props.tabEntities}
+                    typeIds={typeIds}
+                    isProfile={isProfile}
+                    personRecordCounts={personRecordCounts}
+                  />
+                </React.Suspense>
+              </div>
             </div>
           </SpaceHeaderContentGate>
           <Spacer height={20} />
