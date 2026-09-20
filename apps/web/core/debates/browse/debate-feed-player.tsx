@@ -102,18 +102,9 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   });
 
   const showControls = ready && (userPaused || (playbackEnded && !hasVoted));
-  // Play/pause is always up. It is the control a viewer reaches for without looking, and hiding it
-  // until hover meant there was no visible way to stop a video that had already started. Mute
-  // recedes once the viewer has turned the sound on and has no more use for it; while muted it
-  // stays, because feed debates autoplay silent and it is the only way to find the audio.
-  //
-  // `no-hover:opacity-100` because a receding control needs a way back, and hover is not one on a
-  // phone. Without it the mute button faded out the moment the viewer turned the sound on and then
-  // stayed faded — invisible but still tappable, so a tap meant to pause the video muted it
-  // instead, and nothing could ever bring the control back. On a pointer device the hover that
-  // reveals it is the same gesture that makes a click possible, so there is no such window there.
-  const recede = 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 no-hover:opacity-100';
-  const idle = !playing || playbackEnded;
+  // End of an unvoted debate offers a replay; a user pause shows the paused glyph.
+  const showReplay = ready && playbackEnded && !hasVoted;
+  const showPausedGlyph = ready && userPaused && !playbackEnded;
 
   // Whether the scrubber is on screen, which the claim stack has to know as well as the scrubber
   // itself — it sits in the same bottom band and lifts clear of it. Hover is the remaining case and
@@ -237,6 +228,25 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     );
   };
 
+  // Clicking the video briefly flashes the action it just took — feedback only, not a control.
+  const [flash, setFlash] = React.useState<{ icon: 'play' | 'pause'; visible: boolean }>({
+    icon: 'play',
+    visible: false,
+  });
+  const flashTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(
+    () => () => {
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    },
+    []
+  );
+  const toggleFromVideo = () => {
+    setFlash({ icon: playing ? 'pause' : 'play', visible: true });
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    flashTimeoutRef.current = setTimeout(() => setFlash(current => ({ ...current, visible: false })), 600);
+    togglePlayback();
+  };
+
   return (
     // No gap and one radius on the outside: the two tiles are a single surface in the Figma frame,
     // which is what lets the subtitle straddle the seam instead of sitting inside one of them.
@@ -250,30 +260,52 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
-        onToggle={togglePlayback}
+        onToggle={toggleFromVideo}
         claims={claimsFor(1)}
         claimsOpen={claimsOpenFor(1)}
         onClaimsHoverChange={onTileHover(1)}
         topLeft={
           ready ? (
-            <>
+            <div className="flex items-center gap-2">
+              {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
+                  centred paused glyph and tap-to-toggle instead. */}
               <ControlCircle
                 ariaLabel={playing ? 'Pause debate' : playbackEnded ? 'Replay debate' : 'Play debate'}
-                onClick={playbackEnded ? playFromStart : togglePlayback}
+                onClick={togglePlayback}
+                className="md:hidden"
               >
-                {playing ? <Pause size={15} /> : playbackEnded ? <RetrySmall /> : <Play size={15} />}
+                {playing ? <Pause /> : <Play />}
               </ControlCircle>
-              <ControlCircle
-                ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
-                onClick={() => {
-                  measurement.control(mutedByUser ? 'unmute' : 'mute');
-                  setMutedByUser(current => !current);
-                }}
-                className={mutedByUser || idle ? undefined : recede}
-              >
-                {mutedByUser ? <SpeakerMuted size={20} /> : <Speaker size={20} />}
-              </ControlCircle>
-            </>
+              {showReplay ? (
+                <ControlCircle ariaLabel="Replay debate" onClick={playFromStart}>
+                  <RetrySmall />
+                </ControlCircle>
+              ) : (
+                // Feed debates autoplay muted, so the unmute control stays visible during
+                // playback — otherwise there's no way to hear audio. Once unmuted it recedes
+                // to hover-only on desktop; touch has no hover, so on mobile it stays visible
+                // or there'd be no way to find it again.
+                //
+                // `no-hover:` as well as `md:`, because the two ask different questions. A tablet
+                // held in landscape is wider than the `md` breakpoint and still has no hover, so
+                // width alone left the control faded out but tappable there — a tap aimed at
+                // play/pause muted the debate instead, with nothing able to bring the control back.
+                <ControlCircle
+                  ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
+                  onClick={() => {
+                    measurement.control(mutedByUser ? 'unmute' : 'mute');
+                    setMutedByUser(current => !current);
+                  }}
+                  className={
+                    mutedByUser
+                      ? undefined
+                      : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100'
+                  }
+                >
+                  {mutedByUser ? <SpeakerMuted /> : <Speaker />}
+                </ControlCircle>
+              )}
+            </div>
           ) : null
         }
       />
@@ -286,7 +318,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
-        onToggle={togglePlayback}
+        onToggle={toggleFromVideo}
         claims={claimsFor(2)}
         claimsOpen={claimsOpenFor(2)}
         onClaimsHoverChange={onTileHover(2)}
@@ -364,6 +396,29 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
           {subtitle}
         </span>
       )}
+
+      {/* Mobile only — desktop has the persistent play/pause beside the mute control. */}
+      {showPausedGlyph && (
+        <button
+          type="button"
+          aria-label="Resume debate"
+          onClick={togglePlayback}
+          className="absolute top-1/2 left-1/2 z-20 hidden size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card md:grid"
+        >
+          <Play />
+        </button>
+      )}
+
+      {/* Desktop only — mobile already shows the centred paused glyph in this spot. */}
+      <div
+        aria-hidden
+        className={cx(
+          'pointer-events-none absolute top-1/2 left-1/2 z-20 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card transition-[opacity,scale] duration-300 md:hidden',
+          flash.visible ? 'scale-100 opacity-100' : 'scale-110 opacity-0'
+        )}
+      >
+        {flash.icon === 'pause' ? <Pause /> : <Play />}
+      </div>
 
       {error && (
         <Text as="p" variant="metadata" color="red-01" className="absolute inset-x-0 -bottom-6 text-center">
@@ -660,7 +715,10 @@ function ControlCircle({
         event.stopPropagation();
         onClick();
       }}
-      className={cx('grid size-10 place-items-center rounded-full bg-white text-text shadow-light', className)}
+      className={cx(
+        'grid size-10.5 place-items-center rounded-full bg-white text-text shadow-light [&>svg]:scale-[1.3]',
+        className
+      )}
     >
       {children}
     </button>

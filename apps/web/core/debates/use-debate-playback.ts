@@ -267,6 +267,11 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   //
   // `useRecordingUrl` is a mutation rather than a query, so nothing upstream caches this —
   // every discarded URL is a real round trip.
+  //
+  // The key is claimed only once URLs are committed, never while a request is in flight. A
+  // cleanup that lands mid-flight (StrictMode's dev double-run, or scrolling away and back
+  // before the fetch settles) cancels that run, and a claim taken up front would make the
+  // re-run skip as "already fetched" — leaving the card on "Loading…" forever.
   const fetchedForRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
@@ -282,10 +287,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     if (fetchedForRef.current === recordingsKey) return;
 
     let cancelled = false;
-    fetchedForRef.current = recordingsKey;
-    const releaseKey = () => {
-      if (fetchedForRef.current === recordingsKey) fetchedForRef.current = null;
-    };
+    fetchedForRef.current = null;
     setUrls({ slot1: null, slot2: null });
     // A different debate's clocks start over; carrying this across would strand the new one
     // at the old one's position.
@@ -297,17 +299,14 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot2RecordingFilename }),
     ])
       .then(([slot1Result, slot2Result]) => {
-        // Scrolled away mid-flight: nothing is committed, so release the key or the card
-        // would hold a claim on URLs it never received and never fetch again.
-        if (cancelled) {
-          releaseKey();
-          return;
-        }
+        // Cancelled mid-flight: commit nothing and leave the key unclaimed so the next run
+        // fetches again.
+        if (cancelled) return;
+        fetchedForRef.current = recordingsKey;
         setUrls({ slot1: slot1Result.url, slot2: slot2Result.url });
       })
       .catch(caught => {
-        // Same on failure, otherwise one error leaves the card permanently on "Loading…".
-        releaseKey();
+        // The key was never claimed, so the next activation retries.
         if (!cancelled) setError(caught instanceof Error ? caught.message : 'Could not load recordings.');
       });
 
