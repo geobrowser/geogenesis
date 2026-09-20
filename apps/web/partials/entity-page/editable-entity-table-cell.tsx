@@ -78,7 +78,6 @@ export function EditableEntityTableCell({
   collectionTypeFilters,
   openedWithMainViewEditing = false,
 }: Props) {
-  const { storage } = useMutate();
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
 
   if (isNameCell) {

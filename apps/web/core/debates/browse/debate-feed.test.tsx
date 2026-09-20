@@ -793,19 +793,6 @@ describe('DebatesBrowseFeed deep-link anchoring', () => {
   });
 });
 
-async function advance(milliseconds: number) {
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(milliseconds);
-  });
-}
-
-async function flushPromises() {
-  await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-  });
-}
-
 function activateDebate(claim: string) {
   const section = screen.getByRole('heading', { name: claim }).closest('section');
   if (!section) throw new Error(`Could not find debate section for ${claim}`);

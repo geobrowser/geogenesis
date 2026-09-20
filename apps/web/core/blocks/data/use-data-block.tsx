@@ -673,7 +673,6 @@ function stableStringify(value: unknown): string {
 
   try {
     return JSON.stringify(walk(value));
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (_err) {
     return '"[unstringifiable]"';
   }
