@@ -95,10 +95,13 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
         <div className="mt-[3px] flex w-full justify-between leading-[29px]">
           <div className="flex items-center gap-5">
             <div className="flex items-center gap-2">
-              <label className="text-bodySemibold text-[19px] font-normal text-text">Latitude</label>
+              <label className="text-bodySemibold text-[19px] font-normal text-text" htmlFor="geo-location-latitude">
+                Latitude
+              </label>
               <span className="w-[11px] border-t border-t-[#606060]"></span>
               <Textarea
                 {...props}
+                id="geo-location-latitude"
                 onChange={e => handlePointValueChange('latitude', e.currentTarget.value)}
                 onBlur={() => {
                   isTypingRef.current = false;
@@ -112,10 +115,13 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
               />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-bodySemibold text-[19px] font-normal text-text">Longitude</label>
+              <label className="text-bodySemibold text-[19px] font-normal text-text" htmlFor="geo-location-longitude">
+                Longitude
+              </label>
               <span className="w-[11px] border-t border-t-[#606060]"></span>
               <Textarea
                 {...props}
+                id="geo-location-longitude"
                 onChange={e => handlePointValueChange('longitude', e.currentTarget.value)}
                 onBlur={() => {
                   isTypingRef.current = false;

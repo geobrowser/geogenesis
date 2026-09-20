@@ -57,6 +57,12 @@ const eslintConfig = defineConfig([
       'jsx-a11y/alt-text': 'error',
       'jsx-a11y/heading-has-content': 'error',
       'jsx-a11y/role-supports-aria-props': 'error',
+      // `controlComponents` is what makes this usable here. Six of its fourteen findings were
+      // labels that *wrap* their control — valid association — where the control is a custom
+      // component (`<Textarea>`, `<Checkbox>`) the rule cannot see through to the input inside.
+      // Naming them turns six false positives into zero and leaves the eight real ones, which are
+      // fixed in this change.
+      'jsx-a11y/label-has-associated-control': ['error', { controlComponents: ['Textarea', 'Checkbox', 'Input', 'Select'] }],
     },
   },
   {
