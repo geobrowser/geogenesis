@@ -50,6 +50,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     error,
     playing,
     userPaused,
+    autoplayBlocked,
     isScrubbing,
     isResuming,
     playbackEnded,
@@ -81,17 +82,28 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     seekBothRaw(seconds);
   };
 
+  /**
+   * Stopped, and only a tap will start it.
+   *
+   * The two ways in are different facts — the viewer paused, or the browser
+   * refused — and identical from here: the video is not running and the control
+   * is the only answer either accepts.
+   */
+  const awaitingTap = userPaused || autoplayBlocked;
+
   // Autoplay the debate that's in view; pause the rest. Respect an explicit
   // user pause so scrolling back doesn't fight the viewer, and don't resume
   // mid-scrub.
   React.useEffect(() => {
     if (!ready) return;
-    if (active && !userPaused && !isScrubbing && !playing && !playbackEnded) {
+    // A refusal is not retried: the browser gives the same answer every time, and
+    // only the viewer's tap is a gesture it will accept.
+    if (active && !awaitingTap && !isScrubbing && !playing && !playbackEnded) {
       void resumeBoth();
     } else if (!active && playing) {
       suspend();
     }
-  }, [active, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend, userPaused]);
+  }, [active, autoplayBlocked, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend, userPaused]);
 
   // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
   // it belongs to is spoken, rather than appearing a beat late on the first one.
@@ -101,10 +113,10 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     enabled: active || preload,
   });
 
-  const showControls = ready && (userPaused || (playbackEnded && !hasVoted));
-  // End of an unvoted debate offers a replay; a user pause shows the paused glyph.
+  const showControls = ready && (awaitingTap || (playbackEnded && !hasVoted));
+  // End of an unvoted debate offers a replay; a stopped one shows the paused glyph.
   const showReplay = ready && playbackEnded && !hasVoted;
-  const showPausedGlyph = ready && userPaused && !playbackEnded;
+  const showPausedGlyph = ready && awaitingTap && !playbackEnded;
 
   // Whether the scrubber is on screen, which the claim stack has to know as well as the scrubber
   // itself — it sits in the same bottom band and lifts clear of it. Hover is the remaining case and
@@ -248,9 +260,26 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   };
 
   return (
-    // No gap and one radius on the outside: the two tiles are a single surface in the Figma frame,
-    // which is what lets the subtitle straddle the seam instead of sitting inside one of them.
-    <div ref={measurement.elementRef} className="group relative flex flex-col overflow-hidden rounded-xl">
+    <div
+      ref={measurement.elementRef}
+      /*
+       * The player's state, readable from outside React.
+       *
+       * Autoplay faults here are device-specific — iOS refuses in Low Power Mode
+       * and headless engines do not — so the machine that reproduces them is
+       * rarely one with a debugger attached. These four booleans are what
+       * `PlaybackDiagnostics` reports, and what an inspector on a phone can read
+       * without one. They are the difference between "the browser refused" and
+       * "the app never noticed", which look identical on screen.
+       */
+      data-debate-ready={ready ? 'true' : 'false'}
+      data-debate-active={active ? 'true' : 'false'}
+      data-debate-playing={playing ? 'true' : 'false'}
+      data-debate-autoplay-blocked={autoplayBlocked ? 'true' : 'false'}
+      // No gap and one radius on the outside: the two tiles are a single surface in the Figma
+      // frame, which is what lets the subtitle straddle the seam rather than sit inside one tile.
+      className="group relative flex flex-col overflow-hidden rounded-xl"
+    >
       <DebaterVideo
         participant={slot1Participant}
         src={urls.slot1}

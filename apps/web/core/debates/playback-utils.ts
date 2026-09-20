@@ -1,3 +1,5 @@
+import { errorName } from '~/core/utils/error-name';
+
 import type { Debate, DebateMediaResponse, DebateMediaTurnSegment, DebateParticipant, ParticipantSlot } from './api';
 
 export type TurnState = {
@@ -256,7 +258,17 @@ export function speakerLabel(participant: Pick<DebateParticipant, 'display_name'
 /** The two elements this helper needs, so tests do not have to build a whole `HTMLVideoElement`. */
 export type PlayableVideo = Pick<HTMLVideoElement, 'muted' | 'paused'> & { play: () => Promise<void> };
 
-export type PlayBothOutcome = 'playing' | 'playing-muted' | 'blocked' | 'cancelled';
+/**
+ * `'refused'` and `'blocked'` are both "it did not start", and the difference between them is
+ * whether trying again could ever work.
+ *
+ * `'refused'` is the browser's answer — `NotAllowedError`, autoplay policy, iOS in Low Power Mode
+ * — and it will be the same answer to the same question, so the only way forward is a control the
+ * viewer taps. `'blocked'` is everything else that failed to confirm: a stalled buffer, a missing
+ * recording, a decode failure. Those are worth retrying and worth saying out loud, so folding them
+ * into `'refused'` would leave a card sitting silently behind a play button that does nothing.
+ */
+export type PlayBothOutcome = 'playing' | 'playing-muted' | 'refused' | 'blocked' | 'cancelled';
 
 export type PlayBothOptions = {
   /** Injectable so tests do not wait on real timers. */
@@ -293,8 +305,22 @@ export type PlayBothOptions = {
  * whether `play()` resolved. `play()` can resolve while the element is still transitioning out of
  * `paused`, so checking `paused` on the very next microtask reports a block on a video that plays
  * a moment later — which is why the feed showed "Could not play both videos" on essentially every
- * scroll while the recordings played fine. A rejected `play()` needs no special case: a rejection
- * leaves the element paused, so it fails the same check.
+ * scroll while the recordings played fine.
+ *
+ * **But a rejected `play()` does need a special case, and assuming otherwise is GEO-2978.** This
+ * comment used to end "a rejection leaves the element paused, so it fails the same check". It does
+ * not, or not in time: `play()` sets `paused` to false *synchronously* and only then rejects, and
+ * the user agent pauses it again afterwards. So the first confirm poll can see both elements
+ * un-paused and report success for a play the browser was in the middle of refusing.
+ *
+ * Measured on an iPhone in Low Power Mode, which refuses every autoplay: the card reported
+ * `playing=true` with both elements `PAUSED` at `t=0.0` and `calls=[play REJECTED:NotAllowedError]`.
+ * From there nothing recovers — the autoplay effect will not retry a card it believes is playing,
+ * no refusal is recorded, and the paused glyph never renders. The viewer's first tap only pauses
+ * what the app imagined was running, which is why it took two taps to start a video.
+ *
+ * So a refusal now invalidates the reading: whatever `paused` said mid-flight, the browser has
+ * told us plainly that it did not start.
  *
  * The grace window is deliberately short. It only has to outlast the paused -> playing transition,
  * and every millisecond of it delays the muted retry on a genuine block.
@@ -316,17 +342,75 @@ async function bothRunning(
   return !primary.paused && !secondary.paused;
 }
 
+/**
+ * Whether a rejected `play()` was the browser declining, rather than us interrupting.
+ *
+ * On the name only. `play()` rejects with a `DOMException` and the spec names it: `NotAllowedError`
+ * for a policy refusal, `AbortError` for an interruption — which, here, is almost always our own
+ * `pause()`. Matching the *message* instead conflates them, because the engines do not agree on
+ * wording and their phrases overlap: WebKit refuses with "not allowed by the user agent", while
+ * Chrome interrupts with "the play() request was interrupted", and a substring broad enough to
+ * catch the first catches interruptions that mention the user agent too. Calling one of those a
+ * refusal latches the tap control and stops autoplay after an ordinary scroll.
+ *
+ * `errorName` rather than `instanceof Error`, for the reason documented there.
+ */
+function isRefusal(reason: unknown): boolean {
+  return errorName(reason) === 'NotAllowedError';
+}
+
 export async function playBothWithMutedFallback(
   primary: PlayableVideo,
   secondary: PlayableVideo,
   { wait = defaultWait, isCancelled }: PlayBothOptions = {}
 ): Promise<PlayBothOutcome> {
-  const attempt = async () => {
-    await Promise.allSettled([primary.play(), secondary.play()]);
-    return bothRunning(primary, secondary, wait);
+  /**
+   * Whether the browser said no, as opposed to simply not having started yet.
+   *
+   * `play()` rejects for two quite different reasons and they need telling
+   * apart: `NotAllowedError` is a policy answer — no gesture, or iOS in Low
+   * Power Mode — while an `AbortError` is our own `pause()` interrupting the
+   * attempt. Only the first is a fact about the device.
+   */
+  const attempt = async (): Promise<{ running: boolean; refused: boolean }> => {
+    const settled = await Promise.allSettled([primary.play(), secondary.play()]);
+    const refused = settled.some(result => result.status === 'rejected' && isRefusal(result.reason));
+
+    return { running: await bothRunning(primary, secondary, wait), refused };
   };
 
-  if (await attempt()) return 'playing';
+  const first = await attempt();
+
+  if (first.running && !first.refused) return 'playing';
+
+  /*
+   * A refusal outranks the cancellation check below — on the autoplay path, which is the one
+   * GEO-2978 is about.
+   *
+   * `resumeBoth` bumps its generation on entry and its caller re-enters while `playing` is false,
+   * so by the time this returns `isCancelled` is routinely true simply because the *next* attempt
+   * has started. Reporting 'cancelled' there threw away the browser's answer, the next attempt
+   * threw away its own, and the card never learned it had been refused: no play control, no error,
+   * just a still frame. Measured against the preview with `play()` forced to reject — zero play
+   * controls on six cards.
+   *
+   * **The mute condition is what scopes this to autoplay, and it is deliberate.** A card the feed
+   * is starting is stopped, and `DebateFeedPlayer` derives `muted` as `!audible || mutedByUser`
+   * with `audible` requiring `playing` — so both elements are muted and this check is the one that
+   * fires. A resume of a pair that was already *playing* — `endScrub`, or the return from a
+   * backgrounded tab — has the speaking element unmuted, and there a refusal means only "not
+   * unmuted", which is the ordinary case GEO-2783 exists for. 'refused' is a statement about the
+   * device, and latching it on a card that would play perfectly well muted would take the retry
+   * away from a card that deserves one, so it is not reported until the muted retry has answered.
+   *
+   * The consequence, named because it is a real cost rather than an oversight: an unmuted refusal
+   * that is also cancelled returns 'cancelled' and the browser's answer is lost for that attempt.
+   * It survives because the last attempt in an overlap chain is by definition not cancelled, and
+   * that attempt starts from a stopped card with both elements muted — so it takes this branch.
+   * One attempt's delay, not a lost answer. Pinned by a test, since it rests on reasoning about a
+   * caller rather than on anything visible here.
+   */
+  if (first.refused && primary.muted && secondary.muted) return 'refused';
 
   // Someone paused these, or scrolled them off screen, while the confirm above was polling. The
   // retry would start them again — and the caller checking ownership after this returns cannot
@@ -349,5 +433,24 @@ export async function playBothWithMutedFallback(
   // `DebateFeedPlayer` re-asserts it when `isResuming` falls.
   primary.muted = true;
   secondary.muted = true;
-  return (await attempt()) ? 'playing-muted' : 'blocked';
+
+  const retry = await attempt();
+
+  if (retry.running && !retry.refused) return 'playing-muted';
+
+  /*
+   * The muted retry has the only verdict that describes it.
+   *
+   * A refused *unmuted* request is the ordinary case — it is why the muted retry exists at all —
+   * and carrying `first.refused` down here reported a refusal for whatever the retry did next. A
+   * muted attempt that stalls, on a recording that 404s or will not decode, is not the browser
+   * declining: the caller would latch the tap control and drop both the retry and the message a
+   * stall is owed, and the tap would achieve nothing.
+   *
+   * Refusal still outranks cancellation, for the reason given above the first check.
+   */
+  if (retry.refused) return 'refused';
+  if (isCancelled?.()) return 'cancelled';
+
+  return 'blocked';
 }

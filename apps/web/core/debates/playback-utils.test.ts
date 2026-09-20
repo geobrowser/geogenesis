@@ -500,6 +500,183 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
   });
 
   /**
+   * The element iOS actually gives you when it refuses (GEO-2978).
+   *
+   * `play()` sets `paused` false synchronously and only then rejects; the user agent pauses it
+   * again afterwards. So the confirm poll's first pass sees both elements un-paused and, before
+   * this fix, reported 'playing' for a play that was being refused — which left the card
+   * believing it was playing while both videos sat at `t=0.0`, with no retry and no play button,
+   * and needing two taps to start.
+   */
+  function refusingVideo() {
+    const video = {
+      muted: true,
+      paused: true,
+      plays: 0,
+      async play() {
+        video.plays += 1;
+        // Synchronous, exactly as the spec has it.
+        video.paused = false;
+        await Promise.resolve();
+        // And the user agent takes it back.
+        video.paused = true;
+        throw new DOMException('The request is not allowed by the user agent or the platform.', 'NotAllowedError');
+      },
+    };
+    return video;
+  }
+
+  it('does not report playing when the refusal un-pauses the element first', async () => {
+    const a = refusingVideo();
+    const b = refusingVideo();
+
+    expect(await playBothWithMutedFallback(a, b)).toBe('refused');
+  });
+
+  /**
+   * The same shape where `paused` never comes back — a stricter reading of the same race. The
+   * browser's answer decides it either way.
+   */
+  it('trusts the refusal over a stale un-paused reading', async () => {
+    const stuck = () => {
+      const video = {
+        muted: true,
+        paused: true,
+        plays: 0,
+        async play() {
+          video.plays += 1;
+          video.paused = false;
+          throw new DOMException('The request is not allowed by the user agent or the platform.', 'NotAllowedError');
+        },
+      };
+      return video;
+    };
+
+    expect(await playBothWithMutedFallback(stuck(), stuck())).toBe('refused');
+  });
+
+  /**
+   * A refusal is the browser's answer and survives the cancellation check, because
+   * `resumeBoth` re-enters while `playing` is false and so cancels its own previous
+   * attempt as a matter of course. Reporting 'cancelled' there lost the answer every
+   * time and the card never learned it had been refused (GEO-2978).
+   *
+   * Muted on both, so there is no retry left that could turn this into playback.
+   */
+  it('reports a refusal even when the attempt was cancelled while confirming', async () => {
+    const a = fakeVideo({ muted: true, blockUnmuted: false });
+    const b = fakeVideo({ muted: true, blockUnmuted: false });
+    a.play = async function refuse() {
+      a.plays += 1;
+      throw new DOMException('The request is not allowed by the user agent or the platform.', 'NotAllowedError');
+    };
+    b.play = a.play.bind(b);
+
+    expect(await playBothWithMutedFallback(a, b, { isCancelled: () => true })).toBe('refused');
+  });
+
+  /**
+   * The muted retry's verdict is the one that counts, and only it.
+   *
+   * A refused *unmuted* request is the ordinary case — it is why the muted retry exists — so
+   * carrying that refusal into the final answer reported 'refused' for whatever the retry then
+   * did. Here the retry stalls instead of being refused: a recording that will not decode, on a
+   * device perfectly willing to autoplay it muted. Reporting a refusal latches the tap control,
+   * drops the retry, and withholds the message, and the tap achieves nothing.
+   */
+  it('reports a muted retry that stalls as blocked, even though the unmuted request was refused', async () => {
+    const refusedThenStalled = () => {
+      const video = fakeVideo({ muted: false });
+      video.play = async () => {
+        video.plays += 1;
+        // Muted now, which is the retry: the browser is willing, the media is not.
+        if (video.muted) return;
+        throw new DOMException('The request is not allowed by the user agent or the platform.', 'NotAllowedError');
+      };
+      return video;
+    };
+
+    expect(await playBothWithMutedFallback(refusedThenStalled(), refusedThenStalled())).toBe('blocked');
+  });
+
+  /** And a retry the browser refuses in its own right is still a refusal. */
+  it('reports a refusal when the muted retry is refused too', async () => {
+    const alwaysRefuses = () => {
+      const video = fakeVideo({ muted: false });
+      video.play = async () => {
+        video.plays += 1;
+        throw new DOMException('The request is not allowed by the user agent or the platform.', 'NotAllowedError');
+      };
+      return video;
+    };
+
+    expect(await playBothWithMutedFallback(alwaysRefuses(), alwaysRefuses())).toBe('refused');
+  });
+
+  /**
+   * A start that never confirms is not a refusal, and the difference is the caller's whole
+   * behaviour: 'refused' latches a tap control and stops the autoplay effect retrying, so
+   * reporting it for a stall would leave a buffering card behind a dead button with nothing to
+   * say for itself.
+   */
+  it('reports a stalled start as blocked, not refused', async () => {
+    // Resolves, never un-pauses: a stall, a missing recording, a decode failure.
+    const stalled = () => {
+      const video = fakeVideo({ muted: true, blockUnmuted: false });
+      video.play = async () => {
+        video.plays += 1;
+      };
+      return video;
+    };
+
+    expect(await playBothWithMutedFallback(stalled(), stalled())).toBe('blocked');
+  });
+
+  /**
+   * An unmuted refusal waits for the muted retry, even when that costs the answer (GEO-2783).
+   *
+   * Pinned because the reasoning lives in a caller. A refusal on an unmuted pair means only "not
+   * unmuted" — the ordinary case the muted fallback exists for — so reporting 'refused' would
+   * latch a tap control on a card that plays perfectly well muted. Cancelled, there is no retry
+   * left to ask, so the answer is genuinely lost for this attempt; it survives because the last
+   * attempt in an overlap chain is not cancelled and starts from a stopped card, where both
+   * elements are muted and the branch above fires.
+   */
+  it('reports a cancellation, not a refusal, when the refused pair still had audio to give up', async () => {
+    const a = fakeVideo({ muted: false });
+    const b = fakeVideo({ muted: false });
+    a.play = async function refuse(this: { plays: number }) {
+      this.plays += 1;
+      throw new DOMException('The request is not allowed by the user agent or the platform.', 'NotAllowedError');
+    };
+    b.play = a.play.bind(b);
+
+    expect(await playBothWithMutedFallback(a, b, { isCancelled: () => true })).toBe('cancelled');
+    // And crucially it did not start anything while cancelled: one call each, no muted retry.
+    expect(a.plays).toBe(1);
+    expect(b.plays).toBe(1);
+  });
+
+  /**
+   * But an interruption of ours is still a cancellation, not a refusal — and the wording is the
+   * point. Classification used to fall back to matching the message, where a phrase broad enough
+   * for WebKit's "not allowed by the user agent" also caught an interruption that named the user
+   * agent. That turns an ordinary pause or scroll-away into a latched refusal, which stops the
+   * card autoplaying for the rest of the session. Only the `name` separates the two.
+   */
+  it('still reports a cancellation when our own pause interrupted the attempt', async () => {
+    const a = fakeVideo({ muted: true, blockUnmuted: false });
+    const b = fakeVideo({ muted: true, blockUnmuted: false });
+    a.play = async function abort() {
+      a.plays += 1;
+      throw new DOMException('The play() request was interrupted by the user agent.', 'AbortError');
+    };
+    b.play = a.play.bind(b);
+
+    expect(await playBothWithMutedFallback(a, b, { isCancelled: () => true })).toBe('cancelled');
+  });
+
+  /**
    * The retry is the only point where this function starts something it did not start, and it is
    * reached after a confirm window it spent asleep — so a pause or a scroll-away routinely lands
    * in between. A caller that checks ownership only once this returns is too late: `play()` has

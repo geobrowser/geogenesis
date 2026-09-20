@@ -144,6 +144,22 @@ describe('useDebatePlayback — playback URLs survive re-activation (GEO-2895)',
 });
 
 /**
+ * The rejection WebKit gives for a refused autoplay, in the shape it gives it (GEO-2978).
+ *
+ * A `DOMException` rather than an `Error`, because that is what `play()` rejects with and the two
+ * are not interchangeable to a guard written as `instanceof Error`. Classification reads the
+ * `name`; the message is here only so that a fixture matching on prose would be seen to be wrong.
+ */
+const refusal = () =>
+  new DOMException('The request is not allowed by the user agent or the platform.', 'NotAllowedError');
+
+/**
+ * And the rejection our own `pause()` produces, which must never read as a refusal — note that
+ * Chrome's wording for it mentions the user agent too.
+ */
+const interruption = () => new DOMException('The play() request was interrupted by the user agent.', 'AbortError');
+
+/**
  * A fake <video> that models the one browser behaviour this race depends on: calling
  * `pause()` while a `play()` promise is still pending rejects that promise and leaves the
  * element paused. Without modelling that, an interrupted resume looks like a successful one
@@ -172,7 +188,7 @@ function fakeVideo() {
     },
     pause() {
       video.paused = true;
-      video.pending?.reject(new Error('The play() request was interrupted by a call to pause()'));
+      video.pending?.reject(new DOMException('The play() request was interrupted by a call to pause()', 'AbortError'));
       video.pending = null;
     },
     /**
@@ -180,7 +196,7 @@ function fakeVideo() {
      * Distinct from pause(): nothing superseded this attempt, so it must still be reported.
      */
     rejectPlay() {
-      video.pending?.reject(new Error('play() failed because the user agent does not allow it'));
+      video.pending?.reject(refusal());
       video.pending = null;
     },
     /** Let the in-flight play() succeed, as the browser would once the media starts. */
@@ -206,6 +222,35 @@ function fakeVideo() {
     browserResume() {
       video.paused = false;
     },
+    /**
+     * Reject the in-flight play() as an interruption, leaving the element paused.
+     *
+     * The shape a refusal must not be confused with: same rejection channel, same mention of the
+     * user agent, opposite meaning — one is the device saying no, the other is us calling pause().
+     */
+    interruptPlay() {
+      video.paused = true;
+      video.pending?.reject(interruption());
+      video.pending = null;
+    },
+    /** Resolve the play() without the element ever starting — a stall, or a recording that 404s. */
+    stallPlay() {
+      video.pending?.resolve();
+      video.pending = null;
+    },
+    /**
+     * Take the in-flight play() aside and hand back the way to refuse it later.
+     *
+     * A real element only tracks its newest `play()`, and so does this one. Detaching is how a
+     * test can start a second attempt over the first and still let the first answer afterwards,
+     * which is the ordering that matters here: attempts overlap by design, and the later answer
+     * is not always the later attempt's.
+     */
+    detachPlay() {
+      const detached = video.pending;
+      video.pending = null;
+      return () => detached?.reject(refusal());
+    },
   };
   return video as unknown as HTMLVideoElement & {
     plays: number;
@@ -213,6 +258,9 @@ function fakeVideo() {
     rejectPlay: () => void;
     browserPause: () => void;
     browserResume: () => void;
+    stallPlay: () => void;
+    detachPlay: () => () => void;
+    interruptPlay: () => void;
   };
 }
 
@@ -260,6 +308,319 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
     expect(result.current.playing).toBe(false);
     expect(slot1.paused).toBe(true);
     expect(slot2.paused).toBe(true);
+  });
+
+  /**
+   * A refusal is a control, not an error (GEO-2978).
+   *
+   * Measured on a phone with the diagnostic readout: `play()` comes back
+   * `NotAllowedError` with both elements muted, inline and fully buffered —
+   * iOS in Low Power Mode, or with auto-play turned off for the site. Neither
+   * is a fault, and the videos are fine.
+   *
+   * The card used to answer that with "Could not play both videos. Try Play
+   * again." and no play button, because `showControls` reads `userPaused` and
+   * nobody had paused. The viewer's first tap only revealed the control and
+   * the second started it — the two-tap sequence this was reported as.
+   */
+  it('offers the play control when the browser refuses to autoplay', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      // What iOS answers: refused outright, nothing superseded the attempt.
+      slot1.rejectPlay();
+      slot2.rejectPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.autoplayBlocked).toBe(true);
+    expect(result.current.playing).toBe(false);
+    // And no alarming copy about a failure that did not happen.
+    expect(result.current.error).toBeNull();
+  });
+
+  /**
+   * The case that actually happens, and the reason the first fix did nothing.
+   *
+   * Every entry to `resumeBoth` bumps the generation, and the autoplay effect
+   * re-enters while `playing` is false — so an attempt is routinely superseded
+   * before it reaches the outcome. The refusal is a fact about the device rather
+   * than about the attempt, so it has to survive that; otherwise each attempt
+   * discards its own answer and the next one asks again.
+   */
+  it('records a refusal even when a newer resume supersedes the attempt', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.rejectPlay();
+      slot2.rejectPlay();
+      // A second activation lands inside the first one's confirm window.
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.rejectPlay();
+      slot2.rejectPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.autoplayBlocked).toBe(true);
+  });
+
+  /**
+   * The flag has to clear, or a card refused once stays refused for the session
+   * even after the viewer's tap — which is allowed, being a gesture.
+   */
+  it('clears the refusal once playback actually starts', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.rejectPlay();
+      slot2.rejectPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+    expect(result.current.autoplayBlocked).toBe(true);
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.autoplayBlocked).toBe(false);
+    expect(result.current.playing).toBe(true);
+  });
+
+  /**
+   * The other side of letting a refusal outlive its attempt (GEO-2978).
+   *
+   * Recording it above the ownership check is what makes it reach the card at all, but it also
+   * lets a stale attempt speak after a newer one has won. Here the refused attempt answers last,
+   * with the video already running — and if that answer latched, the card would draw the tap
+   * control over a playing video and the tap would stop it, which is the symptom this whole
+   * change exists to remove.
+   */
+  it('does not let a stale refusal contradict a newer resume that started', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      // Hold the first attempt's play() aside so the second can run over it.
+      const refuseFirst1 = slot1.detachPlay();
+      const refuseFirst2 = slot2.detachPlay();
+
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+
+      // Only now does the browser answer the attempt it was asked first.
+      refuseFirst1();
+      refuseFirst2();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.playing).toBe(true);
+    expect(result.current.autoplayBlocked).toBe(false);
+  });
+
+  /**
+   * A start that never confirms is not the browser refusing, and the two cannot share an
+   * outcome: a refusal latches the tap control and stops the autoplay effect retrying, so a
+   * stalled card would sit behind a button that does nothing, with no reason given.
+   */
+  it('keeps the error, and the retry, for a start that stalls rather than being refused', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.stallPlay();
+      slot2.stallPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.playing).toBe(false);
+    expect(result.current.autoplayBlocked).toBe(false);
+    expect(result.current.error).toBe('Could not play both videos. Try Play again.');
+  });
+
+  /**
+   * An interruption is not a refusal, however it is worded.
+   *
+   * Classification used to fall back to matching the rejection's message, and a phrase broad
+   * enough to catch WebKit's "not allowed by the user agent" also catches Chrome interrupting
+   * with the user agent in the sentence. Read as a refusal, an ordinary pause or scroll-away
+   * would latch the tap control and stop the card autoplaying for the rest of the session — the
+   * exact failure this change exists to remove, caused by the fix for it.
+   */
+  it('does not read an interruption that mentions the user agent as a refusal', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.interruptPlay();
+      slot2.interruptPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.autoplayBlocked).toBe(false);
+
+    // And the card still autoplays when asked again, which latching would have prevented.
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.playing).toBe(true);
+  });
+
+  /**
+   * The latch's missing release (GEO-2978).
+   *
+   * A card refused once, then tapped: the browser accepts the gesture — no refusal this time —
+   * but the media stalls, so the attempt reports 'blocked'. That outcome promises a retry and an
+   * explanation, and neither arrived: `autoplayBlocked` was only ever cleared by a *successful*
+   * start, so it stayed set, `awaitingTap` stayed true, and the feed's autoplay effect (which
+   * reads it) never tried again. The card sat behind a manual control telling the viewer to try
+   * a Play that would not have helped, as though policy were still the cause.
+   */
+  it('releases the refusal when the browser accepts the next attempt but it stalls', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.rejectPlay();
+      slot2.rejectPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+    expect(result.current.autoplayBlocked).toBe(true);
+
+    // The viewer taps. The gesture is accepted — nothing refuses — but nothing starts either.
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.stallPlay();
+      slot2.stallPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.autoplayBlocked).toBe(false);
+    expect(result.current.error).toBe('Could not play both videos. Try Play again.');
+  });
+
+  /**
+   * The other release the latch was missing: a different debate in the same hook.
+   *
+   * `DebateFeed` keys its cards by claim rather than by debate id, so a re-rank that changes
+   * which debate represents a claim hands a new debate to the same component — and to the same
+   * hook instance. The refusal describes the device and may well be true again, but nothing has
+   * asked on this debate's behalf yet: carrying it across puts the tap control on a card that was
+   * never refused and withholds the autoplay it is owed. The effect beside this one already
+   * resets the playhead for exactly this reason.
+   */
+  it('does not carry a refusal, or a pause, into a different debate in the same card', async () => {
+    const { result, rerender } = renderHook(({ debate }) => useDebatePlayback(debate, true), {
+      initialProps: { debate: debateFixture('debate-1') },
+    });
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    result.current.slot1VideoRef.current = slot1;
+    result.current.slot2VideoRef.current = slot2;
+
+    // Play it, pause it, then have the next autoplay refused — so both flags are set, the way a
+    // viewer who watched a bit and scrolled off in Low Power Mode would leave them.
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+    act(() => result.current.togglePlayback());
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.rejectPlay();
+      slot2.rejectPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.autoplayBlocked).toBe(true);
+    expect(result.current.userPaused).toBe(true);
+
+    await act(async () => {
+      rerender({ debate: debateFixture('debate-2') });
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    expect(result.current.autoplayBlocked).toBe(false);
+    expect(result.current.userPaused).toBe(false);
+  });
+
+  /**
+   * Clearing the state is only half of a debate change.
+   *
+   * `resumeBoth` awaits up to ~600ms, so an attempt belonging to the debate being replaced can
+   * still be inside that window when the new one arrives. Its refusal is written *above* the
+   * ownership check on purpose — a refusal has to outlive supersession within a debate — and so it
+   * came back after the reset and re-latched the tap control on a debate nothing had asked about
+   * yet, which then skipped its first autoplay. The refusal must outlive supersession, not the
+   * debate.
+   */
+  it('lets no attempt from the replaced debate re-latch a refusal on the new one', async () => {
+    const { result, rerender } = renderHook(({ debate }) => useDebatePlayback(debate, true), {
+      initialProps: { debate: debateFixture('debate-1') },
+    });
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    result.current.slot1VideoRef.current = slot1;
+    result.current.slot2VideoRef.current = slot2;
+
+    // An attempt for debate-1 is in flight and has not answered yet.
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+    });
+
+    /*
+     * The feed re-ranks and hands this card a different debate. Its own `act` on purpose: the
+     * replacement's effects have to be fully flushed *before* the old attempt answers, or the new
+     * debate's reset lands afterwards and cleans up the stale latch by accident — which is the
+     * ordering this test passed under before it tested anything.
+     */
+    await act(async () => {
+      rerender({ debate: debateFixture('debate-2') });
+    });
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+
+    // Only now does debate-1's attempt hear back.
+    await act(async () => {
+      slot1.rejectPlay();
+      slot2.rejectPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.autoplayBlocked).toBe(false);
+    expect(result.current.playing).toBe(false);
   });
 
   /** The positive control: an uninterrupted resume still reports playback. */
@@ -372,21 +733,31 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
     expect(slot2.playbackRate).not.toBe(1);
   });
 
-  /** And the guard must not swallow a real block — the autoplay-policy error still surfaces. */
-  it('still surfaces a genuine failure to start', async () => {
+  /**
+   * And the guard must not swallow a real block — it still reaches the viewer, but as a
+   * control rather than as a sentence.
+   *
+   * This asserted an error message until GEO-2978, on the reasoning that a refusal is
+   * something the viewer needs to be told. The reasoning was right and the rendering was not:
+   * `showControls` reads `userPaused`, so a refused card offered no play button, and the
+   * message — "Could not play both videos. Try Play again." — named a Play control that was
+   * not on screen and a failure that had not happened. Measured on a phone, the videos are
+   * muted, inline and fully buffered; iOS simply wants to be asked by a person.
+   */
+  it('turns a genuine block into a play control rather than an error', async () => {
     const { result, slot1, slot2 } = await mounted();
 
     await act(async () => {
       void result.current.resumeBoth();
       await Promise.resolve();
-      // The browser refuses to start them and nothing superseded the attempt, so the viewer
-      // does need to be told.
+      // The browser refuses to start them and nothing superseded the attempt.
       slot1.rejectPlay();
       slot2.rejectPlay();
       await new Promise(resolve => setTimeout(resolve, 400));
     });
 
-    expect(result.current.error).not.toBeNull();
+    expect(result.current.autoplayBlocked).toBe(true);
+    expect(result.current.error).toBeNull();
     expect(result.current.playing).toBe(false);
   });
 
@@ -1011,4 +1382,31 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
     expect(slot2.currentTime).toBe(12);
     expect(result.current.playing).toBe(true);
   });
+  // A 204 makes `geoChatRequest` return undefined, so reading `.url` throws rather than the
+  // request rejecting. Claiming the key before that read left it standing over null URLs, and
+  // every later activation took the "already fetched" early return — the permanent "Loading…"
+  // this effect exists to prevent, through a narrower door.
+  it('retries after a malformed answer instead of latching on forever', async () => {
+    const debate = debateFixture();
+    // First attempt answers with nothing where a URL should be; second answers properly.
+    mocks.recordingUrl
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValue({ url: 'https://example.test/recording.webm' });
+
+    const { result, rerender } = renderHook(({ active }) => useDebatePlayback(debate, active), {
+      initialProps: { active: true },
+    });
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.urls.slot1).toBeNull();
+
+    // Scroll away and back: the key must not have been claimed, so this asks again.
+    rerender({ active: false });
+    rerender({ active: true });
+
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    expect(result.current.urls.slot2).not.toBeNull();
+  });
+
 });

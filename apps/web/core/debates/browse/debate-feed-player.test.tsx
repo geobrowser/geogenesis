@@ -64,7 +64,14 @@ const votes: DebateVotesResult = {
  * A controller in the one state that matters here: playing, with a turn in progress, both
  * recordings loaded. `mutedByUser` and `turnState` are what the audio gating reads.
  */
-function controllerFixture(overrides: { mutedByUser: boolean; turnSlot: 1 | 2; isResuming?: boolean }) {
+function controllerFixture(overrides: {
+  mutedByUser: boolean;
+  turnSlot: 1 | 2;
+  isResuming?: boolean;
+  /** The browser refused to autoplay — see `useDebatePlayback`. */
+  autoplayBlocked?: boolean;
+  playing?: boolean;
+}) {
   return {
     slot1VideoRef: { current: null },
     slot2VideoRef: { current: null },
@@ -73,7 +80,8 @@ function controllerFixture(overrides: { mutedByUser: boolean; turnSlot: 1 | 2; i
     urls: { slot1: 'https://cdn.test/slot1.webm', slot2: 'https://cdn.test/slot2.webm' },
     ready: true,
     error: null,
-    playing: true,
+    playing: overrides.playing ?? true,
+    autoplayBlocked: overrides.autoplayBlocked ?? false,
     userPaused: false,
     isScrubbing: false,
     isResuming: overrides.isResuming ?? false,
@@ -97,7 +105,13 @@ function controllerFixture(overrides: { mutedByUser: boolean; turnSlot: 1 | 2; i
 }
 
 function renderPlayer(
-  overrides: { mutedByUser: boolean; turnSlot: 1 | 2; isResuming?: boolean },
+  overrides: {
+    mutedByUser: boolean;
+    turnSlot: 1 | 2;
+    isResuming?: boolean;
+    autoplayBlocked?: boolean;
+    playing?: boolean;
+  },
   reactStrictMode = false
 ) {
   mocks.controller = controllerFixture(overrides);
@@ -213,5 +227,39 @@ describe('DebateFeedPlayer media release (GEO-2963)', () => {
     expect(load).toHaveBeenCalledTimes(2);
     expect(slot1.hasAttribute('src')).toBe(false);
     expect(slot2.hasAttribute('src')).toBe(false);
+  });
+});
+
+/**
+ * A refused autoplay has to reach the screen (GEO-2978).
+ *
+ * Three fixes went in without the control ever appearing, and every attempt to
+ * check it went through a browser — which measured the hero carousel at the top
+ * of Explore rather than a debate card, twice. This asks the component
+ * directly: given a controller that says the browser refused, is there
+ * something to tap?
+ */
+describe('a refused autoplay', () => {
+  it('shows the play control', () => {
+    const { container } = (() => {
+      mocks.controller = controllerFixture({
+        mutedByUser: true,
+        turnSlot: 1,
+        autoplayBlocked: true,
+        playing: false,
+      });
+      return render(<DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active votes={votes} />);
+    })();
+
+    expect(container.querySelector('[aria-label="Resume debate"]')).not.toBeNull();
+  });
+
+  it('shows nothing extra while playback is running normally', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container } = render(
+      <DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active votes={votes} />
+    );
+
+    expect(container.querySelector('[aria-label="Resume debate"]')).toBeNull();
   });
 });

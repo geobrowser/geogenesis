@@ -27,6 +27,7 @@ import { HubMessage } from './hub-states';
 import { LobbyTab } from './lobby-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
+import { SetScheduleBanner } from './set-schedule-banner';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
 import { useUnexpiredRequests } from './use-request-countdown';
@@ -284,6 +285,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           ) : null}
         </div>
       </div>
+
+      <SetScheduleBanner />
 
       {/* Hidden until Privy resolves, not just the body below it. `authenticated` is false during
           restoration, so a row drawn before then is the signed-out one — a returning viewer would
