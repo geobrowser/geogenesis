@@ -185,7 +185,6 @@ const GenerateEntityIds = () => {
   const handleCopyEntityIds = async () => {
     try {
       await navigator.clipboard.write([
-        // eslint-disable-next-line no-undef
         new ClipboardItem({
           'text/plain': new Blob([entityIds], { type: 'text/plain' }),
         }),
