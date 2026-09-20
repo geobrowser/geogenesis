@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   personalSpaceId: 'personal-space' as string | null,
   // `ModeToggle` renders only on a space page; null keeps it out of the other suites as before.
   spaceId: null as string | null,
+  isMobileNavbar: false,
   isSmartAccountLoading: false,
   dialogMounts: 0,
   pendingPersonalSpace: { isPending: false, topicId: null as string | null },
@@ -123,13 +124,17 @@ vi.mock('~/design-system/menu', () => ({
 }));
 
 describe('NavbarActions profile menu', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   beforeEach(() => {
     mocks.logout.mockReset();
     mocks.profile = { name: 'Max', avatarUrl: 'ipfs://avatar' };
     mocks.personalSpaceId = 'personal-space';
     mocks.spaceId = null;
+    mocks.isMobileNavbar = false;
     mocks.isSmartAccountLoading = false;
     mocks.dialogMounts = 0;
     mocks.pendingPersonalSpace = { isPending: false, topicId: null };
@@ -138,6 +143,19 @@ describe('NavbarActions profile menu', () => {
       email: { address: 'max@example.com' },
       linkedAccounts: [],
     };
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: mocks.isMobileNavbar,
+        media: '(max-width: 639px)',
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }))
+    );
   });
 
   it('renders the wider identity layout and personal-space link', async () => {
@@ -291,11 +309,10 @@ describe('NavbarActions profile menu', () => {
     });
   });
 
-  // Icon-only, every glyph inside `aria-hidden`, so it announced as nothing. It was desktop-only
-  // until this branch put the account surface back on phones, which is what exposed it — the same
-  // class of gap as the search, create and profile controls beside it.
+  // One stateful toggle instance supplies either slot. Rendering two independently would duplicate
+  // its keyboard shortcut, access-control effect and analytics even if CSS hid one of them.
   describe('the edit mode toggle', () => {
-    it('is named, stateful, thumb-sized, and compactly spaced on narrow phones', async () => {
+    it('stays beside the avatar on desktop', async () => {
       mocks.spaceId = 'space-1';
       render(<NavbarActions />);
 
@@ -303,9 +320,28 @@ describe('NavbarActions profile menu', () => {
 
       expect(toggle).toHaveAccessibleName('Switch to edit mode');
       expect(toggle).toHaveAttribute('aria-pressed', 'false');
-      expect(toggle).toHaveClass('sm:h-11');
-      expect(toggle.parentElement).toHaveClass('max-[359px]:gap-1');
-      expect(toggle.querySelector('.absolute')).toHaveClass('sm:top-3');
+      expect(toggle).toHaveAttribute('data-mode-toggle-placement', 'navbar');
+      expect(screen.queryByTestId('profile-menu')).not.toBeInTheDocument();
+    });
+
+    it('moves into the profile menu on mobile', async () => {
+      mocks.spaceId = 'space-1';
+      mocks.isMobileNavbar = true;
+      const user = userEvent.setup();
+      render(<NavbarActions />);
+
+      // The menu content is unmounted while closed, and no second navbar copy exists.
+      expect(screen.queryByTestId('edit-toggle')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+
+      const menu = screen.getByTestId('profile-menu');
+      const toggle = within(menu).getByRole('button', { name: 'Switch to edit mode' });
+      expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      expect(toggle).toHaveAttribute('data-mode-toggle-placement', 'profile-menu');
+      expect(toggle).toHaveClass('w-full', 'border-t', 'py-2.5');
+      expect(within(toggle).getByText('Switch to edit mode')).toBeInTheDocument();
+      expect(screen.getAllByTestId('edit-toggle')).toHaveLength(1);
     });
   });
 });

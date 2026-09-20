@@ -42,6 +42,32 @@ function useUser() {
   return { isLoading: isLoadingSmartAccount || isLoadingProfile, address, profile };
 }
 
+const MOBILE_NAVBAR_QUERY = '(max-width: 639px)';
+
+function subscribeToMobileNavbar(onStoreChange: () => void) {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {};
+
+  const mediaQuery = window.matchMedia(MOBILE_NAVBAR_QUERY);
+  mediaQuery.addEventListener('change', onStoreChange);
+  return () => mediaQuery.removeEventListener('change', onStoreChange);
+}
+
+function getMobileNavbarSnapshot() {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia(MOBILE_NAVBAR_QUERY).matches
+  );
+}
+
+function getServerMobileNavbarSnapshot() {
+  return false;
+}
+
+function useIsMobileNavbar() {
+  return React.useSyncExternalStore(subscribeToMobileNavbar, getMobileNavbarSnapshot, getServerMobileNavbarSnapshot);
+}
+
 export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = React.useState(false);
@@ -55,6 +81,7 @@ export function NavbarActions() {
   const { isPending, topicId } = usePendingPersonalSpace();
   const pendingAvatar = useAtomValue(avatarAtom);
   const { user } = usePrivy();
+  const isMobileNavbar = useIsMobileNavbar();
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
   // only trigger the logout.
   const { logout } = useLogout();
@@ -72,7 +99,7 @@ export function NavbarActions() {
     if (isUserLoading) {
       return (
         <div key="navbar-content" className="flex items-center gap-4">
-          <Skeleton className="h-7 w-[66px]" radius="rounded-full" />
+          {!isMobileNavbar ? <Skeleton className="h-7 w-[66px]" radius="rounded-full" /> : null}
           <Skeleton className="h-7 w-7" radius="rounded-full" />
         </div>
       );
@@ -96,73 +123,80 @@ export function NavbarActions() {
     const identityDetail = email ?? address;
 
     return (
-      <div key="navbar-content" className="flex items-center gap-4 max-[359px]:gap-1">
-        <ModeToggle />
+      <div key="navbar-content" className="flex items-center gap-4">
+        <ModeToggle isMobile={isMobileNavbar}>
+          {({ navbar, menu }) => (
+            <>
+              {navbar}
 
-        <Menu
-          trigger={
-            // The avatar stays 28px; the tap area around it grows to 44 on a phone. Radix sizes its
-            // trigger button to this content, so padding here is what the thumb actually gets — and
-            // this menu is the only way to a profile, personal space or sign out on mobile, which
-            // it had no way to reach at all until this change. Not applied to the rest of the row:
-            // those controls were already on phones and belong to GEO-2970's sweep.
-            <div className="flex items-center justify-center sm:h-11 sm:w-11">
-              {/* The trigger is an image and nothing else: `FallbackImage` has an empty alt and
-                  `Avatar` carries no label, so Radix's button announced as nothing at all. It is
-                  the only way to a profile, personal space or sign out on a phone. Named the way
-                  the debates button beside it is. */}
-              <span className="sr-only">Open profile menu</span>
-              <div className="relative h-7 w-7 overflow-hidden rounded-full">
-                {avatarValue ? (
-                  <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
-                ) : (
-                  <Avatar value={address} size={28} />
+              <Menu
+                trigger={
+                  // The avatar stays 28px; the tap area around it grows to 44 on a phone. Radix sizes its
+                  // trigger button to this content, so padding here is what the thumb actually gets — and
+                  // this menu is the only way to a profile, personal space or sign out on mobile, which
+                  // it had no way to reach at all until this change. Not applied to the rest of the row:
+                  // those controls were already on phones and belong to GEO-2970's sweep.
+                  <div className="flex items-center justify-center sm:h-11 sm:w-11">
+                    {/* The trigger is an image and nothing else: `FallbackImage` has an empty alt and
+                        `Avatar` carries no label, so Radix's button announced as nothing at all. It is
+                        the only way to a profile, personal space or sign out on a phone. Named the way
+                        the debates button beside it is. */}
+                    <span className="sr-only">Open profile menu</span>
+                    <div className="relative h-7 w-7 overflow-hidden rounded-full">
+                      {avatarValue ? (
+                        <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
+                      ) : (
+                        <Avatar value={address} size={28} />
+                      )}
+                    </div>
+                  </div>
+                }
+                open={open}
+                onOpenChange={onOpenChange}
+                sideOffset={12}
+                // No `sm:w-[322px]`. A fixed 322 does not fit a 320px viewport once `Menu` takes its 8px
+                // collision padding on each side, and Radix repositions fixed-width content rather than
+                // shrinking it, so the menu was clipped. The base width is already viewport-calculated
+                // with 322 as a maximum, which is what phones want.
+                className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px]"
+              >
+                <IdentityHeader
+                  address={address}
+                  avatarValue={avatarValue}
+                  displayName={displayName}
+                  detail={identityDetail}
+                  href={personalHref}
+                  onNavigate={() => onOpenChange(false)}
+                />
+                {menu}
+                {personalSpaceId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenChange(false);
+                      setHasOpenedEditProfile(true);
+                      setIsEditProfileOpen(true);
+                    }}
+                    className="flex w-full items-center border-t border-grey-02 px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+                  >
+                    Edit profile
+                  </button>
                 )}
-              </div>
-            </div>
-          }
-          open={open}
-          onOpenChange={onOpenChange}
-          sideOffset={12}
-          // No `sm:w-[322px]`. A fixed 322 does not fit a 320px viewport once `Menu` takes its 8px
-          // collision padding on each side, and Radix repositions fixed-width content rather than
-          // shrinking it, so the menu was clipped. The base width is already viewport-calculated
-          // with 322 as a maximum, which is what phones want.
-          className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px]"
-        >
-          <IdentityHeader
-            address={address}
-            avatarValue={avatarValue}
-            displayName={displayName}
-            detail={identityDetail}
-            href={personalHref}
-            onNavigate={() => onOpenChange(false)}
-          />
-          {personalSpaceId && (
-            <button
-              type="button"
-              onClick={() => {
-                onOpenChange(false);
-                setHasOpenedEditProfile(true);
-                setIsEditProfileOpen(true);
-              }}
-              className="flex w-full items-center border-t border-grey-02 px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
-            >
-              Edit profile
-            </button>
+                {/* Sign out keeps its own group below the divider — the destructive action
+                  stays alone at the bottom where people expect it. */}
+                <div className="border-t border-grey-02">
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </Menu>
+            </>
           )}
-          {/* Sign out keeps its own group below the divider — the destructive action
-            stays alone at the bottom where people expect it. */}
-          <div className="border-t border-grey-02">
-            <button
-              type="button"
-              onClick={logout}
-              className="flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
-            >
-              Sign out
-            </button>
-          </div>
-        </Menu>
+        </ModeToggle>
       </div>
     );
   })();
@@ -281,7 +315,18 @@ const variants = {
 
 const MotionPopoverContent = motion.create(Popover.Content);
 
-function ModeToggle() {
+type ModeToggleSlots = {
+  navbar: React.ReactNode;
+  menu: React.ReactNode;
+};
+
+function ModeToggle({
+  isMobile,
+  children,
+}: {
+  isMobile: boolean;
+  children: (slots: ModeToggleSlots) => React.ReactNode;
+}) {
   const controls = useAnimation();
   const { editable, setEditable } = useEditable();
 
@@ -367,82 +412,101 @@ function ModeToggle() {
 
   if (!spaceId) {
     // Only show toggle on pages that are editable
-    return null;
+    return children({ navbar: null, menu: null });
   }
 
+  const label = editable ? 'Switch to browse mode' : 'Switch to edit mode';
+  const toggle = (
+    <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
+      <Popover.Anchor asChild>
+        <motion.button
+          type="button"
+          ref={toggleRef}
+          onClick={onToggle}
+          data-testid="edit-toggle"
+          data-mode-toggle-placement={isMobile ? 'profile-menu' : 'navbar'}
+          aria-label={label}
+          aria-pressed={editable}
+          animate={controls}
+          variants={variants}
+          className={cx(
+            isMobile
+              ? 'flex w-full items-center justify-between border-t border-grey-02 px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none'
+              : 'rounded-[47px] focus-visible:outline-none'
+          )}
+        >
+          {isMobile ? <span>{label}</span> : null}
+          <ModeToggleTrack editable={editable} showEditAccessTooltip={showEditAccessTooltip} />
+        </motion.button>
+      </Popover.Anchor>
+      <Popover.Portal>
+        <AnimatePresence mode="popLayout">
+          {showEditAccessTooltip && (
+            <MotionPopoverContent
+              className="z-10 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-hidden"
+              side="bottom"
+              align="end"
+              alignOffset={-8}
+              sideOffset={16}
+              initial={{ opacity: 0, scale: 0.95, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -10 }}
+              transition={{
+                type: 'spring',
+                duration: 0.15,
+                bounce: 0,
+              }}
+            >
+              <h1 className="text-center text-breadcrumb">You don’t have edit access in this space</h1>
+              <Popover.Arrow />
+            </MotionPopoverContent>
+          )}
+        </AnimatePresence>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+
+  return children({
+    navbar: isMobile ? null : (
+      <>
+        {toggle}
+        <EditModeToggleTip open={editModeTipOpen} dismiss={dismissEditModeTip} anchorRef={toggleRef} />
+      </>
+    ),
+    menu: isMobile ? toggle : null,
+  });
+}
+
+function ModeToggleTrack({ editable, showEditAccessTooltip }: { editable: boolean; showEditAccessTooltip: boolean }) {
   return (
-    <>
-      <motion.button
-        ref={toggleRef}
-        onClick={onToggle}
-        data-testid="edit-toggle"
-        // Icon-only, and every glyph inside is `aria-hidden`, so this announced as nothing. It was
-        // desktop-only until this branch put the account surface back on phones, which is what
-        // exposed it. The label says what pressing it does rather than what it is, and
-        // `aria-pressed` carries the state the two icons convey visually.
-        aria-label={editable ? 'Switch to browse mode' : 'Switch to edit mode'}
-        aria-pressed={editable}
-        animate={controls}
-        variants={variants}
-        className="relative flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1 sm:h-11"
-      >
-        <motion.div
-          aria-hidden
-          initial={false}
-          animate={{ x: editable ? 30 : 0 }}
-          transition={{
-            duration: 0.5,
-            type: 'spring',
-            bounce: 0,
-          }}
-          className="pointer-events-none absolute top-1 left-1 z-0 h-5 w-7 rounded-[44px] bg-white shadow-dropdown sm:top-3"
-        />
-        <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
-          <div className={cx('transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}>
-            <EyeSmall />
-          </div>
-        </div>
-        <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
-          <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
-            <Popover.Anchor asChild>
-              <div
-                className={cx(
-                  'transition-colors duration-300',
-                  showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
-                )}
-              >
-                <BulkEdit />
-              </div>
-            </Popover.Anchor>
-            <Popover.Portal>
-              <AnimatePresence mode="popLayout">
-                {showEditAccessTooltip && (
-                  <MotionPopoverContent
-                    className="z-10 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-hidden"
-                    side="bottom"
-                    align="end"
-                    alignOffset={-8}
-                    sideOffset={16}
-                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                    transition={{
-                      type: 'spring',
-                      duration: 0.15,
-                      bounce: 0,
-                    }}
-                  >
-                    <h1 className="text-center text-breadcrumb">You don’t have edit access in this space</h1>
-                    <Popover.Arrow />
-                  </MotionPopoverContent>
-                )}
-              </AnimatePresence>
-            </Popover.Portal>
-          </Popover.Root>
-        </div>
-      </motion.button>
-      <EditModeToggleTip open={editModeTipOpen} dismiss={dismissEditModeTip} anchorRef={toggleRef} />
-    </>
+    <span className="relative flex h-7 w-[66px] shrink-0 items-center justify-between rounded-[47px] bg-divider p-1">
+      <motion.span
+        aria-hidden
+        initial={false}
+        animate={{ x: editable ? 30 : 0 }}
+        transition={{
+          duration: 0.5,
+          type: 'spring',
+          bounce: 0,
+        }}
+        className="pointer-events-none absolute top-1 left-1 z-0 h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
+      />
+      <span className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
+        <span className={cx('transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}>
+          <EyeSmall />
+        </span>
+      </span>
+      <span className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
+        <span
+          className={cx(
+            'transition-colors duration-300',
+            showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
+          )}
+        >
+          <BulkEdit />
+        </span>
+      </span>
+    </span>
   );
 }
 

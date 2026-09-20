@@ -72,12 +72,10 @@ function PrivyConnectButton() {
     login();
   };
 
-  // 44px on a phone. `Button` is ~34 by default, which was academic while this was hidden on
-  // mobile — it is the only deliberate way to sign in there now, so it wants a thumb-sized target.
-  // Scoped to this button rather than the shared component: every other `Button` in the app has the
-  // same problem and that is GEO-2970's sweep, not something to change from inside the navbar.
+  // Match the adjacent Debate button's 28px mobile height so the restored account action does not
+  // make the navbar taller or visually dominate the other compact controls.
   return (
-    <Button className="sm:h-11" onClick={onLogin}>
+    <Button className="sm:h-7 sm:py-0" onClick={onLogin}>
       Log in
     </Button>
   );
