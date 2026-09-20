@@ -1003,8 +1003,14 @@ export function ClaimScrubberMarkers({
           <button
             key={marker.id}
             type="button"
-            title={marker.text}
-            aria-label={`Jump to: ${marker.text}`}
+            title={marker.count > 1 ? `${marker.text} (+${marker.count - 1} more)` : marker.text}
+            // Several claims can finish in one segment and share a hash. Saying so beats announcing
+            // one of them and silently standing for the others.
+            aria-label={
+              marker.count > 1
+                ? `Jump to ${marker.count} claims, starting with: ${marker.text}`
+                : `Jump to: ${marker.text}`
+            }
             onClick={event => {
               event.stopPropagation();
               onSeek(marker.seekMs);

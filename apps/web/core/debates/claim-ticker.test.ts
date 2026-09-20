@@ -352,6 +352,27 @@ describe('claimMarkers', () => {
     expect(claimMarkers([timed('loose', unsure(27_000, 31_000))], 270_000)).toEqual([]);
   });
 
+  /**
+   * Two claims can end on the same millisecond — `matchClaimWindow` places them on segment
+   * boundaries, so any two matched to the same window do. Two hashes at one point means the later
+   * covers the earlier and the first cannot be reached with a pointer, so they become one.
+   */
+  it('draws one hash for several claims that end on the same moment', () => {
+    const markers = claimMarkers(
+      [timed('a', confident(10_000, 30_000)), timed('b', confident(20_000, 30_000))],
+      270_000
+    );
+
+    expect(markers).toHaveLength(1);
+    expect(markers[0].count).toBe(2);
+    // The first in spoken order survives, so the label names a real claim deterministically.
+    expect(markers[0].id).toBe('a');
+  });
+
+  it('counts a lone claim as standing for itself', () => {
+    expect(claimMarkers([timed('a', confident(10_000, 30_000))], 270_000)[0].count).toBe(1);
+  });
+
   it('draws nothing before the timeline is known', () => {
     expect(claimMarkers([timed('a', confident(1_000, 2_000))], 0)).toEqual([]);
   });

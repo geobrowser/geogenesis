@@ -194,6 +194,21 @@ export type ClaimMarker = {
    */
   seekMs: number;
   fraction: number;
+  /**
+   * How many claims this one hash stands for.
+   *
+   * Usually one. More when several claims finish in the same segment: {@link matchClaimWindow}
+   * places a claim on segment boundaries, so two claims matched to the same window end on the same
+   * millisecond and would otherwise draw two hashes at one point — where the later covers the
+   * earlier and the first can never be reached with a pointer. Measured over the corpus as the
+   * matcher places it, rather than from published offsets, 8 of 563 assertable claims share a
+   * moment with a differently-worded claim, so this is ordinary rather than exotic.
+   *
+   * One hash per moment is also the truer model. The stack shows one card at a time, so seeking
+   * here surfaces the newest of them and leaves the rest a scroll away in the backlog — which is
+   * what the hash was promising.
+   */
+  count: number;
 };
 
 /**
@@ -244,8 +259,20 @@ export function claimMarkers(claims: TimedClaim[], timelineMs: number): ClaimMar
           // `seekMs` for both halves of that.
           seekMs: Math.min(timing.endMs + FADE_IN_MS, lastSeekableMs),
           fraction: Math.max(0, Math.min(1, timing.endMs / timelineMs)),
+          count: 1,
         };
       })
       .sort((a, b) => a.atMs - b.atMs)
+      // One hash per moment — see {@link ClaimMarker.count}. Sorted first, so claims sharing a
+      // moment are adjacent and the survivor is the first in spoken order, which is deterministic.
+      .reduce<ClaimMarker[]>((kept, marker) => {
+        const last = kept[kept.length - 1];
+        if (last && last.atMs === marker.atMs) {
+          last.count += 1;
+          return kept;
+        }
+        kept.push(marker);
+        return kept;
+      }, [])
   );
 }

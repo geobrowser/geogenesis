@@ -837,6 +837,7 @@ describe('markerHitWidth', () => {
     atMs: fraction * 100_000,
     seekMs: fraction * 100_000 + 250,
     fraction,
+    count: 1,
   });
 
   const widths = (markers: ClaimMarker[]) => markers.map((_, index) => markerHitWidth(markers, index));
@@ -886,6 +887,7 @@ describe('ClaimScrubberMarkers', () => {
     atMs: fraction * 100_000,
     seekMs: fraction * 100_000 + 250,
     fraction,
+    count: 1,
   });
 
   it('seeks into the claim window rather than to the hash it draws', () => {
