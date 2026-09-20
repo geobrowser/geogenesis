@@ -87,6 +87,8 @@ type LinkableRelationChipProps = {
   className?: string;
   disableLink?: boolean;
   sortableDragHandleListeners?: DraggableSyntheticListeners;
+  /** Callback ref marking the dots button as the drag handle (next-gen @dnd-kit/react). */
+  sortableDragHandleRef?: (element: HTMLButtonElement | null) => void;
 
   truncateLabel?: boolean;
   children: React.ReactNode;
@@ -199,6 +201,7 @@ export function LinkableRelationChip({
   className = '',
   disableLink = false,
   sortableDragHandleListeners,
+  sortableDragHandleRef,
   truncateLabel = false,
   children,
 }: LinkableRelationChipProps) {
@@ -216,6 +219,16 @@ export function LinkableRelationChip({
 
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
+
+  // Stable merged ref: an inline callback would re-run on every render (null then node),
+  // detaching/re-attaching the drag handle during hover/popover state updates.
+  const dotsButtonRef = React.useCallback(
+    (node: HTMLButtonElement | null) => {
+      triggerRef.current = node;
+      sortableDragHandleRef?.(node);
+    },
+    [sortableDragHandleRef]
+  );
 
   const shouldClamp = !truncateLabel && typeof children === 'string' && children.length >= 42;
 
@@ -302,7 +315,7 @@ export function LinkableRelationChip({
       <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
         <Popover.Trigger asChild>
           <button
-            ref={triggerRef}
+            ref={dotsButtonRef}
             type="button"
             {...sortableDragHandleListeners}
             onMouseEnter={() => {
@@ -323,7 +336,7 @@ export function LinkableRelationChip({
                 isDeleteHovered,
                 isRelationHovered,
               }),
-              sortableDragHandleListeners && 'cursor-grab active:cursor-grabbing'
+              (sortableDragHandleListeners || sortableDragHandleRef) && 'cursor-grab active:cursor-grabbing'
             )}
           >
             <RelationDots color="current" />
