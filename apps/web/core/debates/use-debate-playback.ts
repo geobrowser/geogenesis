@@ -306,11 +306,28 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
         // Cancelled mid-flight: commit nothing and leave the key unclaimed so the next run
         // fetches again.
         if (cancelled) return;
+
+        // Read both fields BEFORE claiming the key, so a malformed answer throws while the key
+        // is still unclaimed and the next activation retries.
+        //
+        // `geoChatRequest` returns `undefined` on a 204 (`core/debates/api.ts`), so `.url` here
+        // is a TypeError rather than a rejected request — it lands in the `.catch` below, which
+        // deliberately does not release the key. Claiming first therefore left the key standing
+        // over null URLs forever: the card showed the error, and every later activation hit the
+        // `fetchedForRef.current === recordingsKey` early return and never asked again. That is
+        // the permanent "Loading…" this effect was changed to remove, reintroduced through a
+        // narrower door.
+        const slot1 = slot1Result.url;
+        const slot2 = slot2Result.url;
+
         fetchedForRef.current = recordingsKey;
-        setUrls({ slot1: slot1Result.url, slot2: slot2Result.url });
+        setUrls({ slot1, slot2 });
       })
       .catch(caught => {
-        // The key was never claimed, so the next activation retries.
+        // Deliberately does NOT release the key. A release here is what the previous version did,
+        // and because the key is identical across attempts it let a stale cancelled attempt free
+        // a claim a newer in-flight one owned. Ordering the claim after the reads above is what
+        // makes "never claimed" true for every throw that can reach this.
         if (!cancelled) setError(caught instanceof Error ? caught.message : 'Could not load recordings.');
       });
 
