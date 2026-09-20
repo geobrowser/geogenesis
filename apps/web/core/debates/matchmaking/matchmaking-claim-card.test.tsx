@@ -983,16 +983,31 @@ describe('MatchmakingClaimCard', () => {
     expect(reserved).not.toHaveTextContent(/\S/);
   });
 
-  it('says why the offer cannot be taken when the disabled button is hovered', async () => {
+  it('says why the offer cannot be taken when its wrapper receives keyboard focus', async () => {
+    mocks.match = { id: 'match-1', viewer_position: true };
+    mocks.blockedReason = 'Withdraw your open request to send another.';
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+    const request = screen.getByRole('button', { name: 'Request debate' });
+    const trigger = request.parentElement!;
+    expect(request).toBeDisabled();
+    expect(screen.queryByText('Withdraw your open request to send another.')).not.toBeInTheDocument();
+
+    await userEvent.tab();
+
+    expect(trigger).toHaveFocus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Withdraw your open request to send another.');
+  });
+
+  it('says why the offer cannot be taken when its wrapper is tapped', async () => {
     mocks.match = { id: 'match-1', viewer_position: true };
     mocks.blockedReason = 'Withdraw your open request to send another.';
     renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
     const request = screen.getByRole('button', { name: 'Request debate' });
     expect(request).toBeDisabled();
-    expect(screen.queryByText('Withdraw your open request to send another.')).not.toBeInTheDocument();
 
-    await userEvent.hover(request.parentElement!);
+    fireEvent.pointerDown(request.parentElement!, { pointerType: 'touch' });
 
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Withdraw your open request to send another.');
   });

@@ -88,7 +88,7 @@ export function RequestDebateControl({
         // inch below this and the negative half of the bar beneath that — so a red button here
         // reads as a side rather than an action. Dark is the only weight left that means
         // "primary" without borrowing a meaning that is already taken.
-        'bg-text text-white hover:bg-text/90 disabled:cursor-default disabled:opacity-50'
+        'bg-text text-white hover:bg-text/90 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50'
       )}
     >
       {/* Both labels stacked in one grid cell, so the button is always as wide as the longer of
@@ -119,9 +119,15 @@ export function RequestDebateControl({
           label={blockedReason}
           position="bottom"
           align={variant === 'block' ? 'center' : 'end'}
+          openOnPress
           // A disabled button does not reliably emit the pointer events Radix needs. The wrapper
-          // owns the hover target while leaving the button's disabled semantics intact.
-          trigger={<span className={cx('inline-flex', variant === 'block' && 'w-full')}>{button}</span>}
+          // owns hover/touch and is focusable for keyboard readers, while leaving the button's
+          // disabled semantics intact.
+          trigger={
+            <span tabIndex={0} className={cx('inline-flex cursor-default', variant === 'block' && 'w-full')}>
+              {button}
+            </span>
+          }
         />
       ) : (
         button
