@@ -126,6 +126,12 @@ type ImageVariant = 'avatar' | 'banner' | 'table-cell' | 'default' | 'gallery';
 interface ImageZoomProps {
   imageSrc: string;
   variant?: ImageVariant;
+  /**
+   * Defaults to empty, which marks the image decorative and is what every caller wants today —
+   * they have a URL and no description. It matters that it is empty rather than absent: a missing
+   * alt makes a screen reader read the file name out, an empty one makes it skip the image.
+   */
+  alt?: string;
 }
 
 const imageStyles: Record<ImageVariant, React.CSSProperties> = {
@@ -149,13 +155,13 @@ const imageStyles: Record<ImageVariant, React.CSSProperties> = {
   },
 };
 
-export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
+export function ImageZoom({ imageSrc, variant = 'default', alt = '' }: ImageZoomProps) {
   const { src, onError } = useImageWithFallback(imageSrc);
 
   return (
     <Zoom>
       <div className="relative overflow-hidden rounded-lg" style={imageStyles[variant]}>
-        <img src={src} onError={onError} loading="lazy" decoding="async" className="h-full object-cover" />
+        <img src={src} alt={alt} onError={onError} loading="lazy" decoding="async" className="h-full object-cover" />
       </div>
     </Zoom>
   );
@@ -214,7 +220,8 @@ export function BlockImageField({ imageSrc, onFileChange, onImageRemove, variant
       ) : null}
 
       <div className="absolute h-full w-full">
-        <img src={placeholderImage} className="h-full w-full overflow-visible object-cover" />
+        {/* Decorative: it stands in for an image that is not there yet and says nothing a reader needs. */}
+        <img src={placeholderImage} alt="" className="h-full w-full overflow-visible object-cover" />
       </div>
 
       <div className="z-10 flex h-full w-full items-center justify-center">
