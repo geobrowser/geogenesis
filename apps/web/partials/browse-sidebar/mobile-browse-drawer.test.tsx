@@ -37,6 +37,7 @@ describe('MobileBrowseDrawer', () => {
       <MobileBrowseDrawer
         open
         fallbackFocusRef={fallbackFocusRef}
+        fullscreenFocusTarget={null}
         onOpenChange={onOpenChange}
         triggerRef={triggerRef}
       />
@@ -57,6 +58,7 @@ describe('MobileBrowseDrawer', () => {
       <MobileBrowseDrawer
         open
         fallbackFocusRef={fallbackFocusRef}
+        fullscreenFocusTarget={null}
         onOpenChange={onOpenChange}
         triggerRef={triggerRef}
       />
@@ -83,6 +85,7 @@ describe('MobileBrowseDrawer', () => {
           <MobileBrowseDrawer
             open={open}
             fallbackFocusRef={fallbackFocusRef}
+            fullscreenFocusTarget={null}
             onOpenChange={setOpen}
             triggerRef={triggerRef}
           />
@@ -122,6 +125,7 @@ describe('MobileBrowseDrawer', () => {
           <MobileBrowseDrawer
             open={open}
             fallbackFocusRef={fallbackFocusRef}
+            fullscreenFocusTarget={null}
             onOpenChange={setOpen}
             triggerRef={triggerRef}
           />
@@ -136,30 +140,46 @@ describe('MobileBrowseDrawer', () => {
   });
 
   it('focuses the stable fallback when fullscreen unmounts the Browse trigger', async () => {
-    const triggerRef = React.createRef<HTMLButtonElement>();
-    const fallbackFocusRef = React.createRef<HTMLElement>();
     const onOpenChange = vi.fn();
 
-    const drawer = (fullscreen: boolean) => (
-      <>
-        <nav ref={fallbackFocusRef} tabIndex={-1} aria-label="Fallback navigation" />
-        {fullscreen ? null : (
-          <button ref={triggerRef} type="button">
-            Open browse menu
-          </button>
-        )}
-        <MobileBrowseDrawer
-          open={!fullscreen}
-          fallbackFocusRef={fallbackFocusRef}
-          onOpenChange={onOpenChange}
-          triggerRef={triggerRef}
-        />
-      </>
-    );
+    function FullscreenHarness({ fullscreen }: { fullscreen: boolean }) {
+      const triggerRef = React.useRef<HTMLButtonElement>(null);
+      const fallbackFocusRef = React.useRef<HTMLElement>(null);
+      const [fullscreenFocusTarget, setFullscreenFocusTarget] = React.useState<HTMLElement | null>(null);
 
-    const { rerender } = render(drawer(false));
-    rerender(drawer(true));
+      return (
+        <>
+          <main
+            ref={setFullscreenFocusTarget}
+            tabIndex={-1}
+            aria-label="Ranking fullscreen"
+            style={{ display: fullscreen ? undefined : 'none' }}
+          />
+          <nav
+            ref={fallbackFocusRef}
+            tabIndex={-1}
+            aria-label="Hidden fallback navigation"
+            style={{ display: fullscreen ? 'none' : undefined }}
+          />
+          {fullscreen ? null : (
+            <button ref={triggerRef} type="button">
+              Open browse menu
+            </button>
+          )}
+          <MobileBrowseDrawer
+            open={!fullscreen}
+            fallbackFocusRef={fallbackFocusRef}
+            fullscreenFocusTarget={fullscreen ? fullscreenFocusTarget : null}
+            onOpenChange={onOpenChange}
+            triggerRef={triggerRef}
+          />
+        </>
+      );
+    }
 
-    await waitFor(() => expect(screen.getByRole('navigation', { name: 'Fallback navigation' })).toHaveFocus());
+    const { rerender } = render(<FullscreenHarness fullscreen={false} />);
+    rerender(<FullscreenHarness fullscreen />);
+
+    await waitFor(() => expect(screen.getByRole('main', { name: 'Ranking fullscreen' })).toHaveFocus());
   });
 });

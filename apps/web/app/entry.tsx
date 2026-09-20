@@ -37,7 +37,7 @@ import { StatusBar } from '~/partials/review/status-bar';
 import { SearchDialog } from '~/partials/search';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
-import { rankingFullscreenActiveAtom } from '~/atoms';
+import { rankingFullscreenActiveAtom, rankingFullscreenFocusTargetAtom } from '~/atoms';
 
 const OnboardingDialog = dynamic(
   () => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })),
@@ -104,6 +104,7 @@ export function App({ children }: { children: React.ReactNode }) {
   const navbarRef = React.useRef<HTMLElement>(null);
   const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
   const fullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
+  const rankingFullscreenFocusTarget = useAtomValue(rankingFullscreenFocusTargetAtom);
 
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
@@ -150,6 +151,7 @@ export function App({ children }: { children: React.ReactNode }) {
           <MobileBrowseDrawer
             open={mobileBrowseOpen && !fullscreenActive}
             fallbackFocusRef={navbarRef}
+            fullscreenFocusTarget={rankingFullscreenFocusTarget}
             onOpenChange={setMobileBrowseOpen}
             triggerRef={mobileBrowseButtonRef}
           />
