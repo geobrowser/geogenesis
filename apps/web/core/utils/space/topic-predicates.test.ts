@@ -19,7 +19,9 @@ const SPACE_ID = '00000000000000000000000000000001';
 const TOPIC_ID = '00000000000000000000000000000002';
 const PAGE_ID = '00000000000000000000000000000003';
 
-function remoteEntity(id: string, name: string | null): RemoteEntity {
+// Overrides are passed in rather than assigned afterwards: `RemoteEntity`'s `types` and
+// `relationsList` are readonly, so mutating the returned object does not compile.
+function remoteEntity(id: string, name: string | null, over: Partial<RemoteEntity> = {}): RemoteEntity {
   return {
     id,
     name,
@@ -29,6 +31,7 @@ function remoteEntity(id: string, name: string | null): RemoteEntity {
     valuesList: [],
     relationsList: [],
     updatedAt: '1712345678',
+    ...over,
   };
 }
 
@@ -74,21 +77,22 @@ describe('hasExternalTopic', () => {
 });
 
 describe('isPersonProfileSpace', () => {
-  const person = remoteEntity(TOPIC_ID, 'Preston Mantel');
-  person.types = [{ id: SystemIds.PERSON_TYPE, name: 'Person' }];
-  person.relationsList = [
-    {
-      id: '00000000000000000000000000000004',
-      entityId: TOPIC_ID,
-      spaceId: SPACE_ID,
-      position: null,
-      verified: null,
-      fromEntity: { id: TOPIC_ID, name: 'Preston Mantel' },
-      toEntity: { id: SystemIds.PERSON_TYPE, name: 'Person', types: [], valuesList: [] },
-      toSpaceId: null,
-      type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
-    },
-  ];
+  const person = remoteEntity(TOPIC_ID, 'Preston Mantel', {
+    types: [{ id: SystemIds.PERSON_TYPE, name: 'Person' }],
+    relationsList: [
+      {
+        id: '00000000000000000000000000000004',
+        entityId: TOPIC_ID,
+        spaceId: SPACE_ID,
+        position: null,
+        verified: null,
+        fromEntity: { id: TOPIC_ID, name: 'Preston Mantel' },
+        toEntity: { id: SystemIds.PERSON_TYPE, name: 'Person', types: [], valuesList: [] },
+        toSpaceId: null,
+        type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
+      },
+    ],
+  });
 
   it('is true for a person carried on the page, with no topic at all', () => {
     // The case that broke every visitor's view of somebody else's profile:
