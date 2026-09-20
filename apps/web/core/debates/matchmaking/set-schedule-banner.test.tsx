@@ -16,7 +16,6 @@ vi.mock('~/core/debates/hooks', () => ({
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
-
 afterEach(() => {
   cleanup();
   // The dismissal is stored per notice id in localStorage, so a dismissal in one case would
