@@ -469,7 +469,7 @@ function ModeToggle({
         <AnimatePresence mode="popLayout">
           {showEditAccessTooltip && (
             <MotionPopoverContent
-              className="z-10 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-hidden"
+              className="z-1001 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-hidden"
               side="bottom"
               align="end"
               alignOffset={-8}

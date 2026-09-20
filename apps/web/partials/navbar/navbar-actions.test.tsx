@@ -12,6 +12,12 @@ import { NavbarActions } from './navbar-actions';
 
 const address = '0x1234567890abcdef1234567890abcdef12345678';
 
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 const mocks = vi.hoisted(() => ({
   logout: vi.fn(),
   push: vi.fn(),
@@ -172,6 +178,7 @@ describe('NavbarActions profile menu', () => {
       email: { address: 'max@example.com' },
       linkedAccounts: [],
     };
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -398,6 +405,23 @@ describe('NavbarActions profile menu', () => {
       await user.click(screen.getByRole('switch', { name: 'Edit mode off' }));
 
       expect(mocks.setEditable).toHaveBeenCalledWith(true);
+    });
+
+    it('shows denied edit feedback above the open mobile profile menu', async () => {
+      mocks.spaceId = 'space-1';
+      mocks.isMobileNavbar = true;
+      const user = userEvent.setup();
+      render(<NavbarActions />);
+
+      await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+      const toggle = screen.getByRole('switch', { name: 'Edit mode off' });
+      await user.click(toggle);
+      await user.click(toggle);
+
+      expect(screen.getByTestId('profile-menu')).toBeInTheDocument();
+      const feedback = (await screen.findByText('You don’t have edit access in this space')).parentElement;
+      expect(feedback).toHaveClass('z-1001');
+      expect(feedback).not.toHaveClass('z-10');
     });
 
     it('orders the mobile menu actions and creates an entity in the current space', async () => {
