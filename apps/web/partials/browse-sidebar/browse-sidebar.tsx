@@ -59,6 +59,8 @@ function collectBrowseSidebarImageHrefs(data: BrowseSidebarData): string[] {
 const navLinkBase = 'flex items-center gap-3 rounded-lg p-2.5 text-browseMenu font-normal not-italic';
 const navLinkIdle = `${navLinkBase} text-text hover:bg-grey-01`;
 const navLinkActive = `${navLinkBase} bg-divider text-text`;
+const mobileHeaderActionClass =
+  'flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-grey-01 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-text active:bg-divider';
 
 function BrowseNavIcon({ src }: { src: string }) {
   return (
@@ -429,7 +431,11 @@ export function BrowseSidebar(props: BrowseSidebarProps = {}) {
           mobile ? 'h-14 justify-between border-b border-divider' : 'h-11'
         )}
       >
-        <Link href={NavUtils.toRoot()} aria-label="Geo">
+        <Link
+          href={NavUtils.toRoot()}
+          aria-label="Geo"
+          className={mobile ? cx('-ml-3', mobileHeaderActionClass) : undefined}
+        >
           <GeoLogoLarge />
         </Link>
         {mobile ? (
@@ -437,7 +443,7 @@ export function BrowseSidebar(props: BrowseSidebarProps = {}) {
             type="button"
             aria-label="Close browse menu"
             onClick={onClose}
-            className="-mr-3 flex h-11 w-11 items-center justify-center rounded-lg text-grey-04 transition-colors hover:bg-grey-01 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-text active:bg-divider"
+            className={cx('-mr-3 text-grey-04', mobileHeaderActionClass)}
           >
             <Close />
           </button>

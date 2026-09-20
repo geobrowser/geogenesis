@@ -12,9 +12,10 @@ const MOBILE_BREAKPOINT_QUERY = '(max-width: 639px)';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
 }
 
-export function MobileBrowseDrawer({ open, onOpenChange }: Props) {
+export function MobileBrowseDrawer({ open, onOpenChange, triggerRef }: Props) {
   React.useEffect(() => {
     if (!open || typeof window.matchMedia !== 'function') return;
 
@@ -38,7 +39,12 @@ export function MobileBrowseDrawer({ open, onOpenChange }: Props) {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-100 hidden bg-text/30 mobile:block" />
         <Dialog.Content
+          id="mobile-browse-drawer"
           onClickCapture={closeAfterNavigation}
+          onCloseAutoFocus={event => {
+            event.preventDefault();
+            triggerRef.current?.focus();
+          }}
           className="fixed inset-y-0 left-0 z-101 hidden w-[min(20rem,calc(100vw-3rem))] bg-white shadow-[4px_0_24px_rgba(32,32,32,0.12)] focus:outline-hidden mobile:flex"
         >
           <Dialog.Title className="sr-only">Browse Geo</Dialog.Title>

@@ -23,11 +23,15 @@ describe('Navbar mobile browse control', () => {
   it('opens browse navigation from a full-height touch target', async () => {
     const onBrowseClick = vi.fn();
     const user = userEvent.setup();
+    const browseButtonRef = React.createRef<HTMLButtonElement>();
 
-    render(<Navbar onBrowseClick={onBrowseClick} onSearchClick={vi.fn()} />);
+    render(<Navbar browseButtonRef={browseButtonRef} onBrowseClick={onBrowseClick} onSearchClick={vi.fn()} />);
 
     const button = screen.getByRole('button', { name: 'Open browse menu' });
+    expect(browseButtonRef.current).toBe(button);
     expect(button).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(button).toHaveAttribute('aria-controls', 'mobile-browse-drawer');
     expect(button).toHaveClass('h-11', 'w-11', 'mobile:flex');
 
     await user.click(button);

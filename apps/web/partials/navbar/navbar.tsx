@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { NavUtils } from '~/core/utils/utils';
 
 import { ClientOnly } from '~/design-system/client-only';
@@ -9,13 +11,22 @@ import { NavbarClientActions } from './navbar-client-actions';
 import { NavbarSpaceMetadata } from './navbar-space-metadata';
 
 interface Props {
+  browseOpen?: boolean;
+  browseButtonRef?: React.Ref<HTMLButtonElement>;
   onBrowseClick: () => void;
   onSearchClick: () => void;
   hideLogo?: boolean;
   showBrowseButton?: boolean;
 }
 
-export function Navbar({ onBrowseClick, onSearchClick, hideLogo = false, showBrowseButton = true }: Props) {
+export function Navbar({
+  browseOpen = false,
+  browseButtonRef,
+  onBrowseClick,
+  onSearchClick,
+  hideLogo = false,
+  showBrowseButton = true,
+}: Props) {
   return (
     <nav
       data-app-navbar
@@ -24,9 +35,12 @@ export function Navbar({ onBrowseClick, onSearchClick, hideLogo = false, showBro
       <div className="flex min-w-0 items-center gap-8 mobile:gap-2 md:gap-4">
         {showBrowseButton ? (
           <button
+            ref={browseButtonRef}
             type="button"
             aria-label="Open browse menu"
             aria-haspopup="dialog"
+            aria-expanded={browseOpen}
+            aria-controls="mobile-browse-drawer"
             onClick={onBrowseClick}
             className="-my-1 -ml-3 hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg text-grey-04 transition-colors hover:bg-grey-01 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-text active:bg-divider mobile:flex"
           >

@@ -100,6 +100,7 @@ const DebatesHubPanel = dynamic(
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const [mobileBrowseOpen, setMobileBrowseOpen] = React.useState(false);
+  const mobileBrowseButtonRef = React.useRef<HTMLButtonElement>(null);
   const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
   const fullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
 
@@ -124,6 +125,10 @@ export function App({ children }: { children: React.ReactNode }) {
 
   useKeyboardShortcuts(memoizedShortcuts);
 
+  React.useEffect(() => {
+    if (fullscreenActive) setMobileBrowseOpen(false);
+  }, [fullscreenActive]);
+
   return (
     <DebateMediaSessionProvider>
       <div className="flex min-h-[100dvh] items-stretch">
@@ -133,12 +138,18 @@ export function App({ children }: { children: React.ReactNode }) {
         <div className="mobile:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
         <div className="flex min-w-0 flex-1 flex-col">
           <Navbar
+            browseOpen={mobileBrowseOpen && !fullscreenActive}
+            browseButtonRef={mobileBrowseButtonRef}
             onBrowseClick={() => setMobileBrowseOpen(true)}
             onSearchClick={() => setOpen(true)}
             hideLogo={sidebarOpen && !fullscreenActive}
             showBrowseButton={!fullscreenActive}
           />
-          <MobileBrowseDrawer open={mobileBrowseOpen && !fullscreenActive} onOpenChange={setMobileBrowseOpen} />
+          <MobileBrowseDrawer
+            open={mobileBrowseOpen && !fullscreenActive}
+            onOpenChange={setMobileBrowseOpen}
+            triggerRef={mobileBrowseButtonRef}
+          />
           <SearchDialog open={open} onDone={() => setOpen(false)} />
           <div className="min-w-0 flex-1 2xl:px-[2ch]">
             <Main>{children}</Main>
