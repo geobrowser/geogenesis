@@ -14,6 +14,8 @@ type TooltipProps = {
   position?: Position;
   align?: Align;
   variant?: Variant;
+  /** Also opens on a touch press. Intended for read-only triggers that have no separate action. */
+  openOnPress?: boolean;
 };
 
 type Position = 'top' | 'bottom' | 'left' | 'right';
@@ -28,6 +30,7 @@ export const Tooltip = ({
   position = 'bottom',
   align = 'center',
   variant = 'dark',
+  openOnPress = false,
 }: TooltipProps) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [x, y] = originCoordinates[position];
@@ -35,7 +38,27 @@ export const Tooltip = ({
   return (
     <Provider delayDuration={300} skipDelayDuration={300}>
       <Root open={isOpen} onOpenChange={setIsOpen}>
-        <Trigger asChild>{trigger}</Trigger>
+        <Trigger
+          asChild
+          onPointerDown={
+            openOnPress
+              ? event => {
+                  if (event.pointerType !== 'touch') return;
+
+                  // Radix deliberately ignores touch pointers for tooltips. This opt-in path is
+                  // for read-only triggers whose explanation would otherwise be unreachable on a
+                  // touchscreen. Preventing the default also skips Radix's close-on-pointer-down.
+                  event.preventDefault();
+                  setIsOpen(open => !open);
+                }
+              : undefined
+          }
+          // Radix closes a tooltip on click. Keep a touch-opened, read-only tooltip visible until
+          // the next press or an outside interaction dismisses it.
+          onClick={openOnPress ? event => event.preventDefault() : undefined}
+        >
+          {trigger}
+        </Trigger>
         <Portal>
           <AnimatePresence mode="popLayout">
             {isOpen && (

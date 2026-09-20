@@ -4,6 +4,8 @@ import cx from 'classnames';
 
 import * as React from 'react';
 
+import { Tooltip } from '~/design-system/tooltip';
+
 /**
  * The offer to debate a claim, as one control (GEO-2825).
  *
@@ -74,44 +76,62 @@ export function RequestDebateControl({
   const base = claimSlotPillClass(variant);
   const aside = cx('text-footnote', variant === 'block' ? 'text-left' : 'text-right');
 
+  const button = (
+    <button
+      type="button"
+      onClick={onRequest}
+      disabled={disabled || isRequesting || pending}
+      aria-busy={isRequesting || pending ? true : undefined}
+      className={cx(
+        base,
+        // Filled dark, not red. In this product red is Dispute — it fills the negative pill an
+        // inch below this and the negative half of the bar beneath that — so a red button here
+        // reads as a side rather than an action. Dark is the only weight left that means
+        // "primary" without borrowing a meaning that is already taken.
+        'bg-text text-white hover:bg-text/90 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50'
+      )}
+    >
+      {/* Both labels stacked in one grid cell, so the button is always as wide as the longer of
+          them. "Requesting…" is the shorter, and a button that shrinks the moment you press it
+          reads as something having gone wrong.
+
+          Only while the offer is pressable. A pending label can be longer than "Request debate",
+          and sizing against it would hold every idle button that much wider — in a meta row built
+          not to grow. A press cannot happen while pending, which is the only transition the sizer
+          exists to smooth. */}
+      {pending ? (
+        <span>{pendingLabel}</span>
+      ) : (
+        <span className="grid place-items-center">
+          <span className="invisible col-start-1 row-start-1" aria-hidden>
+            Request debate
+          </span>
+          <span className="col-start-1 row-start-1">{isRequesting ? 'Requesting…' : 'Request debate'}</span>
+        </span>
+      )}
+    </button>
+  );
+
   return (
     <span className={cx('flex flex-col gap-1', variant === 'block' ? 'w-full' : 'shrink-0 items-end', className)}>
-      <button
-        type="button"
-        onClick={onRequest}
-        disabled={disabled || isRequesting || pending}
-        aria-busy={isRequesting || pending ? true : undefined}
-        // Shown rather than left to a `title`: native tooltips never appear on touch and are
-        // unreliable on a disabled button, which is exactly when the explanation matters.
-        title={blockedReason ?? undefined}
-        className={cx(
-          base,
-          // Filled dark, not red. In this product red is Dispute — it fills the negative pill an
-          // inch below this and the negative half of the bar beneath that — so a red button here
-          // reads as a side rather than an action. Dark is the only weight left that means
-          // "primary" without borrowing a meaning that is already taken.
-          'bg-text text-white hover:bg-text/90 disabled:cursor-default disabled:opacity-50'
-        )}
-      >
-        {/* Both labels stacked in one grid cell, so the button is always as wide as the longer of
-            them. "Requesting…" is the shorter, and a button that shrinks the moment you press it
-            reads as something having gone wrong.
-
-            Only while the offer is pressable. A pending label can be longer than "Request debate",
-            and sizing against it would hold every idle button that much wider — in a meta row built
-            not to grow. A press cannot happen while pending, which is the only transition the sizer
-            exists to smooth. */}
-        {pending ? (
-          <span>{pendingLabel}</span>
-        ) : (
-          <span className="grid place-items-center">
-            <span className="invisible col-start-1 row-start-1" aria-hidden>
-              Request debate
+      {blockedReason ? (
+        <Tooltip
+          label={blockedReason}
+          position="bottom"
+          align={variant === 'block' ? 'center' : 'end'}
+          openOnPress
+          // A disabled button does not reliably emit the pointer events Radix needs. The wrapper
+          // owns hover/touch and is focusable for keyboard readers, while leaving the button's
+          // disabled semantics intact.
+          trigger={
+            <span tabIndex={0} className={cx('inline-flex cursor-default', variant === 'block' && 'w-full')}>
+              {button}
             </span>
-            <span className="col-start-1 row-start-1">{isRequesting ? 'Requesting…' : 'Request debate'}</span>
-          </span>
-        )}
-      </button>
+          }
+        />
+      ) : (
+        button
+      )}
       {/* The button's own label changes, but a disabled control nobody is focused on announces
           nothing. This is what actually reaches a screen reader. */}
       {pending && !isRequesting ? (
@@ -119,7 +139,6 @@ export function RequestDebateControl({
           {pendingLabel}
         </span>
       ) : null}
-      {blockedReason ? <span className={cx(aside, 'text-grey-04')}>{blockedReason}</span> : null}
       {note}
       {/* A failed request is an event that happens after they press, with nothing on screen to mark
           it — `role="alert"` is what makes it reach anyone not watching this corner. */}
