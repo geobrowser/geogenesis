@@ -3,10 +3,14 @@ import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { DebatePlaybackGate, useDebatePlaybackAllowed } from './debate-playback-gate';
+import { DebatePlaybackGate, useDebatePlaybackAllowed, useIsDebatePlaybackGated } from './debate-playback-gate';
 
 function Probe({ id }: { id: string }) {
   return <span data-testid={id}>{useDebatePlaybackAllowed(id) ? 'allowed' : 'held'}</span>;
+}
+
+function GatedProbe() {
+  return <span data-testid="gated">{useIsDebatePlaybackGated() ? 'gated' : 'ungated'}</span>;
 }
 
 const A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -49,6 +53,36 @@ describe('DebatePlaybackGate', () => {
     );
 
     expect(screen.getByTestId(A)).toHaveTextContent('held');
+  });
+
+  /**
+   * A card asks this to decide how much of itself has to be on screen before it plays. Under a
+   * gate the answer is "any of it" — the gate has already chosen one card, so the card's own
+   * stricter ratio can only keep the chosen one silent.
+   */
+  it('tells a card whether a gate is arbitrating', () => {
+    render(<GatedProbe />);
+    expect(screen.getByTestId('gated')).toHaveTextContent('ungated');
+
+    cleanup();
+
+    render(
+      <DebatePlaybackGate allowedId={A}>
+        <GatedProbe />
+      </DebatePlaybackGate>
+    );
+    expect(screen.getByTestId('gated')).toHaveTextContent('gated');
+  });
+
+  it('is gated even while the gallery has chosen nobody', () => {
+    // `allowedId={null}` is a gate holding everything, not the absence of one.
+    render(
+      <DebatePlaybackGate allowedId={null}>
+        <GatedProbe />
+      </DebatePlaybackGate>
+    );
+
+    expect(screen.getByTestId('gated')).toHaveTextContent('gated');
   });
 
   it('matches ids however they are spelled', () => {

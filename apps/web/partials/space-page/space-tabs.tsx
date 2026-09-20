@@ -42,27 +42,6 @@ type BuiltSpaceTab = {
 const PERSON_TAB_LABELS = ['Debates', 'Positions', 'Proposals', 'About'] as const;
 
 /**
- * The tab bar's own id, so a link can land on the tabs instead of the top of the page.
- *
- * A fragment rather than a scroll written by hand, because of when each one runs. The router
- * applies a fragment once the destination has rendered, which is the first moment the page is tall
- * enough to hold the position; scrolling on click instead runs against the page being left, and a
- * profile whose Overview is barely a screen tall has nowhere to put the reader, so they land short.
- *
- * It does not survive a cold load of the link — the lists render on the client, so the document is
- * still one screen tall when the browser looks for the fragment. That leaves the reader at the top
- * of the profile, which is where a cold load leaves them anyway.
- *
- * Whoever renders the bar owns the id — see the space layout.
- */
-export const SPACE_TABS_ANCHOR = 'space-tabs';
-
-/** `href` with the fragment that lands the reader on the tab bar rather than the page top. */
-export function withSpaceTabsAnchor(href: string) {
-  return `${href}#${SPACE_TABS_ANCHOR}`;
-}
-
-/**
  * The About tab, defined once for both paths that draw it.
  *
  * The read-only path builds its tabs through `buildSpaceTabs`; the editable one

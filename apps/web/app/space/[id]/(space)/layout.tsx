@@ -35,8 +35,9 @@ import { AddDataPanel } from '~/partials/space-page/add-data-panel';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
-import { SPACE_TABS_ANCHOR, SpaceTabs } from '~/partials/space-page/space-tabs';
+import { SpaceTabs } from '~/partials/space-page/space-tabs';
 import type { PersonRecordCounts } from '~/partials/space-page/space-tabs';
+import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';

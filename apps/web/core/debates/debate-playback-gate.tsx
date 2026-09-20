@@ -30,6 +30,19 @@ export function DebatePlaybackGate({ allowedId, children }: { allowedId: string 
   return <DebatePlaybackContext.Provider value={allowedId}>{children}</DebatePlaybackContext.Provider>;
 }
 
+/**
+ * Whether a surface is holding playback to one debate at all.
+ *
+ * A card decides for itself whether enough of it is on screen to play, and that judgement is
+ * calibrated for a stack of cards where nothing else arbitrates. Under a gate it is a second,
+ * stricter arbiter that can only subtract — so a card the gate has chosen can sit in its own dead
+ * band and never start, with tapping the reader's only way out. Knowing a gate is in force lets a
+ * card ask the question it actually needs answered: is any of me on screen.
+ */
+export function useIsDebatePlaybackGated(): boolean {
+  return React.useContext(DebatePlaybackContext) !== undefined;
+}
+
 /** Whether this debate may play. True wherever no gate is in force. */
 export function useDebatePlaybackAllowed(debateId: string): boolean {
   const allowed = React.useContext(DebatePlaybackContext);

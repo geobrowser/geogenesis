@@ -78,12 +78,14 @@ function mockMobileActivityGeometry(pageHeightWithoutActivity: number) {
   }
   vi.stubGlobal('ResizeObserver', TestResizeObserver);
 
+  const sectionHeight = { debates: 500, claims: 250 };
+
   const originalRect = HTMLElement.prototype.getBoundingClientRect;
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
     if ('activitySection' in this.dataset) {
       const debatesSelected =
         this.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.textContent?.includes('Debates');
-      return rect(390, debatesSelected ? 500 : 250);
+      return rect(390, debatesSelected ? sectionHeight.debates : sectionHeight.claims);
     }
 
     if ('activityScrollReserve' in this.dataset) {
@@ -116,8 +118,9 @@ function mockMobileActivityGeometry(pageHeightWithoutActivity: number) {
     // position, and the recovery path exists for exactly that case.
     scroll,
     // And for the claim cards growing as their queries land, which is the other way the sizing
-    // path runs after a switch.
+    // path runs after a switch. Move `sectionHeight` first; the observer reads it.
     sectionResized: () => notifyResize?.(),
+    sectionHeight,
   };
 }
 
@@ -344,6 +347,33 @@ describe('ProfileActivitySection', () => {
     scroll.y = 0;
     fireEvent.scroll(window);
 
+    expect(reserve).toHaveStyle({ height: '0px' });
+  });
+
+  /**
+   * The swap is over once the page can hold the reader without help, and it has to actually end.
+   * Left armed, `holdY` outlives the switch it belongs to: a shrink long afterwards would size a
+   * reserve from a position the reader left, and hand them a screen of blank space to scroll into.
+   */
+  it('stops holding once the page is tall enough on its own', () => {
+    const { sectionHeight, sectionResized } = mockMobileActivityGeometry(600);
+    const { reserve } = renderActivity();
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(reserve).toHaveStyle({ height: '150px' });
+
+    // The claim cards finish loading, and the page is long enough on its own.
+    sectionHeight.claims = 500;
+    act(() => {
+      sectionResized();
+    });
+    expect(reserve).toHaveStyle({ height: '0px' });
+
+    // Whatever shrinks the section after that is not this switch's business.
+    sectionHeight.claims = 250;
+    act(() => {
+      sectionResized();
+    });
     expect(reserve).toHaveStyle({ height: '0px' });
   });
 

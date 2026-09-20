@@ -7,7 +7,7 @@ import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
-import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
+import { useDebatePlaybackAllowed, useIsDebatePlaybackGated } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
@@ -33,6 +33,19 @@ import { SpaceThumb } from './space-thumb';
  * before it gives it up. Strictly between them the card keeps whatever state it had. */
 const ACTIVATE_RATIO = 0.6;
 const DEACTIVATE_RATIO = 0.4;
+
+/**
+ * The same pair where a gate has already picked the one card allowed to play.
+ *
+ * 0.6 exists to stop a stack of cards all playing at once, which is the gate's job wherever there
+ * is one. Kept that high under a gate it can only subtract: the profile's Activity row shares one
+ * vertical ratio across every card in it, so a row sitting half off the bottom of the screen puts
+ * the chosen card at 0.5 — inside the dead band, holding whatever it was, which after a tab switch
+ * is "not playing". Low enough to start on sight, with the hysteresis kept so a card resting near
+ * the edge does not toggle. Playback is muted, so starting early costs the reader nothing.
+ */
+const GATED_ACTIVATE_RATIO = 0.25;
+const GATED_DEACTIVATE_RATIO = 0.1;
 
 type DebateExploreFeedCardProps = {
   item: ExploreFeedItem;
@@ -82,10 +95,15 @@ export function DebateExploreFeedCard({
   // screen at once, and nothing else holds a card active. Each toggle starts or interrupts a
   // playback attempt, which is what made scrolling feel glitchy (GEO-2895).
   //
-  // Now: reach 0.6 to activate, fall back to 0.4 to give it up, and hold whatever the card
-  // already was strictly between them. The lower edge is inclusive so that the observer's
-  // report at the 0.4 threshold deactivates rather than landing ambiguously inside the band —
-  // a ratio reported exactly at a threshold is the normal case, not an edge case.
+  // Now: reach the activation ratio to activate, fall back to the deactivation one to give it up,
+  // and hold whatever the card already was strictly between them. The lower edge is inclusive so
+  // that the observer's report at that threshold deactivates rather than landing ambiguously
+  // inside the band — a ratio reported exactly at a threshold is the normal case, not an edge
+  // case. Which pair applies depends on whether a gate has already chosen one card; see above.
+  const gated = useIsDebatePlaybackGated();
+  const activateRatio = gated ? GATED_ACTIVATE_RATIO : ACTIVATE_RATIO;
+  const deactivateRatio = gated ? GATED_DEACTIVATE_RATIO : DEACTIVATE_RATIO;
+
   const [active, setActive] = React.useState(false);
   React.useEffect(() => {
     if (!container) return;
@@ -94,17 +112,17 @@ export function DebateExploreFeedCard({
         for (const entry of entries) {
           setActive(current => {
             if (!entry.isIntersecting) return false;
-            if (entry.intersectionRatio >= ACTIVATE_RATIO) return true;
-            if (entry.intersectionRatio <= DEACTIVATE_RATIO) return false;
+            if (entry.intersectionRatio >= activateRatio) return true;
+            if (entry.intersectionRatio <= deactivateRatio) return false;
             return current;
           });
         }
       },
-      { threshold: [DEACTIVATE_RATIO, ACTIVATE_RATIO] }
+      { threshold: [deactivateRatio, activateRatio] }
     );
     observer.observe(container);
     return () => observer.disconnect();
-  }, [container]);
+  }, [container, activateRatio, deactivateRatio]);
 
   // A veto, not a replacement: where a surface holds playback to one debate —
   // a row of cards, all of them fully on screen at once — this says whether it

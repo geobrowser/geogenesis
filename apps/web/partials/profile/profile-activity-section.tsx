@@ -15,7 +15,7 @@ import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-smal
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
-import { withSpaceTabsAnchor } from '~/partials/space-page/space-tabs';
+import { withSpaceTabsAnchor } from '~/partials/space-page/space-tabs-anchor';
 
 import { GalleryClaimCard } from './gallery-claim-card';
 
@@ -268,11 +268,30 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
       if (!swap || Math.abs(swap.width - width) > 1) {
         swapRef.current = null;
         reserve.style.height = '0px';
-        return;
+        return 0;
       }
 
       const naturalDocumentHeight = swap.naturalDocumentHeight - swap.sectionHeight + height;
-      reserve.style.height = `${Math.max(0, swap.holdY + window.innerHeight - naturalDocumentHeight)}px`;
+      const held = Math.max(0, swap.holdY + window.innerHeight - naturalDocumentHeight);
+      reserve.style.height = `${held}px`;
+
+      return held;
+    };
+
+    /**
+     * Size, and let the swap go once the page no longer needs it.
+     *
+     * A swap that outlives its own settling is state waiting to be wrong: the cards grow, the
+     * reserve reaches zero, and `holdY` sits there for as long as the reader stays on this tab —
+     * so a shrink an hour later would conjure height back out of a position they left behind, and
+     * leave them scrolling into blank space.
+     *
+     * Zero is the safe moment to let go precisely because nothing is being held at it, so dropping
+     * the swap cannot move anybody. Not on the first sizing though — that one runs before the
+     * correction below, and the correction needs the swap it belongs to.
+     */
+    const sizeAndSettle = () => {
+      if (sizeReserve() === 0) swapRef.current = null;
     };
 
     sizeReserve();
@@ -289,7 +308,7 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
     if (typeof ResizeObserver === 'undefined') return;
     // Claim cards grow as their queries land. Shrink the reserve by the same amount so the overall
     // document height stays steady rather than drifting.
-    const observer = new ResizeObserver(sizeReserve);
+    const observer = new ResizeObserver(sizeAndSettle);
     observer.observe(section);
 
     // Armed a frame late, so the scroll events belonging to the swap itself — the correction above,
@@ -305,11 +324,12 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
       const current = swapRef.current;
       if (!current) return;
 
-      // Once the reader moves up of their own accord, stop holding space they no longer need.
-      // Moving down needs nothing held and nothing released.
+      // Once the reader moves up of their own accord, stop holding space they no longer need —
+      // and back at the top there is nothing left to hold, so the swap goes with it. Moving down
+      // needs nothing held and nothing released.
       if (window.scrollY < current.holdY) {
         current.holdY = window.scrollY;
-        sizeReserve();
+        sizeAndSettle();
       }
     };
     window.addEventListener('scroll', onScroll, { passive: true });
