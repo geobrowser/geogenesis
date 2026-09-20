@@ -5,6 +5,7 @@ import {
   getSubspaceProposalDetails,
   getVotingSettingsProposalDetails,
   mapApiActionsToProposalType,
+  proposalTypeFromActionTypes,
 } from './proposal';
 
 describe('getSubspaceProposalDetails', () => {
@@ -180,5 +181,46 @@ describe('mapApiActionsToProposalType — voting settings', () => {
         { actionType: 'PUBLISH', contentUri: 'ipfs://cid' },
       ])
     ).toBe('ADD_EDIT');
+  });
+});
+
+/**
+ * The same precedence, reachable without a whole `ApiAction`.
+ *
+ * The profile's Proposals tab reads action types off the graph — two columns,
+ * no schema — and had reimplemented this as "keep the first one back". No source
+ * promises action order, which is what `findMembershipAction` has said all
+ * along, so first-wins gives a multi-action proposal an arbitrary identity. For
+ * an unnamed proposal that identity is its title.
+ */
+describe('proposalTypeFromActionTypes', () => {
+  it('agrees with the ApiAction path it was split out of', () => {
+    const actions = [{ actionType: 'ADD_MEMBER' as const, editor: '0x1' }];
+
+    expect(proposalTypeFromActionTypes(actions.map(a => a.actionType))).toBe(mapApiActionsToProposalType(actions));
+  });
+
+  it('prefers PUBLISH wherever it sits in the list', () => {
+    expect(proposalTypeFromActionTypes(['ADD_MEMBER', 'PUBLISH'])).toBe('ADD_EDIT');
+    expect(proposalTypeFromActionTypes(['PUBLISH', 'ADD_MEMBER'])).toBe('ADD_EDIT');
+  });
+
+  // The case first-wins got wrong, and the reason this is not an index lookup.
+  it('finds the membership action when it is not first', () => {
+    expect(proposalTypeFromActionTypes(['UPDATE_VOTING_SETTINGS', 'REMOVE_EDITOR'])).toBe('REMOVE_EDITOR');
+  });
+
+  it('gives the same answer whichever order the actions arrive in', () => {
+    const order = ['UPDATE_VOTING_SETTINGS', 'ADD_EDITOR', 'UNKNOWN'];
+
+    expect(proposalTypeFromActionTypes(order)).toBe(proposalTypeFromActionTypes([...order].reverse()));
+  });
+
+  it('falls back to voting settings only when nothing outranks it', () => {
+    expect(proposalTypeFromActionTypes(['UPDATE_VOTING_SETTINGS'])).toBe('UPDATE_VOTING_SETTINGS');
+  });
+
+  it('answers for a proposal with no actions at all', () => {
+    expect(proposalTypeFromActionTypes([])).toBe('ADD_EDIT');
   });
 });

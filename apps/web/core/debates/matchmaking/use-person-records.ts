@@ -9,6 +9,7 @@ import { Effect } from 'effect';
 import { type WinnerShare, useWinnerSharesWithStatus } from '~/core/claims/browse/claim-debates';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
+import { normId } from '~/core/utils/norm-id';
 
 import { type PersonRecord, canonicalizeWinnerShares, derivePersonRecord } from './person-record';
 import {
@@ -31,8 +32,12 @@ function debateSetKey(debateIds: string[]): string {
 type RawRecord = {
   /** Distinct claims answered, not `userVotes` rows: the same claim can be answered on two axes. */
   positions: number;
+  /** Distinct answered claims per space, under the same de-duplication rule. */
+  claimsBySpace: Map<string, number>;
   positionsTruncated: boolean;
   debateIds: string[];
+  /** Distinct published debates per space; the same debate on both sides still counts once. */
+  debatesBySpace: Map<string, number>;
   truncated: boolean;
   createdAt: string | number | null;
 };
@@ -198,11 +203,9 @@ export function readPersonRecords(response: PersonRecordsQuery, personIds: strin
 
   personIds.forEach((personId, index) => {
     const positions = response[personAlias(index, 'positions')] as
-      | CountedConnection<{ objectId?: string | null }>
-      | undefined;
+      CountedConnection<{ objectId?: string | null; spaceId?: string | null }> | undefined;
     const supported = response[personAlias(index, 'supported')] as
-      | CountedConnection<{ fromEntityId?: string | null }>
-      | undefined;
+      CountedConnection<{ fromEntityId?: string | null; spaceId?: string | null }> | undefined;
     const opposed = response[personAlias(index, 'opposed')] as typeof supported;
     const joined = response[personAlias(index, 'joined')] as { createdAt?: string | null } | undefined;
 
@@ -210,14 +213,23 @@ export function readPersonRecords(response: PersonRecordsQuery, personIds: strin
     // `userVotes` rows, and one answered in two spaces is two more — so a row count says a bigger
     // number than the positions the rest of the app shows for the same person.
     const positionClaimIds = new Set<string>();
+    const positionClaimIdsBySpace = new Map<string, Set<string>>();
     let positionRows = 0;
     for (const node of positions?.nodes ?? []) {
       if (!node?.objectId) continue;
       positionRows += 1;
-      positionClaimIds.add(uuidToHex(node.objectId));
+      const claimId = uuidToHex(node.objectId);
+      positionClaimIds.add(claimId);
+      if (node.spaceId) {
+        const spaceId = normId(node.spaceId);
+        const claims = positionClaimIdsBySpace.get(spaceId) ?? new Set<string>();
+        claims.add(claimId);
+        positionClaimIdsBySpace.set(spaceId, claims);
+      }
     }
 
     const debateIds = new Set<string>();
+    const debateIdsBySpace = new Map<string, Set<string>>();
     let truncated = false;
     for (const side of [supported, opposed]) {
       let collected = 0;
@@ -225,6 +237,12 @@ export function readPersonRecords(response: PersonRecordsQuery, personIds: strin
         if (!node?.fromEntityId) continue;
         collected += 1;
         debateIds.add(node.fromEntityId);
+        if (node.spaceId) {
+          const spaceId = normId(node.spaceId);
+          const debates = debateIdsBySpace.get(spaceId) ?? new Set<string>();
+          debates.add(uuidToHex(node.fromEntityId));
+          debateIdsBySpace.set(spaceId, debates);
+        }
       }
       // Per side, not over the union: the two sides are paged independently, and a short page on
       // either one makes the record short.
@@ -233,8 +251,10 @@ export function readPersonRecords(response: PersonRecordsQuery, personIds: strin
 
     records.set(personId, {
       positions: positionClaimIds.size,
+      claimsBySpace: new Map([...positionClaimIdsBySpace].map(([spaceId, ids]) => [spaceId, ids.size])),
       positionsTruncated: isShort(positions, positionRows, POSITIONS_PER_PERSON),
       debateIds: [...debateIds],
+      debatesBySpace: new Map([...debateIdsBySpace].map(([spaceId, ids]) => [spaceId, ids.size])),
       truncated,
       createdAt: joined?.createdAt ?? null,
     });

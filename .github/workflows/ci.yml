@@ -60,8 +60,12 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      # `web` and `@geogenesis/auth`, not just `web`. The auth package had no tests until the
+      # embedded-wallet hook earned them, and a suite the pipeline cannot see is not a safety net —
+      # that hook decides whether an authenticated session ends up with a wallet, and it had been
+      # wrong five times before it was covered.
       - name: Run tests
-        run: bun turbo run --filter=web test
+        run: bun turbo run --filter=web --filter=@geogenesis/auth test
 
   lint:
     needs: build

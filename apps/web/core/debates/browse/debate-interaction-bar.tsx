@@ -4,10 +4,10 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { Warning } from '~/design-system/icons/warning';
 import { Text } from '~/design-system/text';
 
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
-import { ExploreClaimsIcon } from '~/partials/explore/explore-claims-icon';
 
 import { Comment, Share } from './icons';
 
@@ -50,7 +50,7 @@ export function DebateInteractionBar({
           presentation="debate-vertical"
         />
         <CircleAction label={String(commentCount)} onClick={onComment} icon={<Comment />} ariaLabel="Comments" />
-        <CircleAction label={String(claimsCount)} onClick={onClaims} icon={<ExploreClaimsIcon />} ariaLabel="Claims" />
+        <CircleAction label={String(claimsCount)} onClick={onClaims} icon={<Warning />} ariaLabel="Claims" />
         <CircleAction label="Share" onClick={onShare} icon={<Share />} ariaLabel="Share debate" expanded={shareOpen} />
       </div>
     );
@@ -65,7 +65,7 @@ export function DebateInteractionBar({
         presentation="debate-horizontal"
       />
       <PillAction onClick={onComment} icon={<Comment />} label={String(commentCount)} ariaLabel="Comments" />
-      <PillAction onClick={onClaims} icon={<ExploreClaimsIcon />} label={String(claimsCount)} ariaLabel="Claims" />
+      <PillAction onClick={onClaims} icon={<Warning />} label={String(claimsCount)} ariaLabel="Claims" />
       <PillAction onClick={onShare} icon={<Share />} label="Share" ariaLabel="Share debate" expanded={shareOpen} />
     </div>
   );

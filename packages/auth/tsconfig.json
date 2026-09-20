@@ -36,5 +36,8 @@
     /* Strictness Options */
     "strict": true,
     "skipLibCheck": true
-  }
+  },
+  /* Run by vitest, never shipped: compiling them put duplicate copies in dist,
+     which vitest then collected a second time. */
+  "exclude": ["**/*.test.ts", "**/*.test.tsx", "dist"]
 }

@@ -18,6 +18,7 @@ import { useDiff } from '~/core/state/diff-store';
 import { Persistence } from '~/core/state/persistence';
 
 import { ClientOnly } from '~/design-system/client-only';
+import { SlideUpBodyState } from '~/design-system/slide-up-body-state';
 
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
 import { EntityCommentsPanelHost } from '~/partials/comments/entity-comments-panel-host';
@@ -126,7 +127,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <React.Suspense fallback={null}>
           <PageViewTracker />
         </React.Suspense>
-        <div className="sm:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
+        <div className="mobile:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
         <div className="flex min-w-0 flex-1 flex-col">
           <Navbar onSearchClick={() => setOpen(true)} hideLogo={sidebarOpen && !fullscreenActive} />
           <SearchDialog open={open} onDone={() => setOpen(false)} />
@@ -134,6 +135,7 @@ export function App({ children }: { children: React.ReactNode }) {
             <Main>{children}</Main>
           </div>
         </div>
+        <SlideUpBodyState />
         <EntitySidePanel />
         <EntityCommentsPanelHost />
         {/* Client-side rendered due to `window.localStorage` usage */}

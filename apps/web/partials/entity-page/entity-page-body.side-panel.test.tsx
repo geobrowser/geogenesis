@@ -16,6 +16,10 @@ vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => fal
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntity: () => ({ entity: { id: 'entity-1', types: [] }, isLoading: false }),
 }));
+// `useCustomBrowseView` asks for the space to tell a person's profile from an
+// ordinary entity. This file renders without a QueryClient on purpose — it is
+// about the header row, not about data — so the space is stubbed like the rest.
+vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: null, isLoading: false }) }));
 vi.mock('~/core/utils/use-entity-media', () => ({
   useEntityMediaUrl: () => null,
   useImageUrlFromEntity: () => null,

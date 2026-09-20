@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@geogenesis/auth', () => ({
+  // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
+  usePrivy: () => ({ authenticated: false }),
   useGeoLogin: ({
     onComplete,
     onError,
@@ -43,6 +45,9 @@ vi.mock('~/partials/onboarding/dialog', async () => {
     avatarAtom: atom(''),
     spaceIdAtom: atom(''),
     stepAtom: atom('enter-profile'),
+    // Persisted onboarding state like the rest, and the one every hand-written reset forgot —
+    // `PendingPersonalSpaceRunner` turns it into membership proposals for the new personal space.
+    selectedTopicIdsAtom: atom<string[]>([]),
   };
 });
 

@@ -20,7 +20,12 @@ import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 
-import { ENTITY_PAGE_CONTENT_MAX_WIDTH, ENTITY_PAGE_COVER_MAX_WIDTH } from './entity-page-layout';
+import {
+  ENTITY_PAGE_CONTENT_MAX_WIDTH,
+  ENTITY_PAGE_COVER_MAX_WIDTH,
+  ENTITY_PAGE_WIDTH_VARIABLES,
+  ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH,
+} from './entity-page-layout';
 
 const COVER_IMAGE_HEIGHT = 320;
 const MOBILE_COVER_IMAGE_HEIGHT_CLASS = 'md:!h-[180px]';
@@ -48,15 +53,29 @@ function computeLayout(hasCover: boolean, hasCoverImage: boolean, hasAvatar: boo
 
 export const EditableCoverAvatarHeader = ({
   avatarUrl,
+  contentMaxWidth = ENTITY_PAGE_CONTENT_MAX_WIDTH,
   coverUrl,
   fitImage = false,
+  withAvatar = false,
 }: {
   avatarUrl: string | null;
+  /**
+   * How wide the text column under this header is, so the avatar can line up
+   * with it. Defaults to the ordinary page width; a surface that renders a rail
+   * — a profile — passes the wider with-sidebar width instead.
+   */
+  contentMaxWidth?: number;
   coverUrl: string | null;
   fitImage?: boolean;
+  /** Whether the fitted header shows the avatar too — see the `fitImage` branch. */
+  withAvatar?: boolean;
 }) => {
   const { spaceId, id } = useEntityStoreInstance();
   const editable = useUserIsEditing(spaceId);
+
+  // A profile's column is 1142 wide and narrows to 900 where the rail drops
+  // itself, so the avatar's box has to follow it rather than sit at one width.
+  const isWideColumn = contentMaxWidth === ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH;
 
   const renderedProperties = useEditableProperties(id, spaceId);
 
@@ -70,17 +89,51 @@ export const EditableCoverAvatarHeader = ({
   const hasCoverImage = !!coverUrl;
   const hasAvatar = !!showAvatar;
 
+  /*
+   * The fitted header: a cover sized to the column it is in rather than cropped
+   * to a fixed height. The side panel uses it.
+   *
+   * `withAvatar` is off by default and that is deliberate. This branch drew the
+   * cover alone, which is right for most entities — an entity's avatar is a
+   * thumbnail for lists, and a panel that is already showing the thing itself
+   * has no use for one. A *person* is the exception the rule cannot survive: the
+   * avatar is their face, and a profile that opens without it is missing the one
+   * thing a reader recognises. So the caller says.
+   */
   if (fitImage) {
-    if (!hasCoverImage) return null;
+    if (!hasCoverImage && !(withAvatar && hasAvatar)) return null;
+
     return (
-      <div className="relative mx-auto mb-8 w-full">
-        <AvatarCoverInput
-          entityId={id}
-          typeOfId={SystemIds.COVER_PROPERTY}
-          inputId="cover-input"
-          imgUrl={coverUrl}
-          fitImage
-        />
+      <div className={cx('relative mx-auto w-full', withAvatar && hasAvatar ? 'mb-14' : 'mb-8')}>
+        {hasCoverImage && (
+          <AvatarCoverInput
+            entityId={id}
+            typeOfId={SystemIds.COVER_PROPERTY}
+            inputId="cover-input"
+            imgUrl={coverUrl}
+            fitImage
+          />
+        )}
+        {withAvatar && hasAvatar && (
+          <div
+            // Overhanging the cover's bottom-left by the same 40px the full
+            // header uses, so a profile reads the same in the panel as on its
+            // page. Aligned to this container rather than to a text column:
+            // the panel has one width, so the cover and the name below it
+            // already start in the same place.
+            className={cx('flex justify-start', hasCoverImage && 'absolute left-0')}
+            style={hasCoverImage ? { bottom: -AVATAR_OVERFLOW } : undefined}
+          >
+            <div className="flex h-20 w-20 items-center justify-center rounded-lg">
+              <AvatarCoverInput
+                typeOfId={ContentIds.AVATAR_PROPERTY}
+                entityId={id}
+                inputId="avatar-input"
+                imgUrl={avatarUrl}
+              />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -130,8 +183,32 @@ export const EditableCoverAvatarHeader = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={TRANSITION}
-            className="absolute right-0 left-0 mx-auto flex justify-start"
-            style={{ bottom: -AVATAR_OVERFLOW, maxWidth: ENTITY_PAGE_CONTENT_MAX_WIDTH }}
+            // Centred in a box the width of the *text column*, so its left edge
+            // lands where the name below it starts. The cover is wider than the
+            // column at every width (1192 against 900 or 1142), so aligning to
+            // the cover instead puts the avatar 25–146px to the left of the
+            // name — which is why this takes the column's width rather than
+            // assuming one.
+            //
+            // And it has to take it *responsively*. `EntityPageContentContainer`
+            // narrows a with-sidebar column back to 900px at `lg` (which is a
+            // max-width of 1023px here), because the rail drops itself at that
+            // point. A fixed 1142 left this box viewport-wide between 901px and
+            // 1023px while the name centred at 900 — the avatar sliding up to
+            // 121px left of the name it is supposed to line up with, in exactly
+            // one band of widths.
+            className={cx(
+              'absolute right-0 left-0 mx-auto flex justify-start',
+              isWideColumn &&
+                'max-w-[var(--entity-page-with-sidebar-max-width)] lg:max-w-[var(--entity-page-content-max-width)]'
+            )}
+            style={{
+              bottom: -AVATAR_OVERFLOW,
+              maxWidth: isWideColumn ? undefined : contentMaxWidth,
+              // Declared here because the container's copy is scoped to its own
+              // element, which is not an ancestor of this one.
+              ...(isWideColumn ? ENTITY_PAGE_WIDTH_VARIABLES : {}),
+            }}
           >
             <div className="flex h-20 w-20 items-center justify-center rounded-lg">
               <AvatarCoverInput
