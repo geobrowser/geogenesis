@@ -107,7 +107,6 @@ function EditorFooter({
         <>
           <Spacer height={24} />
           {hideProperties ? null : <ToggleEntityPage id={entityId} spaceId={spaceId} />}
-          <AutomaticModeToggle />
         </>
       ) : hideProperties ? null : (
         <ToggleEntityPage id={entityId} spaceId={spaceId} />
@@ -273,6 +272,11 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   // generic value sheet and swapping it out from under the reader.
   if (customView === 'pending') return null;
 
+  // Mounted independently of edit-only content so a direct `?edit=true` route can turn editing on.
+  // Claim and Topic both return before the generic EditorFooter, so keeping initialization there
+  // makes both custom routes self-blocking. Side panels own their edit intent and do not use this.
+  const routeEditInitializer = props.variant === 'route' ? <AutomaticModeToggle /> : null;
+
   if (customView === 'claim') {
     const showClaimMedia = props.variant === 'sidePanel' || props.showCover !== false;
 
@@ -296,6 +300,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             />
           )
         ) : null}
+        {routeEditInitializer}
         <ClaimPageView
           entityId={entityId}
           spaceId={spaceId}
@@ -309,7 +314,12 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   }
 
   if (customView === 'topic') {
-    return <TopicPageView entityId={entityId} spaceId={spaceId} />;
+    return (
+      <>
+        {routeEditInitializer}
+        <TopicPageView entityId={entityId} spaceId={spaceId} />
+      </>
+    );
   }
 
   /*
@@ -443,6 +453,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
 
   return (
     <>
+      {routeEditInitializer}
       {showCover && (coverSlot ?? <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />)}
       <EntityPageContentContainer>
         <EntityPageHeader

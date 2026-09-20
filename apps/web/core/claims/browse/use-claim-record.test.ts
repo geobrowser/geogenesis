@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
 
-import { bestRecordRows, claimsExtractedFromDebatesWhere, relatedClaimIds } from './use-claim-record';
+import {
+  CLAIM_RECORD_PAGE_SIZE,
+  bestRecordRows,
+  claimsExtractedFromDebatesWhere,
+  rankedRecordPage,
+  relatedClaimIds,
+} from './use-claim-record';
 
 describe('bestRecordRows', () => {
   const claimA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -16,6 +22,34 @@ describe('bestRecordRows', () => {
 
   it('withholds an unranked fallback when the fixed Best lookup fails', () => {
     expect(bestRecordRows(rows, new Map(), true)).toEqual([]);
+  });
+});
+
+describe('rankedRecordPage', () => {
+  const ids = Array.from({ length: CLAIM_RECORD_PAGE_SIZE + 5 }, (_, index) => index.toString(16).padStart(32, '0'));
+  const rankings = new Map(ids.map((id, index) => [id, index]));
+
+  it('hydrates only the first bounded Best-ranked page', () => {
+    const page = rankedRecordPage(ids, rankings, false, CLAIM_RECORD_PAGE_SIZE);
+
+    expect(page.ids).toHaveLength(CLAIM_RECORD_PAGE_SIZE);
+    expect(page.ids[0]).toBe(ids.at(-1));
+    expect(page.hasNextPage).toBe(true);
+  });
+
+  it('reveals later ids without changing the complete ranking', () => {
+    const page = rankedRecordPage(ids, rankings, false, CLAIM_RECORD_PAGE_SIZE * 2);
+
+    expect(page.ids).toHaveLength(ids.length);
+    expect(page.ids[0]).toBe(ids.at(-1));
+    expect(page.hasNextPage).toBe(false);
+  });
+
+  it('does not hydrate fallback-order ids after a ranking failure', () => {
+    expect(rankedRecordPage(ids, new Map(), true, CLAIM_RECORD_PAGE_SIZE)).toEqual({
+      ids: [],
+      hasNextPage: false,
+    });
   });
 });
 

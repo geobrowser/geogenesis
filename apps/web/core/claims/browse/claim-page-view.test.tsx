@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   chipSection: null as Record<string, unknown> | null,
   tabs: null as Record<string, unknown> | null,
   activity: null as Record<string, unknown> | null,
+  feed: null as Record<string, unknown> | null,
   sidePanel: null as {
     activeTabId: string | null;
     activeSystemTab: string | null;
@@ -34,6 +35,14 @@ const mocks = vi.hoisted(() => ({
     debatesLoading: false,
     claimsError: false,
     debatesError: false,
+    claimsCountUnavailable: false,
+    debatesCountUnavailable: false,
+    claimsFetchingNextPage: false,
+    debatesFetchingNextPage: false,
+    claimsHasNextPage: false,
+    debatesHasNextPage: false,
+    fetchNextClaimsPage: () => {},
+    fetchNextDebatesPage: () => {},
   },
   /**
    * Deliberately not 3.
@@ -138,7 +147,12 @@ vi.mock('~/partials/profile/profile-activity-section', () => ({
     return <div data-testid="activity" />;
   },
 }));
-vi.mock('~/partials/profile/person-record-feed', () => ({ PersonRecordFeed: () => <div data-testid="feed" /> }));
+vi.mock('~/partials/profile/person-record-feed', () => ({
+  PersonRecordFeed: (props: Record<string, unknown>) => {
+    mocks.feed = props;
+    return <div data-testid="feed" />;
+  },
+}));
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
 vi.mock('~/partials/comments/comments-section', () => ({
   CommentSection: () => <div data-testid="comments" />,
@@ -160,13 +174,22 @@ beforeEach(() => {
   mocks.chipSection = null;
   mocks.tabs = null;
   mocks.activity = null;
+  mocks.feed = null;
   mocks.sidePanel = null;
   mocks.record.claimsTotal = 0;
   mocks.record.claimsLoading = false;
   mocks.record.claimsError = false;
+  mocks.record.claimsCountUnavailable = false;
+  mocks.record.claimsFetchingNextPage = false;
+  mocks.record.claimsHasNextPage = false;
+  mocks.record.fetchNextClaimsPage = () => {};
   mocks.record.debatesTotal = 0;
   mocks.record.debatesLoading = false;
   mocks.record.debatesError = false;
+  mocks.record.debatesCountUnavailable = false;
+  mocks.record.debatesFetchingNextPage = false;
+  mocks.record.debatesHasNextPage = false;
+  mocks.record.fetchNextDebatesPage = () => {};
 });
 
 describe('ClaimPageView record', () => {
@@ -241,6 +264,35 @@ describe('ClaimPageView record', () => {
 
     expect(setActiveSystemTab).toHaveBeenNthCalledWith(1, 'debates');
     expect(setActiveSystemTab).toHaveBeenNthCalledWith(2, 'claims');
+  });
+
+  it('marks only failed record counts unavailable in Activity', () => {
+    mocks.record.claimsError = true;
+    mocks.record.claimsCountUnavailable = true;
+    mocks.record.debatesError = true;
+    mocks.record.debatesCountUnavailable = false;
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const kinds = mocks.activity?.kinds as Array<{ key: string; isCountUnavailable?: boolean }>;
+    expect(kinds.find(kind => kind.key === 'claims')?.isCountUnavailable).toBe(true);
+    expect(kinds.find(kind => kind.key === 'debates')?.isCountUnavailable).toBe(false);
+  });
+
+  it('connects bounded record pagination to the full side-panel tab', () => {
+    const fetchNextClaimsPage = vi.fn();
+    mocks.record.claimsHasNextPage = true;
+    mocks.record.claimsFetchingNextPage = true;
+    mocks.record.fetchNextClaimsPage = fetchNextClaimsPage;
+    mocks.sidePanel = { activeTabId: null, activeSystemTab: 'claims', setActiveSystemTab: vi.fn() };
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.feed).toMatchObject({
+      hasNextPage: true,
+      isFetchingNextPage: true,
+      fetchNextPage: fetchNextClaimsPage,
+    });
   });
 });
 

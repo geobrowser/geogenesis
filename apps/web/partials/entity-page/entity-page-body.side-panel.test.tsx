@@ -7,6 +7,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { TOPIC_TYPE_ID } from '~/core/constants';
 
 import { EntityPageBody } from './entity-page-body';
 
@@ -70,7 +71,9 @@ vi.mock('~/partials/entity-page/entity-tabs', () => ({ EntityTabs: () => null })
 vi.mock('~/partials/entity-page/toggle-entity-page', () => ({
   ToggleEntityPage: () => <div data-testid="properties" />,
 }));
-vi.mock('~/partials/entity-page/automatic-mode-toggle', () => ({ AutomaticModeToggle: () => null }));
+vi.mock('~/partials/entity-page/automatic-mode-toggle', () => ({
+  AutomaticModeToggle: () => <div data-testid="automatic-mode-toggle" />,
+}));
 vi.mock('~/partials/entity-page/backlinks-client-container', () => ({ BacklinksClientContainer: () => null }));
 vi.mock('~/partials/entity-page/type-schema-inline', () => ({ TypeSchemaInline: () => null }));
 vi.mock('~/partials/entity-page/entity-page-header', () => ({ EntityPageHeader: () => null }));
@@ -83,7 +86,9 @@ vi.mock('~/core/claims/browse/claim-page-view', () => ({
     return <div data-testid="claim-page">{props.footer as React.ReactNode}</div>;
   },
 }));
-vi.mock('~/core/topics/browse/topic-page-view', () => ({ TopicPageView: () => null }));
+vi.mock('~/core/topics/browse/topic-page-view', () => ({
+  TopicPageView: () => <div data-testid="topic-page" />,
+}));
 vi.mock('~/partials/profile/person-profile-view', () => ({ PersonProfileView: () => null }));
 
 const SHARED = {
@@ -241,5 +246,32 @@ describe('EntityPageBody claim side panel', () => {
     expect(screen.getByTestId('properties')).toBeInTheDocument();
     expect(mocks.claimPage?.isEditing).toBe(true);
     expect(mocks.claimPage?.footer).toBeTruthy();
+  });
+
+  it('mounts route edit initialization before the claim is already editing', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
+
+    render(<EntityPageBody variant="route" {...SHARED} serverRelations={[]} />);
+
+    expect(screen.getByTestId('automatic-mode-toggle')).toBeInTheDocument();
+    expect(mocks.claimPage?.isEditing).toBe(false);
+    expect(screen.queryByTestId('properties')).not.toBeInTheDocument();
+  });
+
+  it('mounts the same route edit initialization for the Topic custom surface', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: TOPIC_TYPE_ID }] };
+
+    render(<EntityPageBody variant="route" {...SHARED} serverRelations={[]} />);
+
+    expect(screen.getByTestId('topic-page')).toBeInTheDocument();
+    expect(screen.getByTestId('automatic-mode-toggle')).toBeInTheDocument();
+  });
+
+  it('does not mount route edit initialization in the side panel', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
+
+    render(<EntityPageBody variant="sidePanel" {...SHARED} />);
+
+    expect(screen.queryByTestId('automatic-mode-toggle')).not.toBeInTheDocument();
   });
 });

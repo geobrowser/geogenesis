@@ -296,6 +296,9 @@ function ClaimTabPanel({
         rows={record.debateRows}
         isLoading={record.debatesLoading}
         isError={record.debatesError}
+        isFetchingNextPage={record.debatesFetchingNextPage}
+        hasNextPage={record.debatesHasNextPage}
+        fetchNextPage={record.fetchNextDebatesPage}
         loadingLabel="Loading debates…"
         emptyLabel="No debates on this claim or its related claims yet."
         errorLabel="Couldn’t load debates."
@@ -310,6 +313,9 @@ function ClaimTabPanel({
         rows={record.claimRows}
         isLoading={record.claimsLoading}
         isError={record.claimsError}
+        isFetchingNextPage={record.claimsFetchingNextPage}
+        hasNextPage={record.claimsHasNextPage}
+        fetchNextPage={record.fetchNextClaimsPage}
         loadingLabel="Loading claims…"
         emptyLabel="No related debate claims yet."
         errorLabel="Couldn’t load claims."
@@ -330,6 +336,7 @@ function ClaimTabPanel({
       total: record.debatesTotal,
       isLoading: record.debatesLoading,
       isError: record.debatesError,
+      isCountUnavailable: record.debatesCountUnavailable,
       href: hrefs.debates,
       seeAllLabel: 'See all debates',
       onSeeAll: onSelectSystemTab ? () => onSelectSystemTab('debates') : undefined,
@@ -341,6 +348,7 @@ function ClaimTabPanel({
       total: record.claimsTotal,
       isLoading: record.claimsLoading,
       isError: record.claimsError,
+      isCountUnavailable: record.claimsCountUnavailable,
       href: hrefs.claims,
       seeAllLabel: 'See all claims',
       onSeeAll: onSelectSystemTab ? () => onSelectSystemTab('claims') : undefined,
