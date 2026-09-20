@@ -105,7 +105,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     } else if (!active && playing) {
       suspend();
     }
-  }, [active, autoplayBlocked, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend, userPaused]);
+  }, [active, awaitingTap, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend]);
 
   const showControls = ready && (awaitingTap || (playbackEnded && !hasVoted));
   // End of an unvoted debate offers a replay; a stopped one shows the paused glyph.

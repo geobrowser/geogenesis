@@ -52,5 +52,10 @@ export function useStableListOrder<T>(items: T[], keyOf: (item: T) => string, re
     // `next` yields `next`, so a discarded or double-invoked memo produces the same order.
     orderRef.current = next;
     return next.map(entry => byKey.get(entry)).filter((item): item is T => item !== undefined);
+    // `resetKey` is not read in here — it is consumed above, during render, to clear `orderRef`.
+    // It stays in this list precisely because of that: when it changes the remembered order is
+    // emptied, and the memo has to recompute against the cleared order rather than hand back the
+    // last one. Dropping it as "unnecessary" would return a stale order on every reset.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, resetKey]);
 }
