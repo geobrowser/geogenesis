@@ -1146,7 +1146,7 @@ describe('DebateRoomPageClient', () => {
     });
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
     expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Video settings' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
@@ -1518,7 +1518,7 @@ describe('DebateRoomPageClient', () => {
       ] as MediaDeviceInfo[])
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Studio Mic' })).toBeChecked());
   });
 
