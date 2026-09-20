@@ -13,6 +13,7 @@ const address = '0x1234567890abcdef1234567890abcdef12345678';
 const mocks = vi.hoisted(() => ({
   logout: vi.fn(),
   push: vi.fn(),
+  openCreateSpaceDialog: vi.fn(),
   setEditable: vi.fn(),
   editable: false,
   canEdit: false,
@@ -59,6 +60,7 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
 }));
 vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => mocks.pendingPersonalSpace,
+  isPendingPersonalSpaceId: (spaceId: string | null | undefined) => spaceId?.startsWith('pending:') ?? false,
 }));
 vi.mock('~/core/state/feature-flags', () => ({}));
 vi.mock('~/core/hooks/use-space-id', () => ({ useSpaceId: () => mocks.spaceId }));
@@ -73,6 +75,9 @@ vi.mock('~/core/id', () => ({ ID: { createEntityId: () => 'new-entity' } }));
 vi.mock('~/partials/hints/edit-mode-toggle-tip', () => ({
   EditModeToggleTip: () => null,
   useEditModeToggleTip: () => ({ open: false, dismiss: vi.fn(), isActive: false }),
+}));
+vi.mock('~/partials/create-space/create-space-dialog', () => ({
+  useOpenCreateSpaceDialog: () => mocks.openCreateSpaceDialog,
 }));
 vi.mock('~/partials/onboarding/dialog', () => ({ avatarAtom: {} }));
 // The real dialog pulls in the whole publish chain (which needs an unmocked
@@ -111,18 +116,26 @@ vi.mock('~/design-system/menu', () => ({
     open,
     onOpenChange,
     className,
+    asChild = false,
   }: {
     trigger: React.ReactNode;
     children: React.ReactNode;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     className?: string;
+    asChild?: boolean;
   }) => (
     <div>
       {/* No `aria-label` here on purpose. The mock used to supply one, which meant the real
           trigger could go unnamed and this suite would never notice — the name has to come from
           the component. */}
-      <button onClick={() => onOpenChange(!open)}>{trigger}</button>
+      {asChild && React.isValidElement(trigger) ? (
+        React.cloneElement(trigger as React.ReactElement<React.ComponentProps<'button'>>, {
+          onClick: () => onOpenChange(!open),
+        })
+      ) : (
+        <button onClick={() => onOpenChange(!open)}>{trigger}</button>
+      )}
       {open && (
         <div data-testid="profile-menu" className={className}>
           {children}
@@ -141,6 +154,7 @@ describe('NavbarActions profile menu', () => {
   beforeEach(() => {
     mocks.logout.mockReset();
     mocks.push.mockReset();
+    mocks.openCreateSpaceDialog.mockReset();
     mocks.setEditable.mockReset();
     mocks.editable = false;
     mocks.canEdit = false;
@@ -311,6 +325,7 @@ describe('NavbarActions profile menu', () => {
       render(<NavbarActions />);
 
       const avatar = await screen.findByTestId('fallback-avatar');
+      expect(screen.getByRole('button', { name: 'Open profile menu' })).toHaveClass('p-0');
 
       // Both dimensions on the same ancestor. Height alone passed with `mobile:w-11` removed, which
       // leaves a 44px-tall sliver 28px wide — not the thumb-sized area the test claims.
@@ -319,6 +334,16 @@ describe('NavbarActions profile menu', () => {
       expect(tapArea?.className ?? '').toContain('mobile:w-11');
       // The avatar itself is untouched — the area around it grew, not the picture.
       expect(avatar.closest('.h-7')).not.toBeNull();
+    });
+
+    it('reserves the loaded profile trigger footprint while the account is loading', () => {
+      mocks.isMobileNavbar = true;
+      mocks.isSmartAccountLoading = true;
+      const { container } = render(<NavbarActions />);
+
+      const profileSkeleton = container.querySelector('[class*="mobile:h-11"]');
+      expect(profileSkeleton).not.toBeNull();
+      expect(profileSkeleton?.className ?? '').toContain('mobile:w-11');
     });
   });
 
@@ -334,6 +359,7 @@ describe('NavbarActions profile menu', () => {
       expect(toggle).toHaveAccessibleName('Switch to edit mode');
       expect(toggle).toHaveAttribute('aria-pressed', 'false');
       expect(toggle).toHaveAttribute('data-mode-toggle-placement', 'navbar');
+      expect(toggle).toHaveClass('p-0');
       expect(screen.queryByTestId('profile-menu')).not.toBeInTheDocument();
     });
 
@@ -383,16 +409,50 @@ describe('NavbarActions profile menu', () => {
       const editProfile = screen.getByRole('button', { name: 'Edit profile' });
       const editMode = screen.getByRole('switch', { name: 'Edit mode off' });
       const createEntity = screen.getByRole('button', { name: 'Create new entity' });
+      const createProperty = screen.getByRole('button', { name: 'Create new property' });
+      const createSpace = screen.getByRole('button', { name: 'Create new space' });
       const signOut = screen.getByRole('button', { name: 'Sign out' });
 
       expect(editProfile.compareDocumentPosition(editMode)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       expect(editMode.compareDocumentPosition(createEntity)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-      expect(createEntity.compareDocumentPosition(signOut)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(createEntity.compareDocumentPosition(createProperty)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(createProperty.compareDocumentPosition(createSpace)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(createSpace.compareDocumentPosition(signOut)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 
       await user.click(createEntity);
 
       expect(mocks.push).toHaveBeenCalledWith('/space/space-1/new-entity?edit=true');
       expect(screen.queryByTestId('profile-menu')).not.toBeInTheDocument();
+    });
+
+    it('keeps property and space creation reachable from the mobile menu', async () => {
+      mocks.spaceId = 'space-1';
+      mocks.isMobileNavbar = true;
+      const user = userEvent.setup();
+      render(<NavbarActions />);
+
+      await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+      await user.click(screen.getByRole('button', { name: 'Create new property' }));
+
+      expect(mocks.push).toHaveBeenCalledWith('/space/space-1/new-entity?edit=true&type=property');
+
+      await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+      await user.click(screen.getByRole('button', { name: 'Create new space' }));
+
+      expect(mocks.openCreateSpaceDialog).toHaveBeenCalledWith();
+    });
+
+    it('does not build entity URLs from a pending personal-space sentinel', async () => {
+      mocks.spaceId = 'pending:topic-1';
+      mocks.isMobileNavbar = true;
+      const user = userEvent.setup();
+      render(<NavbarActions />);
+
+      await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+
+      expect(screen.queryByRole('button', { name: 'Create new entity' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Create new property' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Create new space' })).toBeInTheDocument();
     });
   });
 });

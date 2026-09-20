@@ -8,7 +8,6 @@ import * as React from 'react';
 import cx from 'classnames';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useAtomValue } from 'jotai';
-import { useRouter } from 'next/navigation';
 
 import { browseModeToggled, editModeToggled } from '~/core/analytics';
 import { useAccessControl } from '~/core/hooks/use-access-control';
@@ -18,7 +17,6 @@ import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
-import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils } from '~/core/utils/utils';
@@ -36,6 +34,7 @@ import { Toggle } from '~/design-system/toggle';
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
 import { EditProfileDialog } from '~/partials/profile/edit-profile-dialog';
 
+import { useCreateEntityActions } from '../create-entity/use-create-entity-actions';
 import { avatarAtom } from '../onboarding/dialog';
 
 function useUser() {
@@ -66,7 +65,7 @@ export function NavbarActions() {
   const { user } = usePrivy();
   const isMobileNavbar = useMediaQuery(MOBILE_NAVBAR_QUERY);
   const spaceId = useSpaceId();
-  const router = useRouter();
+  const { canCreateInSpace, createEntity, createProperty, createSpace } = useCreateEntityActions(spaceId);
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
   // only trigger the logout.
   const { logout } = useLogout();
@@ -85,7 +84,7 @@ export function NavbarActions() {
       return (
         <div key="navbar-content" className="flex items-center gap-4">
           {!isMobileNavbar ? <Skeleton className="h-7 w-[66px]" radius="rounded-full" /> : null}
-          <Skeleton className="h-7 w-7" radius="rounded-full" />
+          <Skeleton className="h-7 w-7 mobile:h-11 mobile:w-11" radius="rounded-full" />
         </div>
       );
     }
@@ -115,13 +114,13 @@ export function NavbarActions() {
               {navbar}
 
               <Menu
+                asChild
                 trigger={
-                  // The avatar stays 28px; the tap area around it grows to 44 on a phone. Radix sizes its
-                  // trigger button to this content, so padding here is what the thumb actually gets — and
-                  // this menu is the only way to a profile, personal space or sign out on mobile, which
-                  // it had no way to reach at all until this change. Not applied to the rest of the row:
-                  // those controls were already on phones and belong to GEO-2970's sweep.
-                  <div className="flex items-center justify-center mobile:h-11 mobile:w-11">
+                  // The avatar stays 28px; the actual trigger grows to 44px on a phone. This menu is the
+                  // only way to a profile, personal space or sign out on mobile, which it had no way to
+                  // reach at all until this change. Not applied to the rest of the row: those controls
+                  // were already on phones and belong to GEO-2970's sweep.
+                  <button type="button" className="flex items-center justify-center p-0 mobile:h-11 mobile:w-11">
                     {/* The trigger is an image and nothing else: `FallbackImage` has an empty alt and
                         `Avatar` carries no label, so Radix's button announced as nothing at all. It is
                         the only way to a profile, personal space or sign out on a phone. Named the way
@@ -134,7 +133,7 @@ export function NavbarActions() {
                         <Avatar value={address} size={28} />
                       )}
                     </div>
-                  </div>
+                  </button>
                 }
                 open={open}
                 onOpenChange={onOpenChange}
@@ -167,16 +166,40 @@ export function NavbarActions() {
                   </button>
                 )}
                 {menu}
-                {isMobileNavbar && spaceId ? (
+                {isMobileNavbar && canCreateInSpace ? (
                   <button
                     type="button"
                     onClick={() => {
                       onOpenChange(false);
-                      router.push(NavUtils.toEntity(spaceId, ID.createEntityId(), true));
+                      createEntity();
                     }}
                     className={PROFILE_MENU_DIVIDED_ACTION_CLASS}
                   >
                     Create new entity
+                  </button>
+                ) : null}
+                {isMobileNavbar && canCreateInSpace ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenChange(false);
+                      createProperty();
+                    }}
+                    className={PROFILE_MENU_DIVIDED_ACTION_CLASS}
+                  >
+                    Create new property
+                  </button>
+                ) : null}
+                {isMobileNavbar ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenChange(false);
+                      createSpace();
+                    }}
+                    className={PROFILE_MENU_DIVIDED_ACTION_CLASS}
+                  >
+                    Create new space
                   </button>
                 ) : null}
                 {/* Sign out keeps its own group below the divider — the destructive action
@@ -429,7 +452,7 @@ function ModeToggle({
           className={
             isMobile
               ? cx(PROFILE_MENU_DIVIDED_ACTION_CLASS, 'justify-between')
-              : 'rounded-[47px] focus-visible:outline-none'
+              : 'rounded-[47px] p-0 focus-visible:outline-none'
           }
         >
           {isMobile ? (

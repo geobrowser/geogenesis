@@ -2,24 +2,18 @@
 
 import { useState } from 'react';
 
-import { useRouter } from 'next/navigation';
-
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
-import { ID } from '~/core/id';
-import { NavUtils } from '~/core/utils/utils';
 
 import { Create } from '~/design-system/icons/create';
 import { Menu, MenuItem } from '~/design-system/menu';
 
-import { useOpenCreateSpaceDialog } from '../create-space/create-space-dialog';
+import { useCreateEntityActions } from './use-create-entity-actions';
 
 export function CreateEntityDropdown() {
-  const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const openCreateSpaceDialog = useOpenCreateSpaceDialog();
-
   const spaceId = useSpaceId();
+  const { canCreateInSpace, createEntity, createProperty, createSpace } = useCreateEntityActions(spaceId);
   const { smartAccount } = useSmartAccount();
 
   if (!smartAccount?.account.address) {
@@ -41,25 +35,15 @@ export function CreateEntityDropdown() {
       }
       className="max-w-[120px] bg-white"
     >
-      <MenuItem onClick={() => openCreateSpaceDialog()}>
+      <MenuItem onClick={createSpace}>
         <p className="text-center text-button">New space</p>
       </MenuItem>
-      {spaceId && (
+      {canCreateInSpace && (
         <>
-          <MenuItem
-            onClick={() => {
-              router.push(NavUtils.toEntity(spaceId, ID.createEntityId(), true));
-            }}
-          >
+          <MenuItem onClick={createEntity}>
             <p className="text-center text-button">New entity</p>
           </MenuItem>
-          <MenuItem
-            onClick={() => {
-              const entityId = ID.createEntityId();
-              // Navigate to new entity page with property type preset
-              router.push(`${NavUtils.toEntity(spaceId, entityId)}?edit=true&type=property`);
-            }}
-          >
+          <MenuItem onClick={createProperty}>
             <p className="text-center text-button">New property</p>
           </MenuItem>
           {/* Temporarily hidden while the import data feature is being improved.
