@@ -320,6 +320,17 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // at the old one's position.
     lastRunningPlayheadRef.current = null;
     setError(null);
+    /*
+     * And so does everything the viewer's last debate concluded about itself.
+     *
+     * The feed keys its cards by claim rather than by debate id, so a re-rank that changes which
+     * debate represents a claim hands a new one to the same hook. A refusal describes the device
+     * and would be true again, but nothing here has asked yet — leaving it set puts the tap
+     * control on a card that was never refused and stops the autoplay this debate is owed. A
+     * pause is worse: it belongs to a debate the viewer is no longer looking at.
+     */
+    setAutoplayBlocked(false);
+    setUserPaused(false);
 
     Promise.all([
       getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot1RecordingFilename }),
@@ -672,7 +683,21 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
          * the device simply wants to be asked by a person, and `autoplayBlocked` puts that
          * question on the card as a control instead of a sentence.
          */
-        if (outcome === 'blocked') setError('Could not play both videos. Try Play again.');
+        if (outcome === 'blocked') {
+          /*
+           * A block releases the latch, and that omission is what this fixes.
+           *
+           * 'blocked' from an attempt we still own is positive evidence that the browser is no
+           * longer refusing: it let `play()` through and the media did not confirm. Leaving
+           * `autoplayBlocked` set from an earlier refusal left `awaitingTap` true, which is what
+           * the feed's autoplay effect reads — so the retry this outcome exists to allow never
+           * happened, and the card sat behind the manual control saying "Try Play again" about a
+           * control that would not have helped. A latch is only as good as the conditions that
+           * release it.
+           */
+          setAutoplayBlocked(false);
+          setError('Could not play both videos. Try Play again.');
+        }
         return;
       }
       // The browser only allowed it muted (GEO-2783) — record that so the unmute control is honest

@@ -160,7 +160,10 @@ export function PlaybackDiagnostics() {
     const read = () => {
       const all = [...document.querySelectorAll('video')];
       const visible = all.filter(isReallyVisible);
-      const players = [...document.querySelectorAll(DEBATE_PLAYER_SELECTOR)].filter(isReallyVisible).slice(0, 2);
+      // Every visible card, not the first two. The panel scrolls inside its own height limit, and
+      // a reading that quietly omits the third card on screen is a reading that can be wrong about
+      // which card is misbehaving — the failure this whole file exists to prevent.
+      const players = [...document.querySelectorAll(DEBATE_PLAYER_SELECTOR)].filter(isReallyVisible);
 
       /*
        * Each card reports its own videos, underneath it.
@@ -187,6 +190,7 @@ export function PlaybackDiagnostics() {
       // Media the debate feed does not own still matters — it competes for the same decoders —
       // but it is counted, not described, so it can never be mistaken for a card's own video.
       const strays = visible.filter(video => video.closest(DEBATE_PLAYER_SELECTOR) === null);
+      const offScreenButPlaying = all.filter(video => !video.paused && !isReallyVisible(video));
 
       setLines([
         `${all.length} video(s) on the page, ${visible.length} on screen, ${all.filter(v => !v.paused).length} playing`,
@@ -196,12 +200,10 @@ export function PlaybackDiagnostics() {
               `${strays.length} other video(s) on screen, outside any debate card (${strays.filter(v => !v.paused).length} playing)`,
             ]
           : []),
-        // A video running where nobody can see it is its own fault and worth
-        // naming separately.
-        ...all
-          .filter(video => !video.paused && !isReallyVisible(video))
-          .slice(0, 2)
-          .map((video, index) => `off-screen but playing #${index} · t=${video.currentTime.toFixed(1)}`),
+        // A video running where nobody can see it is its own fault and worth naming separately.
+        ...offScreenButPlaying.map(
+          (video, index) => `off-screen but playing #${index} · t=${video.currentTime.toFixed(1)}`
+        ),
       ]);
     };
 

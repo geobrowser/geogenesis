@@ -89,6 +89,31 @@ describe('PlaybackDiagnostics', () => {
   });
 
   /**
+   * Every visible card, not the first two.
+   *
+   * Both the PR and the feature-flag description promise a reading of every debate video on
+   * screen, and the panel truncated after two. A device reading that quietly omits the third card
+   * can be wrong about which card is misbehaving — the same wrong-measurement failure this file
+   * was written to end, and one that reads as confidently as a correct one.
+   */
+  it('reports every visible card, not the first two', () => {
+    const cards = [
+      debateCard({ playing: true, blocked: false }),
+      debateCard({ playing: false, blocked: false }),
+      debateCard({ playing: false, blocked: true }),
+    ];
+    document.body.append(...cards.map(entry => entry.card));
+
+    render(<PlaybackDiagnostics />);
+
+    expect(screen.getByText(/card0 ·/)).toBeInTheDocument();
+    expect(screen.getByText(/card1 ·/)).toBeInTheDocument();
+    // The one that used to fall off the end — and the only one reporting a refusal.
+    expect(screen.getByText(/card2 · .*blocked=true/)).toBeInTheDocument();
+    expect(screen.getByText(/card2\.v0/)).toBeInTheDocument();
+  });
+
+  /**
    * Visibility is tested on both axes. A vertical-only test counts a card scrolled out sideways
    * in a horizontal row as on screen, which is how an earlier round of this investigation came to
    * believe twelve videos were playing at once and spent a day on a decoder limit never reached.
