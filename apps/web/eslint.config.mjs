@@ -5,7 +5,21 @@ import { defineConfig, globalIgnores } from 'eslint/config';
 
 const eslintConfig = defineConfig([
   ...nextTs,
-  globalIgnores(['.next/**', '.vercel/**', 'out/**', 'build/**', 'next-env.d.ts']),
+  globalIgnores([
+    '.next/**',
+    '.vercel/**',
+    'out/**',
+    'build/**',
+    'next-env.d.ts',
+    // Pre-built analytics bundles served as static assets — ~133KB of minified vendor code each.
+    // Linting them produced 377 of the 536 warnings this config reported, all of them unactionable,
+    // and buried the 159 that are about code anyone here writes.
+    'public/**',
+    // graphql-codegen output (see `codegen.ts`, which generates into this directory). It carries
+    // its own `/* eslint-disable */` header, which the linter then reports as an unused directive —
+    // and there is no point editing a file that `bun codegen` rewrites.
+    'core/gql/**',
+  ]),
   {
     // `eslint-config-next/typescript` is the TypeScript subset and carries no react-hooks rules, so
     // nothing was checking them — in an app whose bug history is largely this class: a resume that
