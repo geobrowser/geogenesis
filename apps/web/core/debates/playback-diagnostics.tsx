@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 
-import { usePlaybackDiagnosticsEnabled } from '~/core/state/feature-flags';
+import { useIsomorphicLayoutEffect } from '~/core/hooks/use-isomorphic-layout-effect';
+import { readStoredFeatureFlag, usePlaybackDiagnosticsEnabled } from '~/core/state/feature-flags';
 import { errorName } from '~/core/utils/error-name';
 
 /**
@@ -132,9 +133,28 @@ export function PlaybackDiagnostics() {
     return () => window.clearTimeout(timeout);
   }, [copied]);
 
+  /*
+   * The trace is installed before any playback effect can run, and deliberately not on `enabled`.
+   *
+   * `enabled` comes from a hydration-gated read, so it is `false` for the first commit by design.
+   * Waiting for it would leave the patch to a passive effect that runs alongside `DebateFeedPlayer`'s
+   * own — and if the card gets there first, its `play()` is never recorded. The readout would then
+   * say `calls=[]`, which does not mean "not recorded": it means "nothing ever asked this to play",
+   * a different fault in a different part of the code. Sending this investigation somewhere it did
+   * not need to go is the one thing this file exists to prevent.
+   *
+   * So the flag is read straight from storage, in a layout effect. Layout effects run during commit,
+   * ahead of every passive effect in the tree, which is what makes the ordering a guarantee rather
+   * than a race this usually wins. Only the patch runs early; the panel stays hydration-gated.
+   */
+  useIsomorphicLayoutEffect(() => {
+    if (readStoredFeatureFlag('playbackDiagnostics')) patchMediaElement();
+  }, []);
+
   React.useEffect(() => {
     if (!enabled) return;
 
+    // Idempotent, and this is the path that matters when the flag is switched on mid-session.
     patchMediaElement();
 
     const read = () => {

@@ -576,6 +576,44 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
   });
 
   /**
+   * The muted retry's verdict is the one that counts, and only it.
+   *
+   * A refused *unmuted* request is the ordinary case — it is why the muted retry exists — so
+   * carrying that refusal into the final answer reported 'refused' for whatever the retry then
+   * did. Here the retry stalls instead of being refused: a recording that will not decode, on a
+   * device perfectly willing to autoplay it muted. Reporting a refusal latches the tap control,
+   * drops the retry, and withholds the message, and the tap achieves nothing.
+   */
+  it('reports a muted retry that stalls as blocked, even though the unmuted request was refused', async () => {
+    const refusedThenStalled = () => {
+      const video = fakeVideo({ muted: false });
+      video.play = async () => {
+        video.plays += 1;
+        // Muted now, which is the retry: the browser is willing, the media is not.
+        if (video.muted) return;
+        throw new DOMException('The request is not allowed by the user agent or the platform.', 'NotAllowedError');
+      };
+      return video;
+    };
+
+    expect(await playBothWithMutedFallback(refusedThenStalled(), refusedThenStalled())).toBe('blocked');
+  });
+
+  /** And a retry the browser refuses in its own right is still a refusal. */
+  it('reports a refusal when the muted retry is refused too', async () => {
+    const alwaysRefuses = () => {
+      const video = fakeVideo({ muted: false });
+      video.play = async () => {
+        video.plays += 1;
+        throw new DOMException('The request is not allowed by the user agent or the platform.', 'NotAllowedError');
+      };
+      return video;
+    };
+
+    expect(await playBothWithMutedFallback(alwaysRefuses(), alwaysRefuses())).toBe('refused');
+  });
+
+  /**
    * A start that never confirms is not a refusal, and the difference is the caller's whole
    * behaviour: 'refused' latches a tap control and stops the autoplay effect retrying, so
    * reporting it for a stall would leave a buffering card behind a dead button with nothing to

@@ -411,5 +411,19 @@ export async function playBothWithMutedFallback(
 
   if (retry.running && !retry.refused) return 'playing-muted';
 
-  return first.refused || retry.refused ? 'refused' : 'blocked';
+  /*
+   * The muted retry has the only verdict that describes it.
+   *
+   * A refused *unmuted* request is the ordinary case — it is why the muted retry exists at all —
+   * and carrying `first.refused` down here reported a refusal for whatever the retry did next. A
+   * muted attempt that stalls, on a recording that 404s or will not decode, is not the browser
+   * declining: the caller would latch the tap control and drop both the retry and the message a
+   * stall is owed, and the tap would achieve nothing.
+   *
+   * Refusal still outranks cancellation, for the reason given above the first check.
+   */
+  if (retry.refused) return 'refused';
+  if (isCancelled?.()) return 'cancelled';
+
+  return 'blocked';
 }

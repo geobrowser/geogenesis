@@ -114,6 +114,32 @@ export function useFeatureFlag(id: FeatureFlagId) {
   return hydrated ? normalizeFeatureFlags(flags)[id] : defaultFeatureFlags[id];
 }
 
+/**
+ * A flag read that does not wait for hydration — for instrumentation, not for rendering.
+ *
+ * {@link useFeatureFlag} deliberately reports the default until `useHydrated` flips, which costs a
+ * flag's surface one frame. That is the right trade for anything drawn on screen and the wrong one
+ * for anything that has to be *installed* before the work it observes: a probe that arrives a frame
+ * late reports nothing for the calls it missed, and "nothing" is indistinguishable from a real
+ * negative. An instrument that can silently under-report is worse than no instrument, because it
+ * answers confidently.
+ *
+ * Call this from an effect or an event handler only, never from render — that is exactly the
+ * mismatch `useFeatureFlag` exists to prevent. Reads the same key the atom persists to.
+ */
+export function readStoredFeatureFlag(id: FeatureFlagId): boolean {
+  if (typeof window === 'undefined') return defaultFeatureFlags[id];
+
+  try {
+    const stored = window.localStorage.getItem(featureFlagsStorageKey);
+    return normalizeFeatureFlags(stored ? (JSON.parse(stored) as StoredFeatureFlags) : null)[id];
+  } catch {
+    // A browser with storage disabled, or a value some other tab left unparseable. Neither is a
+    // reason to throw out of an effect.
+    return defaultFeatureFlags[id];
+  }
+}
+
 export function useDebugDebatesPageEnabled() {
   return useFeatureFlag('debugDebatesPage');
 }
