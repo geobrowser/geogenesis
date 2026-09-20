@@ -301,7 +301,7 @@ export function EntitySidePanelSurface({
           <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} onClose={onClose} />
         ) : null}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-entity-side-panel-scroll>
-          <EntitySidePanelActiveTabProvider entityId={entityId}>
+          <EntitySidePanelActiveTabProvider entityId={entityId} spaceId={effectiveSpaceId}>
             <EntitySidePanelBody
               key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
               entityId={entityId}

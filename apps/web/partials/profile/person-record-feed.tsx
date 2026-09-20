@@ -13,7 +13,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
 import { ClaimResponseTag } from './claim-response-tag';
-import { PartialLoadError } from './partial-load-error';
+import { PartialLoadError, RecordLoadError } from './partial-load-error';
 
 /**
  * A person's record, rendered as explore cards (GEO-2859).
@@ -105,6 +105,7 @@ export function PersonRecordFeed({
   // failed leaves the rows that did arrive on screen, where the sentinel has
   // already stopped asking for more.
   if (isError && rows.length === 0) {
+    if (fetchNextPage) return <RecordLoadError message={errorLabel} onRetry={fetchNextPage} />;
     return <p className="py-6 text-metadata text-grey-04">{errorLabel}</p>;
   }
 

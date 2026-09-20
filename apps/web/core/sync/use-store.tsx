@@ -506,7 +506,7 @@ export function useQueryAllEntities({ where, pageSize = 100, enabled = true, ord
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
 
-  const { data, isFetched, isLoading, error, refetch } = useQuery({
+  const { data, isFetched, isLoading, isFetching, error, refetch } = useQuery({
     enabled,
     queryKey: ['store', 'all-entities', stableStringify(where), pageSize, orderBy ?? null],
     queryFn: async () => {
@@ -537,6 +537,7 @@ export function useQueryAllEntities({ where, pageSize = 100, enabled = true, ord
   return {
     entities,
     isLoading: !isFetched && enabled && isLoading,
+    isFetching: enabled && isFetching,
     isFetched: isFetched && enabled,
     error,
     refetch,

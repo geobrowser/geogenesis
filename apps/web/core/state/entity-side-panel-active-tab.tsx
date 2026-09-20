@@ -15,18 +15,24 @@ export const EntitySidePanelActiveTabContext = React.createContext<EntitySidePan
 
 export function EntitySidePanelActiveTabProvider({
   entityId,
+  spaceId,
   children,
 }: {
   entityId: string;
+  spaceId: string;
   children: React.ReactNode;
 }) {
+  return (
+    <ScopedEntitySidePanelActiveTabProvider key={`${spaceId}:${entityId}`}>
+      {children}
+    </ScopedEntitySidePanelActiveTabProvider>
+  );
+}
+
+/** A keyed boundary synchronously clears selections before children render in a new entity scope. */
+function ScopedEntitySidePanelActiveTabProvider({ children }: { children: React.ReactNode }) {
   const [activeTabId, setActiveTabId] = React.useState<string | null>(null);
   const [activeSystemTab, setActiveSystemTab] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    setActiveTabId(null);
-    setActiveSystemTab(null);
-  }, [entityId]);
 
   const setActiveTabIdValidated = React.useCallback((tabId: string | null) => {
     if (tabId !== null && !validateEntityId(tabId)) return;

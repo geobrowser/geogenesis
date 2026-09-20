@@ -118,7 +118,7 @@ export function entityScoresQueryKey(ids: readonly string[]) {
 const NO_SCORES: EntityScores = { scores: new Map(), rankings: new Map() };
 
 export function useEntityScores({ ids, enabled = true }: { ids: readonly string[]; enabled?: boolean }) {
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: entityScoresQueryKey(ids),
     enabled: enabled && ids.length > 0,
     staleTime: 5 * 60_000,
@@ -152,5 +152,5 @@ export function useEntityScores({ ids, enabled = true }: { ids: readonly string[
   // says Top or Best, permanently and silently.
   const { scores, rankings } = data ?? NO_SCORES;
 
-  return { scores, rankings, isLoading, isError };
+  return { scores, rankings, isLoading, isError, isFetching, refetch };
 }

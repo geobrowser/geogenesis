@@ -69,6 +69,16 @@ describe('PersonRecordFeed', () => {
     expect(screen.queryByText('No positions on claims yet.')).not.toBeInTheDocument();
   });
 
+  it('offers the upstream retry when the initial request failed', () => {
+    const fetchNextPage = vi.fn();
+    renderFeed({ isError: true, fetchNextPage });
+
+    screen.getByRole('button', { name: 'Try again' }).click();
+
+    expect(screen.getByText('Couldn’t load positions.')).toBeInTheDocument();
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
   // A failure on page four is not a reason to throw away pages one to three.
   it('keeps the rows it already has when a later page fails', () => {
     renderFeed({ rows: [row('claim-1'), row('claim-2')], isError: true });
