@@ -11,5 +11,8 @@ export const useEffectOnce = (effect: EffectCallback): void => {
       hasRun.current = true;
       return effect();
     }
+    // Running once is the whole point of the hook, so `effect` is deliberately not a dependency;
+    // the ref guards a StrictMode double-invoke. Naming it would make this `useEffect`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 };

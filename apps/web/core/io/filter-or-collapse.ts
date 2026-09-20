@@ -50,9 +50,7 @@ function soleRelationsSome(branch: EntityFilter): RelationFilter | undefined {
 
   const relations = branch.relations;
   if (!relations) return undefined;
-  const relationKeys = Object.keys(relations).filter(
-    k => (relations as Record<string, unknown>)[k] != null
-  );
+  const relationKeys = Object.keys(relations).filter(k => (relations as Record<string, unknown>)[k] != null);
   if (relationKeys.length !== 1 || relationKeys[0] !== 'some') return undefined;
 
   return relations.some ?? undefined;

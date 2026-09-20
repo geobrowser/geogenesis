@@ -698,9 +698,9 @@ describe('getProposalName', () => {
   const space = (name: string | null) => ({ id: 'a'.repeat(32), name, image: '' });
 
   it('names the space when it is known', () => {
-    expect(
-      getProposalName({ name: '', type: 'UPDATE_VOTING_SETTINGS', space: space('Research DAO') })
-    ).toBe('Update governance settings for Research DAO');
+    expect(getProposalName({ name: '', type: 'UPDATE_VOTING_SETTINGS', space: space('Research DAO') })).toBe(
+      'Update governance settings for Research DAO'
+    );
 
     expect(getProposalName({ name: '', type: 'ADD_EDITOR', space: space('Research DAO') })).toBe(
       'Add editor to Research DAO'

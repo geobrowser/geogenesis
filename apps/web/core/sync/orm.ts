@@ -260,8 +260,7 @@ export class E {
     const deletedLocally = (propertyId: string) => Entities.hasDeletedValue(mergedValues, propertyId);
 
     const name =
-      Entities.nameInSpace(liveValues, spaceId) ??
-      (deletedLocally(SystemIds.NAME_PROPERTY) ? null : remoteEntity.name);
+      Entities.nameInSpace(liveValues, spaceId) ?? (deletedLocally(SystemIds.NAME_PROPERTY) ? null : remoteEntity.name);
 
     // The aggregate applies only to an unscoped read: when a space was named, borrowing the graph's
     // prose is what `descriptionInSpace` exists to decline. And only when nothing was deleted, for

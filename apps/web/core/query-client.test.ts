@@ -16,7 +16,7 @@ describe('global query defaults', () => {
     expect(defaults?.staleTime).toBe(30_000);
   });
 
-  it('does not stack its own retries on top of the graphql client\'s', () => {
+  it("does not stack its own retries on top of the graphql client's", () => {
     // `core/io/graphql-client.ts` already retries on an exponential, jittered schedule. React
     // Query's default of 3 multiplies that budget.
     expect(defaults?.retry).toBe(1);
