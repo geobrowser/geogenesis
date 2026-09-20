@@ -9,6 +9,7 @@ import { produce } from 'immer';
 import { EntityId, SpaceId } from '~/core/io/substream-schema';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useQueryEntity } from '~/core/sync/use-store';
+import type { Relation } from '~/core/types';
 
 import { Filter } from './filters';
 import { Source, getSource, sourceStableKey, upsertSourceType } from './source';
@@ -18,6 +19,10 @@ type UseSourceOptions = {
   filterState: Filter[];
   setFilterState: (filters: Filter[]) => void;
 };
+
+// A stable empty list: `?? []` mints a new array every render, which made the hooks keyed on it
+// re-run on each one.
+const NO_RELATIONS: Relation[] = [];
 
 export function useSource({ filterState, setFilterState }: UseSourceOptions) {
   const { entityId, spaceId, knownSourceType } = useDataBlockInstance();
@@ -30,7 +35,7 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
     id: entityId,
   });
 
-  const dataEntityRelations = blockEntity?.relations ?? initialBlockEntity?.relations ?? [];
+  const dataEntityRelations = blockEntity?.relations ?? initialBlockEntity?.relations ?? NO_RELATIONS;
 
   const derivedSource: Source = getSource({
     blockId: EntityId(entityId),

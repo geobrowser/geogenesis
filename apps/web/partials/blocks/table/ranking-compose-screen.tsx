@@ -251,6 +251,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       }
       return next;
     });
+    // `mySubmissionIdsKey` is the joined signature of `myLastSubmission?.orderedEntityIds`, and
+    // stands in for it: the array is rebuilt on every render of the query, and this only wants to
+    // re-seed when the submitted order actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mySubmissionIdsKey]);
 
   const displayMyEntityIds = orderedIds;
