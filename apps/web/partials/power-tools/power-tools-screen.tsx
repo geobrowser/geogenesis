@@ -388,6 +388,11 @@ export function PowerToolsScreen() {
     }
 
     return data.rows;
+    // `sourceValue` is the narrowed `'value' in source ? source.value : null`, and together with
+    // `source.type` it covers everything about the source that matters here. Depending on `source`
+    // itself is the documented hazard: `getSource` returns a new object literal every render
+    // (`core/blocks/data/source.ts`), which loops effects that call setState.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.rows, placeholderEntityId, shouldShowPlaceholder, spaceId, source.type, sourceValue, pinnedNewEntityId]);
 
   const selectableRows = React.useMemo(() => rowsWithPlaceholder.filter(r => !r.placeholder), [rowsWithPlaceholder]);
@@ -774,6 +779,11 @@ export function PowerToolsScreen() {
     if (pinnedNewEntityId && idsToDelete.has(pinnedNewEntityId)) {
       setPinnedNewEntityId(null);
     }
+    // `sourceValue` is the narrowed `'value' in source ? source.value : null`, and together with
+    // `source.type` it covers everything about the source that matters here. Depending on `source`
+    // itself is the documented hazard: `getSource` returns a new object literal every render
+    // (`core/blocks/data/source.ts`), which loops effects that call setState.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEntityIds, source.type, sourceValue, storage, pinnedNewEntityId]);
 
   const selectionProps = React.useMemo(
@@ -973,7 +983,6 @@ export function PowerToolsScreen() {
   const supportsDropdowns = browseDropdowns.supportsDropdowns;
   const showBrowseDropdownsRow = !isEditing && supportsDropdowns && browseDropdowns.appliedColumnIds.length > 0;
   const showPillsRow = hasActiveFilters || (isEditing && supportsDropdowns && browseDropdowns.configs.length > 0);
-
 
   return (
     <div

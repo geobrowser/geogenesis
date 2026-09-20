@@ -18,6 +18,10 @@ import { Property, Relation } from '~/core/types';
 
 import { PowerToolsData, PowerToolsRow } from '../types';
 
+// A stable empty list: `options?.extraColumnIds ?? []` mints a new array every render, which
+// made the effect keyed on it re-run every render.
+const NO_EXTRA_COLUMN_IDS: string[] = [];
+
 const DEFAULT_PAGE_SIZE = 25;
 // Keep a bounded window in memory to avoid re-render costs after long scroll sessions.
 const MAX_PAGES_IN_MEMORY = 6;
@@ -63,7 +67,7 @@ export function usePowerToolsData(options?: {
   fetchAllIds: () => Promise<string[]>;
 } {
   const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
-  const extraColumnIds = options?.extraColumnIds ?? [];
+  const extraColumnIds = options?.extraColumnIds ?? NO_EXTRA_COLUMN_IDS;
   const excludedColumnIdsSet = React.useMemo(
     () => new Set(options?.excludedColumnIds ?? []),
     [options?.excludedColumnIds]
@@ -302,6 +306,11 @@ export function usePowerToolsData(options?: {
     }
 
     return [];
+    // `sourceValue` is the narrowed `'value' in source ? source.value : null`, and together with
+    // `source.type` it covers everything about the source that matters here. Depending on `source`
+    // itself is the documented hazard: `getSource` returns a new object literal every render
+    // (`core/blocks/data/source.ts`), which loops effects that call setState.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadedEntities, loadedCollectionRelations, source.type, sourceValue, spaceId]);
 
   const loadMore = React.useCallback(() => {
@@ -475,6 +484,11 @@ export function usePowerToolsData(options?: {
     }
 
     return [];
+    // `sourceValue` is the narrowed `'value' in source ? source.value : null`, and together with
+    // `source.type` it covers everything about the source that matters here. Depending on `source`
+    // itself is the documented hazard: `getSource` returns a new object literal every render
+    // (`core/blocks/data/source.ts`), which loops effects that call setState.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source.type, sourceValue, blockEntity?.relations, where, pageSize, queryEntitiesAsync]);
 
   return {
