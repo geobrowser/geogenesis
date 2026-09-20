@@ -2702,7 +2702,10 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     <button
       type="button"
       onClick={onClick}
-      aria-selected={active}
+      // `aria-pressed`, not `aria-selected`: these are plain buttons with no `role="tab"` and no
+      // `tablist` around them, and `aria-selected` is not supported on a button — it was being
+      // dropped, so nothing announced which tab was active.
+      aria-pressed={active}
       className={cx(
         // `shrink-0` so a narrow screen scrolls the strip rather than squeezing three tabs into
         // the width of one; `whitespace-nowrap` so a two-word tab can't wrap into two lines.

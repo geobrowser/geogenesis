@@ -1,4 +1,5 @@
 import nextTs from 'eslint-config-next/typescript';
+import a11y from 'eslint-plugin-jsx-a11y';
 import reactHooks from 'eslint-plugin-react-hooks';
 import { defineConfig, globalIgnores } from 'eslint/config';
 
@@ -23,6 +24,32 @@ const eslintConfig = defineConfig([
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
     },
+  },
+  {
+    // No jsx-a11y rules were active either. The recommended set reports 146 things across 79 files
+    // and most are judgement calls — 35 static elements carrying click handlers, 30 deliberate
+    // autoFocus. These three are not judgement calls. Each one means an assistive technology is
+    // handed something it cannot use, and each is now at zero:
+    //
+    //   alt-text                  a missing alt makes a screen reader read the file name aloud
+    //   heading-has-content       an empty heading is announced and leads nowhere
+    //   role-supports-aria-props  an unsupported aria-* is dropped, so the state is never conveyed
+    //
+    // The rest stay off rather than warn. A 146-line warning list is one nobody reads, and these
+    // want doing by area with someone looking at the surface as they go.
+    files: ['**/*.tsx'],
+    plugins: { 'jsx-a11y': a11y },
+    rules: {
+      'jsx-a11y/alt-text': 'error',
+      'jsx-a11y/heading-has-content': 'error',
+      'jsx-a11y/role-supports-aria-props': 'error',
+    },
+  },
+  {
+    // These render through Satori to a PNG. There is no DOM and no assistive technology on the
+    // other side, so `alt` would be a prop nothing ever reads.
+    files: ['**/opengraph.tsx', '**/*-og-image.tsx', '**/api/ranking-og/**', '**/api/debate-og/**'],
+    rules: { 'jsx-a11y/alt-text': 'off' },
   },
   {
     rules: {
