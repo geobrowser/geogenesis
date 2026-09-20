@@ -48,6 +48,12 @@ describe('NavbarClientActions', () => {
     expect(container.firstElementChild).toHaveClass('max-[359px]:gap-1');
   });
 
+  it('keeps the standalone create control on desktop only', () => {
+    render(<NavbarClientActions onSearchClick={vi.fn()} />);
+
+    expect(screen.getByTestId('create-entity').parentElement).toHaveClass('mobile:hidden');
+  });
+
   // Three of the four controls in this row are icon-only. Radix wraps the profile avatar in a
   // button of its own, so an unnamed trigger announces as nothing — and this row is the whole of
   // account access on a phone.

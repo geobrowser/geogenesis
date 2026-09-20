@@ -8,6 +8,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useAtomValue } from 'jotai';
+import { useRouter } from 'next/navigation';
 
 import { browseModeToggled, editModeToggled } from '~/core/analytics';
 import { useAccessControl } from '~/core/hooks/use-access-control';
@@ -16,6 +17,7 @@ import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
+import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils } from '~/core/utils/utils';
@@ -28,6 +30,7 @@ import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
+import { Toggle } from '~/design-system/toggle';
 
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
 import { EditProfileDialog } from '~/partials/profile/edit-profile-dialog';
@@ -82,6 +85,8 @@ export function NavbarActions() {
   const pendingAvatar = useAtomValue(avatarAtom);
   const { user } = usePrivy();
   const isMobileNavbar = useIsMobileNavbar();
+  const spaceId = useSpaceId();
+  const router = useRouter();
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
   // only trigger the logout.
   const { logout } = useLogout();
@@ -124,7 +129,7 @@ export function NavbarActions() {
 
     return (
       <div key="navbar-content" className="flex items-center gap-4">
-        <ModeToggle isMobile={isMobileNavbar}>
+        <ModeToggle isMobile={isMobileNavbar} spaceId={spaceId}>
           {({ navbar, menu }) => (
             <>
               {navbar}
@@ -168,7 +173,6 @@ export function NavbarActions() {
                   href={personalHref}
                   onNavigate={() => onOpenChange(false)}
                 />
-                {menu}
                 {personalSpaceId && (
                   <button
                     type="button"
@@ -182,6 +186,19 @@ export function NavbarActions() {
                     Edit profile
                   </button>
                 )}
+                {menu}
+                {isMobileNavbar && spaceId ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenChange(false);
+                      router.push(NavUtils.toEntity(spaceId, ID.createEntityId(), true));
+                    }}
+                    className="flex w-full items-center border-t border-grey-02 px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+                  >
+                    Create new entity
+                  </button>
+                ) : null}
                 {/* Sign out keeps its own group below the divider — the destructive action
                   stays alone at the bottom where people expect it. */}
                 <div className="border-t border-grey-02">
@@ -322,15 +339,16 @@ type ModeToggleSlots = {
 
 function ModeToggle({
   isMobile,
+  spaceId,
   children,
 }: {
   isMobile: boolean;
+  spaceId: string | null | undefined;
   children: (slots: ModeToggleSlots) => React.ReactNode;
 }) {
   const controls = useAnimation();
   const { editable, setEditable } = useEditable();
 
-  const spaceId = useSpaceId();
   const { canEdit: canUserEdit, isLoading: isLoadingAccessControl } = useAccessControl(spaceId ?? '');
 
   React.useEffect(() => {
@@ -415,7 +433,8 @@ function ModeToggle({
     return children({ navbar: null, menu: null });
   }
 
-  const label = editable ? 'Switch to browse mode' : 'Switch to edit mode';
+  const navbarLabel = editable ? 'Switch to browse mode' : 'Switch to edit mode';
+  const menuLabel = `Edit mode ${editable ? 'on' : 'off'}`;
   const toggle = (
     <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
       <Popover.Anchor asChild>
@@ -425,8 +444,10 @@ function ModeToggle({
           onClick={onToggle}
           data-testid="edit-toggle"
           data-mode-toggle-placement={isMobile ? 'profile-menu' : 'navbar'}
-          aria-label={label}
-          aria-pressed={editable}
+          aria-label={isMobile ? menuLabel : navbarLabel}
+          role={isMobile ? 'switch' : undefined}
+          aria-checked={isMobile ? editable : undefined}
+          aria-pressed={isMobile ? undefined : editable}
           animate={controls}
           variants={variants}
           className={cx(
@@ -435,8 +456,14 @@ function ModeToggle({
               : 'rounded-[47px] focus-visible:outline-none'
           )}
         >
-          {isMobile ? <span>{label}</span> : null}
-          <ModeToggleTrack editable={editable} showEditAccessTooltip={showEditAccessTooltip} />
+          {isMobile ? (
+            <>
+              <span>{menuLabel}</span>
+              <Toggle checked={editable} data-testid="edit-mode-switch-visual" />
+            </>
+          ) : (
+            <ModeToggleTrack editable={editable} showEditAccessTooltip={showEditAccessTooltip} />
+          )}
         </motion.button>
       </Popover.Anchor>
       <Popover.Portal>

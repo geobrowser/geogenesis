@@ -12,6 +12,10 @@ const address = '0x1234567890abcdef1234567890abcdef12345678';
 
 const mocks = vi.hoisted(() => ({
   logout: vi.fn(),
+  push: vi.fn(),
+  setEditable: vi.fn(),
+  editable: false,
+  canEdit: false,
   profile: {
     name: 'Max',
     avatarUrl: 'ipfs://avatar',
@@ -35,6 +39,10 @@ vi.mock('@geogenesis/auth', () => ({
   usePrivy: () => ({ ready: true, authenticated: true, user: mocks.privyUser }),
 }));
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mocks.push }),
+}));
+
 vi.mock('jotai', () => ({ useAtomValue: () => '' }));
 
 vi.mock('~/core/hooks/use-smart-account', () => ({
@@ -55,12 +63,13 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 vi.mock('~/core/state/feature-flags', () => ({}));
 vi.mock('~/core/hooks/use-space-id', () => ({ useSpaceId: () => mocks.spaceId }));
 vi.mock('~/core/hooks/use-access-control', () => ({
-  useAccessControl: () => ({ canEdit: false, isLoading: false }),
+  useAccessControl: () => ({ canEdit: mocks.canEdit, isLoading: false }),
 }));
 vi.mock('~/core/hooks/use-keyboard-shortcuts', () => ({ useKeyboardShortcuts: vi.fn() }));
 vi.mock('~/core/state/editable-store', () => ({
-  useEditable: () => ({ editable: false, setEditable: vi.fn() }),
+  useEditable: () => ({ editable: mocks.editable, setEditable: mocks.setEditable }),
 }));
+vi.mock('~/core/id', () => ({ ID: { createEntityId: () => 'new-entity' } }));
 vi.mock('~/partials/hints/edit-mode-toggle-tip', () => ({
   EditModeToggleTip: () => null,
   useEditModeToggleTip: () => ({ open: false, dismiss: vi.fn(), isActive: false }),
@@ -131,6 +140,10 @@ describe('NavbarActions profile menu', () => {
 
   beforeEach(() => {
     mocks.logout.mockReset();
+    mocks.push.mockReset();
+    mocks.setEditable.mockReset();
+    mocks.editable = false;
+    mocks.canEdit = false;
     mocks.profile = { name: 'Max', avatarUrl: 'ipfs://avatar' };
     mocks.personalSpaceId = 'personal-space';
     mocks.spaceId = null;
@@ -336,12 +349,50 @@ describe('NavbarActions profile menu', () => {
       await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
 
       const menu = screen.getByTestId('profile-menu');
-      const toggle = within(menu).getByRole('button', { name: 'Switch to edit mode' });
-      expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      const toggle = within(menu).getByRole('switch', { name: 'Edit mode off' });
+      expect(toggle).toHaveAttribute('aria-checked', 'false');
+      expect(toggle).not.toHaveAttribute('aria-pressed');
       expect(toggle).toHaveAttribute('data-mode-toggle-placement', 'profile-menu');
       expect(toggle).toHaveClass('w-full', 'border-t', 'py-2.5');
-      expect(within(toggle).getByText('Switch to edit mode')).toBeInTheDocument();
+      expect(within(toggle).getByText('Edit mode off')).toBeInTheDocument();
+      expect(within(toggle).getByTestId('edit-mode-switch-visual')).toHaveClass('h-2.5', 'w-4', 'rounded-full');
       expect(screen.getAllByTestId('edit-toggle')).toHaveLength(1);
+    });
+
+    it('turns edit mode on from the mobile switch', async () => {
+      mocks.spaceId = 'space-1';
+      mocks.isMobileNavbar = true;
+      mocks.canEdit = true;
+      const user = userEvent.setup();
+      render(<NavbarActions />);
+
+      await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+      await user.click(screen.getByRole('switch', { name: 'Edit mode off' }));
+
+      expect(mocks.setEditable).toHaveBeenCalledWith(true);
+    });
+
+    it('orders the mobile menu actions and creates an entity in the current space', async () => {
+      mocks.spaceId = 'space-1';
+      mocks.isMobileNavbar = true;
+      const user = userEvent.setup();
+      render(<NavbarActions />);
+
+      await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+
+      const editProfile = screen.getByRole('button', { name: 'Edit profile' });
+      const editMode = screen.getByRole('switch', { name: 'Edit mode off' });
+      const createEntity = screen.getByRole('button', { name: 'Create new entity' });
+      const signOut = screen.getByRole('button', { name: 'Sign out' });
+
+      expect(editProfile.compareDocumentPosition(editMode)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(editMode.compareDocumentPosition(createEntity)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(createEntity.compareDocumentPosition(signOut)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+      await user.click(createEntity);
+
+      expect(mocks.push).toHaveBeenCalledWith('/space/space-1/new-entity?edit=true');
+      expect(screen.queryByTestId('profile-menu')).not.toBeInTheDocument();
     });
   });
 });

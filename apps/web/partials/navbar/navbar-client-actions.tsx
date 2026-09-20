@@ -27,7 +27,9 @@ interface Props {
 export function NavbarClientActions({ onSearchClick }: Props) {
   return (
     <div className="flex items-center gap-3 max-[359px]:gap-1">
-      <CreateEntityDropdown />
+      <div className="mobile:hidden">
+        <CreateEntityDropdown />
+      </div>
 
       <button
         aria-label="Search"
