@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  fromPayload,
   type AvailabilityBlock,
   columnFor,
   effectiveAvailability,
@@ -222,5 +223,49 @@ describe('toPayload', () => {
     expect(payload.recurring).toHaveLength(1);
     expect(payload.dated).toEqual([{ date: '2026-09-19', start: '11:00', end: '13:00' }]);
     expect(payload.exceptions).toEqual([{ date: '2026-09-17', start: '09:00', end: '10:00' }]);
+  });
+});
+
+describe('fromPayload', () => {
+  it('undoes the one-based weekday the wire uses', () => {
+    // The wire counts Monday as 1 and the editor counts it as 0. A round trip that forgets this
+    // moves a whole week by a day, and nothing throws.
+    const [block] = fromPayload({
+      timezone: 'Europe/London',
+      slot_minutes: 30,
+      recurring: [{ weekday: 1, start: '09:00', end: '10:00' }],
+      dated: [],
+    });
+    expect(block).toMatchObject({ kind: 'recurring', weekday: 0, start: at(9), end: at(10) });
+  });
+
+  it('reads a payload with no exceptions key at all', () => {
+    // `toPayload` omits it rather than sending [], so the inverse must not assume it is there.
+    const blocks = fromPayload({
+      timezone: 'Europe/London',
+      slot_minutes: 30,
+      recurring: [],
+      dated: [{ date: '2026-09-19', start: '11:00', end: '13:30' }],
+    });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({ kind: 'dated', date: '2026-09-19' });
+  });
+
+  it('round-trips every kind without drift', () => {
+    const original = [
+      recurring(1, at(9), at(10)),
+      recurring(3, at(18), at(20)),
+      dated('2026-09-19', at(11), at(13, 30)),
+      exception('2026-09-17', at(9), at(10)),
+    ];
+    const restored = fromPayload(toPayload(original, 'Europe/London'));
+
+    // Ids are regenerated on read, so compare everything else.
+    const shape = (blocks: AvailabilityBlock[]) =>
+      blocks
+        .map(({ id: _id, ...rest }) => rest)
+        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+
+    expect(shape(restored)).toEqual(shape(original));
   });
 });

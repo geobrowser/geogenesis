@@ -317,7 +317,10 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
           onClick={event => {
             if (event.target === event.currentTarget && pressStartedOnBackdrop.current) close();
           }}
-          className="fixed inset-0 z-101 flex items-start justify-center overflow-y-auto focus:outline-hidden"
+          // `px-4` so the card clears the screen edges on a phone, where
+          // `max-w-[560px]` is wider than the viewport and the dialog would
+          // otherwise run edge to edge.
+          className="fixed inset-0 z-101 flex items-start justify-center overflow-y-auto px-4 focus:outline-hidden"
         >
           <form
             data-geo-analytics-label="Edit profile"

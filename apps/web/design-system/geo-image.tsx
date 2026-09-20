@@ -10,7 +10,7 @@ import { IPFS_GATEWAY_COUNT, getImagePathAtLevel } from '~/core/utils/utils';
 
 /**
  * Default responsive sizes for Next.js Image components with fill prop.
- * Matches Tailwind breakpoints: sm (639px), lg (1023px)
+ * Matches Tailwind breakpoints: mobile (639px), lg (1023px)
  */
 export const DEFAULT_IMAGE_SIZES = '(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 25vw';
 

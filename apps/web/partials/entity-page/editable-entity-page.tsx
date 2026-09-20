@@ -35,7 +35,6 @@ import {
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue } from '~/core/sync/use-store';
 import { Property, Relation, ValueOptions } from '~/core/types';
-
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
@@ -198,7 +197,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                 return (
                   <div
                     key={section.id}
-                    className={isTypeEntity ? 'flex flex-col gap-2 sm:gap-5' : 'flex flex-col gap-4 sm:gap-5'}
+                    className={isTypeEntity ? 'flex flex-col gap-2 mobile:gap-5' : 'flex flex-col gap-4 mobile:gap-5'}
                   >
                     {effectiveHasGroups && section.isGroup && collapsible && (
                       <button

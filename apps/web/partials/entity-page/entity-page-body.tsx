@@ -1,26 +1,29 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import * as React from 'react';
 
 import { ClaimPageView } from '~/core/claims/browse/claim-page-view';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { TOPIC_TYPE_ID } from '~/core/constants';
+import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
+import type { Space } from '~/core/io/dto/spaces';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { TopicPageView } from '~/core/topics/browse/topic-page-view';
 import type { Relation, TabEntity } from '~/core/types';
+import { Spaces } from '~/core/utils/space';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
-import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Spacer } from '~/design-system/spacer';
 
 import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
-import { BacklinksClientContainer } from '~/partials/entity-page/backlinks-client-container';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { EntityBacklinks } from '~/partials/entity-page/entity-backlinks';
 import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
@@ -30,6 +33,7 @@ import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-met
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
+import { PersonProfileView } from '~/partials/profile/person-profile-view';
 
 type SharedProps = {
   entityId: string;
@@ -86,27 +90,6 @@ function EntityTabsSection({
   );
 }
 
-/**
- * Both variants fetch through `BacklinksClientContainer`, which is the only one of the two
- * containers that can run here.
- *
- * `BacklinksServerContainer` is an async component. This file is a client component, so React
- * doesn't treat it as a Server Component — it re-invokes the function on every render, which fires
- * its two requests again, suspends, resolves, renders, and invokes it again. The `Suspense` that
- * used to wrap it hid that entirely: the backlinks looked fine while a single entity page load sent
- * `EntityBacklinksPage` 82 times and `Spaces` 64 times, with identical variables (GEO-2666).
- *
- * The server container is still right for the three routes that render it from an actual server
- * component; it just can't be reached from here.
- */
-function EntityBacklinks({ entityId }: { entityId: string }) {
-  return (
-    <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-      <BacklinksClientContainer entityId={entityId} />
-    </TrackedErrorBoundary>
-  );
-}
-
 function EditorFooter({
   entityId,
   spaceId,
@@ -145,6 +128,107 @@ function EditorFooter({
   );
 }
 
+export type CustomBrowseView = 'claim' | 'topic' | 'person' | 'person-pending' | 'generic' | 'pending';
+
+/**
+ * The decision itself, with no hooks in it.
+ *
+ * Exported and pure because it is a routing rule rather than a rendering
+ * detail: which of four read surfaces somebody gets, from four inputs that
+ * arrive at different times. The hook below is the only place those inputs are
+ * gathered.
+ */
+export function customBrowseView({
+  entityId,
+  entity,
+  isLoadingEntity,
+  space,
+  isLoadingSpace,
+  isEditing,
+}: {
+  entityId: string;
+  entity: { types: { id: string }[] } | null | undefined;
+  isLoadingEntity: boolean;
+  space: Pick<Space, 'type' | 'entity'> | null | undefined;
+  isLoadingSpace: boolean;
+  isEditing: boolean;
+}): CustomBrowseView {
+  if (isEditing) return 'generic';
+  // The types decide which page this is, so until they are known there is no page to draw. Falling
+  // through to the generic one meanwhile rendered the value sheet for a claim or a topic and then
+  // replaced it a moment later, which read as the page loading twice.
+  if (!entity) return isLoadingEntity ? 'pending' : 'generic';
+
+  const byType = viewFromTypes(entity);
+
+  if (byType === 'claim') return 'claim';
+  if (byType === 'topic') return 'topic';
+
+  /*
+   * A profile is the *space's* view of a person, not the type's.
+   *
+   * `isPersonProfileSpace` wants a PERSONAL space whose own entity is a Person,
+   * and this wants, on top of that, the entity being read to *be* that entity.
+   * Both halves matter and the first has burned this codebase before: a Person
+   * written into a DAO space satisfies the type check alone, and was once handed
+   * profile tabs whose routes answered 404. A personal space also holds entities
+   * besides its owner, and those are not profiles either.
+   */
+  if (byType === 'person') {
+    // `person-pending`, not `pending`: the caller holds back the *body* on this
+    // one and draws the header regardless. A profile and an ordinary Person
+    // entity have the same cover, avatar, name and bio, so there is nothing to
+    // get wrong by drawing them — where blanking the page would make every
+    // Person in a DAO space wait out a space read for a view it was never going
+    // to get.
+    if (!space) return isLoadingSpace ? 'person-pending' : 'generic';
+    if (Spaces.isPersonProfileSpace(space) && space.entity && ID.equals(space.entity.id, entityId)) return 'person';
+  }
+
+  return 'generic';
+}
+
+/**
+ * The view an entity's own types put it in line for, before any space is read.
+ *
+ * Precedence lives here and only here. Claim beats Topic, so an entity typed as
+ * both reads as the narrower of the two — a claim is a thing to take a side on,
+ * which is more specific than a subject heading — and both beat Person for the
+ * same reason.
+ *
+ * `'person'` is a *candidate*, not an answer: whether that person's page is a
+ * profile is the space's to say, and `customBrowseView` asks it.
+ */
+function viewFromTypes(entity: { types: { id: string }[] }): 'claim' | 'topic' | 'person' | null {
+  if (entity.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID))) return 'claim';
+  if (entity.types.some(type => ID.equals(type.id, TOPIC_TYPE_ID))) return 'topic';
+  if (entity.types.some(type => ID.equals(type.id, SystemIds.PERSON_TYPE))) return 'person';
+
+  return null;
+}
+
+/**
+ * Whether the space has to be read before this entity's view is known.
+ *
+ * The one question `useSpace` is enabled by, and it is asked through
+ * `viewFromTypes` rather than restated. Restating it is exactly what went wrong:
+ * the gate tested Person alone, so an entity typed Person *and* Claim — which
+ * the routing test covers explicitly — fetched a space that the claim branch
+ * above was always going to discard. A gate that repeats a precedence it does
+ * not own drifts from it the first time the precedence changes.
+ */
+export function needsSpaceForView({
+  entity,
+  isEditing,
+}: {
+  entity: { types: { id: string }[] } | null | undefined;
+  isEditing: boolean;
+}): boolean {
+  if (isEditing || !entity) return false;
+
+  return viewFromTypes(entity) === 'person';
+}
+
 /**
  * Which custom read view this entity gets, if any.
  *
@@ -155,20 +239,32 @@ function EditorFooter({
  * derived across every space either way, so this is about consistency with the controls the pages
  * render rather than about reaching a type a scoped read would miss.
  */
-function useCustomBrowseView(entityId: string, spaceId: string): 'claim' | 'topic' | 'generic' | 'pending' {
+function useCustomBrowseView(entityId: string, spaceId: string): CustomBrowseView {
   const isEditing = useUserIsEditing(spaceId);
   const { entity, isLoading } = useQueryEntity({ id: entityId });
 
-  if (isEditing) return 'generic';
-  // The types decide which page this is, so until they are known there is no page to draw. Falling
-  // through to the generic one meanwhile rendered the value sheet for a claim or a topic and then
-  // replaced it a moment later, which read as the page loading twice.
-  if (!entity) return isLoading ? 'pending' : 'generic';
-  if (entity.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID))) return 'claim';
-  // After Claim, so an entity typed as both reads as the narrower of the two — a claim is a thing
-  // to take a side on, which is more specific than a subject heading.
-  if (entity.types.some(type => ID.equals(type.id, TOPIC_TYPE_ID))) return 'topic';
-  return 'generic';
+  /*
+   * Asked for only by an entity whose view actually depends on it.
+   *
+   * `useSpace` sits above the dispatch — hooks cannot be called conditionally —
+   * but its *query* can be, and running it unasked put a `getSpace` request
+   * behind every claim, topic and ordinary entity page that had no use for the
+   * answer. Passing `undefined` leaves the query disabled, which is what
+   * `useSpace` already does with a missing id.
+   *
+   * `needsSpaceForView` reads the same precedence the dispatch does rather than
+   * repeating part of it — see the note there.
+   */
+  const { space, isLoading: isLoadingSpace } = useSpace(needsSpaceForView({ entity, isEditing }) ? spaceId : undefined);
+
+  return customBrowseView({
+    entityId,
+    entity,
+    isLoadingEntity: isLoading,
+    space,
+    isLoadingSpace,
+    isEditing,
+  });
 }
 
 export function EntityPageBody(props: EntityPageBodyProps) {
@@ -205,6 +301,31 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     return <TopicPageView entityId={entityId} spaceId={spaceId} />;
   }
 
+  /*
+   * The profile, for the side panel.
+   *
+   * The space route builds it out of three pieces in three places — layout
+   * header, rail, page body — so the panel, which has none of them, showed the
+   * generic value sheet for somebody's profile instead. Clicking a debate
+   * participant opens on exactly the pair that route uses: the person entity, in
+   * their personal space.
+   *
+   * **Only the panel reaches this**, and an earlier version of this comment said
+   * the `(entity)` full-page route did too. It does not:
+   * `space/(entity)/[id]/[entityId]/page.tsx` intercepts every Person before
+   * `DefaultEntityPage`, and for a personal space's own entity — which is typed
+   * Space as well as Person — `ProfileEntityServerContainer` *redirects* to
+   * `/space/<id>`, the real profile with its header, tabs and rail. That is a
+   * better answer than this one and is left alone.
+   *
+   * Unlike the claim and topic views this is a *body*, not a whole page, and
+   * returning early like they do was a mistake worth recording: it threw away
+   * the cover, the avatar, the name and the bio drawn below, so the panel opened
+   * on a bare Activity card with nothing above it saying whose record it was.
+   * What it replaces is only what follows the header — the entity's authored
+   * tabs and the editor/properties footer — because the profile has its own tabs
+   * and its own idea of what belongs under each.
+   */
   const tabsSection = (
     <EntityTabsSection
       entityId={entityId}
@@ -214,13 +335,44 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     />
   );
 
+  /*
+   * Keyed on the entity. `EntitySidePanelBody` is keyed too, so this is belt and
+   * braces today — but the reason it is cheap to keep is that the route renders
+   * this component *unkeyed* (`default-entity-page`, documented in
+   * `relation-chip-section` for the same reason). Anything that later reaches
+   * this branch from there would otherwise carry the previous profile's open tab
+   * and that tab's space and topic chips into the next person's record.
+   *
+   * The person's authored tabs go with it: they belong to the page Overview
+   * shows, and this is the only tab bar the panel has — the space route carries
+   * them in its own header instead, which is why the profile body there does not.
+   */
+  const personProfile =
+    customView === 'person' ? (
+      <PersonProfileView key={entityId} entityId={entityId} spaceId={spaceId} authoredTabs={tabsSection} />
+    ) : null;
+
+  // The space read is still out on an entity that might be a profile. Its header
+  // is already drawn above; what follows it is the part that depends on the
+  // answer, and the generic tabs-and-editor would have to be swapped out for the
+  // profile a moment later.
+  const isPersonPending = customView === 'person-pending';
+
   if (props.variant === 'sidePanel') {
     const { isRelationPage = false, previewName, previewDescription, notice, belowBodySlot, hideProperties } = props;
     const avatarUrl = props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null;
 
     return (
-      <div className="px-4 pt-6 pb-12 sm:px-5">
-        <EntityPageCover avatarUrl={avatarUrl} coverUrl={props.coverUrl} fitImage />
+      <div className="px-4 pt-6 pb-12 mobile:px-5">
+        {/* A profile brings its avatar: it is the person's face, and the panel
+            opened on a cover with nobody in it. Everything else keeps the
+            cover-only header — see `EditableCoverAvatarHeader`. */}
+        <EntityPageCover
+          avatarUrl={avatarUrl}
+          coverUrl={props.coverUrl}
+          fitImage
+          withAvatar={customView === 'person'}
+        />
         <EntityPageContentContainer>
           <div>
             <div className="space-y-2">
@@ -238,21 +390,26 @@ export function EntityPageBody(props: EntityPageBodyProps) {
               </div>
             </div>
             <Spacer height={40} />
-            {tabsSection}
-            {notice ? (
-              <>
-                <Spacer height={24} />
-                {notice}
-              </>
-            ) : null}
-            <Spacer height={40} />
-            <EditorFooter
-              entityId={entityId}
-              spaceId={spaceId}
-              variant="sidePanel"
-              belowBodySlot={belowBodySlot}
-              hideProperties={hideProperties}
-            />
+            {personProfile ??
+              (isPersonPending ? null : (
+                <>
+                  {tabsSection}
+                  {notice ? (
+                    <>
+                      <Spacer height={24} />
+                      {notice}
+                    </>
+                  ) : null}
+                  <Spacer height={40} />
+                  <EditorFooter
+                    entityId={entityId}
+                    spaceId={spaceId}
+                    variant="sidePanel"
+                    belowBodySlot={belowBodySlot}
+                    hideProperties={hideProperties}
+                  />
+                </>
+              ))}
           </div>
         </EntityPageContentContainer>
       </div>
@@ -285,17 +442,22 @@ export function EntityPageBody(props: EntityPageBodyProps) {
         <Spacer height={24} />
         <TypeSchemaInline entityId={entityId} spaceId={spaceId} />
         <Spacer height={16} />
-        {tabsSection}
-        {notice ? <Spacer height={24} /> : null}
-        {notice}
-        {(showSpacer || !!notice) && <Spacer height={40} />}
-        <EditorFooter
-          entityId={entityId}
-          spaceId={spaceId}
-          variant="route"
-          belowBodySlot={belowBodySlot}
-          hideProperties={hideProperties}
-        />
+        {personProfile ??
+          (isPersonPending ? null : (
+            <>
+              {tabsSection}
+              {notice ? <Spacer height={24} /> : null}
+              {notice}
+              {(showSpacer || !!notice) && <Spacer height={40} />}
+              <EditorFooter
+                entityId={entityId}
+                spaceId={spaceId}
+                variant="route"
+                belowBodySlot={belowBodySlot}
+                hideProperties={hideProperties}
+              />
+            </>
+          ))}
       </EntityPageContentContainer>
     </>
   );

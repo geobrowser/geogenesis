@@ -15,7 +15,7 @@ const CROWN_PATH =
 
 /**
  * `variant="outline"` draws the same crown stroked rather than filled, for the People row's stat
- * line — `InfoSmall` and `Megaphone` beside it are both stroked, and a filled crown among them read
+ * line — `Warning` and `Megaphone` beside it are both stroked, and a filled crown among them reads
  * as a status badge rather than as one more count.
  */
 export function Crown({

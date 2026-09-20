@@ -15,7 +15,23 @@ import { validateEntityId } from '~/core/utils/utils';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 interface TabGroupProps {
-  tabs: Array<{ href: string; label: string; badge?: string; disabled?: boolean; hidden?: boolean }>;
+  tabs: Array<{
+    href: string;
+    label: string;
+    badge?: string;
+    disabled?: boolean;
+    hidden?: boolean;
+    /** Draws a rule before this tab, marking where one group of tabs ends and another begins. */
+    dividerBefore?: boolean;
+    /**
+     * Only shown where the side rail is not.
+     *
+     * Breakpoints here are desktop-first (`lg` is max-width 1023px), and
+     * `StickySideRail` drops itself at exactly that width — so a tab reaching
+     * the rail's content appears precisely when the rail stops being there.
+     */
+    onlyWhenNarrow?: boolean;
+  }>;
   className?: string;
 }
 
@@ -116,7 +132,16 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
       >
         <div className="relative flex w-max items-center gap-6 pb-2">
           {tabs.map(t => (
-            <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+            <React.Fragment key={t.href}>
+              {t.dividerBefore && <span aria-hidden className="h-4 w-px shrink-0 bg-grey-02" />}
+              {t.onlyWhenNarrow ? (
+                <span className="hidden lg:contents">
+                  <Tab href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+                </span>
+              ) : (
+                <Tab href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+              )}
+            </React.Fragment>
           ))}
         </div>
         <div className="sticky right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
@@ -218,6 +243,17 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
   }
 
   return (
+    // No `scroll={false}` here, though it is tempting. This component draws the
+    // tab bar on profiles, ordinary spaces, entities and governance alike, and
+    // preserving the offset for all of them lands a reader who switched tabs
+    // near the bottom of a long list somewhere past the end of a shorter one.
+    //
+    // What it was added for is real — Next's jump to the top makes the underline
+    // fly up through the label, because the shared-layout animation measures the
+    // marker before and after and animates through the scroll delta. That wants
+    // scrolling *to the tab bar* rather than to the top or not at all, which is
+    // a behaviour to design alongside the sticky bar in GEO-2923 rather than a
+    // flag to set here.
     <Link className={tabGroupTabLinkStyles({ active, disabled })} href={href} prefetch>
       {label}
       {badge && <Badge>{badge}</Badge>}

@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 
-import { InfoSmall } from '~/design-system/icons/info-small';
 import { Megaphone } from '~/design-system/icons/megaphone';
+import { Warning } from '~/design-system/icons/warning';
 import { Text } from '~/design-system/text';
 
 import { Crown } from '../browse/icons';
@@ -59,11 +59,11 @@ export function winRateLabel(winRate: NonNullable<PersonRecord['winRate']>): str
  * failure where absence reads as new — so this returns just the join date for someone who has not
  * started yet, and nothing at all for someone we know nothing about.
  */
-export function PersonRecordLine({ record }: { record: PersonRecord }) {
+export function PersonRecordLine({ record, activeSpaces }: { record: PersonRecord; activeSpaces?: React.ReactNode }) {
   const { positions, debatesArgued, winRate, joinedAt } = record;
   const hasStats = positions !== null || debatesArgued !== null || winRate !== null;
 
-  if (!hasStats && !joinedAt) return null;
+  if (!hasStats && !activeSpaces && !joinedAt) return null;
 
   return (
     <>
@@ -71,7 +71,7 @@ export function PersonRecordLine({ record }: { record: PersonRecord }) {
         <ul className="m-0 flex list-none flex-wrap items-center gap-x-3 gap-y-0.5 p-0">
           {positions !== null && (
             <Stat
-              icon={<InfoSmall size={ICON_SIZE} />}
+              icon={<Warning size={ICON_SIZE} />}
               value={String(positions)}
               label={`${positions} ${positions === 1 ? 'position' : 'positions'}`}
             />
@@ -92,6 +92,7 @@ export function PersonRecordLine({ record }: { record: PersonRecord }) {
           )}
         </ul>
       )}
+      {activeSpaces}
       {joinedAt && (
         <Text as="p" variant="footnote" color="grey-04">
           On Geo since {formatJoinedAt(joinedAt)}

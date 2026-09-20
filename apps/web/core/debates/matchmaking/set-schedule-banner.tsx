@@ -2,12 +2,13 @@
 
 import * as React from 'react';
 
-import type { AvailabilityBlock } from '~/core/availability/blocks';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Text } from '~/design-system/text';
+
+import { useDebateSchedule, useSaveDebateSchedule } from '~/core/debates/hooks';
 
 import { AvailabilityModal } from '~/partials/availability/availability-modal';
 
@@ -34,10 +35,11 @@ export function SetScheduleBanner() {
 function Banner() {
   const { dismissed, remember: handleDismiss } = useDismissedNotice(SET_SCHEDULE_BANNER_ID);
   const [modalOpen, setModalOpen] = React.useState(false);
-  // Where the schedule lives until there is somewhere to send it. The availability endpoints today
-  // carry the online toggle only (`/me/debate-availability`), so saving keeps the blocks for this
-  // session and nothing more — the wiring lands with the backend half of GEO-2936.
-  const [blocks, setBlocks] = React.useState<AvailabilityBlock[]>([]);
+  // Saved server-side now that the backend half of GEO-2936 exists (GEO-2932). `blocks` is
+  // undefined until the first read answers, which the modal treats as an empty calendar — the
+  // same thing it showed before, so opening it early is no worse than it was.
+  const { blocks } = useDebateSchedule();
+  const saveSchedule = useSaveDebateSchedule();
   const openerRef = React.useRef<HTMLButtonElement | null>(null);
 
   if (dismissed) return null;
@@ -75,8 +77,8 @@ function Banner() {
       <AvailabilityModal
         open={modalOpen}
         onOpenChange={setModalOpen}
-        blocks={blocks}
-        onSave={setBlocks}
+        blocks={blocks ?? []}
+        onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
         openerRef={openerRef}
       />
     </div>

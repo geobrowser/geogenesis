@@ -375,6 +375,7 @@ describe('EntityFeed Explore type filter', () => {
       commentCount: 0,
       recordingUrls: [],
       debateVideoUrls: [],
+      debateClaim: null,
       isMemberOrEditor: true,
       hasPendingMembershipRequest: false,
     };
@@ -391,6 +392,18 @@ describe('EntityFeed Explore type filter', () => {
       render(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" />);
 
       expect(mocks.cardProps?.titleOpensSidePanel).toBe(false);
+    });
+
+    it('hands the mobile debates-panel Claim variant to cards only when requested', () => {
+      mocks.pages = [{ items: [item] }];
+      const { rerender } = render(
+        <EntityFeed apiEndpoint="/api/explore/feed" claimCardVariant="debate-panel-mobile" />
+      );
+
+      expect(mocks.cardProps?.claimCardVariant).toBe('debate-panel-mobile');
+
+      rerender(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" />);
+      expect(mocks.cardProps?.claimCardVariant).toBe('feed');
     });
   });
 });

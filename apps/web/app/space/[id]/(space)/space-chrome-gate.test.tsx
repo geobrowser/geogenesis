@@ -158,3 +158,38 @@ describe('space chrome layout', () => {
     expect(screen.getByText('Header').dataset.entityPageContentVariant).toBe('with-sidebar');
   });
 });
+
+/**
+ * A person's Debates tab renders the same feed from the same route, but as a tab
+ * rather than as the whole surface. Stripping the chrome there takes away the tab
+ * bar that got you here.
+ */
+describe('keepChrome', () => {
+  // The suite's cleanup lives in the describe above, so without this the second
+  // case reads the first one's DOM and passes whatever the gate does.
+  afterEach(cleanup);
+
+  it('keeps the chrome on a debates route when asked', () => {
+    navigation.pathname = '/space/f3dab79cb5a3d9d1759656dd5361d1c6/debates';
+
+    render(
+      <SpaceChromeGate keepChrome>
+        <div>header</div>
+      </SpaceChromeGate>
+    );
+
+    expect(screen.queryByText('header')).not.toBeNull();
+  });
+
+  it('still strips it everywhere else', () => {
+    navigation.pathname = '/space/f3dab79cb5a3d9d1759656dd5361d1c6/debates';
+
+    render(
+      <SpaceChromeGate>
+        <div>header</div>
+      </SpaceChromeGate>
+    );
+
+    expect(screen.queryByText('header')).toBeNull();
+  });
+});

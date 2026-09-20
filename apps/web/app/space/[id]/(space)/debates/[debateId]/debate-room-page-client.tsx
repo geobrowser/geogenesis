@@ -2622,7 +2622,7 @@ function DebateRecordingModal({
       {/* `main` is wide enough for the claim, which is set and sized exactly as the intro screen
           sets it so the headline does not change under you at the swap. Everything below it stays
           in the single 430px column the room has always used. */}
-      <main className="mx-auto flex min-h-dvh w-full max-w-[940px] flex-col items-center justify-center px-2 py-8 sm:px-5 md:max-w-[430px]">
+      <main className="mx-auto flex min-h-dvh w-full max-w-[940px] flex-col items-center justify-center px-2 py-8 mobile:px-5 md:max-w-[430px]">
         <h1 className="mb-5 w-full max-w-[900px] text-center text-mainPage text-text md:max-w-[390px] md:text-[1.5rem] md:leading-[1.8125rem] md:font-semibold md:tracking-[-0.75px]">
           {debate.claim.claim}
         </h1>

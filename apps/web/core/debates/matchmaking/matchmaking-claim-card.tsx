@@ -92,6 +92,13 @@ type Props = {
   /** Rendered under the summary, for hosts with something extra to say. */
   footer?: React.ReactNode;
   /**
+   * Rendered under one of the two response buttons — see `PositionRow`.
+   *
+   * A profile uses it to say which side that person came down on, under the
+   * button that says the same word.
+   */
+  noteFor?: (position: boolean) => React.ReactNode;
+  /**
    * Leaves the end slot out.
    *
    * For the one host whose offer is not the card's offer: the rematch picker sends a rematch
@@ -170,6 +177,7 @@ export function MatchmakingClaimCard({
   answersMayComeFromIndex,
   responseBlockedReason,
   footer,
+  noteFor,
   onOpenClaim,
   viewerIdentityPending,
   viewerResponseUnknown,
@@ -215,13 +223,10 @@ export function MatchmakingClaimCard({
   return (
     // `w-full` matters: popLayout absolutely positions an exiting card, which would otherwise
     // collapse to its content width as it fades.
-    <motion.article
-      ref={setCardRef}
-      {...hubCardMotion}
-      className="w-full rounded-lg border border-grey-02 bg-white p-3"
-    >
+    <motion.article ref={setCardRef} {...hubCardMotion} className="w-full claim-card-panel-surface">
       {isOnGraph ? (
         <RespondableControls
+          noteFor={noteFor}
           claim={claim}
           positions={positions}
           readiness={readiness}
@@ -282,7 +287,7 @@ function ClaimHeader({
   isControversial?: boolean;
   onOpenClaim?: () => void;
 }) {
-  const claimTextClassName = 'mb-3 block text-metadataMedium leading-snug text-pretty line-clamp-3';
+  const claimTextClassName = 'claim-card-panel-title';
 
   const openable = isOnGraph ? (
     onOpenClaim ? (
@@ -306,7 +311,7 @@ function ClaimHeader({
       {/* `items-start` so the chip stays put when the slot stacks a blocked reason beneath it. No
           reserved height: the slot is now the height of the chip beside it, so the row does not grow
           when the match lookup answers. */}
-      <div className="mb-2 flex items-start justify-between gap-3">
+      <div className="claim-card-panel-header">
         <span className="flex min-w-0 items-center gap-1.5">
           <SpaceChip spaceId={claim.space_id} />
           {isControversial ? <ControversialTag /> : null}
@@ -566,6 +571,7 @@ function RespondableControls({
   hideEndSlot,
   endSlot,
   hasFooter,
+  noteFor,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -585,6 +591,8 @@ function RespondableControls({
   responseBlockedReason?: string | null;
   /** False while the card is still far enough below the fold that its reads are not worth making. */
   readResponses?: boolean;
+  /** See {@link Props.noteFor}. */
+  noteFor?: (position: boolean) => React.ReactNode;
   onOpenClaim?: () => void;
   viewerIdentityPending?: boolean;
   viewerResponseUnknown?: boolean;
@@ -750,6 +758,7 @@ function RespondableControls({
         // for the length of an indexing round trip read as the response not having landed.
         disabled={!canRespond}
         titleFor={actionTitle}
+        noteFor={noteFor}
       />
       {responseError ? (
         <div role="alert" className="mt-2">
@@ -773,7 +782,7 @@ function RespondableControls({
           summary={summary}
           layout="inline"
           className={cx(
-            '-mx-3 mt-3 border-t border-divider bg-grey-01 px-3 py-2',
+            '-mx-3 mt-3 claim-card-summary-band',
             // Only reaches the card's base when nothing follows it. A host that passes a footer —
             // the rematch picker's error alert — renders after this, and a band bled past the
             // padding would sit under it.
@@ -987,6 +996,7 @@ export function PositionRow({
   onRespond,
   disabled,
   titleFor,
+  noteFor,
 }: {
   positions: DebateClaimPositionSummary[];
   responseKind: MatchmakingReadiness['response_kind'];
@@ -994,6 +1004,16 @@ export function PositionRow({
   onRespond?: (position: boolean) => void;
   disabled?: boolean;
   titleFor?: (position: boolean) => string;
+  /**
+   * Something to say under one of the two buttons — on a profile, which side
+   * that person came down on.
+   *
+   * Under the button rather than under the row, because the row is two columns
+   * and a line under the whole thing has to name its side in words. Under the
+   * Agree button, "Susan agrees" needs no such help. Asked per side so the note
+   * can be nothing for the other one.
+   */
+  noteFor?: (position: boolean) => React.ReactNode;
 }) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const forSide = positions.find(position => position.position === true);
@@ -1010,26 +1030,43 @@ export function PositionRow({
   return (
     <div className="@container">
       <div className="grid grid-cols-1 gap-2 claim-pills-wide:grid-cols-2">
-        <PositionButton
-          // Server labels win when a side has responders; otherwise fall back to the vocabulary for
-          // this response kind — Agree/Disagree, or Verify/Dispute for a factual claim.
-          label={forSide?.position_label ?? copy.positiveAction}
-          summary={forSide}
-          position
-          selected={viewerPosition === true}
-          onRespond={onRespond}
-          disabled={disabled}
-          title={titleFor?.(true)}
-        />
-        <PositionButton
-          label={againstSide?.position_label ?? copy.negativeAction}
-          summary={againstSide}
-          position={false}
-          selected={viewerPosition === false}
-          onRespond={onRespond}
-          disabled={disabled}
-          title={titleFor?.(false)}
-        />
+        {/* The note shares its button's grid cell rather than sitting in one of
+            its own, which is what keeps the two arrangements honest: stacked, it
+            follows the button it belongs to instead of both buttons; side by
+            side, it sits in that button's column.
+
+            `flex flex-col` and not a bare `div`: a grid item stretches to its
+            column, but a *block* child of one does not pass that width on, and
+            the pill sizes itself from its content — so wrapping it collapsed
+            both buttons to their icons, the label truncating to nothing inside
+            `min-w-0`. A flex column stretches its children by default, which is
+            the width the pill had as a grid item. */}
+        <div className="flex flex-col">
+          <PositionButton
+            // Server labels win when a side has responders; otherwise fall back to the vocabulary for
+            // this response kind — Agree/Disagree, or Verify/Dispute for a factual claim.
+            label={forSide?.position_label ?? copy.positiveAction}
+            summary={forSide}
+            position
+            selected={viewerPosition === true}
+            onRespond={onRespond}
+            disabled={disabled}
+            title={titleFor?.(true)}
+          />
+          {noteFor?.(true)}
+        </div>
+        <div className="flex flex-col">
+          <PositionButton
+            label={againstSide?.position_label ?? copy.negativeAction}
+            summary={againstSide}
+            position={false}
+            selected={viewerPosition === false}
+            onRespond={onRespond}
+            disabled={disabled}
+            title={titleFor?.(false)}
+          />
+          {noteFor?.(false)}
+        </div>
       </div>
     </div>
   );

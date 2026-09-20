@@ -12,12 +12,13 @@ import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
+import { releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
-import { Play, Speaker, SpeakerMuted } from './icons';
+import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { WinnerVoteButton } from './winner-vote-button';
 
 type DebateFeedPlayerProps = {
@@ -51,6 +52,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     playing,
     userPaused,
     isScrubbing,
+    isResuming,
     playbackEnded,
     mutedByUser,
     setMutedByUser,
@@ -98,6 +100,25 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
   const showReplay = ready && playbackEnded && !hasVoted;
   const showPausedGlyph = ready && userPaused && !playbackEnded;
 
+  // Clicking the video briefly flashes the action it just took — feedback only, not a control.
+  const [flash, setFlash] = React.useState<{ icon: 'play' | 'pause'; visible: boolean }>({
+    icon: 'play',
+    visible: false,
+  });
+  const flashTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(
+    () => () => {
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    },
+    []
+  );
+  const toggleFromVideo = () => {
+    setFlash({ icon: playing ? 'pause' : 'play', visible: true });
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    flashTimeoutRef.current = setTimeout(() => setFlash(current => ({ ...current, visible: false })), 600);
+    togglePlayback();
+  };
+
   return (
     <div ref={measurement.elementRef} className="group relative flex flex-col gap-2">
       <DebaterVideo
@@ -108,32 +129,47 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         countdown={playing && turnState?.slot === 1 ? turnState : null}
         subtitle={activeSlot === 1 ? subtitle : null}
         mutedByUser={mutedByUser}
+        isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
-        onToggle={togglePlayback}
+        onToggle={toggleFromVideo}
         votes={votes}
         topLeft={
-          showReplay ? (
-            <ControlCircle ariaLabel="Replay debate" onClick={playFromStart}>
-              <RetrySmall />
-            </ControlCircle>
-          ) : ready ? (
-            // Feed debates autoplay muted, so the unmute control stays visible during
-            // playback — otherwise there's no way to hear audio. Once unmuted it recedes
-            // to hover-only.
-            <ControlCircle
-              ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
-              onClick={() => {
-                measurement.control(mutedByUser ? 'unmute' : 'mute');
-                setMutedByUser(current => !current);
-              }}
-              className={
-                mutedByUser
-                  ? undefined
-                  : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100'
-              }
-            >
-              {mutedByUser ? <SpeakerMuted /> : <Speaker />}
-            </ControlCircle>
+          ready ? (
+            <div className="flex items-center gap-2">
+              {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
+                  centred paused glyph and tap-to-toggle instead. */}
+              <ControlCircle
+                ariaLabel={playing ? 'Pause debate' : playbackEnded ? 'Replay debate' : 'Play debate'}
+                onClick={togglePlayback}
+                className="md:hidden"
+              >
+                {playing ? <Pause /> : <Play />}
+              </ControlCircle>
+              {showReplay ? (
+                <ControlCircle ariaLabel="Replay debate" onClick={playFromStart}>
+                  <RetrySmall />
+                </ControlCircle>
+              ) : (
+                // Feed debates autoplay muted, so the unmute control stays visible during
+                // playback — otherwise there's no way to hear audio. Once unmuted it recedes
+                // to hover-only on desktop; touch has no hover, so on mobile it stays visible
+                // or there'd be no way to find it again.
+                <ControlCircle
+                  ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
+                  onClick={() => {
+                    measurement.control(mutedByUser ? 'unmute' : 'mute');
+                    setMutedByUser(current => !current);
+                  }}
+                  className={
+                    mutedByUser
+                      ? undefined
+                      : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100'
+                  }
+                >
+                  {mutedByUser ? <SpeakerMuted /> : <Speaker />}
+                </ControlCircle>
+              )}
+            </div>
           ) : null
         }
       />
@@ -145,8 +181,9 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         countdown={playing && turnState?.slot === 2 ? turnState : null}
         subtitle={activeSlot === 2 ? subtitle : null}
         mutedByUser={mutedByUser}
+        isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
-        onToggle={togglePlayback}
+        onToggle={toggleFromVideo}
         votes={votes}
         scrubber={
           ready ? (
@@ -172,16 +209,28 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         }
       />
 
+      {/* Mobile only — desktop has the persistent play/pause beside the mute control. */}
       {showPausedGlyph && (
         <button
           type="button"
           aria-label="Resume debate"
           onClick={togglePlayback}
-          className="absolute top-1/2 left-1/2 z-20 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card"
+          className="absolute top-1/2 left-1/2 z-20 hidden size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card md:grid"
         >
           <Play />
         </button>
       )}
+
+      {/* Desktop only — mobile already shows the centred paused glyph in this spot. */}
+      <div
+        aria-hidden
+        className={cx(
+          'pointer-events-none absolute top-1/2 left-1/2 z-20 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card transition-[opacity,scale] duration-300 md:hidden',
+          flash.visible ? 'scale-100 opacity-100' : 'scale-110 opacity-0'
+        )}
+      >
+        {flash.icon === 'pause' ? <Pause /> : <Play />}
+      </div>
 
       {error && (
         <Text as="p" variant="metadata" color="red-01" className="absolute inset-x-0 -bottom-6 text-center">
@@ -200,6 +249,7 @@ function DebaterVideo({
   countdown,
   subtitle,
   mutedByUser,
+  isResuming,
   onPlaybackTick,
   onToggle,
   votes,
@@ -213,6 +263,7 @@ function DebaterVideo({
   countdown: TurnState;
   subtitle: string | null;
   mutedByUser: boolean;
+  isResuming: boolean;
   onPlaybackTick: () => void;
   onToggle: () => void;
   votes: DebateVotesResult;
@@ -221,6 +272,46 @@ function DebaterVideo({
 }) {
   const { openSidePanel } = useEntitySidePanel();
   const name = participant ? speakerLabel(participant) : 'Debater';
+
+  const muted = !audible || mutedByUser;
+
+  /**
+   * Re-assert the rendered mute after a resume (GEO-2947).
+   *
+   * `playBothWithMutedFallback` mutes both elements to retry a blocked play and cannot put them
+   * back: it does not know what this component renders `muted` from, and anything it captured is
+   * a confirm window out of date by the time it could write it. React will not repair that either
+   * — it writes a DOM property only when its *own* previous value differs, and a mute it never
+   * made is invisible to it — so the element would play audibly under a UI showing muted.
+   *
+   * Not while a resume is confirming: the retry depends on the mute it just made, and writing over
+   * it mid-attempt would block the play this is trying to let happen. `isResuming` falling is
+   * itself what runs this effect again, so the repair lands the moment the attempt is over.
+   *
+   * This is why `playFromStart` no longer writes `muted` either. The value it has (`mutedByUser`)
+   * is not the value rendered here, so repairing from the hook moved the divergence rather than
+   * closing it. `muted` has one owner: this render.
+   */
+  React.useLayoutEffect(() => {
+    const video = videoRef.current;
+    if (!video || isResuming) return;
+    video.muted = muted;
+  }, [isResuming, muted, src, videoRef]);
+
+  /**
+   * Pausing is not enough to return a media decoder or its buffered data on mobile browsers.
+   * Detach the source and force the element back to its empty resource state whenever this tile
+   * is evicted. The setup repairs the source too because React Strict Mode deliberately exercises
+   * an effect cleanup/setup cycle without removing the DOM node in development (GEO-2963).
+   */
+  React.useLayoutEffect(() => {
+    const video = videoRef.current;
+    if (!video || !src) return;
+
+    if (video.getAttribute('src') !== src) video.setAttribute('src', src);
+
+    return () => releaseVideo(video);
+  }, [src, videoRef]);
 
   // A personal space's own id resolves to its "system entity" (an ugly technical
   // record). The space's page entity is the real profile, so open that once it's
@@ -244,7 +335,8 @@ function DebaterVideo({
             playsInline
             preload="metadata"
             src={src}
-            muted={!audible || mutedByUser}
+            // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
+            muted={muted}
             onEnded={onPlaybackTick}
             onLoadedMetadata={onPlaybackTick}
             onPause={onPlaybackTick}
@@ -339,7 +431,10 @@ function ControlCircle({
         event.stopPropagation();
         onClick();
       }}
-      className={cx('grid size-8 place-items-center rounded-full bg-white text-text shadow-light', className)}
+      className={cx(
+        'grid size-10.5 place-items-center rounded-full bg-white text-text shadow-light [&>svg]:scale-[1.3]',
+        className
+      )}
     >
       {children}
     </button>

@@ -278,3 +278,52 @@ export function localTimezone() {
     return 'local';
   }
 }
+
+/**
+ * The inverse of {@link toPayload}: what the server holds, as blocks the calendar can draw.
+ *
+ * Two details have to be undone exactly, or a saved schedule reads back wrong:
+ *
+ * - **`weekday` is one-based on the wire** and zero-based here, so it loses the one `toPayload`
+ *   added. Getting this wrong shifts a whole week by a day and nothing throws.
+ * - **`exceptions` is absent rather than empty** when there are none, so it is read defensively.
+ *
+ * Ids are generated on read. They exist so the editor can track a block across a drag; the server
+ * has no reason to know them, and a block is identified by its kind, key and span regardless.
+ */
+export function fromPayload(payload: AvailabilityPayload): AvailabilityBlock[] {
+  let sequence = 0;
+  const id = (kind: string) => `${kind}-${sequence++}`;
+
+  const recurring: AvailabilityBlock[] = payload.recurring.map(block => ({
+    id: id('recurring'),
+    kind: 'recurring' as const,
+    weekday: block.weekday - 1,
+    start: parseTime24(block.start),
+    end: parseTime24(block.end),
+  }));
+
+  const dated: AvailabilityBlock[] = payload.dated.map(block => ({
+    id: id('dated'),
+    kind: 'dated' as const,
+    date: block.date,
+    start: parseTime24(block.start),
+    end: parseTime24(block.end),
+  }));
+
+  const exceptions: AvailabilityBlock[] = (payload.exceptions ?? []).map(block => ({
+    id: id('exception'),
+    kind: 'exception' as const,
+    date: block.date,
+    start: parseTime24(block.start),
+    end: parseTime24(block.end),
+  }));
+
+  return [...recurring, ...dated, ...exceptions];
+}
+
+/** `"18:30"` -> 1110. The inverse of {@link formatTime24}. */
+export function parseTime24(value: string) {
+  const [hours, minutes] = value.split(':');
+  return Number(hours) * 60 + Number(minutes);
+}

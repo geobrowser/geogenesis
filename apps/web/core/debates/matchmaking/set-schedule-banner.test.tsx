@@ -4,9 +4,18 @@ import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SetScheduleBanner } from './set-schedule-banner';
+
+// The banner now reads and writes the saved calendar (GEO-2932). These tests are about the
+// callout and the modal opening, not the round trip, so the hooks are stubbed -- the payload
+// conversion has its own tests in core/availability.
+vi.mock('~/core/debates/hooks', () => ({
+  useDebateSchedule: () => ({ blocks: [], isSet: false }),
+  useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
 
 afterEach(() => {
   cleanup();

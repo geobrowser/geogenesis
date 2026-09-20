@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import cx from 'classnames';
-import { MotionConfig, type PanInfo, motion, useDragControls } from 'framer-motion';
+import { MotionConfig, motion } from 'framer-motion';
 import { useAtom, useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
@@ -11,8 +11,10 @@ import { createPortal } from 'react-dom';
 import { DEBATES_MODAL } from '~/core/debates/debates-panel-deep-link';
 import { requestsModal } from '~/core/deep-links/modal-deep-link';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
+import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
 import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
@@ -34,7 +36,6 @@ import { type DebatesHubTab, debatesHubFiltersOwnerAtom, resetDebatesHubFiltersA
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
 const MOBILE_SHEET_TOP_OFFSET_PX = 120;
-const PANEL_SCROLL_SELECTOR = '[data-debates-hub-scroll]';
 
 // Reading order, widest to narrowest: everything you could debate, then who is around, then the
 // two lists that only exist once matchmaking has produced something. The landing tab is set
@@ -79,26 +80,13 @@ function visibleTab(activeTab: DebatesHubTab, authenticated: boolean): DebatesHu
   return 'explore';
 }
 
-function isInteractiveDragTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
-  return Boolean(
-    target.closest(
-      'button, a, input, textarea, select, [role="button"], [contenteditable="true"], [data-no-sheet-drag]'
-    )
-  );
-}
-
-function shouldStartSheetDrag(event: React.PointerEvent, root: HTMLElement): boolean {
-  if (isInteractiveDragTarget(event.target)) return false;
-  const scrollEl = root.querySelector<HTMLElement>(PANEL_SCROLL_SELECTOR);
-  if (scrollEl?.contains(event.target as Node) && scrollEl.scrollTop > 0) return false;
-  return true;
-}
-
 export function DebatesHubPanel() {
   const isMobile = useIsMobileLayout();
-  const dragControls = useDragControls();
   const { isOpen, activeTab, close, setTab } = useDebatesHub();
+  const { dragControls, handleDragEnd, handlePointerDown, setOverlayElement } = useMobileSheetDrag({
+    enabled: isMobile && isOpen,
+    onDismiss: close,
+  });
   // Held here rather than per tab, so switching tabs doesn't drop and re-take the gateway scope.
   useMatchmakingScope(isOpen);
   // Only the mobile sheet claims `aria-modal`; the desktop aside is a non-modal companion panel.
@@ -194,13 +182,12 @@ export function DebatesHubPanel() {
       // animation in the app. `user` keeps opacity fades but drops transform and layout motion.
       <MotionConfig reducedMotion="user">
         <motion.div
-          className="fixed inset-0 z-[200]"
+          ref={setOverlayElement}
+          className="fixed inset-0 z-[200] overscroll-none"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.15 }}
-          onPointerDown={event => {
-            if (shouldStartSheetDrag(event, event.currentTarget)) dragControls.start(event);
-          }}
+          onPointerDown={handlePointerDown}
         >
           {/* Not a button: `aria-modal` hides it from assistive tech anyway, so labelling it
               "Close" only promised a control nobody could hear about — the header's button is the
@@ -210,6 +197,7 @@ export function DebatesHubPanel() {
             ref={sheetRef as React.RefObject<HTMLDivElement>}
             tabIndex={-1}
             data-debates-hub
+            data-mobile-sheet-surface
             role="dialog"
             aria-modal="true"
             aria-label="Debates"
@@ -218,18 +206,14 @@ export function DebatesHubPanel() {
             dragListener={false}
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={0.12}
-            onDragEnd={(_event, info: PanInfo) => {
-              if (info.offset.y > 72 || info.velocity.y > 420) close();
-            }}
+            onDragEnd={handleDragEnd}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-            className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden bg-white"
+            className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
             style={{ top: MOBILE_SHEET_TOP_OFFSET_PX }}
           >
-            <div className="flex shrink-0 justify-center pt-2 pb-1" aria-hidden>
-              <div className="h-1 w-10 rounded-full bg-grey-02" />
-            </div>
+            <MobileSheetGrabHandle />
             {body}
           </motion.div>
         </motion.div>
@@ -355,6 +339,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         layoutScroll
         ref={scrollRef}
         data-debates-hub-scroll
+        data-mobile-sheet-scroll
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6"
       >
         {/* `filtersReconciled` joins the Privy gate rather than becoming a second one: the reset
