@@ -21,20 +21,20 @@ export function Navbar({ onBrowseClick, onSearchClick, hideLogo = false, showBro
       data-app-navbar
       className="sticky top-0 z-60 flex h-11 w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1"
     >
-      <div className="flex min-w-0 items-center gap-8 sm:gap-2 md:gap-4">
+      <div className="flex min-w-0 items-center gap-8 mobile:gap-2 md:gap-4">
         {showBrowseButton ? (
           <button
             type="button"
             aria-label="Open browse menu"
             aria-haspopup="dialog"
             onClick={onBrowseClick}
-            className="-my-1 -ml-3 hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg text-grey-04 transition-colors hover:bg-grey-01 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-text active:bg-divider sm:flex"
+            className="-my-1 -ml-3 hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg text-grey-04 transition-colors hover:bg-grey-01 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-text active:bg-divider mobile:flex"
           >
             <NavigationMenu />
           </button>
         ) : null}
         {hideLogo ? null : (
-          <Link href={NavUtils.toRoot()} className={showBrowseButton ? 'sm:hidden' : undefined}>
+          <Link href={NavUtils.toRoot()} className={showBrowseButton ? 'mobile:hidden' : undefined}>
             <GeoLogoLarge />
           </Link>
         )}

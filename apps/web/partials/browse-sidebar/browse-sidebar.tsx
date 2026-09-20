@@ -303,14 +303,14 @@ function SidebarToggle({ open, onToggle, className }: { open: boolean; onToggle:
   );
 }
 
-interface BrowseSidebarProps {
-  presentation?: 'desktop' | 'mobile';
-  onClose?: () => void;
-}
+type BrowseSidebarProps =
+  { presentation?: 'desktop'; onClose?: never } | { presentation: 'mobile'; onClose: () => void };
 
-export function BrowseSidebar({ presentation = 'desktop', onClose }: BrowseSidebarProps = {}) {
+export function BrowseSidebar(props: BrowseSidebarProps = {}) {
+  const presentation = props.presentation ?? 'desktop';
   const [open, setOpen] = useAtom(browseSidebarOpenAtom);
   const mobile = presentation === 'mobile';
+  const onClose = props.presentation === 'mobile' ? props.onClose : undefined;
   const { personalSpaceId: personalSpaceIdFromHook } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;

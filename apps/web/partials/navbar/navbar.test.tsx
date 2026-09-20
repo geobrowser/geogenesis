@@ -28,7 +28,7 @@ describe('Navbar mobile browse control', () => {
 
     const button = screen.getByRole('button', { name: 'Open browse menu' });
     expect(button).toHaveAttribute('aria-haspopup', 'dialog');
-    expect(button).toHaveClass('h-11', 'w-11', 'sm:flex');
+    expect(button).toHaveClass('h-11', 'w-11', 'mobile:flex');
 
     await user.click(button);
     expect(onBrowseClick).toHaveBeenCalledOnce();
@@ -38,6 +38,6 @@ describe('Navbar mobile browse control', () => {
     render(<Navbar onBrowseClick={vi.fn()} onSearchClick={vi.fn()} showBrowseButton={false} />);
 
     expect(screen.queryByRole('button', { name: 'Open browse menu' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link')).not.toHaveClass('sm:hidden');
+    expect(screen.getByRole('link')).not.toHaveClass('mobile:hidden');
   });
 });

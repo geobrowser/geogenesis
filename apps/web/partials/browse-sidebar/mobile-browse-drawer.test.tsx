@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
@@ -22,7 +22,10 @@ vi.mock('./browse-sidebar', () => ({
 }));
 
 describe('MobileBrowseDrawer', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   it('presents the browse tree as a modal drawer and closes after navigation', async () => {
     const onOpenChange = vi.fn();
@@ -42,6 +45,26 @@ describe('MobileBrowseDrawer', () => {
     render(<MobileBrowseDrawer open onOpenChange={onOpenChange} />);
 
     await user.click(screen.getByRole('button', { name: 'Close browse menu' }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('closes when the viewport grows beyond the mobile breakpoint', () => {
+    let breakpointListener: ((event: MediaQueryListEvent) => void) | undefined;
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: true,
+        addEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+          breakpointListener = listener;
+        },
+        removeEventListener: vi.fn(),
+      }))
+    );
+    const onOpenChange = vi.fn();
+
+    render(<MobileBrowseDrawer open onOpenChange={onOpenChange} />);
+    act(() => breakpointListener?.({ matches: false } as MediaQueryListEvent));
+
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });
