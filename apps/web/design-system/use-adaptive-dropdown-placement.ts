@@ -150,6 +150,9 @@ export function useAdaptiveDropdownPlacement(
       window.removeEventListener('scroll', scheduleRecompute, true);
       resizeObserver?.disconnect();
     };
+    // The spread is the point: callers pass whatever their placement depends on. The rule cannot
+    // check a spread statically, and there is nothing here to check it against.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, contentElement, recomputePlacement, ...recomputeDeps]);
 
   return placement;

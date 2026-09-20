@@ -389,6 +389,9 @@ export function ChatWidget() {
       setMessages(persisted.messages);
     }
     hydratedRef.current = true;
+    // Hydrate once, guarded by `hydratedRef`. Depending on `persistedCurrent` would re-hydrate from
+    // storage and overwrite whatever the reader has typed since.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   React.useEffect(() => {
@@ -631,6 +634,9 @@ export function ChatWidget() {
       // QuotaExceededError — auto-compaction normally keeps a single chat
       // well under localStorage's budget. Surrender; in-memory state still works.
     }
+    // `persistedCurrent` is deliberately absent: this effect *writes* it, so depending on it would
+    // re-run on its own output. It is read only for the title it is about to carry forward.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, status]);
 
   // Refs read inside async handlers so we don't tear when the component
@@ -934,6 +940,7 @@ export function ChatWidget() {
     messages.length,
     handleNewChat,
     clearError,
+    setInjectInline,
     setSeed,
     trackAssistantMessage,
     currentSpaceId,

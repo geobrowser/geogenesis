@@ -175,6 +175,9 @@ export function CreateSpaceDialog() {
     if (autoRunFired) return;
     autoRunFired = true;
     createSpaces(spaceType);
+    // `createSpaces` is declared in the component body, so it is a new function every render and
+    // naming it would re-run this on each one. `autoRunFired` already makes it fire once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, autoRun, step, spaceType, address, name, topicId, image, governanceType]);
 
   if (!address) return null;
