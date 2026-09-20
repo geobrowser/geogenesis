@@ -36,6 +36,8 @@ export function ClaimSourcesTab({
         rows={sources.data ?? []}
         isLoading={sources.isLoading}
         isError={sources.isError}
+        isFetchingNextPage={sources.isFetching && sources.data.length > 0}
+        fetchNextPage={sources.refetch}
         loadingLabel="Loading sources…"
         emptyLabel="No linked sources could be displayed."
         errorLabel="Couldn’t load sources."

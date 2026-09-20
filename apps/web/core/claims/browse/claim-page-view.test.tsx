@@ -198,16 +198,22 @@ beforeEach(() => {
 });
 
 describe('ClaimPageView record', () => {
-  it('loads the exhaustive record only after a full record tab is opened', () => {
+  it('loads only the exhaustive record represented by the open full tab', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
-    expect(mocks.recordOptions).toMatchObject({ loadCompleteRecord: false });
+    expect(mocks.recordOptions).toMatchObject({ completeRecord: null });
 
     cleanup();
     mocks.sidePanel = { activeTabId: null, activeSystemTab: 'claims', setActiveSystemTab: vi.fn() };
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
-    expect(mocks.recordOptions).toMatchObject({ loadCompleteRecord: true });
+    expect(mocks.recordOptions).toMatchObject({ completeRecord: 'claims' });
+
+    cleanup();
+    mocks.sidePanel = { activeTabId: null, activeSystemTab: 'debates', setActiveSystemTab: vi.fn() };
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.recordOptions).toMatchObject({ completeRecord: 'debates' });
   });
 
   it('offers product tabs before authored claim tabs', () => {

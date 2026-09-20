@@ -7,9 +7,41 @@ import {
   CLAIM_RECORD_PAGE_SIZE,
   bestRecordRows,
   claimsExtractedFromDebatesWhere,
+  completeRecordQueryPlan,
   rankedRecordPage,
   relatedClaimIds,
 } from './use-claim-record';
+
+describe('completeRecordQueryPlan', () => {
+  it('keeps Overview bounded to the summary query', () => {
+    expect(completeRecordQueryPlan(null)).toEqual({
+      loadClaims: false,
+      loadDebates: false,
+      loadRelatedClaims: false,
+      loadDirectDebates: false,
+      loadExtractedClaims: false,
+      loadRelatedDebates: false,
+    });
+  });
+
+  it('loads extracted claims but not related debates for the Related claims tab', () => {
+    expect(completeRecordQueryPlan('claims')).toMatchObject({
+      loadClaims: true,
+      loadDebates: false,
+      loadExtractedClaims: true,
+      loadRelatedDebates: false,
+    });
+  });
+
+  it('loads related debates but not extracted claims for the Debates tab', () => {
+    expect(completeRecordQueryPlan('debates')).toMatchObject({
+      loadClaims: false,
+      loadDebates: true,
+      loadExtractedClaims: false,
+      loadRelatedDebates: true,
+    });
+  });
+});
 
 describe('bestRecordRows', () => {
   const claimA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';

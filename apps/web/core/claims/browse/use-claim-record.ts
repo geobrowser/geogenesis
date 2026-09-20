@@ -23,6 +23,23 @@ export { CLAIM_RECORD_PAGE_SIZE } from './use-claim-explore-rows';
 /** Stable empty rows keep the query result from changing identity while it is disabled. */
 const NO_ROWS: ExploreFeedRow[] = [];
 
+export type ClaimRecordKind = 'claims' | 'debates';
+
+/** The two full records share discovery queries, but only one branch should fan out at a time. */
+export function completeRecordQueryPlan(record: ClaimRecordKind | null) {
+  const loadClaims = record === 'claims';
+  const loadDebates = record === 'debates';
+
+  return {
+    loadClaims,
+    loadDebates,
+    loadRelatedClaims: loadClaims || loadDebates,
+    loadDirectDebates: loadClaims || loadDebates,
+    loadExtractedClaims: loadClaims,
+    loadRelatedDebates: loadDebates,
+  };
+}
+
 /**
  * Drawable neighbours from one or more relation paths.
  *
@@ -157,20 +174,29 @@ export function useClaimRecord({
   claimId,
   spaceId,
   topicIds,
-  loadCompleteRecord = false,
+  completeRecord = null,
 }: {
   claimId: string;
   spaceId: string;
   topicIds: string[];
-  /** Exhaust and client-rank the complete record only after a full record tab is opened. */
-  loadCompleteRecord?: boolean;
+  /** Exhaust and client-rank only the record represented by the open full tab. */
+  completeRecord?: ClaimRecordKind | null;
 }) {
-  const summary = useClaimRecordSummary({ claimId, spaceId, topicIds, enabled: !loadCompleteRecord });
+  const plan = completeRecordQueryPlan(completeRecord);
+  // Keep the small server summary active for both tab counts, but do not hydrate its hidden rows
+  // while a full record owns the surface.
+  const summary = useClaimRecordSummary({
+    claimId,
+    spaceId,
+    topicIds,
+    enabled: true,
+    hydrateRows: completeRecord === null,
+  });
 
   const related = useQueryAllEntities({
     where: relatedClaimsWhere({ spaceId, topicIds, requireTagId: DEBATE_TAG_ID }),
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: loadCompleteRecord && topicIds.length > 0,
+    enabled: plan.loadRelatedClaims && topicIds.length > 0,
   });
 
   const topicRelatedIds = React.useMemo(() => relatedClaimIds(claimId, related.entities), [claimId, related.entities]);
@@ -188,14 +214,14 @@ export function useClaimRecord({
       ],
     },
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: loadCompleteRecord,
+    enabled: plan.loadDirectDebates,
   });
 
   const claimDebateIds = React.useMemo(() => entityIds(claimDebates.entities), [claimDebates.entities]);
   const extractedClaims = useQueryAllEntities({
     where: claimsExtractedFromDebatesWhere(spaceId, claimDebateIds),
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: loadCompleteRecord && claimDebateIds.length > 0,
+    enabled: plan.loadExtractedClaims && claimDebateIds.length > 0,
   });
 
   const relatedIds = React.useMemo(
@@ -216,18 +242,21 @@ export function useClaimRecord({
       ],
     },
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: loadCompleteRecord && topicRelatedIds.length > 0,
+    enabled: plan.loadRelatedDebates && topicRelatedIds.length > 0,
   });
 
   const debateIds = React.useMemo(
     () => entityIds([...claimDebates.entities, ...relatedDebates.entities]),
     [claimDebates.entities, relatedDebates.entities]
   );
-  const claimsReady = loadCompleteRecord && !related.isLoading && !claimDebates.isLoading && !extractedClaims.isLoading;
-  const debatesReady = loadCompleteRecord && !related.isLoading && !claimDebates.isLoading && !relatedDebates.isLoading;
+  const claimsReady =
+    plan.loadClaims && !related.isLoading && !claimDebates.isLoading && !extractedClaims.isLoading;
+  const debatesReady =
+    plan.loadDebates && !related.isLoading && !claimDebates.isLoading && !relatedDebates.isLoading;
   const recordKey = `${normId(spaceId)}:${normId(claimId)}`;
-  const claimsCountUnavailable = Boolean(related.error ?? claimDebates.error ?? extractedClaims.error);
-  const debatesCountUnavailable = Boolean(related.error ?? claimDebates.error ?? relatedDebates.error);
+  const claimsCountUnavailable = plan.loadClaims && Boolean(related.error ?? claimDebates.error ?? extractedClaims.error);
+  const debatesCountUnavailable =
+    plan.loadDebates && Boolean(related.error ?? claimDebates.error ?? relatedDebates.error);
   // Candidate ids and scores remain complete so totals and Best order are exact. Only expensive
   // Explore-card hydration and DOM rendering are paged, which bounds work without changing rank.
   const claimsPage = useRankedRecordPage({
@@ -245,25 +274,23 @@ export function useClaimRecord({
     recordKey,
   });
 
-  const completeRecord = {
-    relatedClaimIds: relatedIds,
-    claimRows: claimsPage.rows,
-    debateRows: debatesPage.rows,
-    claimsTotal: relatedIds.length,
-    debatesTotal: debateIds.length,
-    claimsCountUnavailable,
-    debatesCountUnavailable,
-    claimsLoading: claimsPage.isLoading,
-    debatesLoading: debatesPage.isLoading,
-    claimsError: claimsCountUnavailable || claimsPage.isError,
-    debatesError: debatesCountUnavailable || debatesPage.isError,
-    claimsFetchingNextPage: claimsPage.isFetchingNextPage,
-    debatesFetchingNextPage: debatesPage.isFetchingNextPage,
-    claimsHasNextPage: claimsPage.hasNextPage,
-    debatesHasNextPage: debatesPage.hasNextPage,
-    fetchNextClaimsPage: claimsPage.fetchNextPage,
-    fetchNextDebatesPage: debatesPage.fetchNextPage,
+  return {
+    relatedClaimIds: plan.loadClaims ? relatedIds : summary.relatedClaimIds,
+    claimRows: plan.loadClaims ? claimsPage.rows : summary.claimRows,
+    debateRows: plan.loadDebates ? debatesPage.rows : summary.debateRows,
+    claimsTotal: plan.loadClaims ? relatedIds.length : summary.claimsTotal,
+    debatesTotal: plan.loadDebates ? debateIds.length : summary.debatesTotal,
+    claimsCountUnavailable: plan.loadClaims ? claimsCountUnavailable : summary.claimsCountUnavailable,
+    debatesCountUnavailable: plan.loadDebates ? debatesCountUnavailable : summary.debatesCountUnavailable,
+    claimsLoading: plan.loadClaims ? claimsPage.isLoading : summary.claimsLoading,
+    debatesLoading: plan.loadDebates ? debatesPage.isLoading : summary.debatesLoading,
+    claimsError: plan.loadClaims ? claimsCountUnavailable || claimsPage.isError : summary.claimsError,
+    debatesError: plan.loadDebates ? debatesCountUnavailable || debatesPage.isError : summary.debatesError,
+    claimsFetchingNextPage: plan.loadClaims ? claimsPage.isFetchingNextPage : summary.claimsFetchingNextPage,
+    debatesFetchingNextPage: plan.loadDebates ? debatesPage.isFetchingNextPage : summary.debatesFetchingNextPage,
+    claimsHasNextPage: plan.loadClaims ? claimsPage.hasNextPage : summary.claimsHasNextPage,
+    debatesHasNextPage: plan.loadDebates ? debatesPage.hasNextPage : summary.debatesHasNextPage,
+    fetchNextClaimsPage: plan.loadClaims ? claimsPage.fetchNextPage : summary.fetchNextClaimsPage,
+    fetchNextDebatesPage: plan.loadDebates ? debatesPage.fetchNextPage : summary.fetchNextDebatesPage,
   };
-
-  return loadCompleteRecord ? completeRecord : summary;
 }

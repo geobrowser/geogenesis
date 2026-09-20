@@ -183,11 +183,14 @@ export function useClaimRecordSummary({
   spaceId,
   topicIds,
   enabled,
+  hydrateRows = true,
 }: {
   claimId: string;
   spaceId: string;
   topicIds: string[];
   enabled: boolean;
+  /** Counts stay available on full tabs without hydrating either hidden summary feed. */
+  hydrateRows?: boolean;
 }) {
   const normalizedTopicIds = topicIds.map(normId).sort();
   const filters = claimRecordSummaryFilters({ claimId, spaceId, topicIds });
@@ -211,7 +214,7 @@ export function useClaimRecordSummary({
 
   const relatedClaimIds = summary.data?.relatedClaimIds ?? NO_IDS;
   const debateIds = summary.data?.debateIds ?? NO_IDS;
-  const canHydrate = enabled && summary.isSuccess;
+  const canHydrate = enabled && hydrateRows && summary.isSuccess;
   const claimRows = useClaimExploreRows(relatedClaimIds, spaceId, canHydrate);
   const debateRows = useClaimExploreRows(debateIds, spaceId, canHydrate);
   const retryClaims = () => void (summary.isError ? summary.refetch() : claimRows.refetch());
@@ -225,10 +228,10 @@ export function useClaimRecordSummary({
     debatesTotal: summary.data?.debatesTotal ?? 0,
     claimsCountUnavailable: summary.isError,
     debatesCountUnavailable: summary.isError,
-    claimsLoading: enabled && (summary.isLoading || (summary.isSuccess && claimRows.isLoading)),
-    debatesLoading: enabled && (summary.isLoading || (summary.isSuccess && debateRows.isLoading)),
-    claimsError: summary.isError || claimRows.isError,
-    debatesError: summary.isError || debateRows.isError,
+    claimsLoading: enabled && (summary.isLoading || (canHydrate && claimRows.isLoading)),
+    debatesLoading: enabled && (summary.isLoading || (canHydrate && debateRows.isLoading)),
+    claimsError: summary.isError || (canHydrate && claimRows.isError),
+    debatesError: summary.isError || (canHydrate && debateRows.isError),
     claimsFetchingNextPage: false,
     debatesFetchingNextPage: false,
     claimsHasNextPage: false,

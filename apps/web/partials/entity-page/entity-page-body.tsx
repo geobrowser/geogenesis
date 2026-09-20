@@ -2,7 +2,11 @@
 
 import * as React from 'react';
 
-import { CLAIM_PAGE_CONTENT_MAX_WIDTH, ClaimPageView } from '~/core/claims/browse/claim-page-view';
+import {
+  CLAIM_PAGE_CONTENT_INSET_CLASS,
+  CLAIM_PAGE_CONTENT_MAX_WIDTH,
+  ClaimPageView,
+} from '~/core/claims/browse/claim-page-view';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -293,6 +297,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
               coverUrl={props.coverUrl}
               fitImage={props.variant === 'sidePanel'}
               contentMaxWidth={CLAIM_PAGE_CONTENT_MAX_WIDTH}
+              contentInsetClassName={CLAIM_PAGE_CONTENT_INSET_CLASS}
               // Claims use both media properties as part of their identity. The generic fitted
               // side-panel header suppresses avatars because they are usually just list
               // thumbnails, but doing that here would make a claim's configured avatar vanish.

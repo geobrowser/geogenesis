@@ -49,6 +49,7 @@ type ClaimSystemTab = Exclude<ClaimTab, 'custom'>;
 
 /** Shared with the cover/avatar header so its left edge stays aligned with the claim column. */
 export const CLAIM_PAGE_CONTENT_MAX_WIDTH = 720;
+export const CLAIM_PAGE_CONTENT_INSET_CLASS = 'px-4 @[560px]:px-5';
 
 export function resolveClaimTab({
   pathname,
@@ -141,7 +142,7 @@ export function ClaimPageView({
     claimId: entityId,
     spaceId,
     topicIds,
-    loadCompleteRecord: requestedTab === 'debates' || requestedTab === 'claims',
+    completeRecord: requestedTab === 'debates' || requestedTab === 'claims' ? requestedTab : null,
   });
 
   const overviewHref = NavUtils.toEntity(spaceId, entityId);
@@ -163,7 +164,7 @@ export function ClaimPageView({
 
   if (isLoading && !entity) {
     return (
-      <div className="flex flex-col gap-4 px-4 py-6 @[560px]:px-5">
+      <div className={`flex flex-col gap-4 py-6 ${CLAIM_PAGE_CONTENT_INSET_CLASS}`}>
         <Skeleton className="h-8 w-3/4 rounded" />
         <Skeleton className="h-[132px] w-full rounded-lg" />
         <Skeleton className="h-[96px] w-full rounded-lg" />
@@ -176,7 +177,7 @@ export function ClaimPageView({
   return (
     <div className="@container">
       <div
-        className="mx-auto flex w-full flex-col gap-6 px-4 py-6 @[560px]:gap-8 @[560px]:px-5 @[560px]:py-8"
+        className={`mx-auto flex w-full flex-col gap-6 py-6 @[560px]:gap-8 @[560px]:py-8 ${CLAIM_PAGE_CONTENT_INSET_CLASS}`}
         style={{ maxWidth: CLAIM_PAGE_CONTENT_MAX_WIDTH }}
       >
         {/* Hero */}

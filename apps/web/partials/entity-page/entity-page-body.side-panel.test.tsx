@@ -80,6 +80,7 @@ vi.mock('~/partials/entity-page/entity-page-header', () => ({ EntityPageHeader: 
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => null }));
 vi.mock('~/partials/comments/comments-section', () => ({ CommentSection: () => null }));
 vi.mock('~/core/claims/browse/claim-page-view', () => ({
+  CLAIM_PAGE_CONTENT_INSET_CLASS: 'claim-content-inset',
   CLAIM_PAGE_CONTENT_MAX_WIDTH: 720,
   ClaimPageView: (props: Record<string, unknown>) => {
     mocks.claimPage = props;
@@ -189,6 +190,7 @@ describe('EntityPageBody claim side panel', () => {
       fitImage: true,
       withAvatar: true,
       contentMaxWidth: 720,
+      contentInsetClassName: 'claim-content-inset',
     });
   });
 
