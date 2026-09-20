@@ -332,11 +332,15 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
     window.addEventListener('scroll', onScroll, { passive: true });
 
     // `held` is measured against the viewport, and on a phone the viewport changes without anything
-    // else on the page moving: the browser chrome collapses as the reader scrolls and comes back
-    // when they stop. A taller viewport needs more held below it, and nothing here was watching —
-    // so the reader could be clamped upward by exactly the height of a hidden URL bar. `resize` and
-    // not `visualViewport`, because `window.innerHeight` is the figure the sum above uses and the
-    // two do not always agree.
+    // else on the page moving: iOS Safari grows `innerHeight` when its URL bar collapses under a
+    // scroll and shrinks it back when the reader stops, firing `resize` both ways. A taller
+    // viewport needs more held below it, and nothing here was watching — so the reader could be
+    // clamped upward by exactly the height of a hidden URL bar. That is the device this was
+    // reported from; Chrome on Android pins its layout viewport to the largest size instead, so
+    // `innerHeight` never moves there and there is nothing to react to.
+    //
+    // `resize` rather than `visualViewport`, because `window.innerHeight` is the figure the sum
+    // above uses and the two do not always agree.
     window.addEventListener('resize', sizeAndSettle);
 
     return () => {
