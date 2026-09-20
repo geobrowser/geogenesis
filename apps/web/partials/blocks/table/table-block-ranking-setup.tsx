@@ -26,6 +26,7 @@ import { useEditable } from '~/core/state/editable-store';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useValues } from '~/core/sync/use-store';
+import type { Relation } from '~/core/types';
 
 import { CheckboxVisual } from '~/design-system/checkbox';
 import { DateTimeInput } from '~/design-system/editable-fields/date-field';
@@ -40,6 +41,10 @@ type Props = {
   onCompleteRankingSetup: (dates: { startDate: string; endDate: string }) => void;
 };
 
+// A stable empty list: `?? []` mints a new array every render, which made the hooks keyed on it
+// re-run on each one.
+const NO_RELATIONS: Relation[] = [];
+
 export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Props) {
   const { setName: persistBlockName } = useDataBlock();
   const { entityId, relationId } = useDataBlockInstance();
@@ -49,8 +54,8 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
   const blocksRelationEntityId = relationId;
   const { entity: blockEntity } = useQueryEntity({ spaceId, id: entityId });
   const { entity: blockRelationEntity } = useQueryEntity({ spaceId, id: blocksRelationEntityId });
-  const blockEntityRelations = blockEntity?.relations ?? initialBlockEntity?.relations ?? [];
-  const blockRelationRelations = blockRelationEntity?.relations ?? [];
+  const blockEntityRelations = blockEntity?.relations ?? initialBlockEntity?.relations ?? NO_RELATIONS;
+  const blockRelationRelations = blockRelationEntity?.relations ?? NO_RELATIONS;
   const existingValues = useValues({ selector: v => v.entity.id === entityId && v.spaceId === spaceId });
   const canEditSpace = useCanUserEdit(spaceId);
   const { setEditable } = useEditable();
