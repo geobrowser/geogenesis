@@ -206,7 +206,8 @@ export type ClaimMarker = {
    *
    * One hash per moment is also the truer model. The stack shows one card at a time, so seeking
    * here surfaces the newest of them and leaves the rest a scroll away in the backlog — which is
-   * what the hash was promising.
+   * what the hash was promising. `id` and `text` are that newest claim's for the same reason: they
+   * are what the hash's label and tooltip say, and a label has to name the card it lands on.
    */
   count: number;
 };
@@ -264,11 +265,13 @@ export function claimMarkers(claims: TimedClaim[], timelineMs: number): ClaimMar
       })
       .sort((a, b) => a.atMs - b.atMs)
       // One hash per moment — see {@link ClaimMarker.count}. Sorted first, so claims sharing a
-      // moment are adjacent and the survivor is the first in spoken order, which is deterministic.
+      // moment are adjacent, and the *last* of them is the survivor: `tickerStack` keeps one card
+      // and takes it from the end of the group, so this is the sentence a click actually puts on
+      // screen. Taking the first instead left the hash labelled with one claim and showing another.
       .reduce<ClaimMarker[]>((kept, marker) => {
         const last = kept[kept.length - 1];
         if (last && last.atMs === marker.atMs) {
-          last.count += 1;
+          kept[kept.length - 1] = { ...marker, count: last.count + 1 };
           return kept;
         }
         kept.push(marker);

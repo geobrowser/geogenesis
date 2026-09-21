@@ -870,8 +870,15 @@ describe('markerHitWidth', () => {
     ]);
   });
 
-  // Two claims ending on the same millisecond would otherwise compute a zero-width button, which
-  // cannot be pressed or focused at all — the floor keeps it as wide as the hash it draws.
+  /**
+   * The floor, on an input `claimMarkers` no longer produces.
+   *
+   * Two markers on one point overlap exactly — same `left`, same width — so the later covers the
+   * earlier and one claim cannot be pressed at all. That is fixed at the producer: coincident
+   * claims collapse into a single hash before they get here, and
+   * `claim-ticker.test.ts` holds that. This holds the floor anyway, because `markerHitWidth` is
+   * exported and pure, and a 2px button that can be pressed beats a 0px one that cannot.
+   */
   it('keeps a floor under markers that land on the same moment', () => {
     expect(widths([marker('a', 0.5), marker('b', 0.5)])).toEqual([
       'clamp(2px, 0.000%, 12px)',

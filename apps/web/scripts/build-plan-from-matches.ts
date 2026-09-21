@@ -15,10 +15,16 @@
  * hatch for a claim whose specifics are not in the turn it was filed under, which is the case the
  * matcher cannot express and the main reason for reading at all:
  *
- *   { "matches": [
+ *   { "taskVersion": "3f2a19c04b7e",
+ *     "matches": [
  *       { "claimId": "ad46e41f…", "startSegment": 12, "endSegment": 15 },
  *       { "claimId": "8401b74c…", "notInTurn": true }
  *   ] }
+ *
+ * `taskVersion` is copied from the top of the task file, and is the one thing here that is checked
+ * before anything else: an answer is a pair of segment indices, which are meaningful only against
+ * the transcript they were read from — see `taskVersion` in `lib/debate-claims.ts` for what that costs when they drift
+ * apart.
  *
  * Usage:
  *   bun scripts/build-plan-from-matches.ts --tasks ./claim-matching-tasks --answers ./answers --out plan.json
@@ -48,12 +54,15 @@ type TaskClaim = {
   published: { startMs: number; endMs: number; onSegmentBoundaries: boolean } | null;
 };
 type Task = {
+  /** Absent on a task file written before this check existed — treated as a mismatch, not a pass. */
+  taskVersion?: string;
   debateEntityId: string;
   debateName: string | null;
   spaceId: string;
   turns: { blockId: string; segments: TaskSegment[]; claims: TaskClaim[] }[];
 };
 type Answer = { claimId: string; startSegment?: number; endSegment?: number; notInTurn?: boolean };
+type AnswersFile = { taskVersion?: string; matches?: Answer[] };
 
 const rejected: string[] = [];
 const plans: {
@@ -86,9 +95,11 @@ for (const file of (await readdir(TASKS)).filter(name => name.endsWith('.json'))
   const task: Task = JSON.parse(await readFile(join(TASKS, file), 'utf8'));
 
   let answers: Answer[];
+  let answeredVersion: string | undefined;
   try {
-    const parsed = JSON.parse(await readFile(join(ANSWERS, file), 'utf8'));
+    const parsed: Answer[] | AnswersFile = JSON.parse(await readFile(join(ANSWERS, file), 'utf8'));
     answers = Array.isArray(parsed) ? parsed : (parsed.matches ?? []);
+    answeredVersion = Array.isArray(parsed) ? undefined : parsed.taskVersion;
   } catch (error) {
     // A file that is not there is the ordinary case: the reader has not reached this debate yet,
     // and its claims fall through to the matcher. A file that *is* there and will not parse is the
@@ -99,6 +110,34 @@ for (const file of (await readdir(TASKS)).filter(name => name.endsWith('.json'))
       throw new Error(`answers for ${file} could not be read`, { cause: error });
     }
     rejected.push(`${task.debateName}: no answers file`);
+    continue;
+  }
+
+  /**
+   * The version gate, before any of this file's answers are looked at.
+   *
+   * Everything below checks an answer against the task file *as it is now*: the claim id exists,
+   * the indices are in the turn, the range runs forwards. A transcript re-cut between the read and
+   * this run passes all three and resolves the same indices to different milliseconds — so the
+   * script keeps its promise that a timecode is a real boundary of the recording, and publishes
+   * the wrong boundary. That is the one failure here that is invisible afterwards.
+   *
+   * The whole file goes rather than individual claims: the drift is a property of the transcript,
+   * so every answer read against the old one is equally suspect. They fall back to the matcher,
+   * which is where they would have been with no answers file at all.
+   *
+   * A task file from before this existed carries no version, so nothing can be verified against it
+   * and it fails the same way. Re-exporting stamps every file and takes a minute.
+   */
+  if (task.taskVersion === undefined) {
+    rejected.push(`${task.debateName}: task file predates task versioning — re-export it`);
+    continue;
+  }
+  if (answeredVersion !== task.taskVersion) {
+    rejected.push(
+      `${task.debateName}: answers were read against ${answeredVersion ?? '(no version)'}, ` +
+        `this task file is ${task.taskVersion} — re-read it`
+    );
     continue;
   }
 

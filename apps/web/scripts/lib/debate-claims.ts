@@ -12,6 +12,7 @@
  * text is what matters, and that is shared.
  */
 import { print } from 'graphql';
+import { createHash } from 'node:crypto';
 
 import type { DebateTranscriptSegment } from '../../core/debates/api';
 import {
@@ -203,4 +204,54 @@ export function numberAt(index: number, label: string, fallback: number, min = 0
     process.exit(1);
   }
   return value;
+}
+
+/**
+ * The shape of a matching task, as far as anything needs to fingerprint one.
+ *
+ * Structural rather than the task type itself: `export-claims-for-matching.ts` builds the file and
+ * `build-plan-from-matches.ts` reads it back, and neither should have to import the other's type
+ * to agree on what a version is.
+ */
+export type VersionableTask = {
+  debateEntityId: string;
+  turns: {
+    blockId: string;
+    segments: { i: number; startMs: number; endMs: number }[];
+    claims: { claimId: string; text: string }[];
+  }[];
+};
+
+/**
+ * A short fingerprint of everything a reader's answer depends on.
+ *
+ * An answer is `(claimId, startSegment, endSegment)` and nothing else — no times, by design. That
+ * makes it meaningful *only* against the task file it was read from. Re-export a debate whose
+ * transcript has been re-cut and the same indices survive every check in
+ * `build-plan-from-matches.ts` — the claim id still exists, the indices are still in the turn, the
+ * range still ends after it starts — while pointing at different words. The script's whole promise
+ * is that a timecode is a real boundary of the recording; that failure keeps the promise and
+ * publishes the wrong boundary, which is worse than an obvious error.
+ *
+ * So the answers echo this, and a mismatch throws the file out rather than planning from it.
+ *
+ * Covers what an answer is read against: the turn a claim was filed under, the index-to-milliseconds
+ * mapping the answer is resolved through, and the claim text the reader matched. Deliberately not
+ * `published` or `matcherGuess` — those are re-read from the current task file when the plan is
+ * built, so a change in either leaves the reader's segment choice as good as it was.
+ *
+ * Twelve hex characters: short enough to copy into an answers file by hand, and 48 bits against a
+ * corpus of tens of files is not a collision anyone will meet.
+ */
+export function taskVersion(task: VersionableTask): string {
+  const shape = {
+    debateEntityId: task.debateEntityId,
+    turns: task.turns.map(turn => ({
+      blockId: turn.blockId,
+      segments: turn.segments.map(segment => [segment.i, segment.startMs, segment.endMs]),
+      claims: turn.claims.map(claim => [claim.claimId, claim.text]),
+    })),
+  };
+
+  return createHash('sha256').update(JSON.stringify(shape)).digest('hex').slice(0, 12);
 }

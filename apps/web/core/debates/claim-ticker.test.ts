@@ -365,8 +365,46 @@ describe('claimMarkers', () => {
 
     expect(markers).toHaveLength(1);
     expect(markers[0].count).toBe(2);
-    // The first in spoken order survives, so the label names a real claim deterministically.
-    expect(markers[0].id).toBe('a');
+    // The last in spoken order survives, because that is the one the card will show — see below.
+    expect(markers[0].id).toBe('b');
+  });
+
+  /**
+   * The hash's label and the card it lands on have to be the same claim.
+   *
+   * `tickerStack` keeps one card, and `.slice(-max)` makes that the *last* of the claims sharing a
+   * moment. A marker labelled with the first announced one claim and then put a different one on
+   * screen, which is the one thing a label pointing at a specific sentence must not do.
+   */
+  it('names the claim the card will actually show when several share a moment', () => {
+    const claims = [timed('a', confident(10_000, 30_000)), timed('b', confident(20_000, 30_000))];
+    const [marker] = claimMarkers(claims, 270_000);
+    const [card] = tickerStack(tickerWindows(claims), marker.seekMs);
+
+    expect(card.window.claim.id).toBe(marker.id);
+    expect(card.window.claim.text).toBe(marker.text);
+  });
+
+  /**
+   * The invariant the hit-area maths leans on.
+   *
+   * `markerHitWidth` sizes each target by its distance to its nearest neighbour, and two markers on
+   * one point make that zero — same `left`, same width, the later covering the earlier so one claim
+   * cannot be pressed. The floor there keeps the button clickable; this keeps the case from
+   * arising, and it is the only producer of `ClaimMarker[]`, so holding it here holds it.
+   */
+  it('never puts two hashes on the same point', () => {
+    const claims = [
+      timed('a', confident(10_000, 30_000)),
+      timed('b', confident(20_000, 30_000)),
+      timed('c', confident(40_000, 60_000)),
+      timed('d', confident(50_000, 60_000)),
+      timed('e', confident(70_000, 90_000)),
+    ];
+    const fractions = claimMarkers(claims, 270_000).map(marker => marker.fraction);
+
+    expect(new Set(fractions).size).toBe(fractions.length);
+    expect(fractions).toEqual([...fractions].sort((a, b) => a - b));
   });
 
   it('counts a lone claim as standing for itself', () => {

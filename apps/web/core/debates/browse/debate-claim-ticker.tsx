@@ -1005,11 +1005,10 @@ export function ClaimScrubberMarkers({
             type="button"
             title={marker.count > 1 ? `${marker.text} (+${marker.count - 1} more)` : marker.text}
             // Several claims can finish in one segment and share a hash. Saying so beats announcing
-            // one of them and silently standing for the others.
+            // one of them and silently standing for the others. `marker.text` is the one the card
+            // will show — not the first of the group — so the label names what the click surfaces.
             aria-label={
-              marker.count > 1
-                ? `Jump to ${marker.count} claims, starting with: ${marker.text}`
-                : `Jump to: ${marker.text}`
+              marker.count > 1 ? `Jump to ${marker.count} claims, showing: ${marker.text}` : `Jump to: ${marker.text}`
             }
             onClick={event => {
               event.stopPropagation();

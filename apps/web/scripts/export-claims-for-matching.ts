@@ -13,6 +13,10 @@
  *
  * Read-only. Writes task files; publishes nothing.
  *
+ * Each file carries a `taskVersion` fingerprint of what the reader reads. The answers file has to
+ * echo it, so answers written against an earlier cut of a transcript cannot be planned from — see
+ * {@link taskVersion}.
+ *
  * Usage:
  *   bun scripts/export-claims-for-matching.ts --out ./claim-matching-tasks [--limit N]
  */
@@ -21,7 +25,14 @@ import { join } from 'node:path';
 
 import type { DebateTranscriptSegment } from '../core/debates/api';
 import { findBlockWindow, matchClaimWindow } from '../core/debates/claim-timing';
-import { arg, fetchAllDebates, fetchDebateClaims, fetchTranscriptSegments, numberArg } from './lib/debate-claims';
+import {
+  arg,
+  fetchAllDebates,
+  fetchDebateClaims,
+  fetchTranscriptSegments,
+  numberArg,
+  taskVersion,
+} from './lib/debate-claims';
 
 const OUT = arg('out') ?? './claim-matching-tasks';
 const LIMIT = numberArg('limit', { fallback: Infinity, min: 1 });
@@ -172,9 +183,12 @@ for (const debate of debates) {
     if (turns.length === 0) break;
 
     written += 1;
+    // Stamped so the reader can echo it — see {@link taskVersion}. Written first in the file so it
+    // is the first thing read, by a person or by a model, rather than buried under the transcript.
+    const task = { debateEntityId: debate.id, debateName: debate.name, spaceId, turns };
     await writeFile(
       join(OUT, `${debate.id}.json`),
-      `${JSON.stringify({ debateEntityId: debate.id, debateName: debate.name, spaceId, turns }, null, 2)}\n`
+      `${JSON.stringify({ taskVersion: taskVersion(task), ...task }, null, 2)}\n`
     );
     break;
   }
