@@ -43,6 +43,7 @@ export function ClaimPositionCommentControl({
   titleFor,
   noteFor,
   positionRowClassName,
+  positionRowEndSlot,
 }: {
   entityId: string;
   spaceId: string;
@@ -56,6 +57,8 @@ export function ClaimPositionCommentControl({
   titleFor?: (position: boolean) => string;
   noteFor?: (position: boolean) => React.ReactNode;
   positionRowClassName?: string;
+  /** Compact action rendered after Disagree/Dispute, such as the Explore comments-panel opener. */
+  positionRowEndSlot?: React.ReactNode;
 }) {
   const [promptedPosition, setPromptedPosition] = React.useState<boolean | null>(null);
   const [comment, setComment] = React.useState('');
@@ -148,6 +151,7 @@ export function ClaimPositionCommentControl({
           disabled={disabled || isSubmitting}
           titleFor={titleFor}
           noteFor={noteFor}
+          endSlot={positionRowEndSlot}
         />
       </div>
       <AnimatePresence initial={false}>
