@@ -13,5 +13,5 @@ export default async function DebugPeerAvailabilityPage({ params }: Props) {
 
   if (!IdUtils.isValid(id)) notFound();
 
-  return <DebugPeerAvailabilityPageClient />;
+  return <DebugPeerAvailabilityPageClient spaceId={id} />;
 }

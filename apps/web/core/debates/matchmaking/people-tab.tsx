@@ -6,6 +6,7 @@ import { useAtom } from 'jotai';
 
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
@@ -374,6 +375,9 @@ function PersonRow({
   onRequireSignIn?: () => void;
 }) {
   const createChallenge = useCreateDebateChallenge();
+  // Off by default until the endpoint can return their week unfiltered (GEO-2938); the view still
+  // describes what it draws as mutual times in the meantime.
+  const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
   // Per row rather than per tab: only one can be open at a time anyway, and hoisting it would put
   // a person's identity into the tab's state for no gain.
   const [timesOpen, setTimesOpen] = React.useState(false);
@@ -442,16 +446,18 @@ function PersonRow({
             is next free. Gating it on the same reasons would hide it at the moment it earns its
             place. Signed out it opens Privy like the pill does, because the endpoint behind it is
             viewer-scoped and would only 401. */}
-        <button
-          type="button"
-          // Every row carries this control, so the visible label alone leaves a screen reader or
-          // voice control with a list of identical targets.
-          aria-label={`See times for ${speakerLabel(person)}`}
-          onClick={() => (onRequireSignIn ? onRequireSignIn() : setTimesOpen(true))}
-          className="shrink-0 text-metadata whitespace-nowrap text-grey-04 transition-colors hover:text-text"
-        >
-          See times
-        </button>
+        {peerAvailabilityEnabled && (
+          <button
+            type="button"
+            // Every row carries this control, so the visible label alone leaves a screen reader or
+            // voice control with a list of identical targets.
+            aria-label={`See times for ${speakerLabel(person)}`}
+            onClick={() => (onRequireSignIn ? onRequireSignIn() : setTimesOpen(true))}
+            className="shrink-0 text-metadata whitespace-nowrap text-grey-04 transition-colors hover:text-text"
+          >
+            See times
+          </button>
+        )}
         <HubPillButton
           onClick={() =>
             onRequireSignIn
@@ -471,10 +477,9 @@ function PersonRow({
         </HubPillButton>
       </div>
 
-      {/* Closing returns to the hub rather than the modal's default of Explore: that default is for
-          arriving from a shared link with no history behind it, which is not this. */}
+      {/* Closing returns to the hub, which is where this was opened from. */}
       <PeerAvailabilityModal
-        open={timesOpen}
+        open={peerAvailabilityEnabled && timesOpen}
         userId={person.user_id}
         peerName={speakerLabel(person)}
         onClose={() => setTimesOpen(false)}

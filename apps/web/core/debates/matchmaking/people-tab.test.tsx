@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   records: new Map<string, PersonRecord>(),
   publishableSpaceIds: null as Set<string> | null,
   publishableSpacesLoading: false,
+  peerAvailability: true,
   spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */
   linkProps: [] as Record<string, unknown>[],
@@ -115,6 +116,13 @@ vi.mock('~/core/hooks/use-space-labels', async importOriginal => {
   return { ...actual, useSpaceLabels: () => ({ labelsById: mocks.spaceLabels, isLoading: false }) };
 });
 
+// GEO-2938 is behind a flag that is off by default. These cases are about the row, so the flag is
+// on unless a case turns it off.
+vi.mock('~/core/state/feature-flags', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
+  usePeerAvailabilityEnabled: () => mocks.peerAvailability,
+}));
+
 vi.mock('../use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.currentUserId,
 }));
@@ -194,6 +202,7 @@ const card = () => screen.queryByRole('article');
 beforeEach(() => {
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
+  mocks.peerAvailability = true;
   mocks.people = [person('user-them', 'Arturas'), person('user-other', 'Vytautas')];
   mocks.peopleDataAvailable = true;
   mocks.peopleLoading = false;
@@ -600,6 +609,16 @@ describe('See times', () => {
 
     expect(screen.getByRole('button', { name: 'In a debate' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'See times for Arturas' })).toBeEnabled();
+  });
+
+  it('is absent while the flag is off, which is the default', () => {
+    mocks.peerAvailability = false;
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.queryByRole('button', { name: /See times/ })).not.toBeInTheDocument();
+    // The row is otherwise untouched.
+    expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
   });
 
   it('sends a signed-out viewer to sign in, since the read behind it is viewer-scoped', () => {

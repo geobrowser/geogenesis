@@ -2,8 +2,11 @@
 
 import * as React from 'react';
 
+import { useRouter } from 'next/navigation';
+
 import { toPeerSchedule } from '~/core/availability/peer-schedule';
 import { usePeerSchedule } from '~/core/debates/hooks';
+import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 
 import { Text } from '~/design-system/text';
 
@@ -20,7 +23,13 @@ import { PeerAvailabilityModal } from '~/partials/availability/peer-availability
  * endpoint cannot produce yet — a dashed week, a peer with nothing, a truncated list — so the
  * half of this feature that is waiting on Patrick is still exercisable by hand.
  */
-export function DebugPeerAvailabilityPageClient() {
+export function DebugPeerAvailabilityPageClient({ spaceId }: { spaceId: string }) {
+  const enabled = usePeerAvailabilityEnabled();
+  const router = useRouter();
+  React.useEffect(() => {
+    if (!enabled) router.replace(`/space/${spaceId}`);
+  }, [enabled, router, spaceId]);
+
   const [input, setInput] = React.useState('');
   const [userId, setUserId] = React.useState<string | null>(null);
   const [fixture, setFixture] = React.useState<FixtureName | null>(null);
@@ -28,6 +37,8 @@ export function DebugPeerAvailabilityPageClient() {
 
   const { schedule, data, isPending, isError, error } = usePeerSchedule(userId);
   const shown = fixture ? FIXTURES[fixture] : schedule;
+
+  if (!enabled) return null;
 
   return (
     <div className="flex flex-col gap-4 py-6">
