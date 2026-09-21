@@ -2,104 +2,104 @@ import { renderHook } from '@testing-library/react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Entity } from '~/core/types';
-
 import { useClaimRecord } from './use-claim-record';
 
-const relatedClaim = {
+const claimEntity = {
   id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-  name: 'Related claim',
-  description: null,
-  spaces: ['space-1'],
-  types: [],
-  relations: [],
-  values: [],
-} as Entity;
-
-const relatedRow = { entityId: relatedClaim.id, spaceId: 'space-1' };
+  rankingScore: 4,
+  updatedAt: '2026-01-01T00:00:00Z',
+};
+const claimRow = { entityId: claimEntity.id, spaceId: 'space-1' };
 
 const mocks = vi.hoisted(() => ({
-  discoveryError: false,
-  scoreError: false,
-  useQueryAllEntities: vi.fn(),
-  useEntityScores: vi.fn(),
-  useClaimExploreRows: vi.fn(),
+  countLoading: true,
+  claimsError: false,
+  useQuery: vi.fn(),
+  useInfiniteQuery: vi.fn(),
+  buildExploreFeedRows: vi.fn(),
 }));
 
-vi.mock('~/core/sync/use-store', () => ({ useQueryAllEntities: mocks.useQueryAllEntities }));
-vi.mock('~/core/profile/use-entity-scores', () => ({ useEntityScores: mocks.useEntityScores }));
-vi.mock('./use-claim-explore-rows', () => ({
-  CLAIM_RECORD_PAGE_SIZE: 20,
-  useClaimExploreRows: mocks.useClaimExploreRows,
+vi.mock('@tanstack/react-query', () => ({
+  useQuery: mocks.useQuery,
+  useInfiniteQuery: mocks.useInfiniteQuery,
+}));
+vi.mock('~/core/explore/explore-card-item', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/explore/explore-card-item')>()),
+  buildExploreFeedRows: mocks.buildExploreFeedRows,
 }));
 
-function queryResult(entities: Entity[] = [], error: Error | null = null) {
-  return {
-    entities,
-    isLoading: false,
-    isFetching: false,
-    isFetched: true,
-    dataAvailable: true,
-    error,
-    refetch: vi.fn(async () => undefined),
-  };
-}
+const emptyConnection = { entities: [], endCursor: null, hasNextPage: false };
 
-describe('useClaimRecord cached refresh failures', () => {
+describe('useClaimRecord independent loading and cached data', () => {
   beforeEach(() => {
-    mocks.discoveryError = false;
-    mocks.scoreError = false;
-    mocks.useQueryAllEntities.mockReset();
-    mocks.useEntityScores.mockReset();
-    mocks.useClaimExploreRows.mockReset();
+    mocks.countLoading = true;
+    mocks.claimsError = false;
+    mocks.useQuery.mockReset();
+    mocks.useInfiniteQuery.mockReset();
+    mocks.buildExploreFeedRows.mockReset();
 
-    mocks.useQueryAllEntities.mockImplementation(() => {
-      const call = mocks.useQueryAllEntities.mock.calls.length;
-      if (call === 1) {
-        return queryResult(
-          [relatedClaim],
-          mocks.discoveryError ? new Error('topic refresh failed') : null
-        );
-      }
-      return queryResult();
-    });
-    mocks.useEntityScores.mockImplementation(() => ({
-      scores: new Map(),
-      rankings: new Map([[relatedClaim.id, 1]]),
-      dataAvailable: true,
-      isLoading: false,
-      isError: mocks.scoreError,
-      isFetching: false,
-      refetch: vi.fn(),
-    }));
-    mocks.useClaimExploreRows.mockImplementation((ids: string[]) => ({
-      data: ids.includes(relatedClaim.id) ? [relatedRow] : [],
-      isLoading: false,
+    mocks.useQuery.mockImplementation(() => ({
+      data: undefined,
+      isLoading: mocks.countLoading,
       isError: false,
-      isFetching: false,
-      refetch: vi.fn(),
+      error: null,
     }));
+    mocks.useInfiniteQuery.mockImplementation(() => {
+      const call = mocks.useInfiniteQuery.mock.calls.length;
+      if (call === 1) {
+        return {
+          data: {
+            pages: [
+              {
+                topicClaims: { entities: [claimEntity], endCursor: null, hasNextPage: false },
+                extractedClaims: emptyConnection,
+              },
+            ],
+          },
+          isLoading: false,
+          isError: mocks.claimsError,
+          isFetchingNextPage: false,
+          hasNextPage: false,
+          fetchNextPage: vi.fn(),
+          refetch: vi.fn(),
+        };
+      }
+
+      return {
+        data: undefined,
+        isLoading: true,
+        isError: false,
+        isFetchingNextPage: false,
+        hasNextPage: false,
+        fetchNextPage: vi.fn(),
+        refetch: vi.fn(),
+      };
+    });
+    mocks.buildExploreFeedRows.mockImplementation((entities: Array<{ id: string }>) =>
+      entities.map(entity => ({ ...claimRow, entityId: entity.id }))
+    );
+
   });
 
-  it('keeps cached cards visible when discovery refresh fails', () => {
-    mocks.discoveryError = true;
+  it('publishes claim rows before the independent exact count and debate requests finish', () => {
+    const { result } = renderHook(() =>
+      useClaimRecord({ claimId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', spaceId: 'space-1', topicIds: ['topic-1'] })
+    );
+
+    expect(result.current.claimRows).toEqual([claimRow]);
+    expect(result.current.claimsLoading).toBe(false);
+    expect(result.current.claimsTotal).toBe(1);
+    expect(result.current.debatesLoading).toBe(true);
+  });
+
+  it('keeps cached claim cards visible when their background page refresh fails', () => {
+    mocks.claimsError = true;
 
     const { result } = renderHook(() =>
       useClaimRecord({ claimId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', spaceId: 'space-1', topicIds: ['topic-1'] })
     );
 
-    expect(result.current.claimRows).toEqual([relatedRow]);
-    expect(result.current.claimsError).toBe(true);
-  });
-
-  it('keeps cached cards visible when Best-score refresh fails', () => {
-    mocks.scoreError = true;
-
-    const { result } = renderHook(() =>
-      useClaimRecord({ claimId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', spaceId: 'space-1', topicIds: ['topic-1'] })
-    );
-
-    expect(result.current.claimRows).toEqual([relatedRow]);
+    expect(result.current.claimRows).toEqual([claimRow]);
     expect(result.current.claimsError).toBe(true);
   });
 });

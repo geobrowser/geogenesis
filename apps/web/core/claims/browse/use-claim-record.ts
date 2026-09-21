@@ -1,246 +1,85 @@
 'use client';
 
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+
 import * as React from 'react';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { relatedClaimsWhere } from '~/core/claims/related-claims';
-import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TAG_ID, DEBATE_TYPE_ID, SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
-import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
-import { EntitiesOrderBy } from '~/core/gql/graphql';
-import { ID } from '~/core/id';
-import { sortRows } from '~/core/profile/record-client-filter';
-import { useEntityScores } from '~/core/profile/use-entity-scores';
-import type { WhereCondition } from '~/core/sync/experimental_query-layer';
-import { useQueryAllEntities } from '~/core/sync/use-store';
-import type { Entity } from '~/core/types';
+import { buildExploreFeedRows, type ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { normId } from '~/core/utils/norm-id';
 
-import { CLAIM_RECORD_PAGE_SIZE, useClaimExploreRows } from './use-claim-explore-rows';
+import {
+  CLAIM_RECORD_PAGE_SIZE,
+  claimRecordFilters,
+  fetchClaimRecordClaimsPage,
+  fetchClaimRecordCounts,
+  fetchClaimRecordDebatesPage,
+  firstClaimRecordClaimsPageParam,
+  mergeRankedRecordEntities,
+  nextClaimRecordClaimsPageParam,
+  type RankedClaimRecordEntity,
+} from './claim-record-query';
 
-export { CLAIM_RECORD_PAGE_SIZE } from './use-claim-explore-rows';
+export { CLAIM_RECORD_PAGE_SIZE } from './claim-record-query';
 
-/** Stable empty rows keep the query result from changing identity while it is disabled. */
+const CLAIM_RECORD_STALE_TIME = 60_000;
 const NO_ROWS: ExploreFeedRow[] = [];
-const CLAIM_RECORD_QUERY_OPTIONS = { includeEmptyNames: true } as const;
 
-/**
- * Drawable neighbours from one or more relation paths.
- *
- * The current claim can match its own topic query, and one claim can arrive through both topics and
- * debate extraction. Exclusion and normalized-id deduplication happen here, before counts, scoring,
- * or hydration observe the set.
- */
-export function relatedClaimIds(claimId: string, ...groups: Array<Pick<Entity, 'id' | 'name'>[]>): string[] {
-  const ids = new Map<string, string>();
-
-  for (const entity of groups.flat()) {
-    if (ID.equals(entity.id, claimId)) continue;
-    ids.set(normId(entity.id), entity.id);
-  }
-
-  return [...ids.values()];
-}
-
-/** Claims published from the transcript of one of the claim's direct debates. */
-export function claimsExtractedFromDebatesWhere(spaceId: string, debateIds: string[]): WhereCondition {
-  return {
-    types: [{ id: { equals: CLAIM_TYPE_ID } }],
-    spaces: [{ equals: spaceId }],
-    relations: [
-      {
-        typeOf: { id: { equals: SOURCES_PROPERTY_ID } },
-        toEntity: { id: { in: debateIds } },
-        space: { equals: spaceId },
-      },
-    ],
-  };
-}
-
-function entityIds(entities: Pick<Entity, 'id'>[]): string[] {
-  return [...new Map(entities.map(entity => [normId(entity.id), entity.id])).values()];
-}
-
-/** A fixed Best record must not degrade to its input order when ranking cannot be read. */
-export function bestRecordRows<T extends { entityId: string }>(
-  rows: readonly T[],
-  rankings: ReadonlyMap<string, number>,
-  isRankingError: boolean
-): T[] {
-  return isRankingError ? [] : sortRows(rows, 'best', { rankings });
-}
-
-/** Best-ranked ids for the bounded card page, plus whether another page remains. */
-export function rankedRecordPage(
-  ids: readonly string[],
-  rankings: ReadonlyMap<string, number>,
-  isRankingError: boolean,
-  visibleCount: number
-): { ids: string[]; hasNextPage: boolean } {
-  const ordered = bestRecordRows(
-    ids.map(entityId => ({ entityId })),
-    rankings,
-    isRankingError
-  ).map(row => row.entityId);
-  const count = Math.max(CLAIM_RECORD_PAGE_SIZE, visibleCount);
-
-  return { ids: ordered.slice(0, count), hasNextPage: count < ordered.length };
-}
-
-/**
- * Ordinary records fit in one card page, so their projection does not depend on Best order.
- * Hydrate that whole set while ranking loads, then sort the finished rows before exposing them.
- * Larger records still wait for ranking so only the correct bounded page is hydrated.
- */
-export function recordHydrationIds(
-  ids: readonly string[],
-  rankedIds: readonly string[],
-  rankingsReady: boolean
-): string[] {
-  if (ids.length <= CLAIM_RECORD_PAGE_SIZE) return [...ids];
-  return rankingsReady ? [...rankedIds] : [];
-}
-
-type RefetchableRecordQuery = {
-  error: unknown;
-  refetch: () => Promise<unknown>;
-};
-
-/** Retry only failed discovery branches so one failure does not replay successful cursor walks. */
-export async function refetchFailedRecordQueries(queries: RefetchableRecordQuery[]): Promise<void> {
-  await Promise.all(queries.filter(query => query.error).map(query => query.refetch()));
-}
-
-/** Retry the earliest failed prerequisite; pagination is only valid after all three stages succeed. */
-export function retryFailedRecordStage({
-  idsError,
-  scoresError,
-  rowsError,
-  refetchIds,
-  refetchScores,
-  refetchRows,
-}: {
-  idsError: boolean;
-  scoresError: boolean;
-  rowsError: boolean;
-  refetchIds: () => unknown;
-  refetchScores: () => unknown;
-  refetchRows: () => unknown;
-}): boolean {
-  if (idsError) {
-    void refetchIds();
-    return true;
-  }
-
-  if (scoresError) {
-    void refetchScores();
-    return true;
-  }
-
-  if (rowsError) {
-    void refetchRows();
-    return true;
-  }
-
-  return false;
-}
-
-export function isRecordPageExpansionFetching(expansionPending: boolean, rowsFetching: boolean): boolean {
-  return expansionPending && rowsFetching;
-}
-
-function useRankedRecordPage({
-  ids,
-  spaceId,
-  idsReady,
-  idsAvailable,
-  idsError,
-  refetchIds,
+function useVisibleRecordPage({
   recordKey,
+  entityCount,
+  queryHasNextPage,
+  queryIsError,
+  refetch,
+  fetchNextPage,
 }: {
-  ids: string[];
-  spaceId: string;
-  idsReady: boolean;
-  idsAvailable: boolean;
-  idsError: boolean;
-  refetchIds: () => Promise<void>;
   recordKey: string;
+  entityCount: number;
+  queryHasNextPage: boolean;
+  queryIsError: boolean;
+  refetch: () => Promise<unknown>;
+  fetchNextPage: () => Promise<unknown>;
 }) {
-  const scores = useEntityScores({ ids, enabled: idsAvailable });
-  const [page, setPage] = React.useState({
-    key: recordKey,
-    visibleCount: CLAIM_RECORD_PAGE_SIZE,
-    expansionPending: false,
-  });
+  const [page, setPage] = React.useState({ key: recordKey, visibleCount: CLAIM_RECORD_PAGE_SIZE });
   const visibleCount = page.key === recordKey ? page.visibleCount : CLAIM_RECORD_PAGE_SIZE;
-  const expansionPending = page.key === recordKey && page.expansionPending;
-  const visible = React.useMemo(
-    () => rankedRecordPage(ids, scores.rankings, !scores.dataAvailable, visibleCount),
-    [ids, scores.dataAvailable, scores.rankings, visibleCount]
-  );
-  const rankingsReady = scores.dataAvailable;
-  const hydrationIds = React.useMemo(
-    () => recordHydrationIds(ids, visible.ids, rankingsReady),
-    [ids, rankingsReady, visible.ids]
-  );
-  const canHydrate = idsAvailable && (ids.length <= CLAIM_RECORD_PAGE_SIZE || rankingsReady);
-  const rowsQuery = useClaimExploreRows(hydrationIds, spaceId, canHydrate);
-  const rowsError = rowsQuery.isError;
-  const refetchRows = rowsQuery.refetch;
-  const rows = React.useMemo(
-    () => (rankingsReady ? bestRecordRows(rowsQuery.data, scores.rankings, false) : NO_ROWS),
-    [rankingsReady, rowsQuery.data, scores.rankings]
-  );
+  const hasNextPage = entityCount > visibleCount || queryHasNextPage;
 
-  React.useEffect(() => {
-    if (!expansionPending || rowsQuery.isFetching) return;
-    setPage(current => (current.key === recordKey ? { ...current, expansionPending: false } : current));
-  }, [expansionPending, recordKey, rowsQuery.isFetching]);
-
-  const fetchNextPage = React.useCallback(() => {
-    if (
-      retryFailedRecordStage({
-        idsError,
-        scoresError: scores.isError,
-        rowsError,
-        refetchIds,
-        refetchScores: scores.refetch,
-        refetchRows,
-      })
-    )
+  const fetchNext = React.useCallback(() => {
+    if (queryIsError) {
+      void refetch();
       return;
+    }
 
-    setPage(current => ({
-      key: recordKey,
-      visibleCount:
-        (current.key === recordKey ? current.visibleCount : CLAIM_RECORD_PAGE_SIZE) + CLAIM_RECORD_PAGE_SIZE,
-      expansionPending: true,
-    }));
-  }, [idsError, recordKey, refetchIds, refetchRows, rowsError, scores.isError, scores.refetch]);
+    const nextVisibleCount = visibleCount + CLAIM_RECORD_PAGE_SIZE;
+    setPage({ key: recordKey, visibleCount: nextVisibleCount });
 
-  return {
-    rows: canHydrate && visible.ids.length > 0 ? rows : NO_ROWS,
-    isLoading:
-      !idsReady ||
-      (!idsError && (scores.isLoading || (rowsQuery.isLoading && rowsQuery.data.length === 0 && !rowsQuery.isError))),
-    isError: scores.isError || rowsError,
-    isFetchingNextPage:
-      canHydrate && rowsQuery.data.length > 0 && isRecordPageExpansionFetching(expansionPending, rowsQuery.isFetching),
-    hasNextPage: visible.hasNextPage,
-    fetchNextPage,
-  };
+    // Two ranked claim branches can provide a buffered page between them. Reveal that buffer
+    // immediately, and only ask the graph for another cursor page when it cannot fill the next
+    // visible page. This keeps scrolling bounded without adding an avoidable request per click.
+    if (entityCount < nextVisibleCount && queryHasNextPage) void fetchNextPage();
+  }, [entityCount, fetchNextPage, queryHasNextPage, queryIsError, recordKey, refetch, visibleCount]);
+
+  return { visibleCount, hasNextPage, fetchNextPage: fetchNext };
+}
+
+function rowsForEntities(entities: RankedClaimRecordEntity[], visibleCount: number, spaceId: string): ExploreFeedRow[] {
+  if (entities.length === 0) return NO_ROWS;
+  return buildExploreFeedRows(
+    entities.slice(0, visibleCount),
+    new Set([normId(spaceId)]),
+    // These records do not render a Join button, so there is no membership state to resolve.
+    new Set()
+  );
 }
 
 /**
- * The Debates and Related claims record shared by the claim Overview summary and its two full tabs.
+ * The claim page's Debates and Related claims record.
  *
- * Related claims combine the canonical topic relation with every claim extracted from a direct
- * debate on this claim. The extracted branch follows the provenance Geo publishes on each claim
- * (`Sources` → Debate), so it includes factual/non-contestable statements as well as candidate
- * motions. Both branches exclude the current claim and are deduped by normalized entity id.
- *
- * The Debates record retains its existing scope: debates directly on this claim plus debates on
- * its topic-related candidate motions. Both row sets are hydrated through the explore card
- * projection so the summary and tabs render the same cards as the rest of the product.
+ * The old path discovered every matching entity, fetched a score for every id, sorted them in the
+ * browser, and then fetched the visible cards. This version asks the graph for Best-ranked card
+ * pages directly. Topic matches and claims extracted from a direct debate remain separate indexed
+ * branches; their pages are merged and deduped in Best order, while an aggregate relation query
+ * counts the exact union independently. That separation lets Activity draw whichever list arrives
+ * first instead of waiting for the slowest prerequisite.
  */
 export function useClaimRecord({
   claimId,
@@ -251,140 +90,94 @@ export function useClaimRecord({
   spaceId: string;
   topicIds: string[];
 }) {
-  const related = useQueryAllEntities({
-    where: relatedClaimsWhere({ spaceId, topicIds, requireTagId: DEBATE_TAG_ID }),
-    orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: topicIds.length > 0,
-    ...CLAIM_RECORD_QUERY_OPTIONS,
-  });
-
-  const topicRelatedIds = React.useMemo(() => relatedClaimIds(claimId, related.entities), [claimId, related.entities]);
-
-  const claimDebates = useQueryAllEntities({
-    where: {
-      types: [{ id: { equals: DEBATE_TYPE_ID } }],
-      spaces: [{ equals: spaceId }],
-      relations: [
-        {
-          typeOf: { id: { equals: DEBATE_CLAIMS_PROPERTY_ID } },
-          toEntity: { id: { equals: claimId } },
-          space: { equals: spaceId },
-        },
-      ],
-    },
-    orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: true,
-    ...CLAIM_RECORD_QUERY_OPTIONS,
-  });
-
-  const claimDebateIds = React.useMemo(() => entityIds(claimDebates.entities), [claimDebates.entities]);
-  const extractedClaims = useQueryAllEntities({
-    where: claimsExtractedFromDebatesWhere(spaceId, claimDebateIds),
-    orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: claimDebateIds.length > 0,
-    ...CLAIM_RECORD_QUERY_OPTIONS,
-  });
-
-  const relatedIds = React.useMemo(
-    () => relatedClaimIds(claimId, related.entities, extractedClaims.entities),
-    [claimId, extractedClaims.entities, related.entities]
+  const topicKey = topicIds.map(normId).sort().join(',');
+  const recordKey = `${normId(spaceId)}:${normId(claimId)}:${topicKey}`;
+  const filters = React.useMemo(
+    () => claimRecordFilters({ claimId, spaceId, topicIds }),
+    // Topic order and UUID formatting do not change the query's meaning.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [claimId, spaceId, topicKey]
   );
 
-  const relatedDebates = useQueryAllEntities({
-    where: {
-      types: [{ id: { equals: DEBATE_TYPE_ID } }],
-      spaces: [{ equals: spaceId }],
-      relations: [
-        {
-          typeOf: { id: { equals: DEBATE_CLAIMS_PROPERTY_ID } },
-          toEntity: { id: { in: topicRelatedIds } },
-          space: { equals: spaceId },
-        },
-      ],
-    },
-    orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: topicRelatedIds.length > 0,
-    ...CLAIM_RECORD_QUERY_OPTIONS,
+  const counts = useQuery({
+    queryKey: ['claim-record', 'counts', recordKey],
+    queryFn: ({ signal }) => fetchClaimRecordCounts({ filters, signal }),
+    staleTime: CLAIM_RECORD_STALE_TIME,
   });
 
-  const debateIds = React.useMemo(
-    () => entityIds([...claimDebates.entities, ...relatedDebates.entities]),
-    [claimDebates.entities, relatedDebates.entities]
+  const claims = useInfiniteQuery({
+    queryKey: ['claim-record', 'claims', recordKey],
+    initialPageParam: firstClaimRecordClaimsPageParam(filters.hasTopics),
+    queryFn: ({ pageParam, signal }) =>
+      fetchClaimRecordClaimsPage({ filters, spaceId, pageParam, signal }),
+    getNextPageParam: nextClaimRecordClaimsPageParam,
+    staleTime: CLAIM_RECORD_STALE_TIME,
+  });
+
+  const debates = useInfiniteQuery({
+    queryKey: ['claim-record', 'debates', recordKey],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam, signal }) =>
+      fetchClaimRecordDebatesPage({ filters, spaceId, after: pageParam, signal }),
+    getNextPageParam: page => (page.hasNextPage && page.endCursor !== null ? page.endCursor : undefined),
+    staleTime: CLAIM_RECORD_STALE_TIME,
+  });
+
+  const claimEntities = React.useMemo(() => {
+    const pages = claims.data?.pages ?? [];
+    return mergeRankedRecordEntities(
+      pages.flatMap(page => page.topicClaims.entities),
+      pages.flatMap(page => page.extractedClaims.entities)
+    );
+  }, [claims.data?.pages]);
+  const debateEntities = React.useMemo(
+    () => mergeRankedRecordEntities(...(debates.data?.pages ?? []).map(page => page.entities)),
+    [debates.data?.pages]
   );
-  const claimsReady = !related.isLoading && !claimDebates.isLoading && !extractedClaims.isLoading;
-  const debatesReady = !related.isLoading && !claimDebates.isLoading && !relatedDebates.isLoading;
-  const claimsAvailable = related.dataAvailable && claimDebates.dataAvailable && extractedClaims.dataAvailable;
-  const debatesAvailable = related.dataAvailable && claimDebates.dataAvailable && relatedDebates.dataAvailable;
-  const recordKey = `${normId(spaceId)}:${normId(claimId)}`;
-  const claimsCountUnavailable = Boolean(related.error ?? claimDebates.error ?? extractedClaims.error);
-  const debatesCountUnavailable = Boolean(related.error ?? claimDebates.error ?? relatedDebates.error);
-  const refetchClaimsDiscovery = React.useCallback(
-    () =>
-      refetchFailedRecordQueries([
-        { error: related.error, refetch: related.refetch },
-        { error: claimDebates.error, refetch: claimDebates.refetch },
-        { error: extractedClaims.error, refetch: extractedClaims.refetch },
-      ]),
-    [
-      claimDebates.error,
-      claimDebates.refetch,
-      extractedClaims.error,
-      extractedClaims.refetch,
-      related.error,
-      related.refetch,
-    ]
-  );
-  const refetchDebatesDiscovery = React.useCallback(
-    () =>
-      refetchFailedRecordQueries([
-        { error: related.error, refetch: related.refetch },
-        { error: claimDebates.error, refetch: claimDebates.refetch },
-        { error: relatedDebates.error, refetch: relatedDebates.refetch },
-      ]),
-    [
-      claimDebates.error,
-      claimDebates.refetch,
-      related.error,
-      related.refetch,
-      relatedDebates.error,
-      relatedDebates.refetch,
-    ]
-  );
-  // Candidate ids and scores remain complete so totals and Best order are exact. Only expensive
-  // Explore-card hydration and DOM rendering are paged, which bounds work without changing rank.
-  const claimsPage = useRankedRecordPage({
-    ids: relatedIds,
-    spaceId,
-    idsReady: claimsReady,
-    idsAvailable: claimsAvailable,
-    idsError: claimsCountUnavailable,
-    refetchIds: refetchClaimsDiscovery,
+
+  const claimsPage = useVisibleRecordPage({
     recordKey,
+    entityCount: claimEntities.length,
+    queryHasNextPage: Boolean(claims.hasNextPage),
+    queryIsError: claims.isError,
+    refetch: claims.refetch,
+    fetchNextPage: claims.fetchNextPage,
   });
-  const debatesPage = useRankedRecordPage({
-    ids: debateIds,
-    spaceId,
-    idsReady: debatesReady,
-    idsAvailable: debatesAvailable,
-    idsError: debatesCountUnavailable,
-    refetchIds: refetchDebatesDiscovery,
+  const debatesPage = useVisibleRecordPage({
     recordKey,
+    entityCount: debateEntities.length,
+    queryHasNextPage: Boolean(debates.hasNextPage),
+    queryIsError: debates.isError,
+    refetch: debates.refetch,
+    fetchNextPage: debates.fetchNextPage,
   });
+
+  const claimRows = React.useMemo(
+    () => rowsForEntities(claimEntities, claimsPage.visibleCount, spaceId),
+    [claimEntities, claimsPage.visibleCount, spaceId]
+  );
+  const debateRows = React.useMemo(
+    () => rowsForEntities(debateEntities, debatesPage.visibleCount, spaceId),
+    [debateEntities, debatesPage.visibleCount, spaceId]
+  );
 
   return {
-    relatedClaimIds: relatedIds,
-    claimRows: claimsPage.rows,
-    debateRows: debatesPage.rows,
-    claimsTotal: relatedIds.length,
-    debatesTotal: debateIds.length,
-    claimsCountUnavailable,
-    debatesCountUnavailable,
-    claimsLoading: claimsPage.isLoading,
-    debatesLoading: debatesPage.isLoading,
-    claimsError: claimsCountUnavailable || claimsPage.isError,
-    debatesError: debatesCountUnavailable || debatesPage.isError,
-    claimsFetchingNextPage: claimsPage.isFetchingNextPage,
-    debatesFetchingNextPage: debatesPage.isFetchingNextPage,
+    // Kept for the public hook shape; it now describes the bounded pages already fetched rather
+    // than forcing an exhaustive id walk before Activity can appear.
+    relatedClaimIds: claimEntities.map(entity => entity.id),
+    claimRows,
+    debateRows,
+    // Rows are a truthful lower bound while the independent exact aggregate is still in flight.
+    claimsTotal: counts.data?.claims ?? claimEntities.length,
+    debatesTotal: counts.data?.debates ?? debateEntities.length,
+    claimsCountUnavailable: counts.isError,
+    debatesCountUnavailable: counts.isError,
+    claimsLoading: claims.isLoading,
+    debatesLoading: debates.isLoading,
+    claimsError: claims.isError,
+    debatesError: debates.isError,
+    claimsFetchingNextPage: claims.isFetchingNextPage,
+    debatesFetchingNextPage: debates.isFetchingNextPage,
     claimsHasNextPage: claimsPage.hasNextPage,
     debatesHasNextPage: debatesPage.hasNextPage,
     fetchNextClaimsPage: claimsPage.fetchNextPage,

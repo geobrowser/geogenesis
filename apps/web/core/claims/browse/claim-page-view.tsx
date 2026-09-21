@@ -152,8 +152,14 @@ export function ClaimPageView({
     sources: `${overviewHref}/sources`,
   };
   // Matches profile record tabs: unknown/error stays reachable, while a settled zero disappears.
-  const hasDebates = hasRecordToShow(record.debatesLoading || record.debatesError ? undefined : record.debatesTotal);
-  const hasClaims = hasRecordToShow(record.claimsLoading || record.claimsError ? undefined : record.claimsTotal);
+  const hasDebates = hasRecordToShow(
+    record.debatesLoading || record.debatesError || record.debatesCountUnavailable
+      ? undefined
+      : record.debatesTotal
+  );
+  const hasClaims = hasRecordToShow(
+    record.claimsLoading || record.claimsError || record.claimsCountUnavailable ? undefined : record.claimsTotal
+  );
   const hasSources = sources.length > 0;
   const systemTabs = [
     { label: 'Overview', href: overviewHref, sidePanelKey: 'overview' },
