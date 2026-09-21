@@ -11,6 +11,21 @@ describe('entity tab navigation', () => {
     expect(entityTabIdFromHref('/claim?tabId=not-an-id')).toBeNull();
   });
 
+  it('matches the exact tabId parameter instead of text in another key or value', () => {
+    expect(entityTabIdFromHref(`/claim?notabId=${TAB_ID}`)).toBeNull();
+    expect(entityTabIdFromHref(`/claim?redirect=tabId%3D${TAB_ID}`)).toBeNull();
+  });
+
+  it('parses tabId in any query position without including the fragment', () => {
+    expect(entityTabIdFromHref(`/claim?filter=recent&tabId=${TAB_ID}#activity`)).toBe(TAB_ID);
+  });
+
+  it('uses the first tabId value when the parameter is repeated', () => {
+    const secondTabId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+    expect(entityTabIdFromHref(`/claim?tabId=${TAB_ID}&tabId=${secondTabId}`)).toBe(TAB_ID);
+  });
+
   it('uses the route path outside the side panel', () => {
     expect(
       isEntityTabActive({

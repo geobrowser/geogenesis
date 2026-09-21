@@ -1,11 +1,13 @@
 import { validateEntityId } from './utils';
 
 export function entityTabIdFromHref(href: string): string | null {
-  const idx = href.indexOf('tabId=');
-  if (idx === -1) return null;
+  const queryStart = href.indexOf('?');
+  if (queryStart === -1) return null;
 
-  const raw = href.slice(idx + 6).split('&')[0];
-  return validateEntityId(raw) ? raw : null;
+  const fragmentStart = href.indexOf('#', queryStart);
+  const query = href.slice(queryStart + 1, fragmentStart === -1 ? undefined : fragmentStart);
+  const tabId = new URLSearchParams(query).get('tabId');
+  return tabId && validateEntityId(tabId) ? tabId : null;
 }
 
 /** One active-tab rule for read and edit tab bars, on routes and in the entity side panel. */
