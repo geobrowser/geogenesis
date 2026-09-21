@@ -65,10 +65,9 @@ function Banner() {
         </button>
       </div>
 
-      {/* @TODO(copy): the `isSet` wording is a first draft and wants a copy review. */}
       <Text as="p" variant="metadata" className="mt-2">
         {isSet
-          ? 'Your debate times are saved. Update them whenever your week changes, so others can keep requesting a time that works for both of you.'
+          ? 'These are the times you’re free for debates. Update them whenever your week changes, so others can keep requesting a time that works for both of you.'
           : 'Set the times you’re free for debates. When you’re offline, others can check your availability and request a time that works for both of you.'}
       </Text>
 

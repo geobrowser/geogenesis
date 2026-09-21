@@ -63,7 +63,7 @@ describe('SetScheduleBanner', () => {
 
     expect(await screen.findByRole('button', { name: 'Edit my schedule' })).toBeInTheDocument();
     expect(screen.getByText('Your debate schedule')).toBeInTheDocument();
-    expect(screen.getByText(/Your debate times are saved/)).toBeInTheDocument();
+    expect(screen.getByText(/These are the times you/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Set my schedule' })).not.toBeInTheDocument();
     expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
   });

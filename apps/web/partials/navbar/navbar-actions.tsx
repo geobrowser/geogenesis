@@ -56,7 +56,7 @@ export function NavbarActions() {
   const [hasOpenedSchedule, setHasOpenedSchedule] = React.useState(false);
   const avatarTriggerRef = React.useRef<HTMLButtonElement>(null);
 
-  const { isLoading: isUserLoading, profile, address } = useUser();
+  const { isLoading: isUserLoading, profile: resolvedProfile, address: resolvedAddress } = useUser();
   const { personalSpaceId } = usePersonalSpaceId();
   const { isPending, topicId } = usePendingPersonalSpace();
   const pendingAvatar = useAtomValue(avatarAtom);
@@ -68,6 +68,18 @@ export function NavbarActions() {
   // opened. The modal holds the grid back until this answers, so a slow read costs a moment of
   // "Loading your schedule" rather than a wrong one.
   const { blocks: scheduleBlocks, isError: scheduleError, refetch: refetchSchedule } = useDebateSchedule();
+
+  // A re-resolve mid-session (see below) would swap the avatar for the skeleton, unmounting the node
+  // the dialogs below return focus to. The last resolved identity stands in for that window, and is
+  // null on a cold start, so the skeleton still covers first load.
+  const lastIdentity = React.useRef<{
+    address: NonNullable<typeof resolvedAddress>;
+    profile: typeof resolvedProfile;
+  } | null>(null);
+  React.useEffect(() => {
+    if (!isUserLoading && resolvedAddress)
+      lastIdentity.current = { address: resolvedAddress, profile: resolvedProfile };
+  }, [isUserLoading, resolvedAddress, resolvedProfile]);
   const saveSchedule = useSaveDebateSchedule();
 
   // The navbar's own content is swapped inside one stable tree rather than being
@@ -80,7 +92,11 @@ export function NavbarActions() {
   // reopen on failure, nothing to roll back, and the rows stranded in the space.
   // The keys hold each slot's identity as the content beside it changes.
   const navbarContent = (() => {
-    if (isUserLoading) {
+    const held = isUserLoading ? lastIdentity.current : null;
+    const address = resolvedAddress ?? held?.address;
+    const profile = resolvedProfile ?? held?.profile;
+
+    if (isUserLoading && !held) {
       return (
         <div key="navbar-content" className="flex items-center gap-4">
           <Skeleton className="h-7 w-[66px]" radius="rounded-full" />

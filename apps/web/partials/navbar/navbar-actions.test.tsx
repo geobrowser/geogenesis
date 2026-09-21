@@ -247,7 +247,6 @@ describe('NavbarActions profile menu', () => {
 
     expect(mocks.dialogMounts).toBe(1);
 
-    mocks.isSmartAccountLoading = true;
     rerender(<NavbarActions />);
 
     // Presence alone is not the guarantee — a remounted dialog is still in the DOM
@@ -297,6 +296,29 @@ describe('NavbarActions profile menu', () => {
 
     // Not the menu item that opened it -- that unmounted with the menu, and without a live node to
     // return to, focus was dropped on the body.
+    expect(document.activeElement).toBe(avatar);
+  });
+
+  // `isUserLoading` flips back mid-session, and swapping the avatar for the skeleton under an open
+  // dialog leaves nothing to return focus to.
+  it('keeps the avatar mounted when the user reloads while the calendar is open', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<NavbarActions />);
+    const avatar = screen.getByRole('button', { name: 'Open profile menu' });
+    await user.click(avatar);
+    await user.click(screen.getByRole('button', { name: 'Set my schedule' }));
+    await screen.findByRole('dialog');
+
+    mocks.isSmartAccountLoading = true;
+    rerender(<NavbarActions />);
+
+    // The open dialog aria-hides its siblings, so the avatar is asserted on directly.
+    expect(avatar.isConnected).toBe(true);
+
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
     expect(document.activeElement).toBe(avatar);
   });
 
