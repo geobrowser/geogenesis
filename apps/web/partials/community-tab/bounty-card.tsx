@@ -10,6 +10,8 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
 import { Avatar } from '~/design-system/avatar';
 
+import { AVAILABLE_CARD_HEIGHT_PX, COMPLETED_CARD_HEIGHT_PX, IN_PROGRESS_CARD_HEIGHT_PX } from './bounty-card-layout';
+
 const GEO_ICON_WIDTH_PX = 8.5;
 const GEO_ICON_HEIGHT_PX = 10;
 
@@ -45,9 +47,11 @@ function BountyGeoIcon() {
   );
 }
 
-export const COMPLETED_CARD_HEIGHT_PX = 143;
-export const IN_PROGRESS_CARD_HEIGHT_PX = 110;
-export const AVAILABLE_CARD_HEIGHT_PX = 240;
+// Declared in `bounty-card-layout.ts`, which carries no `'use client'`, because the board's
+// server-rendered loading state needs the available card's height. Re-exported here so every
+// existing importer keeps working.
+export { AVAILABLE_CARD_HEIGHT_PX, COMPLETED_CARD_HEIGHT_PX, IN_PROGRESS_CARD_HEIGHT_PX };
+
 const CARD_PADDING_PX = 20;
 
 /**

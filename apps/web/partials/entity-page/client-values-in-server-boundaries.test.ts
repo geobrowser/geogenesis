@@ -493,11 +493,6 @@ function staticReferences(sourceFile: ts.SourceFile): Reference[] {
  * existing entry would go on authorising the same name after someone repointed the import at a
  * *different* client module — debt quietly licensing a new fault.
  *
- * - `bounty-board-skeleton` is the live one. `app/bounties/loading.tsx` is server-rendered and puts
- *   `BOARD_GRID_CLASS` straight into a `className`, so the grid has no grid during the loading
- *   flash. Left here rather than fixed because `BOARD_CARD_HEIGHT_PX` derives from
- *   `AVAILABLE_CARD_HEIGHT_PX` in a second client module, so the fix relocates layout constants
- *   across two features and wants someone who can look at the bounties board while doing it.
  * - `read-block-media-dimensions` would return a client reference in place of its empty-dimensions
  *   object. Nothing calls it outside its own test today, so it is a landmine rather than a fault.
  * - `bounties/config` is inert: `useFeatureFlag` is only ever called from `useBountiesEnabled`,
@@ -505,8 +500,6 @@ function staticReferences(sourceFile: ts.SourceFile): Reference[] {
  *   Untangling it moves a hook out of `config.ts` and repoints nine files, for no behaviour change.
  */
 const KNOWN = new Set([
-  'partials/bounties/bounty-board-skeleton.tsx -> BOARD_CARD_HEIGHT_PX (from partials/bounties/board-bounty-card.tsx)',
-  'partials/bounties/bounty-board-skeleton.tsx -> BOARD_GRID_CLASS (from partials/bounties/board-bounty-card.tsx)',
   'core/blocks/data/read-block-media-dimensions.ts -> NO_BLOCK_MEDIA_DIMENSIONS (from core/hooks/use-block-media-dimensions.ts)',
   'core/bounties/config.ts -> useFeatureFlag (from core/state/feature-flags.ts)',
 ]);

@@ -7,23 +7,14 @@ import { statusKeyForId } from '~/core/bounties/labels';
 import type { BoardBounty } from '~/core/bounties/types';
 import type { SpaceBounty } from '~/core/community/bounty-types';
 
-import {
-  AVAILABLE_CARD_HEIGHT_PX,
-  AvailableBountyCard,
-  BountyCard,
-  InProgressBountyCard,
-} from '~/partials/community-tab/bounty-card';
+import { AvailableBountyCard, BountyCard, InProgressBountyCard } from '~/partials/community-tab/bounty-card';
 
-/**
- * The board mixes statuses in one grid, so every card gets the same HEIGHT —
- * the available card's, the tallest of the three. Width is fluid: cards fill
- * whatever column the grid gives them (a fixed width is what put the
- * Community-tab grids one column short; see bounty-card's cardStyle).
- */
-export const BOARD_CARD_HEIGHT_PX = AVAILABLE_CARD_HEIGHT_PX;
+import { BOARD_CARD_HEIGHT_PX } from './board-layout';
 
-/** Same column threshold as the Community tab's available grid. */
-export const BOARD_GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))] gap-4';
+// Declared in `board-layout.ts`, which carries no `'use client'`, because `app/bounties/loading.tsx`
+// renders the skeleton on the server and puts the grid class into a `className`. Re-exported here so
+// every existing importer keeps working.
+export { BOARD_CARD_HEIGHT_PX, BOARD_GRID_CLASS } from './board-layout';
 
 /**
  * The interest bindings an available card needs, lifted to the grid so one
