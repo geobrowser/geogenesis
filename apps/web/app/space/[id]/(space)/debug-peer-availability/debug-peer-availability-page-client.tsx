@@ -30,7 +30,9 @@ export function DebugPeerAvailabilityPageClient({ spaceId }: { spaceId: string }
     // Read storage directly rather than `enabled`, which is hydration-gated and so reports the
     // default on this first pass — redirecting every visitor, flag on or not.
     if (!readStoredFeatureFlag('peerAvailability')) router.replace(`/space/${spaceId}`);
-  }, [router, spaceId]);
+    // `enabled` is in the deps so turning the flag off while here still redirects, rather than
+    // leaving a blank page.
+  }, [enabled, router, spaceId]);
 
   const [input, setInput] = React.useState('');
   const [userId, setUserId] = React.useState<string | null>(null);

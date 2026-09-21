@@ -638,8 +638,9 @@ export function useSaveDebateSchedule() {
 export function usePeerSchedule(peerUserId: string | null) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const viewerSchedule = useDebateSchedule();
-  // The endpoint is viewer-scoped and authenticated, so there is nothing to ask signed out.
-  const enabled = authenticated && peerUserId !== null;
+  // Viewer-scoped and authenticated, so nothing to ask signed out or without a peer. A closed
+  // dialog that stays mounted passes an empty id, not null.
+  const enabled = authenticated && Boolean(peerUserId);
 
   const query = useQuery({
     ...debateQueryNetworkOptions,

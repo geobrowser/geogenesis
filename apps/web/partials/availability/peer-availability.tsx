@@ -28,16 +28,15 @@ const SLOTS_PER_DAY = 4;
 /**
  * Another person's availability, read-only (GEO-2938).
  *
- * ## It shows their week, not the overlap
+ * ## It draws the overlap today, and says so
  *
- * The grid is *their* availability. The viewer's own only decides how a slot is drawn — solid
- * where both are free, dashed where only they are — and never whether it is drawn at all.
- * Availability is a preference, not a constraint, and filtering to the intersection would both
- * overstate the app's certainty and break the case this view exists for: opening a link with no
- * schedule of your own, to see when one particular person is around. That viewer sees the whole
- * week, all dashed.
+ * GEO-2938 wants their whole week, styled by the viewer's own rather than filtered by it. The
+ * endpoint cannot say that yet: it returns mutual slots only, and nothing at all when either side
+ * has no schedule. So every string here is about the pair, and a viewer with no schedule gets the
+ * hint bar rather than a dashed week.
  *
- * Which is also why the nudge to set your own is a hint bar and not a gate.
+ * The dashed path below is built and tested against {@link PeerDaySlot.viewerIsFree}. Landing the
+ * API change means flipping those strings back as well as changing the adapter.
  *
  * ## Viewing only
  *
@@ -106,11 +105,7 @@ export function PeerAvailabilityView({
               conditional — "Ada is in ," otherwise. */}
           {schedule.viewerTimezone && schedule.peerTimezone
             ? `Times shown in your zone, ${schedule.viewerTimezone}. ${name} is in ${schedule.peerTimezone}${
-                uniformOffset === null
-                  ? ''
-                  : uniformOffset === 0
-                    ? ', the same time as you'
-                    : `, ${formatOffset(uniformOffset)}`
+                uniformOffset === null ? '' : `, ${formatOffset(uniformOffset)}`
               }.`
             : 'Times shown in your local time.'}
         </Text>

@@ -14,8 +14,8 @@
  * `viewerIsFree: true`.
  *
  * The dashed half is fully built above this line, against {@link PeerSlot.viewerIsFree}. When the
- * API learns to send their slots unfiltered with a per-slot flag, this file changes and the view
- * does not.
+ * API sends their slots unfiltered with a per-slot flag, this file changes and the view's copy
+ * with it: four of its strings name the pair.
  */
 import type { ScheduleOverlapResponse } from '~/core/debates/api';
 
@@ -58,7 +58,7 @@ export type PeerSchedule = {
    */
   peerHasSchedule: boolean | null;
   slots: PeerSlot[];
-  /** The server stopped early; there is more availability than is drawn. */
+  /** The server hit the `limit` it was given. Nothing sends one yet, so this is false in the app. */
   truncated: boolean;
 };
 
@@ -171,8 +171,8 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
 /**
  * A wire slot as the chips it offers.
  *
- * Stepping by {@link SLOT_MINUTES} rather than trusting one entry to be one chip: the endpoint
- * sends spans, and a merged 9–11 span is four pickable slots, not one two-hour commitment.
+ * Stepping by {@link SLOT_MINUTES} rather than trusting one entry to be one chip. The endpoint
+ * sends slot-sized entries today, so this is a no-op; it earns its keep if that ever changes.
  *
  * A trailing part-slot still counts — a debate runs six to eight minutes, so the last 30 minutes
  * of a block is as usable as the first. There is deliberately no "unbookable" state here.
@@ -196,7 +196,7 @@ function dayColumns(now: Date, zone: string | undefined): string[] {
   const local = zonedParts(now, zone).date;
   const serverWindowStart = zonedParts(now, 'UTC').date;
   const [year, month, day] = (local > serverWindowStart ? local : serverWindowStart).split('-').map(Number);
-  // Midday, so that adding days cannot land on an hour a DST jump skipped and roll the date.
+  // Midday, so this first date cannot sit on an hour a DST jump skipped.
   const first = new Date(year, month - 1, day, 12);
   return Array.from({ length: PEER_SCHEDULE_DAYS }, (_, offset) => isoDate(addDays(first, offset)));
 }
@@ -270,7 +270,7 @@ function formatterFor(zone: string | undefined): Intl.DateTimeFormat {
   return formatter;
 }
 
-/** `UTC+5:30`, for the header. The viewer's zone is their own, so it is named, not offset. */
+/** `+5:30 hrs`, or `same time as you` at zero. For the header, beside both zone names. */
 export function formatOffset(minutes: number): string {
   if (minutes === 0) return 'same time as you';
   const sign = minutes > 0 ? '+' : '−';

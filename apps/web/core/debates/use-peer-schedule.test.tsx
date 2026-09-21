@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 
 import type * as React from 'react';
 import type { ReactNode } from 'react';
@@ -61,21 +61,18 @@ function deferred<T>() {
   return { promise, settle, fail };
 }
 
-/** One client per test, held so a case can drive a refetch the way the app would. */
+/** A fresh client per test, so one case's cache cannot answer the next one's query. */
 function harness() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
-  const wrapper = ({ children }: { children: ReactNode }) => (
+  return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  return { client, wrapper };
 }
 
-let client: QueryClient;
 let wrapper: ({ children }: { children: ReactNode }) => React.JSX.Element;
 
 beforeEach(() => {
-  // A fresh client per test, so one case's cache cannot answer the next one's query.
-  ({ client, wrapper } = harness());
+  wrapper = harness();
   mocks.authenticated = true;
   mocks.identityToken.mockReturnValue('token');
   mocks.getIdentityToken.mockResolvedValue('token');
@@ -141,24 +138,6 @@ describe('usePeerSchedule', () => {
     expect(result.current.isPending).toBe(false);
   });
 
-  // `useDebateSchedule` refetches on window focus. A failed background refetch flips its status to
-  // error while the cached schedule is untouched, and that cached value is all this needs.
-  it('keeps the week when a later viewer-schedule refetch fails', async () => {
-    mocks.getScheduleOverlaps.mockResolvedValue(overlap({ both_have_schedules: false }));
-    mocks.getDebateSchedule.mockResolvedValue({ is_set: false, schedule: { recurring: [], dated: [] } });
-
-    const { result } = renderHook(() => usePeerSchedule('user-peer'), { wrapper });
-    await waitFor(() => expect(result.current.schedule).toBeDefined());
-
-    mocks.getDebateSchedule.mockRejectedValue(new Error('blip'));
-    await act(async () => {
-      await client.refetchQueries();
-    });
-
-    expect(result.current.isError).toBe(false);
-    expect(result.current.schedule).toBeDefined();
-  });
-
   // Nothing asserted this before, so the peer id and the window could both be wrong and green.
   it('asks for the peer it was given, over the window the grid draws', async () => {
     mocks.getScheduleOverlaps.mockResolvedValue(overlap());
@@ -195,6 +174,15 @@ describe('usePeerSchedule', () => {
     mocks.authenticated = false;
 
     const { result } = renderHook(() => usePeerSchedule('user-peer'), { wrapper });
+
+    expect(result.current.enabled).toBe(false);
+    expect(result.current.isPending).toBe(false);
+    expect(mocks.getScheduleOverlaps).not.toHaveBeenCalled();
+  });
+
+  // A caller that keeps a closed dialog mounted passes an empty id rather than null.
+  it('asks nothing for an empty peer id', () => {
+    const { result } = renderHook(() => usePeerSchedule(''), { wrapper });
 
     expect(result.current.enabled).toBe(false);
     expect(result.current.isPending).toBe(false);

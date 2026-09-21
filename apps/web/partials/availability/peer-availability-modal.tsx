@@ -73,8 +73,8 @@ export function PeerAvailabilityModal({ open, userId, peerName, onClose }: Props
               </button>
             </div>
 
-            {/* Mounted only while open, so closing and reopening asks again rather than showing a
-                week that may have been booked out in between. */}
+            {/* Mounted only while open, so a closed dialog issues no request. It is also what keeps
+                an empty `userId` away from the hook while nobody is selected. */}
             {open && <PeerAvailability userId={userId} peerName={peerName} className="min-h-0 flex-1" />}
           </div>
         </Content>
