@@ -542,6 +542,7 @@ export function useClaimPositionControl({
     respond,
     actionTitle,
     responseError,
+    isConnected,
     /**
      * False only while the account genuinely cannot publish, never while one is in flight.
      *

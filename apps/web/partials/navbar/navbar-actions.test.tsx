@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
@@ -20,6 +20,7 @@ class ResizeObserverStub {
 
 const mocks = vi.hoisted(() => ({
   logout: vi.fn(),
+  saveSchedule: vi.fn(),
   push: vi.fn(),
   openCreateSpaceDialog: vi.fn(),
   setEditable: vi.fn(),
@@ -34,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   spaceId: null as string | null,
   isMobileNavbar: false,
   isSmartAccountLoading: false,
+  hasSmartAccount: true,
   dialogMounts: 0,
   shortcutCallback: null as (() => void) | null,
   pendingPersonalSpace: { isPending: false, topicId: null as string | null },
@@ -55,9 +57,17 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('jotai', () => ({ useAtomValue: () => '' }));
 
+// Stubbed rather than provided: the real `useDebateSchedule` issues a query, which would want a
+// QueryClientProvider around every case here. The modal below is the real one, so what is being
+// tested is still the navbar wiring the two together.
+vi.mock('~/core/debates/hooks', () => ({
+  useDebateSchedule: () => ({ blocks: [], isSet: false, isError: false, refetch: vi.fn() }),
+  useSaveDebateSchedule: () => ({ mutate: mocks.saveSchedule, isPending: false }),
+}));
+
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({
-    smartAccount: { account: { address } },
+    smartAccount: mocks.hasSmartAccount ? { account: { address } } : undefined,
     isLoading: mocks.isSmartAccountLoading,
   }),
 }));
@@ -130,6 +140,7 @@ vi.mock('~/design-system/menu', () => ({
     onOpenChange,
     className,
     asChild = false,
+    triggerRef,
   }: {
     trigger: React.ReactNode;
     children: React.ReactNode;
@@ -137,17 +148,21 @@ vi.mock('~/design-system/menu', () => ({
     onOpenChange: (open: boolean) => void;
     className?: string;
     asChild?: boolean;
+    triggerRef?: React.RefObject<HTMLButtonElement | null>;
   }) => (
     <div>
       {/* No `aria-label` here on purpose. The mock used to supply one, which meant the real
           trigger could go unnamed and this suite would never notice — the name has to come from
           the component. */}
       {asChild && React.isValidElement(trigger) ? (
-        React.cloneElement(trigger as React.ReactElement<React.ComponentProps<'button'>>, {
+        React.cloneElement(trigger as React.ReactElement<React.ComponentPropsWithRef<'button'>>, {
+          ref: triggerRef,
           onClick: () => onOpenChange(!open),
         })
       ) : (
-        <button onClick={() => onOpenChange(!open)}>{trigger}</button>
+        <button ref={triggerRef} onClick={() => onOpenChange(!open)}>
+          {trigger}
+        </button>
       )}
       {open && (
         <div data-testid="profile-menu" className={className}>
@@ -166,6 +181,7 @@ describe('NavbarActions profile menu', () => {
 
   beforeEach(() => {
     mocks.logout.mockReset();
+    mocks.saveSchedule.mockReset();
     mocks.push.mockReset();
     mocks.openCreateSpaceDialog.mockReset();
     mocks.setEditable.mockReset();
@@ -176,6 +192,7 @@ describe('NavbarActions profile menu', () => {
     mocks.spaceId = null;
     mocks.isMobileNavbar = false;
     mocks.isSmartAccountLoading = false;
+    mocks.hasSmartAccount = true;
     mocks.dialogMounts = 0;
     mocks.shortcutCallback = null;
     mocks.pendingPersonalSpace = { isPending: false, topicId: null };
@@ -307,13 +324,119 @@ describe('NavbarActions profile menu', () => {
 
     expect(mocks.dialogMounts).toBe(1);
 
-    mocks.isSmartAccountLoading = true;
     rerender(<NavbarActions />);
 
     // Presence alone is not the guarantee — a remounted dialog is still in the DOM
     // but has lost the staged edit it was holding.
     expect(screen.getByTestId('edit-profile-dialog')).toBeInTheDocument();
     expect(mocks.dialogMounts).toBe(1);
+  });
+
+  // The debates-panel banner is dismissed permanently, so this is the entry point that keeps the
+  // calendar reachable afterwards.
+  it('opens the availability calendar from the menu, between edit profile and sign out', async () => {
+    const user = userEvent.setup();
+    render(<NavbarActions />);
+    await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+
+    // Deferred like the profile dialog: nothing of the week grid exists until it is asked for.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    const setSchedule = screen.getByRole('button', { name: 'Set my schedule' });
+    expect(setSchedule).toHaveClass('border-t', 'border-grey-02');
+    expect(setSchedule.compareDocumentPosition(screen.getByRole('button', { name: 'Edit profile' }))).toBe(
+      Node.DOCUMENT_POSITION_PRECEDING
+    );
+    expect(setSchedule.compareDocumentPosition(screen.getByRole('button', { name: 'Sign out' }))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+
+    await user.click(setSchedule);
+
+    // The grid itself, not just the dialog shell -- the menu item exists to reach the calendar.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('group', { name: 'New block mode' })).toBeInTheDocument();
+    // Opening it closes the menu it was launched from.
+    expect(screen.queryByTestId('profile-menu')).not.toBeInTheDocument();
+  });
+
+  it('returns focus to the avatar once the calendar closes', async () => {
+    const user = userEvent.setup();
+    render(<NavbarActions />);
+    const avatar = screen.getByRole('button', { name: 'Open profile menu' });
+    await user.click(avatar);
+    await user.click(screen.getByRole('button', { name: 'Set my schedule' }));
+
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    // Not the menu item that opened it -- that unmounted with the menu, and without a live node to
+    // return to, focus was dropped on the body.
+    expect(document.activeElement).toBe(avatar);
+  });
+
+  // `isUserLoading` flips back mid-session, and swapping the avatar for the skeleton under an open
+  // dialog leaves nothing to return focus to.
+  it('keeps the avatar mounted when the user reloads while the calendar is open', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<NavbarActions />);
+    const avatar = screen.getByRole('button', { name: 'Open profile menu' });
+    await user.click(avatar);
+    await user.click(screen.getByRole('button', { name: 'Set my schedule' }));
+    await screen.findByRole('dialog');
+
+    mocks.isSmartAccountLoading = true;
+    rerender(<NavbarActions />);
+
+    // The open dialog aria-hides its siblings, so the avatar is asserted on directly.
+    expect(avatar.isConnected).toBe(true);
+
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    expect(document.activeElement).toBe(avatar);
+  });
+
+  // The held identity is only for the loading window. Signing out is not one, so it must not keep
+  // the avatar on screen.
+  it('falls through to the connect button once the account goes away', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<NavbarActions />);
+    await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+
+    mocks.hasSmartAccount = false;
+    rerender(<NavbarActions />);
+
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open profile menu' })).not.toBeInTheDocument();
+  });
+
+  it('saves the schedule edited from the menu', async () => {
+    const user = userEvent.setup();
+    render(<NavbarActions />);
+    await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+    await user.click(screen.getByRole('button', { name: 'Set my schedule' }));
+
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Save schedule' }));
+
+    expect(mocks.saveSchedule).toHaveBeenCalledOnce();
+    expect(mocks.saveSchedule.mock.calls[0][0]).toEqual([]);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  // Unlike Edit profile, which has nowhere to publish without one. A schedule is stored against
+  // the Privy account.
+  it('offers the schedule to someone with no personal space', async () => {
+    mocks.personalSpaceId = null;
+    const user = userEvent.setup();
+    render(<NavbarActions />);
+    await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+
+    expect(screen.queryByRole('button', { name: 'Edit profile' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Set my schedule' })).toBeInTheDocument();
   });
 
   it('leaves sign out working, and no longer offers a second availability switch', async () => {
@@ -414,6 +537,7 @@ describe('NavbarActions profile menu', () => {
         'Create new entity',
         'Create new property',
         'Create new space',
+        'Set my schedule',
         'Sign out',
       ]) {
         expect(screen.getByRole(name === 'Edit mode off' ? 'switch' : 'button', { name })).toHaveClass(
