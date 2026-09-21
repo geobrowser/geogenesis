@@ -68,7 +68,7 @@ beforeEach(() => {
   searchMock.mockReset();
 });
 
-function wrapper({ children }: { children: React.ReactNode }) {
+function Wrapper({ children }: { children: React.ReactNode }) {
   // One client for the life of the mount. Rebuilt in the render body, as it was, every re-render
   // handed the tree a fresh cache — so nothing was ever really cached, and anything asserting
   // about a *second* pass over the same key (a retry, an invalidation) could not be written.
@@ -137,13 +137,13 @@ function respondThenHold(firstPage: unknown[]) {
 }
 
 function renderClaims(filters: TaggedClaimFilters = NO_TAGGED_CLAIM_FILTERS, enabled = true) {
-  return renderHook(() => useTaggedClaims(TAG, filters, enabled), { wrapper });
+  return renderHook(() => useTaggedClaims(TAG, filters, enabled), { wrapper: Wrapper });
 }
 
 /** The same list, re-renderable with a new set of filters — an edited search, for instance. */
 function renderEditableClaims(initial: TaggedClaimFilters) {
   return renderHook(({ filters }: { filters: TaggedClaimFilters }) => useTaggedClaims(TAG, filters, true), {
-    wrapper,
+    wrapper: Wrapper,
     initialProps: { filters: initial },
   });
 }
@@ -189,7 +189,7 @@ describe('the count of what was fetched', () => {
     const { result, rerender } = renderHook(
       ({ filters }: { filters: TaggedClaimFilters }) => useTaggedClaims(TAG, filters, true),
       {
-        wrapper,
+        wrapper: Wrapper,
         initialProps: { filters: NO_TAGGED_CLAIM_FILTERS },
       }
     );
@@ -702,7 +702,7 @@ describe('the filter it builds', () => {
     respondWithPages([[node('a1', 'One')], [node('a2', 'Two')]]);
     const { result, rerender } = renderHook(
       ({ enabled }: { enabled: boolean }) => useTaggedClaims(TAG, NO_TAGGED_CLAIM_FILTERS, enabled),
-      { wrapper, initialProps: { enabled: true } }
+      { wrapper: Wrapper, initialProps: { enabled: true } }
     );
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
     expect(result.current.hasNextPage).toBe(true);
@@ -717,7 +717,7 @@ describe('the filter it builds', () => {
     respondWithPages([[node('a1', 'One')], [node('a2', 'Two')]]);
     const { result, rerender } = renderHook(
       ({ enabled }: { enabled: boolean }) => useTaggedClaims(TAG, NO_TAGGED_CLAIM_FILTERS, enabled),
-      { wrapper, initialProps: { enabled: true } }
+      { wrapper: Wrapper, initialProps: { enabled: true } }
     );
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
     const requestsWhileEnabled = graphqlMock.mock.calls.length;
@@ -763,7 +763,10 @@ describe('the filter it builds', () => {
     respondWithPages([[node('a1', 'One')]]);
     const { result, rerender } = renderHook(
       ({ filters }: { filters: TaggedClaimFilters }) => useTaggedClaims(TAG, filters, true),
-      { wrapper, initialProps: { filters: { ...NO_TAGGED_CLAIM_FILTERS, eligibleSpaceIds: [SPACE, OTHER_SPACE] } } }
+      {
+        wrapper: Wrapper,
+        initialProps: { filters: { ...NO_TAGGED_CLAIM_FILTERS, eligibleSpaceIds: [SPACE, OTHER_SPACE] } },
+      }
     );
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
@@ -824,7 +827,7 @@ describe('the facet menus', () => {
     // dashless. An unnormalized join matches nothing and every row reads "Topic", which is how this
     // first shipped.
     respondWithGroups([{ id: '5d050707-bc58-4011-9b1e-81ad3adb6244', count: 12 }]);
-    const { result } = renderHook(() => useTaggedTopicFacet(TAG, NO_TAGGED_CLAIM_FILTERS, true), { wrapper });
+    const { result } = renderHook(() => useTaggedTopicFacet(TAG, NO_TAGGED_CLAIM_FILTERS, true), { wrapper: Wrapper });
 
     await waitFor(() => expect(result.current.topics).toHaveLength(1));
     // The aggregate answers in ids; a menu row needs a word, so a second request resolves them.
@@ -850,7 +853,7 @@ describe('the facet menus', () => {
     respondWithGroups([{ id: '5d050707-bc58-4011-9b1e-81ad3adb6244', count: 12 }]);
     const { result, rerender } = renderHook(
       ({ filters }: { filters: TaggedClaimFilters }) => useTaggedTopicFacet(TAG, filters, true),
-      { wrapper, initialProps: { filters: NO_TAGGED_CLAIM_FILTERS } }
+      { wrapper: Wrapper, initialProps: { filters: NO_TAGGED_CLAIM_FILTERS } }
     );
     await waitFor(() => expect(result.current.settled).toBe(true));
 
@@ -877,7 +880,7 @@ describe('the facet menus', () => {
     respondWithSearch([['a1']], 400);
     respondWithGroups([{ id: TOPIC, count: 3 }]);
     const { result } = renderHook(() => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, search: 'the' }, true), {
-      wrapper,
+      wrapper: Wrapper,
     });
 
     await waitFor(() => expect(result.current.topics).toHaveLength(1));
@@ -891,7 +894,7 @@ describe('the facet menus', () => {
     respondWithGroups([{ id: TOPIC, count: 3 }]);
     const { result } = renderHook(
       () => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, search: 'trump' }, true),
-      { wrapper }
+      { wrapper: Wrapper }
     );
 
     await waitFor(() => expect(result.current.complete).toBe(true));
@@ -910,7 +913,7 @@ describe('the facet menus', () => {
     respondWithGroups([{ id: TOPIC, count: 3 }]);
     const { result } = renderHook(
       () => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, search: 'power' }, true),
-      { wrapper }
+      { wrapper: Wrapper }
     );
 
     // `complete`, which is what gates reconciling a selection. Whether there are counts to *draw*
@@ -932,7 +935,7 @@ describe('the facet menus', () => {
     respondWithGroups([{ id: TOPIC, count: 12 }]);
     const { result } = renderHook(
       () => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, topicIds: [TOPIC], search: 'x' }, true),
-      { wrapper }
+      { wrapper: Wrapper }
     );
     await waitFor(() => expect(result.current.topics).toHaveLength(1));
 
@@ -973,7 +976,7 @@ describe('the facet menus', () => {
           { ...NO_TAGGED_CLAIM_FILTERS, spaceIds: [SPACE], eligibleSpaceIds: [SPACE, OTHER_SPACE] },
           true
         ),
-      { wrapper }
+      { wrapper: Wrapper }
     );
     await waitFor(() => expect(result.current.spaces).toHaveLength(1));
 
@@ -985,7 +988,7 @@ describe('the facet menus', () => {
 
   it('groups the space menu on the tag relation, so a space is counted for what is tagged in it', async () => {
     respondWithGroups([{ id: SPACE, count: 5 }]);
-    const { result } = renderHook(() => useTaggedSpaceFacet(TAG, NO_TAGGED_CLAIM_FILTERS, true), { wrapper });
+    const { result } = renderHook(() => useTaggedSpaceFacet(TAG, NO_TAGGED_CLAIM_FILTERS, true), { wrapper: Wrapper });
     await waitFor(() => expect(result.current.spaces).toHaveLength(1));
 
     expect(sentVariables().groupBy).toEqual(['SPACE_ID']);
@@ -995,7 +998,7 @@ describe('the facet menus', () => {
 
   it('reports a failed count as unsettled, so a selection is not reconciled against it', async () => {
     graphqlMock.mockImplementation(() => Effect.fail(new Error('facet exploded')));
-    const { result } = renderHook(() => useTaggedSpaceFacet(TAG, NO_TAGGED_CLAIM_FILTERS, true), { wrapper });
+    const { result } = renderHook(() => useTaggedSpaceFacet(TAG, NO_TAGGED_CLAIM_FILTERS, true), { wrapper: Wrapper });
 
     await waitFor(() => expect(result.current.error).toBeTruthy());
     // An error leaves the menu empty while it stops loading. Read as settled, that empty menu says

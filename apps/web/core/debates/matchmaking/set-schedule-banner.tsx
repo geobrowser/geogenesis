@@ -2,13 +2,12 @@
 
 import * as React from 'react';
 
+import { useDebateSchedule, useSaveDebateSchedule } from '~/core/debates/hooks';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Text } from '~/design-system/text';
-
-import { useDebateSchedule, useSaveDebateSchedule } from '~/core/debates/hooks';
 
 import { AvailabilityModal } from '~/partials/availability/availability-modal';
 

@@ -10,9 +10,7 @@ function operation(doc: DocumentNode): OperationDefinitionNode {
 }
 
 function buckets(): FieldNode[] {
-  return operation(topicCompositionDocument).selectionSet.selections.filter(
-    s => s.kind === Kind.FIELD
-  ) as FieldNode[];
+  return operation(topicCompositionDocument).selectionSet.selections.filter(s => s.kind === Kind.FIELD) as FieldNode[];
 }
 
 function bucket(alias: string): FieldNode {
@@ -43,8 +41,10 @@ describe('the topic composition document', () => {
   });
 
   it('asks for every bucket in one request', () => {
-    expect(buckets().map(f => f.alias?.value ?? f.name.value).sort()).toEqual(
-      ['claims', 'debates', 'episodes', 'news', 'posts', 'total', 'tweets'].sort()
-    );
+    expect(
+      buckets()
+        .map(f => f.alias?.value ?? f.name.value)
+        .sort()
+    ).toEqual(['claims', 'debates', 'episodes', 'news', 'posts', 'total', 'tweets'].sort());
   });
 });

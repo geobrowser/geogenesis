@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { type OpenProposalOrder, compareOpenProposals } from './sort-open-proposals';
+import { type OpenProposalOrder, type OpenProposalSortOptions, compareOpenProposals } from './sort-open-proposals';
 
 const OPEN = { unvotedFirst: true, endTime: 'asc' } as const;
 
@@ -8,7 +8,10 @@ function row(over: Partial<OpenProposalOrder> = {}): OpenProposalOrder {
   return { hasViewerVote: false, endTime: 0, submittedAt: 0, ...over };
 }
 
-function sorted(rows: OpenProposalOrder[], options = OPEN) {
+// Annotated rather than inferred: `options = OPEN` gives the parameter the type of that frozen
+// literal — `{ unvotedFirst: true; endTime: 'asc' }` — so every test passing any other combination
+// fails to compile.
+function sorted(rows: OpenProposalOrder[], options: OpenProposalSortOptions = OPEN) {
   return [...rows].sort((a, b) => compareOpenProposals(a, b, options));
 }
 

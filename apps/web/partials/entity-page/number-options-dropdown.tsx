@@ -403,7 +403,21 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
           </>
         );
     }
-  }, [currentView, formatOptions, selectedNumberType, format, value, handleBack, handleNavigate, togglePercentage]);
+  }, [
+    currentView,
+    format,
+    formatLabel,
+    formatOptions,
+    handleBack,
+    handleNavigate,
+    removeUnitId,
+    selectedCurrencySymbol,
+    selectedNumberType,
+    send,
+    togglePercentage,
+    unitId,
+    value,
+  ]);
 
   return (
     <DropdownPrimitive.Root open={isOpen} onOpenChange={toggleIsOpen}>

@@ -262,7 +262,12 @@ export function DebatesBrowseFeed({
     return () => setDebateFullscreenActive(false);
   }, [rendersFeed, setDebateFullscreenActive]);
 
-  const visibleDebates = anchorPending ? [] : debates.slice(0, visibleCount);
+  // Memoised because both branches build a new array: the effect below is keyed on this, and an
+  // unmemoised ternary re-ran it on every render.
+  const visibleDebates = React.useMemo(
+    () => (anchorPending ? [] : debates.slice(0, visibleCount)),
+    [anchorPending, debates, visibleCount]
+  );
 
   // Gated on what's actually on screen rather than on `debates`: that inherits the anchor
   // hold above, and holds the nudge back while the media lookups land one at a time and

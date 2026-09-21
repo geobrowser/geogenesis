@@ -103,7 +103,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     } else if (!active && playing) {
       suspend();
     }
-  }, [active, autoplayBlocked, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend, userPaused]);
+  }, [active, awaitingTap, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend]);
 
   // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
   // it belongs to is spoken, rather than appearing a beat late on the first one.
@@ -714,7 +714,13 @@ function DebaterVideo({
           A generous 55%, and it no longer rations the claim corner's width: the corner shares this
           row and draws over it rather than sitting beside it. It also stays put — it used to fade
           out under a card, which cost the viewer the link to the debater's profile exactly when
-          they were reading something that debater had said. */}
+          they were reading something that debater had said.
+
+          Absolute rather than the flex row #2466 put here. That row exists so the name cannot run
+          under the "Winner?" pill at a 312px gallery width; the pill and the position chip are off
+          the tile in this redesign — winner voting lives in the scorecard and the claims panel — so
+          the name has the band to itself and there is nothing left to overlap. The 55% is still
+          what keeps it clear of the claim card above. */}
       <button
         type="button"
         onClick={openProfile}

@@ -781,7 +781,6 @@ export async function getDebateActivity(
   });
 }
 
-
 /** What `/me/debate-schedule` answers. `is_set` is false for somebody who never saved one. */
 export type DebateScheduleResponse = {
   is_set: boolean;
@@ -795,10 +794,7 @@ export type DebateScheduleResponse = {
  * toggle. This is the calendar: when someone is generally free. The paths differ by one word and
  * mean unrelated things, which is why they are documented together.
  */
-export async function getDebateSchedule(
-  getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
-) {
+export async function getDebateSchedule(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string | null) {
   return geoChatRequest<DebateScheduleResponse>('/me/debate-schedule', {
     auth: true,
     getPrivyIdentityToken,

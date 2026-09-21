@@ -99,6 +99,10 @@ const documentIsHidden = () => typeof document !== 'undefined' && document.visib
  * (for the countdown + subtitles), and exposes play/pause/seek/replay controls.
  * Shared by the browse feed; the videos themselves are rendered by the caller.
  */
+// A stable empty list: `?? []` mints a new array every render, which made the subtitle memo
+// below recompute on each one.
+const NO_TRANSCRIPT_SEGMENTS: NonNullable<ReturnType<typeof useDebateTranscript>['data']>['segments'] = [];
+
 export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const recordingUrlMutation = useRecordingUrl();
   const [urls, setUrls] = React.useState<PlaybackUrls>({ slot1: null, slot2: null });
@@ -274,7 +278,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const activeSlot = React.useMemo(() => turnStateAt(playheadSeconds)?.slot ?? null, [playheadSeconds, turnStateAt]);
 
   const transcriptQuery = useDebateTranscript(debate.id, 'json', enabled);
-  const transcriptSegments = transcriptQuery.data?.segments ?? [];
+  const transcriptSegments = transcriptQuery.data?.segments ?? NO_TRANSCRIPT_SEGMENTS;
   const subtitle = React.useMemo(() => {
     if (!activeSlot) return null;
     const playheadMs = playheadSeconds * 1_000;

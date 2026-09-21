@@ -12,7 +12,7 @@ import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { ReviewState } from '~/core/types';
 import { collectClientDiagnostics, formatErrorReport } from '~/core/utils/error-diagnostics';
-import { Z_LAYERS, Z_LAYER_CLASS } from '~/core/z-layers';
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Button } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
@@ -89,6 +89,9 @@ export const StatusBar = () => {
     return (
       // No entry animation — error toasts shouldn't celebrate themselves. The card
       // appears instantly so the user can read and act without watching a transition.
+      // A mouse affordance on top of dismissal that already works from a keyboard: Escape is bound
+      // above, and the card carries a real dismiss button. Giving a full-screen backdrop a tabIndex
+      // would put an unlabelled stop in the tab order in front of the dialog it is dimming.
       <div
         onClick={onDismiss}
         className={cx(

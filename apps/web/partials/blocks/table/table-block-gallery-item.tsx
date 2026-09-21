@@ -289,8 +289,7 @@ export function TableBlockGalleryItem({
               alt=""
               fill
             />
-          ) : isImageResolving ? // Still looking the image up. Leaving the frame empty reads as the card still
-          // loading; dropping the placeholder in here would show every card the fallback
+          ) : isImageResolving ? // loading; dropping the placeholder in here would show every card the fallback // Still looking the image up. Leaving the frame empty reads as the card still
           // image and then swap it for the real one.
           null : (
             <NextImage

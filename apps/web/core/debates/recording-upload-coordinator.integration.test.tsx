@@ -168,7 +168,32 @@ vi.mock('./recording-upload-queue', async importOriginal => ({
   },
 }));
 
+/**
+ * Upload ids, made unique per test.
+ *
+ * An upload chain can outlive the test that began it: `cleanup()` unmounts the coordinator but
+ * cannot un-schedule a `completeUpload` promise that is still pending, and when that promise
+ * finally rejects the chain calls `scheduleDebateRecordingRetry`. The harness mock for that
+ * function mutates the module-scoped `mocks.queue` **by id** and notifies the live observer.
+ *
+ * While every test used the same `user-a:debate-1`, a late rejection from an earlier test matched
+ * the *current* test's entry, stamped a `lastError` on it and pushed it to the mounted component —
+ * so a banner that should read "Waiting to upload 1 debate" gained a failure suffix it had no
+ * reason to have. That is GEO-2873, which failed master intermittently and only under load,
+ * because whether the stale rejection lands inside a later test at all is a matter of timing.
+ *
+ * The nonce makes the stale write miss. It cannot match an id that no longer exists, so the chain
+ * lands nowhere and the test it would have corrupted is unaffected. Nothing else keys on the
+ * shape: `debateRecordingUploadId` builds `userId:debateId` only inside the enqueue path, which
+ * these tests mock away, and the coordinator treats `upload.id` as opaque.
+ */
+let idNonce = 0;
+function uploadId(debateId: string) {
+  return `user-a:${debateId}#${idNonce}`;
+}
+
 beforeEach(() => {
+  idNonce += 1;
   mocks.activityDebate = null;
   mocks.thankingDebateId = 'debate-1';
   mocks.cancelRecording.mockReset().mockResolvedValue(undefined);
@@ -407,7 +432,7 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
     expect(mocks.scheduleRetry).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
@@ -443,7 +468,7 @@ describe('DebateRecordingUploadCoordinator', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
 
     await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything(), 'user-a'));
-    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 
@@ -461,7 +486,7 @@ describe('DebateRecordingUploadCoordinator', () => {
     mocks.queue = [queuedRecording('debate-1')];
     mocks.observer?.(mocks.queue);
 
-    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
     expect(mocks.createUpload).not.toHaveBeenCalled();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
@@ -484,10 +509,10 @@ describe('DebateRecordingUploadCoordinator', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
 
-    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-2'));
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-2')));
     expect(mocks.cancelRecording).toHaveBeenCalledTimes(1);
     expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-2', expect.anything(), 'user-a');
-    expect(mocks.deleteUpload).not.toHaveBeenCalledWith('user-a:debate-1');
+    expect(mocks.deleteUpload).not.toHaveBeenCalledWith(uploadId('debate-1'));
     // The untouched recording keeps uploading, now without an opt-out.
     expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
@@ -620,7 +645,7 @@ describe('DebateRecordingUploadCoordinator', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
 
     await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything(), 'user-a'));
-    expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1');
+    expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1'));
   });
 
   it('matches the thank-you debate even though the queue stores ids dashless', async () => {
@@ -661,7 +686,7 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
     expect(await screen.findByText('Debate uploaded')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
@@ -719,7 +744,7 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
     expect(mocks.completeUpload).not.toHaveBeenCalled();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
@@ -799,7 +824,7 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 
@@ -842,7 +867,7 @@ describe('DebateRecordingUploadCoordinator', () => {
 
 function queuedRecording(debateId: string): DebateRecordingUpload {
   return {
-    id: `user-a:${debateId}`,
+    id: uploadId(debateId),
     userId: 'user-a',
     debateId,
     blob: new Blob(['recording'], { type: 'video/webm' }),

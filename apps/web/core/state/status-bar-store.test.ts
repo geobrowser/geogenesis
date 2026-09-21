@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-
 import { createStore } from 'jotai';
+import { describe, expect, it, vi } from 'vitest';
 
 import { statusBarDispatchAtom, statusBarStateAtom } from './status-bar-store';
 

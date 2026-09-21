@@ -24,21 +24,21 @@ type DiffState = {
 
 const initialDiffState = {
   isReviewOpen: false,
-  setIsReviewOpen: (value: boolean) => null,
+  setIsReviewOpen: (_value: boolean) => null,
   reviewVersion: 0,
   bumpReviewVersion: () => null,
   activeSpace: '',
-  setActiveSpace: (value: string) => null,
+  setActiveSpace: (_value: string) => null,
   isReadyToPublish: false,
-  setIsReadyToPublish: (value: boolean) => null,
+  setIsReadyToPublish: (_value: boolean) => null,
   selectedVersion: '',
-  setSelectedVersion: (value: string) => null,
+  setSelectedVersion: (_value: string) => null,
   previousVersion: '',
-  setPreviousVersion: (value: string) => null,
+  setPreviousVersion: (_value: string) => null,
   selectedProposal: '',
-  setSelectedProposal: (value: string) => null,
+  setSelectedProposal: (_value: string) => null,
   previousProposal: '',
-  setPreviousProposal: (value: string) => null,
+  setPreviousProposal: (_value: string) => null,
 };
 
 const DiffContext = createContext<DiffState>(initialDiffState);

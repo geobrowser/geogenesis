@@ -4,7 +4,6 @@ import { useGeoLogin } from '@geogenesis/auth';
 
 import * as React from 'react';
 
-
 import { type AnalyticsProperties, trackPrivyAuth } from '~/core/analytics';
 
 import { usePrepareOnboarding } from './use-prepare-onboarding';
