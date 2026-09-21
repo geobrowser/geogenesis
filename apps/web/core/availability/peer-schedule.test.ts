@@ -109,6 +109,32 @@ describe('peerScheduleDays', () => {
     expect(result[0].dayLabel).toBe('Sep 21');
   });
 
+  // The server's window starts at the UTC date and is then read as local dates, so a viewer west
+  // of UTC in their own evening has a local "today" the response can never cover.
+  describe('the near edge of the server window', () => {
+    it('does not draw a today column the server could not have filled', () => {
+      // 01:00Z on the 22nd is Mon 18:00 in Los Angeles: local date 09-21, server `from` 09-22.
+      const evening = new Date('2026-09-22T01:00:00Z');
+      const result = days({ viewer_timezone: 'America/Los_Angeles' }, evening);
+
+      expect(result[0].date).toBe('2026-09-22');
+      expect(result.map(day => day.date)).not.toContain('2026-09-21');
+    });
+
+    it('still starts at the viewer own today when that is the later of the two', () => {
+      // 20:00Z on the 21st is Tue 05:00 in Tokyo: local date 09-22, server `from` 09-21.
+      const morning = new Date('2026-09-21T20:00:00Z');
+      const result = days({ viewer_timezone: 'Asia/Tokyo' }, morning);
+
+      expect(result[0].date).toBe('2026-09-22');
+    });
+
+    it('is a no-op for a viewer already on the UTC date', () => {
+      const result = days({ viewer_timezone: 'Europe/London' }, new Date('2026-09-21T15:00:00Z'));
+      expect(result[0].date).toBe('2026-09-21');
+    });
+  });
+
   it('keeps days with nothing in them, so the grid keeps its shape', () => {
     const result = days({ slots: [{ start: '2026-09-22T13:00:00Z', end: '2026-09-22T13:30:00Z' }] });
     expect(result.filter(day => day.slots.length === 0)).toHaveLength(6);

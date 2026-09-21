@@ -667,6 +667,8 @@ export function usePeerSchedule(peerUserId: string | null) {
   const schedule: PeerSchedule | undefined =
     query.data && viewerResolved ? toPeerSchedule(query.data, { viewerHasSchedule: viewerSchedule.isSet }) : undefined;
 
+  const isError = query.isError || (enabled && viewerUnavailable);
+
   return {
     ...query,
     schedule,
@@ -675,8 +677,11 @@ export function usePeerSchedule(peerUserId: string | null) {
      * forever, which a caller would otherwise draw as a spinner that never resolves.
      */
     enabled,
-    isPending: enabled && !viewerUnavailable && (query.isPending || !viewerResolved),
-    isError: query.isError || (enabled && viewerUnavailable),
+    // Error wins. With the overlap failed and the viewer read not yet successful both would
+    // otherwise be true at once, and callers check pending first, so a dead end would draw as a
+    // spinner that never resolves.
+    isPending: enabled && !isError && (query.isPending || !viewerResolved),
+    isError,
   };
 }
 

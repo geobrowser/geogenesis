@@ -179,9 +179,12 @@ function chipStarts(slot: PeerSlot): Date[] {
   return starts;
 }
 
-/** Today and the six days after it, as dates in `zone`. */
+/** Seven columns from the earliest date the server covers: its `from` is the UTC date, so an
+ * evening viewer west of UTC would otherwise get a "Today" the response never fills. */
 function dayColumns(now: Date, zone: string | undefined): string[] {
-  const [year, month, day] = zonedParts(now, zone).date.split('-').map(Number);
+  const local = zonedParts(now, zone).date;
+  const serverWindowStart = zonedParts(now, 'UTC').date;
+  const [year, month, day] = (local > serverWindowStart ? local : serverWindowStart).split('-').map(Number);
   // Midday, so that adding days cannot land on an hour a DST jump skipped and roll the date.
   const first = new Date(year, month - 1, day, 12);
   return Array.from({ length: PEER_SCHEDULE_DAYS }, (_, offset) => isoDate(addDays(first, offset)));

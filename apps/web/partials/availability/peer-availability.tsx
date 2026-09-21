@@ -127,7 +127,7 @@ export function PeerAvailabilityView({
         // their week is empty, so naming them would be a guess stated as fact.
         <Empty>No shared times in the next 7 days.</Empty>
       ) : (
-        <WeekGrid days={days} />
+        <WeekGrid days={days} peerName={name} />
       )}
 
       {schedule.truncated && (
@@ -146,24 +146,29 @@ export function PeerAvailabilityView({
  * desktop layout is the unprefixed one. A vertical day list rather than the editor's horizontal
  * scroller: nothing here is a drag target, so there are no off-screen days to discover.
  */
-function WeekGrid({ days }: { days: PeerDay[] }) {
+function WeekGrid({ days, peerName }: { days: PeerDay[]; peerName: string }) {
   return (
     <div className="grid min-h-0 flex-1 grid-cols-7 gap-3 overflow-y-auto overscroll-contain mobile:grid-cols-1 mobile:gap-2">
       {days.map((day, index) => (
-        <DayColumn key={day.date} day={day} isToday={index === 0} />
+        <DayColumn key={day.date} day={day} isToday={index === 0} peerName={peerName} />
       ))}
     </div>
   );
 }
 
-function DayColumn({ day, isToday }: { day: PeerDay; isToday: boolean }) {
+function DayColumn({ day, isToday, peerName }: { day: PeerDay; isToday: boolean; peerName: string }) {
   const [expanded, setExpanded] = React.useState(false);
   const empty = day.slots.length === 0;
   const shown = expanded ? day.slots : day.slots.slice(0, SLOTS_PER_DAY);
   const hidden = day.slots.length - shown.length;
+  const dayLabel = `${isToday ? 'Today' : day.weekdayLabel} ${day.dayLabel}`;
 
   return (
     <section
+      // Named, because a chip's own label is a time that recurs on all seven days. `group` rather
+      // than a landmark: seven regions in one grid is noise.
+      role="group"
+      aria-label={dayLabel}
       data-testid={`peer-day-${day.date}`}
       data-empty={empty || undefined}
       className={cx(
@@ -188,15 +193,19 @@ function DayColumn({ day, isToday }: { day: PeerDay; isToday: boolean }) {
       ) : (
         <div className="flex flex-col gap-1 mobile:flex-row mobile:flex-wrap">
           {shown.map(slot => (
-            <SlotChip key={slot.start} slot={slot} />
+            <SlotChip key={slot.start} slot={slot} dayLabel={dayLabel} peerName={peerName} />
           ))}
-          {hidden > 0 && (
+          {(hidden > 0 || expanded) && (
             <button
               type="button"
-              onClick={() => setExpanded(true)}
+              // Named with its day for the same reason the chips are, and a toggle so an expanded
+              // day can be put back.
+              aria-label={expanded ? `Show fewer times on ${dayLabel}` : `Show ${hidden} more times on ${dayLabel}`}
+              aria-expanded={expanded}
+              onClick={() => setExpanded(current => !current)}
               className="rounded-md px-2 py-1 text-left text-footnote text-grey-04 transition-colors hover:text-text"
             >
-              +{hidden} more
+              {expanded ? 'Show less' : `+${hidden} more`}
             </button>
           )}
         </div>
@@ -213,15 +222,27 @@ function DayColumn({ day, isToday }: { day: PeerDay; isToday: boolean }) {
  * the grid then. Dashed and muted means only they are free; it stays a perfectly ordinary,
  * pickable slot.
  */
-function SlotChip({ slot }: { slot: PeerDaySlot }) {
+function SlotChip({ slot, dayLabel, peerName }: { slot: PeerDaySlot; dayLabel: string; peerName: string }) {
   const [selected, setSelected] = React.useState(false);
   // Per slot rather than per week: a week spanning a DST change carries two offsets, and one can
   // sit on the far side of the threshold from the other.
   const showPeerTime = Math.abs(slot.offsetMinutes) >= LARGE_OFFSET_MINUTES;
 
+  // The visible chip carries the day in its column and free-vs-not in its border, neither of which
+  // survives into an accessible name: without this every chip is a bare time that recurs on all
+  // seven days, and the solid/dashed distinction the view exists to draw is invisible.
+  const label = [
+    `${dayLabel} at ${slot.label}`,
+    showPeerTime ? `${slot.peerLabel} for ${peerName}` : null,
+    slot.viewerIsFree ? 'you are both free' : `only ${peerName} is free`,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
   return (
     <button
       type="button"
+      aria-label={label}
       aria-pressed={selected}
       data-viewer-free={slot.viewerIsFree || undefined}
       onClick={() => setSelected(current => !current)}

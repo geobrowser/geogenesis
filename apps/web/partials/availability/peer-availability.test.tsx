@@ -101,6 +101,34 @@ describe('PeerAvailabilityView', () => {
     });
   });
 
+  describe('what a screen reader gets', () => {
+    it('says whose availability a slot is, since the border style cannot', () => {
+      setup({ slots: [slot(13, true), slot(14, false)] });
+      const monday = within(day('2026-09-21'));
+
+      expect(monday.getByRole('button', { name: /1pm, you are both free/ })).toBeInTheDocument();
+      expect(monday.getByRole('button', { name: /2pm, only Ada is free/ })).toBeInTheDocument();
+    });
+
+    // The same hour recurs on every one of the seven days.
+    it('qualifies each slot with its day, so names do not collide across the week', () => {
+      setup({ slots: [slot(13), slot(13, true, 22)] });
+
+      expect(screen.getByRole('button', { name: /^Today Sep 21 at 1pm/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Tue Sep 22 at 1pm/ })).toBeInTheDocument();
+    });
+
+    it('names the day group', () => {
+      setup();
+      expect(screen.getByRole('group', { name: 'Today Sep 21' })).toBeInTheDocument();
+    });
+
+    it('carries their local time into the name when the offset is large', () => {
+      setup({ viewerTimezone: 'America/New_York', peerTimezone: 'Asia/Tokyo', slots: [slot(13)] });
+      expect(screen.getByRole('button', { name: /9am, 10pm for Ada, you are both free/ })).toBeInTheDocument();
+    });
+  });
+
   describe('per-day cap', () => {
     const many = [slot(12), slot(13), slot(14), slot(15), slot(16), slot(17)];
 
@@ -108,23 +136,24 @@ describe('PeerAvailabilityView', () => {
       setup({ slots: many });
       const monday = within(day('2026-09-21'));
 
-      expect(monday.getAllByRole('button', { name: /[ap]m/ })).toHaveLength(4);
-      expect(monday.getByRole('button', { name: '+2 more' })).toBeInTheDocument();
+      expect(monday.getAllByRole('button', { name: /at \d/ })).toHaveLength(4);
+      expect(monday.getByRole('button', { name: /Show 2 more times on/ })).toBeInTheDocument();
     });
 
     it('expands to all of them', async () => {
       const { user } = setup({ slots: many });
       const monday = within(day('2026-09-21'));
 
-      await user.click(monday.getByRole('button', { name: '+2 more' }));
+      await user.click(monday.getByRole('button', { name: /Show 2 more times on/ }));
 
-      expect(monday.getAllByRole('button', { name: /[ap]m/ })).toHaveLength(6);
-      expect(monday.queryByRole('button', { name: /more/ })).not.toBeInTheDocument();
+      expect(monday.getAllByRole('button', { name: /at \d/ })).toHaveLength(6);
+      // A toggle, so an expanded day can be put back.
+      expect(monday.getByRole('button', { name: /Show fewer times on/ })).toHaveAttribute('aria-expanded', 'true');
     });
 
     it('does not offer an expander for exactly four', () => {
       setup({ slots: many.slice(0, 4) });
-      expect(within(day('2026-09-21')).queryByRole('button', { name: /more/ })).not.toBeInTheDocument();
+      expect(within(day('2026-09-21')).queryByRole('button', { name: /Show \d+ more/ })).not.toBeInTheDocument();
     });
   });
 
@@ -216,6 +245,14 @@ describe('PeerAvailabilityView', () => {
       setup({ viewerTimezone: 'America/New_York', peerTimezone: 'Asia/Tokyo', slots: [slot(13)] });
       // 13:00Z is 9am in New York and 10pm in Tokyo.
       expect(screen.getByRole('button', { name: /9am.*10pm/s })).toBeInTheDocument();
+    });
+
+    // Only ever tested eastward before, so `Math.abs` could be deleted with every test still green.
+    it('is carried when the peer is west of the viewer', () => {
+      // A Tokyo viewer is already on the 22nd at the fixed NOW, so the slot has to be too.
+      setup({ viewerTimezone: 'Asia/Tokyo', peerTimezone: 'America/New_York', slots: [slot(13, true, 22)] });
+      // 13:00Z is 10pm in Tokyo and 9am in New York: an offset of -13 hours.
+      expect(screen.getByRole('button', { name: /10pm, 9am for Ada/ })).toBeInTheDocument();
     });
 
     it('is left off when both are in the same part of the day', () => {

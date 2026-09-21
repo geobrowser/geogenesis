@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   publishableSpaceIds: null as Set<string> | null,
   publishableSpacesLoading: false,
   peerAvailability: true,
+  usePeerSchedule: vi.fn(),
   spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */
   linkProps: [] as Record<string, unknown>[],
@@ -66,9 +67,9 @@ vi.mock('../hooks', () => ({
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
-  // Reached only once a row's "See times" opens the modal. This mock is wholesale, so a hook the
-  // tree can call has to appear here or the render throws where the real one would have fetched.
-  usePeerSchedule: () => ({ schedule: undefined, enabled: true, isPending: true, isError: false }),
+  // Reached only once a row's "See times" opens the modal. A `vi.fn` rather than a bare arrow, so
+  // a case can assert which peer the row asked about.
+  usePeerSchedule: (peerUserId: string | null) => mocks.usePeerSchedule(peerUserId),
   useGeoChatAuth: () => ({ authenticated: mocks.authenticated, ready: true, accountKey: 'user-a' }),
   useDebateActivity: () => ({
     data: { challenge: mocks.challenge, outbound_request: mocks.outboundRequest, debate: mocks.activeDebate },
@@ -203,6 +204,22 @@ beforeEach(() => {
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
   mocks.peerAvailability = true;
+  mocks.usePeerSchedule.mockReset();
+  // Enough of a schedule that the view renders its heading, so a case can see the peer's name.
+  mocks.usePeerSchedule.mockReturnValue({
+    enabled: true,
+    isPending: false,
+    isError: false,
+    schedule: {
+      userId: 'user-them',
+      viewerTimezone: 'UTC',
+      peerTimezone: 'UTC',
+      viewerHasSchedule: true,
+      peerHasSchedule: true,
+      slots: [],
+      truncated: false,
+    },
+  });
   mocks.people = [person('user-them', 'Arturas'), person('user-other', 'Vytautas')];
   mocks.peopleDataAvailable = true;
   mocks.peopleLoading = false;
@@ -592,7 +609,10 @@ describe('See times', () => {
     fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-    expect(within(screen.getByRole('dialog')).getByText('Availability')).toBeInTheDocument();
+    const dialog = within(screen.getByRole('dialog'));
+    // The id the row asked about, and the name it handed down, rather than the static title.
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
+    expect(dialog.getByRole('heading', { name: /Arturas/ })).toBeInTheDocument();
   });
 
   it('mounts nothing until it is asked for', () => {

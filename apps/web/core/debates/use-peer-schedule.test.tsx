@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
+import type * as React from 'react';
 import type { ReactNode } from 'react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setCachedIdentityToken } from '~/core/auth/identity-token';
+import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
 
 import type { ScheduleOverlapResponse } from './api';
 
@@ -59,12 +61,21 @@ function deferred<T>() {
   return { promise, settle, fail };
 }
 
-function wrapper({ children }: { children: ReactNode }) {
+/** One client per test, held so a case can drive a refetch the way the app would. */
+function harness() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  return { client, wrapper };
 }
 
+let client: QueryClient;
+let wrapper: ({ children }: { children: ReactNode }) => React.JSX.Element;
+
 beforeEach(() => {
+  // A fresh client per test, so one case's cache cannot answer the next one's query.
+  ({ client, wrapper } = harness());
   mocks.authenticated = true;
   mocks.identityToken.mockReturnValue('token');
   mocks.getIdentityToken.mockResolvedValue('token');
@@ -117,6 +128,67 @@ describe('usePeerSchedule', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.schedule).toBeUndefined();
     expect(result.current.isPending).toBe(false);
+  });
+
+  // Both can be true at once, and a stuck spinner is the worse of the two to render.
+  it('reports an error rather than a spinner when both reads fail', async () => {
+    mocks.getScheduleOverlaps.mockRejectedValue(new Error('down'));
+    mocks.getDebateSchedule.mockRejectedValue(new Error('down'));
+
+    const { result } = renderHook(() => usePeerSchedule('user-peer'), { wrapper });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.isPending).toBe(false);
+  });
+
+  // `useDebateSchedule` refetches on window focus. A failed background refetch flips its status to
+  // error while the cached schedule is untouched, and that cached value is all this needs.
+  it('keeps the week when a later viewer-schedule refetch fails', async () => {
+    mocks.getScheduleOverlaps.mockResolvedValue(overlap({ both_have_schedules: false }));
+    mocks.getDebateSchedule.mockResolvedValue({ is_set: false, schedule: { recurring: [], dated: [] } });
+
+    const { result } = renderHook(() => usePeerSchedule('user-peer'), { wrapper });
+    await waitFor(() => expect(result.current.schedule).toBeDefined());
+
+    mocks.getDebateSchedule.mockRejectedValue(new Error('blip'));
+    await act(async () => {
+      await client.refetchQueries();
+    });
+
+    expect(result.current.isError).toBe(false);
+    expect(result.current.schedule).toBeDefined();
+  });
+
+  // Nothing asserted this before, so the peer id and the window could both be wrong and green.
+  it('asks for the peer it was given, over the window the grid draws', async () => {
+    mocks.getScheduleOverlaps.mockResolvedValue(overlap());
+    mocks.getDebateSchedule.mockResolvedValue({ is_set: true, schedule: { recurring: [], dated: [] } });
+
+    const { result } = renderHook(() => usePeerSchedule('user-peer'), { wrapper });
+    await waitFor(() => expect(result.current.schedule).toBeDefined());
+
+    expect(mocks.getScheduleOverlaps).toHaveBeenCalledWith(
+      'user-peer',
+      { days: PEER_SCHEDULE_DAYS },
+      expect.anything(),
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
+  it('keys the cache on the peer, so two peers cannot share an answer', async () => {
+    mocks.getDebateSchedule.mockResolvedValue({ is_set: true, schedule: { recurring: [], dated: [] } });
+    mocks.getScheduleOverlaps.mockImplementation((withUserId: string) =>
+      Promise.resolve(overlap({ with: withUserId }))
+    );
+
+    const first = renderHook(() => usePeerSchedule('user-a-peer'), { wrapper });
+    await waitFor(() => expect(first.result.current.schedule?.userId).toBe('user-a-peer'));
+
+    const second = renderHook(() => usePeerSchedule('user-b-peer'), { wrapper });
+    await waitFor(() => expect(second.result.current.schedule?.userId).toBe('user-b-peer'));
+
+    expect(mocks.getScheduleOverlaps).toHaveBeenCalledTimes(2);
   });
 
   it('asks nothing signed out, and does not sit at pending forever', () => {
