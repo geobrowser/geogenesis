@@ -201,6 +201,10 @@ export const ReviewChanges = () => {
     };
 
     fetchSpaces();
+    // `spacesKey` is the sorted join of `dedupedSpacesWithActions`, and standing in for it on
+    // purpose: this only wants to refetch when the set of spaces actually changes, not whenever
+    // the memo behind it produces an equal array with a new identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spacesKey]);
 
   // Debounced auto-close: avoids flashing closed during import's clear→rebuild gap.
@@ -232,6 +236,8 @@ export const ReviewChanges = () => {
         closeTimerRef.current = null;
       }
     };
+    // `spacesKey` again stands in for `dedupedSpacesWithActions`; see the effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spacesKey, activeSpace, diffPreferredSpaceId, statusBarState.reviewState, setIsReviewOpen]);
 
   const rawProposalName = proposals[activeSpace]?.name ?? '';
@@ -717,7 +723,7 @@ export const ReviewChanges = () => {
 
   React.useEffect(() => {
     rowVirtualizer.measure();
-  }, [entities, visibleEntities.length, excludedEntityIds, collapsedEntityIds]);
+  }, [entities, visibleEntities.length, excludedEntityIds, collapsedEntityIds, rowVirtualizer]);
 
   const handleOpenReviewEntity = React.useCallback(
     (entityId: string) => {
@@ -934,7 +940,6 @@ export const ReviewChanges = () => {
     activeSpace,
     isReadyToPublish,
     makeProposal,
-    valuesFromSpace,
     relationsFromSpace,
     publishSelection,
     ownershipIndex,

@@ -34,6 +34,20 @@ describe('isPrivateHost', () => {
     ['::FFFF:C0A8:0001'],
     ['2002:7f00:0001::'],
     ['2002:c0a8:0001::'],
+    // inet_aton encodings. `new URL()` keeps the hostname as written and a resolver takes all of
+    // these, so a check that only reads dotted-decimal sees an ordinary name. The 169.254.169.254
+    // rows are the ones that matter — that is the cloud metadata address.
+    ['2130706433'],
+    ['0x7f000001'],
+    ['0177.0.0.1'],
+    ['127.1'],
+    ['127.0.1'],
+    ['2852039166'],
+    ['0xA9FEA9FE'],
+    ['0251.0376.0251.0376'],
+    ['0xa9.0xfe.0xa9.0xfe'],
+    ['3232235777'],
+    ['0300.0250.0.1'],
   ])('blocks %s', host => {
     expect(isPrivateHost(host)).toBe(true);
   });
@@ -50,6 +64,16 @@ describe('isPrivateHost', () => {
     ['2606:4700:4700::1111'],
     ['::ffff:8.8.8.8'],
     ['2002:0808:0808::'],
+    // The same encodings pointing somewhere public must still be allowed — the normalisation
+    // decides what an address *is*, it does not blanket-refuse anything that parses as one.
+    ['134744072'],
+    ['0x08080808'],
+    ['8.8.8.8.8'],
+    ['256.1.1.1'],
+    ['0x.ax'],
+    ['fac.ad'],
+    ['1e100.net'],
+    ['099.1.1.1'],
   ])('allows %s', host => {
     expect(isPrivateHost(host)).toBe(false);
   });

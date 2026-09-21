@@ -23,7 +23,6 @@ import { ClaimsTab } from './claims-tab';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { HubSwap } from './hub-motion';
 import { hubClosesOnArrivalAt } from './hub-navigation';
-import { HubMessage } from './hub-states';
 import { LobbyTab } from './lobby-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';

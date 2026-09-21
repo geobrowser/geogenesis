@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -12,7 +12,6 @@ const SPACE_ID = 'ffeeddccbbaa99887766554433221100';
 const OTHER_SPACE_ID = '00112233445566778899aabbccddeeff';
 const EDITOR_SPACE_ID = '4cd9cca5530b69056aead853c8088e7e';
 const MEMBER_SPACE_ID = 'cc0bf85a27c217d75993bc785a15b198';
-const OTHER_EDITOR_SPACE_ID = 'b7e3a1d95c2f48e0a6d31f7c8b04e592';
 
 const fetchProposalVotes = vi.fn();
 

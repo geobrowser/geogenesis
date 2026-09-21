@@ -2,7 +2,6 @@ import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
-import { NavUtils } from '~/core/utils/utils';
 
 import { ProposalWithoutVoters } from '../dto/proposals';
 import {

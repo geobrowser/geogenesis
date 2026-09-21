@@ -1,5 +1,4 @@
 import type { SpaceGovernanceType } from '~/core/types';
-
 import { normId } from '~/core/utils/norm-id';
 
 /**

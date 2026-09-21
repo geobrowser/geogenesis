@@ -5,7 +5,6 @@ import { notFound } from 'next/navigation';
 
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph';
 import { fallbackProposer } from '~/core/profile/profile-proposer';
-import type { Profile } from '~/core/types';
 import { Spaces } from '~/core/utils/space';
 
 import { PersonProposalsTab } from '~/partials/profile/person-proposals-tab';

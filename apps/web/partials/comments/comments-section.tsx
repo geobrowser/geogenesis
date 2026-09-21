@@ -51,6 +51,8 @@ import type { CommentFilter, CommentSortOrder, CommentWithReplies } from './type
 
 const CommentDensityContext = React.createContext<CommentDensity>(PAGE_DENSITY);
 
+const NO_REPLIES: never[] = [];
+
 function useCommentDensity(): CommentDensity {
   return React.useContext(CommentDensityContext);
 }
@@ -798,6 +800,11 @@ function CommentList({
     };
   }, [listLayoutKey, updateLastReplyTop]);
 
+  // Above the early return, because it is a hook: `depth` is a prop, so a list rendered at depth 0
+  // on one pass and deeper on the next would change how many hooks this component calls and React
+  // would throw. Cheap enough to read on every render.
+  const density = useCommentDensity();
+
   if (depth === 0) {
     return (
       <div>
@@ -834,7 +841,6 @@ function CommentList({
   // The elbow lands on the reply avatar's vertical centre, so its geometry
   // follows the density's avatar size rather than the 32px avatar these paths
   // were originally drawn against.
-  const density = useCommentDensity();
   const spineOffsetPx = threadSpineOffsetPx(density);
   const armCenterPx = threadArmCenterPx(density);
   const armY = armCenterPx - 0.5;
@@ -1077,7 +1083,11 @@ function CommentItem({
   }, [comment.createdAt]);
 
   const density = useCommentDensity();
-  const replies = Array.isArray(comment.replies) ? comment.replies : [];
+  // Memoised: the empty branch was a new array each render, and `sortedReplies` below is keyed on it.
+  const replies = React.useMemo(
+    () => (Array.isArray(comment.replies) ? comment.replies : NO_REPLIES),
+    [comment.replies]
+  );
   const sortedReplies = React.useMemo(() => sortReplies(replies), [replies, sortReplies]);
   const hasReplies = replies.length > 0;
   const nestedSpineLeftPx = -threadSpineOffsetPx(density);
@@ -1111,6 +1121,9 @@ function CommentItem({
       // The spine starts below the avatar, so drop that much off its length.
       setParentLineHeight(repliesRect.top - commentRect.top - avatarBottomInRowPx(density));
     }
+    // `density.avatarPx` rather than `density`: the object is rebuilt each render, and the pixel is
+    // the only part of it this measurement reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasReplies, threadCollapsed, replies.length, isEditing, isReplying, density.avatarPx]);
 
   const expandedHeaderRow = (

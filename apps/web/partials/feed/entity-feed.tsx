@@ -198,14 +198,24 @@ export function EntityFeed({
 
   React.useEffect(() => {
     if (!showTypeFilter) return;
-    setSelectedTypeIds(parseStoredExploreTypeIds(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)));
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY);
+    } catch {
+      // Site data blocked — the filter starts at its default rather than the feed failing to mount.
+    }
+    setSelectedTypeIds(parseStoredExploreTypeIds(stored));
     setTypeSelectionLoaded(true);
   }, [showTypeFilter]);
 
   React.useEffect(() => {
     if (!showTypeFilter || !typeSelectionLoaded || !shouldPersistTypeSelectionRef.current) return;
     shouldPersistTypeSelectionRef.current = false;
-    window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify(selectedTypeIds));
+    try {
+      window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify(selectedTypeIds));
+    } catch {
+      // Quota or blocked site data — the choice holds for this session, it just won't be restored.
+    }
   }, [selectedTypeIds, showTypeFilter, typeSelectionLoaded]);
 
   const toggleType = React.useCallback((typeId: string) => {

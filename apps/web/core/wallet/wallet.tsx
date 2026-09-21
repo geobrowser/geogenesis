@@ -72,10 +72,12 @@ function PrivyConnectButton() {
     login();
   };
 
-  // Match the adjacent Debate button's 28px mobile height so the restored account action does not
-  // make the navbar taller or visually dominate the other compact controls.
   return (
-    <Button className="mobile:h-7 mobile:py-0" onClick={onLogin}>
+    <Button
+      variant="primary"
+      className="h-7 shrink-0 !gap-0 !rounded-full !border-transparent !bg-[#151515] !px-2.5 !py-0 !text-[16px] !leading-[13px] font-normal tracking-[-0.35px] whitespace-nowrap !text-white !shadow-none hover:!bg-[#151515] focus-visible:!border-text focus-visible:!shadow-inner-text"
+      onClick={onLogin}
+    >
       Log in
     </Button>
   );

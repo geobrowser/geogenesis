@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as Effect from 'effect/Effect';
 
@@ -726,6 +726,14 @@ export function getDebateTranscriptClaims(debateEntityId: string, spaceId: strin
 }
 
 export function getEntityBacklinks(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
+  // `id` is `UUID!`, so a malformed one is rejected by the server with a 400 rather than
+  // answering "nothing links here". A space with no home entity hands this an empty string
+  // (see `getSpaceFrontPage`), which produced a steady stream of
+  // `Variable "$id" got invalid value ""` on /space/[id] — 322 events, all of them a
+  // question we already knew the answer to. Nothing can link to an entity that does not
+  // exist, so answer it here instead of paying a round trip to be told off.
+  if (!IdUtils.isValid(entityId)) return Effect.succeed([]);
+
   return graphql({
     query: entityBacklinksQuery,
     // prettier-ignore

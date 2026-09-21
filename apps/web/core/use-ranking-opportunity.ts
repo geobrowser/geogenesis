@@ -7,6 +7,10 @@ import { type OpportunityEligibility, createRankingOpportunity } from './analyti
 export function useRankingOpportunity(rankingId: string, eligibility: OpportunityEligibility, reason: string) {
   const root = React.useRef<HTMLDivElement>(null);
   const [epoch, setEpoch] = React.useState(0);
+  // `epoch` is not read here. It is bumped by the listener below when the analytics context
+  // changes, and exists so the opportunity is recreated then. Dropping it as "unnecessary" would
+  // keep handing back the one made for the previous context.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const opportunity = React.useMemo(() => createRankingOpportunity(rankingId), [rankingId, epoch]);
   React.useEffect(() => {
     const reset = (event: Event) => {

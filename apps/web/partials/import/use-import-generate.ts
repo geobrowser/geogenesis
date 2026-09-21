@@ -366,6 +366,10 @@ export function useImportGenerate(spaceId: string) {
         setIsLoading(false);
       }
     }
+    // `rowCount` is in this list as a change-signal, not because the callback reads it — the
+    // comment beside it says so. Dropping it as "unnecessary" would stop the re-create when the
+    // imported data changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     checkboxOverrides,
     columnMapping,
@@ -588,6 +592,7 @@ export function useImportGenerate(spaceId: string) {
   }, [
     store,
     spaceId,
+    setImageEntityCache,
     setValues,
     setRelations,
     setUnresolvedLinks,
