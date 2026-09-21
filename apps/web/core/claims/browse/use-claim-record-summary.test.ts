@@ -13,12 +13,14 @@ describe('claim record summary query', () => {
   it('asks the server for exact totals and only one bounded Best page', () => {
     const source = print(claimRecordSummaryDocument);
 
-    expect(source.match(/totalCount/g)).toHaveLength(2);
+    // Two record totals plus the Explore projection's per-card comment count.
+    expect(source.match(/totalCount/g)).toHaveLength(3);
     expect(source.match(/first: \$first/g)).toHaveLength(2);
     expect(source.match(/orderBy: \[RANKING_SCORE_DESC\]/g)).toHaveLength(2);
     expect(source).not.toContain('$after');
     expect(source).toContain('relatedClaims: entitiesConnection');
     expect(source).toContain('debates: entitiesConnection');
+    expect(source.match(/\.\.\.ClaimRecordSummaryEntity @include\(if: \$hydrateRows\)/g)).toHaveLength(2);
   });
 
   it('omits the topic branch when a claim has no topics', () => {
@@ -52,6 +54,8 @@ describe('claim record summary query', () => {
     ).toEqual({
       relatedClaimIds: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
       debateIds: ['cccccccccccccccccccccccccccccccc'],
+      claimRows: [],
+      debateRows: [],
       claimsTotal: 2,
       debatesTotal: 1,
     });

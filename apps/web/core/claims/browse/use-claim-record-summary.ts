@@ -9,13 +9,13 @@ import { parse } from 'graphql';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TAG_ID, DEBATE_TYPE_ID, SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
-import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
+import { type ExploreCardEntity, type ExploreFeedRow, decodeExploreCardEntity } from '~/core/explore/explore-card-item';
+import { exploreCardNodeFields, exploreCardPropertyFragment } from '~/core/explore/explore-card-selection';
 import type { EntityFilter } from '~/core/gql/graphql';
 import { graphql } from '~/core/io/graphql-client';
 import { ACTIVITY_GALLERY_CARD_LIMIT } from '~/core/profile/activity-gallery';
+import { buildExploreRowsByIds } from '~/core/profile/explore-rows-by-ids';
 import { normId } from '~/core/utils/norm-id';
-
-import { useClaimExploreRows } from './use-claim-explore-rows';
 
 /**
  * Exact record totals and one globally Best-ranked page for the Overview.
@@ -31,12 +31,28 @@ import { useClaimExploreRows } from './use-claim-explore-rows';
  * OR at the far end of its Claims relation, which likewise dedupes debates arguing both the current
  * claim and a related one.
  */
+const SUMMARY_ENTITY_FRAGMENT = 'ClaimRecordSummaryEntity';
+const SUMMARY_PROPERTY_FRAGMENT = 'ClaimRecordSummaryProperty';
+
 const CLAIM_RECORD_SUMMARY_SOURCE = /* GraphQL */ `
-  query ClaimRecordSummary($relatedClaimsFilter: EntityFilter!, $debatesFilter: EntityFilter!, $first: Int!) {
+  ${exploreCardPropertyFragment(SUMMARY_PROPERTY_FRAGMENT)}
+
+  fragment ${SUMMARY_ENTITY_FRAGMENT} on Entity {
+    ${exploreCardNodeFields(SUMMARY_PROPERTY_FRAGMENT)}
+  }
+
+  query ClaimRecordSummary(
+    $relatedClaimsFilter: EntityFilter!
+    $debatesFilter: EntityFilter!
+    $first: Int!
+    $spaceIdsForLists: [UUID!]!
+    $hydrateRows: Boolean!
+  ) {
     relatedClaims: entitiesConnection(first: $first, orderBy: [RANKING_SCORE_DESC], filter: $relatedClaimsFilter) {
       totalCount
       nodes {
         id
+        ...${SUMMARY_ENTITY_FRAGMENT} @include(if: $hydrateRows)
       }
     }
 
@@ -44,6 +60,7 @@ const CLAIM_RECORD_SUMMARY_SOURCE = /* GraphQL */ `
       totalCount
       nodes {
         id
+        ...${SUMMARY_ENTITY_FRAGMENT} @include(if: $hydrateRows)
       }
     }
   }
@@ -147,30 +164,49 @@ type SummaryResponse = {
 export type ClaimRecordSummary = {
   relatedClaimIds: string[];
   debateIds: string[];
+  claimRows: ExploreFeedRow[];
+  debateRows: ExploreFeedRow[];
   claimsTotal: number;
   debatesTotal: number;
 };
 
-function decodeConnection(connection: SummaryConnection, label: string): { ids: string[]; total: number } {
+function decodeConnection(
+  connection: SummaryConnection,
+  label: string,
+  spaceId: string
+): { ids: string[]; rows: ExploreFeedRow[]; total: number } {
   if (!connection || !Number.isSafeInteger(connection.totalCount) || connection.totalCount! < 0) {
     throw new Error(`Claim record summary returned an invalid ${label} count`);
   }
 
   const ids = new Map<string, string>();
+  const entities: ExploreCardEntity[] = [];
   for (const node of connection.nodes ?? []) {
-    if (node?.id) ids.set(normId(node.id), node.id);
+    if (!node?.id) continue;
+    ids.set(normId(node.id), node.id);
+    const entity = decodeExploreCardEntity(node);
+    if (entity) entities.push(entity);
   }
 
-  return { ids: [...ids.values()], total: connection.totalCount! };
+  const orderedIds = [...ids.values()];
+  const preferredSpaces = new Map(orderedIds.map(id => [normId(id), [spaceId]]));
+
+  return {
+    ids: orderedIds,
+    rows: buildExploreRowsByIds(orderedIds, entities, preferredSpaces),
+    total: connection.totalCount!,
+  };
 }
 
-export function decodeClaimRecordSummary(response: SummaryResponse): ClaimRecordSummary {
-  const claims = decodeConnection(response.relatedClaims ?? null, 'related claims');
-  const debates = decodeConnection(response.debates ?? null, 'debates');
+export function decodeClaimRecordSummary(response: SummaryResponse, spaceId = ''): ClaimRecordSummary {
+  const claims = decodeConnection(response.relatedClaims ?? null, 'related claims', spaceId);
+  const debates = decodeConnection(response.debates ?? null, 'debates', spaceId);
 
   return {
     relatedClaimIds: claims.ids,
     debateIds: debates.ids,
+    claimRows: claims.rows,
+    debateRows: debates.rows,
     claimsTotal: claims.total,
     debatesTotal: debates.total,
   };
@@ -196,17 +232,28 @@ export function useClaimRecordSummary({
   const normalizedTopicIds = topicIds.map(normId).sort();
   const filters = claimRecordSummaryFilters({ claimId, spaceId, topicIds });
   const summary = useQuery({
-    queryKey: ['claim', 'record-summary', normId(spaceId), normId(claimId), normalizedTopicIds],
+    // Counts-only and card-bearing results have different shapes. Keeping them under separate
+    // keys prevents a freshly cached full-tab count from making Overview accept an empty row set.
+    queryKey: [
+      'claim',
+      'record-summary',
+      normId(spaceId),
+      normId(claimId),
+      normalizedTopicIds,
+      hydrateRows ? 'with-rows' : 'counts-only',
+    ],
     enabled,
     staleTime: 30_000,
     queryFn: ({ signal }) =>
       Effect.runPromise(
         graphql({
           query: claimRecordSummaryDocument,
-          decoder: decodeClaimRecordSummary,
+          decoder: response => decodeClaimRecordSummary(response, spaceId),
           variables: {
             ...filters,
             first: ACTIVITY_GALLERY_CARD_LIMIT,
+            spaceIdsForLists: [spaceId],
+            hydrateRows,
           },
           signal,
         })
@@ -214,30 +261,24 @@ export function useClaimRecordSummary({
   });
 
   const relatedClaimIds = summary.data?.relatedClaimIds ?? NO_IDS;
-  const debateIds = summary.data?.debateIds ?? NO_IDS;
-  const canHydrate = enabled && hydrateRows && summary.isSuccess;
-  const claimRows = useClaimExploreRows(relatedClaimIds, spaceId, canHydrate);
-  const debateRows = useClaimExploreRows(debateIds, spaceId, canHydrate);
-  const retryClaims = () => void (summary.isError ? summary.refetch() : claimRows.refetch());
-  const retryDebates = () => void (summary.isError ? summary.refetch() : debateRows.refetch());
 
   return {
     relatedClaimIds,
-    claimRows: canHydrate ? (claimRows.data ?? NO_ROWS) : NO_ROWS,
-    debateRows: canHydrate ? (debateRows.data ?? NO_ROWS) : NO_ROWS,
+    claimRows: hydrateRows ? (summary.data?.claimRows ?? NO_ROWS) : NO_ROWS,
+    debateRows: hydrateRows ? (summary.data?.debateRows ?? NO_ROWS) : NO_ROWS,
     claimsTotal: summary.data?.claimsTotal ?? 0,
     debatesTotal: summary.data?.debatesTotal ?? 0,
     claimsCountUnavailable: summary.isError,
     debatesCountUnavailable: summary.isError,
-    claimsLoading: enabled && (summary.isLoading || (canHydrate && claimRows.isLoading)),
-    debatesLoading: enabled && (summary.isLoading || (canHydrate && debateRows.isLoading)),
-    claimsError: summary.isError || (canHydrate && claimRows.isError),
-    debatesError: summary.isError || (canHydrate && debateRows.isError),
+    claimsLoading: enabled && summary.isLoading,
+    debatesLoading: enabled && summary.isLoading,
+    claimsError: summary.isError,
+    debatesError: summary.isError,
     claimsFetchingNextPage: false,
     debatesFetchingNextPage: false,
     claimsHasNextPage: false,
     debatesHasNextPage: false,
-    fetchNextClaimsPage: retryClaims,
-    fetchNextDebatesPage: retryDebates,
+    fetchNextClaimsPage: () => void summary.refetch(),
+    fetchNextDebatesPage: () => void summary.refetch(),
   };
 }
