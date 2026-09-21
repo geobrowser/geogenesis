@@ -44,6 +44,28 @@ vi.mock('~/core/debates/hooks', () => ({
   useDebateMedia: () => mocks.mediaQuery,
 }));
 
+// The card renders the real `DebateInteractionBar` — sharing it with the full-screen feed is the
+// point of these assertions — so only its vote control is stood in for. The real one reaches the
+// sync store, Privy and the onboarding atoms, none of which this card's behavior depends on.
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  EntityVoteButtons: ({
+    entityId,
+    presentation,
+    responseKind,
+  }: {
+    entityId: string;
+    presentation?: string;
+    responseKind?: string | null;
+  }) => (
+    <div
+      data-testid="vote-buttons"
+      data-entity={entityId}
+      data-presentation={presentation}
+      data-response-kind={responseKind ?? 'inferred'}
+    />
+  ),
+}));
+
 vi.mock('~/core/debates/use-debate-votes', () => ({
   useDebateVotes: () => ({
     sharePercentFor: () => null,
@@ -70,7 +92,9 @@ vi.mock('~/core/debates/browse/share-dialog', () => ({
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
   useDebateTranscriptClaims: () => ({
-    claims: { byAuthorSpaceId: new Map(), unattributed: [], totalCount: 3 },
+    // Deliberately not the item's `commentCount`: equal counts would let the comment and claims
+    // wirings be swapped without a test noticing.
+    claims: { byAuthorSpaceId: new Map(), unattributed: [], totalCount: 18 },
     isLoading: false,
     error: null,
   }),
@@ -242,7 +266,7 @@ describe('DebateExploreFeedCard', () => {
   it('shows the card chrome with video placeholders while the debate loads', () => {
     renderCard();
     expect(screen.getByText(CLAIM_NAME)).toBeDefined();
-    expect(screen.getByText('View all')).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Watch this debate full screen' })).toBeDefined();
     expect(screen.queryByTestId('player')).toBeNull();
     expect(screen.queryByTestId('fallback')).toBeNull();
   });
@@ -282,16 +306,46 @@ describe('DebateExploreFeedCard', () => {
 
     intersectAll(0.7);
     expect(screen.getByTestId('player')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Claims' })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Claims/ })).toBeDefined();
 
     // A row stays in the infinite feed, but its media/query subtree does not.
     intersectAll(0);
     expect(screen.queryByTestId('player')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Claims' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Claims/ })).toBeNull();
 
     // Re-entering the look-ahead band restores a warm, inactive player before it is visible.
     intersectAll(0.1);
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
+  });
+
+  /**
+   * The open flags live on the card now, not in a subtree that unmounts with the player, so the
+   * panel they control must not be gated on the media window the way the controls are. Scrolling
+   * the feed on past the card an open panel came from used to tear it away mid-read and leave the
+   * flag set, so scrolling back reopened it unasked.
+   */
+  it('keeps an open claims panel when the card leaves the media window', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+    intersectAll(0.7);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Claims/ }));
+    expect(screen.getByTestId('claims-panel')).toBeDefined();
+
+    // The player and the control that opened it both stand down; what is open stays open.
+    intersectAll(0);
+    expect(screen.queryByTestId('player')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Claims/ })).toBeNull();
+    expect(screen.getByTestId('claims-panel')).toBeDefined();
+
+    // And its own close control is still the way out, rather than a scroll back and forth.
+    fireEvent.click(screen.getByText('Close'));
+    expect(screen.queryByTestId('claims-panel')).toBeNull();
+
+    // Which is to say it does not come back on its own.
+    intersectAll(0.7);
+    expect(screen.queryByTestId('claims-panel')).toBeNull();
   });
 
   /**
@@ -337,16 +391,104 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByRole('button', { name: 'Share debate' })).toBeDefined();
 
     expect(screen.queryByTestId('claims-panel')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Claims/ }));
     expect(screen.getByTestId('claims-panel')).toBeDefined();
 
     fireEvent.click(screen.getByText('Close'));
     expect(screen.queryByTestId('claims-panel')).toBeNull();
   });
 
+  it("renders the same interaction bar the full-screen feed does, with the card's own counts", () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+    intersectAll(0.1);
+
+    // The shared bar in its horizontal arrangement, beneath the videos - not the inline arrows the
+    // other explore cards use.
+    expect(screen.getByTestId('vote-buttons').getAttribute('data-presentation')).toBe('debate-horizontal');
+
+    // Counts come from what the card already has: the feed's comment count and the shared
+    // transcript-claims query, rather than a thread fetch per card.
+    const comments = screen.getByRole('button', { name: /^Comments/ });
+    expect(comments.textContent).toBe('3');
+    expect(screen.getByRole('button', { name: /^Claims/ }).textContent).toBe('18');
+
+    // Marked as an opener so pressing it while the global comments panel is open switches the
+    // panel to this debate instead of reading as an outside click that dismisses it.
+    expect(comments.hasAttribute('data-entity-comments-opener')).toBe(true);
+  });
+
+  it('keeps votes and comments while the debate is still loading', () => {
+    renderCard();
+    expect(screen.getByTestId('vote-buttons')).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Comments/ })).toBeDefined();
+  });
+
+  /**
+   * GEO-2879 headed the card with the claim, which left nothing on the card pointing at the debate
+   * itself — the open question in that ticket's notes. This control is the answer, and it has to
+   * stay a real link: the Debate entity's page *is* the full-screen feed anchored to that debate.
+   */
+  describe('full-screen control', () => {
+    it('links to the Debate entity, which is the anchored full-screen feed', () => {
+      renderCard();
+
+      const expand = screen.getByRole('link', { name: 'Watch this debate full screen' });
+      expect(expand.getAttribute('href')).toBe('/space/space-1/fd51f9352063461780397b672b23364c');
+    });
+
+    it('is offered before the debate resolves, and is not the claim heading', () => {
+      renderCard();
+
+      // Present from the first paint: the route resolves the debate itself, so it needs none of
+      // the geo-chat lookups the rest of the card is waiting on.
+      expect(screen.getByRole('link', { name: 'Watch this debate full screen' })).toBeDefined();
+      // And it is a second, separate target — the heading still goes to the claim.
+      expect(screen.getByRole('link', { name: CLAIM_NAME }).getAttribute('href')).not.toBe(
+        '/space/space-1/fd51f9352063461780397b672b23364c'
+      );
+    });
+  });
+
+  /**
+   * GEO-2660. Naming the response kind skips `EntityVoteButtons`' entity lookup, and with it the
+   * space resolution that finds an entity's own votes when a surface is listing it from elsewhere
+   * — which an explore card does whenever a data block row carries a debate from another space.
+   * The full-screen feed names it, because it only ever shows a space its own debates.
+   */
+  it('lets the vote control work out the response kind, so it can resolve the home space', () => {
+    renderCard();
+
+    expect(screen.getByTestId('vote-buttons').getAttribute('data-response-kind')).toBe('inferred');
+  });
+
+  /**
+   * The app's comments panel is an in-flow panel with no dialog role and no focus trap, so the
+   * control that opens it says how it stands without sending a reader looking for a dialog.
+   * `EntityCommentsButton`, which this replaced on explore cards, announced exactly this much.
+   */
+  it('reports the comments panel as expanded without claiming it is a dialog', () => {
+    renderCard();
+
+    const comments = screen.getByRole('button', { name: /^Comments/ });
+    expect(comments.getAttribute('aria-expanded')).toBe('false');
+    expect(comments.hasAttribute('aria-haspopup')).toBe(false);
+  });
+
+  /** Share really does open a dialog, and still says so. */
+  it('keeps the dialog announcement on Share, which opens one', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+    intersectAll(0.1);
+
+    expect(screen.getByRole('button', { name: 'Share debate' }).getAttribute('aria-haspopup')).toBe('dialog');
+  });
+
   it('hides Claims and Share while the debate is still loading', () => {
     renderCard();
-    expect(screen.queryByRole('button', { name: 'Claims' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Claims/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /share/i })).toBeNull();
   });
 
