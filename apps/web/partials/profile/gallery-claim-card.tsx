@@ -23,9 +23,9 @@ import { ClaimResponseTag } from './claim-response-tag';
  * `MatchmakingClaimCard` is the lobby's card — claim, two response pills with
  * their avatar stacks, the share bar, and the offer to request a debate. Using
  * it here rather than the explore feed's card is the point: a claim should look
- * the same wherever it is answered. This card also owns a narrow container
- * layout for its response pills, so it scales into the 260px Activity rail
- * without the bespoke wrapping the full-width explore card would need.
+ * the same wherever it is answered. The Activity rail gives it 300px, leaving
+ * enough inner width for its container query to keep both response pills on the
+ * same row while remaining substantially narrower than a full feed card.
  *
  * The wiring is `ClaimExploreFeedCard`'s, because that card already turns a feed
  * row into exactly the three things the lobby card wants — `claim`, `positions`

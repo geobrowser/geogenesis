@@ -247,7 +247,7 @@ describe('ProfileActivitySection', () => {
     expect(gate).toHaveAttribute('data-allowed-id', 'd2');
   });
 
-  it('shows almost three narrow Claim cards in the Activity rail', () => {
+  it('keeps Claim cards wide enough for side-by-side response buttons', () => {
     render(
       <ProfileActivitySection
         kinds={[kind({ key: 'claims', label: 'Claims', rows: [claimRow('c1'), claimRow('c2'), claimRow('c3')] })]}
@@ -256,7 +256,7 @@ describe('ProfileActivitySection', () => {
 
     const cards = screen.getAllByTestId('card');
     expect(cards).toHaveLength(3);
-    expect(cards.every(card => card.parentElement?.className.includes('w-[min(260px,84cqw)]'))).toBe(true);
+    expect(cards.every(card => card.parentElement?.className.includes('w-[min(300px,84cqw)]'))).toBe(true);
   });
 
   it('offers left and right buttons to scroll one Activity card at a time', () => {

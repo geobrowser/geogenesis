@@ -607,10 +607,10 @@ function GalleryNavigationButton({ direction, onClick }: { direction: 'left' | '
 /**
  * One card in the row.
  *
- * Every Activity card is `260px`: at the profile's 750px content width that
- * leaves almost three in view. Debate videos scale without changing aspect
- * ratio, while the Claim card's own container query moves its response pills
- * into the narrow arrangement.
+ * Debate cards stay at `260px`, leaving almost three in view at the profile's
+ * 750px content width. Claim cards use `300px`: after the card's 24px horizontal
+ * padding, their 276px pill row clears the 272px container-query threshold and
+ * keeps both response buttons beside each other.
  *
  * Narrow enough that the next card is visibly cut off, which is what says the
  * row scrolls without a control saying so.
@@ -647,10 +647,11 @@ function GalleryCard({
         // be three times wider, so `84vw` there is not 84% of anything the reader
         // can see. The wrapper around the scroller establishes the container this
         // measures — see `ActivityGallery`.
-        // 260 + 16px gaps shows 2.7 cards in the profile's content column: a clear browsing rail
-        // rather than one oversized card and an ambiguous sliver of the next. `84cqw` remains the
-        // phone ceiling, though 260px wins on every ordinary handset.
-        'w-[min(260px,84cqw)] shrink-0 snap-start',
+        // 260 + 16px gaps shows 2.7 debate cards in the profile's content column. Claims need 300px
+        // to preserve two response columns after the card's padding. `84cqw` remains the phone
+        // ceiling, where the response row may stack rather than overflow.
+        isClaim ? 'w-[min(300px,84cqw)]' : 'w-[min(260px,84cqw)]',
+        'shrink-0 snap-start',
         // The lobby card brings its own outline; the feed's card does not, and
         // draws a rule underneath itself to separate it from the next card
         // *down* — which in a row is a line under nothing.
