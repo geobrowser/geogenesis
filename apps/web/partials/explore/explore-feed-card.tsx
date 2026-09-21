@@ -17,7 +17,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { PublishedRecordingPlayer } from '~/partials/community-calls/published-recording-player';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
-import { ClaimExploreFeedCard } from './claim-explore-feed-card';
+import { type ClaimCardVariant, ClaimExploreFeedCard } from './claim-explore-feed-card';
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
 import { ExploreCardTitle } from './explore-card-title';
 import { ExploreCommentsIcon } from './explore-comments-icon';
@@ -35,6 +35,8 @@ type ExploreFeedCardProps = {
    * Explore turns this on; the other surfaces this card serves keep navigating.
    */
   titleOpensSidePanel?: boolean;
+  /** Presentation used for Claim rows; other entity types ignore it. */
+  claimCardVariant?: ClaimCardVariant;
   /** See `ClaimExploreFeedCard`. Only a claim can carry one. */
   responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
 };
@@ -146,6 +148,7 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
         hideSpaceLink={props.hideSpaceLink}
         hideJoinButton={props.hideJoinButton}
         titleOpensSidePanel={props.titleOpensSidePanel}
+        variant={props.claimCardVariant}
       />
     );
   }

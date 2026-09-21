@@ -78,7 +78,8 @@ export function extractSpaceIdsFromFilter(filter?: EntityFilter): UuidFilter | u
   const spaceIds = findSpaceIdsClause(filter);
   if (!spaceIds) return undefined;
 
-  const listed = (spaceIds.in?.length ?? 0) > 1 ? spaceIds.in : (spaceIds.overlaps?.length ?? 0) > 1 ? spaceIds.overlaps : undefined;
+  const listed =
+    (spaceIds.in?.length ?? 0) > 1 ? spaceIds.in : (spaceIds.overlaps?.length ?? 0) > 1 ? spaceIds.overlaps : undefined;
   if (listed) {
     const validIds = listed.filter((v): v is string => typeof v === 'string');
     if (validIds.length > 0) {

@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import cx from 'classnames';
-import { type PanInfo, motion, useAnimation, useDragControls } from 'framer-motion';
+import { motion, useAnimation } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import { usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
@@ -13,6 +13,7 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { getLocalUnpublishedChangesFingerprint } from '~/core/hooks/use-local-changes';
+import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 import { useSidePanelEntityScope } from '~/core/hooks/use-side-panel-entity-scope';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useDiff } from '~/core/state/diff-store';
@@ -33,11 +34,13 @@ import {
 import type { Entity } from '~/core/types';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 import { NavUtils } from '~/core/utils/utils';
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { CloseSidePanel } from '~/design-system/icons/close-side-panel';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Fullscreen } from '~/design-system/icons/full-screen';
+import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
@@ -51,6 +54,7 @@ import {
   editorContentVersionAtom,
   entitySidePanelHostElementAtom,
   entitySidePanelPersistEditorAtom,
+  slideUpOpenCountAtom,
 } from '~/atoms';
 
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];
@@ -153,11 +157,11 @@ function EntitySidePanelHeader({
   const entityPageHref = NavUtils.toEntity(entitySpaceId, entityId, panelCtx?.panelWantsEdit ?? false);
 
   return (
-    <div className="sticky top-0 z-10 flex h-11 shrink-0 items-center gap-2 border-b border-divider bg-white px-4 py-1 sm:px-5">
+    <div className="sticky top-0 z-10 flex h-11 shrink-0 items-center gap-2 border-b border-divider bg-white px-4 py-1 mobile:px-5">
       <button
         type="button"
         onClick={onClose}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm hover:bg-grey-01"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm hover:bg-grey-01 lg:[&_svg]:rotate-90"
         aria-label="Close side panel"
       >
         <CloseSidePanel color="grey-04" />
@@ -205,7 +209,7 @@ function EntitySidePanelBody({
 
   if (surface.isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center px-4 py-24 sm:px-5">
+      <div className="flex flex-1 items-center justify-center px-4 py-24 mobile:px-5">
         <Text variant="body" color="grey-04">
           Loading entity…
         </Text>
@@ -215,7 +219,7 @@ function EntitySidePanelBody({
 
   if (!surface.isReady || !entity) {
     return (
-      <div className="flex flex-1 items-center justify-center px-4 py-24 sm:px-5">
+      <div className="flex flex-1 items-center justify-center px-4 py-24 mobile:px-5">
         <Text variant="body" color="grey-04">
           Could not load this entity in this space. Try opening it full page from the link in the header.
         </Text>
@@ -300,7 +304,11 @@ export function EntitySidePanelSurface({
         {showHeader ? (
           <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} onClose={onClose} />
         ) : null}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-entity-side-panel-scroll>
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          data-entity-side-panel-scroll
+          data-mobile-sheet-scroll
+        >
           <EntitySidePanelActiveTabProvider entityId={entityId} spaceId={effectiveSpaceId}>
             <EntitySidePanelBody
               key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
@@ -322,33 +330,18 @@ export function EntitySidePanelSurface({
 // On mobile the panel opens as a bottom sheet (like the ranking compose flow) rather than a
 // full-height right-hand drawer. It starts this far below the top of the screen.
 const MOBILE_SHEET_TOP_OFFSET_PX = 200;
-const MOBILE_SHEET_SCROLL_SELECTOR = '[data-entity-side-panel-scroll]';
-
-function isInteractiveDragTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
-  return Boolean(
-    target.closest(
-      'button, a, input, textarea, select, [role="button"], [contenteditable="true"], [data-no-sheet-drag]'
-    )
-  );
-}
-
-// Only start a swipe-to-dismiss drag from a non-interactive area, and not while the sheet's
-// own content is scrolled — otherwise the drag would fight scrolling and button taps.
-function shouldStartSheetDrag(event: React.PointerEvent, root: HTMLElement): boolean {
-  if (isInteractiveDragTarget(event.target)) return false;
-  const scrollEl = root.querySelector<HTMLElement>(MOBILE_SHEET_SCROLL_SELECTOR);
-  if (scrollEl?.contains(event.target as Node) && scrollEl.scrollTop > 0) return false;
-  return true;
-}
 
 export function EntitySidePanel() {
   const pathname = usePathname();
   const jotaiStore = useStore();
   const isMobile = useIsMobileLayout();
-  const dragControls = useDragControls();
   const setSidePanelHostElement = useSetAtom(entitySidePanelHostElementAtom);
   const { isReviewOpen, bumpReviewVersion } = useDiff();
+  // `isReviewOpen` is the *edit* review sheet only, so on any other slide-up — the proposal review,
+  // for one — this panel was opening beneath it at z-200 and reading as not opening. Any sheet
+  // counts (GEO-2907).
+  const slideUpOpenCount = useAtomValue(slideUpOpenCountAtom);
+  const overSlideUp = isReviewOpen || slideUpOpenCount > 0;
   const { sidePanelTarget, closeSidePanel } = useEntitySidePanel();
   const [createPostFlow, setCreatePostFlow] = useAtom(createPostFlowAtom);
   const { setEditable } = useEditable();
@@ -394,6 +387,16 @@ export function EntitySidePanel() {
 
     closeSidePanel();
   }, [bumpReviewVersion, closeSidePanel, createPostFlow, jotaiStore, setCreatePostFlow, setEditable, sidePanelTarget]);
+
+  const {
+    dragControls,
+    handleDragEnd: handleSheetDragEnd,
+    handlePointerDown: handleSheetPointerDown,
+    setOverlayElement,
+  } = useMobileSheetDrag({
+    enabled: isMobile && Boolean(sidePanelTarget),
+    onDismiss: handleCloseSidePanel,
+  });
 
   React.useEffect(() => {
     if (!sidePanelTarget) return;
@@ -506,13 +509,15 @@ export function EntitySidePanel() {
   if (isMobile) {
     return createPortal(
       <motion.div
-        className={cx('fixed inset-0', isReviewOpen ? 'z-[10001]' : 'z-[200]')}
+        ref={setOverlayElement}
+        className={cx(
+          'fixed inset-0 overscroll-none',
+          overSlideUp ? Z_LAYER_CLASS.entitySidePanelOverSlideUp : 'z-[200]'
+        )}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.15 }}
-        onPointerDown={event => {
-          if (shouldStartSheetDrag(event, event.currentTarget)) dragControls.start(event);
-        }}
+        onPointerDown={handleSheetPointerDown}
       >
         <button
           type="button"
@@ -523,6 +528,7 @@ export function EntitySidePanel() {
         <motion.div
           ref={panelHostRef as React.Ref<HTMLDivElement>}
           data-entity-side-panel
+          data-mobile-sheet-surface
           role="dialog"
           aria-modal="true"
           aria-label="Entity side panel"
@@ -531,18 +537,14 @@ export function EntitySidePanel() {
           dragListener={false}
           dragConstraints={{ top: 0, bottom: 0 }}
           dragElastic={0.12}
-          onDragEnd={(_event, info: PanInfo) => {
-            if (info.offset.y > 72 || info.velocity.y > 420) handleCloseSidePanel();
-          }}
+          onDragEnd={handleSheetDragEnd}
           initial={{ y: '100%' }}
           animate={{ y: 0 }}
           transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-          className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden bg-white"
+          className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
           style={{ top: MOBILE_SHEET_TOP_OFFSET_PX }}
         >
-          <div className="flex shrink-0 justify-center pt-2 pb-1" aria-hidden>
-            <div className="h-1 w-10 rounded-full bg-grey-02" />
-          </div>
+          <MobileSheetGrabHandle />
           {panelBody}
         </motion.div>
       </motion.div>,
@@ -556,7 +558,7 @@ export function EntitySidePanel() {
       data-entity-side-panel
       className={cx(
         'rounded-l-2xl shadow-2xl fixed inset-y-0 right-0 flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden border-l border-grey-02 bg-white',
-        isReviewOpen ? 'z-[10001]' : 'z-[200]'
+        overSlideUp ? Z_LAYER_CLASS.entitySidePanelOverSlideUp : 'z-[200]'
       )}
     >
       {panelBody}

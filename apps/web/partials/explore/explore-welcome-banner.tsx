@@ -6,7 +6,6 @@ import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
-
 // Persisted alongside the other one-time notices (see `dismissedNoticesAtom`). Once the
 // user dismisses the banner this id is appended to the list and it never renders again.
 // The id keeps its original `Curator` suffix even though the copy is now debate-focused —
@@ -37,17 +36,15 @@ function WelcomeBanner() {
   return (
     <div className="relative mb-5 overflow-clip rounded-lg bg-[#151515]">
       {/* Decorative fanned book covers, anchored to the right and bleeding off the top,
-          bottom, and right edges (clipped by overflow-clip). Hidden on narrow screens.
-          NB: breakpoints here are desktop-first (`sm` = max-width 639px), so `sm:hidden`
-          hides the covers on small screens while they show by default. */}
+          bottom, and right edges (clipped by overflow-clip). Hidden on narrow screens. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute top-1/2 right-0 translate-x-3 -translate-y-1/2 sm:hidden"
+        className="pointer-events-none absolute top-1/2 right-0 translate-x-3 -translate-y-1/2 mobile:hidden"
       >
         <img src="/explore-welcome-banner.png" alt="" className="h-[135px] w-auto max-w-none select-none" />
       </div>
 
-      <div className="relative z-10 py-5 pr-48 pl-5 sm:pr-5">
+      <div className="relative z-10 py-5 pr-48 pl-5 mobile:pr-5">
         <h2 className="text-smallTitle text-white">
           <span aria-hidden className="mr-1.5">
             👋

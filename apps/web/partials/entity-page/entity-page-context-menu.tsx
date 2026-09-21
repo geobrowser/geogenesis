@@ -90,13 +90,13 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
 
     storage.values.deleteMany(allValuesToDelete);
     storage.relations.deleteMany(allRelationsToDelete);
-  }, [entityId, outgoingRelations, storage.relations, storage.values, values]);
+  }, [entityId, outgoingRelations, spaceId, storage.relations, storage.values, values]);
 
   const onCopyEntityId = async () => {
     try {
       await navigator.clipboard.writeText(entityId);
       setIsMenuOpen(false);
-    } catch (err) {
+    } catch {
       console.error('Failed to copy entity ID in: ', entityId);
     }
   };

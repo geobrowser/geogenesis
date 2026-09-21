@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import type { ReactElement } from 'react';
 
@@ -58,6 +59,10 @@ vi.mock('../claim-picker-page', () => ({
 }));
 
 vi.mock('../hooks', () => ({
+  // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
+  // exercising it — the schedule itself is covered in core/availability.
+  useDebateSchedule: () => ({ blocks: [], isSet: false }),
+  useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
   useDebateActivity: () => ({
     // Undefined while loading, exactly as react-query reports it — the empty state has to wait for
     // this rather than read `available_to_debate` off nothing.
@@ -217,11 +222,14 @@ beforeEach(() => {
 
   // The dropdown measures itself to pick a placement. Stubbed the way the Claims suite does it,
   // because a case that opens the menu is the only thing that reaches it.
-  window.ResizeObserver ??= class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  } as unknown as typeof ResizeObserver;
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
 });
 
 afterEach(cleanup);
@@ -331,17 +339,19 @@ describe('MatchesList', () => {
     expect(screen.getByText('Claim unavailable')).toBeInTheDocument();
   });
 
-  // A request you send while marked unavailable could not be answered, so the design drops the
-  // action in that state — kept visible here, with the reason, rather than silently missing.
-  it('cannot request a debate while the viewer is unavailable', () => {
+  // A request you send while marked unavailable could not be answered, so the design keeps the
+  // action visible and explains the disabled state on hover without adding a line to every card.
+  it('cannot request a debate while the viewer is unavailable', async () => {
     mocks.availableToDebate = false;
     render(<MatchesList onTabChange={vi.fn()} />);
 
     const request = screen.getByRole('button', { name: 'Request debate' });
     expect(request).toBeDisabled();
-    // Shown rather than a `title`: tooltips never appear on touch and are unreliable on a disabled
-    // button, which is exactly when the reason matters.
-    expect(screen.getByText('Switch yourself to available to send a request.')).toBeInTheDocument();
+    expect(screen.queryByText('Switch yourself to available to send a request.')).not.toBeInTheDocument();
+
+    await userEvent.hover(request.parentElement!);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Switch yourself to available to send a request.');
   });
 
   it('requests a debate on the claim and blocks a second concurrent request', () => {

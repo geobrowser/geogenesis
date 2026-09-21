@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { CURATED_TOPIC_TAG_ID, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID } from '~/core/constants';
 import { ID } from '~/core/id';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -125,7 +124,7 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
               Deliberately not container-scaled: the regular entity header isn't either, so scaling
               this one down in the side panel would reintroduce a mismatch. `text-pretty` stays — it
               governs where the line breaks, not how big it is. */}
-          <Text as="h1" variant="entityTitle" color="text" className="block wrap-break-word text-pretty">
+          <Text as="h1" variant="entityTitle" color="text" className="block text-pretty wrap-break-word">
             {entity.name ?? entity.id}
           </Text>
 

@@ -39,8 +39,18 @@ type View = 'selectEntity' | 'selectSpace' | 'createEntity';
 // Defaults to true (canonical graph only) unless the user has turned it off; persisted across sessions.
 const SEARCH_CANONICAL_ONLY_KEY = 'geo.search.canonicalOnly';
 
-const readCanonicalOnly = (): boolean =>
-  typeof window === 'undefined' || window.localStorage.getItem(SEARCH_CANONICAL_ONLY_KEY) !== 'false';
+// Guarded because this is a lazy `useState` initialiser and so runs during render: a browser with
+// site data blocked throws `SecurityError` on the `window.localStorage` getter itself, which would
+// take the whole dialog down rather than just lose the preference. Same shape the rest of the app
+// uses for storage — see `core/space/daily-activities-storage.ts`.
+const readCanonicalOnly = (): boolean => {
+  if (typeof window === 'undefined') return true;
+  try {
+    return window.localStorage.getItem(SEARCH_CANONICAL_ONLY_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+};
 
 export const SearchDialog = ({ open, onDone }: Props) => {
   if (!open) return null;
@@ -61,7 +71,13 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   const toggleCanonicalOnly = useCallback(() => {
     setCanonicalOnly(prev => {
       const next = !prev;
-      if (typeof window !== 'undefined') window.localStorage.setItem(SEARCH_CANONICAL_ONLY_KEY, String(next));
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem(SEARCH_CANONICAL_ONLY_KEY, String(next));
+        } catch {
+          // Quota or blocked site data — the toggle still works, it just won't persist.
+        }
+      }
       return next;
     });
   }, []);

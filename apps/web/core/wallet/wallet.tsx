@@ -72,7 +72,15 @@ function PrivyConnectButton() {
     login();
   };
 
-  return <Button onClick={onLogin}>Log in</Button>;
+  return (
+    <Button
+      variant="primary"
+      className="h-7 shrink-0 !gap-0 !rounded-full !border-transparent !bg-[#151515] !px-2.5 !py-0 !text-[16px] !leading-[13px] font-normal tracking-[-0.35px] whitespace-nowrap !text-white !shadow-none hover:!bg-[#151515] focus-visible:!border-text focus-visible:!shadow-inner-text"
+      onClick={onLogin}
+    >
+      Log in
+    </Button>
+  );
 }
 
 export function GeoConnectButton() {

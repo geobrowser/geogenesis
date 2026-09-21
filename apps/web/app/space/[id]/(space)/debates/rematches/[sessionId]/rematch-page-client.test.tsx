@@ -23,8 +23,6 @@ const {
   CLAIM_MORE,
   CLAIM_SOURCE,
   CLAIM_FRESH,
-  CRYPTO_SPACE,
-  PODCASTS_SPACE,
   NAME_PROPERTY,
 } = vi.hoisted(() => ({
   SPACE_1: '019fedae-72b6-7ab2-927a-df044d57c566',
@@ -1258,7 +1256,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     const tab = screen.getByRole('button', { name: /Salina’s positions/ });
-    expect(tab).toHaveAttribute('aria-selected', 'true');
+    expect(tab).toHaveAttribute('aria-pressed', 'true');
     // Only the shared claim carries a side from Salina, and the badge counts it.
     expect(within(tab).getByText('1')).toBeInTheDocument();
 
@@ -1267,7 +1265,7 @@ describe('DebateRematchPageClient', () => {
 
     await showExplore();
 
-    expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   // A curator's page for this pairing is the best thing to land on; without one the tab has no
@@ -1305,7 +1303,7 @@ describe('DebateRematchPageClient', () => {
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       await showExplore();
 
-      expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-pressed', 'true');
       expect(screen.getByRole('button', { name: 'All claims' })).toBeInTheDocument();
       expect(screen.getByText('A newly published claim')).toBeInTheDocument();
       expect(screen.queryByText('A featured claim')).toBeNull();
@@ -1525,7 +1523,7 @@ describe('DebateRematchPageClient', () => {
       // the viewer will land on, which is the whole point of warming it rather than some other one.
       await waitFor(() => expect(mocks.featuredEnabledWith).toContain(true));
       expect(mocks.taggedClaimsAskedFor).toContain('55c95b2626f8482cb9739ea99dfde438');
-      expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-pressed', 'true');
       // Fetched, not shown: the warm-up fills the cache, it does not put Explore's rows on this
       // tab. Nobody has answered this claim, so the opponent's positions are not where it lists.
       expect(screen.queryByText('A newly published claim')).toBeNull();
@@ -1555,7 +1553,7 @@ describe('DebateRematchPageClient', () => {
       await act(async () => {});
 
       expect(mocks.featuredEnabledWith.at(-1)).toBe(true);
-      expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-pressed', 'true');
     });
 
     /**
@@ -1569,12 +1567,12 @@ describe('DebateRematchPageClient', () => {
     it('opens each rematch on its own opponent’s positions', async () => {
       const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
       await showExplore();
-      expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-pressed', 'true');
 
       rerender(<DebateRematchPageClient sessionId="rematch-2" />);
       await settleTabSwap();
 
-      expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-pressed', 'true');
     });
 
     /**
@@ -2264,7 +2262,7 @@ describe('DebateRematchPageClient', () => {
     const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showExplore();
 
-    expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
 
     // And the option arrives when the lookup does, without moving the list under the viewer.
@@ -3946,7 +3944,7 @@ function openSourceMenu() {
   // that tab is one fixed list. Anything reaching for a source is asking about Explore, so this
   // goes there first. Idempotent: a test already on Explore clicks a tab it is on.
   const explore = screen.queryByRole('button', { name: 'Explore' });
-  if (explore && explore.getAttribute('aria-selected') !== 'true') fireEvent.click(explore);
+  if (explore && explore.getAttribute('aria-pressed') !== 'true') fireEvent.click(explore);
 
   const label = (['Recommended', 'Featured', 'All claims', 'My positions'] as const).find(
     name => screen.queryAllByRole('button', { name }).length > 0
@@ -4614,7 +4612,7 @@ describe('the Related tab', () => {
 
     const related = await screen.findByRole('button', { name: 'Related' });
     // And the pair are on it, rather than being moved onto it once the count lands.
-    expect(related).toHaveAttribute('aria-selected', 'true');
+    expect(related).toHaveAttribute('aria-pressed', 'true');
   });
 
   /**
@@ -4663,7 +4661,7 @@ describe('the Related tab', () => {
     // in the header and carries none.
     const tabs = screen
       .getAllByRole('button')
-      .filter(button => button.hasAttribute('aria-selected'))
+      .filter(button => button.hasAttribute('aria-pressed'))
       .map(button => button.textContent ?? '');
     expect(tabs[0]).toBe('Related');
     expect(tabs[1]).toMatch(/positions/);
@@ -4743,7 +4741,7 @@ describe('the Related tab', () => {
     await settleTabSwap();
 
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
-    expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   /**
@@ -4959,7 +4957,7 @@ describe('the Related tab', () => {
     await settleTabSwap();
 
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
-    expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   /**
@@ -5001,7 +4999,7 @@ describe('the Related tab', () => {
     await settleTabSwap();
 
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
-    expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('No related claims are left to debate.')).toBeNull();
   });
 

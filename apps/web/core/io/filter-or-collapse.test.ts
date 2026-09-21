@@ -46,10 +46,7 @@ describe('collapseOrFilter', () => {
 
   it('leaves `none` alone — the equivalence only holds for `some`', () => {
     const input: EntityFilter = {
-      or: [
-        { relations: { none: { typeId: { is: A } } } },
-        { relations: { none: { typeId: { is: B } } } },
-      ],
+      or: [{ relations: { none: { typeId: { is: A } } } }, { relations: { none: { typeId: { is: B } } } }],
     };
     expect(collapseOrFilter(input)).toBe(input);
   });

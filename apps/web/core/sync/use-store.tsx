@@ -407,6 +407,10 @@ export function useQueryEntities({
         return { ids: result.merged.map(e => e.id), endCursor: result.endCursor, hasNextPage: result.hasNextPage };
       },
     });
+    // `prefetchKeyTail` is a memoised signature of `where`/`first`/`sort`/`orderBy`, so it stands
+    // in for all four — depending on them directly would re-prefetch whenever a caller passed an
+    // equal-but-new filter object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, prefetchEndCursor, prefetchKeyTail, cache, store, stream]);
 
   const results = useSelector(

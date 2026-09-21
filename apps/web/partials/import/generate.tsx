@@ -81,7 +81,6 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   const [typesColumnIndex, setTypesColumnIndex] = useAtom(typesColumnIndexAtom);
   const [columnMapping, setColumnMapping] = useAtom(columnMappingAtom);
   const headers = useAtomValue(headersAtom);
-  const rowCount = useAtomValue(rowCountAtom);
   const setHeaders = useSetAtom(headersAtom);
   const setRowCount = useSetAtom(rowCountAtom);
   const setImportSessionId = useSetAtom(importSessionIdAtom);
@@ -263,6 +262,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       if (fileInputRef.current) fileInputRef.current.value = '';
     },
     [
+      MAX_FILE_SIZE_BYTES,
       resetSessionState,
       setFileName,
       setStep,

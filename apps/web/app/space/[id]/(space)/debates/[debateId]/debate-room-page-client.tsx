@@ -631,7 +631,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       { audioEnabled: localAudioEnabled, videoEnabled },
       sourceMediaStreamTracksRef.current
     );
-  }, [localAudioEnabled, videoEnabled]);
+  }, [localAudioEnabled, localTracksRef, videoEnabled]);
 
   React.useEffect(() => {
     if (!pendingTurnYield) return;
@@ -829,7 +829,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (ownershipRef.current === coordinator) ownershipRef.current = null;
       coordinator.close();
     };
-  }, [currentUserId, debateId, reportConnectionConflict]);
+  }, [currentUserId, debateId, localMediaStreamRef, localTracksRef, reportConnectionConflict]);
 
   const clearRecordingTimers = React.useCallback(() => {
     if (recordingStopTimerRef.current !== null) {
@@ -990,7 +990,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recordingStartedAtRef.current = null;
     recordingEndedAtRef.current = null;
     return true;
-  }, [currentUserId, debate, joinResponse?.participant_slot, stopLocalRecorder]);
+  }, [currentUserId, debate, joinResponse?.participant_slot, localMediaStreamRef, stopLocalRecorder]);
 
   const persistStoppedLocalRecording = React.useCallback(() => {
     if (persistedRecordingDebateIdRef.current === debate?.id) return Promise.resolve(true);
@@ -1527,13 +1527,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // no longer changes identity on every countdown tick.
     [
       attachRemoteTrack,
+      audioOutputSelectionPromiseRef,
+      audioOutputSupportedRef,
       debateId,
       initializeNoiseFilter,
       liveKitJoin,
+      localMediaStreamRef,
+      localTracksRef,
       markJoined,
       reportConnectionConflict,
       reportLocalReleaseRecovery,
       refetchDebate,
+      selectedAudioInputIdRef,
+      selectedAudioOutputIdRef,
+      selectedVideoInputIdRef,
       setPreviewStream,
     ]
   );
@@ -1697,7 +1704,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setRoomState('connected');
       return false;
     }
-  }, [persistStoppedLocalRecording]);
+  }, [localMediaStreamRef, localTracksRef, persistStoppedLocalRecording]);
 
   const finishLiveDebate = React.useCallback(async () => {
     if (!debate || finalizedDebateRef.current === debate.id) return;
@@ -1721,7 +1728,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
     returnFromDebate();
-  }, [debate, finishAndPersist, rematchQuery.data, returnFromDebate, router]);
+  }, [debate, finishAndPersist, localMediaStreamRef, localTracksRef, rematchQuery.data, returnFromDebate, router]);
 
   const retryLiveDebateFinalization = React.useCallback(() => {
     if (debate?.status === 'thanking') {
@@ -1850,6 +1857,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     discardLocalRecorder,
     finishLiveDebate,
     leaveRematch,
+    localMediaStreamRef,
+    localTracksRef,
     persistStoppedLocalRecording,
     returnFromDebate,
   ]);
@@ -1872,7 +1881,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setRemoteVideoReady(false);
     setRoomError('Connection failed. Finding another match.');
     setRoomState('connecting');
-  }, [clearRecordingTimers, clearTimedOutDebateActivity, debateId, discardLocalRecorder]);
+  }, [
+    clearRecordingTimers,
+    clearTimedOutDebateActivity,
+    debateId,
+    discardLocalRecorder,
+    localMediaStreamRef,
+    localTracksRef,
+  ]);
 
   const redirectAfterConnectionFailure = React.useCallback(() => {
     if (connectionFailureRedirectTimerRef.current !== null) return;
@@ -1946,7 +1962,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
       localMediaStreamRef.current = null;
     };
-  }, [clearRecordingTimers, discardLocalRecorder]);
+  }, [clearRecordingTimers, discardLocalRecorder, localMediaStreamRef, localTracksRef]);
 
   React.useEffect(() => {
     if (!shouldReturnFromTerminalDebate) return;
@@ -2069,6 +2085,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [
     clearRecordingTimers,
     debate,
+    localMediaStreamRef,
     persistRecordingAfterCapture,
     roomState,
     serverClock,
@@ -2092,7 +2109,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (debate.status !== 'complete') return;
     if (debate.rematch_session_id && !rematchQuery.data) return;
     void finishLiveDebate();
-  }, [debate, discardLocalRecorder, finishLiveDebate, rematchQuery.data, roomState]);
+  }, [
+    debate,
+    discardLocalRecorder,
+    finishLiveDebate,
+    localMediaStreamRef,
+    localTracksRef,
+    rematchQuery.data,
+    roomState,
+  ]);
 
   React.useEffect(() => {
     if (!debate || recordingCancelledBy === null) return;
@@ -2131,6 +2156,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     debate,
     discardLocalRecorder,
     leaveCancelledDebate,
+    localMediaStreamRef,
+    localTracksRef,
     opponentCancelledRecording,
     recordingCancelledBy,
     rematchOutcomeResolved,
@@ -2622,7 +2649,7 @@ function DebateRecordingModal({
       {/* `main` is wide enough for the claim, which is set and sized exactly as the intro screen
           sets it so the headline does not change under you at the swap. Everything below it stays
           in the single 430px column the room has always used. */}
-      <main className="mx-auto flex min-h-dvh w-full max-w-[940px] flex-col items-center justify-center px-2 py-8 sm:px-5 md:max-w-[430px]">
+      <main className="mx-auto flex min-h-dvh w-full max-w-[940px] flex-col items-center justify-center px-2 py-8 mobile:px-5 md:max-w-[430px]">
         <h1 className="mb-5 w-full max-w-[900px] text-center text-mainPage text-text md:max-w-[390px] md:text-[1.5rem] md:leading-[1.8125rem] md:font-semibold md:tracking-[-0.75px]">
           {debate.claim.claim}
         </h1>

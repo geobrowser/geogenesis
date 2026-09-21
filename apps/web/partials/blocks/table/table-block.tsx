@@ -159,7 +159,7 @@ function useEntries(
   filterState: Filter[],
   relations: Relation[] | undefined,
   source: Source,
-  canEdit: boolean
+  _canEdit: boolean
 ) {
   const isEditing = useUserIsEditing(spaceId);
 
@@ -561,7 +561,6 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
 const ConfiguredTableBlock = ({
   spaceId,
   blockId,
-  onCompleteQuerySetup,
   initialFiltersOpen = false,
   onConsumedInitialFiltersOpen,
 }: Props) => {
@@ -569,7 +568,6 @@ const ConfiguredTableBlock = ({
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
   const { entityId, relationId } = useDataBlockInstance();
   const blockEntityId = blockId ?? entityId;
-  const { setEditable } = useEditable();
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
 

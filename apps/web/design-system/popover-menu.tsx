@@ -23,9 +23,17 @@ export const PopoverMenu = ({ isOpen, onOpenChange, menu = <></>, position = 'bo
   return (
     <Popover.Root open={isOpen} onOpenChange={onOpenChange}>
       <Popover.Anchor asChild>
-        <div onClick={() => onOpenChange(true)} onMouseEnter={() => onOpenChange(true)}>
+        {/* A button, not a div: this opens the menu, and on a div it could be reached by mouse
+            only. The label is explicit because the content is an icon with no text. */}
+        <button
+          type="button"
+          aria-label={isOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={isOpen}
+          onClick={() => onOpenChange(true)}
+          onMouseEnter={() => onOpenChange(true)}
+        >
           {!isOpen ? <Context /> : <Close />}
-        </div>
+        </button>
       </Popover.Anchor>
       <Popover.Portal>
         <AnimatePresence mode="popLayout">

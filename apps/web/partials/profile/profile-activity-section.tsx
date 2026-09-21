@@ -17,6 +17,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
+import { withSpaceTabsAnchor } from '~/partials/space-page/space-tabs-anchor';
 
 import { GalleryClaimCard } from './gallery-claim-card';
 
@@ -92,6 +93,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   // cannot shift the selection out from under them.
   const selected = available.find(kind => kind.key === selectedKey) ?? available[0];
 
+  const { sectionRef, reserveRef, prepareSwitch } = useMobileActivityHeightReserve(selected?.key);
   const isLoading = kinds.some(kind => kind.isLoading);
 
   // Reserve the section while its first usable record is on the way. Once either kind resolves,
@@ -103,60 +105,95 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   if (available.length === 0 || !selected) return null;
 
   return (
-    <section className="flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white">
-      {/* The toggles sit to the right of the heading, and wrap below it rather
-          than squeezing into it on a narrow screen. */}
-      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-divider px-4 py-3">
-        <h3 className="text-metadataMedium text-text">Activity</h3>
-
-        {/* Only when there is a choice to make. One pill on its own is a label
-            dressed up as a control. */}
-        {available.length > 1 && (
-          <div className="flex flex-wrap items-center gap-2">
-            {available.map(kind => {
-              const isSelected = kind.key === selected.key;
-
-              return (
-                <button
-                  key={kind.key}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => setSelectedKey(kind.key)}
-                  className={cx(
-                    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-smallButton transition-colors',
-                    isSelected
-                      ? 'border-text bg-text text-white'
-                      : 'border-grey-02 text-grey-04 hover:border-text hover:text-text'
-                  )}
-                >
-                  {kind.label}
-                  <span className={cx('tabular-nums', isSelected ? 'text-white/70' : 'text-grey-03')}>
-                    {kind.isCountUnavailable ? '—' : kind.total.toLocaleString()}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+    <div>
+      <section
+        ref={sectionRef}
+        data-activity-section
+        className={cx(
+          'flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white',
+          // Not a card on a phone. A bordered panel holding bordered cards spends two gutters and two
+          // rules on saying "these belong together", which the heading already says — and on a 390px
+          // screen that is most of what a claim's buttons needed. The heading and the rule under it
+          // stay; the box around them goes, and the gallery below can reach the screen edge.
+          'md:overflow-visible md:rounded-none md:border-0 md:bg-transparent'
         )}
-      </header>
+      >
+        {/* The toggles sit to the right of the heading, and wrap below it rather
+          than squeezing into it on a narrow screen. */}
+        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-divider px-4 py-3 md:px-0">
+          <h3 className="text-metadataMedium text-text">Activity</h3>
 
-      {selected.isError && selected.rows.length === 0 ? (
-        /*
-         * No retry here on purpose. This card is a summary; the tab its count
-         * links to holds the authoritative list and offers the retry, so a
-         * second control here would be a second thing to keep in step.
-         */
-        <p className="px-4 py-6 text-metadata text-grey-04">Couldn’t load {selected.label.toLowerCase()}.</p>
-      ) : (
-        <ActivityGallery
-          rows={selected.rows}
-          responseByClaimId={selected.responseByClaimId}
-          personName={selected.personName}
-        />
-      )}
+          {/* Only when there is a choice to make. One pill on its own is a label
+            dressed up as a control. */}
+          {available.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {available.map(kind => {
+                const isSelected = kind.key === selected.key;
 
-      <ActivitySeeAll kind={selected} />
-    </section>
+                return (
+                  <button
+                    key={kind.key}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => {
+                      if (isSelected) return;
+
+                      // Put the reserve in the document before React replaces
+                      // the tall view. Waiting for the next layout effect would
+                      // let the shorter DOM clamp `scrollY` while it is being
+                      // measured, before the reserve could help.
+                      prepareSwitch();
+                      setSelectedKey(kind.key);
+                    }}
+                    className={cx(
+                      'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-smallButton transition-colors',
+                      isSelected
+                        ? 'border-text bg-text text-white'
+                        : 'border-grey-02 text-grey-04 hover:border-text hover:text-text'
+                    )}
+                  >
+                    {kind.label}
+                    <span className={cx('tabular-nums', isSelected ? 'text-white/70' : 'text-grey-03')}>
+                      {kind.isCountUnavailable ? '—' : kind.total.toLocaleString()}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </header>
+
+        {selected.isError && selected.rows.length === 0 ? (
+          /*
+           * No retry here on purpose. This card is a summary; the tab its count
+           * links to holds the authoritative list and offers the retry, so a
+           * second control here would be a second thing to keep in step.
+           */
+          <p className="px-4 py-6 text-metadata text-grey-04">Couldn’t load {selected.label.toLowerCase()}.</p>
+        ) : (
+          <ActivityGallery
+            rows={selected.rows}
+            responseByClaimId={selected.responseByClaimId}
+            personName={selected.personName}
+          />
+        )}
+        <ActivitySeeAll kind={selected} />
+      </section>
+
+      {/*
+       * On narrow screens this supplies only the document height missing below
+       * the current viewport. The reserve sits outside the section, so Claims
+       * stays compact while switching away from the taller Debates view cannot
+       * clamp the viewport upward. Profiles with content below Activity need no
+       * reserve at all, and desktop keeps its natural layout.
+       *
+       * `hidden md:block`, not `md:hidden`: the breakpoints here are desktop-first
+       * (`md` is `max-width: 767px`, see styles.css), so `md:hidden` hid this on
+       * exactly the phones it exists for — `display: none` reserves no height, and
+       * the fix was inert on the only screens that needed it.
+       */}
+      <div ref={reserveRef} data-activity-scroll-reserve aria-hidden className="pointer-events-none hidden md:block" />
+    </div>
   );
 }
 
@@ -165,13 +202,16 @@ function ProfileActivitySkeleton() {
     <section
       aria-label="Loading activity"
       aria-busy="true"
-      className="flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white"
+      className={cx(
+        'flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white',
+        'md:overflow-visible md:rounded-none md:border-0 md:bg-transparent'
+      )}
     >
-      <header className="flex items-center justify-between gap-4 border-b border-divider px-4 py-3">
+      <header className="flex items-center justify-between gap-4 border-b border-divider px-4 py-3 md:px-0">
         <h3 className="text-metadataMedium text-text">Activity</h3>
         <Skeleton className="h-7 w-24 rounded-full" />
       </header>
-      <div className="p-4">
+      <div className="p-4 md:px-0">
         <Skeleton className="h-44 w-full rounded-lg" />
       </div>
       <div className="flex justify-center border-t border-divider py-4">
@@ -197,11 +237,196 @@ function ActivitySeeAll({ kind }: { kind: ActivityKind }) {
     );
   }
 
+  // A route navigation lands at the top of the page, which on a phone is a screenful of profile
+  // chrome. The fragment puts the tab row under the navbar instead. Side panels use `onSeeAll`
+  // above because their tabs are selected in place and have no route fragment to follow.
   return (
-    <Link href={kind.href} className={SEE_ALL_CLASS}>
+    <Link href={withSpaceTabsAnchor(kind.href)} className={SEE_ALL_CLASS}>
       {content}
     </Link>
   );
+}
+
+/**
+ * Keep the reader where they were while Activity views of different heights are swapped.
+ *
+ * Switching to a shorter view makes the document shorter, and a document that no longer reaches the
+ * reader's viewport bottom has no scroll position to hold them at — the browser moves them up. On a
+ * profile with content below Activity there is other height to absorb that; on a short one, like a
+ * person with only an Activity card, there is none, and the page jumps to the top.
+ *
+ * Two things hold the position, in order of precedence:
+ *
+ *  1. A sibling reserve supplies exactly the document height missing below the viewport, so the
+ *     shorter view never shortens the scrollable range. It is a sibling rather than a `min-height`
+ *     on the section, which keeps a three-row Claims gallery from sitting inside a debate-sized box.
+ *  2. If the position is lost anyway — the gallery can paint empty for a frame before its queries
+ *     land, which shortens the document below even the reserve's reach — it is put back before the
+ *     browser paints.
+ */
+function useMobileActivityHeightReserve(selectedKey: string | undefined) {
+  const sectionRef = React.useRef<HTMLElement | null>(null);
+  const reserveRef = React.useRef<HTMLDivElement | null>(null);
+  const swapRef = React.useRef<{
+    /** The layout this was calculated for. A different one invalidates it — see `sizeReserve`. */
+    width: number;
+    /** The position being held for the reader, which only ever moves up. */
+    holdY: number;
+  } | null>(null);
+  const prepareSwitch = React.useCallback(() => {
+    const section = sectionRef.current;
+    const reserve = reserveRef.current;
+    if (!section || !reserve) return;
+
+    const { width, height } = section.getBoundingClientRect();
+    swapRef.current = { width, holdY: window.scrollY };
+
+    // Hold the outgoing view's whole height before React replaces it. Waiting for the layout effect
+    // would leave a window where the document is short and the position is already gone; over-
+    // reserving now costs nothing, because the effect below replaces it with the exact figure before
+    // anything is painted.
+    reserve.style.height = `${height}px`;
+  }, []);
+
+  React.useLayoutEffect(() => {
+    const section = sectionRef.current;
+    const reserve = reserveRef.current;
+    if (!section || !reserve) return;
+
+    // Sizing only. Nothing here moves the reader: this runs on every scroll, and a function that
+    // both sizes the reserve and corrects the position will correct it every time they scroll —
+    // which reads as the page refusing to move (GEO-2974).
+    const sizeReserve = () => {
+      const { width } = section.getBoundingClientRect();
+      const swap = swapRef.current;
+
+      // A new layout width (rotation, resized side panel, breakpoint change) has different card
+      // wrapping. Drop the old calculation; the next tab switch will establish one for the new
+      // layout.
+      if (!swap || Math.abs(swap.width - width) > 1) {
+        swapRef.current = null;
+        reserve.style.height = '0px';
+        return 0;
+      }
+
+      // Measured now rather than carried from the switch. The page keeps moving afterwards — the
+      // cards grow as their queries land, a cover image arrives above, the rail settles — and a
+      // figure taken once is wrong for every one of those. Subtracting what the reserve is
+      // currently contributing is what makes this the height the page would have without it.
+      const naturalDocumentHeight = document.documentElement.scrollHeight - reserve.getBoundingClientRect().height;
+      const held = Math.max(0, swap.holdY + window.innerHeight - naturalDocumentHeight);
+      reserve.style.height = `${held}px`;
+
+      return held;
+    };
+
+    /**
+     * Size, and let the swap go once the page no longer needs it.
+     *
+     * A swap that outlives its own settling is state waiting to be wrong: the cards grow, the
+     * reserve reaches zero, and `holdY` sits there for as long as the reader stays on this tab —
+     * so a shrink an hour later would conjure height back out of a position they left behind, and
+     * leave them scrolling into blank space.
+     *
+     * Zero is the safe moment to let go precisely because nothing is being held at it, so dropping
+     * the swap cannot move anybody. Not on the first sizing though — that one runs before the
+     * correction below, and the correction needs the swap it belongs to.
+     *
+     * Only for changes that do not come back. Cards growing and the reader scrolling up both leave
+     * the page needing less than it did, and go on needing less. A viewport is not like that: it
+     * shrinks and grows again as the URL bar returns and hides, so settling on a shrink would
+     * retire the swap during the half of that cycle where nothing is needed, and leave nothing to
+     * rebuild the reserve on the half where it is. Resizes size, and do not settle.
+     */
+    const sizeAndSettle = () => {
+      if (sizeReserve() === 0) swapRef.current = null;
+    };
+
+    sizeReserve();
+
+    // The reserve is in the document now, so the position asked for is reachable again. If a frame
+    // painted before it was — the gallery can paint empty while its queries land — the reader is put
+    // back here, once, before the browser paints. Once, because this is a correction for the swap
+    // that just happened and not a rule about where the page may be scrolled to.
+    const swap = swapRef.current;
+    if (swap && Math.abs(window.scrollY - swap.holdY) > 1) {
+      window.scrollTo(0, swap.holdY);
+    }
+
+    if (typeof ResizeObserver === 'undefined') return;
+    // Claim cards grow as their queries land. Shrink the reserve by the same amount so the overall
+    // document height stays steady rather than drifting.
+    const observer = new ResizeObserver(sizeAndSettle);
+    observer.observe(section);
+
+    // Armed a frame late, so the scroll events belonging to the swap itself — the correction above,
+    // and any clamp it was correcting — are not read as the reader choosing to move.
+    let armed = false;
+    const arm = requestAnimationFrame(() => {
+      armed = true;
+    });
+
+    const onScroll = () => {
+      if (!armed) return;
+
+      const current = swapRef.current;
+      if (!current) return;
+
+      // Once the reader moves up of their own accord, stop holding space they no longer need —
+      // and back at the top there is nothing left to hold, so the swap goes with it. Moving down
+      // needs nothing held and nothing released.
+      if (window.scrollY < current.holdY) {
+        current.holdY = window.scrollY;
+        sizeAndSettle();
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+
+    // `held` is measured against the viewport, and on a phone the viewport changes without anything
+    // else on the page moving: iOS Safari grows `innerHeight` when its URL bar collapses under a
+    // scroll and shrinks it back when the reader stops, firing `resize` both ways. A taller
+    // viewport needs more held below it, and nothing here was watching — so the reader could be
+    // clamped upward by exactly the height of a hidden URL bar. That is the device this was
+    // reported from; Chrome on Android pins its layout viewport to the largest size instead, so
+    // `innerHeight` never moves there and there is nothing to react to.
+    //
+    // `resize` rather than `visualViewport`, because `window.innerHeight` is the figure the sum
+    // above uses and the two do not always agree. And it sizes without settling: see
+    // `sizeAndSettle` for why a reversible change must not retire the swap.
+    //
+    // Sizing alone is not enough, because a growing viewport has already moved the reader by the
+    // time this runs. While the reserve holds anything, it sizes the document so that `holdY` is
+    // *exactly* the furthest the page can scroll — that is what holding the position means — so a
+    // viewport 100px taller drops the maximum by 100 and the browser takes the reader with it,
+    // every time rather than occasionally. Restoring afterwards is the same one-shot correction the
+    // swap itself gets, for the same reason.
+    const onViewportResize = () => {
+      const swap = swapRef.current;
+      if (!swap) {
+        sizeReserve();
+        return;
+      }
+
+      // Synchronously, inside the resize handler, and that ordering is the whole guard. The clamp
+      // also arrives as a scroll event, which is dispatched after this runs — so by the time
+      // `onScroll` reads the position it is the restored one, and there is nothing there for it to
+      // mistake for the reader moving up.
+      const target = swap.holdY;
+      sizeReserve();
+
+      if (Math.abs(window.scrollY - target) > 1) window.scrollTo(0, target);
+    };
+    window.addEventListener('resize', onViewportResize);
+
+    return () => {
+      cancelAnimationFrame(arm);
+      observer.disconnect();
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onViewportResize);
+    };
+  }, [selectedKey]);
+
+  return { sectionRef, reserveRef, prepareSwitch };
 }
 
 function ActivityGallery({
@@ -229,25 +454,34 @@ function ActivityGallery({
     // start. The gate names the one nearest the middle.
     <DebatePlaybackGate allowedId={centredId}>
       {/*
-       * `snap-x` so a flick lands on a card rather than between two.
+       * The wrapper, not the scroller, carries both of these.
        *
-       * The gap at either end is a spacer element rather than padding on the
-       * scroller: a scroll container's trailing padding is dropped by every
-       * browser that matters, so `p-4` gave 16px on the left and nothing on the
-       * right. Spacers are honoured on both sides, and `scroll-px` keeps a
-       * snapped card off the edge it lands against.
+       * `@container`, because the container types imply `contain: inline-size`, and containing the
+       * element whose overflow is the whole point is a bad trade for one class. The wrapper is also
+       * the width the reader actually sees, which is what the cards want to measure — `cqw` below
+       * reads this element, so widening only what scrolls would give the reader more to look at
+       * without giving the cards any more to size against.
+       *
+       * The bleed takes it out through the app shell's own gutter on a phone, so a card can use the
+       * full width and the one behind it is cut off by the screen edge rather than by a panel. `2ch`
+       * is the shell's figure (`2xl:px-[2ch]` in `app/entry.tsx`) and the two have to stay equal, or
+       * the gallery hangs off the side of the document and every profile scrolls sideways. `md` is
+       * inside `2xl` in a desktop-first scale, so the gutter is always there to cancel.
        */}
-      {/* `@container` on a wrapper rather than on the scroller itself: the
-          container types imply `contain: inline-size`, and containing the
-          element whose overflow is the whole point is a bad trade for one class.
-          The wrapper is the width the reader actually sees, which is what the
-          cards want to measure — see `GalleryCard`. */}
-      <div className="@container">
+      <div className="@container md:-mr-[2ch]">
+        {/*
+         * `snap-x` so a flick lands on a card rather than between two.
+         *
+         * The gap at either end is a spacer element rather than padding on the scroller: a scroll
+         * container's trailing padding is dropped by every browser that matters, so `p-4` gave 16px
+         * on the left and nothing on the right. Spacers are honoured on both sides, and `scroll-px`
+         * keeps a snapped card off the edge it lands against.
+         */}
         <div
           ref={scrollerRef}
-          className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 items-stretch gap-4 overflow-x-auto py-2"
+          className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 items-start gap-4 overflow-x-auto py-2 md:scroll-px-0"
         >
-          <span aria-hidden className="w-0 shrink-0 pl-4" />
+          <span aria-hidden className="w-0 shrink-0 pl-4 md:pl-0" />
           {shown.map(row => (
             <GalleryCard
               key={`${row.entityId}-${row.spaceId}`}
@@ -268,7 +502,7 @@ function ActivityGallery({
  * Which card is nearest the middle of the row.
  *
  * Measured rather than derived from the scroll offset over a card width: the
- * cards are `min(420px, 80vw)` and the spacers at either end are not cards at
+ * cards are `min(420px, 84cqw)` and the spacers at either end are not cards at
  * all, so arithmetic on a nominal width would drift. Read on scroll through a
  * rAF, which is what keeps a flick from measuring on every frame it fires.
  */
@@ -367,10 +601,14 @@ function GalleryCard({
       className={cx(
         // `cqw`, not `vw`. The viewport is the wrong ruler for a card in a side
         // panel: the panel is a column of its own width inside a window that may
-        // be three times wider, so `80vw` there is not 80% of anything the reader
-        // can see. The scroller establishes the container this measures — see
-        // `ActivityGallery`.
-        'w-[min(420px,80cqw)] shrink-0 snap-start',
+        // be three times wider, so `84vw` there is not 84% of anything the reader
+        // can see. The wrapper around the scroller establishes the container this
+        // measures — see `ActivityGallery`.
+        // Sized so the pill row clears the 272px that `claim-pills-wide` needs to put Agree and
+        // Disagree side by side — the card's own padding takes 26px off whatever this is — while
+        // leaving a clear sliver of the next card. Narrower phones still stack, which is the
+        // container query doing its job rather than a card growing wider than its screen.
+        'w-[min(420px,84cqw)] shrink-0 snap-start',
         // The lobby card brings its own outline; the feed's card does not, and
         // draws a rule underneath itself to separate it from the next card
         // *down* — which in a row is a line under nothing.

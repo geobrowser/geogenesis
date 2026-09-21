@@ -226,6 +226,7 @@ function TableBlockDropdown({
     // `loadingNames` is the dependency because `nameOf` reads a mutable
     // cache behind a stable-enough identity — the flag flips as batches land.
     return options.filter(option => (option.name ?? nameOf(option.id))?.toLowerCase().includes(needle));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `loadingNames` is the signal, per the comment above.
   }, [options, query, nameOf, loadingNames]);
   const renderedOptions = React.useMemo(() => visibleOptions.slice(0, visibleCount), [visibleOptions, visibleCount]);
 
@@ -247,6 +248,9 @@ function TableBlockDropdown({
   // while the menu is closed so the pill never reads "…" over a filtered table.
   const unresolvedSelectedIds = React.useMemo(
     () => selected.filter(id => !nameOf(id) && !pinned.some(pin => ID.equals(pin.id, id) && pin.name)),
+    // As above: `nameOf` reads a mutable cache, and `loadingNames` is what changes as the name
+    // batches land.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [selected, pinned, nameOf, loadingNames]
   );
   const { entities: resolvedEntities } = useQueryEntities({

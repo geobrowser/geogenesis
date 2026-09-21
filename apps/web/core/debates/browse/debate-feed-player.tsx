@@ -18,7 +18,7 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
-import { Play, Speaker, SpeakerMuted } from './icons';
+import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { WinnerVoteButton } from './winner-vote-button';
 
 type DebateFeedPlayerProps = {
@@ -51,6 +51,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     error,
     playing,
     userPaused,
+    autoplayBlocked,
     isScrubbing,
     isResuming,
     playbackEnded,
@@ -83,25 +84,72 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     seekBothRaw(seconds);
   };
 
+  /**
+   * Stopped, and only a tap will start it.
+   *
+   * The two ways in are different facts — the viewer paused, or the browser
+   * refused — and identical from here: the video is not running and the control
+   * is the only answer either accepts.
+   */
+  const awaitingTap = userPaused || autoplayBlocked;
+
   // Autoplay the debate that's in view; pause the rest. Respect an explicit
   // user pause so scrolling back doesn't fight the viewer, and don't resume
   // mid-scrub.
   React.useEffect(() => {
     if (!ready) return;
-    if (active && !userPaused && !isScrubbing && !playing && !playbackEnded) {
+    // A refusal is not retried: the browser gives the same answer every time, and
+    // only the viewer's tap is a gesture it will accept.
+    if (active && !awaitingTap && !isScrubbing && !playing && !playbackEnded) {
       void resumeBoth();
     } else if (!active && playing) {
       suspend();
     }
-  }, [active, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend, userPaused]);
+  }, [active, awaitingTap, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend]);
 
-  const showControls = ready && (userPaused || (playbackEnded && !hasVoted));
-  // End of an unvoted debate offers a replay; a user pause shows the paused glyph.
+  const showControls = ready && (awaitingTap || (playbackEnded && !hasVoted));
+  // End of an unvoted debate offers a replay; a stopped one shows the paused glyph.
   const showReplay = ready && playbackEnded && !hasVoted;
-  const showPausedGlyph = ready && userPaused && !playbackEnded;
+  const showPausedGlyph = ready && awaitingTap && !playbackEnded;
+
+  // Clicking the video briefly flashes the action it just took — feedback only, not a control.
+  const [flash, setFlash] = React.useState<{ icon: 'play' | 'pause'; visible: boolean }>({
+    icon: 'play',
+    visible: false,
+  });
+  const flashTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(
+    () => () => {
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    },
+    []
+  );
+  const toggleFromVideo = () => {
+    setFlash({ icon: playing ? 'pause' : 'play', visible: true });
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    flashTimeoutRef.current = setTimeout(() => setFlash(current => ({ ...current, visible: false })), 600);
+    togglePlayback();
+  };
 
   return (
-    <div ref={measurement.elementRef} className="group relative flex flex-col gap-2">
+    <div
+      ref={measurement.elementRef}
+      /*
+       * The player's state, readable from outside React.
+       *
+       * Autoplay faults here are device-specific — iOS refuses in Low Power Mode
+       * and headless engines do not — so the machine that reproduces them is
+       * rarely one with a debugger attached. These four booleans are what
+       * `PlaybackDiagnostics` reports, and what an inspector on a phone can read
+       * without one. They are the difference between "the browser refused" and
+       * "the app never noticed", which look identical on screen.
+       */
+      data-debate-ready={ready ? 'true' : 'false'}
+      data-debate-active={active ? 'true' : 'false'}
+      data-debate-playing={playing ? 'true' : 'false'}
+      data-debate-autoplay-blocked={autoplayBlocked ? 'true' : 'false'}
+      className="group relative flex flex-col gap-2"
+    >
       <DebaterVideo
         participant={slot1Participant}
         src={urls.slot1}
@@ -112,31 +160,45 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
-        onToggle={togglePlayback}
+        onToggle={toggleFromVideo}
         votes={votes}
         topLeft={
-          showReplay ? (
-            <ControlCircle ariaLabel="Replay debate" onClick={playFromStart}>
-              <RetrySmall />
-            </ControlCircle>
-          ) : ready ? (
-            // Feed debates autoplay muted, so the unmute control stays visible during
-            // playback — otherwise there's no way to hear audio. Once unmuted it recedes
-            // to hover-only.
-            <ControlCircle
-              ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
-              onClick={() => {
-                measurement.control(mutedByUser ? 'unmute' : 'mute');
-                setMutedByUser(current => !current);
-              }}
-              className={
-                mutedByUser
-                  ? undefined
-                  : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100'
-              }
-            >
-              {mutedByUser ? <SpeakerMuted /> : <Speaker />}
-            </ControlCircle>
+          ready ? (
+            <div className="flex items-center gap-2">
+              {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
+                  centred paused glyph and tap-to-toggle instead. */}
+              <ControlCircle
+                ariaLabel={playing ? 'Pause debate' : playbackEnded ? 'Replay debate' : 'Play debate'}
+                onClick={togglePlayback}
+                className="md:hidden"
+              >
+                {playing ? <Pause /> : <Play />}
+              </ControlCircle>
+              {showReplay ? (
+                <ControlCircle ariaLabel="Replay debate" onClick={playFromStart}>
+                  <RetrySmall />
+                </ControlCircle>
+              ) : (
+                // Feed debates autoplay muted, so the unmute control stays visible during
+                // playback — otherwise there's no way to hear audio. Once unmuted it recedes
+                // to hover-only on desktop; touch has no hover, so on mobile it stays visible
+                // or there'd be no way to find it again.
+                <ControlCircle
+                  ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
+                  onClick={() => {
+                    measurement.control(mutedByUser ? 'unmute' : 'mute');
+                    setMutedByUser(current => !current);
+                  }}
+                  className={
+                    mutedByUser
+                      ? undefined
+                      : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100'
+                  }
+                >
+                  {mutedByUser ? <SpeakerMuted /> : <Speaker />}
+                </ControlCircle>
+              )}
+            </div>
           ) : null
         }
       />
@@ -150,7 +212,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
-        onToggle={togglePlayback}
+        onToggle={toggleFromVideo}
         votes={votes}
         scrubber={
           ready ? (
@@ -176,16 +238,28 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         }
       />
 
+      {/* Mobile only — desktop has the persistent play/pause beside the mute control. */}
       {showPausedGlyph && (
         <button
           type="button"
           aria-label="Resume debate"
           onClick={togglePlayback}
-          className="absolute top-1/2 left-1/2 z-20 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card"
+          className="absolute top-1/2 left-1/2 z-20 hidden size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card md:grid"
         >
           <Play />
         </button>
       )}
+
+      {/* Desktop only — mobile already shows the centred paused glyph in this spot. */}
+      <div
+        aria-hidden
+        className={cx(
+          'pointer-events-none absolute top-1/2 left-1/2 z-20 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card transition-[opacity,scale] duration-300 md:hidden',
+          flash.visible ? 'scale-100 opacity-100' : 'scale-110 opacity-0'
+        )}
+      >
+        {flash.icon === 'pause' ? <Pause /> : <Play />}
+      </div>
 
       {error && (
         <Text as="p" variant="metadata" color="red-01" className="absolute inset-x-0 -bottom-6 text-center">
@@ -318,35 +392,49 @@ function DebaterVideo({
         </div>
       )}
 
-      {/* Debater identity: avatar + name + position, opens their personal space in the side panel. */}
-      <button
-        type="button"
-        onClick={openProfile}
-        className="absolute bottom-3 left-4 z-10 flex items-center gap-2 text-left"
-      >
-        <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
-          <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
-        </span>
-        <span className="truncate text-[1rem] font-medium text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55)]">
-          {name}
-        </span>
-        {participant && (
-          <DebateTileChip className={cx('shrink-0 text-text', tileChipSurface)}>
-            {participant.position_label}
-          </DebateTileChip>
-        )}
-      </button>
+      {/*
+       * The tile's bottom line: who is speaking on the left, the winner vote on
+       * the right.
+       *
+       * One row rather than two absolutely-positioned corners. They used to be
+       * `left-4` and `right-4` independently, which is fine at the width a feed
+       * card gives a tile and not at the width a 312px gallery card does — the
+       * name and its Agree/Disagree chip simply ran on underneath the button,
+       * which reads as "Ag…" and "Disagr…" with a pill on top. A flex row cannot
+       * overlap: the identity takes what is left after the vote, and the name
+       * truncates into it.
+       */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex items-end justify-between gap-2 px-4">
+        {/* Debater identity: avatar + name + position, opens their personal space in the side panel. */}
+        <button
+          type="button"
+          onClick={openProfile}
+          className="pointer-events-auto flex min-w-0 items-center gap-2 text-left"
+        >
+          <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
+            <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
+          </span>
+          <span className="truncate text-[1rem] font-medium text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55)]">
+            {name}
+          </span>
+          {participant && (
+            <DebateTileChip className={cx('shrink-0 text-text', tileChipSurface)}>
+              {participant.position_label}
+            </DebateTileChip>
+          )}
+        </button>
 
-      {participant && (
-        <WinnerVoteButton
-          className="absolute right-4 bottom-3 z-10"
-          debaterName={name}
-          sharePercent={votes.sharePercentFor(participant)}
-          isMyPick={votes.isMyPick(participant)}
-          disabled={votes.isVoting}
-          onVote={() => votes.castVote(participant)}
-        />
-      )}
+        {participant && (
+          <WinnerVoteButton
+            className="pointer-events-auto shrink-0"
+            debaterName={name}
+            sharePercent={votes.sharePercentFor(participant)}
+            isMyPick={votes.isMyPick(participant)}
+            disabled={votes.isVoting}
+            onVote={() => votes.castVote(participant)}
+          />
+        )}
+      </div>
 
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}
     </div>
@@ -386,7 +474,10 @@ function ControlCircle({
         event.stopPropagation();
         onClick();
       }}
-      className={cx('grid size-8 place-items-center rounded-full bg-white text-text shadow-light', className)}
+      className={cx(
+        'grid size-10.5 place-items-center rounded-full bg-white text-text shadow-light [&>svg]:scale-[1.3]',
+        className
+      )}
     >
       {children}
     </button>
