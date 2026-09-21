@@ -85,6 +85,20 @@ export function rankedRecordPage(
   return { ids: ordered.slice(0, count), hasNextPage: count < ordered.length };
 }
 
+/**
+ * Ordinary records fit in one card page, so their projection does not depend on Best order.
+ * Hydrate that whole set while ranking loads, then sort the finished rows before exposing them.
+ * Larger records still wait for ranking so only the correct bounded page is hydrated.
+ */
+export function recordHydrationIds(
+  ids: readonly string[],
+  rankedIds: readonly string[],
+  rankingsReady: boolean
+): string[] {
+  if (ids.length <= CLAIM_RECORD_PAGE_SIZE) return [...ids];
+  return rankingsReady ? [...rankedIds] : [];
+}
+
 function useRankedRecordPage({
   ids,
   spaceId,
@@ -106,10 +120,18 @@ function useRankedRecordPage({
     [ids, scores.isError, scores.rankings, visibleCount]
   );
   const rankingsReady = !scores.isLoading && !scores.isError;
-  const canHydrate = idsReady && !idsError && rankingsReady;
-  const rowsQuery = useClaimExploreRows(visible.ids, spaceId, canHydrate);
+  const hydrationIds = React.useMemo(
+    () => recordHydrationIds(ids, visible.ids, rankingsReady),
+    [ids, rankingsReady, visible.ids]
+  );
+  const canHydrate = idsReady && !idsError && (ids.length <= CLAIM_RECORD_PAGE_SIZE || rankingsReady);
+  const rowsQuery = useClaimExploreRows(hydrationIds, spaceId, canHydrate);
   const rowsError = rowsQuery.isError;
   const refetchRows = rowsQuery.refetch;
+  const rows = React.useMemo(
+    () => (rankingsReady ? bestRecordRows(rowsQuery.data, scores.rankings, false) : NO_ROWS),
+    [rankingsReady, rowsQuery.data, scores.rankings]
+  );
 
   const fetchNextPage = React.useCallback(() => {
     if (rowsError) {
@@ -125,7 +147,7 @@ function useRankedRecordPage({
   }, [recordKey, refetchRows, rowsError]);
 
   return {
-    rows: canHydrate && visible.ids.length > 0 ? (rowsQuery.data ?? NO_ROWS) : NO_ROWS,
+    rows: canHydrate && visible.ids.length > 0 ? rows : NO_ROWS,
     isLoading:
       !idsReady ||
       (!idsError && (scores.isLoading || (rowsQuery.isLoading && rowsQuery.data.length === 0 && !rowsQuery.isError))),

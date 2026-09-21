@@ -8,6 +8,7 @@ import {
   bestRecordRows,
   claimsExtractedFromDebatesWhere,
   rankedRecordPage,
+  recordHydrationIds,
   relatedClaimIds,
 } from './use-claim-record';
 
@@ -50,6 +51,22 @@ describe('rankedRecordPage', () => {
       ids: [],
       hasNextPage: false,
     });
+  });
+});
+
+describe('recordHydrationIds', () => {
+  it('hydrates an ordinary one-page record before ranking finishes', () => {
+    const ids = ['claim-1', 'claim-2'];
+
+    expect(recordHydrationIds(ids, [], false)).toEqual(ids);
+  });
+
+  it('waits for Best order before hydrating a record larger than one page', () => {
+    const ids = Array.from({ length: CLAIM_RECORD_PAGE_SIZE + 1 }, (_, index) => `claim-${index}`);
+    const ranked = [...ids].reverse().slice(0, CLAIM_RECORD_PAGE_SIZE);
+
+    expect(recordHydrationIds(ids, ranked, false)).toEqual([]);
+    expect(recordHydrationIds(ids, ranked, true)).toEqual(ranked);
   });
 });
 
