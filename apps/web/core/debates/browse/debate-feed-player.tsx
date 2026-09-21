@@ -33,8 +33,7 @@ type DebateFeedPlayerProps = {
   votes: DebateVotesResult;
 };
 
-export function DebateFeedPlayer({ debate, active, preload = false, votes }: DebateFeedPlayerProps) {
-  const { hasVoted } = votes;
+export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeedPlayerProps) {
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
@@ -113,9 +112,9 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     enabled: active || preload,
   });
 
-  const showControls = ready && (awaitingTap || (playbackEnded && !hasVoted));
-  // End of an unvoted debate offers a replay; a stopped one shows the paused glyph.
-  const showReplay = ready && playbackEnded && !hasVoted;
+  const showReplay = ready && playbackEnded;
+  const showControls = ready && (awaitingTap || showReplay);
+  // An ended debate always offers a replay; a stopped one shows the paused glyph.
   const showPausedGlyph = ready && awaitingTap && !playbackEnded;
 
   // Whether the scrubber is on screen, which the claim stack has to know as well as the scrubber
@@ -336,13 +335,15 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
             <div className="flex items-center gap-2">
               {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
                   centred paused glyph and tap-to-toggle instead. */}
-              <ControlCircle
-                ariaLabel={playing ? 'Pause debate' : playbackEnded ? 'Replay debate' : 'Play debate'}
-                onClick={togglePlayback}
-                className="md:hidden"
-              >
-                {playing ? <Pause /> : <Play />}
-              </ControlCircle>
+              {!playbackEnded && (
+                <ControlCircle
+                  ariaLabel={playing ? 'Pause debate' : 'Play debate'}
+                  onClick={togglePlayback}
+                  className="md:hidden"
+                >
+                  {playing ? <Pause /> : <Play />}
+                </ControlCircle>
+              )}
               {showReplay ? (
                 <ControlCircle ariaLabel="Replay debate" onClick={playFromStart}>
                   <RetrySmall />

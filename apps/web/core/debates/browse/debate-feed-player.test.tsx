@@ -285,6 +285,26 @@ describe('a refused autoplay', () => {
   });
 });
 
+describe('ended playback', () => {
+  it('offers one replay button even after the viewer has voted', () => {
+    const controller = controllerFixture({
+      mutedByUser: true,
+      turnSlot: 1,
+      playing: false,
+      playbackEnded: true,
+    });
+    mocks.controller = controller;
+    const voted = { ...votes, hasVoted: true };
+    const { getAllByRole } = render(<DebateFeedPlayer debate={debate} active votes={voted} />);
+
+    const replayButtons = getAllByRole('button', { name: 'Replay debate' });
+    expect(replayButtons).toHaveLength(1);
+
+    fireEvent.click(replayButtons[0]);
+    expect(controller.playFromStart).toHaveBeenCalledTimes(1);
+  });
+});
+
 /**
  * The backlog opens on keyboard focus and stays open until focus leaves — a latch, because the
  * corner has to survive a keyboard moving between the cards inside it.
