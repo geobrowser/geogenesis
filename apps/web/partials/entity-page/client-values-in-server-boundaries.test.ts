@@ -201,8 +201,11 @@ type ExportKind = 'component' | 'erased' | 'value' | 'unknown';
 /** `memo(X)` and `forwardRef(X)`, plain or `React.`-qualified, produce components. Nothing else does. */
 const COMPONENT_WRAPPERS = new Set(['memo', 'forwardRef']);
 
-/** The local names in one module that actually refer to React's `memo` and `forwardRef`. */
-type ReactBindings = { wrappers: Set<string>; namespaces: Set<string> };
+/** The local names in one module that actually refer to React's wrappers and base classes. */
+type ReactBindings = { wrappers: Set<string>; bases: Set<string>; namespaces: Set<string> };
+
+/** The base classes a React class component may extend. */
+const COMPONENT_BASES = new Set(['Component', 'PureComponent']);
 
 /**
  * Which spellings of `memo` and `forwardRef` this file has earned.
@@ -214,6 +217,7 @@ type ReactBindings = { wrappers: Set<string>; namespaces: Set<string> };
  */
 function reactBindingsOf(sourceFile: ts.SourceFile): ReactBindings {
   const wrappers = new Set<string>();
+  const bases = new Set<string>();
   const namespaces = new Set<string>();
 
   for (const statement of sourceFile.statements) {
@@ -230,12 +234,14 @@ function reactBindingsOf(sourceFile: ts.SourceFile): ReactBindings {
     } else if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
       for (const element of clause.namedBindings.elements) {
         if (element.isTypeOnly) continue;
-        if (COMPONENT_WRAPPERS.has((element.propertyName ?? element.name).text)) wrappers.add(element.name.text);
+        const exported = (element.propertyName ?? element.name).text;
+        if (COMPONENT_WRAPPERS.has(exported)) wrappers.add(element.name.text);
+        if (COMPONENT_BASES.has(exported)) bases.add(element.name.text);
       }
     }
   }
 
-  return { wrappers, namespaces };
+  return { wrappers, bases, namespaces };
 }
 
 function isComponentWrapper(expression: ts.Expression, react: ReactBindings): boolean {
@@ -326,18 +332,28 @@ function returnsAValue(expression: ts.Expression): boolean {
 }
 
 /**
- * A class is a component only if it extends React's.
+ * A class is a component only if it extends React's, by binding rather than by spelling.
  *
  * `export class GeoChatRequestError extends Error` lives in a `'use client'` module and a capital
- * letter alone let it through. An Error subclass read on the server is a client reference like any
- * other value.
+ * letter alone let it through; an Error subclass read on the server is a client reference like any
+ * other value. Matching the *name* `Component` was the next version of the same mistake — it takes
+ * an unrelated local `Component` for React's, and rejects React's own base imported under an alias.
+ * This is the wrapper check's twin and should have been fixed in the same commit as it.
  */
-function classifyClass(node: ts.ClassLikeDeclaration): ExportKind {
+function classifyClass(node: ts.ClassLikeDeclaration, react: ReactBindings): ExportKind {
   const extended = (node.heritageClauses ?? [])
     .filter(clause => clause.token === ts.SyntaxKind.ExtendsKeyword)
-    .flatMap(clause => clause.types.map(type => type.expression.getText()));
+    .flatMap(clause => clause.types.map(type => type.expression));
 
-  return extended.some(name => /(^|\.)(Pure)?Component$/.test(name)) ? 'component' : 'value';
+  const isReactBase = (expression: ts.Expression) => {
+    if (ts.isIdentifier(expression)) return react.bases.has(expression.text);
+    if (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)) {
+      return react.namespaces.has(expression.expression.text) && COMPONENT_BASES.has(expression.name.text);
+    }
+    return false;
+  };
+
+  return extended.some(isReactBase) ? 'component' : 'value';
 }
 
 /**
@@ -401,9 +417,16 @@ function exportKindsOf(
     seen.add(node);
 
     if (ts.isFunctionDeclaration(node) || ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+      // A client component is neither of these: an async function hands back a promise and a
+      // generator hands back an iterator. Only a Server Component may be async, and a module that
+      // says `use client` has opted out of being one.
+      const isAsync = (ts.getModifiers(node) ?? []).some(modifier => modifier.kind === ts.SyntaxKind.AsyncKeyword);
+      const isGenerator = !ts.isArrowFunction(node) && Boolean(node.asteriskToken);
+      if (isAsync || isGenerator) return 'value';
+
       return classifyFunction(node);
     }
-    if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return classifyClass(node);
+    if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return classifyClass(node, react);
     if (ts.isTaggedTemplateExpression(node)) return 'value';
     if (ts.isCallExpression(node)) return isComponentWrapper(node.expression, react) ? 'component' : 'value';
     if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) {
@@ -433,7 +456,9 @@ function exportKindsOf(
 
   for (const statement of sourceFile.statements) {
     if (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) {
-      if (isExported(statement)) kinds.set(statement.name.text, 'erased');
+      // `export default interface Foo {}` is looked up as `default`, the way the function and class
+      // branches already key theirs.
+      if (isExported(statement)) kinds.set(isDefault(statement) ? 'default' : statement.name.text, 'erased');
       continue;
     }
 
@@ -477,6 +502,14 @@ function exportKindsOf(
       for (const [name, kind] of origin) {
         if (name !== 'default') kinds.set(name, kind);
       }
+      continue;
+    }
+
+    // `export * as Ns from './other'` is a namespace object. Recorded as a value, because every
+    // property read off one belonging to a client module is a client reference — and recorded at all,
+    // because a barrel over this barrel would otherwise lose the binding entirely.
+    if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamespaceExport(statement.exportClause)) {
+      if (!statement.isTypeOnly) kinds.set(statement.exportClause.name.text, 'value');
       continue;
     }
 
@@ -874,7 +907,14 @@ describe('exportKindsOf', () => {
     ['an arrow', 'export const Subject = () => <div />;'],
     ['memo imported from react', "import { memo } from 'react';\nexport const Subject = memo(() => <div />);"],
     ['React.forwardRef', "import * as React from 'react';\nexport const Subject = React.forwardRef(() => <div />);"],
-    ['a class extending Component', 'export class Subject extends React.Component {}'],
+    [
+      'a class extending React.Component',
+      "import * as React from 'react';\nexport class Subject extends React.Component {}",
+    ],
+    [
+      'a class extending an aliased React base',
+      "import { Component as Base } from 'react';\nexport class Subject extends Base {}",
+    ],
     ['an identifier default', 'const Inner = () => <div />;\nexport default Inner;'],
     ['a parenthesised arrow', 'export const Subject = ((props) => <div />);'],
     ['an arrow returning a component call', 'export const Subject = () => renderThing();'],
@@ -905,6 +945,14 @@ describe('exportKindsOf', () => {
       "a wrapper call that is not React's",
       "import { memo } from 'other';\nexport const Subject = memo(() => <div />);",
     ],
+    [
+      'a class extending an unrelated Component',
+      "import { Component } from './ui';\nexport class Subject extends Component {}",
+    ],
+    // A client component can be neither: one hands back a promise, the other an iterator.
+    ['an async function', 'export async function Subject() { return fetchThing(); }'],
+    ['an async arrow', 'export const Subject = async () => <div />;'],
+    ['a generator function', 'export function* Subject() { yield item; }'],
     ['a default object', 'export default { a: 1 };'],
   ])('rejects %s', (_label, source) => {
     expect(kindOf(source, source.includes('export default') ? 'default' : 'Subject')).toBe('value');
@@ -946,6 +994,17 @@ describe('exportKindsOf', () => {
     expect(kindOf('export type Subject = { a: 1 };')).toBe('erased');
     expect(kindOf('export interface Subject { a: 1 }')).toBe('erased');
     expect(kindOf("export type { Subject } from './x';")).toBe('erased');
+    // Keyed as `default`, which is what a default import looks it up as.
+    expect(kindOf('export default interface Subject { a: 1 }', 'default')).toBe('erased');
+  });
+
+  it('records a namespace export, so a barrel over it keeps the binding', () => {
+    // Nothing to classify in `* as Ns` itself — every property read off one belonging to a client
+    // module is a client reference — but leaving it out of the map loses it for anything that
+    // re-exports this module.
+    const kinds = exportKindsOf(parse('barrel.tsx', "export * as Ns from './other';"), () => null);
+
+    expect(kinds.get('Ns')).toBe('value');
   });
 
   it('follows a re-export to whatever the origin says it is', () => {
