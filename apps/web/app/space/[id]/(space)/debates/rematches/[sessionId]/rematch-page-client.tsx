@@ -1900,7 +1900,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       markEnteringDebate(session.converted_debate_id);
       router.replace(`/space/${session.source_space_id}/debates/${session.converted_debate_id}`);
     } else if (session.status === 'ended' || session.status === 'expired') {
-      if (localLeaveStarted || session.status === 'expired') {
+      if (localLeaveStarted || didLocallyLeaveRematch(session.id) || session.status === 'expired') {
         returnFromSession(session);
       }
     }
@@ -1913,7 +1913,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     });
   };
 
-  // `didLocallyLeaveRematch` covers remounts after this tab's own Leave (gateway `ended` is shared).
+  // `didLocallyLeaveRematch` covers remounts after this tab's own Leave.
   const showOpponentLeftDialog = Boolean(
     session &&
     session.status === 'ended' &&

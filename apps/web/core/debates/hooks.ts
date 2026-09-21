@@ -76,7 +76,12 @@ import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
-import { markLocalDebateLeave, markLocalRematchLeave } from './local-debate-leave';
+import {
+  markLocalDebateLeave,
+  markLocalRematchLeave,
+  unmarkLocalDebateLeave,
+  unmarkLocalRematchLeave,
+} from './local-debate-leave';
 import {
   type ParticipantAvatarMapper,
   type ParticipantAvatarSource,
@@ -852,6 +857,9 @@ export function useAbortDebate(debateId: string) {
     onMutate: () => {
       markLocalDebateLeave(debateId);
     },
+    onError: () => {
+      unmarkLocalDebateLeave(debateId);
+    },
     onSuccess: debate => {
       queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debate.id) });
@@ -974,6 +982,9 @@ export function useLeaveDebateRematch(sessionId: string) {
     mutationFn: () => leaveDebateRematch(sessionId, getPrivyIdentityToken, accountKey),
     onMutate: () => {
       markLocalRematchLeave(sessionId);
+    },
+    onError: () => {
+      unmarkLocalRematchLeave(sessionId);
     },
     onSuccess: session => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, session.id), session);
