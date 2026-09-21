@@ -46,7 +46,7 @@ describe('Menu triggerRef', () => {
     expect(screen.getByText('Open').closest('button')).toBeInTheDocument();
   });
 
-  // The ref is focusable, which is the whole point of handing it to a dialog.
+  // A dialog restores focus to this node, so it has to be focusable.
   it('gives a focusable trigger while the menu is open', () => {
     const triggerRef = React.createRef<HTMLButtonElement>();
 
