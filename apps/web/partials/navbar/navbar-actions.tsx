@@ -10,6 +10,7 @@ import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 
 import { browseModeToggled, editModeToggled } from '~/core/analytics';
+import { useDebateSchedule, useSaveDebateSchedule } from '~/core/debates/hooks';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -29,6 +30,7 @@ import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
+import { AvailabilityModal } from '~/partials/availability/availability-modal';
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
 import { EditProfileDialog } from '~/partials/profile/edit-profile-dialog';
 
@@ -49,6 +51,9 @@ export function NavbarActions() {
   // the person entity, and a publish outlives the close, so unmounting it midway
   // would drop the success write-back to the navbar avatar.
   const [hasOpenedEditProfile, setHasOpenedEditProfile] = React.useState(false);
+  const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
+  // Deferred like the dialog above: the week grid is only built once somebody asks for it.
+  const [hasOpenedSchedule, setHasOpenedSchedule] = React.useState(false);
 
   const { isLoading: isUserLoading, profile, address } = useUser();
   const { personalSpaceId } = usePersonalSpaceId();
@@ -58,6 +63,11 @@ export function NavbarActions() {
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
   // only trigger the logout.
   const { logout } = useLogout();
+  // Read here rather than inside the modal: the modal seeds its grid from `blocks` as it opens and
+  // does not reseed when a later read answers, so a query that only started on the click would draw
+  // an empty calendar over a saved schedule.
+  const { blocks: scheduleBlocks } = useDebateSchedule();
+  const saveSchedule = useSaveDebateSchedule();
 
   // The navbar's own content is swapped inside one stable tree rather than being
   // returned from competing branches. Returning a `<div>` from one branch and a
@@ -135,6 +145,20 @@ export function NavbarActions() {
               Edit profile
             </button>
           )}
+          {/* Not gated on `personalSpaceId` the way Edit profile is: that one publishes into the
+              personal space, while a schedule is stored in geo-chat against the Privy account
+              (`debateQueryKeys.schedule`), which everyone signed in has. */}
+          <button
+            type="button"
+            onClick={() => {
+              onOpenChange(false);
+              setHasOpenedSchedule(true);
+              setIsScheduleOpen(true);
+            }}
+            className="flex w-full items-center border-t border-grey-02 px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+          >
+            Set my schedule
+          </button>
           {/* Sign out keeps its own group below the divider — the destructive action
             stays alone at the bottom where people expect it. */}
           <div className="border-t border-grey-02">
@@ -156,6 +180,18 @@ export function NavbarActions() {
       {navbarContent}
       {hasOpenedEditProfile ? (
         <EditProfileDialog key="edit-profile-dialog" open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen} />
+      ) : null}
+      {/* No `openerRef`, unlike the banner's copy: the menu item that opens this unmounts with the
+          popover on the same click, leaving no node to focus. The popover returns focus to the
+          avatar trigger, and the dialog restores to that on close. */}
+      {hasOpenedSchedule ? (
+        <AvailabilityModal
+          key="availability-modal"
+          open={isScheduleOpen}
+          onOpenChange={setIsScheduleOpen}
+          blocks={scheduleBlocks ?? []}
+          onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
+        />
       ) : null}
     </>
   );
