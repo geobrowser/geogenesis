@@ -631,6 +631,30 @@ describe('See times', () => {
     expect(screen.getByRole('button', { name: 'See times for Arturas' })).toBeEnabled();
   });
 
+  // The list is everyone online *now*, so the viewed person can drop off it at any moment. The
+  // dialog is mounted at tab level precisely so their row unmounting cannot take it away.
+  it('stays open when the person goes offline and leaves the list', async () => {
+    mocks.people = [person('user-them', 'Arturas'), person('user-other', 'Vytautas')];
+    const store = createStore();
+    const { rerender } = render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    mocks.people = [person('user-other', 'Vytautas')];
+    // Re-wrapped, because RTL's rerender takes the bare element and dropping the Provider would
+    // remount the tab and lose the state this case is about.
+    rerender(
+      <Provider store={store}>
+        <PeopleTab onTabChange={mocks.onTabChange} />
+      </Provider>
+    );
+
+    expect(screen.queryByRole('button', { name: 'See times for Arturas' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
+  });
+
   it('is absent while the flag is off, which is the default', () => {
     mocks.peerAvailability = false;
     mocks.people = [person('user-them', 'Arturas')];

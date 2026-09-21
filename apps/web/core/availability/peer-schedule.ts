@@ -84,6 +84,11 @@ export type PeerDay = {
   weekdayLabel: string;
   /** `Sep 21`. */
   dayLabel: string;
+  /**
+   * The viewer's own date. Not the first column: that one starts at the server's window, which
+   * west of UTC can already be tomorrow.
+   */
+  isToday: boolean;
   slots: PeerDaySlot[];
 };
 
@@ -128,7 +133,13 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
   const viewerZone = usableZone(schedule.viewerTimezone);
   const peerZone = usableZone(schedule.peerTimezone);
 
-  const days = dayColumns(now, viewerZone).map((date): PeerDay => ({ date, ...dayLabels(date), slots: [] }));
+  const today = zonedParts(now, viewerZone).date;
+  const days = dayColumns(now, viewerZone).map((date): PeerDay => ({
+    date,
+    ...dayLabels(date),
+    isToday: date === today,
+    slots: [],
+  }));
   const byDate = new Map(days.map(day => [day.date, day]));
 
   for (const slot of schedule.slots) {

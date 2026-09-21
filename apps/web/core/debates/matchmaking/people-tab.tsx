@@ -72,6 +72,10 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // One elevated portal for every row's space list. A portal per person would append a matching
   // number of containers to the body, while a plain Radix portal sits behind this z-200 panel.
   const spacesPopoverPortal = useElevatedPopoverPortal();
+  const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
+  // Held here rather than in the row. This list is everyone online *now*, so a row unmounts the
+  // moment its person goes offline, and a dialog inside it would vanish mid-read.
+  const [viewingTimes, setViewingTimes] = React.useState<{ userId: string; name: string } | null>(null);
   const allPeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
 
   // Held outside this component so they survive it, exactly as the claim tabs' filters are: the hub
@@ -336,12 +340,21 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                   disabled={buttonsDisabled}
                   disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
                   onRequireSignIn={onRequireSignIn}
+                  onSeeTimes={peerAvailabilityEnabled ? setViewingTimes : undefined}
                 />
               ))}
             </ul>
           </>
         </HubQueryState>
       </div>
+
+      {/* Closing returns to the hub, which is where it was opened from. */}
+      <PeerAvailabilityModal
+        open={viewingTimes !== null}
+        userId={viewingTimes?.userId ?? ''}
+        peerName={viewingTimes?.name}
+        onClose={() => setViewingTimes(null)}
+      />
     </div>
   );
 }
@@ -355,6 +368,7 @@ function PersonRow({
   disabled,
   disabledReason,
   onRequireSignIn,
+  onSeeTimes,
 }: {
   person: DebatePerson;
   /** Fetched once for the whole list, so a row never asks for its own. Null until that lands. */
@@ -373,14 +387,10 @@ function PersonRow({
    * would fail at the token exchange with an error the viewer can do nothing about.
    */
   onRequireSignIn?: () => void;
+  /** Absent while the feature flag is off, which is what hides "See times". */
+  onSeeTimes?: (peer: { userId: string; name: string }) => void;
 }) {
   const createChallenge = useCreateDebateChallenge();
-  // Off by default until the endpoint can return their week unfiltered (GEO-2938); the view still
-  // describes what it draws as mutual times in the meantime.
-  const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
-  // Per row rather than per tab: only one can be open at a time anyway, and hoisting it would put
-  // a person's identity into the tab's state for no gain.
-  const [timesOpen, setTimesOpen] = React.useState(false);
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
   const activeSpaces =
     spaceIds.length > 0 ? (
@@ -446,13 +456,15 @@ function PersonRow({
             is next free. Gating it on the same reasons would hide it at the moment it earns its
             place. Signed out it opens Privy like the pill does, because the endpoint behind it is
             viewer-scoped and would only 401. */}
-        {peerAvailabilityEnabled && (
+        {onSeeTimes && (
           <button
             type="button"
             // Every row carries this control, so the visible label alone leaves a screen reader or
             // voice control with a list of identical targets.
             aria-label={`See times for ${speakerLabel(person)}`}
-            onClick={() => (onRequireSignIn ? onRequireSignIn() : setTimesOpen(true))}
+            onClick={() =>
+              onRequireSignIn ? onRequireSignIn() : onSeeTimes({ userId: person.user_id, name: speakerLabel(person) })
+            }
             className="shrink-0 text-metadata whitespace-nowrap text-grey-04 transition-colors hover:text-text"
           >
             See times
@@ -476,14 +488,6 @@ function PersonRow({
           {person.in_debate ? 'In a debate' : 'Request debate'}
         </HubPillButton>
       </div>
-
-      {/* Closing returns to the hub, which is where this was opened from. */}
-      <PeerAvailabilityModal
-        open={peerAvailabilityEnabled && timesOpen}
-        userId={person.user_id}
-        peerName={speakerLabel(person)}
-        onClose={() => setTimesOpen(false)}
-      />
     </li>
   );
 }

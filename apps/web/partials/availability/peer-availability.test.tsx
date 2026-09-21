@@ -63,6 +63,20 @@ describe('PeerAvailabilityView', () => {
     expect(screen.getByRole('heading', { name: /user-pee/ })).toBeInTheDocument();
   });
 
+  // The first column is the server's window start, which west of UTC can be the viewer's tomorrow.
+  it('does not head a shifted first column with Today', () => {
+    render(
+      <PeerAvailabilityView
+        schedule={schedule({ viewerTimezone: 'America/Los_Angeles', slots: [slot(13, true, 22)] })}
+        peerName="Ada"
+        now={new Date('2026-09-22T01:00:00Z')}
+      />
+    );
+
+    expect(screen.queryByText('Today')).not.toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Tue Sep 22' })).toBeInTheDocument();
+  });
+
   it('draws seven days', () => {
     setup();
     expect(screen.getAllByTestId(/^peer-day-/)).toHaveLength(7);
@@ -137,23 +151,23 @@ describe('PeerAvailabilityView', () => {
       const monday = within(day('2026-09-21'));
 
       expect(monday.getAllByRole('button', { name: /at \d/ })).toHaveLength(4);
-      expect(monday.getByRole('button', { name: /Show 2 more times on/ })).toBeInTheDocument();
+      expect(monday.getByRole('button', { name: /\+2 more times on/ })).toBeInTheDocument();
     });
 
     it('expands to all of them', async () => {
       const { user } = setup({ slots: many });
       const monday = within(day('2026-09-21'));
 
-      await user.click(monday.getByRole('button', { name: /Show 2 more times on/ }));
+      await user.click(monday.getByRole('button', { name: /\+2 more times on/ }));
 
       expect(monday.getAllByRole('button', { name: /at \d/ })).toHaveLength(6);
       // A toggle, so an expanded day can be put back.
-      expect(monday.getByRole('button', { name: /Show fewer times on/ })).toHaveAttribute('aria-expanded', 'true');
+      expect(monday.getByRole('button', { name: /Show less on/ })).toHaveAttribute('aria-expanded', 'true');
     });
 
     it('does not offer an expander for exactly four', () => {
       setup({ slots: many.slice(0, 4) });
-      expect(within(day('2026-09-21')).queryByRole('button', { name: /Show \d+ more/ })).not.toBeInTheDocument();
+      expect(within(day('2026-09-21')).queryByRole('button', { name: /more times on/ })).not.toBeInTheDocument();
     });
   });
 

@@ -149,19 +149,19 @@ export function PeerAvailabilityView({
 function WeekGrid({ days, peerName }: { days: PeerDay[]; peerName: string }) {
   return (
     <div className="grid min-h-0 flex-1 grid-cols-7 gap-3 overflow-y-auto overscroll-contain mobile:grid-cols-1 mobile:gap-2">
-      {days.map((day, index) => (
-        <DayColumn key={day.date} day={day} isToday={index === 0} peerName={peerName} />
+      {days.map(day => (
+        <DayColumn key={day.date} day={day} peerName={peerName} />
       ))}
     </div>
   );
 }
 
-function DayColumn({ day, isToday, peerName }: { day: PeerDay; isToday: boolean; peerName: string }) {
+function DayColumn({ day, peerName }: { day: PeerDay; peerName: string }) {
   const [expanded, setExpanded] = React.useState(false);
   const empty = day.slots.length === 0;
   const shown = expanded ? day.slots : day.slots.slice(0, SLOTS_PER_DAY);
   const hidden = day.slots.length - shown.length;
-  const dayLabel = `${isToday ? 'Today' : day.weekdayLabel} ${day.dayLabel}`;
+  const dayLabel = `${day.isToday ? 'Today' : day.weekdayLabel} ${day.dayLabel}`;
 
   return (
     <section
@@ -179,7 +179,7 @@ function DayColumn({ day, isToday, peerName }: { day: PeerDay; isToday: boolean;
     >
       <div className="flex flex-col gap-0 mobile:flex-row mobile:items-baseline mobile:gap-1.5">
         <Text as="span" variant="metadataMedium">
-          {isToday ? 'Today' : day.weekdayLabel}
+          {day.isToday ? 'Today' : day.weekdayLabel}
         </Text>
         <Text as="span" variant="footnote" color="grey-04">
           {day.dayLabel}
@@ -200,7 +200,7 @@ function DayColumn({ day, isToday, peerName }: { day: PeerDay; isToday: boolean;
               type="button"
               // Named with its day for the same reason the chips are, and a toggle so an expanded
               // day can be put back.
-              aria-label={expanded ? `Show fewer times on ${dayLabel}` : `Show ${hidden} more times on ${dayLabel}`}
+              aria-label={expanded ? `Show less on ${dayLabel}` : `+${hidden} more times on ${dayLabel}`}
               aria-expanded={expanded}
               onClick={() => setExpanded(current => !current)}
               className="rounded-md px-2 py-1 text-left text-footnote text-grey-04 transition-colors hover:text-text"

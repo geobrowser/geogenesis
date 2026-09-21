@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 
 import { toPeerSchedule } from '~/core/availability/peer-schedule';
 import { usePeerSchedule } from '~/core/debates/hooks';
-import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
+import { readStoredFeatureFlag, usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 
 import { Text } from '~/design-system/text';
 
@@ -27,8 +27,10 @@ export function DebugPeerAvailabilityPageClient({ spaceId }: { spaceId: string }
   const enabled = usePeerAvailabilityEnabled();
   const router = useRouter();
   React.useEffect(() => {
-    if (!enabled) router.replace(`/space/${spaceId}`);
-  }, [enabled, router, spaceId]);
+    // Read storage directly rather than `enabled`, which is hydration-gated and so reports the
+    // default on this first pass — redirecting every visitor, flag on or not.
+    if (!readStoredFeatureFlag('peerAvailability')) router.replace(`/space/${spaceId}`);
+  }, [router, spaceId]);
 
   const [input, setInput] = React.useState('');
   const [userId, setUserId] = React.useState<string | null>(null);

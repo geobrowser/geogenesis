@@ -107,6 +107,8 @@ describe('peerScheduleDays', () => {
     ]);
     expect(result[0].weekdayLabel).toBe('Mon');
     expect(result[0].dayLabel).toBe('Sep 21');
+    expect(result[0].isToday).toBe(true);
+    expect(result.slice(1).every(day => !day.isToday)).toBe(true);
   });
 
   // The server's window starts at the UTC date and is then read as local dates, so a viewer west
@@ -119,6 +121,15 @@ describe('peerScheduleDays', () => {
 
       expect(result[0].date).toBe('2026-09-22');
       expect(result.map(day => day.date)).not.toContain('2026-09-21');
+    });
+
+    it('does not call the shifted first column Today, because it is tomorrow for them', () => {
+      const evening = new Date('2026-09-22T01:00:00Z');
+      const result = days({ viewer_timezone: 'America/Los_Angeles' }, evening);
+
+      expect(result[0].date).toBe('2026-09-22');
+      expect(result[0].isToday).toBe(false);
+      expect(result.some(day => day.isToday)).toBe(false);
     });
 
     it('still starts at the viewer own today when that is the later of the two', () => {
