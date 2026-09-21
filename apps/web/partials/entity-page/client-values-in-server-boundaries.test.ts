@@ -90,8 +90,10 @@ function dynamicImportSpecifiers(sourceFile: ts.SourceFile): string[] {
   const visit = (node: ts.Node) => {
     if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
       const [specifier] = node.arguments;
-      // A computed specifier resolves to no file, so there is nothing to follow.
-      if (specifier && ts.isStringLiteral(specifier)) found.push(specifier.text);
+      // `isStringLiteralLike`, unlike the directive check: `import(`./helper`)` is a legal and
+      // statically resolvable specifier, where `` `use client` `` is not a legal directive. A
+      // computed specifier resolves to no file, so there is nothing to follow.
+      if (specifier && ts.isStringLiteralLike(specifier)) found.push(specifier.text);
     }
     ts.forEachChild(node, visit);
   };
@@ -219,34 +221,56 @@ function isComponentWrapper(expression: ts.Expression): boolean {
  *
  * So the evidence runs the other way: a function whose every `return` hands back an object, array,
  * string or number is a value — which is `function BuildOptions() { return {}; }`, the case review
- * named — and anything else is left as a component. That leaves a residue, a function returning a
- * value through a variable rather than a literal, and it is the right residue to have: silent where
- * it is unsure, loud only where it is certain.
+ * named — and anything else is left as a component. A concise arrow body counts as a return, or
+ * `() => ({})` slips through the same door the block form was just closed on, and a literal is
+ * recognised through parentheses, `as`, `satisfies` and `!`.
+ *
+ * Deciding from the returns alone also drops the separate JSX scan this used to run, which could
+ * override a definite literal return — a function handing back `{ label: <span /> }` returns an
+ * object, whatever it renders on the way. That leaves a residue, a function returning a value
+ * through a variable rather than a literal, and it is the right residue to have: silent where it is
+ * unsure, loud only where it is certain.
  */
 function classifyFunction(node: ts.SignatureDeclaration): ExportKind {
-  const returned: ts.Node[] = [];
-  let rendersJsx = false;
+  const returned: ts.Expression[] = [];
+
+  // `() => ({})` has no return statement at all, which is how the first version of this accepted
+  // the very example it was written to catch — in the other half of the syntax.
+  if (ts.isArrowFunction(node) && node.body && !ts.isBlock(node.body)) returned.push(node.body);
 
   const visit = (child: ts.Node) => {
     // Anything with its own body owns its own returns. `isFunctionLike` rather than the three
     // function kinds by hand: a method or an accessor on a nested class is a scope too, and
     // listing kinds is how the earlier version of this file kept being wrong.
     if (child !== node && ts.isFunctionLike(child)) return;
-    if (ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child) || ts.isJsxFragment(child)) rendersJsx = true;
     if (ts.isReturnStatement(child) && child.expression) returned.push(child.expression);
     ts.forEachChild(child, visit);
   };
   ts.forEachChild(node, visit);
 
-  if (rendersJsx || returned.length === 0) return 'component';
+  // Returning nothing is what an effect-only component does.
+  if (returned.length === 0) return 'component';
 
-  const isValueLiteral = (expression: ts.Node) =>
+  return returned.every(returnsAValue) ? 'value' : 'component';
+}
+
+/** A literal, through whatever is wrapped around it. */
+function returnsAValue(expression: ts.Expression): boolean {
+  if (
+    ts.isParenthesizedExpression(expression) ||
+    ts.isAsExpression(expression) ||
+    ts.isSatisfiesExpression(expression) ||
+    ts.isNonNullExpression(expression)
+  ) {
+    return returnsAValue(expression.expression);
+  }
+
+  return (
     ts.isObjectLiteralExpression(expression) ||
     ts.isArrayLiteralExpression(expression) ||
     ts.isStringLiteralLike(expression) ||
-    ts.isNumericLiteral(expression);
-
-  return returned.every(isValueLiteral) ? 'value' : 'component';
+    ts.isNumericLiteral(expression)
+  );
 }
 
 /**
@@ -280,7 +304,7 @@ describe('server components take only components from client modules', () => {
    * reaches the arrow function declared above it instead of giving up and reporting a real
    * component.
    */
-  function kindsFor(file: string): Map<string, ExportKind> {
+  function kindsFor(file: string, visiting: Set<string> = new Set()): Map<string, ExportKind> {
     const cached = exportKinds.get(file);
     if (cached) return cached;
 
@@ -364,20 +388,49 @@ describe('server components take only components from client modules', () => {
         continue;
       }
 
-      // `export { a }` and `export { a } from '…'`: resolvable only when declared here.
       if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+        /*
+         * `export { a }` is declared here. `export { a } from './b'` is declared in `./b`, and a
+         * client barrel doing exactly that is a real shape in this tree — `table-block.tsx`
+         * re-exports `TableBlockLoadingPlaceholder`, `community-filter-pill.tsx` re-exports
+         * `FilterPillTrigger`. Calling those unclassifiable accuses real components, so the chain
+         * is followed to wherever the thing is actually declared.
+         *
+         * `visiting` is the cycle guard: barrels re-export each other, and a loop here would be an
+         * infinite one rather than a wrong answer.
+         */
+        const origin =
+          statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
+            ? resolveImport(statement.moduleSpecifier.text, file)
+            : null;
+
         for (const element of statement.exportClause.elements) {
           if (statement.isTypeOnly || element.isTypeOnly) {
             kinds.set(element.name.text, 'erased');
             continue;
           }
-          const local = locals.get((element.propertyName ?? element.name).text);
-          kinds.set(element.name.text, local ? classify(local) : 'unknown');
+
+          const sourceName = (element.propertyName ?? element.name).text;
+
+          if (!origin) {
+            const local = locals.get(sourceName);
+            kinds.set(element.name.text, local ? classify(local) : 'unknown');
+            continue;
+          }
+
+          if (visiting.has(origin)) {
+            kinds.set(element.name.text, 'unknown');
+            continue;
+          }
+
+          kinds.set(element.name.text, kindsFor(origin, new Set([...visiting, file])).get(sourceName) ?? 'unknown');
         }
       }
     }
 
-    exportKinds.set(file, kinds);
+    // Cached only for a complete answer. A run that gave up on a cycle would otherwise be the
+    // answer every later caller got.
+    if (visiting.size === 0) exportKinds.set(file, kinds);
     return kinds;
   }
 
@@ -556,8 +609,19 @@ describe('server components take only components from client modules', () => {
         }
         if (!reference.exported) continue;
 
+        /*
+         * The gate reads the exported name, because that is the declaration being classified and
+         * React cannot render a lowercase binding as an element. A default import is judged by its
+         * local name instead, which is the only name it has.
+         *
+         * `export { default } from './client'` has neither — `default` is not a name anyone chose —
+         * so there is nothing for capitalisation to say and the declaration decides alone. Review
+         * also asked for `{ panel as Panel }` to be judged by the local alias; that one is declined
+         * below, in the reply, because the opposite alias `{ Button as button }` wants the opposite
+         * rule and neither spelling exists here.
+         */
         const named = reference.exported === 'default' ? reference.local : reference.exported;
-        if (!isCapitalised(named)) {
+        if (named !== 'default' && !isCapitalised(named)) {
           yield {
             offence: `${from} -> ${reference.local} (from ${source})${suffix}`,
             kind: 'value',
