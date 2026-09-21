@@ -34,6 +34,7 @@ import { Avatar } from '~/design-system/avatar';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
+import { Close } from '~/design-system/icons/close';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -58,6 +59,8 @@ function collectBrowseSidebarImageHrefs(data: BrowseSidebarData): string[] {
 const navLinkBase = 'flex items-center gap-3 rounded-lg p-2.5 text-browseMenu font-normal not-italic';
 const navLinkIdle = `${navLinkBase} text-text hover:bg-grey-01`;
 const navLinkActive = `${navLinkBase} bg-divider text-text`;
+const mobileHeaderActionClass =
+  'flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-grey-01 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-text active:bg-divider';
 
 function BrowseNavIcon({ src }: { src: string }) {
   return (
@@ -302,8 +305,14 @@ function SidebarToggle({ open, onToggle, className }: { open: boolean; onToggle:
   );
 }
 
-export function BrowseSidebar() {
+type BrowseSidebarProps =
+  { presentation?: 'desktop'; onClose?: never } | { presentation: 'mobile'; onClose: () => void };
+
+export function BrowseSidebar(props: BrowseSidebarProps = {}) {
+  const presentation = props.presentation ?? 'desktop';
   const [open, setOpen] = useAtom(browseSidebarOpenAtom);
+  const mobile = presentation === 'mobile';
+  const onClose = props.presentation === 'mobile' ? props.onClose : undefined;
   const { personalSpaceId: personalSpaceIdFromHook } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;
@@ -388,7 +397,7 @@ export function BrowseSidebar() {
     }
   }, []);
 
-  if (!open) {
+  if (!open && !mobile) {
     return (
       <aside
         className="pointer-events-none sticky top-0 z-50 h-dvh w-0 shrink-0 overflow-visible"
@@ -407,23 +416,54 @@ export function BrowseSidebar() {
 
   return (
     <aside
-      className="relative sticky top-0 z-50 flex h-dvh shrink-0 flex-col overflow-visible border-r border-divider bg-white"
-      style={{ width: SIDEBAR_WIDTH_PX, minWidth: SIDEBAR_WIDTH_PX }}
+      className={cx(
+        'flex shrink-0 flex-col bg-white',
+        mobile
+          ? 'h-full w-full overflow-hidden'
+          : 'relative sticky top-0 z-50 h-dvh overflow-visible border-r border-divider'
+      )}
+      style={mobile ? undefined : { width: SIDEBAR_WIDTH_PX, minWidth: SIDEBAR_WIDTH_PX }}
       aria-label="Browse menu"
     >
-      <div className="flex h-11 shrink-0 items-center px-4">
-        <Link href={NavUtils.toRoot()} aria-label="Geo">
+      <div
+        className={cx(
+          'flex shrink-0 items-center px-4',
+          mobile ? 'h-14 justify-between border-b border-divider' : 'h-11'
+        )}
+      >
+        <Link
+          href={NavUtils.toRoot()}
+          aria-label="Geo"
+          className={mobile ? cx('-ml-3', mobileHeaderActionClass) : undefined}
+        >
           <GeoLogoLarge />
         </Link>
+        {mobile ? (
+          <button
+            type="button"
+            aria-label="Close browse menu"
+            onClick={onClose}
+            className={cx('-mr-3 text-grey-04', mobileHeaderActionClass)}
+          >
+            <Close />
+          </button>
+        ) : null}
       </div>
 
-      <SidebarToggle
-        open
-        onToggle={() => setOpen(false)}
-        className="top-[calc(2.75rem+0.75rem)] right-0 translate-x-1/2"
-      />
+      {!mobile ? (
+        <SidebarToggle
+          open
+          onToggle={() => setOpen(false)}
+          className="top-[calc(2.75rem+0.75rem)] right-0 translate-x-1/2"
+        />
+      ) : null}
 
-      <div className="no-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3">
+      <div
+        className={cx(
+          'no-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3',
+          mobile && '[&_a]:min-h-11 [&_button]:min-h-11'
+        )}
+      >
         <nav className="space-y-0.5">
           <BrowseNavPrimaryLinks personalSpaceId={personalSpaceId} />
         </nav>
