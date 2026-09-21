@@ -132,6 +132,25 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   }),
 }));
 
+vi.mock('~/core/claims/browse/claim-position-comment', () => ({
+  ClaimPositionCommentControl: ({
+    disabled,
+    responseKind,
+    titleFor,
+  }: {
+    disabled?: boolean;
+    responseKind: string;
+    titleFor?: (position: boolean) => string;
+  }) => (
+    <div
+      data-testid="pills"
+      data-disabled={String(Boolean(disabled))}
+      data-response-kind={responseKind}
+      data-title={titleFor?.(true)}
+    />
+  ),
+}));
+
 vi.mock('~/core/claims/browse/claim-end-slot', () => ({
   ClaimEndSlot: ({ enabled }: { enabled?: boolean }) => (
     <div data-testid="end-slot" data-enabled={String(enabled !== false)} />

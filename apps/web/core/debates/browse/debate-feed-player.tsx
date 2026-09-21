@@ -5,21 +5,20 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
-import { DebateTileChip, tileChipSurface } from '~/core/debates/debate-video-tile';
+import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
-import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
-import { useSpace } from '~/core/hooks/use-space';
 import { releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
+import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
-import { WinnerVoteButton } from './winner-vote-button';
+import { useOpenDebaterProfile } from './use-open-debater-profile';
 
 type DebateFeedPlayerProps = {
   debate: Debate;
@@ -60,7 +59,6 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     playheadSeconds,
     timelineSeconds,
     turnState,
-    activeSlot,
     subtitle,
     onPlaybackTick,
     togglePlayback: togglePlaybackRaw,
@@ -107,10 +105,178 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     }
   }, [active, awaitingTap, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend]);
 
+  // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
+  // it belongs to is spoken, rather than appearing a beat late on the first one.
+  const ticker = useDebateClaimTicker(debate, {
+    playheadMs: playheadSeconds * 1000,
+    timelineMs: timelineSeconds * 1000,
+    enabled: active || preload,
+  });
+
   const showControls = ready && (awaitingTap || (playbackEnded && !hasVoted));
   // End of an unvoted debate offers a replay; a stopped one shows the paused glyph.
   const showReplay = ready && playbackEnded && !hasVoted;
   const showPausedGlyph = ready && awaitingTap && !playbackEnded;
+
+  // Whether the scrubber is on screen, which the claim stack has to know as well as the scrubber
+  // itself — it sits in the same bottom band and lifts clear of it. Hover is the remaining case and
+  // stays in CSS (`group-hover` on both), since neither element can ask about the other in a class.
+  //
+  // Keyboard focus is here rather than a `focus-within:` variant for exactly that reason: tabbing
+  // to the timeline has to raise the cards too, and a sibling cannot see focus land inside the
+  // scrubber. Guarded on `relatedTarget` so moving between the markers and the range input — both
+  // inside the wrapper — does not blink it off and on.
+  const [timelineFocused, setTimelineFocused] = React.useState(false);
+  const scrubberShown = showControls || timelineFocused;
+
+  // Which debater's corner is showing their backlog rather than their live cards.
+  //
+  // Pointer state is tracked per tile rather than on the stack itself, because the backlog has to
+  // open from anywhere over that debater's half. A claim card is on screen for a few seconds at a
+  // time, so a hover target made of the cards is a target that is usually not there — and "hover to
+  // see what they said" has to work in the silences, which is most of a debate.
+  //
+  // Per tile rather than per player so the two corners stay independent: pointing at one debater
+  // opens their claims and leaves the other's alone, which is the whole reason for splitting them.
+  const [pointerOverSlot, setPointerOverSlot] = React.useState<number | null>(null);
+  const [focusedSlot, setFocusedSlot] = React.useState<number | null>(null);
+  // Held open by the chip rather than by the pointer — the only way in on a touch screen, where
+  // there is no hover to end and so no hover to hold it.
+  const [pinnedSlot, setPinnedSlot] = React.useState<number | null>(null);
+  /**
+   * The slot whose backlog the pointer has opened, held until the pointer leaves that tile.
+   *
+   * A latch rather than a live test of where the pointer is. Reaching the backlog means crossing
+   * into it, and a rule that closed the moment the pointer came back down would put the cards
+   * permanently out of reach — no scrolling it, no expanding a claim, no answering one. So the
+   * pointer opens it by going above the live card, and then the tile holds it open.
+   */
+  const [backlogHoverSlot, setBacklogHoverSlot] = React.useState<number | null>(null);
+
+  /** The same condition the stack is given, so the corner's box can cap itself only when open. */
+  const claimsOpenFor = (slot: number) => {
+    // A backlog opened on purpose stays open, and a claim arriving lands at the bottom of it —
+    // that is the whole point of having opened it. Same for a keyboard that has tabbed into it.
+    if (pinnedSlot === slot || focusedSlot === slot) return true;
+    return pointerOverSlot === slot && backlogHoverSlot === slot;
+  };
+
+  /**
+   * The top edge of the live card, in viewport coordinates, per slot.
+   *
+   * Remembered rather than measured live, because opening the backlog makes the corner taller and
+   * moves its top edge up past the pointer. Test against that and the pointer would be above the
+   * corner, then inside it, then above it again — the list would flicker open and shut under a
+   * stationary mouse. The line stays where the *card* drew it.
+   */
+  const liveCornerTop = React.useRef(new Map<number, number>());
+
+  /**
+   * The pointer moving over, or leaving, one debater's tile.
+   *
+   * Filtered to a real mouse. Touch browsers synthesise `pointerenter` from a tap, so without this
+   * every tap on the video — including the tap that pauses it — would throw the claim corner open,
+   * and nothing would close it again since there is no corresponding leave. On touch the chip is
+   * the way in, deliberately and only.
+   *
+   * Leaving also clears the pin, so a mouse user who clicked the chip and then moved away does not
+   * leave the corner stuck open behind them.
+   */
+  const onTileHover = (slot: number) => (event: React.PointerEvent, hovered: boolean) => {
+    if (event.pointerType !== 'mouse') return;
+    const clearSlot = (current: number | null) => (current === slot ? null : current);
+
+    if (!hovered) {
+      setPointerOverSlot(clearSlot);
+      setBacklogHoverSlot(clearSlot);
+      setPinnedSlot(clearSlot);
+      liveCornerTop.current.delete(slot);
+      return;
+    }
+
+    setPointerOverSlot(slot);
+
+    const live = (ticker.cardsBySlot.get(slot)?.length ?? 0) > 0;
+    // Measured only while the card itself is what the corner is drawing. Once the backlog is open
+    // the remembered edge is the one that counts, and reading the box again would move the line.
+    // Skipped entirely with nothing live, which is most of a debate and the whole cost here.
+    if (live && !claimsOpenFor(slot)) {
+      const corner = event.currentTarget.querySelector('[data-claim-corner]');
+      if (corner) liveCornerTop.current.set(slot, corner.getBoundingClientRect().top);
+    }
+
+    setBacklogHoverSlot(current => {
+      if (current === slot) return current;
+      // Nothing being presented: the backlog answers to the tile as a whole.
+      if (!live) return slot;
+      // A claim is up, so only the video above it asks for the backlog. The card's own band belongs
+      // to the card, and a pointer resting there cannot swap the claim out mid-sentence.
+      const edge = liveCornerTop.current.get(slot);
+      return edge !== undefined && event.clientY < edge ? slot : current;
+    });
+  };
+
+  /**
+   * Whether slot's corner has a stack at all. `claimsFor` draws nothing when this is false.
+   *
+   * Lifted out of it so the effect below can watch the same condition: both latches that open the
+   * backlog are held up here, and a stack that has gone cannot release either one.
+   */
+  const stackShownFor = (slot: number) => {
+    if (playbackEnded) return false;
+    return (ticker.cardsBySlot.get(slot)?.length ?? 0) > 0 || (ticker.historyBySlot.get(slot)?.length ?? 0) > 0;
+  };
+
+  const slot1StackShown = stackShownFor(1);
+  const slot2StackShown = stackShownFor(2);
+
+  /**
+   * Let go of a corner whose stack has been taken away.
+   *
+   * `focusedSlot` is cleared only by the stack's own `onBlur`, and a focused element removed from
+   * the document fires no `blur` — the ticker's suite asserts that absence directly. So a viewer
+   * who tabs into the backlog and then reaches the end of the debate, or scrolls the tile out of
+   * the preload window, left the slot latched: on replay the corner opened straight into backlog
+   * mode with nothing in it, and nothing short of tabbing back in and out closed it again.
+   *
+   * `pinnedSlot` has the same hole on a touch screen, where the only other release is a
+   * `pointerleave` that early-returns on anything but a mouse — so both are cleared here.
+   */
+  React.useEffect(() => {
+    const releaseIfGone = (shown: boolean, slot: number) => {
+      if (shown) return;
+      const clear = (current: number | null) => (current === slot ? null : current);
+      setFocusedSlot(clear);
+      setPinnedSlot(clear);
+    };
+
+    releaseIfGone(slot1StackShown, 1);
+    releaseIfGone(slot2StackShown, 2);
+  }, [slot1StackShown, slot2StackShown]);
+
+  const claimsFor = (slot: number) => {
+    const cards = ticker.cardsBySlot.get(slot) ?? [];
+    const history = ticker.historyBySlot.get(slot) ?? [];
+    if (!stackShownFor(slot)) return null;
+
+    const pinned = pinnedSlot === slot;
+    const clearSlot = (current: number | null) => (current === slot ? null : current);
+
+    return (
+      <DebateClaimTickerStack
+        cards={cards}
+        history={history}
+        open={claimsOpenFor(slot)}
+        pinned={pinned}
+        onTogglePinned={() => setPinnedSlot(current => (current === slot ? null : slot))}
+        onFocusChange={focused => setFocusedSlot(current => (focused ? slot : clearSlot(current)))}
+        participantByClaimId={ticker.participantByClaimId}
+        rowsByClaimId={ticker.rowsByClaimId}
+        entitiesByClaimId={ticker.entitiesByClaimId}
+        onAnswered={ticker.onAnswered}
+      />
+    );
+  };
 
   // Clicking the video briefly flashes the action it just took — feedback only, not a control.
   const [flash, setFlash] = React.useState<{ icon: 'play' | 'pause'; visible: boolean }>({
@@ -148,7 +314,9 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
       data-debate-active={active ? 'true' : 'false'}
       data-debate-playing={playing ? 'true' : 'false'}
       data-debate-autoplay-blocked={autoplayBlocked ? 'true' : 'false'}
-      className="group relative flex flex-col gap-2"
+      // No gap and one radius on the outside: the two tiles are a single surface in the Figma
+      // frame, which is what lets the subtitle straddle the seam rather than sit inside one tile.
+      className="group relative flex flex-col overflow-hidden rounded-xl"
     >
       <DebaterVideo
         participant={slot1Participant}
@@ -156,12 +324,13 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         videoRef={slot1VideoRef}
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
-        subtitle={activeSlot === 1 ? subtitle : null}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
         onToggle={toggleFromVideo}
-        votes={votes}
+        claims={claimsFor(1)}
+        claimsOpen={claimsOpenFor(1)}
+        onClaimsHoverChange={onTileHover(1)}
         topLeft={
           ready ? (
             <div className="flex items-center gap-2">
@@ -183,6 +352,11 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
                 // playback — otherwise there's no way to hear audio. Once unmuted it recedes
                 // to hover-only on desktop; touch has no hover, so on mobile it stays visible
                 // or there'd be no way to find it again.
+                //
+                // `no-hover:` as well as `md:`, because the two ask different questions. A tablet
+                // held in landscape is wider than the `md` breakpoint and still has no hover, so
+                // width alone left the control faded out but tappable there — a tap aimed at
+                // play/pause muted the debate instead, with nothing able to bring the control back.
                 <ControlCircle
                   ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
                   onClick={() => {
@@ -192,7 +366,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
                   className={
                     mutedByUser
                       ? undefined
-                      : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100'
+                      : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100'
                   }
                 >
                   {mutedByUser ? <SpeakerMuted /> : <Speaker />}
@@ -208,27 +382,50 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         videoRef={slot2VideoRef}
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
-        subtitle={activeSlot === 2 ? subtitle : null}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
         onToggle={toggleFromVideo}
-        votes={votes}
+        claims={claimsFor(2)}
+        claimsOpen={claimsOpenFor(2)}
+        onClaimsHoverChange={onTileHover(2)}
+        // This is the half the scrubber sits in, so its claim corner is the one that has to lift
+        // clear of the bar.
+        clearScrubber={scrubberShown ? 'always' : 'on-hover'}
+        // Taller than the top tile's, per the frame.
+        scrimClassName="h-[4.625rem]"
         scrubber={
           ready ? (
             // Always available so the viewer can seek. During playback it recedes to
             // hover-only and drops pointer-events so it can't swallow play/pause taps.
+            // `pointer-events-none` does not stop keyboard focus reaching the range input, which
+            // is what brings it back up for a viewer who never touches the pointer.
             <div
+              onFocus={() => setTimelineFocused(true)}
+              onBlur={event => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setTimelineFocused(false);
+              }}
               className={cx(
                 'transition-opacity',
-                showControls
+                scrubberShown
                   ? 'opacity-100'
-                  : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100'
+                  : // `[&_button]:` as well as the wrapper itself, because the claim markers inside
+                    // set `pointer-events-auto` on themselves — they have to, so a drag can pass
+                    // between them to the range input underneath. An explicit value beats an
+                    // inherited one, so `pointer-events-none` here never reached them and a fully
+                    // transparent marker stayed clickable: a click meant to pause the video seeked
+                    // it instead. The descendant selector outranks the marker's own class.
+                    //
+                    // Focusability is deliberately untouched. Tabbing to a marker sets
+                    // `timelineFocused`, which is what brings the scrubber back into view, so the
+                    // keyboard route in depends on them staying in the tab order while hidden.
+                    'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [&_button]:pointer-events-none group-hover:[&_button]:pointer-events-auto'
               )}
             >
               <FeedScrubber
                 currentTime={playheadSeconds}
                 duration={timelineSeconds}
+                markers={ticker.markers}
                 onSeek={seekBoth}
                 onScrubStart={beginScrub}
                 onScrubEnd={endScrub}
@@ -237,6 +434,35 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
           ) : null
         }
       />
+
+      {/* Straddling the seam between the tiles, which is the one strip of the player that is never
+          a face — and the one place it cannot land on top of the claim stack.
+
+          `text-box` trims the line box to the cap-height band, which is what makes the *glyphs*
+          centre on the seam rather than the box that contains them. Calibre's metrics are
+          asymmetric, so a plainly-centred pill puts the type about 2px low — visible on a rule the
+          eye is already using the seam as. Figma's own frame specifies the same trim. Browsers
+          without it fall back to the box being centred, which is where this started.
+
+          `w-max` is what makes the cap above it mean anything. An absolutely positioned box with
+          `left: 50%` and an automatic width is shrink-to-fit against the space *from that point to
+          the container's edge* — half the tile — so the caption wrapped at 178px however high the
+          max-width was set, and raising the cap to 90% changed nothing at all. Sizing to
+          max-content and letting the cap do the clamping is the fix: measured on a 355px phone
+          tile, the same caption goes from 178px over three lines to 239px over two.
+
+          90% of the width on a phone, 70% above it. A subtitle is one whole transcript segment and
+          those are short: across 7,359 of them the median is 27 characters, the 99th is 33, and the
+          longest in the corpus is 41. At the explore card's 484px tile 70% leaves 327px of line and
+          the longest segment measures 284, so on a desktop they already never wrap and widening
+          would only loosen the pill around the same one line. A ~355px phone tile leaves 236px,
+          which is where a segment starts folding onto a second line and taking the caption off the
+          seam. */}
+      {subtitle && (
+        <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
+          {subtitle}
+        </span>
+      )}
 
       {/* Mobile only — desktop has the persistent play/pause beside the mute control. */}
       {showPausedGlyph && (
@@ -276,30 +502,41 @@ function DebaterVideo({
   videoRef,
   audible,
   countdown,
-  subtitle,
   mutedByUser,
   isResuming,
   onPlaybackTick,
   onToggle,
-  votes,
+  claims,
+  claimsOpen = false,
+  onClaimsHoverChange,
+  clearScrubber = 'never',
   topLeft,
   scrubber,
+  scrimClassName = 'h-14',
 }: {
   participant: DebateParticipant | null;
   src: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   audible: boolean;
   countdown: TurnState;
-  subtitle: string | null;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
   onToggle: () => void;
-  votes: DebateVotesResult;
+  /** This debater's claim corner, if they have anything to show right now. */
+  claims?: React.ReactNode;
+  /** Whether the corner is showing the scrollable backlog rather than the live card. */
+  claimsOpen?: boolean;
+  /** The pointer entering or leaving this tile, which opens their backlog. */
+  onClaimsHoverChange?: (event: React.PointerEvent, hovered: boolean) => void;
+  /** Whether the claim corner has to sit above the scrubber, which only one tile hosts. */
+  /** Whether what sits in the bottom band — the claim corner and the debater's name — lifts clear
+   * of the scrubber, and whether it does so always or only while the player is hovered. */
+  clearScrubber?: 'never' | 'on-hover' | 'always';
   topLeft?: React.ReactNode;
   scrubber?: React.ReactNode;
+  scrimClassName?: string;
 }) {
-  const { openSidePanel } = useEntitySidePanel();
   const name = participant ? speakerLabel(participant) : 'Debater';
 
   const muted = !audible || mutedByUser;
@@ -342,19 +579,15 @@ function DebaterVideo({
     return () => releaseVideo(video);
   }, [src, videoRef]);
 
-  // A personal space's own id resolves to its "system entity" (an ugly technical
-  // record). The space's page entity is the real profile, so open that once it's
-  // loaded and fall back to the space id while it's still fetching.
-  const { space } = useSpace(participant?.profile_space_id);
-  const profileEntityId = space?.entity.id || participant?.profile_space_id;
-
-  const openProfile = (event: React.MouseEvent) => {
-    event.stopPropagation();
-    if (participant && profileEntityId) openSidePanel(profileEntityId, participant.profile_space_id, false);
-  };
+  const openProfile = useOpenDebaterProfile(participant);
 
   return (
-    <div className="relative aspect-480/289 w-full overflow-hidden rounded-lg bg-grey-01">
+    <div
+      onPointerEnter={event => onClaimsHoverChange?.(event, true)}
+      onPointerMove={event => onClaimsHoverChange?.(event, true)}
+      onPointerLeave={event => onClaimsHoverChange?.(event, false)}
+      className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
+    >
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button type="button" aria-label="Pause or play" onClick={onToggle} className="absolute inset-0 z-0">
         {src ? (
@@ -377,64 +610,135 @@ function DebaterVideo({
         )}
       </button>
 
-      {/* Bottom gradient scrim for legibility of the overlaid controls. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-1 h-14 bg-linear-to-b from-black/0 to-black/70" />
+      {/* Bottom gradient scrim for legibility of the overlaid controls. All the way to black, per
+          the frame — the name that sits on it is regular weight and carries no text shadow. */}
+      <div
+        className={cx(
+          'pointer-events-none absolute inset-x-0 bottom-0 z-1 bg-linear-to-b from-black/0 to-black',
+          scrimClassName
+        )}
+      />
 
-      {topLeft && <div className="absolute top-3 left-3 z-10">{topLeft}</div>}
+      {topLeft && <div className="absolute top-3 left-3 z-10 flex items-center gap-2">{topLeft}</div>}
 
       {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
 
-      {subtitle && (
-        <div className="absolute inset-x-0 bottom-14 z-10 flex justify-center px-4">
-          <span className="max-w-[70%] rounded-sm bg-black/78 px-1.5 py-1 text-center text-[1rem] leading-tight text-white">
-            {subtitle}
-          </span>
+      {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
+          one for the player: a viewer is looking at whoever is talking, and a shared corner asks
+          the eye to leave the speaker in order to read what the speaker is saying.
+
+          The height cap is on this box rather than on the list inside it. A percentage max-height
+          resolves against the parent's height, and the list's parent is content-sized — so capping
+          the list made it 63% of a box it had itself defined, and the whole stack ended up pinned to
+          the top of the tile instead of the bottom. Here the percentage is of the tile, which the
+          aspect ratio makes definite, and `bottom-3` keeps it anchored where it belongs.
+
+          60% is roughly the 168px of a 291px tile the frame gives the stack. Left to fill the tile
+          the open list climbed to the debater's chin — more of their face than it needs, and
+          further than the edge fade can dissolve.
+
+          360px and two lines — a departure from the frame's 209px and three lines, and a
+          deliberate one.
+
+          Measured over all 854 published claims in Calibre at 16/17: at the frame's 209px the
+          median claim runs to *four* lines and only 30% are shown whole. Width and lines both buy
+          legibility, but width is what keeps the card short, and a short card is what keeps it
+          below the speaker's chin — the face is in the middle of the tile, so height costs more
+          than width does. Two lines at 360px show 62% of claims whole against three lines at 260px
+          showing 66%: the same reading in a card 17px shorter.
+
+          75% is where the explore card's 484px tile lands on the 360 cap; the cap is what holds a
+          far wider fullscreen player to the same card rather than a 450px one. Half the tile was
+          tried and reverted — 242px reads better as a corner label but shows only about 13% of
+          claims whole, which is a look bought with most of the legibility.
+
+          Back on the name's own line, and drawn over it — `z-[11]` against the name's `z-10`,
+          under the subtitle's `z-20`. The corner had been lifted clear of the name, which cost 26px
+          of the tile's height for a gap nobody asked for. Sharing the line is what lets the card
+          have the full width: the name is still there and still a link the moment no card covers
+          it, and behind a card it goes under 30% dark and a 44px blur rather than being switched
+          off, which is the one thing that reads worse than either.
+
+          A phone splits the difference by state rather than picking one width. A live card takes
+          the whole tile — 93% of ~361px is 337, a 313px line, where two lines hold about 45% of
+          claims whole — because one claim over a video is there to be read at a glance and there
+          is nothing else in the band to share with. The backlog drops back to 62%, because a list
+          you have opened to scroll through should leave the debate visible behind it, and that is
+          also where the dissolve earns its place again.
+
+          `items-end` because that cap is a cap, not a width. A flex column stretches its children
+          by default, which drew the little claims chip as a 209px bar with two words adrift in it.
+          The cards ask for the full width themselves; everything else here should be its own size,
+          against the edge the corner is anchored to.
+
+          No height cap here any more. It used to carry one, which was wrong twice over: measured
+          against the tile, so the same class meant a different number of cards on a phone than on
+          a desktop; and shared with the chip, so on a phone the chip's 43px came out of the list's
+          budget and left one card, most of it under the dissolve. The list caps itself in px now —
+          see `max-h-[9.75rem]` on the scroll box, which is sized against the cards rather than
+          against the picture.
+
+          `justify-end` is still load-bearing: it overflows *downward* once its content is taller
+          than its box, which is how a second card used to push the newest one 78px below the
+          corner and into the tile's own `overflow-hidden`. Nothing here may set a height the
+          content can exceed. */}
+      {claims && (
+        <div
+          data-claim-corner
+          className={cx(
+            'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end transition-[padding-bottom] duration-150',
+            // Two widths, by state rather than by screen. A live claim takes the whole tile,
+            // because it is one line of somebody's argument and there is nothing to read it
+            // against. `100% - 1.75rem` rather than a percentage: the corner hangs off `right-3`,
+            // so subtracting that 12px and the name's own `left-4` 16px lands the card's left edge
+            // exactly on the avatar below it, which is the line the eye already has.
+            //
+            // The backlog is a list you have opened to scroll, and it should leave the debate
+            // visible behind it — so it gives most of the picture back, and at that width the
+            // dissolve at its top edge reads as the edge of a list rather than as damage.
+            claimsOpen ? 'w-[45%] md:w-[62%]' : 'w-[calc(100%-1.75rem)] max-w-[45rem]',
+            // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling
+            // is written out because Tailwind generates classes by scanning this source text, so a
+            // composed `group-hover:${…}` would produce a rule that does not exist.
+            clearScrubber === 'always' && 'pb-5',
+            clearScrubber === 'on-hover' && 'group-hover:pb-5'
+          )}
+        >
+          {claims}
         </div>
       )}
 
-      {/*
-       * The tile's bottom line: who is speaking on the left, the winner vote on
-       * the right.
-       *
-       * One row rather than two absolutely-positioned corners. They used to be
-       * `left-4` and `right-4` independently, which is fine at the width a feed
-       * card gives a tile and not at the width a 312px gallery card does — the
-       * name and its Agree/Disagree chip simply ran on underneath the button,
-       * which reads as "Ag…" and "Disagr…" with a pill on top. A flex row cannot
-       * overlap: the identity takes what is left after the vote, and the name
-       * truncates into it.
-       */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex items-end justify-between gap-2 px-4">
-        {/* Debater identity: avatar + name + position, opens their personal space in the side panel. */}
-        <button
-          type="button"
-          onClick={openProfile}
-          className="pointer-events-auto flex min-w-0 items-center gap-2 text-left"
-        >
-          <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
-            <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
-          </span>
-          <span className="truncate text-[1rem] font-medium text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55)]">
-            {name}
-          </span>
-          {participant && (
-            <DebateTileChip className={cx('shrink-0 text-text', tileChipSurface)}>
-              {participant.position_label}
-            </DebateTileChip>
-          )}
-        </button>
+      {/* Debater identity, opens their personal space in the side panel. On the left, opposite the
+          claim corner.
 
-        {participant && (
-          <WinnerVoteButton
-            className="pointer-events-auto shrink-0"
-            debaterName={name}
-            sharePercent={votes.sharePercentFor(participant)}
-            isMyPick={votes.isMyPick(participant)}
-            disabled={votes.isVoting}
-            onVote={() => votes.castVote(participant)}
-          />
+          A generous 55%, and it no longer rations the claim corner's width: the corner shares this
+          row and draws over it rather than sitting beside it. It also stays put — it used to fade
+          out under a card, which cost the viewer the link to the debater's profile exactly when
+          they were reading something that debater had said.
+
+          Absolute rather than the flex row #2466 put here. That row exists so the name cannot run
+          under the "Winner?" pill at a 312px gallery width; the pill and the position chip are off
+          the tile in this redesign — winner voting lives in the scorecard and the claims panel — so
+          the name has the band to itself and there is nothing left to overlap. The 55% is still
+          what keeps it clear of the claim card above. */}
+      <button
+        type="button"
+        onClick={openProfile}
+        className={cx(
+          'absolute bottom-3 left-4 z-10 flex max-w-[55%] items-center gap-2 text-left transition-[padding-bottom] duration-150',
+          // Lifts with the claim stack, and for the same reason: the name shares the bottom band
+          // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
+          // Padding rather than `bottom`, because the box is pinned by its bottom edge — the
+          // padding grows it upward and carries the content with it.
+          clearScrubber === 'always' && 'pb-5',
+          clearScrubber === 'on-hover' && 'group-hover:pb-5'
         )}
-      </div>
+      >
+        <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
+          <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
+        </span>
+        <span className="truncate text-[1rem] tracking-[-0.35px] text-white">{name}</span>
+      </button>
 
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}
     </div>
@@ -446,11 +750,21 @@ function CountdownBadge({ seconds, progress }: { seconds: number; progress: numb
   const remaining = 1 - Math.max(0, Math.min(1, progress));
   const degrees = remaining * 360;
   return (
-    <div
-      className="absolute top-3 right-3 z-10 grid size-8 place-items-center rounded-full text-white"
-      style={{ backgroundImage: `conic-gradient(#ffffff ${degrees}deg, rgba(255,255,255,0.28) 0deg)` }}
-    >
-      <span className="grid size-7 place-items-center rounded-full bg-text/70 text-button">{Math.ceil(seconds)}</span>
+    <div className="absolute top-3 right-3 z-10 grid size-8 place-items-center rounded-full bg-linear-to-b from-black/50 to-black/25">
+      <span
+        className="col-start-1 row-start-1 size-7 rounded-full"
+        style={{
+          backgroundImage: `conic-gradient(#ffffff ${degrees}deg, rgba(255,255,255,0.3) 0deg)`,
+          // Hollowed into a 2px ring so the badge's own translucent backing shows through the
+          // middle. The frame draws a stroked circle; a filled disc would print the number on a
+          // grey plate the design does not have.
+          maskImage: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))',
+          WebkitMaskImage: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))',
+        }}
+      />
+      <span className="col-start-1 row-start-1 grid place-items-center text-[1.0625rem] leading-none font-medium text-white tabular-nums">
+        {Math.ceil(seconds)}
+      </span>
     </div>
   );
 }
@@ -493,12 +807,14 @@ const isScrubKey = (key: string) =>
 function FeedScrubber({
   currentTime,
   duration,
+  markers,
   onSeek,
   onScrubStart,
   onScrubEnd,
 }: {
   currentTime: number;
   duration: number;
+  markers: ClaimMarker[];
   onSeek: (seconds: number) => void;
   onScrubStart: () => void;
   onScrubEnd: () => void;
@@ -510,6 +826,17 @@ function FeedScrubber({
       <div className="relative h-(--track-height) w-full overflow-hidden rounded-full bg-white/40">
         <span className="absolute inset-y-0 left-0 rounded-full bg-white" style={{ width: `${progress}%` }} />
       </div>
+      {/* Above the range input, which is the only way a marker can be clicked at all: the input is
+          transparent but covers the whole bar, so at a lower z it swallowed every marker click and
+          scrubbed to the pixel instead of seeking to the claim. The comment here used to claim the
+          opposite, which is how it survived.
+
+          The markers' wrapper is `pointer-events-none`, so only the targets themselves intercept
+          and a drag starting anywhere else along the bar still reaches the input. Those targets are
+          no longer the 2px hashes, though: they are up to 12px wide, clamped to the gap to the next
+          claim — a mean 10% of the track, 44% on the densest debate in the corpus. See
+          {@link MARKER_HIT_WIDTH_PX} for why that ceiling and not 24. */}
+      <ClaimScrubberMarkers markers={markers} onSeek={ms => onSeek(ms / 1000)} className="z-3" />
       <span
         className="pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.35)]"
         style={{ left: `calc(12px + ${progress}% * (100% - 24px) / 100%)` }}

@@ -2,12 +2,14 @@
 
 import * as React from 'react';
 
+import { ClaimCommentPositionProvider } from '~/core/claims/browse/claim-comment-position';
+import { ClaimPositionCommentControl } from '~/core/claims/browse/claim-position-comment';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateClaim } from '~/core/debates/api';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
-import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -148,7 +150,16 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
             this way for both the route and the side panel, and only the dedicated comments panel
             asks for the `panel` variant. Unlike the modules above, this one always renders: an
             empty thread is an invitation to start it, not an absence to hide. */}
-        <CommentSection entityId={entityId} spaceId={spaceId} />
+        <ClaimCommentPositionProvider
+          entityId={entityId}
+          spaceId={spaceId}
+          responseKind={responseKind}
+          viewerDirection={summary.viewerDirection}
+          viewerSpaceId={summary.viewerSpaceId}
+          isViewerResponseLoading={summary.isViewerResponseLoading}
+        >
+          <CommentSection entityId={entityId} spaceId={spaceId} />
+        </ClaimCommentPositionProvider>
       </div>
     </div>
   );
@@ -206,11 +217,14 @@ function ClaimPositionSection({
       {/* No readiness switch — the Debate toggle is gone from the product. Master left the header
           row that used to hold it; with nothing on its right there is no row, just a label. */}
       <SectionTitle>Your position</SectionTitle>
-      <PositionRow
+      <ClaimPositionCommentControl
+        entityId={entityId}
+        spaceId={spaceId}
         positions={control.optimisticPositions}
         responseKind={readiness.response_kind}
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
+        promptForComment={control.isConnected}
         disabled={!control.canRespond}
         titleFor={control.actionTitle}
       />

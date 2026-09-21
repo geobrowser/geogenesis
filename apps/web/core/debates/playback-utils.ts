@@ -9,6 +9,22 @@ export type TurnState = {
 } | null;
 
 /**
+ * How close to the timeline's end counts as the end.
+ *
+ * Shared by `playbackEnded`, the background-playhead recovery and the scrubber markers, so the
+ * three cannot disagree about whether a debate has finished. It moved here from the playback hook
+ * once a third caller needed it: `claim-ticker.ts` is a pure module a Node script imports, and
+ * pulling a `'use client'` React hook in for one number was not an option.
+ *
+ * Getting that sharing wrong is what the markers did. A marker clamped its seek to `timelineMs - 1`
+ * on the reasoning that anything short of the duration is still playing — but a millisecond short
+ * is well inside this window, so the player called it ended and took the whole claim corner down,
+ * which is the blank the clamp was added to prevent.
+ */
+export const PLAYBACK_END_EPSILON_MS = 50;
+export const PLAYBACK_END_EPSILON_SECONDS = PLAYBACK_END_EPSILON_MS / 1000;
+
+/**
  * Has both per-slot recordings. A debate whose media job failed still passes this, so the feed
  * pairs it with {@link hasProcessedVideo} before rendering.
  */
