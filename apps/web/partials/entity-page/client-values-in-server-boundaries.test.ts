@@ -201,9 +201,48 @@ type ExportKind = 'component' | 'erased' | 'value' | 'unknown';
 /** `memo(X)` and `forwardRef(X)`, plain or `React.`-qualified, produce components. Nothing else does. */
 const COMPONENT_WRAPPERS = new Set(['memo', 'forwardRef']);
 
-function isComponentWrapper(expression: ts.Expression): boolean {
-  if (ts.isIdentifier(expression)) return COMPONENT_WRAPPERS.has(expression.text);
-  if (ts.isPropertyAccessExpression(expression)) return COMPONENT_WRAPPERS.has(expression.name.text);
+/** The local names in one module that actually refer to React's `memo` and `forwardRef`. */
+type ReactBindings = { wrappers: Set<string>; namespaces: Set<string> };
+
+/**
+ * Which spellings of `memo` and `forwardRef` this file has earned.
+ *
+ * Matching the callee's name alone would take `helpers.memo(config)` or a locally declared
+ * `forwardRef` for React's, and hand a component exemption to an ordinary value. Neither spelling
+ * exists in this tree — all nine call sites are React's — so this is prevention, and cheap because
+ * the imports are already parsed.
+ */
+function reactBindingsOf(sourceFile: ts.SourceFile): ReactBindings {
+  const wrappers = new Set<string>();
+  const namespaces = new Set<string>();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    if (statement.moduleSpecifier.text !== 'react') continue;
+
+    const clause = statement.importClause;
+    if (!clause || clause.isTypeOnly) continue;
+
+    if (clause.name) namespaces.add(clause.name.text);
+
+    if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+      namespaces.add(clause.namedBindings.name.text);
+    } else if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+      for (const element of clause.namedBindings.elements) {
+        if (element.isTypeOnly) continue;
+        if (COMPONENT_WRAPPERS.has((element.propertyName ?? element.name).text)) wrappers.add(element.name.text);
+      }
+    }
+  }
+
+  return { wrappers, namespaces };
+}
+
+function isComponentWrapper(expression: ts.Expression, react: ReactBindings): boolean {
+  if (ts.isIdentifier(expression)) return react.wrappers.has(expression.text);
+  if (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)) {
+    return react.namespaces.has(expression.expression.text) && COMPONENT_WRAPPERS.has(expression.name.text);
+  }
   return false;
 }
 
@@ -255,12 +294,19 @@ function classifyFunction(node: ts.SignatureDeclaration): ExportKind {
 }
 
 /**
- * A definite value, through whatever is wrapped around it.
+ * A return React could not render, through whatever is wrapped around it.
  *
- * `return -1` is a `PrefixUnaryExpression` around a numeric literal rather than a literal, and
- * `return new Date()` is a `NewExpression` — both of which the variable-initialiser classifier
- * already treated as values while this one let them make a utility look like a component. The two
- * halves agree now.
+ * Narrower than "a literal", and deliberately so. `function Badge() { return 'New'; }` is a real
+ * component, and so is one returning a number or an array of elements; React renders all three, and
+ * renders nothing at all for a boolean. Calling those values would accuse real components — the
+ * failure this guard cannot afford. What React genuinely cannot render is a plain object, a regular
+ * expression, or anything from `new`, and those stay.
+ *
+ * This reverses the `return -1` half of an earlier round, which asked for signed numerics to count
+ * as values. They are renderable, so they do not.
+ *
+ * Note this is only about what a function *returns*. `export const Subject = 'x'` is still a string
+ * rather than a component — a different question, answered by the initialiser classifier.
  */
 function returnsAValue(expression: ts.Expression): boolean {
   if (
@@ -272,24 +318,10 @@ function returnsAValue(expression: ts.Expression): boolean {
     return returnsAValue(expression.expression);
   }
 
-  // `-1`, `+1`, and `!0` — a sign or a negation around a literal is still a literal.
-  if (ts.isPrefixUnaryExpression(expression)) {
-    const signs: ts.PrefixUnaryOperator[] = [
-      ts.SyntaxKind.MinusToken,
-      ts.SyntaxKind.PlusToken,
-      ts.SyntaxKind.ExclamationToken,
-    ];
-    return signs.includes(expression.operator) && returnsAValue(expression.operand);
-  }
-
   return (
     ts.isObjectLiteralExpression(expression) ||
-    ts.isArrayLiteralExpression(expression) ||
-    ts.isStringLiteralLike(expression) ||
-    ts.isNumericLiteral(expression) ||
-    ts.isNewExpression(expression) ||
-    expression.kind === ts.SyntaxKind.TrueKeyword ||
-    expression.kind === ts.SyntaxKind.FalseKeyword
+    ts.isRegularExpressionLiteral(expression) ||
+    ts.isNewExpression(expression)
   );
 }
 
@@ -329,8 +361,16 @@ function exportKindsOf(
   resolveOrigin: (specifier: string) => Map<string, ExportKind> | null
 ): Map<string, ExportKind> {
   const kinds = new Map<string, ExportKind>();
+  const react = reactBindingsOf(sourceFile);
   /** Local declarations, so an export by identifier has something to resolve against. */
   const locals = new Map<string, ts.Node>();
+  /**
+   * Imported names, so an identifier that is not declared here still resolves.
+   *
+   * `import { Button } from './button'; export { Button };` is a barrel that declares nothing, and
+   * calling its component unclassifiable reports it. One module in this tree is written that way.
+   */
+  const imported = new Map<string, { specifier: string; exported: string }>();
 
   for (const statement of sourceFile.statements) {
     if (ts.isVariableStatement(statement)) {
@@ -341,6 +381,18 @@ function exportKindsOf(
       }
     } else if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name) {
       locals.set(statement.name.text, statement);
+    } else if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
+      const clause = statement.importClause;
+      if (!clause || clause.isTypeOnly) continue;
+      const specifier = statement.moduleSpecifier.text;
+
+      if (clause.name) imported.set(clause.name.text, { specifier, exported: 'default' });
+      if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+        for (const element of clause.namedBindings.elements) {
+          if (element.isTypeOnly) continue;
+          imported.set(element.name.text, { specifier, exported: (element.propertyName ?? element.name).text });
+        }
+      }
     }
   }
 
@@ -353,13 +405,17 @@ function exportKindsOf(
     }
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return classifyClass(node);
     if (ts.isTaggedTemplateExpression(node)) return 'value';
-    if (ts.isCallExpression(node)) return isComponentWrapper(node.expression) ? 'component' : 'value';
+    if (ts.isCallExpression(node)) return isComponentWrapper(node.expression, react) ? 'component' : 'value';
     if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) {
       return classify(node.expression, seen);
     }
     if (ts.isIdentifier(node)) {
       const local = locals.get(node.text);
-      return local ? classify(local, seen) : 'unknown';
+      if (local) return classify(local, seen);
+
+      const source = imported.get(node.text);
+      if (!source) return 'unknown';
+      return resolveOrigin(source.specifier)?.get(source.exported) ?? 'unknown';
     }
     if (
       ts.isObjectLiteralExpression(node) ||
@@ -407,6 +463,23 @@ function exportKindsOf(
       continue;
     }
 
+    /*
+     * `export * from './x'` hands on every named export of `./x` — but never its default, which is
+     * the one binding `export *` does not carry. Without this a client barrel written that way had
+     * no exports at all as far as this was concerned, so everything taken from it came back
+     * unclassifiable.
+     */
+    if (ts.isExportDeclaration(statement) && !statement.exportClause && statement.moduleSpecifier) {
+      if (statement.isTypeOnly || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+      const origin = resolveOrigin(statement.moduleSpecifier.text);
+      if (!origin) continue;
+
+      for (const [name, kind] of origin) {
+        if (name !== 'default') kinds.set(name, kind);
+      }
+      continue;
+    }
+
     if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
       /*
        * `export { a }` is declared here. `export { a } from './b'` is declared in `./b`, and a
@@ -433,7 +506,18 @@ function exportKindsOf(
 
         if (!origin) {
           const local = locals.get(sourceName);
-          kinds.set(element.name.text, local ? classify(local) : 'unknown');
+          if (local) {
+            kinds.set(element.name.text, classify(local));
+            continue;
+          }
+
+          // Declared in neither this statement nor this file: `import { Button } from './button';
+          // export { Button };` is a barrel whose export is somebody else's declaration.
+          const fromImport = imported.get(sourceName);
+          kinds.set(
+            element.name.text,
+            fromImport ? (resolveOrigin(fromImport.specifier)?.get(fromImport.exported) ?? 'unknown') : 'unknown'
+          );
           continue;
         }
 
@@ -537,6 +621,19 @@ describe('server components take only components from client modules', () => {
           continue;
         }
         if (clause.isTypeOnly) continue;
+
+        // `import {} from './x'` has a clause with nothing in it and still loads the module. Review
+        // also asked for the all-type-specifier form; that is declined in the reply, because this
+        // repo does not set `verbatimModuleSyntax` and TypeScript elides it.
+        if (
+          !clause.name &&
+          clause.namedBindings &&
+          ts.isNamedImports(clause.namedBindings) &&
+          clause.namedBindings.elements.length === 0
+        ) {
+          found.push({ specifier, local: '' });
+          continue;
+        }
 
         if (clause.name) found.push({ specifier, exported: 'default', local: clause.name.text });
 
@@ -657,6 +754,8 @@ describe('server components take only components from client modules', () => {
         // `export * from` is every named binding the target has, so each is judged on its own.
         if (reference.starReexport) {
           for (const [exported, kind] of kindsFor(target)) {
+            // `export *` does not carry the default export, so reading one here invents an offence.
+            if (exported === 'default') continue;
             if (kind === 'component' || kind === 'erased') continue;
             if (isCapitalised(exported)) {
               const label = kind === 'unknown' ? 'unclassifiable ' : '';
@@ -773,12 +872,17 @@ describe('exportKindsOf', () => {
     ['a function that renders nothing but runs effects', 'export function Subject() { return null; }'],
     ['a function with no return at all', 'export function Subject() { useThing(); }'],
     ['an arrow', 'export const Subject = () => <div />;'],
-    ['memo', 'export const Subject = memo(() => <div />);'],
-    ['React.forwardRef', 'export const Subject = React.forwardRef(() => <div />);'],
+    ['memo imported from react', "import { memo } from 'react';\nexport const Subject = memo(() => <div />);"],
+    ['React.forwardRef', "import * as React from 'react';\nexport const Subject = React.forwardRef(() => <div />);"],
     ['a class extending Component', 'export class Subject extends React.Component {}'],
     ['an identifier default', 'const Inner = () => <div />;\nexport default Inner;'],
     ['a parenthesised arrow', 'export const Subject = ((props) => <div />);'],
     ['an arrow returning a component call', 'export const Subject = () => renderThing();'],
+    // React renders all of these, so a function returning one is a component.
+    ['a function returning a string', "export function Subject() { return 'New'; }"],
+    ['a function returning a negative number', 'export function Subject() { return -1; }'],
+    ['a function returning an array', 'export function Subject() { return [<A key=\"a\" />]; }'],
+    ['a function returning false', 'export function Subject() { return false; }'],
   ])('accepts %s', (_label, source) => {
     expect(kindOf(source, source.includes('export default') ? 'default' : 'Subject')).toBe('component');
   });
@@ -795,11 +899,47 @@ describe('exportKindsOf', () => {
     ['a function returning an object', 'export function Subject() { return {}; }'],
     ['a concise arrow returning an object', 'export const Subject = () => ({});'],
     ['a concise arrow returning an asserted object', 'export const Subject = () => ({}) as Thing;'],
-    ['a function returning a negative number', 'export function Subject() { return -1; }'],
     ['a function returning a constructed object', 'export function Subject() { return new Date(); }'],
+    ['a function returning a regular expression', 'export function Subject() { return /x/; }'],
+    [
+      "a wrapper call that is not React's",
+      "import { memo } from 'other';\nexport const Subject = memo(() => <div />);",
+    ],
     ['a default object', 'export default { a: 1 };'],
   ])('rejects %s', (_label, source) => {
     expect(kindOf(source, source.includes('export default') ? 'default' : 'Subject')).toBe('value');
+  });
+
+  it('tells a returned string from an exported one', () => {
+    // `export const Subject = 'x'` is a string. `function Subject() { return 'x' }` is a component
+    // that renders one. The same literal, two different questions.
+    expect(kindOf("export const Subject = 'x';")).toBe('value');
+    expect(kindOf("export function Subject() { return 'x'; }")).toBe('component');
+  });
+
+  it('resolves an identifier that was imported rather than declared', () => {
+    // A barrel that declares nothing: `import { Button } from './button'; export { Button };`
+    const origin = new Map<string, ExportKind>([['Button', 'component']]);
+    const kinds = exportKindsOf(
+      parse('barrel.tsx', "import { Button } from './button';\nexport { Button };"),
+      () => origin
+    );
+
+    expect(kinds.get('Button')).toBe('component');
+  });
+
+  it("carries a star re-export's named exports but not its default", () => {
+    const origin = new Map<string, ExportKind>([
+      ['Button', 'component'],
+      ['BUTTON_CLASS', 'value'],
+      ['default', 'value'],
+    ]);
+    const kinds = exportKindsOf(parse('barrel.tsx', "export * from './button';"), () => origin);
+
+    expect(kinds.get('Button')).toBe('component');
+    expect(kinds.get('BUTTON_CLASS')).toBe('value');
+    // `export *` does not carry a default, so claiming one here would invent an offence.
+    expect(kinds.has('default')).toBe(false);
   });
 
   it('treats a type as erased, however it is written', () => {
