@@ -8,7 +8,6 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
-import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { releaseVideo } from '~/core/utils/video/release-video';
 
@@ -20,6 +19,9 @@ import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } fr
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
+const CENTERED_PLAYBACK_CONTROL_CLASS =
+  'absolute top-1/2 left-1/2 size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card';
+
 type DebateFeedPlayerProps = {
   debate: Debate;
   active: boolean;
@@ -30,11 +32,9 @@ type DebateFeedPlayerProps = {
    * makes arriving at a card feel glitchy (GEO-2895).
    */
   preload?: boolean;
-  votes: DebateVotesResult;
 };
 
-export function DebateFeedPlayer({ debate, active, preload = false, votes }: DebateFeedPlayerProps) {
-  const { hasVoted } = votes;
+export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeedPlayerProps) {
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
@@ -113,9 +113,9 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     enabled: active || preload,
   });
 
-  const showControls = ready && (awaitingTap || (playbackEnded && !hasVoted));
-  // End of an unvoted debate offers a replay; a stopped one shows the paused glyph.
-  const showReplay = ready && playbackEnded && !hasVoted;
+  const showReplay = ready && playbackEnded;
+  const showControls = ready && (awaitingTap || showReplay);
+  // An ended debate always offers a replay; a stopped one shows the paused glyph.
   const showPausedGlyph = ready && awaitingTap && !playbackEnded;
 
   // Whether the scrubber is on screen, which the claim stack has to know as well as the scrubber
@@ -332,46 +332,40 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         claimsOpen={claimsOpenFor(1)}
         onClaimsHoverChange={onTileHover(1)}
         topLeft={
-          ready ? (
+          ready && !playbackEnded ? (
             <div className="flex items-center gap-2">
               {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
                   centred paused glyph and tap-to-toggle instead. */}
               <ControlCircle
-                ariaLabel={playing ? 'Pause debate' : playbackEnded ? 'Replay debate' : 'Play debate'}
+                ariaLabel={playing ? 'Pause debate' : 'Play debate'}
                 onClick={togglePlayback}
                 className="md:hidden"
               >
                 {playing ? <Pause /> : <Play />}
               </ControlCircle>
-              {showReplay ? (
-                <ControlCircle ariaLabel="Replay debate" onClick={playFromStart}>
-                  <RetrySmall />
-                </ControlCircle>
-              ) : (
-                // Feed debates autoplay muted, so the unmute control stays visible during
-                // playback — otherwise there's no way to hear audio. Once unmuted it recedes
-                // to hover-only on desktop; touch has no hover, so on mobile it stays visible
-                // or there'd be no way to find it again.
-                //
-                // `no-hover:` as well as `md:`, because the two ask different questions. A tablet
-                // held in landscape is wider than the `md` breakpoint and still has no hover, so
-                // width alone left the control faded out but tappable there — a tap aimed at
-                // play/pause muted the debate instead, with nothing able to bring the control back.
-                <ControlCircle
-                  ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
-                  onClick={() => {
-                    measurement.control(mutedByUser ? 'unmute' : 'mute');
-                    setMutedByUser(current => !current);
-                  }}
-                  className={
-                    mutedByUser
-                      ? undefined
-                      : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100'
-                  }
-                >
-                  {mutedByUser ? <SpeakerMuted /> : <Speaker />}
-                </ControlCircle>
-              )}
+              {/* Feed debates autoplay muted, so the unmute control stays visible during
+                  playback — otherwise there's no way to hear audio. Once unmuted it recedes
+                  to hover-only on desktop; touch has no hover, so on mobile it stays visible
+                  or there'd be no way to find it again.
+
+                  `no-hover:` as well as `md:`, because the two ask different questions. A tablet
+                  held in landscape is wider than the `md` breakpoint and still has no hover, so
+                  width alone left the control faded out but tappable there — a tap aimed at
+                  play/pause muted the debate instead, with nothing able to bring the control back. */}
+              <ControlCircle
+                ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
+                onClick={() => {
+                  measurement.control(mutedByUser ? 'unmute' : 'mute');
+                  setMutedByUser(current => !current);
+                }}
+                className={
+                  mutedByUser
+                    ? undefined
+                    : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100'
+                }
+              >
+                {mutedByUser ? <SpeakerMuted /> : <Speaker />}
+              </ControlCircle>
             </div>
           ) : null
         }
@@ -464,15 +458,21 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
         </span>
       )}
 
-      {/* Mobile only — desktop has the persistent play/pause beside the mute control. */}
-      {showPausedGlyph && (
+      {/* The replay and resume states are mutually exclusive, so they share one centered control.
+          Replay is shown at every width; the ordinary paused control stays mobile-only because
+          desktop retains its persistent corner play/pause control while playback is in progress. */}
+      {(showReplay || showPausedGlyph) && (
         <button
           type="button"
-          aria-label="Resume debate"
-          onClick={togglePlayback}
-          className="absolute top-1/2 left-1/2 z-20 hidden size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card md:grid"
+          aria-label={showReplay ? 'Replay debate' : 'Resume debate'}
+          onClick={showReplay ? playFromStart : togglePlayback}
+          className={cx(
+            CENTERED_PLAYBACK_CONTROL_CLASS,
+            'z-30',
+            showReplay ? 'grid [&>svg]:scale-[2]' : 'hidden md:grid'
+          )}
         >
-          <Play />
+          {showReplay ? <RetrySmall /> : <Play />}
         </button>
       )}
 
@@ -480,7 +480,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
       <div
         aria-hidden
         className={cx(
-          'pointer-events-none absolute top-1/2 left-1/2 z-20 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card transition-[opacity,scale] duration-300 md:hidden',
+          CENTERED_PLAYBACK_CONTROL_CLASS,
+          'pointer-events-none z-20 grid transition-[opacity,scale] duration-300 md:hidden',
           flash.visible ? 'scale-100 opacity-100' : 'scale-110 opacity-0'
         )}
       >

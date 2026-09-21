@@ -15,7 +15,6 @@ import { useGeoChatAuth } from '~/core/debates/hooks';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
-import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { useComments } from '~/core/hooks/use-comments';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpace } from '~/core/hooks/use-space';
@@ -425,7 +424,6 @@ function DebateFeedItem({
   onOpenComments: () => void;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
-  const winnerVotes = useDebateVotes(debate);
   const share = useDebateShareAction();
   // Comments live on the Debate entity — same query key as the panel, so posting
   // there updates this count without a refetch of our own.
@@ -494,7 +492,7 @@ function DebateFeedItem({
             />
           </div>
           <div className="mt-6 md:mt-7">
-            <DebateFeedPlayer debate={debate} active={active} preload={preload} votes={winnerVotes} />
+            <DebateFeedPlayer debate={debate} active={active} preload={preload} />
           </div>
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}
