@@ -5,13 +5,14 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
+import { ClaimPositionCommentControl } from '~/core/claims/browse/claim-position-comment';
 import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSides, ClaimSplitBar, ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
-import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -284,21 +285,25 @@ export function ClaimExploreFeedCard({
 
         <div
           className={cx(
-            'col-start-1 row-start-3 mt-4 max-w-[360px] claim-card-narrow:mt-0'
+            'col-start-1 row-start-3 mt-4 claim-card-narrow:mt-0'
             // Nothing to add on a phone: the pills hold row 3 either way, and the verdict below
             // them takes row 4. That is the debates panel's order — what you can *do* to the claim
             // before what everyone else did with it — and on a wide card the verdict is a column
             // beside this, so the question does not arise.
           )}
         >
-          <PositionRow
+          <ClaimPositionCommentControl
+            entityId={item.entityId}
+            spaceId={item.spaceId}
             positions={control.optimisticPositions}
             responseKind={responseKind}
             viewerPosition={control.viewerPosition}
             onRespond={control.respond}
+            promptForComment={control.isConnected}
             disabled={!control.canRespond}
             titleFor={control.actionTitle}
             noteFor={responseNote ? noteFor : undefined}
+            positionRowClassName="max-w-[360px]"
           />
           {control.responseError ? (
             <div role="alert" className="mt-2">
