@@ -2,12 +2,8 @@
 
 import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
-import * as React from 'react';
-
 import cx from 'classnames';
-import { useRouter } from 'next/navigation';
 
-import { NavUtils } from '~/core/utils/utils';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Close } from '~/design-system/icons/close';
@@ -21,11 +17,14 @@ type Props = {
   userId: string;
   peerName?: string | null;
   /**
-   * Where closing goes. Defaults to Explore rather than to browser history, because the point of
-   * this view is to be arrived at from a shared link, and that arrival has no history behind it —
-   * a back button there lands outside the app or nowhere at all.
+   * Where closing goes — required, because only the caller knows.
+   *
+   * A row in the hub goes back to the hub. The shareable link this view is eventually the
+   * destination of has no history behind it, so that route should send Explore rather than a
+   * back that lands outside the app; that decision belongs to the route, which knows how the
+   * viewer arrived, and not to a dialog that would have to guess.
    */
-  onClose?: () => void;
+  onClose: () => void;
 };
 
 /**
@@ -40,14 +39,8 @@ type Props = {
  * mobile fixes with it.
  */
 export function PeerAvailabilityModal({ open, userId, peerName, onClose }: Props) {
-  const router = useRouter();
-  const close = React.useCallback(() => {
-    if (onClose) return onClose();
-    router.push(NavUtils.toExplore());
-  }, [onClose, router]);
-
   return (
-    <Root open={open} onOpenChange={next => !next && close()}>
+    <Root open={open} onOpenChange={next => !next && onClose()}>
       <Portal>
         <Overlay className={cx('fixed inset-0 bg-text/20', Z_LAYER_CLASS.scheduleDialogBackdrop)} />
         <Content
@@ -77,7 +70,7 @@ export function PeerAvailabilityModal({ open, userId, peerName, onClose }: Props
               <button
                 type="button"
                 aria-label="Close"
-                onClick={close}
+                onClick={onClose}
                 className="grid size-4 shrink-0 place-items-center text-[#151515] transition-opacity hover:opacity-70"
               >
                 <Close />

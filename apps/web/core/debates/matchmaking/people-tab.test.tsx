@@ -65,6 +65,9 @@ vi.mock('../hooks', () => ({
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
+  // Reached only once a row's "See times" opens the modal. This mock is wholesale, so a hook the
+  // tree can call has to appear here or the render throws where the real one would have fetched.
+  usePeerSchedule: () => ({ schedule: undefined, enabled: true, isPending: true, isError: false }),
   useGeoChatAuth: () => ({ authenticated: mocks.authenticated, ready: true, accountKey: 'user-a' }),
   useDebateActivity: () => ({
     data: { challenge: mocks.challenge, outbound_request: mocks.outboundRequest, debate: mocks.activeDebate },
@@ -567,6 +570,48 @@ describe('PeopleTab', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByRole('button', { name: 'In a debate' })).toBeDisabled();
+  });
+});
+
+// GEO-2938. The row is the first way into someone else's availability; until this, the view was
+// only reachable from its debug route.
+describe('See times', () => {
+  it('opens that person availability, named and by user id', async () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times' }));
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(within(screen.getByRole('dialog')).getByText('Availability')).toBeInTheDocument();
+  });
+
+  it('mounts nothing until it is asked for', () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  // The whole point of it being separate from the pill: the moment you cannot debate someone now
+  // is the moment their next free slot matters.
+  it('stays live while the pill is blocked', () => {
+    mocks.people = [{ ...person('user-them', 'Arturas'), in_debate: true }];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByRole('button', { name: 'In a debate' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'See times' })).toBeEnabled();
+  });
+
+  it('sends a signed-out viewer to sign in, since the read behind it is viewer-scoped', () => {
+    mocks.authenticated = false;
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times' }));
+
+    expect(mocks.promptSignIn).toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 

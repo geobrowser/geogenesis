@@ -16,6 +16,8 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
+import { PeerAvailabilityModal } from '~/partials/availability/peer-availability-modal';
+
 import { activeDebate } from '../activity-state';
 import type { DebatePerson } from '../api';
 import { useCreateDebateChallenge, useDebateActivity, useGeoChatAuth } from '../hooks';
@@ -372,6 +374,9 @@ function PersonRow({
   onRequireSignIn?: () => void;
 }) {
   const createChallenge = useCreateDebateChallenge();
+  // Per row rather than per tab: only one can be open at a time anyway, and hoisting it would put
+  // a person's identity into the tab's state for no gain.
+  const [timesOpen, setTimesOpen] = React.useState(false);
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
   const activeSpaces =
     spaceIds.length > 0 ? (
@@ -431,23 +436,46 @@ function PersonRow({
           </div>
         ) : null}
       </div>
-      <HubPillButton
-        onClick={() =>
-          onRequireSignIn
-            ? onRequireSignIn()
-            : createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })
-        }
-        // `in_debate` holds signed out too: it means this person is in an active debate right now,
-        // which is true of them rather than of any viewer, so signing in would not make them
-        // available. `can_challenge` and the viewer's own pending request are the viewer-relative
-        // ones, and those are what the press bypasses on its way to the sign-in.
-        disabled={person.in_debate || (!onRequireSignIn && (!person.can_challenge || disabled))}
-        pending={createChallenge.isPending}
-        pendingLabel="Requesting…"
-        title={disabled ? disabledReason : undefined}
-      >
-        {person.in_debate ? 'In a debate' : 'Request debate'}
-      </HubPillButton>
+      <div className="flex shrink-0 items-center gap-2">
+        {/* Quiet, and deliberately never disabled alongside the pill: someone already in a debate,
+            or a viewer whose own request is pending, is exactly who wants to know when this person
+            is next free. Gating it on the same reasons would hide it at the moment it earns its
+            place. Signed out it opens Privy like the pill does, because the endpoint behind it is
+            viewer-scoped and would only 401. */}
+        <button
+          type="button"
+          onClick={() => (onRequireSignIn ? onRequireSignIn() : setTimesOpen(true))}
+          className="shrink-0 text-metadata whitespace-nowrap text-grey-04 transition-colors hover:text-text"
+        >
+          See times
+        </button>
+        <HubPillButton
+          onClick={() =>
+            onRequireSignIn
+              ? onRequireSignIn()
+              : createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })
+          }
+          // `in_debate` holds signed out too: it means this person is in an active debate right now,
+          // which is true of them rather than of any viewer, so signing in would not make them
+          // available. `can_challenge` and the viewer's own pending request are the viewer-relative
+          // ones, and those are what the press bypasses on its way to the sign-in.
+          disabled={person.in_debate || (!onRequireSignIn && (!person.can_challenge || disabled))}
+          pending={createChallenge.isPending}
+          pendingLabel="Requesting…"
+          title={disabled ? disabledReason : undefined}
+        >
+          {person.in_debate ? 'In a debate' : 'Request debate'}
+        </HubPillButton>
+      </div>
+
+      {/* Closing returns to the hub rather than the modal's default of Explore: that default is for
+          arriving from a shared link with no history behind it, which is not this. */}
+      <PeerAvailabilityModal
+        open={timesOpen}
+        userId={person.user_id}
+        peerName={speakerLabel(person)}
+        onClose={() => setTimesOpen(false)}
+      />
     </li>
   );
 }

@@ -8,22 +8,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PeerAvailabilityModal } from './peer-availability-modal';
 
-const push = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
-
 // The view has its own tests; these are about the shell.
 vi.mock('./peer-availability', () => ({
   PeerAvailability: ({ userId }: { userId: string }) => <div data-testid="peer-availability">{userId}</div>,
 }));
 
+const onClose = vi.fn();
+
 afterEach(() => {
   cleanup();
-  push.mockClear();
+  onClose.mockClear();
 });
 
 const setup = (props: Partial<React.ComponentProps<typeof PeerAvailabilityModal>> = {}) => ({
   user: userEvent.setup(),
-  ...render(<PeerAvailabilityModal open userId="user-peer" {...props} />),
+  ...render(<PeerAvailabilityModal open userId="user-peer" onClose={onClose} {...props} />),
 });
 
 describe('PeerAvailabilityModal', () => {
@@ -37,22 +36,15 @@ describe('PeerAvailabilityModal', () => {
     expect(screen.queryByTestId('peer-availability')).not.toBeInTheDocument();
   });
 
-  it('goes to Explore on close, because a shared link has no history behind it', async () => {
+  // Where closing goes is the caller's to decide -- a hub row returns to the hub, and the eventual
+  // shared-link route will send Explore. The dialog needs no router of its own, which is also what
+  // lets it mount anywhere without one.
+  it('hands closing back to whoever opened it', async () => {
     const { user } = setup();
 
     await user.click(screen.getByRole('button', { name: 'Close' }));
 
-    expect(push).toHaveBeenCalledWith('/explore');
-  });
-
-  it('lets a caller that does have somewhere to go override that', async () => {
-    const onClose = vi.fn();
-    const { user } = setup({ onClose });
-
-    await user.click(screen.getByRole('button', { name: 'Close' }));
-
     expect(onClose).toHaveBeenCalled();
-    expect(push).not.toHaveBeenCalled();
   });
 
   it('opts the content out of the bottom-sheet drag it is portalled inside', () => {
