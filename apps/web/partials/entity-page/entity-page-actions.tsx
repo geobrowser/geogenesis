@@ -24,10 +24,17 @@ interface EntityPageActionsProps {
   entityId: string;
   spaceId: string;
   isVoteable?: boolean;
+  /** Put voting before history/menu, matching the personal-profile header. */
+  votesFirst?: boolean;
 }
 
 /** Menu, history, create, and votes — separate from type metadata */
-export function EntityPageActions({ entityId, spaceId, isVoteable = false }: EntityPageActionsProps) {
+export function EntityPageActions({
+  entityId,
+  spaceId,
+  isVoteable = false,
+  votesFirst = false,
+}: EntityPageActionsProps) {
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const editable = useUserIsEditing(spaceId);
   const name = useName(entityId, spaceId);
@@ -43,11 +50,13 @@ export function EntityPageActions({ entityId, spaceId, isVoteable = false }: Ent
     clearDiffSelection,
   } = useEntityHistory({ entityId, spaceId, enabled: isHistoryOpen });
 
+  const voteButtons = isVoteable ? <EntityVoteButtons entityId={entityId} spaceId={spaceId} /> : null;
+
   return (
     <div className="ml-auto flex shrink-0 items-center gap-5">
-      {/* Create, then history, then the menu — master's order, and still the space header's
-          (`editable-space-header.tsx`). The row these moved into is new; the order within it is
-          not, and flipping it put the menu holding "Delete entity" where history used to sit. */}
+      {/* Profiles put voting first, as their mobile header does. Every other
+          surface keeps master's create, history, menu, votes order. */}
+      {votesFirst && voteButtons}
       {editable && (
         // The label keeps this icon-only link from announcing as its bare URL. `PrefetchLink`
         // matches the space header and includes hover prefetching.
@@ -92,7 +101,7 @@ export function EntityPageActions({ entityId, spaceId, isVoteable = false }: Ent
         )}
       </HistoryPanel>
       <EntityPageContextMenu entityId={entityId} entityName={name || ''} spaceId={spaceId} />
-      {isVoteable && <EntityVoteButtons entityId={entityId} spaceId={spaceId} />}
+      {!votesFirst && voteButtons}
       <HistoryDiffSlideUp selection={diffSelection} onClose={clearDiffSelection} />
     </div>
   );

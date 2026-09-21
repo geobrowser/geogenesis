@@ -134,7 +134,7 @@ describe('EntityPageBody relation side panel', () => {
     expect(mocks.actions).toMatchObject({ isVoteable: true });
   });
 
-  it('hides Person and Space types on a personal-space profile', () => {
+  it('puts profile actions beside the name and hides Person and Space types', () => {
     const personType = { id: SystemIds.PERSON_TYPE };
     mocks.entity = { id: 'entity-1', types: [personType] };
     mocks.space = { type: 'PERSONAL', entity: { id: 'entity-1', types: [personType] } };
@@ -143,7 +143,8 @@ describe('EntityPageBody relation side panel', () => {
 
     expect(screen.getByTestId('person-profile')).toBeInTheDocument();
     expect(screen.queryByTestId('metadata')).toBeNull();
-    expect(mocks.actions).toMatchObject({ isVoteable: true });
+    expect(screen.getByTestId('title').parentElement?.parentElement).toContainElement(screen.getByTestId('actions'));
+    expect(mocks.actions).toMatchObject({ isVoteable: true, votesFirst: true });
   });
 
   // The title is outside the gate entirely — a relation page is still titled.

@@ -361,6 +361,15 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   if (props.variant === 'sidePanel') {
     const { isRelationPage = false, previewName, previewDescription, notice, belowBodySlot, hideProperties } = props;
     const avatarUrl = props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null;
+    const heading = <EditableHeading spaceId={spaceId} entityId={entityId} fallbackName={previewName} />;
+    const actions = (
+      <EntityPageActions
+        entityId={entityId}
+        spaceId={spaceId}
+        isVoteable={!isRelationPage}
+        votesFirst={isPersonProfile}
+      />
+    );
 
     return (
       <div className="px-4 pt-6 pb-12 mobile:px-5">
@@ -371,7 +380,16 @@ export function EntityPageBody(props: EntityPageBodyProps) {
         <EntityPageContentContainer>
           <div>
             <div className="space-y-2">
-              <EditableHeading spaceId={spaceId} entityId={entityId} fallbackName={previewName} />
+              {isPersonProfile ? (
+                // The mobile profile keeps voting, history and the overflow
+                // menu beside the name, wrapping only when space runs out.
+                <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                  <div className="min-w-0 grow">{heading}</div>
+                  {actions}
+                </div>
+              ) : (
+                heading
+              )}
               {!isRelationPage && (
                 <EntityPageInlineDescription
                   entityId={entityId}
@@ -379,12 +397,12 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                   fallbackDescription={previewDescription}
                 />
               )}
-              <div className="flex items-center gap-4 text-text">
-                {/* Match the personal-space profile header: its Person/Space
-                    types live in About rather than beside the profile actions. */}
-                {!isRelationPage && !isPersonProfile && <EntityPageMetadataHeader spaceId={spaceId} />}
-                <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable={!isRelationPage} />
-              </div>
+              {!isPersonProfile && (
+                <div className="flex items-center gap-4 text-text">
+                  {!isRelationPage && <EntityPageMetadataHeader spaceId={spaceId} />}
+                  {actions}
+                </div>
+              )}
             </div>
             <Spacer height={40} />
             {personProfile ??
