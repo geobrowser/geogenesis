@@ -28,6 +28,14 @@ import { describe, expect, it } from 'vitest';
  * server graph today — checked, not assumed: the 85 files calling `import()` are client modules
  * reaching for `next/dynamic`, and every bare import in the graph resolves to CSS or a package.
  * Worth adding the day either stops being true.
+ *
+ * And it decides what counts as a component by reading the source, not by resolving types — see
+ * `isComponentHere`. It is right about the 163 capitalised imports in the tree today, and the two
+ * places it could still be wrong are worth knowing: a component this file imports and neither
+ * renders nor passes on would be reported, and a capitalised value *re-exported* from a barrel is
+ * let through, because a re-export has no use site to read. Both are conservative in the direction
+ * of the failure being visible rather than silent, which is the only direction that works for a
+ * test nobody runs deliberately.
  */
 
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -143,29 +151,55 @@ function resolveImport(specifier: string, importingFile: string): string | null 
 /**
  * `A` or `A as B` inside a named import block, skipping inline `type` specifiers.
  *
- * The exported name is what identifies the export, so `foo as bar` is judged as `foo`. `default as
- * Bar` is the exception: `default` says nothing about what it is, so the local name is the only
- * signal there — the same reasoning as a default import.
+ * Both names are kept because they answer different questions. The export is known by its exported
+ * name, which is what the source module declares; it is used under its local one, which is what
+ * appears in JSX here.
  */
-function parseNamedBindings(block: string): string[] {
+function parseNamedBindings(block: string): { exported: string; local: string }[] {
   return block
     .split(',')
     .map(entry => entry.trim())
     .filter(entry => entry.length > 0 && !entry.startsWith('type '))
     .map(entry => {
       const [exported, local] = entry.split(/\s+as\s+/).map(part => part.trim());
-      return exported === 'default' && local ? local : exported;
+      return { exported, local: local ?? exported };
     })
-    .filter(Boolean);
+    .filter(({ exported, local }) => Boolean(exported) && Boolean(local));
 }
 
 /**
  * Components are the one export a Server Component may take from a client module — that is what the
- * boundary is for. PascalCase stands in for "component", with SCREAMING_CASE excluded, since
- * `BOARD_GRID_CLASS` passes a naive capital-letter test while being a string.
+ * boundary is for. So the question for every binding is whether it is one, and capitalisation alone
+ * cannot answer it: `BOARD_GRID_CLASS` fails a naive capital-letter test while being a string, and
+ * a client module exporting `const DefaultConfig = {...}` passes one while being an object.
+ *
+ * Three questions instead, cheapest first.
  */
-function looksLikeComponent(name: string): boolean {
+function isCapitalised(name: string): boolean {
   return /^[A-Z]/.test(name) && name !== name.toUpperCase();
+}
+
+/**
+ * Whether the importing file treats it as a component: rendered as `<Name>`, or handed to something
+ * else to render as `render={Name}`. The sibling test matches render sites the same way.
+ *
+ * The prop form is here for a case the tree does not hold yet — a server module importing a client
+ * component and passing it on without rendering it — because the failure would otherwise be a
+ * false accusation, and a guard that cries wolf gets deleted.
+ */
+function usedAsComponent(local: string, contents: string): boolean {
+  return new RegExp(`<${local}[\\s/>]|=\\{\\s*${local}\\s*\\}`).test(contents);
+}
+
+/**
+ * Whether the source module declares it as a type, which the compiler erases before anything runs.
+ *
+ * Two of these exist today and both would otherwise be reported: `Tabs` from `editor-provider` and
+ * `Feature` from `use-place-search` are `export type`, imported without the `type` keyword and used
+ * only in annotations.
+ */
+function declaredAsType(exported: string, sourceContents: string): boolean {
+  return new RegExp(`^export\\s+(?:type|interface)\\s+${exported}\\b`, 'm').test(sourceContents);
 }
 
 describe('server components take only components from client modules', () => {
@@ -202,9 +236,30 @@ describe('server components take only components from client modules', () => {
   });
 
   /**
+   * Whether this binding is a component as far as this file is concerned — the one thing a server
+   * module may take across the boundary. Capitalised *and* either used as one here or erased by the
+   * compiler; capitalised and neither is the `const DefaultConfig = {...}` case, which is a value
+   * wearing a component's name.
+   */
+  function isComponentHere({
+    exported,
+    local,
+    contents,
+    target,
+  }: {
+    exported: string;
+    local: string;
+    contents: string;
+    target: string;
+  }): boolean {
+    if (!isCapitalised(exported === 'default' ? local : exported)) return false;
+
+    return usedAsComponent(local, contents) || declaredAsType(exported, contentsByFile.get(target) ?? '');
+  }
+
+  /**
    * Every value a server-graph module takes from a client module, in any of the shapes it can
-   * arrive in, as `[offence, source]` pairs. A default binding is judged by its local name — the
-   * only signal a default import carries — and a namespace binding is reported whole, since every
+   * arrive in, as `[offence, source]` pairs. A namespace binding is reported whole, since every
    * property read off it is a client reference.
    */
   function* clientValuesInServerGraph(): Generator<[string, string]> {
@@ -220,14 +275,17 @@ describe('server components take only components from client modules', () => {
       for (const [, block, specifier] of contents.matchAll(NAMED_IMPORT_BLOCK)) {
         const target = fromClientModule(specifier);
         if (!target) continue;
-        for (const name of parseNamedBindings(block)) {
-          if (!looksLikeComponent(name)) yield [`${from} -> ${name}`, target];
+        for (const { exported, local } of parseNamedBindings(block)) {
+          if (isComponentHere({ exported, local, contents, target })) continue;
+          yield [`${from} -> ${exported === 'default' ? `default as ${local}` : exported}`, target];
         }
       }
 
       for (const [, local, specifier] of contents.matchAll(DEFAULT_IMPORT)) {
         const target = fromClientModule(specifier);
-        if (target && !looksLikeComponent(local)) yield [`${from} -> default as ${local}`, target];
+        if (!target) continue;
+        if (isComponentHere({ exported: 'default', local, contents, target })) continue;
+        yield [`${from} -> default as ${local}`, target];
       }
 
       for (const [, local, specifier] of contents.matchAll(NAMESPACE_IMPORT)) {
@@ -238,8 +296,10 @@ describe('server components take only components from client modules', () => {
       for (const [, block, specifier] of contents.matchAll(NAMED_REEXPORT)) {
         const target = fromClientModule(specifier);
         if (!target) continue;
-        for (const name of parseNamedBindings(block)) {
-          if (!looksLikeComponent(name)) yield [`${from} -> re-exports ${name}`, target];
+        for (const { exported } of parseNamedBindings(block)) {
+          // No JSX to look at in a re-export, so capitalisation and the type check are all there is.
+          if (isCapitalised(exported) || declaredAsType(exported, contentsByFile.get(target) ?? '')) continue;
+          yield [`${from} -> re-exports ${exported}`, target];
         }
       }
 
