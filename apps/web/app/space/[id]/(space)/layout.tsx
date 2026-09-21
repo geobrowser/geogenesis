@@ -37,6 +37,7 @@ import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 import { SpaceTabs } from '~/partials/space-page/space-tabs';
 import type { PersonRecordCounts } from '~/partials/space-page/space-tabs';
+import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
@@ -209,17 +210,28 @@ export default async function Layout(props0: LayoutProps) {
                 </>
               ) : null}
               <TypeSchemaInline entityId={props.id} spaceId={spaceId} />
-              <React.Suspense fallback={null}>
-                <SpaceTabs
-                  spaceId={spaceId}
-                  entityId={props.id}
-                  initialTabRelations={props.tabRelations ?? []}
-                  tabEntities={props.tabEntities}
-                  typeIds={typeIds}
-                  isProfile={isProfile}
-                  personRecordCounts={personRecordCounts}
-                />
-              </React.Suspense>
+              {/*
+               * The tab bar is a link target, so a link can send the reader to the tabs rather than
+               * to the top of the page — see `withSpaceTabsAnchor`.
+               *
+               * The margin clears the navbar, which is `sticky top-0 h-11` and would otherwise cover
+               * the row the link exists to show — the same 44px the hub panel and the side rail sit
+               * below as `top-11`. `scroll-mt-14` is that plus 12px, so the tabs land under the
+               * navbar rather than welded to it.
+               */}
+              <div id={SPACE_TABS_ANCHOR} className="scroll-mt-14">
+                <React.Suspense fallback={null}>
+                  <SpaceTabs
+                    spaceId={spaceId}
+                    entityId={props.id}
+                    initialTabRelations={props.tabRelations ?? []}
+                    tabEntities={props.tabEntities}
+                    typeIds={typeIds}
+                    isProfile={isProfile}
+                    personRecordCounts={personRecordCounts}
+                  />
+                </React.Suspense>
+              </div>
             </div>
           </SpaceHeaderContentGate>
           <Spacer height={20} />
