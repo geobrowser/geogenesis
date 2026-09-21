@@ -331,48 +331,40 @@ export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeed
         claimsOpen={claimsOpenFor(1)}
         onClaimsHoverChange={onTileHover(1)}
         topLeft={
-          ready ? (
+          ready && !playbackEnded ? (
             <div className="flex items-center gap-2">
               {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
                   centred paused glyph and tap-to-toggle instead. */}
-              {!playbackEnded && (
-                <ControlCircle
-                  ariaLabel={playing ? 'Pause debate' : 'Play debate'}
-                  onClick={togglePlayback}
-                  className="md:hidden"
-                >
-                  {playing ? <Pause /> : <Play />}
-                </ControlCircle>
-              )}
-              {showReplay ? (
-                <ControlCircle ariaLabel="Replay debate" onClick={playFromStart}>
-                  <RetrySmall />
-                </ControlCircle>
-              ) : (
-                // Feed debates autoplay muted, so the unmute control stays visible during
-                // playback — otherwise there's no way to hear audio. Once unmuted it recedes
-                // to hover-only on desktop; touch has no hover, so on mobile it stays visible
-                // or there'd be no way to find it again.
-                //
-                // `no-hover:` as well as `md:`, because the two ask different questions. A tablet
-                // held in landscape is wider than the `md` breakpoint and still has no hover, so
-                // width alone left the control faded out but tappable there — a tap aimed at
-                // play/pause muted the debate instead, with nothing able to bring the control back.
-                <ControlCircle
-                  ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
-                  onClick={() => {
-                    measurement.control(mutedByUser ? 'unmute' : 'mute');
-                    setMutedByUser(current => !current);
-                  }}
-                  className={
-                    mutedByUser
-                      ? undefined
-                      : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100'
-                  }
-                >
-                  {mutedByUser ? <SpeakerMuted /> : <Speaker />}
-                </ControlCircle>
-              )}
+              <ControlCircle
+                ariaLabel={playing ? 'Pause debate' : 'Play debate'}
+                onClick={togglePlayback}
+                className="md:hidden"
+              >
+                {playing ? <Pause /> : <Play />}
+              </ControlCircle>
+              {/* Feed debates autoplay muted, so the unmute control stays visible during
+                  playback — otherwise there's no way to hear audio. Once unmuted it recedes
+                  to hover-only on desktop; touch has no hover, so on mobile it stays visible
+                  or there'd be no way to find it again.
+
+                  `no-hover:` as well as `md:`, because the two ask different questions. A tablet
+                  held in landscape is wider than the `md` breakpoint and still has no hover, so
+                  width alone left the control faded out but tappable there — a tap aimed at
+                  play/pause muted the debate instead, with nothing able to bring the control back. */}
+              <ControlCircle
+                ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
+                onClick={() => {
+                  measurement.control(mutedByUser ? 'unmute' : 'mute');
+                  setMutedByUser(current => !current);
+                }}
+                className={
+                  mutedByUser
+                    ? undefined
+                    : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100'
+                }
+              >
+                {mutedByUser ? <SpeakerMuted /> : <Speaker />}
+              </ControlCircle>
             </div>
           ) : null
         }
@@ -463,6 +455,17 @@ export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeed
         <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
           {subtitle}
         </span>
+      )}
+
+      {showReplay && (
+        <button
+          type="button"
+          aria-label="Replay debate"
+          onClick={playFromStart}
+          className="absolute top-1/2 left-1/2 z-30 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card [&>svg]:scale-[2]"
+        >
+          <RetrySmall />
+        </button>
       )}
 
       {/* Mobile only — desktop has the persistent play/pause beside the mute control. */}

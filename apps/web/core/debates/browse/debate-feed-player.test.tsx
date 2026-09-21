@@ -299,6 +299,9 @@ describe('ended playback', () => {
 
     const replayButtons = getAllByRole('button', { name: 'Replay debate' });
     expect(replayButtons).toHaveLength(1);
+    expect([...replayButtons[0].classList]).toEqual(
+      expect.arrayContaining(['top-1/2', 'left-1/2', '-translate-x-1/2', '-translate-y-1/2'])
+    );
 
     fireEvent.click(replayButtons[0]);
     expect(controller.playFromStart).toHaveBeenCalledTimes(1);
