@@ -593,8 +593,7 @@ describe('See times', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  // The whole point of it being separate from the pill: the moment you cannot debate someone now
-  // is the moment their next free slot matters.
+  // Being unable to debate someone now is when their next free slot matters most.
   it('stays live while the pill is blocked', () => {
     mocks.people = [{ ...person('user-them', 'Arturas'), in_debate: true }];
     render(<PeopleTab onTabChange={mocks.onTabChange} />);

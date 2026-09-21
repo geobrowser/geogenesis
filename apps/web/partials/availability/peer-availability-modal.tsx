@@ -17,12 +17,8 @@ type Props = {
   userId: string;
   peerName?: string | null;
   /**
-   * Where closing goes — required, because only the caller knows.
-   *
-   * A row in the hub goes back to the hub. The shareable link this view is eventually the
-   * destination of has no history behind it, so that route should send Explore rather than a
-   * back that lands outside the app; that decision belongs to the route, which knows how the
-   * viewer arrived, and not to a dialog that would have to guess.
+   * Required: only the caller knows where closing goes. A hub row returns to the hub; a route
+   * reached from a shared link has no history behind it and should send Explore.
    */
   onClose: () => void;
 };
