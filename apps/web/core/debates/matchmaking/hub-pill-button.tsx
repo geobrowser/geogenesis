@@ -9,6 +9,10 @@ type Props = {
   /** Swapped in while a mutation is in flight, so the press has visible feedback. */
   pendingLabel?: string;
   pending?: boolean;
+  /** Stable auto-capture label; string children are used when omitted. */
+  analyticsLabel?: string;
+  /** Defaults to the hub and can be changed by the standalone rematch surface. */
+  analyticsIntent?: string;
 } & React.ComponentPropsWithoutRef<'button'>;
 
 /**
@@ -21,15 +25,23 @@ export function HubPillButton({
   variant = 'secondary',
   pendingLabel,
   pending = false,
+  analyticsLabel,
+  analyticsIntent = 'debates_hub_action',
   disabled,
   className,
   children,
   ...rest
 }: Props) {
+  const resolvedAnalyticsLabel =
+    analyticsLabel ??
+    rest['aria-label'] ??
+    (typeof children === 'string' ? `Debate hub ${children}` : 'Debate hub action');
+
   return (
     <button
       type="button"
-      data-geo-analytics-intent="debates_hub_action"
+      data-geo-analytics-label={resolvedAnalyticsLabel}
+      data-geo-analytics-intent={analyticsIntent}
       disabled={disabled || pending}
       aria-busy={pending || undefined}
       className={cx(

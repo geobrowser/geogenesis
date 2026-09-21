@@ -319,6 +319,7 @@ export function ClaimExploreFeedCard({
                 <EntityCommentsButton
                   entityId={item.entityId}
                   spaceId={item.spaceId}
+                  targetEntityType="claim"
                   count={item.commentCount}
                   className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-grey-02 px-2.5 text-[14px] leading-[13px] font-normal text-text tabular-nums transition-colors hover:border-text"
                 />

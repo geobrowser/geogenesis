@@ -56,6 +56,15 @@ type InteractionBarProps = {
   className?: string;
 };
 
+type DebateActionKind = 'comments' | 'claims' | 'share';
+
+function debateActionAnalyticsProps(actionKind: DebateActionKind) {
+  return {
+    'data-geo-analytics-label': `Debate ${actionKind}`,
+    'data-geo-analytics-intent': 'debate_action',
+  } as const;
+}
+
 /**
  * The upvote/downvote/comment/claims/share bar beside each debate. Entity votes
  * use the same persisted response path as gallery and entity-page vote controls.
@@ -106,6 +115,7 @@ export function DebateInteractionBar({
           onClick={onComment}
           icon={<Comment />}
           ariaLabel={commentsLabel}
+          actionKind="comments"
           open={commentsPanelOpen}
           commentsPanelOpener={opensGlobalCommentsPanel}
         />
@@ -115,6 +125,7 @@ export function DebateInteractionBar({
             onClick={onClaims}
             icon={<Warning />}
             ariaLabel={claimsLabel}
+            actionKind="claims"
           />
         )}
         {onShare && (
@@ -123,6 +134,7 @@ export function DebateInteractionBar({
             onClick={onShare}
             icon={<Share />}
             ariaLabel="Share debate"
+            actionKind="share"
             expanded={shareOpen}
           />
         )}
@@ -143,6 +155,7 @@ export function DebateInteractionBar({
         icon={<Comment />}
         label={String(commentCount)}
         ariaLabel={commentsLabel}
+        actionKind="comments"
         open={commentsPanelOpen}
         commentsPanelOpener={opensGlobalCommentsPanel}
         compact={compact}
@@ -153,6 +166,7 @@ export function DebateInteractionBar({
           icon={<Warning />}
           label={String(claimsCount ?? 0)}
           ariaLabel={claimsLabel}
+          actionKind="claims"
           compact={compact}
         />
       )}
@@ -162,6 +176,7 @@ export function DebateInteractionBar({
           icon={<Share />}
           label="Share"
           ariaLabel="Share debate"
+          actionKind="share"
           expanded={shareOpen}
           compact={compact}
           hideLabel={compact}
@@ -176,6 +191,7 @@ function CircleAction({
   icon,
   onClick,
   ariaLabel,
+  actionKind,
   expanded,
   open,
   commentsPanelOpener,
@@ -184,6 +200,8 @@ function CircleAction({
   icon: React.ReactNode;
   onClick: () => void;
   ariaLabel: string;
+  /** Stable analytics dimension; unlike the accessible label it deliberately excludes live counts. */
+  actionKind: DebateActionKind;
   // When set, the button opens a dialog — announce that and its open/closed state to screen readers,
   // which Radix would do via <Trigger> if the trigger lived in the sheet's own subtree.
   expanded?: boolean;
@@ -202,8 +220,7 @@ function CircleAction({
     <div className="flex flex-col items-center gap-1">
       <button
         type="button"
-        data-geo-analytics-label={`Debate ${ariaLabel}`}
-        data-geo-analytics-intent="debate_action"
+        {...debateActionAnalyticsProps(actionKind)}
         aria-label={ariaLabel}
         aria-haspopup={expanded === undefined ? undefined : 'dialog'}
         aria-expanded={expanded ?? open}
@@ -225,6 +242,7 @@ function PillAction({
   icon,
   onClick,
   ariaLabel,
+  actionKind,
   expanded,
   open,
   commentsPanelOpener,
@@ -236,6 +254,8 @@ function PillAction({
   icon: React.ReactNode;
   onClick: () => void;
   ariaLabel: string;
+  /** Stable analytics dimension; unlike the accessible label it deliberately excludes live counts. */
+  actionKind: DebateActionKind;
   // See {@link CircleAction}: announces the dialog and its open state when this button opens one.
   expanded?: boolean;
   // See {@link CircleAction}.
@@ -250,8 +270,7 @@ function PillAction({
   return (
     <button
       type="button"
-      data-geo-analytics-label={`Debate ${ariaLabel}`}
-      data-geo-analytics-intent="debate_action"
+      {...debateActionAnalyticsProps(actionKind)}
       aria-label={ariaLabel}
       aria-haspopup={expanded === undefined ? undefined : 'dialog'}
       aria-expanded={expanded ?? open}

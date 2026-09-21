@@ -16,7 +16,8 @@ export function useEntityCommentsPanel() {
 
   // Stable identities: the host keys a document-level listener off these.
   const openComments = React.useCallback(
-    (entityId: string, spaceId: string) => setTarget({ entityId, spaceId }),
+    (entityId: string, spaceId: string, targetEntityType = 'entity') =>
+      setTarget({ entityId, spaceId, targetEntityType }),
     [setTarget]
   );
   const closeComments = React.useCallback(() => setTarget(null), [setTarget]);

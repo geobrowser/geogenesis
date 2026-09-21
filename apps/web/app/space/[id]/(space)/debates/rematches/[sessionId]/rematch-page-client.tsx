@@ -2332,7 +2332,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           // `HubQueryState` draws its action instead of the rows. Stopping short with rows on screen
           // is the ordinary case, and without this the list quietly stopped paging.
           <div className="flex justify-center pt-1">
-            <HubPillButton onClick={keepLooking}>Keep looking</HubPillButton>
+            <HubPillButton
+              analyticsLabel="Rematch keep looking"
+              analyticsIntent="debate_rematch_action"
+              onClick={keepLooking}
+            >
+              Keep looking
+            </HubPillButton>
           </div>
         ) : null}
       </main>
