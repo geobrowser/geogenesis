@@ -48,8 +48,21 @@ vi.mock('~/core/debates/hooks', () => ({
 // point of these assertions — so only its vote control is stood in for. The real one reaches the
 // sync store, Privy and the onboarding atoms, none of which this card's behavior depends on.
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: ({ entityId, presentation }: { entityId: string; presentation?: string }) => (
-    <div data-testid="vote-buttons" data-entity={entityId} data-presentation={presentation} />
+  EntityVoteButtons: ({
+    entityId,
+    presentation,
+    responseKind,
+  }: {
+    entityId: string;
+    presentation?: string;
+    responseKind?: string | null;
+  }) => (
+    <div
+      data-testid="vote-buttons"
+      data-entity={entityId}
+      data-presentation={presentation}
+      data-response-kind={responseKind ?? 'inferred'}
+    />
   ),
 }));
 
@@ -436,6 +449,41 @@ describe('DebateExploreFeedCard', () => {
         '/space/space-1/fd51f9352063461780397b672b23364c'
       );
     });
+  });
+
+  /**
+   * GEO-2660. Naming the response kind skips `EntityVoteButtons`' entity lookup, and with it the
+   * space resolution that finds an entity's own votes when a surface is listing it from elsewhere
+   * — which an explore card does whenever a data block row carries a debate from another space.
+   * The full-screen feed names it, because it only ever shows a space its own debates.
+   */
+  it('lets the vote control work out the response kind, so it can resolve the home space', () => {
+    renderCard();
+
+    expect(screen.getByTestId('vote-buttons').getAttribute('data-response-kind')).toBe('inferred');
+  });
+
+  /**
+   * The app's comments panel is an in-flow panel with no dialog role and no focus trap, so the
+   * control that opens it says how it stands without sending a reader looking for a dialog.
+   * `EntityCommentsButton`, which this replaced on explore cards, announced exactly this much.
+   */
+  it('reports the comments panel as expanded without claiming it is a dialog', () => {
+    renderCard();
+
+    const comments = screen.getByRole('button', { name: /^Comments/ });
+    expect(comments.getAttribute('aria-expanded')).toBe('false');
+    expect(comments.hasAttribute('aria-haspopup')).toBe(false);
+  });
+
+  /** Share really does open a dialog, and still says so. */
+  it('keeps the dialog announcement on Share, which opens one', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+    intersectAll(0.1);
+
+    expect(screen.getByRole('button', { name: 'Share debate' }).getAttribute('aria-haspopup')).toBe('dialog');
   });
 
   it('hides Claims and Share while the debate is still loading', () => {

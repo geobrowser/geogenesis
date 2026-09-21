@@ -216,6 +216,9 @@ export function DebateExploreFeedCard({
     commentsPanelOpen: commentsTarget?.entityId === item.entityId,
     onComment: () => openComments(item.entityId, item.spaceId),
     claimsCount: claims.totalCount,
+    // See the prop's own note: an explore card can be a data block row listing a debate from
+    // another space, and only the lookup finds that space's votes.
+    responseKind: 'infer' as const,
     onClaims: mediaMounted ? () => setClaimsOpen(true) : undefined,
     onShare: mediaMounted ? share.onOpen : undefined,
     shareOpen: share.open,

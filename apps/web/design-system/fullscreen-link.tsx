@@ -12,9 +12,11 @@ type FullscreenLinkProps = {
   /** What is being opened, for the accessible name — the icon says nothing on its own. */
   ariaLabel: string;
   /**
-   * Still rendered, so the control does not disappear from a row as it loads, but inert: no hover,
-   * no focus ring, no navigation. `pointer-events-none` rather than an `aria-disabled` anchor,
-   * which is the shape the data block already used here.
+   * Still rendered, so the control does not disappear from a row as it loads, but inert.
+   *
+   * `pointer-events-none` alone only stops the mouse: the anchor stays tabbable and Enter still
+   * follows it, which leaves a keyboard reaching something a pointer cannot. So it also leaves the
+   * tab order and says `aria-disabled`, which is what the class was always meant to mean.
    */
   disabled?: boolean;
   /** Prefetch hints, when the target is an entity page. See {@link Link}. */
@@ -49,6 +51,8 @@ export function FullscreenLink({
       entityId={entityId}
       spaceId={spaceId}
       aria-label={ariaLabel}
+      aria-disabled={disabled || undefined}
+      tabIndex={disabled ? -1 : undefined}
       className={cx(
         'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04',
         disabled

@@ -61,14 +61,17 @@ export function ExploreCardTitle({
   item: ExploreFeedItem;
   opensSidePanel: boolean;
   /**
-   * Hold the heading to two lines, and hand the whole text back on hover for the times that cuts
-   * it. One flag rather than a `className`, because the clamp and the tooltip are one decision:
-   * a heading that can be cut needs a way to read the rest, and a heading that cannot must not
-   * grow a tooltip that says what is already on screen.
+   * Hold the heading to two lines.
    *
    * Only the debate card asks for it. That card sizes fixed aspect-ratio media from the height its
    * title leaves over, so a third line is height it did not budget for; every other card lets the
    * name run.
+   *
+   * No `title` tooltip with it. Clamping is not the same as being cut — most headings fit inside
+   * two lines — and a tooltip repeating text already on screen is worse than none. Knowing which
+   * is which means measuring, as the full-screen header does with `useLineClampOverflow`, and that
+   * is a ResizeObserver per card in an infinite feed to reveal what the heading's own link already
+   * opens.
    */
   clamped?: boolean;
 }) {
@@ -77,7 +80,6 @@ export function ExploreCardTitle({
   return (
     <ExploreCardEntityLink item={target} opensSidePanel={opensSidePanel}>
       <h2
-        title={clamped ? text : undefined}
         className={cx(
           'mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline',
           clamped && 'line-clamp-2'

@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import type { ResponseKind } from '~/core/responses/entity-response';
+
 import { Warning } from '~/design-system/icons/warning';
 import { Text } from '~/design-system/text';
 
@@ -34,6 +36,21 @@ type InteractionBarProps = {
   onClaims?: () => void;
   onShare?: () => void;
   shareOpen?: boolean;
+  /**
+   * What kind of response the vote control records, or `'infer'` to let `EntityVoteButtons` read
+   * it off the entity.
+   *
+   * Not just a kind: naming one skips that component's entity lookup, and with it
+   * `resolveEntitySpaceId`, which is what diverts counts and votes to the space an entity actually
+   * lives in when the surface is listing it from somewhere else (GEO-2660). The full-screen feed
+   * only ever shows a space its own debates, so it keeps the cheaper fixed kind. An explore card
+   * can be a data block row listing a debate from another space, where the fixed kind reads that
+   * row's votes against the listing space and finds none — so it asks for the lookup.
+   *
+   * A debate infers to `'curation'` either way, so this changes which space is read, not what the
+   * control looks like.
+   */
+  responseKind?: ResponseKind | 'infer';
   className?: string;
 };
 
@@ -55,6 +72,7 @@ export function DebateInteractionBar({
   onClaims,
   onShare,
   shareOpen,
+  responseKind = 'curation',
   className,
 }: InteractionBarProps) {
   // Defined at all means comments open in the app's global panel rather than in one this bar's
@@ -66,6 +84,8 @@ export function DebateInteractionBar({
   // screen reader, and the visible text on these two is the number — so labelling them "Comments"
   // and "Claims" is the one reading that drops the thing they are there to report. Counted the way
   // `EntityCommentsButton` counts, which is the control the explore card used before this one.
+  const voteResponseKind = responseKind === 'infer' ? undefined : responseKind;
+
   const commentsLabel = `Comments (${commentCount})`;
   const claimsLabel = `Claims (${claimsCount ?? 0})`;
 
@@ -75,7 +95,7 @@ export function DebateInteractionBar({
         <EntityVoteButtons
           entityId={entityId}
           spaceId={spaceId}
-          responseKind="curation"
+          responseKind={voteResponseKind}
           presentation="debate-vertical"
         />
         <CircleAction
@@ -83,7 +103,7 @@ export function DebateInteractionBar({
           onClick={onComment}
           icon={<Comment />}
           ariaLabel={commentsLabel}
-          expanded={commentsPanelOpen}
+          open={commentsPanelOpen}
           commentsPanelOpener={opensGlobalCommentsPanel}
         />
         {onClaims && (
@@ -112,7 +132,7 @@ export function DebateInteractionBar({
       <EntityVoteButtons
         entityId={entityId}
         spaceId={spaceId}
-        responseKind="curation"
+        responseKind={voteResponseKind}
         presentation="debate-horizontal"
       />
       <PillAction
@@ -120,7 +140,7 @@ export function DebateInteractionBar({
         icon={<Comment />}
         label={String(commentCount)}
         ariaLabel={commentsLabel}
-        expanded={commentsPanelOpen}
+        open={commentsPanelOpen}
         commentsPanelOpener={opensGlobalCommentsPanel}
       />
       {onClaims && (
@@ -139,6 +159,7 @@ function CircleAction({
   onClick,
   ariaLabel,
   expanded,
+  open,
   commentsPanelOpener,
 }: {
   label: string;
@@ -148,6 +169,13 @@ function CircleAction({
   // When set, the button opens a dialog — announce that and its open/closed state to screen readers,
   // which Radix would do via <Trigger> if the trigger lived in the sheet's own subtree.
   expanded?: boolean;
+  /**
+   * Open/closed state for a control whose surface is *not* a dialog, so it gets `aria-expanded`
+   * without `aria-haspopup`. The app's comments panel is an in-flow panel with no dialog role and
+   * no focus trap, and `EntityCommentsButton` — the control this replaced on explore cards —
+   * announced exactly this much. Promising a dialog sends a screen reader looking for one.
+   */
+  open?: boolean;
   // See {@link InteractionBarProps.commentsPanelOpen}: marks this button to the global comments
   // panel as one of its openers.
   commentsPanelOpener?: boolean;
@@ -158,7 +186,7 @@ function CircleAction({
         type="button"
         aria-label={ariaLabel}
         aria-haspopup={expanded === undefined ? undefined : 'dialog'}
-        aria-expanded={expanded}
+        aria-expanded={expanded ?? open}
         data-entity-comments-opener={commentsPanelOpener ? '' : undefined}
         onClick={onClick}
         className="grid size-9 place-items-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-light transition-colors hover:text-text"
@@ -178,6 +206,7 @@ function PillAction({
   onClick,
   ariaLabel,
   expanded,
+  open,
   commentsPanelOpener,
   className,
 }: {
@@ -188,6 +217,8 @@ function PillAction({
   // See {@link CircleAction}: announces the dialog and its open state when this button opens one.
   expanded?: boolean;
   // See {@link CircleAction}.
+  open?: boolean;
+  // See {@link CircleAction}.
   commentsPanelOpener?: boolean;
   className?: string;
 }) {
@@ -196,7 +227,7 @@ function PillAction({
       type="button"
       aria-label={ariaLabel}
       aria-haspopup={expanded === undefined ? undefined : 'dialog'}
-      aria-expanded={expanded}
+      aria-expanded={expanded ?? open}
       data-entity-comments-opener={commentsPanelOpener ? '' : undefined}
       onClick={onClick}
       className={cx(
