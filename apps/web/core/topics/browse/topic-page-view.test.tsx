@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SUBTOPIC_RELATION_TYPE_ID } from '~/core/constants';
 
-import { TopicPageView } from './topic-page-view';
+import { TopicPageView, resolveTopicTab } from './topic-page-view';
 
 const mocks = vi.hoisted(() => ({
   entity: null as Record<string, unknown> | null,
@@ -28,7 +28,17 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
   ENTITY_DESCRIPTION_MAX_LINES: mocks.maxLines,
+  EntityPageInlineDescription: () => <div data-testid="editable-description" />,
 }));
+vi.mock('~/partials/entity-page/editable-entity-header', () => ({
+  EditableHeading: () => <div data-testid="editable-heading" />,
+}));
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/space/space-1/topic-1',
+  useSearchParams: () => new URLSearchParams(),
+}));
+vi.mock('~/partials/entity-page/entity-tabs', () => ({ EntityTabs: () => <div data-testid="entity-tabs" /> }));
+vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
 
 // jsdom has no layout, so the real clamp can never measure an overflow. What this file is about is
 // that the description is handed to it at all, and with the shared line budget — the measuring
@@ -40,13 +50,13 @@ vi.mock('~/design-system/clamped-text', () => ({
   },
 }));
 
-// The section moved out of this file in GEO-2781 and is shared with the claim view. Its own suite
-// covers the chips and the expander; this only checks that subtopics still reach it unchanged.
 vi.mock('~/partials/entity-page/relation-chip-section', () => ({
   META_CHIP_CLASS: 'meta-chip',
-  RelationChipSection: (props: Record<string, unknown>) => {
+}));
+vi.mock('./topic-subtopics', () => ({
+  TopicSubtopics: (props: Record<string, unknown>) => {
     mocks.chipSection = props;
-    return <div data-testid="chip-section" data-label={props.label as string} />;
+    return <div data-testid="subtopics" />;
   },
 }));
 
@@ -134,20 +144,21 @@ describe('TopicPageView title', () => {
 // GEO-2781 lifted this section out of this file so the claim view could draw its Topics with it.
 // Extracting a component is where a caller quietly loses an argument, so the subtopics side is
 // pinned too rather than only the new one.
-describe('TopicPageView subtopics', () => {
+describe('TopicPageView subtopics preview', () => {
   const subtopicRelation = {
     id: 'relation-1',
     type: { id: SUBTOPIC_RELATION_TYPE_ID },
     toEntity: { id: 'subtopic-1', name: 'Alignment' },
   };
 
-  it('still draws them with the shared chip section, under the label Subtopics', () => {
+  it('passes the subtopic relations to the overview preview', () => {
     mocks.entity = { ...topicEntity('Anything'), relations: [subtopicRelation] };
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
-    expect(screen.getByTestId('chip-section')).toHaveAttribute('data-label', 'Subtopics');
+    expect(screen.getByTestId('subtopics')).toBeInTheDocument();
     expect(mocks.chipSection?.relations).toEqual([subtopicRelation]);
     expect(mocks.chipSection?.spaceId).toBe('space-1');
+    expect(mocks.chipSection?.preview).toBe(true);
   });
 });
 
@@ -156,5 +167,26 @@ describe('TopicPageView composition', () => {
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(screen.queryByTestId('topic-composition')).toBeNull();
+  });
+});
+
+describe('resolveTopicTab', () => {
+  it('resolves route system tabs', () => {
+    expect(resolveTopicTab({ pathname: '/space/a/b/coverage', authoredTabId: null, panel: null })).toBe('coverage');
+    expect(resolveTopicTab({ pathname: '/space/a/b/subtopics', authoredTabId: null, panel: null })).toBe('subtopics');
+  });
+
+  it('lets an authored tab take precedence over the route', () => {
+    expect(resolveTopicTab({ pathname: '/space/a/b/claims', authoredTabId: 'tab-1', panel: null })).toBe('custom');
+  });
+
+  it('uses the side panel selection instead of the page behind it', () => {
+    expect(
+      resolveTopicTab({
+        pathname: '/space/a/b/coverage',
+        authoredTabId: 'page-tab',
+        panel: { activeTabId: null, activeSystemTab: 'debates' },
+      })
+    ).toBe('debates');
   });
 });

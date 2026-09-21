@@ -258,7 +258,14 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           )
         ) : null}
         {routeEditInitializer}
-        <TopicPageView entityId={entityId} spaceId={spaceId} />
+        <TopicPageView
+          entityId={entityId}
+          spaceId={spaceId}
+          initialTabRelations={initialTabRelations}
+          tabEntities={tabEntities}
+          isEditing={isEditing}
+          footer={isEditing && !props.hideProperties ? <ToggleEntityPage id={entityId} spaceId={spaceId} /> : undefined}
+        />
       </>
     );
   }

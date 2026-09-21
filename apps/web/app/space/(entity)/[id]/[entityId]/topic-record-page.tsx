@@ -2,7 +2,6 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { TOPIC_TYPE_ID } from '~/core/constants';
 import { ID } from '~/core/id';
 import { isHiddenEntity } from '~/core/moderation/hidden';
@@ -10,32 +9,20 @@ import { isHiddenEntity } from '~/core/moderation/hidden';
 import { cachedFetchEntityPage } from './cached-fetch-entity';
 import DefaultEntityPage from './default-entity-page';
 
-export type ClaimRecordPageProps = {
+export type TopicRecordPageProps = {
   params: Promise<{ id: string; entityId: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-/** The shared server guard and page shell behind the claim's record routes. */
-export async function ClaimRecordPage(props: ClaimRecordPageProps) {
-  return entityRecordPage(props, [CLAIM_TYPE_ID]);
-}
-
-/** The Debates and Claims routes are shared by both custom Claim and Topic pages. */
-export async function ClaimOrTopicRecordPage(props: ClaimRecordPageProps) {
-  return entityRecordPage(props, [CLAIM_TYPE_ID, TOPIC_TYPE_ID]);
-}
-
-async function entityRecordPage(props: ClaimRecordPageProps, allowedTypeIds: string[]) {
+/** Shared server guard and page shell for the topic's product-owned tab routes. */
+export async function TopicRecordPage(props: TopicRecordPageProps) {
   const params = await props.params;
   const searchParams = await props.searchParams;
 
   if (!IdUtils.isValid(params.id) || !IdUtils.isValid(params.entityId)) notFound();
 
   const result = await cachedFetchEntityPage(params.entityId, params.id);
-  if (
-    isHiddenEntity(result?.entity) ||
-    !result?.entity?.types.some(type => allowedTypeIds.some(typeId => ID.equals(type.id, typeId)))
-  ) {
+  if (isHiddenEntity(result?.entity) || !result?.entity?.types.some(type => ID.equals(type.id, TOPIC_TYPE_ID))) {
     notFound();
   }
 

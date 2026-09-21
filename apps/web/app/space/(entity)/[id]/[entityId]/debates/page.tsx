@@ -1,5 +1,5 @@
-import { ClaimRecordPage, type ClaimRecordPageProps } from '../claim-record-page';
+import { ClaimOrTopicRecordPage, type ClaimRecordPageProps } from '../claim-record-page';
 
-export default function ClaimDebatesPage(props: ClaimRecordPageProps) {
-  return <ClaimRecordPage {...props} />;
+export default function DebatesPage(props: ClaimRecordPageProps) {
+  return <ClaimOrTopicRecordPage {...props} />;
 }

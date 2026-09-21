@@ -336,12 +336,7 @@ describe('EntityPageBody topic side panel', () => {
     mocks.entity = { id: 'entity-1', types: [{ id: TOPIC_TYPE_ID }] };
 
     render(
-      <EntityPageBody
-        variant="sidePanel"
-        {...SHARED}
-        avatarUrl="ipfs://topic-avatar"
-        coverUrl="ipfs://topic-cover"
-      />
+      <EntityPageBody variant="sidePanel" {...SHARED} avatarUrl="ipfs://topic-avatar" coverUrl="ipfs://topic-cover" />
     );
 
     expect(screen.getByTestId('cover')).toBeInTheDocument();

@@ -282,7 +282,7 @@ export function EditableTabGroup({
         <div
           className={cx(
             'relative z-0 overflow-x-auto overflow-y-clip',
-            '[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
+            '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
             className
           )}
         >

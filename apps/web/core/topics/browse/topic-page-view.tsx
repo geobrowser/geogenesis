@@ -2,10 +2,14 @@
 
 import * as React from 'react';
 
+import { usePathname } from 'next/navigation';
+
 import { CURATED_TOPIC_TAG_ID, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID } from '~/core/constants';
 import { ID } from '~/core/id';
+import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
+import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useQueryEntity } from '~/core/sync/use-store';
-import type { Relation } from '~/core/types';
+import type { Relation, TabEntity } from '~/core/types';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -15,18 +19,54 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
-import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
-import { META_CHIP_CLASS, RelationChipSection } from '~/partials/entity-page/relation-chip-section';
+import { Editor } from '~/partials/editor/editor';
+import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import {
+  ENTITY_DESCRIPTION_MAX_LINES,
+  EntityPageInlineDescription,
+} from '~/partials/entity-page/entity-page-inline-description';
+import { EntityTabs } from '~/partials/entity-page/entity-tabs';
+import { META_CHIP_CLASS } from '~/partials/entity-page/relation-chip-section';
 
 import { UNNAMED_SUBTOPIC_PROPERTY_ID } from '../ontology';
 import { TopicClaims } from './topic-claims';
 import { TopicCoverage } from './topic-coverage';
 import { TopicDebates } from './topic-debates';
+import { TopicSubtopics } from './topic-subtopics';
 import { useTopicAncestors } from './use-topic-ancestors';
 
 /** Shared with the cover/avatar header so its left edge stays aligned with the topic column. */
 export const TOPIC_PAGE_CONTENT_MAX_WIDTH = 720;
 export const TOPIC_PAGE_CONTENT_INSET_CLASS = 'px-4 @[560px]:px-5';
+
+type TopicTab = 'overview' | 'debates' | 'claims' | 'subtopics' | 'coverage' | 'custom';
+type TopicSystemTab = Exclude<TopicTab, 'custom'>;
+
+export function resolveTopicTab({
+  pathname,
+  authoredTabId,
+  panel,
+}: {
+  pathname: string;
+  authoredTabId: string | null;
+  panel: { activeTabId: string | null; activeSystemTab: string | null } | null;
+}): TopicTab {
+  if (panel) {
+    if (panel.activeTabId) return 'custom';
+    if (panel.activeSystemTab === 'debates') return 'debates';
+    if (panel.activeSystemTab === 'claims') return 'claims';
+    if (panel.activeSystemTab === 'subtopics') return 'subtopics';
+    if (panel.activeSystemTab === 'coverage') return 'coverage';
+    return 'overview';
+  }
+
+  if (authoredTabId) return 'custom';
+  if (pathname.endsWith('/debates')) return 'debates';
+  if (pathname.endsWith('/claims')) return 'claims';
+  if (pathname.endsWith('/subtopics')) return 'subtopics';
+  if (pathname.endsWith('/coverage')) return 'coverage';
+  return 'overview';
+}
 
 /**
  * The browse-mode read view for a Topic.
@@ -47,8 +87,25 @@ export const TOPIC_PAGE_CONTENT_INSET_CLASS = 'px-4 @[560px]:px-5';
  * Sections render only when they have something to show, and the order is fixed — the composition
  * strip carries the variation between topics instead, so every topic is structurally the same page.
  */
-export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId: string }) {
+export function TopicPageView({
+  entityId,
+  spaceId,
+  initialTabRelations = [],
+  tabEntities = [],
+  footer,
+  isEditing = false,
+}: {
+  entityId: string;
+  spaceId: string;
+  initialTabRelations?: Relation[];
+  tabEntities?: TabEntity[];
+  footer?: React.ReactNode;
+  isEditing?: boolean;
+}) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
+  const pathname = usePathname();
+  const activeAuthoredTabId = useActiveTabIdForEditor();
+  const sidePanelTab = useEntitySidePanelActiveTab();
 
   const subtopics = React.useMemo(() => {
     // Both hierarchy properties, merged and deduplicated. The named `Subtopics` and the unnamed
@@ -81,6 +138,15 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
   // The whole path down to this topic, not just the rung above it — a topic can sit several levels
   // deep, and showing one parent reads as though the hierarchy is flat.
   const ancestors = useTopicAncestors(entityId, spaceId);
+  const activeTab = resolveTopicTab({ pathname, authoredTabId: activeAuthoredTabId, panel: sidePanelTab });
+  const overviewHref = NavUtils.toEntity(spaceId, entityId);
+  const systemTabs = [
+    { label: 'Overview', href: overviewHref, sidePanelKey: 'overview' },
+    { label: 'Debates', href: `${overviewHref}/debates`, sidePanelKey: 'debates' },
+    { label: 'Claims', href: `${overviewHref}/claims`, sidePanelKey: 'claims' },
+    { label: 'Subtopics', href: `${overviewHref}/subtopics`, sidePanelKey: 'subtopics' },
+    { label: 'Coverage', href: `${overviewHref}/coverage`, sidePanelKey: 'coverage' },
+  ];
 
   if (isLoading && !entity) {
     return (
@@ -130,9 +196,13 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
               Deliberately not container-scaled: the regular entity header isn't either, so scaling
               this one down in the side panel would reintroduce a mismatch. `text-pretty` stays — it
               governs where the line breaks, not how big it is. */}
-          <Text as="h1" variant="entityTitle" color="text" className="block text-pretty wrap-break-word">
-            {entity.name ?? entity.id}
-          </Text>
+          {isEditing ? (
+            <EditableHeading entityId={entityId} spaceId={spaceId} fallbackName={entity.name ?? entity.id} />
+          ) : (
+            <Text as="h1" variant="entityTitle" color="text" className="block text-pretty wrap-break-word">
+              {entity.name ?? entity.id}
+            </Text>
+          )}
 
           {/* Clamped, like entity pages, the side panel and the claim page (GEO-2776). What is
               shared is the line budget, not the cut: wrapping decides where the break lands and
@@ -145,13 +215,21 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
               is genuinely hidden. The naive-overflow bug GEO-2756 fixed lived in the debates
               feed's own title, which clamps a heading inside a link and so has its own
               implementation. */}
-          {entity.description && (
-            <ClampedText
-              text={entity.description}
-              maxLines={ENTITY_DESCRIPTION_MAX_LINES}
-              variant="body"
-              textClassName="wrap-break-word text-grey-04"
+          {isEditing ? (
+            <EntityPageInlineDescription
+              entityId={entityId}
+              spaceId={spaceId}
+              fallbackDescription={entity.description}
             />
+          ) : (
+            entity.description && (
+              <ClampedText
+                text={entity.description}
+                maxLines={ENTITY_DESCRIPTION_MAX_LINES}
+                variant="body"
+                textClassName="wrap-break-word text-grey-04"
+              />
+            )
           )}
 
           <div className="flex flex-wrap items-center gap-1.5">
@@ -160,16 +238,63 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
           </div>
         </header>
 
-        <RelationChipSection label="Subtopics" relations={subtopics} spaceId={spaceId} />
+        <EntityTabs
+          entityId={entityId}
+          spaceId={spaceId}
+          initialTabRelations={initialTabRelations}
+          tabEntities={tabEntities}
+          systemTabsBefore={systemTabs}
+          reservedSystemLabels={systemTabs.map(tab => tab.label)}
+          divideBeforeAuthored
+        />
 
-        <TopicDebates topicId={entityId} spaceId={spaceId} />
-
-        <TopicClaims topicId={entityId} spaceId={spaceId} />
-
-        <TopicCoverage topicId={entityId} spaceId={spaceId} />
-
-        <CommentSection entityId={entityId} spaceId={spaceId} />
+        <TopicTabPanel
+          activeTab={activeTab}
+          entityId={entityId}
+          spaceId={spaceId}
+          subtopics={subtopics}
+          subtopicsHref={`${overviewHref}/subtopics`}
+          onSelectSystemTab={sidePanelTab?.setActiveSystemTab}
+        />
+        {footer}
       </div>
     </div>
+  );
+}
+
+function TopicTabPanel({
+  activeTab,
+  entityId,
+  spaceId,
+  subtopics,
+  subtopicsHref,
+  onSelectSystemTab,
+}: {
+  activeTab: TopicTab;
+  entityId: string;
+  spaceId: string;
+  subtopics: Relation[];
+  subtopicsHref: string;
+  onSelectSystemTab?: (tab: TopicSystemTab) => void;
+}) {
+  if (activeTab === 'custom') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
+  if (activeTab === 'debates') return <TopicDebates topicId={entityId} spaceId={spaceId} />;
+  if (activeTab === 'claims') return <TopicClaims topicId={entityId} spaceId={spaceId} />;
+  if (activeTab === 'subtopics') {
+    return <TopicSubtopics relations={subtopics} spaceId={spaceId} href={subtopicsHref} />;
+  }
+  if (activeTab === 'coverage') return <TopicCoverage topicId={entityId} spaceId={spaceId} />;
+
+  return (
+    <>
+      <TopicSubtopics
+        relations={subtopics}
+        spaceId={spaceId}
+        href={subtopicsHref}
+        preview
+        onSeeAll={onSelectSystemTab ? () => onSelectSystemTab('subtopics') : undefined}
+      />
+      <CommentSection entityId={entityId} spaceId={spaceId} />
+    </>
   );
 }
