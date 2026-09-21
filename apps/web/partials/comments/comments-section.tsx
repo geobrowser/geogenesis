@@ -593,6 +593,7 @@ function TopLevelCommentInput({
         onSubmit(text);
         onExpandedChange(false);
       }}
+      analyticsLabel="New comment"
       placeholder=""
       autoFocus
       onCancel={() => onExpandedChange(false)}
@@ -603,12 +604,14 @@ function TopLevelCommentInput({
 /** Exported for the Escape test: this composer renders inside the proposal review sheet. */
 export function CommentInput({
   onSubmit,
+  analyticsLabel = 'Comment',
   placeholder,
   autoFocus = false,
   onCancel,
   initialValue = '',
 }: {
   onSubmit: (text: string) => void;
+  analyticsLabel?: string;
   placeholder: string;
   autoFocus?: boolean;
   onCancel?: () => void;
@@ -668,6 +671,8 @@ export function CommentInput({
     <div className="flex flex-col gap-2 rounded-lg border border-grey-02 p-3">
       <textarea
         ref={textareaRef}
+        data-geo-analytics-label={analyticsLabel}
+        aria-label={analyticsLabel}
         value={text}
         onChange={e => setText(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -1187,6 +1192,7 @@ function CommentItem({
       {isEditing ? (
         <CommentInput
           onSubmit={handleEdit}
+          analyticsLabel="Edit comment"
           placeholder="Edit your comment..."
           autoFocus
           onCancel={() => setIsEditing(false)}
@@ -1259,6 +1265,7 @@ function CommentItem({
         <div className="mt-3">
           <CommentInput
             onSubmit={handleReply}
+            analyticsLabel="Reply to comment"
             placeholder={`Reply to ${comment.author.name ?? 'comment'}...`}
             autoFocus
             onCancel={() => setIsReplying(false)}

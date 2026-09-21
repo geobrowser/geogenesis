@@ -373,7 +373,7 @@ function EmailCapturePopup() {
           // different wording in every browser, unstyleable, and gone the moment they look away.
           // `inputMode` and `autoComplete` keep the phone keyboard and the autofill that
           // `type="email"` was there for.
-          <form onSubmit={submit} noValidate>
+          <form data-geo-analytics-label="Explore newsletter signup" onSubmit={submit} noValidate>
             <p className={HEADING_CLASS}>Geo network launching soon!</p>
             <p className={SUBTEXT_CLASS}>Get updates on features, points, and path to mainnet.</p>
 

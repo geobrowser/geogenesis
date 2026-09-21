@@ -46,6 +46,7 @@ const mocks = vi.hoisted(() => ({
   /** Whether each render of the card's summary read was enabled, in order. */
   summaryEnabled: [] as boolean[],
   nearViewport: true,
+  entityResponseInputs: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock('../hooks', () => ({
@@ -122,14 +123,17 @@ vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
-  useEntityResponse: () => ({
-    submitResponse: mocks.submitResponse,
-    optimisticResponse: undefined,
-    isProcessingResponse: false,
-    isResponseIndexingDelayed: false,
-    isConnected: true,
-    personalSpaceId: mocks.viewerSpaceId,
-  }),
+  useEntityResponse: (input: Record<string, unknown>) => (
+    mocks.entityResponseInputs.push(input),
+    {
+      submitResponse: mocks.submitResponse,
+      optimisticResponse: undefined,
+      isProcessingResponse: false,
+      isResponseIndexingDelayed: false,
+      isConnected: true,
+      personalSpaceId: mocks.viewerSpaceId,
+    }
+  ),
   useEntityResponseIndexingSnapshot: () => mocks.indexing,
   useResetEntityResponseIndexingSnapshot: () => mocks.resetIndexing,
 }));
@@ -254,6 +258,18 @@ beforeEach(() => {
   mocks.viewerSpaceId = 'personal-space';
   mocks.summaryEnabled = [];
   mocks.nearViewport = true;
+  mocks.entityResponseInputs = [];
+});
+
+it('attributes response events to the claim text as well as its id', () => {
+  renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+  expect(mocks.entityResponseInputs).toContainEqual({
+    entityId: CLAIM_ENTITY_ID,
+    entityName: CLAIM_TEXT,
+    spaceId: SPACE_ID,
+    responseKind: 'stance',
+  });
 });
 
 afterEach(cleanup);

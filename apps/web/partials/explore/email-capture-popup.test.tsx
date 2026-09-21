@@ -116,6 +116,21 @@ async function subscribeSuccessfully(email = 'reader@example.com') {
 }
 
 describe('ExploreEmailCapturePopup', () => {
+  it('gives each signup form a stable analytics identity', async () => {
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    expect(popup()?.querySelector('form')).toHaveAttribute('data-geo-analytics-label', 'Explore newsletter signup');
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reader@example.com' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+
+    expect(popup()?.querySelector('form')).toHaveAttribute('data-geo-analytics-label', 'Explore account verification');
+  });
+
   it('stays away until the reader has scrolled', () => {
     render(<ExploreEmailCapturePopup />);
 
