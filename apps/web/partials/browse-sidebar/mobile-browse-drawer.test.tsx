@@ -8,6 +8,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MobileBrowseDrawer } from './mobile-browse-drawer';
 
+const pathname = { current: '/explore' };
+vi.mock('next/navigation', () => ({
+  usePathname: () => pathname.current,
+}));
+
 vi.mock('./browse-sidebar', () => ({
   BrowseSidebar: ({ onClose }: { onClose: () => void }) => (
     <aside>
@@ -24,6 +29,7 @@ vi.mock('./browse-sidebar', () => ({
 describe('MobileBrowseDrawer', () => {
   afterEach(() => {
     cleanup();
+    pathname.current = '/explore';
     vi.unstubAllGlobals();
   });
 
@@ -65,6 +71,34 @@ describe('MobileBrowseDrawer', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Close browse menu' }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('closes when browser navigation changes the route without a drawer click', () => {
+    const onOpenChange = vi.fn();
+    const triggerRef = React.createRef<HTMLButtonElement>();
+    const fallbackFocusRef = React.createRef<HTMLElement>();
+    const view = render(
+      <MobileBrowseDrawer
+        open
+        fallbackFocusRef={fallbackFocusRef}
+        fullscreenFocusTarget={null}
+        onOpenChange={onOpenChange}
+        triggerRef={triggerRef}
+      />
+    );
+
+    pathname.current = '/root';
+    view.rerender(
+      <MobileBrowseDrawer
+        open
+        fallbackFocusRef={fallbackFocusRef}
+        fullscreenFocusTarget={null}
+        onOpenChange={onOpenChange}
+        triggerRef={triggerRef}
+      />
+    );
+
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
@@ -207,5 +241,35 @@ describe('MobileBrowseDrawer', () => {
     rerender(<FullscreenHarness fullscreen />);
 
     await waitFor(() => expect(screen.getByRole('main', { name: 'Ranking fullscreen' })).toHaveFocus());
+  });
+
+  it('prefers the visible navbar over the fullscreen surface when the Browse trigger is gone', async () => {
+    const user = userEvent.setup();
+
+    function VisibleNavbarHarness() {
+      const [open, setOpen] = React.useState(true);
+      const triggerRef = React.useRef<HTMLButtonElement>(null);
+      const fallbackFocusRef = React.useRef<HTMLElement>(null);
+      const [fullscreenFocusTarget, setFullscreenFocusTarget] = React.useState<HTMLElement | null>(null);
+
+      return (
+        <>
+          <main ref={setFullscreenFocusTarget} tabIndex={-1} aria-label="Ranking fullscreen" />
+          <nav ref={fallbackFocusRef} tabIndex={-1} aria-label="Visible fallback navigation" />
+          <MobileBrowseDrawer
+            open={open}
+            fallbackFocusRef={fallbackFocusRef}
+            fullscreenFocusTarget={fullscreenFocusTarget}
+            onOpenChange={setOpen}
+            triggerRef={triggerRef}
+          />
+        </>
+      );
+    }
+
+    render(<VisibleNavbarHarness />);
+    await user.click(screen.getByRole('button', { name: 'Close browse menu' }));
+
+    await waitFor(() => expect(screen.getByRole('navigation', { name: 'Visible fallback navigation' })).toHaveFocus());
   });
 });

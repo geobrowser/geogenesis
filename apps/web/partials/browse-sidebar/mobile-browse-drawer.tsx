@@ -4,6 +4,8 @@ import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
+import { usePathname } from 'next/navigation';
+
 import { BrowseSidebar } from './browse-sidebar';
 
 /** Matches the `mobile:` custom variant in styles.css. */
@@ -25,6 +27,16 @@ function isVisible(element: HTMLElement | null): element is HTMLElement {
 }
 
 export function MobileBrowseDrawer({ open, fallbackFocusRef, fullscreenFocusTarget, onOpenChange, triggerRef }: Props) {
+  const pathname = usePathname();
+  const previousPathnameRef = React.useRef(pathname);
+
+  React.useEffect(() => {
+    if (previousPathnameRef.current === pathname) return;
+
+    previousPathnameRef.current = pathname;
+    if (open) onOpenChange(false);
+  }, [onOpenChange, open, pathname]);
+
   React.useEffect(() => {
     if (!open || typeof window.matchMedia !== 'function') return;
 
@@ -57,7 +69,7 @@ export function MobileBrowseDrawer({ open, fallbackFocusRef, fullscreenFocusTarg
           onClickCapture={closeAfterNavigation}
           onCloseAutoFocus={event => {
             event.preventDefault();
-            const focusTarget = [triggerRef.current, fullscreenFocusTarget, fallbackFocusRef.current].find(isVisible);
+            const focusTarget = [triggerRef.current, fallbackFocusRef.current, fullscreenFocusTarget].find(isVisible);
             focusTarget?.focus();
           }}
           className="fixed inset-y-0 left-0 z-101 hidden w-[min(20rem,calc(100vw-3rem))] bg-white shadow-[4px_0_24px_rgba(32,32,32,0.12)] focus:outline-hidden mobile:flex"
