@@ -17,11 +17,7 @@ import { AvailabilityCalendar } from './availability-calendar';
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /**
-   * The schedule as it stands; the modal edits a copy and reports it only on save. `undefined`
-   * until the read answers, which is not an empty week: the grid seeds from this once and never
-   * reseeds, so an assumed empty week would be saved as one.
-   */
+  /** The schedule, or `undefined` until the read answers: not an empty week, which would be saved as one. */
   blocks?: AvailabilityBlock[];
   onSave: (blocks: AvailabilityBlock[]) => void;
   /** Focus goes back here on close, since the opener is off in the panel behind the overlay. */
