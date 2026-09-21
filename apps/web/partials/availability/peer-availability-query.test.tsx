@@ -59,7 +59,17 @@ describe('PeerAvailability', () => {
 
     expect(screen.getByText(/Loading availability/)).toBeInTheDocument();
     // Specifically not the hint bar, which a premature `viewerHasSchedule: false` would raise.
-    expect(screen.queryByText(/haven’t set your own availability/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Set your availability/)).not.toBeInTheDocument();
+  });
+
+  // The overlap call can succeed while `/me/debate-schedule` fails. Reading that as "no schedule
+  // set" raised the hint against someone who has one, so the hook reports it as an error instead.
+  it('reports a failed viewer-schedule lookup rather than assuming no schedule', () => {
+    state({ isError: true, schedule: undefined });
+    render(<PeerAvailability userId="user-peer" />);
+
+    expect(screen.getByText(/Couldn’t load their availability/)).toBeInTheDocument();
+    expect(screen.queryByText(/Set your availability/)).not.toBeInTheDocument();
   });
 
   it('reports a failure as one', () => {
@@ -71,6 +81,6 @@ describe('PeerAvailability', () => {
   it('draws the week once it has one', () => {
     state({ schedule });
     render(<PeerAvailability userId="user-peer" peerName="Ada" />);
-    expect(screen.getByRole('heading', { name: 'When Ada is free' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'When you and Ada are both free' })).toBeInTheDocument();
   });
 });

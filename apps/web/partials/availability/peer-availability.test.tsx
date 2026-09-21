@@ -44,7 +44,7 @@ describe('PeerAvailabilityView', () => {
   it('names both people and both zones', () => {
     setup({ viewerTimezone: 'America/New_York', peerTimezone: 'Europe/Berlin' });
 
-    expect(screen.getByRole('heading', { name: 'When Ada is free' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'When you and Ada are both free' })).toBeInTheDocument();
     expect(screen.getByText(/America\/New_York/)).toBeInTheDocument();
     expect(screen.getByText(/Europe\/Berlin/)).toBeInTheDocument();
   });
@@ -141,12 +141,12 @@ describe('PeerAvailabilityView', () => {
   describe('hint bar', () => {
     it('appears only when the viewer has no availability set', () => {
       setup({ viewerHasSchedule: false });
-      expect(screen.getByText(/haven’t set your own availability/)).toBeInTheDocument();
+      expect(screen.getByText(/Set your availability to see when you and Ada are both free/)).toBeInTheDocument();
     });
 
     it('stays out of the way when they have', () => {
       setup({ viewerHasSchedule: true });
-      expect(screen.queryByText(/haven’t set your own availability/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Set your availability/)).not.toBeInTheDocument();
     });
 
     it('never blocks the week', () => {
@@ -167,7 +167,47 @@ describe('PeerAvailabilityView', () => {
       setup({ slots: [], peerHasSchedule: null, viewerHasSchedule: false });
 
       expect(screen.queryByText(/hasn’t set any availability/)).not.toBeInTheDocument();
-      expect(screen.getByText(/No times to show for Ada/)).toBeInTheDocument();
+      expect(screen.getByText('No shared times in the next 7 days.')).toBeInTheDocument();
+    });
+  });
+
+  // Europe leaves summer time a week before the US in 2026, so a week spanning Oct 25 holds a
+  // +6 offset and a +5 one. Reading one slot's offset as the week's got both of these wrong.
+  describe('a week that crosses a DST boundary', () => {
+    const OCTOBER = new Date('2026-10-22T15:00:00Z');
+    const straddling = (overrides: Partial<PeerSchedule> = {}) =>
+      render(
+        <PeerAvailabilityView
+          schedule={schedule({
+            viewerTimezone: 'America/New_York',
+            peerTimezone: 'Europe/Berlin',
+            slots: [
+              { start: '2026-10-23T17:00:00Z', end: '2026-10-23T17:30:00Z', viewerIsFree: true },
+              { start: '2026-10-26T17:00:00Z', end: '2026-10-26T17:30:00Z', viewerIsFree: true },
+            ],
+            ...overrides,
+          })}
+          peerName="Ada"
+          now={OCTOBER}
+        />
+      );
+
+    it('does not present one offset as the whole week', () => {
+      straddling();
+      expect(screen.getByText(/Ada is in Europe\/Berlin\.$/)).toBeInTheDocument();
+      expect(screen.queryByText(/hrs\./)).not.toBeInTheDocument();
+    });
+
+    it('still names the offset when every slot agrees on it', () => {
+      straddling({ slots: [{ start: '2026-10-23T17:00:00Z', end: '2026-10-23T17:30:00Z', viewerIsFree: true }] });
+      expect(screen.getByText(/Ada is in Europe\/Berlin, \+6 hrs\./)).toBeInTheDocument();
+    });
+
+    it('labels each chip from its own offset', () => {
+      straddling();
+      // Same 17:00Z wall clock for the viewer either side of the boundary; Berlin moves.
+      expect(screen.getByRole('button', { name: /1pm.*7pm/s })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /1pm.*6pm/s })).toBeInTheDocument();
     });
   });
 
@@ -187,7 +227,7 @@ describe('PeerAvailabilityView', () => {
 
   it('says when the list was cut short', () => {
     setup({ truncated: true });
-    expect(screen.getByText(/Showing the first of Ada’s available times/)).toBeInTheDocument();
+    expect(screen.getByText(/Showing the first of your shared times/)).toBeInTheDocument();
   });
 
   it('renders no absolute instant anywhere — they are for comparing, not for reading', () => {

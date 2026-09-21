@@ -655,14 +655,15 @@ export function usePeerSchedule(peerUserId: string | null) {
     enabled,
   });
 
-  // Held back until the viewer's own schedule has answered. `isSet` is false while that query is
-  // in flight, and a false there is indistinguishable from a real one — so publishing early would
-  // put up the "you haven't set your availability" hint, and the empty state that goes with it,
-  // in front of someone who has.
-  const viewerSettled = !enabled || !viewerSchedule.isPending;
+  // `both_have_schedules` proves the viewer has one, so their own lookup only matters when false.
+  const provenByOverlap = query.data?.both_have_schedules === true;
+  // `isSet` reads false while in flight and on error, neither distinguishable from a real false,
+  // so anything short of success is withheld rather than shown as "no schedule set".
+  const viewerResolved = provenByOverlap || viewerSchedule.isSuccess;
+  const viewerUnavailable = !provenByOverlap && viewerSchedule.isError;
 
   const schedule: PeerSchedule | undefined =
-    query.data && viewerSettled ? toPeerSchedule(query.data, { viewerHasSchedule: viewerSchedule.isSet }) : undefined;
+    query.data && viewerResolved ? toPeerSchedule(query.data, { viewerHasSchedule: viewerSchedule.isSet }) : undefined;
 
   return {
     ...query,
@@ -672,7 +673,8 @@ export function usePeerSchedule(peerUserId: string | null) {
      * forever, which a caller would otherwise draw as a spinner that never resolves.
      */
     enabled,
-    isPending: enabled && (query.isPending || !viewerSettled),
+    isPending: enabled && !viewerUnavailable && (query.isPending || !viewerResolved),
+    isError: query.isError || (enabled && viewerUnavailable),
   };
 }
 

@@ -580,7 +580,7 @@ describe('See times', () => {
     mocks.people = [person('user-them', 'Arturas')];
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'See times' }));
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     expect(within(screen.getByRole('dialog')).getByText('Availability')).toBeInTheDocument();
@@ -599,7 +599,7 @@ describe('See times', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByRole('button', { name: 'In a debate' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'See times' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'See times for Arturas' })).toBeEnabled();
   });
 
   it('sends a signed-out viewer to sign in, since the read behind it is viewer-scoped', () => {
@@ -607,7 +607,7 @@ describe('See times', () => {
     mocks.people = [person('user-them', 'Arturas')];
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'See times' }));
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
 
     expect(mocks.promptSignIn).toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

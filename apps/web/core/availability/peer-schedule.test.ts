@@ -65,6 +65,13 @@ describe('toPeerSchedule', () => {
       expect(schedule.peerHasSchedule).toBe(false);
     });
 
+    // The caller's own lookup can fail or still be in flight, both of which arrive as `false`.
+    it('trusts the response over a false from the caller', () => {
+      const schedule = toPeerSchedule(response({ both_have_schedules: true }), { viewerHasSchedule: false });
+      expect(schedule.viewerHasSchedule).toBe(true);
+      expect(schedule.peerHasSchedule).toBe(true);
+    });
+
     it('says nothing about the peer when the viewer has no schedule either', () => {
       const schedule = toPeerSchedule(response({ both_have_schedules: false }), { viewerHasSchedule: false });
       expect(schedule.peerHasSchedule).toBeNull();

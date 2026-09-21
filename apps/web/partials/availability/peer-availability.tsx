@@ -90,50 +90,49 @@ export function PeerAvailabilityView({
   const name = peerName || shortId(schedule.userId);
   const hasAnySlot = days.some(day => day.slots.length > 0);
 
-  // The offset is per instant, so it is read off a real slot rather than computed for "now" —
-  // a week that crosses a DST boundary genuinely has two of them, and the one worth naming in
-  // the header is the one attached to the times being looked at.
-  const offsetMinutes = days.flatMap(day => day.slots)[0]?.offsetMinutes ?? 0;
-  const showPeerTimes = Math.abs(offsetMinutes) >= LARGE_OFFSET_MINUTES;
+  // A week crossing a DST boundary holds two genuinely different offsets, so the header names one
+  // only when every slot agrees. Each chip decides for itself whether to carry their local time.
+  const offsets = new Set(days.flatMap(day => day.slots).map(slot => slot.offsetMinutes));
+  const uniformOffset = offsets.size === 1 ? [...offsets][0] : null;
 
   return (
     <div className={cx('flex min-h-0 flex-col gap-4', className)}>
       <header className="flex shrink-0 flex-col gap-1">
         <Text as="h2" variant="smallTitle">
-          When {name} is free
+          When you and {name} are both free
         </Text>
         <Text as="p" variant="footnote" color="grey-04">
           {/* geo-chat sends an empty zone for a side with no saved schedule, so naming them is
               conditional — "Ada is in ," otherwise. */}
           {schedule.viewerTimezone && schedule.peerTimezone
             ? `Times shown in your zone, ${schedule.viewerTimezone}. ${name} is in ${schedule.peerTimezone}${
-                offsetMinutes === 0 ? ', the same time as you' : `, ${formatOffset(offsetMinutes)}`
+                uniformOffset === null
+                  ? ''
+                  : uniformOffset === 0
+                    ? ', the same time as you'
+                    : `, ${formatOffset(uniformOffset)}`
               }.`
             : 'Times shown in your local time.'}
         </Text>
       </header>
 
-      {!schedule.viewerHasSchedule && (
-        <Hint>
-          You haven&rsquo;t set your own availability. You can still see {name}&rsquo;s — setting yours just marks the
-          times you both have free.
-        </Hint>
-      )}
+      {/* Today's endpoint returns only mutual slots, so with no schedule of your own there is
+          nothing to intersect and no times at all. Softens once the API sends their week whole. */}
+      {!schedule.viewerHasSchedule && <Hint>Set your availability to see when you and {name} are both free.</Hint>}
 
       {schedule.peerHasSchedule === false && !hasAnySlot ? (
         <Empty>{name} hasn&rsquo;t set any availability yet.</Empty>
       ) : !hasAnySlot ? (
-        // `peerHasSchedule === null` and nothing to show: the endpoint cannot tell us whether the
-        // week is empty or simply unreadable without a schedule of the viewer's own, and saying
-        // "they have nothing" on that evidence would be a guess presented as a fact.
-        <Empty>No times to show for {name} in the next 7 days.</Empty>
+        // About the pair, not about them: with no viewer schedule the response cannot say whether
+        // their week is empty, so naming them would be a guess stated as fact.
+        <Empty>No shared times in the next 7 days.</Empty>
       ) : (
-        <WeekGrid days={days} showPeerTimes={showPeerTimes} />
+        <WeekGrid days={days} />
       )}
 
       {schedule.truncated && (
         <Text as="p" variant="footnote" color="grey-04" className="shrink-0">
-          Showing the first of {name}&rsquo;s available times.
+          Showing the first of your shared times.
         </Text>
       )}
     </div>
@@ -149,17 +148,17 @@ export function PeerAvailabilityView({
  * trade: no off-screen days to discover, no travelling headers, and the day a slot belongs to is
  * beside it rather than above a scroll position.
  */
-function WeekGrid({ days, showPeerTimes }: { days: PeerDay[]; showPeerTimes: boolean }) {
+function WeekGrid({ days }: { days: PeerDay[] }) {
   return (
     <div className="sm:grid-cols-7 sm:gap-3 grid min-h-0 flex-1 gap-2 overflow-y-auto overscroll-contain">
       {days.map((day, index) => (
-        <DayColumn key={day.date} day={day} isToday={index === 0} showPeerTimes={showPeerTimes} />
+        <DayColumn key={day.date} day={day} isToday={index === 0} />
       ))}
     </div>
   );
 }
 
-function DayColumn({ day, isToday, showPeerTimes }: { day: PeerDay; isToday: boolean; showPeerTimes: boolean }) {
+function DayColumn({ day, isToday }: { day: PeerDay; isToday: boolean }) {
   const [expanded, setExpanded] = React.useState(false);
   const empty = day.slots.length === 0;
   const shown = expanded ? day.slots : day.slots.slice(0, SLOTS_PER_DAY);
@@ -191,7 +190,7 @@ function DayColumn({ day, isToday, showPeerTimes }: { day: PeerDay; isToday: boo
       ) : (
         <div className="sm:flex-col flex flex-wrap gap-1">
           {shown.map(slot => (
-            <SlotChip key={slot.start} slot={slot} showPeerTime={showPeerTimes} />
+            <SlotChip key={slot.start} slot={slot} />
           ))}
           {hidden > 0 && (
             <button
@@ -216,8 +215,11 @@ function DayColumn({ day, isToday, showPeerTimes }: { day: PeerDay; isToday: boo
  * the grid then. Dashed and muted means only they are free; it stays a perfectly ordinary,
  * pickable slot.
  */
-function SlotChip({ slot, showPeerTime }: { slot: PeerDaySlot; showPeerTime: boolean }) {
+function SlotChip({ slot }: { slot: PeerDaySlot }) {
   const [selected, setSelected] = React.useState(false);
+  // Per slot rather than per week: a week spanning a DST change carries two offsets, and one can
+  // sit on the far side of the threshold from the other.
+  const showPeerTime = Math.abs(slot.offsetMinutes) >= LARGE_OFFSET_MINUTES;
 
   return (
     <button

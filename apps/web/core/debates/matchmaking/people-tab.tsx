@@ -444,6 +444,9 @@ function PersonRow({
             viewer-scoped and would only 401. */}
         <button
           type="button"
+          // Every row carries this control, so the visible label alone leaves a screen reader or
+          // voice control with a list of identical targets.
+          aria-label={`See times for ${speakerLabel(person)}`}
           onClick={() => (onRequireSignIn ? onRequireSignIn() : setTimesOpen(true))}
           className="shrink-0 text-metadata whitespace-nowrap text-grey-04 transition-colors hover:text-text"
         >

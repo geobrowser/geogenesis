@@ -101,7 +101,9 @@ export function toPeerSchedule(
     userId: response.with,
     viewerTimezone: response.viewer_timezone,
     peerTimezone: response.with_timezone,
-    viewerHasSchedule,
+    // `both_have_schedules` proves it by itself, so a caller whose own lookup failed or has not
+    // answered cannot make this read false when the response already says otherwise.
+    viewerHasSchedule: response.both_have_schedules || viewerHasSchedule,
     peerHasSchedule: response.both_have_schedules ? true : viewerHasSchedule ? false : null,
     slots: (response.slots ?? []).map(slot => ({
       start: slot.start,
