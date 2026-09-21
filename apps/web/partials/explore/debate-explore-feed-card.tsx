@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
@@ -78,9 +76,10 @@ type DebateExploreFeedCardProps = {
   hideJoinButton?: boolean;
   /** Whether the claim title opens the side panel rather than navigating (same semantics as ExploreFeedCard). */
   titleOpensSidePanel?: boolean;
-  /** Use the shorter stacked player intended for the profile Activity gallery. */
-  compactPlayer?: boolean;
-  /** Transfer playback ownership when this debate's player is clicked. */
+  /**
+   * Called before a pointer or keyboard click reaches this card's player. A surface with several
+   * visible debates uses it to transfer playback ownership before the clicked player starts.
+   */
   onPlaybackRequest?: (debateId: string) => void;
   /**
    * Rendered instead of the debate card when the debate can't be shown as a video — feature flag
@@ -106,7 +105,6 @@ export function DebateExploreFeedCard({
   hideSpaceLink = false,
   hideJoinButton = false,
   titleOpensSidePanel = false,
-  compactPlayer = false,
   onPlaybackRequest,
   fallback,
 }: DebateExploreFeedCardProps) {
@@ -311,9 +309,9 @@ export function DebateExploreFeedCard({
           {mediaMounted ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
             // that same window unmounts this subtree instead of retaining two paused videos forever.
-            <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} compact={compactPlayer} />
+            <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} />
           ) : (
-            <DebateVideoSkeleton compact={compactPlayer} />
+            <DebateVideoSkeleton />
           )}
         </div>
 
@@ -364,23 +362,15 @@ export function DebateExploreFeedCard({
 // is a boolean, so on a change that is only about the panel this skips the player and its playback
 // hooks entirely. (A re-render never interrupted playback — the <video> keeps its identity — but
 // there is no reason to re-run the whole subtree for a flag it does not read.)
-const DebateCardVideos = React.memo(function DebateCardVideos({
-  debate,
-  active,
-  compact,
-}: {
-  debate: Debate;
-  active: boolean;
-  compact: boolean;
-}) {
-  return <DebateFeedPlayer debate={debate} active={active} compact={compact} preload />;
+const DebateCardVideos = React.memo(function DebateCardVideos({ debate, active }: { debate: Debate; active: boolean }) {
+  return <DebateFeedPlayer debate={debate} active={active} preload />;
 });
 
-function DebateVideoSkeleton({ compact }: { compact: boolean }) {
+function DebateVideoSkeleton() {
   return (
     <div className="flex flex-col gap-2" aria-hidden="true">
-      <div className={cx('w-full animate-pulse rounded-lg bg-grey-01', compact ? 'aspect-[12/5]' : 'aspect-480/289')} />
-      <div className={cx('w-full animate-pulse rounded-lg bg-grey-01', compact ? 'aspect-[12/5]' : 'aspect-480/289')} />
+      <div className="aspect-480/289 w-full animate-pulse rounded-lg bg-grey-01" />
+      <div className="aspect-480/289 w-full animate-pulse rounded-lg bg-grey-01" />
     </div>
   );
 }

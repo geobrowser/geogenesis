@@ -26,11 +26,6 @@ type DebateFeedPlayerProps = {
   debate: Debate;
   active: boolean;
   /**
-   * Crop each stacked speaker tile to a shallower frame. The profile Activity gallery uses this
-   * denser treatment; the full-screen and explore feeds keep the original aspect ratio.
-   */
-  compact?: boolean;
-  /**
    * Load this debate's recordings without playing them — for the card the viewer is about to
    * reach. Resolving the two signed URLs is a round trip each, and until they land
    * `DebateFeedPlayer` renders the "Loading…" placeholder instead of a <video>, which is what
@@ -39,7 +34,7 @@ type DebateFeedPlayerProps = {
   preload?: boolean;
 };
 
-export function DebateFeedPlayer({ debate, active, compact = false, preload = false }: DebateFeedPlayerProps) {
+export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeedPlayerProps) {
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
@@ -333,7 +328,6 @@ export function DebateFeedPlayer({ debate, active, compact = false, preload = fa
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
         onToggle={toggleFromVideo}
-        compact={compact}
         claims={claimsFor(1)}
         claimsOpen={claimsOpenFor(1)}
         onClaimsHoverChange={onTileHover(1)}
@@ -386,7 +380,6 @@ export function DebateFeedPlayer({ debate, active, compact = false, preload = fa
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
         onToggle={toggleFromVideo}
-        compact={compact}
         claims={claimsFor(2)}
         claimsOpen={claimsOpenFor(2)}
         onClaimsHoverChange={onTileHover(2)}
@@ -514,7 +507,6 @@ function DebaterVideo({
   isResuming,
   onPlaybackTick,
   onToggle,
-  compact = false,
   claims,
   claimsOpen = false,
   onClaimsHoverChange,
@@ -532,8 +524,6 @@ function DebaterVideo({
   isResuming: boolean;
   onPlaybackTick: () => void;
   onToggle: () => void;
-  /** Preserve the stacked layout while using a shallower, cropped speaker frame. */
-  compact?: boolean;
   /** This debater's claim corner, if they have anything to show right now. */
   claims?: React.ReactNode;
   /** Whether the corner is showing the scrollable backlog rather than the live card. */
@@ -597,7 +587,7 @@ function DebaterVideo({
       onPointerEnter={event => onClaimsHoverChange?.(event, true)}
       onPointerMove={event => onClaimsHoverChange?.(event, true)}
       onPointerLeave={event => onClaimsHoverChange?.(event, false)}
-      className={cx('relative w-full overflow-hidden bg-grey-01', compact ? 'aspect-[12/5]' : 'aspect-480/289')}
+      className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button type="button" aria-label="Pause or play" onClick={onToggle} className="absolute inset-0 z-0">

@@ -151,20 +151,19 @@ beforeEach(() => {
 
 afterEach(() => vi.restoreAllMocks());
 
-describe('compact profile layout', () => {
-  it('keeps the speakers stacked while making each video shallower', () => {
+describe('player layout', () => {
+  it('keeps both stacked videos at the original aspect ratio', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
-    const { container } = render(<DebateFeedPlayer debate={debate} active compact votes={votes} />);
+    const { container } = render(<DebateFeedPlayer debate={debate} active votes={votes} />);
 
     const player = container.querySelector('[data-debate-ready]');
     expect(player?.className).toContain('flex-col');
-    expect(player?.className).not.toContain('grid-cols-2');
 
     const tiles = Array.from(container.querySelectorAll('[aria-label="Pause or play"]')).map(
       control => control.parentElement
     );
     expect(tiles).toHaveLength(2);
-    expect(tiles.every(tile => tile?.className.includes('aspect-[12/5]'))).toBe(true);
+    expect(tiles.every(tile => tile?.className.includes('aspect-480/289'))).toBe(true);
   });
 });
 

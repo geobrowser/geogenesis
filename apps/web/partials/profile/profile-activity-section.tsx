@@ -467,10 +467,9 @@ function ActivityGallery({
 /**
  * One card in the row.
  *
- * `420px` on a wide screen, and never wider than the viewport allows on a
- * phone. Under `520px` the claim card switches to its own narrow arrangement —
- * `claim-card-narrow`, a container query — so this width is what puts it there,
- * and the card lays itself out rather than being told how.
+ * Claims stay `420px` on a wide screen. A debate is `260px`: at the profile's
+ * 750px content width that leaves almost three in view, while scaling its
+ * original player down without changing either video's aspect ratio.
  *
  * Narrow enough that the next card is visibly cut off, which is what says the
  * row scrolls without a control saying so.
@@ -506,11 +505,11 @@ function GalleryCard({
         // be three times wider, so `84vw` there is not 84% of anything the reader
         // can see. The wrapper around the scroller establishes the container this
         // measures — see `ActivityGallery`.
-        // Sized so the pill row clears the 272px that `claim-pills-wide` needs to put Agree and
-        // Disagree side by side — the card's own padding takes 26px off whatever this is — while
-        // leaving a clear sliver of the next card. Narrower phones still stack, which is the
-        // container query doing its job rather than a card growing wider than its screen.
-        'w-[min(420px,84cqw)] shrink-0 snap-start',
+        'shrink-0 snap-start',
+        // Claims need enough room for the two response pills. Debate cards instead target almost
+        // three across the profile's 750px content column: 260 + 16px gaps shows 2.7 cards, a clear
+        // browsing rail rather than one oversized player and an ambiguous sliver of the next.
+        isClaim ? 'w-[min(420px,84cqw)]' : 'w-[min(260px,84cqw)]',
         // The lobby card brings its own outline; the feed's card does not, and
         // draws a rule underneath itself to separate it from the next card
         // *down* — which in a row is a line under nothing.
@@ -526,7 +525,6 @@ function GalleryCard({
           item={toExploreFeedItem(row, label)}
           hideJoinButton
           titleOpensSidePanel
-          compactDebatePlayer
           onDebatePlaybackRequest={onDebatePlaybackRequest}
         />
       )}

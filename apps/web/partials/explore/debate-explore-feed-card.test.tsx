@@ -67,8 +67,8 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
 }));
 
 vi.mock('~/core/debates/browse/debate-feed-player', () => ({
-  DebateFeedPlayer: ({ debate, active, compact }: { debate: Debate; active: boolean; compact?: boolean }) => (
-    <div data-testid="player" data-debate={debate.id} data-active={active} data-compact={compact} />
+  DebateFeedPlayer: ({ debate, active }: { debate: Debate; active: boolean }) => (
+    <div data-testid="player" data-debate={debate.id} data-active={active} />
   ),
 }));
 
@@ -289,16 +289,14 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
   });
 
-  it('uses the shorter player and requests playback before a player interaction', () => {
+  it('requests playback before a player interaction', () => {
     mocks.debateQuery = { data: watchableDebate(), isError: false };
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
     const onPlaybackRequest = vi.fn();
-    renderCard({ compactPlayer: true, onPlaybackRequest });
+    renderCard({ onPlaybackRequest });
     intersectAll(0.7);
 
     const player = screen.getByTestId('player');
-    expect(player).toHaveAttribute('data-compact', 'true');
-
     fireEvent.click(player);
     expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
   });

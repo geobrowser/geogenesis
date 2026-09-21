@@ -233,6 +233,10 @@ describe('ProfileActivitySection', () => {
   it('autoplays only the first debate and transfers playback when another is clicked', () => {
     render(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2')] })]} />);
 
+    const cards = screen.getAllByTestId('card');
+    expect(cards).toHaveLength(2);
+    expect(cards[0]?.parentElement).toHaveClass('w-[min(260px,84cqw)]');
+
     const gate = screen.getByTestId('playback-gate');
     expect(gate).toHaveAttribute('data-allowed-id', 'd1');
 
