@@ -76,6 +76,8 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // Held here rather than in the row. This list is everyone online *now*, so a row unmounts the
   // moment its person goes offline, and a dialog inside it would vanish mid-read.
   const [viewingTimes, setViewingTimes] = React.useState<{ userId: string; name: string } | null>(null);
+  // The row that opened it, so focus can go back there. It may unmount first; the modal checks.
+  const seeTimesOpenerRef = React.useRef<HTMLElement | null>(null);
   const allPeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
 
   // Held outside this component so they survive it, exactly as the claim tabs' filters are: the hub
@@ -340,7 +342,14 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                   disabled={buttonsDisabled}
                   disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
                   onRequireSignIn={onRequireSignIn}
-                  onSeeTimes={peerAvailabilityEnabled ? setViewingTimes : undefined}
+                  onSeeTimes={
+                    peerAvailabilityEnabled
+                      ? (peer, opener) => {
+                          seeTimesOpenerRef.current = opener;
+                          setViewingTimes(peer);
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </ul>
@@ -354,6 +363,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
         userId={viewingTimes?.userId ?? ''}
         peerName={viewingTimes?.name}
         onClose={() => setViewingTimes(null)}
+        openerRef={seeTimesOpenerRef}
       />
     </div>
   );
@@ -388,7 +398,7 @@ function PersonRow({
    */
   onRequireSignIn?: () => void;
   /** Absent while the feature flag is off, which is what hides "See times". */
-  onSeeTimes?: (peer: { userId: string; name: string }) => void;
+  onSeeTimes?: (peer: { userId: string; name: string }, opener: HTMLElement | null) => void;
 }) {
   const createChallenge = useCreateDebateChallenge();
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
@@ -462,8 +472,10 @@ function PersonRow({
             // Every row carries this control, so the visible label alone leaves a screen reader or
             // voice control with a list of identical targets.
             aria-label={`See times for ${speakerLabel(person)}`}
-            onClick={() =>
-              onRequireSignIn ? onRequireSignIn() : onSeeTimes({ userId: person.user_id, name: speakerLabel(person) })
+            onClick={event =>
+              onRequireSignIn
+                ? onRequireSignIn()
+                : onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, event.currentTarget)
             }
             className="shrink-0 text-metadata whitespace-nowrap text-grey-04 transition-colors hover:text-text"
           >

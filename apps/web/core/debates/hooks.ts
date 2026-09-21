@@ -587,13 +587,13 @@ export function useDebateActivity(enabled = true) {
  * Returns blocks rather than the wire payload, so callers never handle the one-based `weekday`
  * or the absent-when-empty `exceptions` themselves — `fromPayload` is the only place that knows.
  */
-export function useDebateSchedule() {
+export function useDebateSchedule(enabled = true) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   const query = useQuery({
     queryKey: debateQueryKeys.schedule(accountKey),
     // Signed out there is no schedule to fetch, and asking would 401 on every render.
-    enabled: accountKey !== null,
+    enabled: enabled && accountKey !== null,
     queryFn: () => getDebateSchedule(getPrivyIdentityToken, accountKey),
   });
 
@@ -637,10 +637,11 @@ export function useSaveDebateSchedule() {
  */
 export function usePeerSchedule(peerUserId: string | null) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-  const viewerSchedule = useDebateSchedule();
   // Viewer-scoped and authenticated, so nothing to ask signed out or without a peer. A closed
   // dialog that stays mounted passes an empty id, not null.
   const enabled = authenticated && Boolean(peerUserId);
+  // Gated too: with no peer there is nothing to interpret it against.
+  const viewerSchedule = useDebateSchedule(enabled);
 
   const query = useQuery({
     ...debateQueryNetworkOptions,

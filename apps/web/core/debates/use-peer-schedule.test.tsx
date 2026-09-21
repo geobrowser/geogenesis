@@ -189,10 +189,12 @@ describe('usePeerSchedule', () => {
     expect(mocks.getScheduleOverlaps).not.toHaveBeenCalled();
   });
 
+  // Including the viewer's own schedule: with no peer there is nothing to interpret it against.
   it('asks nothing without a peer', () => {
     const { result } = renderHook(() => usePeerSchedule(null), { wrapper });
 
     expect(result.current.enabled).toBe(false);
     expect(mocks.getScheduleOverlaps).not.toHaveBeenCalled();
+    expect(mocks.getDebateSchedule).not.toHaveBeenCalled();
   });
 });

@@ -655,6 +655,19 @@ describe('See times', () => {
     expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
   });
 
+  it('gives focus back to the row it was opened from', async () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const opener = screen.getByRole('button', { name: 'See times for Arturas' });
+    fireEvent.click(opener);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
   it('is absent while the flag is off, which is the default', () => {
     mocks.peerAvailability = false;
     mocks.people = [person('user-them', 'Arturas')];

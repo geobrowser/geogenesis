@@ -2,6 +2,8 @@
 
 import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
+import type * as React from 'react';
+
 import cx from 'classnames';
 
 import { Z_LAYER_CLASS } from '~/core/z-layers';
@@ -21,6 +23,8 @@ type Props = {
    * reached from a shared link has no history behind it and should send Explore.
    */
   onClose: () => void;
+  /** Focus goes back here on close, when it is still in the document. */
+  openerRef?: React.RefObject<HTMLElement | null>;
 };
 
 /**
@@ -34,13 +38,22 @@ type Props = {
  * than seven day columns — the same reason `availability-modal` does, and it carries that modal's
  * mobile fixes with it.
  */
-export function PeerAvailabilityModal({ open, userId, peerName, onClose }: Props) {
+export function PeerAvailabilityModal({ open, userId, peerName, onClose, openerRef }: Props) {
   return (
     <Root open={open} onOpenChange={next => !next && onClose()}>
       <Portal>
         <Overlay className={cx('fixed inset-0 bg-text/20', Z_LAYER_CLASS.scheduleDialogBackdrop)} />
         <Content
           aria-describedby={undefined}
+          onCloseAutoFocus={event => {
+            // The opener is a row in a live list and may have unmounted while this was open.
+            // Radix's own restore is a no-op on a detached node, so hand it back only if it is
+            // still there and let the default run otherwise.
+            const opener = openerRef?.current;
+            if (!opener?.isConnected) return;
+            event.preventDefault();
+            opener.focus();
+          }}
           className={cx(
             'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 focus:outline-hidden md:inset-0 md:translate-x-0 md:translate-y-0',
             Z_LAYER_CLASS.scheduleDialog
