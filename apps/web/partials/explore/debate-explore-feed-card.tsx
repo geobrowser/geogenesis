@@ -328,11 +328,7 @@ export function DebateExploreFeedCard({
           {mediaMounted ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
             // that same window unmounts this subtree instead of retaining two paused videos forever.
-            <DebateCardVideos
-              debate={readyDebate}
-              active={active && playbackAllowed}
-              reducedOverlays={compactChrome}
-            />
+            <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} reducedOverlays={compactChrome} />
           ) : (
             <DebateVideoSkeleton />
           )}
@@ -345,7 +341,7 @@ export function DebateExploreFeedCard({
             a difference full screen already makes with itself. Wrapper carries the margin so it
             doesn't collide with the bar's own `flex`. */}
         <div className="mt-1">
-          <DebateInteractionBar orientation="horizontal" {...interactionProps} />
+          <DebateInteractionBar orientation="horizontal" compact={compactChrome} {...interactionProps} />
         </div>
       </div>
 

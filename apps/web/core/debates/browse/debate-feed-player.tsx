@@ -263,7 +263,6 @@ export function DebateFeedPlayer({
   }, [slot1StackShown, slot2StackShown]);
 
   const claimsFor = (slot: number) => {
-    if (reducedOverlays) return null;
     const cards = ticker.cardsBySlot.get(slot) ?? [];
     const history = ticker.historyBySlot.get(slot) ?? [];
     if (!stackShownFor(slot)) return null;

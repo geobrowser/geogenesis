@@ -67,8 +67,21 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
 }));
 
 vi.mock('~/core/debates/browse/debate-feed-player', () => ({
-  DebateFeedPlayer: ({ debate, active }: { debate: Debate; active: boolean }) => (
-    <div data-testid="player" data-debate={debate.id} data-active={active} />
+  DebateFeedPlayer: ({
+    debate,
+    active,
+    reducedOverlays,
+  }: {
+    debate: Debate;
+    active: boolean;
+    reducedOverlays?: boolean;
+  }) => (
+    <div
+      data-testid="player"
+      data-debate={debate.id}
+      data-active={active}
+      data-reduced-overlays={reducedOverlays ? 'true' : 'false'}
+    />
   ),
 }));
 
@@ -208,6 +221,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -261,13 +275,28 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.queryByTestId('fallback')).toBeNull();
   });
 
-  it('keeps compact Activity chrome to one metadata row and two title lines', () => {
+  it('keeps compact Activity chrome to one metadata row and two title lines', async () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
     renderCard({ compactChrome: true });
+    intersectAll(0.1);
 
     expect(screen.queryByText('Debate')).toBeNull();
-    expect(screen.getByRole('heading', { name: CLAIM_NAME })).toHaveClass('line-clamp-2');
-    expect(screen.getByRole('heading', { name: CLAIM_NAME })).toHaveAttribute('title', CLAIM_NAME);
+    const heading = screen.getByRole('heading', { name: CLAIM_NAME });
+    expect(heading).toHaveClass('line-clamp-2');
+    expect(heading).not.toHaveAttribute('title');
+
+    Object.defineProperty(heading, 'scrollHeight', { configurable: true, value: 69 });
+    Object.defineProperty(heading, 'clientHeight', { configurable: true, value: 46 });
+    heading.style.lineHeight = '23px';
+    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    expect(heading).toHaveAttribute('title', CLAIM_NAME);
+
     expect(screen.getByText('Fashion').closest('div')).toHaveClass('flex-nowrap', 'overflow-hidden');
+    expect(screen.getByTestId('player')).toHaveAttribute('data-reduced-overlays', 'true');
+    expect(screen.getByRole('button', { name: /^Comments/ })).toHaveClass('gap-1', 'px-1.5');
+    expect(screen.getByRole('button', { name: 'Share debate' })).toHaveClass('size-7', 'px-0');
+    expect(screen.getByRole('button', { name: 'Share debate' }).textContent).toBe('');
   });
 
   it('renders the fallback when the debate is not watchable', () => {

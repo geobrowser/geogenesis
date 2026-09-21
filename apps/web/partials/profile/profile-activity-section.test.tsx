@@ -84,14 +84,26 @@ const rect = (width: number, height: number): DOMRect => ({
  * passed for the wrong reason, whatever the code did.
  */
 function mockMobileActivityGeometry(pageHeightWithoutActivity: number) {
-  let notifyResize: (() => void) | null = null;
+  const resizeCallbacks = new Map<Element, () => void>();
   class TestResizeObserver {
+    private readonly callback: ResizeObserverCallback;
+    private readonly elements = new Set<Element>();
+
     constructor(callback: ResizeObserverCallback) {
-      notifyResize = () => callback([], this as unknown as ResizeObserver);
+      this.callback = callback;
     }
-    observe() {}
-    unobserve() {}
-    disconnect() {}
+    observe(element: Element) {
+      this.elements.add(element);
+      resizeCallbacks.set(element, () => this.callback([], this as unknown as ResizeObserver));
+    }
+    unobserve(element: Element) {
+      this.elements.delete(element);
+      resizeCallbacks.delete(element);
+    }
+    disconnect() {
+      for (const element of this.elements) resizeCallbacks.delete(element);
+      this.elements.clear();
+    }
   }
   vi.stubGlobal('ResizeObserver', TestResizeObserver);
 
@@ -147,7 +159,10 @@ function mockMobileActivityGeometry(pageHeightWithoutActivity: number) {
     scroll,
     // And for the claim cards growing as their queries land, which is the other way the sizing
     // path runs after a switch. Move `sectionHeight` first; the observer reads it.
-    sectionResized: () => notifyResize?.(),
+    sectionResized: () => {
+      const section = document.querySelector('[data-activity-section]');
+      if (section) resizeCallbacks.get(section)?.();
+    },
     sectionHeight,
     // The viewport, which a phone changes on its own as its chrome collapses, and the rest of the
     // page, which goes on loading after the switch.
@@ -259,7 +274,7 @@ describe('ProfileActivitySection', () => {
     expect(cards.every(card => card.parentElement?.className.includes('w-[min(300px,84cqw)]'))).toBe(true);
   });
 
-  it('offers left and right buttons to scroll one Activity card at a time', () => {
+  it('offers left and right buttons to scroll one Activity card at a time', async () => {
     render(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2'), row('d3')] })]} />);
 
     const scroller = document.querySelector<HTMLElement>('.overflow-x-auto') as HTMLElement;
@@ -282,6 +297,7 @@ describe('ProfileActivitySection', () => {
       );
     });
     fireEvent.scroll(scroller);
+    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
 
     expect(screen.queryByRole('button', { name: 'Scroll activity left' })).toBeNull();
     const next = screen.getByRole('button', { name: 'Scroll activity right' });
@@ -290,12 +306,14 @@ describe('ProfileActivitySection', () => {
 
     scroller.scrollLeft = 300;
     fireEvent.scroll(scroller);
+    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
     expect(screen.getByRole('button', { name: 'Scroll activity left' })).toBeInTheDocument();
 
     // The final card is fully visible here even though the trailing spacer means the rail itself
     // still has a few scrollable pixels left. Those pixels should not keep the arrow around.
     scroller.scrollLeft = 512;
     fireEvent.scroll(scroller);
+    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
     expect(screen.queryByRole('button', { name: 'Scroll activity right' })).toBeNull();
   });
 

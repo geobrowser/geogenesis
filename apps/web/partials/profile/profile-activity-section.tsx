@@ -404,8 +404,8 @@ function ActivityGallery({
   const rowSpaceIds = React.useMemo(() => [...new Set(shown.map(row => row.spaceId))], [shown]);
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
-  const { scrollerRef, allowedDebateId, requestPlayback } = useGalleryDebatePlayback(shown);
-  const { canScrollLeft, canScrollRight, scrollByCard } = useGalleryNavigation(scrollerRef, shown.length);
+  const { scrollerRef, allowedDebateId, requestPlayback, canScrollLeft, canScrollRight, scrollByCard } =
+    useActivityGallery(shown);
 
   return (
     // One at a time. Compact cards can leave several debates fully visible, so intersection alone
@@ -468,41 +468,68 @@ function ActivityGallery({
  * until less than 40% remains in the rail, then advances in the scroll direction to a card that is
  * at least 60% visible. Those are the same hysteresis edges used by the player itself, so the gate
  * hands off at the moment the outgoing player pauses rather than leaving a silent visible row.
+ * The same measurement pass also drives the rail navigation controls.
  */
-function useGalleryDebatePlayback(rows: ExploreFeedRow[]) {
+function useActivityGallery(rows: ExploreFeedRow[]) {
   const scrollerRef = React.useRef<HTMLDivElement | null>(null);
+  const collectionKey = React.useMemo(() => rows.map(row => `${row.entityId}:${row.spaceId}`).join('|'), [rows]);
   const firstDebateId = rows.find(row => !isClaimRow(row))?.entityId ?? null;
-  const [requestedDebateId, setRequestedDebateId] = React.useState<string | null>(null);
+  const [requestedPlayback, setRequestedPlayback] = React.useState<{ collectionKey: string; debateId: string } | null>(
+    null
+  );
+  const requestedDebateId = requestedPlayback?.collectionKey === collectionKey ? requestedPlayback.debateId : null;
   const allowedDebateId =
     requestedDebateId && rows.some(row => !isClaimRow(row) && ID.equals(row.entityId, requestedDebateId))
       ? requestedDebateId
       : firstDebateId;
   const allowedRef = React.useRef(allowedDebateId);
   allowedRef.current = allowedDebateId;
+  const [navigation, setNavigation] = React.useState({ left: false, right: false });
 
   React.useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
+    // A different Activity collection starts at its first card. Besides being the expected tab
+    // behavior, this keeps the first debate selected for autoplay and actually visible together.
+    scroller.scrollLeft = 0;
     let frame = 0;
-    let previousScrollLeft = scroller.scrollLeft;
+    let previousScrollLeft = 0;
 
     const measure = () => {
       frame = 0;
       const scrollDirection = Math.sign(scroller.scrollLeft - previousScrollLeft);
       previousScrollLeft = scroller.scrollLeft;
-      if (scrollDirection === 0) return;
 
       const scrollerBox = scroller.getBoundingClientRect();
-      const cards = Array.from(scroller.querySelectorAll<HTMLElement>('[data-activity-debate-id]'));
-      const visible = cards.map((card, index) => {
+      const cards = Array.from(scroller.querySelectorAll<HTMLElement>('[data-activity-card]'));
+      const firstBox = cards.at(0)?.getBoundingClientRect();
+      const lastBox = cards.at(-1)?.getBoundingClientRect();
+      const nextNavigation = {
+        // Card bounds, rather than raw scroll offsets, keep the controls tied to useful content.
+        // The rail has spacer elements at both ends, and scrolling through those alone should not
+        // leave an arrow visible after the first or last card is already fully in view.
+        left: Boolean(firstBox && firstBox.left < scrollerBox.left - 1),
+        right: Boolean(lastBox && lastBox.right > scrollerBox.right + 1),
+      };
+      setNavigation(current =>
+        current.left === nextNavigation.left && current.right === nextNavigation.right ? current : nextNavigation
+      );
+
+      if (scrollDirection === 0) return;
+
+      const visible = cards.flatMap((card, index) => {
+        const id = card.dataset.activityDebateId;
+        if (!id) return [];
         const box = card.getBoundingClientRect();
         const visibleWidth = Math.max(0, Math.min(box.right, scrollerBox.right) - Math.max(box.left, scrollerBox.left));
-        return {
-          id: card.dataset.activityDebateId ?? '',
-          index,
-          ratio: box.width > 0 ? visibleWidth / box.width : 0,
-        };
+        return [
+          {
+            id,
+            index,
+            ratio: box.width > 0 ? visibleWidth / box.width : 0,
+          },
+        ];
       });
 
       const currentId = allowedRef.current;
@@ -516,64 +543,28 @@ function useGalleryDebatePlayback(rows: ExploreFeedRow[]) {
           : [...candidates].reverse().find(card => current == null || card.index < current.index);
       const next = directional ?? candidates.sort((a, b) => b.ratio - a.ratio)[0];
 
-      if (next && (!currentId || !ID.equals(next.id, currentId))) setRequestedDebateId(next.id);
+      if (next && (!currentId || !ID.equals(next.id, currentId))) {
+        setRequestedPlayback({ collectionKey, debateId: next.id });
+      }
     };
 
-    const onScroll = () => {
+    const scheduleMeasure = () => {
       if (!frame) frame = requestAnimationFrame(measure);
     };
 
-    scroller.addEventListener('scroll', onScroll, { passive: true });
+    measure();
+    scroller.addEventListener('scroll', scheduleMeasure, { passive: true });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleMeasure);
+    observer?.observe(scroller);
+    window.addEventListener('resize', scheduleMeasure);
+
     return () => {
       if (frame) cancelAnimationFrame(frame);
-      scroller.removeEventListener('scroll', onScroll);
-    };
-  }, [rows]);
-
-  return {
-    scrollerRef,
-    allowedDebateId,
-    requestPlayback: React.useCallback((debateId: string) => setRequestedDebateId(debateId), []),
-  };
-}
-
-/** Mouse-accessible controls for a rail that otherwise depends on horizontal wheel or swipe input. */
-function useGalleryNavigation(scrollerRef: React.RefObject<HTMLDivElement | null>, cardCount: number) {
-  const [availability, setAvailability] = React.useState({ left: false, right: false });
-
-  React.useEffect(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-
-    const update = () => {
-      const cards = scroller.querySelectorAll<HTMLElement>('[data-activity-card]');
-      const firstCard = cards.item(0);
-      const lastCard = cards.item(cards.length - 1);
-      const scrollerBox = scroller.getBoundingClientRect();
-      const firstBox = firstCard?.getBoundingClientRect();
-      const lastBox = lastCard?.getBoundingClientRect();
-      const next = {
-        // Card bounds, rather than raw scroll offsets, keep the controls tied to useful content.
-        // The rail has spacer elements at both ends, and scrolling through those alone should not
-        // leave an arrow visible after the first or last card is already fully in view.
-        left: Boolean(firstBox && firstBox.left < scrollerBox.left - 1),
-        right: Boolean(lastBox && lastBox.right > scrollerBox.right + 1),
-      };
-      setAvailability(current => (current.left === next.left && current.right === next.right ? current : next));
-    };
-
-    update();
-    scroller.addEventListener('scroll', update, { passive: true });
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
-    observer?.observe(scroller);
-    window.addEventListener('resize', update);
-
-    return () => {
-      scroller.removeEventListener('scroll', update);
+      scroller.removeEventListener('scroll', scheduleMeasure);
       observer?.disconnect();
-      window.removeEventListener('resize', update);
+      window.removeEventListener('resize', scheduleMeasure);
     };
-  }, [cardCount, scrollerRef]);
+  }, [collectionKey]);
 
   const scrollByCard = React.useCallback(
     (direction: -1 | 1) => {
@@ -587,9 +578,17 @@ function useGalleryNavigation(scrollerRef: React.RefObject<HTMLDivElement | null
     [scrollerRef]
   );
 
+  const requestPlayback = React.useCallback(
+    (debateId: string) => setRequestedPlayback({ collectionKey, debateId }),
+    [collectionKey]
+  );
+
   return {
-    canScrollLeft: availability.left,
-    canScrollRight: availability.right,
+    scrollerRef,
+    allowedDebateId,
+    requestPlayback,
+    canScrollLeft: navigation.left,
+    canScrollRight: navigation.right,
     scrollByCard,
   };
 }
@@ -616,8 +615,8 @@ function GalleryNavigationButton({ direction, onClick }: { direction: 'left' | '
  * One card in the row.
  *
  * Debate cards stay at `260px`, leaving almost three in view at the profile's
- * 750px content width. Claim cards use `300px`: after the card's 24px horizontal
- * padding, their 276px pill row clears the 272px container-query threshold and
+ * 750px content width. Claim cards use `300px`: after the card's border and 24px
+ * horizontal padding, their 274px pill row clears the 272px container-query threshold and
  * keeps both response buttons beside each other.
  *
  * Narrow enough that the next card is visibly cut off, which is what says the
