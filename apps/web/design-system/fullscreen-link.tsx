@@ -53,6 +53,11 @@ export function FullscreenLink({
       aria-label={ariaLabel}
       aria-disabled={disabled || undefined}
       tabIndex={disabled ? -1 : undefined}
+      // The one that actually stops it. `pointer-events-none` stops a mouse, `tabIndex={-1}` stops
+      // Tab and `aria-disabled` only says so — none of them stop an activation that arrives some
+      // other way: assistive tech, a programmatic `focus()` and Enter, a synthesized click. The
+      // href has to stay for the enabled case, so refusing the navigation is what closes it.
+      onClick={disabled ? event => event.preventDefault() : undefined}
       className={cx(
         'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04',
         disabled

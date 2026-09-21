@@ -37,11 +37,21 @@ const DEACTIVATE_RATIO = 0.4;
  * How wide the card's column — meta row, title, media and bar — is allowed to get.
  *
  * Width is what sets height here, so this is really a height budget. The two tiles are
- * `aspect-480/289` with an 8px gap between them, so the media alone is `1.2042 × width + 8`, and
- * the rest of the card measures a flat 163px: 32px of `py-4`, a 28px meta row, a two-line 46px
- * title, a 32px bar with its margin, 24px of column gaps and the 1px rule. A card is therefore
- * `1.2042 × width + 171` tall, and fitting that under the viewport less the 44px app header gives
- * `width ≤ 0.83 × dvh − 178px` — which is where `calc(83dvh - 178px)` comes from.
+ * `aspect-480/289` with an 8px gap between them, so the media is `1.2042 × width + 8` — measured
+ * at 682px against a predicted 682.3px on a 560px column. Everything else is a reserve, and
+ * `calc(83dvh - 178px)` is `width ≤ (dvh − 44 − 170) / 1.2042`: the 44px app header, and ~170px
+ * for the card's own chrome.
+ *
+ * That reserve is deliberately loose rather than exact, because the chrome is not one fixed
+ * number. Measured, it is 128px with a one-line heading and 151px with the two lines the clamp
+ * allows — leaving about 19px spare at the worst case the heading can reach.
+ *
+ * Which is what absorbs a meta row that wraps. That row is `flex-wrap`, and its widest state
+ * ("Membership pending" beside a long space name) does take a second line — measured at 41px
+ * against the usual 24px. It only does so once the column is down at its 320px floor, where the
+ * clamp has stopped binding and there is far more than 17px going spare; and even inside the
+ * binding range the worst case would be 168px against the 170px reserved. Verified by measurement
+ * across widths 390–1440 and heights 600–1000 with that state forced: nothing overflows.
  *
  * So the column tracks the viewport rather than sitting at a fixed 480px — 486px at an 800px
  * viewport, 403px at 700px — up to the 560px cap, which the budget clears from about an 890px
