@@ -392,35 +392,49 @@ function DebaterVideo({
         </div>
       )}
 
-      {/* Debater identity: avatar + name + position, opens their personal space in the side panel. */}
-      <button
-        type="button"
-        onClick={openProfile}
-        className="absolute bottom-3 left-4 z-10 flex items-center gap-2 text-left"
-      >
-        <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
-          <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
-        </span>
-        <span className="truncate text-[1rem] font-medium text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55)]">
-          {name}
-        </span>
-        {participant && (
-          <DebateTileChip className={cx('shrink-0 text-text', tileChipSurface)}>
-            {participant.position_label}
-          </DebateTileChip>
-        )}
-      </button>
+      {/*
+       * The tile's bottom line: who is speaking on the left, the winner vote on
+       * the right.
+       *
+       * One row rather than two absolutely-positioned corners. They used to be
+       * `left-4` and `right-4` independently, which is fine at the width a feed
+       * card gives a tile and not at the width a 312px gallery card does — the
+       * name and its Agree/Disagree chip simply ran on underneath the button,
+       * which reads as "Ag…" and "Disagr…" with a pill on top. A flex row cannot
+       * overlap: the identity takes what is left after the vote, and the name
+       * truncates into it.
+       */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex items-end justify-between gap-2 px-4">
+        {/* Debater identity: avatar + name + position, opens their personal space in the side panel. */}
+        <button
+          type="button"
+          onClick={openProfile}
+          className="pointer-events-auto flex min-w-0 items-center gap-2 text-left"
+        >
+          <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
+            <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
+          </span>
+          <span className="truncate text-[1rem] font-medium text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55)]">
+            {name}
+          </span>
+          {participant && (
+            <DebateTileChip className={cx('shrink-0 text-text', tileChipSurface)}>
+              {participant.position_label}
+            </DebateTileChip>
+          )}
+        </button>
 
-      {participant && (
-        <WinnerVoteButton
-          className="absolute right-4 bottom-3 z-10"
-          debaterName={name}
-          sharePercent={votes.sharePercentFor(participant)}
-          isMyPick={votes.isMyPick(participant)}
-          disabled={votes.isVoting}
-          onVote={() => votes.castVote(participant)}
-        />
-      )}
+        {participant && (
+          <WinnerVoteButton
+            className="pointer-events-auto shrink-0"
+            debaterName={name}
+            sharePercent={votes.sharePercentFor(participant)}
+            isMyPick={votes.isMyPick(participant)}
+            disabled={votes.isVoting}
+            onVote={() => votes.castVote(participant)}
+          />
+        )}
+      </div>
 
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}
     </div>
