@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
@@ -80,5 +80,24 @@ describe('useQueryAllEntities', () => {
     hook.unmount();
 
     expect(signal?.aborted).toBe(true);
+  });
+
+  it('reports cached entities as available after a background refresh fails', async () => {
+    mocks.syncMany.mockResolvedValueOnce({
+      merged: [entity],
+      remote: [entity],
+      endCursor: null,
+      hasNextPage: false,
+    });
+
+    const { result } = renderHook(() => useQueryAllEntities({ where: {} }), { wrapper });
+    await waitFor(() => expect(result.current.entities).toEqual([entity]));
+
+    mocks.syncMany.mockRejectedValueOnce(new Error('refresh failed'));
+    await act(async () => void (await result.current.refetch()));
+
+    await waitFor(() => expect(result.current.error).toEqual(new Error('refresh failed')));
+    expect(result.current.entities).toEqual([entity]);
+    expect(result.current.dataAvailable).toBe(true);
   });
 });

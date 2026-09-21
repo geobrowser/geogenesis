@@ -170,5 +170,14 @@ export function useEntityScores({ ids, enabled = true }: { ids: readonly string[
   // says Top or Best, permanently and silently.
   const { scores, rankings } = data ?? NO_SCORES;
 
-  return { scores, rankings, isLoading, isError, isFetching, refetch };
+  return {
+    scores,
+    rankings,
+    /** Cached rankings remain usable when a later background refresh fails. */
+    dataAvailable: ids.length === 0 || data !== undefined,
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  };
 }

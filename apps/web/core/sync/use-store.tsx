@@ -568,6 +568,8 @@ export function useQueryAllEntities({
 
   return {
     entities,
+    /** Cached results remain usable when a later background refresh fails. */
+    dataAvailable: !enabled || data !== undefined,
     isLoading: !isFetched && enabled && isLoading,
     isFetching: enabled && isFetching,
     isFetched: isFetched && enabled,

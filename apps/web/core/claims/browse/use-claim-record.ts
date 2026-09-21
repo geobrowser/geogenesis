@@ -152,6 +152,7 @@ function useRankedRecordPage({
   ids,
   spaceId,
   idsReady,
+  idsAvailable,
   idsError,
   refetchIds,
   recordKey,
@@ -159,11 +160,12 @@ function useRankedRecordPage({
   ids: string[];
   spaceId: string;
   idsReady: boolean;
+  idsAvailable: boolean;
   idsError: boolean;
   refetchIds: () => Promise<void>;
   recordKey: string;
 }) {
-  const scores = useEntityScores({ ids, enabled: idsReady && !idsError });
+  const scores = useEntityScores({ ids, enabled: idsAvailable });
   const [page, setPage] = React.useState({
     key: recordKey,
     visibleCount: CLAIM_RECORD_PAGE_SIZE,
@@ -172,15 +174,15 @@ function useRankedRecordPage({
   const visibleCount = page.key === recordKey ? page.visibleCount : CLAIM_RECORD_PAGE_SIZE;
   const expansionPending = page.key === recordKey && page.expansionPending;
   const visible = React.useMemo(
-    () => rankedRecordPage(ids, scores.rankings, scores.isError, visibleCount),
-    [ids, scores.isError, scores.rankings, visibleCount]
+    () => rankedRecordPage(ids, scores.rankings, !scores.dataAvailable, visibleCount),
+    [ids, scores.dataAvailable, scores.rankings, visibleCount]
   );
-  const rankingsReady = !scores.isLoading && !scores.isError;
+  const rankingsReady = scores.dataAvailable;
   const hydrationIds = React.useMemo(
     () => recordHydrationIds(ids, visible.ids, rankingsReady),
     [ids, rankingsReady, visible.ids]
   );
-  const canHydrate = idsReady && !idsError && (ids.length <= CLAIM_RECORD_PAGE_SIZE || rankingsReady);
+  const canHydrate = idsAvailable && (ids.length <= CLAIM_RECORD_PAGE_SIZE || rankingsReady);
   const rowsQuery = useClaimExploreRows(hydrationIds, spaceId, canHydrate);
   const rowsError = rowsQuery.isError;
   const refetchRows = rowsQuery.refetch;
@@ -311,6 +313,8 @@ export function useClaimRecord({
   );
   const claimsReady = !related.isLoading && !claimDebates.isLoading && !extractedClaims.isLoading;
   const debatesReady = !related.isLoading && !claimDebates.isLoading && !relatedDebates.isLoading;
+  const claimsAvailable = related.dataAvailable && claimDebates.dataAvailable && extractedClaims.dataAvailable;
+  const debatesAvailable = related.dataAvailable && claimDebates.dataAvailable && relatedDebates.dataAvailable;
   const recordKey = `${normId(spaceId)}:${normId(claimId)}`;
   const claimsCountUnavailable = Boolean(related.error ?? claimDebates.error ?? extractedClaims.error);
   const debatesCountUnavailable = Boolean(related.error ?? claimDebates.error ?? relatedDebates.error);
@@ -352,6 +356,7 @@ export function useClaimRecord({
     ids: relatedIds,
     spaceId,
     idsReady: claimsReady,
+    idsAvailable: claimsAvailable,
     idsError: claimsCountUnavailable,
     refetchIds: refetchClaimsDiscovery,
     recordKey,
@@ -360,6 +365,7 @@ export function useClaimRecord({
     ids: debateIds,
     spaceId,
     idsReady: debatesReady,
+    idsAvailable: debatesAvailable,
     idsError: debatesCountUnavailable,
     refetchIds: refetchDebatesDiscovery,
     recordKey,

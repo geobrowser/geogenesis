@@ -50,4 +50,20 @@ describe('useEntityScores chunk retries', () => {
     expect(firstChunkCalls).toHaveLength(1);
     expect(lastChunkCalls).toHaveLength(2);
   });
+
+  it('reports cached rankings as available after a background refresh fails', async () => {
+    mocks.failLastChunk = false;
+    mocks.graphql.mockReturnValueOnce(
+      Effect.succeed({ scores: new Map(), rankings: new Map([['id-1', 42]]) })
+    );
+    const { result } = renderHook(() => useEntityScores({ ids: ['id-1'] }), { wrapper });
+    await waitFor(() => expect(result.current.rankings.get('id-1')).toBe(42));
+
+    mocks.graphql.mockReturnValueOnce(Effect.fail(new Error('refresh failed')));
+    await act(async () => void (await result.current.refetch()));
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.rankings.get('id-1')).toBe(42);
+    expect(result.current.dataAvailable).toBe(true);
+  });
 });
