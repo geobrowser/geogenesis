@@ -19,7 +19,7 @@
  */
 import type { ScheduleOverlapResponse } from '~/core/debates/api';
 
-import { SLOT_MINUTES, addDays, formatTime, isoDate, localTimezone } from './blocks';
+import { SLOT_MINUTES, addDays, formatTime, isoDate } from './blocks';
 
 /** How many days of columns the view draws. Fixed — there is no range selector. */
 export const PEER_SCHEDULE_DAYS = 7;
@@ -221,7 +221,7 @@ function wallMinutes({ date, minutes }: ZonedParts): number {
 
 /**
  * `undefined` for anything `Intl` will not take — an empty zone, or the `local` that
- * {@link localTimezone} yields where the browser will not say. A formatter built without a
+ * `localTimezone` yields where the browser will not say. A formatter built without a
  * `timeZone` uses the browser's own, which is the honest fallback and never throws.
  */
 function usableZone(zone: string | undefined): string | undefined {

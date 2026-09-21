@@ -660,7 +660,9 @@ export function usePeerSchedule(peerUserId: string | null) {
   // `isSet` reads false while in flight and on error, neither distinguishable from a real false,
   // so anything short of success is withheld rather than shown as "no schedule set".
   const viewerResolved = provenByOverlap || viewerSchedule.isSuccess;
-  const viewerUnavailable = !provenByOverlap && viewerSchedule.isError;
+  // Fatal only once the overlap has answered and still needs it, so a slow `true` cannot arrive
+  // and retract an error already on screen.
+  const viewerUnavailable = query.isSuccess && !provenByOverlap && viewerSchedule.isError;
 
   const schedule: PeerSchedule | undefined =
     query.data && viewerResolved ? toPeerSchedule(query.data, { viewerHasSchedule: viewerSchedule.isSet }) : undefined;
