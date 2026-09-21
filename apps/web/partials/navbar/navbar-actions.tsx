@@ -71,7 +71,7 @@ function useIsMobileNavbar() {
 }
 
 const PROFILE_MENU_ACTION_CLASS =
-  'flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none';
+  'flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none mobile:min-h-11';
 const PROFILE_MENU_DIVIDED_ACTION_CLASS = cx(PROFILE_MENU_ACTION_CLASS, 'border-t border-grey-02');
 
 export function NavbarActions() {
@@ -421,6 +421,15 @@ function ModeToggle({
         return;
       }
 
+      // The shortcut stays global so editors can use it while the mobile menu is
+      // closed, but denied feedback belongs to the visible menu session. Hidden
+      // attempts must not prime a tooltip that appears the next time it opens.
+      if (isMobile && !isProfileMenuOpen) {
+        setAttemptCount(0);
+        setShowEditAccessTooltip(false);
+        return;
+      }
+
       controls.start('shake');
 
       // Allow the user two attempts to toggle edit mode before showing the tooltip.
@@ -448,6 +457,8 @@ function ModeToggle({
     spaceId,
     isLoadingAccessControl,
     editModeTipActive,
+    isMobile,
+    isProfileMenuOpen,
   ]);
 
   const memoizedShortcuts = React.useMemo(

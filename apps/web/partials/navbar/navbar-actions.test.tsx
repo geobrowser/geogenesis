@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   isMobileNavbar: false,
   isSmartAccountLoading: false,
   dialogMounts: 0,
+  shortcutCallback: null as (() => void) | null,
   pendingPersonalSpace: { isPending: false, topicId: null as string | null },
   privyUser: {
     id: 'user-a',
@@ -75,7 +76,11 @@ vi.mock('~/core/hooks/use-space-id', () => ({ useSpaceId: () => mocks.spaceId })
 vi.mock('~/core/hooks/use-access-control', () => ({
   useAccessControl: () => ({ canEdit: mocks.canEdit, isLoading: false }),
 }));
-vi.mock('~/core/hooks/use-keyboard-shortcuts', () => ({ useKeyboardShortcuts: vi.fn() }));
+vi.mock('~/core/hooks/use-keyboard-shortcuts', () => ({
+  useKeyboardShortcuts: (shortcuts: Array<{ callback: () => void }>) => {
+    mocks.shortcutCallback = shortcuts[0]?.callback ?? null;
+  },
+}));
 vi.mock('~/core/state/editable-store', () => ({
   useEditable: () => ({ editable: mocks.editable, setEditable: mocks.setEditable }),
 }));
@@ -172,6 +177,7 @@ describe('NavbarActions profile menu', () => {
     mocks.isMobileNavbar = false;
     mocks.isSmartAccountLoading = false;
     mocks.dialogMounts = 0;
+    mocks.shortcutCallback = null;
     mocks.pendingPersonalSpace = { isPending: false, topicId: null };
     mocks.privyUser = {
       id: 'user-a',
@@ -394,6 +400,28 @@ describe('NavbarActions profile menu', () => {
       expect(screen.getAllByTestId('edit-toggle')).toHaveLength(1);
     });
 
+    it('gives every mobile profile-menu action a 44px minimum touch target', async () => {
+      mocks.spaceId = 'space-1';
+      mocks.isMobileNavbar = true;
+      const user = userEvent.setup();
+      render(<NavbarActions />);
+
+      await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+
+      for (const name of [
+        'Edit profile',
+        'Edit mode off',
+        'Create new entity',
+        'Create new property',
+        'Create new space',
+        'Sign out',
+      ]) {
+        expect(screen.getByRole(name === 'Edit mode off' ? 'switch' : 'button', { name })).toHaveClass(
+          'mobile:min-h-11'
+        );
+      }
+    });
+
     it('turns edit mode on from the mobile switch', async () => {
       mocks.spaceId = 'space-1';
       mocks.isMobileNavbar = true;
@@ -434,14 +462,31 @@ describe('NavbarActions profile menu', () => {
       await user.click(profileMenuTrigger);
       const toggle = screen.getByRole('switch', { name: 'Edit mode off' });
       await user.click(toggle);
-      await user.click(toggle);
-      expect(screen.getByText('You don’t have edit access in this space')).toBeInTheDocument();
+      expect(screen.queryByText('You don’t have edit access in this space')).not.toBeInTheDocument();
 
       await user.click(profileMenuTrigger);
       expect(screen.queryByText('You don’t have edit access in this space')).not.toBeInTheDocument();
 
       await user.click(profileMenuTrigger);
+      expect(screen.queryByText('You don’t have edit access in this space')).not.toBeInTheDocument();
+
       await user.click(screen.getByRole('switch', { name: 'Edit mode off' }));
+      expect(screen.queryByText('You don’t have edit access in this space')).not.toBeInTheDocument();
+    });
+
+    it('does not carry denied shortcut attempts from a closed mobile menu into the next session', async () => {
+      mocks.spaceId = 'space-1';
+      mocks.isMobileNavbar = true;
+      const user = userEvent.setup();
+      render(<NavbarActions />);
+
+      expect(screen.queryByTestId('profile-menu')).not.toBeInTheDocument();
+      expect(mocks.shortcutCallback).not.toBeNull();
+
+      await act(async () => mocks.shortcutCallback?.());
+      await act(async () => mocks.shortcutCallback?.());
+      await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+
       expect(screen.queryByText('You don’t have edit access in this space')).not.toBeInTheDocument();
     });
 
