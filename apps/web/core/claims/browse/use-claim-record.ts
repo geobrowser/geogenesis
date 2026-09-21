@@ -16,29 +16,11 @@ import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 
 import { CLAIM_RECORD_PAGE_SIZE, useClaimExploreRows } from './use-claim-explore-rows';
-import { useClaimRecordSummary } from './use-claim-record-summary';
 
 export { CLAIM_RECORD_PAGE_SIZE } from './use-claim-explore-rows';
 
 /** Stable empty rows keep the query result from changing identity while it is disabled. */
 const NO_ROWS: ExploreFeedRow[] = [];
-
-export type ClaimRecordKind = 'claims' | 'debates';
-
-/** The two full records share discovery queries, but only one branch should fan out at a time. */
-export function completeRecordQueryPlan(record: ClaimRecordKind | null) {
-  const loadClaims = record === 'claims';
-  const loadDebates = record === 'debates';
-
-  return {
-    loadClaims,
-    loadDebates,
-    loadRelatedClaims: loadClaims || loadDebates,
-    loadDirectDebates: loadClaims || loadDebates,
-    loadExtractedClaims: loadClaims,
-    loadRelatedDebates: loadDebates,
-  };
-}
 
 /**
  * Drawable neighbours from one or more relation paths.
@@ -103,64 +85,17 @@ export function rankedRecordPage(
   return { ids: ordered.slice(0, count), hasNextPage: count < ordered.length };
 }
 
-type RefetchableRecordQuery = {
-  error: unknown;
-  refetch: () => Promise<unknown>;
-};
-
-/** Retry every failed prerequisite together without re-requesting successful cursor chains. */
-export async function refetchFailedRecordQueries(queries: RefetchableRecordQuery[]): Promise<void> {
-  await Promise.all(queries.filter(query => query.error).map(query => query.refetch()));
-}
-
-export function retryFailedRecordStage({
-  idsError,
-  scoresError,
-  rowsError,
-  refetchIds,
-  refetchScores,
-  refetchRows,
-}: {
-  idsError: boolean;
-  scoresError: boolean;
-  rowsError: boolean;
-  refetchIds: () => unknown;
-  refetchScores: () => unknown;
-  refetchRows: () => unknown;
-}): boolean {
-  if (idsError) {
-    void refetchIds();
-    return true;
-  }
-
-  if (scoresError) {
-    void refetchScores();
-    return true;
-  }
-
-  if (rowsError) {
-    void refetchRows();
-    return true;
-  }
-
-  return false;
-}
-
 function useRankedRecordPage({
   ids,
   spaceId,
   idsReady,
   idsError,
-  idsFetching,
-  refetchIds,
   recordKey,
 }: {
   ids: string[];
   spaceId: string;
   idsReady: boolean;
   idsError: boolean;
-  idsFetching: boolean;
-  refetchIds: () => Promise<void>;
   recordKey: string;
 }) {
   const scores = useEntityScores({ ids, enabled: idsReady && !idsError });
@@ -170,8 +105,6 @@ function useRankedRecordPage({
     () => rankedRecordPage(ids, scores.rankings, scores.isError, visibleCount),
     [ids, scores.isError, scores.rankings, visibleCount]
   );
-  // Keep successfully ranked rows visible during background refreshes. A retry with no prior data
-  // remains `isLoading`, while a failed query remains `isError` until it succeeds.
   const rankingsReady = !scores.isLoading && !scores.isError;
   const canHydrate = idsReady && !idsError && rankingsReady;
   const rowsQuery = useClaimExploreRows(visible.ids, spaceId, canHydrate);
@@ -179,34 +112,25 @@ function useRankedRecordPage({
   const refetchRows = rowsQuery.refetch;
 
   const fetchNextPage = React.useCallback(() => {
-    const retried = retryFailedRecordStage({
-      idsError,
-      scoresError: scores.isError,
-      rowsError,
-      refetchIds,
-      refetchScores: scores.refetch,
-      refetchRows,
-    });
-    if (retried) return;
+    if (rowsError) {
+      void refetchRows();
+      return;
+    }
 
     setPage(current => ({
       key: recordKey,
       visibleCount:
         (current.key === recordKey ? current.visibleCount : CLAIM_RECORD_PAGE_SIZE) + CLAIM_RECORD_PAGE_SIZE,
     }));
-  }, [idsError, recordKey, refetchIds, refetchRows, rowsError, scores.isError, scores.refetch]);
-
-  const hasRows = rowsQuery.data.length > 0;
+  }, [recordKey, refetchRows, rowsError]);
 
   return {
     rows: canHydrate && visible.ids.length > 0 ? (rowsQuery.data ?? NO_ROWS) : NO_ROWS,
     isLoading:
       !idsReady ||
-      idsFetching ||
-      (!idsError &&
-        (scores.isLoading || scores.isFetching || ((rowsQuery.isLoading || rowsQuery.isFetching) && !hasRows))),
+      (!idsError && (scores.isLoading || (rowsQuery.isLoading && rowsQuery.data.length === 0 && !rowsQuery.isError))),
     isError: scores.isError || rowsError,
-    isFetchingNextPage: hasRows && (idsFetching || scores.isFetching || rowsQuery.isFetching),
+    isFetchingNextPage: canHydrate && rowsQuery.isFetching && rowsQuery.data.length > 0,
     hasNextPage: visible.hasNextPage,
     fetchNextPage,
   };
@@ -223,38 +147,20 @@ function useRankedRecordPage({
  * The Debates record retains its existing scope: debates directly on this claim plus debates on
  * its topic-related candidate motions. Both row sets are hydrated through the explore card
  * projection so the summary and tabs render the same cards as the rest of the product.
- *
- * Overview reads exact counts and one Best-ranked page from the bounded server summary. The
- * exhaustive cursor and client-score path below stays disabled until a full record tab is opened;
- * completeness is worth paying for there, but not for every reader who only opens the claim.
  */
 export function useClaimRecord({
   claimId,
   spaceId,
   topicIds,
-  completeRecord = null,
 }: {
   claimId: string;
   spaceId: string;
   topicIds: string[];
-  /** Exhaust and client-rank only the record represented by the open full tab. */
-  completeRecord?: ClaimRecordKind | null;
 }) {
-  const plan = completeRecordQueryPlan(completeRecord);
-  // Keep the small server summary active for both tab counts, but do not hydrate its hidden rows
-  // while a full record owns the surface.
-  const summary = useClaimRecordSummary({
-    claimId,
-    spaceId,
-    topicIds,
-    enabled: true,
-    hydrateRows: completeRecord === null,
-  });
-
   const related = useQueryAllEntities({
     where: relatedClaimsWhere({ spaceId, topicIds, requireTagId: DEBATE_TAG_ID }),
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: plan.loadRelatedClaims && topicIds.length > 0,
+    enabled: topicIds.length > 0,
   });
 
   const topicRelatedIds = React.useMemo(() => relatedClaimIds(claimId, related.entities), [claimId, related.entities]);
@@ -272,14 +178,14 @@ export function useClaimRecord({
       ],
     },
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: plan.loadDirectDebates,
+    enabled: true,
   });
 
   const claimDebateIds = React.useMemo(() => entityIds(claimDebates.entities), [claimDebates.entities]);
   const extractedClaims = useQueryAllEntities({
     where: claimsExtractedFromDebatesWhere(spaceId, claimDebateIds),
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: plan.loadExtractedClaims && claimDebateIds.length > 0,
+    enabled: claimDebateIds.length > 0,
   });
 
   const relatedIds = React.useMemo(
@@ -300,53 +206,18 @@ export function useClaimRecord({
       ],
     },
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-    enabled: plan.loadRelatedDebates && topicRelatedIds.length > 0,
+    enabled: topicRelatedIds.length > 0,
   });
 
   const debateIds = React.useMemo(
     () => entityIds([...claimDebates.entities, ...relatedDebates.entities]),
     [claimDebates.entities, relatedDebates.entities]
   );
-  const claimsReady =
-    plan.loadClaims && !related.isLoading && !claimDebates.isLoading && !extractedClaims.isLoading;
-  const debatesReady =
-    plan.loadDebates && !related.isLoading && !claimDebates.isLoading && !relatedDebates.isLoading;
+  const claimsReady = !related.isLoading && !claimDebates.isLoading && !extractedClaims.isLoading;
+  const debatesReady = !related.isLoading && !claimDebates.isLoading && !relatedDebates.isLoading;
   const recordKey = `${normId(spaceId)}:${normId(claimId)}`;
-  const claimsCountUnavailable = plan.loadClaims && Boolean(related.error ?? claimDebates.error ?? extractedClaims.error);
-  const debatesCountUnavailable =
-    plan.loadDebates && Boolean(related.error ?? claimDebates.error ?? relatedDebates.error);
-  const refetchClaimsDiscovery = React.useCallback(
-    () =>
-      refetchFailedRecordQueries([
-        { error: related.error, refetch: related.refetch },
-        { error: claimDebates.error, refetch: claimDebates.refetch },
-        { error: extractedClaims.error, refetch: extractedClaims.refetch },
-      ]),
-    [
-      claimDebates.error,
-      claimDebates.refetch,
-      extractedClaims.error,
-      extractedClaims.refetch,
-      related.error,
-      related.refetch,
-    ]
-  );
-  const refetchDebatesDiscovery = React.useCallback(
-    () =>
-      refetchFailedRecordQueries([
-        { error: related.error, refetch: related.refetch },
-        { error: claimDebates.error, refetch: claimDebates.refetch },
-        { error: relatedDebates.error, refetch: relatedDebates.refetch },
-      ]),
-    [
-      claimDebates.error,
-      claimDebates.refetch,
-      related.error,
-      related.refetch,
-      relatedDebates.error,
-      relatedDebates.refetch,
-    ]
-  );
+  const claimsCountUnavailable = Boolean(related.error ?? claimDebates.error ?? extractedClaims.error);
+  const debatesCountUnavailable = Boolean(related.error ?? claimDebates.error ?? relatedDebates.error);
   // Candidate ids and scores remain complete so totals and Best order are exact. Only expensive
   // Explore-card hydration and DOM rendering are paged, which bounds work without changing rank.
   const claimsPage = useRankedRecordPage({
@@ -354,8 +225,6 @@ export function useClaimRecord({
     spaceId,
     idsReady: claimsReady,
     idsError: claimsCountUnavailable,
-    idsFetching: related.isFetching || claimDebates.isFetching || extractedClaims.isFetching,
-    refetchIds: refetchClaimsDiscovery,
     recordKey,
   });
   const debatesPage = useRankedRecordPage({
@@ -363,28 +232,26 @@ export function useClaimRecord({
     spaceId,
     idsReady: debatesReady,
     idsError: debatesCountUnavailable,
-    idsFetching: related.isFetching || claimDebates.isFetching || relatedDebates.isFetching,
-    refetchIds: refetchDebatesDiscovery,
     recordKey,
   });
 
   return {
-    relatedClaimIds: plan.loadClaims ? relatedIds : summary.relatedClaimIds,
-    claimRows: plan.loadClaims ? claimsPage.rows : summary.claimRows,
-    debateRows: plan.loadDebates ? debatesPage.rows : summary.debateRows,
-    claimsTotal: plan.loadClaims ? relatedIds.length : summary.claimsTotal,
-    debatesTotal: plan.loadDebates ? debateIds.length : summary.debatesTotal,
-    claimsCountUnavailable: plan.loadClaims ? claimsCountUnavailable : summary.claimsCountUnavailable,
-    debatesCountUnavailable: plan.loadDebates ? debatesCountUnavailable : summary.debatesCountUnavailable,
-    claimsLoading: plan.loadClaims ? claimsPage.isLoading : summary.claimsLoading,
-    debatesLoading: plan.loadDebates ? debatesPage.isLoading : summary.debatesLoading,
-    claimsError: plan.loadClaims ? claimsCountUnavailable || claimsPage.isError : summary.claimsError,
-    debatesError: plan.loadDebates ? debatesCountUnavailable || debatesPage.isError : summary.debatesError,
-    claimsFetchingNextPage: plan.loadClaims ? claimsPage.isFetchingNextPage : summary.claimsFetchingNextPage,
-    debatesFetchingNextPage: plan.loadDebates ? debatesPage.isFetchingNextPage : summary.debatesFetchingNextPage,
-    claimsHasNextPage: plan.loadClaims ? claimsPage.hasNextPage : summary.claimsHasNextPage,
-    debatesHasNextPage: plan.loadDebates ? debatesPage.hasNextPage : summary.debatesHasNextPage,
-    fetchNextClaimsPage: plan.loadClaims ? claimsPage.fetchNextPage : summary.fetchNextClaimsPage,
-    fetchNextDebatesPage: plan.loadDebates ? debatesPage.fetchNextPage : summary.fetchNextDebatesPage,
+    relatedClaimIds: relatedIds,
+    claimRows: claimsPage.rows,
+    debateRows: debatesPage.rows,
+    claimsTotal: relatedIds.length,
+    debatesTotal: debateIds.length,
+    claimsCountUnavailable,
+    debatesCountUnavailable,
+    claimsLoading: claimsPage.isLoading,
+    debatesLoading: debatesPage.isLoading,
+    claimsError: claimsCountUnavailable || claimsPage.isError,
+    debatesError: debatesCountUnavailable || debatesPage.isError,
+    claimsFetchingNextPage: claimsPage.isFetchingNextPage,
+    debatesFetchingNextPage: debatesPage.isFetchingNextPage,
+    claimsHasNextPage: claimsPage.hasNextPage,
+    debatesHasNextPage: debatesPage.hasNextPage,
+    fetchNextClaimsPage: claimsPage.fetchNextPage,
+    fetchNextDebatesPage: debatesPage.fetchNextPage,
   };
 }

@@ -142,7 +142,6 @@ export function ClaimPageView({
     claimId: entityId,
     spaceId,
     topicIds,
-    completeRecord: requestedTab === 'debates' || requestedTab === 'claims' ? requestedTab : null,
   });
 
   const overviewHref = NavUtils.toEntity(spaceId, entityId);

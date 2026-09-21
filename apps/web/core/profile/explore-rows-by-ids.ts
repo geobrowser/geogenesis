@@ -114,21 +114,6 @@ export async function fetchExploreRowsByIds(
     );
   }
 
-  return buildExploreRowsByIds(ids, entities, preferredSpaceById);
-}
-
-/**
- * Build card rows from an already-fetched Explore projection while preserving the caller's order.
- *
- * Most records discover ids and hydrate them in separate requests, but small bounded summaries can
- * select the same projection with their discovery query. Keeping the row assembly here means both
- * paths make the same display-space choice and neither has to reimplement Explore-card semantics.
- */
-export function buildExploreRowsByIds(
-  ids: readonly string[],
-  entities: readonly ExploreCardEntity[],
-  preferredSpaceById?: Map<string, string[]>
-): ExploreFeedRow[] {
   const byId = new Map(entities.map(entity => [normId(entity.id), entity]));
   const ordered = ids
     .map(id => byId.get(normId(id)))
