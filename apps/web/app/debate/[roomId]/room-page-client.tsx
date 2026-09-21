@@ -19,11 +19,8 @@ import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 /**
- * A debate room (GEO-2941). The room is the debate-again picker with an indicator over it, so this
- * is a wrapper rather than a screen.
- *
- * Nothing here ejects anyone: `scheduled_end_at` is never read, and a viewer the server refuses is
- * redirected before the room renders rather than out of one they were in.
+ * A debate room (GEO-2941): the debate-again picker with an indicator over it, so a wrapper rather
+ * than a screen. Nothing here ejects anyone — `scheduled_end_at` is never read.
  */
 export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   const router = useRouter();

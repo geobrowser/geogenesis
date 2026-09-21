@@ -35,10 +35,8 @@ export function useDebateRoom(roomId: string, enabled = true) {
 }
 
 /**
- * This tab's identity for the room, stable for the life of the document.
- *
- * Occupancy is per connection: a person with the room open in two tabs who closes one has not left,
- * and a leave keyed only by user would tell their opponent they had.
+ * This tab's identity, stable for the document's life. Occupancy is per connection, so a leave
+ * keyed only by user would tell an opponent that someone closing a second tab had left.
  */
 function useConnectionId() {
   const ref = React.useRef<string>('');
@@ -49,11 +47,8 @@ function useConnectionId() {
 }
 
 /**
- * Announces arrival once admitted, and departure on the way out.
- *
- * The leave is sent twice over, because the two ways a tab goes away are different events: React
- * unmount covers navigating within the app, `pagehide` covers closing the tab and the bfcache. Both
- * are idempotent — a duplicate leave for a connection already gone changes nothing.
+ * Announces arrival once admitted, and departure on both exits: unmount is navigating within the
+ * app, `pagehide` is closing the tab. A duplicate leave changes nothing.
  */
 export function useRoomPresence(roomId: string, admitted: boolean) {
   const queryClient = useQueryClient();
@@ -76,8 +71,8 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
     const depart = () => {
       if (departed) return;
       departed = true;
-      // Nothing awaits this: the tab may be going away, and a rejected promise here is a leave the
-      // sweeper's idle timer will reach anyway.
+      // Unawaited: the tab may be going away, and a leave that fails is one the sweeper's idle
+      // timer reaches anyway.
       void sendRef.current(false).catch(() => {});
     };
 

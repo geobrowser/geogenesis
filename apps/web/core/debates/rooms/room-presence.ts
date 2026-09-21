@@ -13,7 +13,7 @@ export type DebateRoomPresenceState =
   | 'waiting_elsewhere'
   /** 3. They are in the room. The only state that changes behaviour. */
   | 'present'
-  /** 4. Seen in `occupants` this visit and no longer there. See `sawOpponent`. */
+  /** 4. Seen in `occupants` this visit, absent now. See `sawOpponent`. */
   | 'left'
   /** 5. The grace period elapsed with no arrival. */
   | 'no_show';
@@ -31,11 +31,8 @@ export type DebateRoomPresenceInput = {
   /** `null` until geo-chat resolves the viewer, which is not the same as being alone. */
   currentUserId: string | null;
   /**
-   * Whether the opponent has been seen in `occupants` at any point this visit.
-   *
-   * The view reports who is in the room, never who has ever been in it, so "left" and "never came"
-   * are the same payload until the grace period expires. This is the client's own memory of that
-   * difference and does not survive a refresh; a backend `ever_joined` would.
+   * Seen in `occupants` this visit. The view reports who is in the room, never who has been, so
+   * "left" and "never came" are one payload without this. Does not survive a refresh.
    */
   sawOpponent: boolean;
 };

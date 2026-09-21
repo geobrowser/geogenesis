@@ -210,12 +210,8 @@ export function DebateCoordinator() {
     if (snoozedChallengeId && challenge?.id !== snoozedChallengeId) setSnoozedChallengeId(null);
   }, [challenge, snoozedChallengeId]);
 
-  // GEO-2941. A room the viewer is expected in, offered rather than entered for them. `joinable`
-  // is the server's own door check, so this never offers a room that would refuse the join.
-  //
-  // Not gated on `activeFlow`: a scheduled debate coming due while the viewer browses is exactly
-  // when this is worth saying. It is suppressed inside a room, and prompt 2 — the in-debate case,
-  // which must never appear during recording — is GEO-2946 and not this.
+  // GEO-2941. Offered, never entered for them. `joinable` is the server's door check, so this
+  // cannot offer a room that would refuse the join.
   const upcomingRoomsQuery = useUpcomingDebateRooms(!isDebateRoomPath(pathname));
   const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
   const joinableRooms = React.useMemo(

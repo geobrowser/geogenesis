@@ -27,10 +27,8 @@ export function toRoomAccess(denial: RoomAccessDenial, via?: string): string {
 }
 
 /**
- * Which refusals send the viewer away, and which the room handles in place.
- *
- * `not_yet_open` stays: the viewer is on the list and the door opens shortly, so the room says when
- * rather than bouncing them to Explore. `admitted` obviously stays.
+ * Which refusals send the viewer away. `not_yet_open` is not one: they are on the list and the door
+ * opens shortly, so the room says when rather than bouncing them to Explore.
  */
 export function roomAccessDenialFor(access: DebateRoomAccess): RoomAccessDenial | null {
   switch (access.status) {

@@ -11,11 +11,8 @@ import { ROOM_JOIN_PROMPT } from './room-copy';
 import { debateRoomPath } from './room-routes';
 
 /**
- * The offer to join a scheduled debate (GEO-2941). An offer, never a redirect — the viewer opened
- * Geo to do something else, and a room they were moved into has to explain why they are there.
- *
- * Urgency comes from the server's own `due` and `others_present`, so this and the Requests tab
- * (GEO-2940) cannot disagree about what is happening.
+ * The offer to join a scheduled debate (GEO-2941), never a redirect. Urgency comes from the
+ * server's `due` and `others_present`, so this and the Requests tab (GEO-2940) cannot disagree.
  */
 export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateRoom; onNotNow: () => void }) {
   const router = useRouter();
