@@ -19,6 +19,9 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   /** The schedule, or `undefined` until the read answers: not an empty week, which would be saved as one. */
   blocks?: AvailabilityBlock[];
+  /** The read failed, so `blocks` will stay `undefined` and there is nothing left to wait for. */
+  error?: boolean;
+  onRetry?: () => void;
   onSave: (blocks: AvailabilityBlock[]) => void;
   /** Focus goes back here on close, since the opener is off in the panel behind the overlay. */
   openerRef?: React.RefObject<HTMLElement | null>;
@@ -34,7 +37,7 @@ type Props = {
  * Edits are held until Save. Closing by any other route (Cancel, ×, Escape, the overlay) discards
  * them, because a schedule half-dragged is not one a person meant to publish.
  */
-export function AvailabilityModal({ open, onOpenChange, blocks, onSave, openerRef }: Props) {
+export function AvailabilityModal({ open, onOpenChange, blocks, error, onRetry, onSave, openerRef }: Props) {
   const [draft, setDraft] = React.useState<AvailabilityBlock[]>(blocks ?? []);
 
   return (
@@ -93,15 +96,26 @@ export function AvailabilityModal({ open, onOpenChange, blocks, onSave, openerRe
             {open && blocks === undefined ? (
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
                 <Text as="p" variant="metadata" className="text-grey-04">
-                  Loading your schedule…
+                  {error ? 'We couldn’t load your schedule.' : 'Loading your schedule…'}
                 </Text>
-                <button
-                  type="button"
-                  onClick={() => onOpenChange(false)}
-                  className="rounded-full px-3 py-1 text-metadata text-grey-04 transition-colors hover:text-text"
-                >
-                  Cancel
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenChange(false)}
+                    className="rounded-full px-3 py-1 text-metadata text-grey-04 transition-colors hover:text-text"
+                  >
+                    Cancel
+                  </button>
+                  {error && onRetry ? (
+                    <button
+                      type="button"
+                      onClick={onRetry}
+                      className="rounded-full bg-[#151515] px-4 py-1 text-metadata text-white transition-opacity hover:opacity-90"
+                    >
+                      Try again
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ) : null}
             {open && blocks !== undefined && (

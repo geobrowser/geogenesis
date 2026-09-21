@@ -40,7 +40,7 @@ function Banner() {
   // Saved server-side now that the backend half of GEO-2936 exists (GEO-2932). `blocks` is
   // undefined until the first read answers; it is passed straight through, because the modal has
   // to tell "not read yet" from "an empty week" to avoid saving the latter over the former.
-  const { blocks, isSet } = useDebateSchedule();
+  const { blocks, isSet, isError, refetch } = useDebateSchedule();
   const saveSchedule = useSaveDebateSchedule();
   const openerRef = React.useRef<HTMLButtonElement | null>(null);
 
@@ -82,6 +82,8 @@ function Banner() {
         open={modalOpen}
         onOpenChange={setModalOpen}
         blocks={blocks}
+        error={isError}
+        onRetry={() => refetch()}
         onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
         openerRef={openerRef}
       />

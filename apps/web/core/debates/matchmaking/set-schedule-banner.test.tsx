@@ -14,7 +14,7 @@ import { SetScheduleBanner } from './set-schedule-banner';
 const mocks = vi.hoisted(() => ({ isSet: false }));
 
 vi.mock('~/core/debates/hooks', () => ({
-  useDebateSchedule: () => ({ blocks: [], isSet: mocks.isSet }),
+  useDebateSchedule: () => ({ blocks: [], isSet: mocks.isSet, isError: false, refetch: vi.fn() }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 

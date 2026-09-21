@@ -39,7 +39,7 @@ vi.mock('jotai', () => ({ useAtomValue: () => '' }));
 // QueryClientProvider around every case here. The modal below is the real one, so what is being
 // tested is still the navbar wiring the two together.
 vi.mock('~/core/debates/hooks', () => ({
-  useDebateSchedule: () => ({ blocks: [], isSet: false }),
+  useDebateSchedule: () => ({ blocks: [], isSet: false, isError: false, refetch: vi.fn() }),
   useSaveDebateSchedule: () => ({ mutate: mocks.saveSchedule, isPending: false }),
 }));
 

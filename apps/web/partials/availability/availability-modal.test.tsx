@@ -57,4 +57,41 @@ describe('AvailabilityModal while the schedule is still being read', () => {
     expect(within(dialog).queryByText('Loading your schedule…')).not.toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Save schedule' })).toBeInTheDocument();
   });
+
+  // `blocks` stays undefined when the read fails, so without this the wait never ends.
+  it('offers a retry instead of waiting forever when the read fails', async () => {
+    const onRetry = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <AvailabilityModal open onOpenChange={() => {}} blocks={undefined} error onRetry={onRetry} onSave={vi.fn()} />
+    );
+
+    expect(screen.queryByText('Loading your schedule…')).not.toBeInTheDocument();
+    expect(screen.getByText('We couldn’t load your schedule.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+});
+
+describe('AvailabilityModal across openings', () => {
+  // The modal stays mounted between openings, so `draft` outlives a cancelled edit. It is reset by
+  // the calendar reporting its seed on remount; this pins that, since nothing else would catch it.
+  it('does not save edits that were cancelled in an earlier opening', async () => {
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+
+    const { rerender } = render(<AvailabilityModal open onOpenChange={() => {}} blocks={saved} onSave={onSave} />);
+
+    await user.click(screen.getByRole('button', { name: 'Clear all' }));
+    rerender(<AvailabilityModal open={false} onOpenChange={() => {}} blocks={saved} onSave={onSave} />);
+    rerender(<AvailabilityModal open onOpenChange={() => {}} blocks={saved} onSave={onSave} />);
+
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Save schedule' }));
+
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onSave.mock.calls[0][0]).toEqual(saved);
+  });
 });

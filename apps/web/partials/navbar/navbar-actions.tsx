@@ -67,7 +67,7 @@ export function NavbarActions() {
   // Read here rather than inside the modal so the week is usually cached by the time the menu is
   // opened. The modal holds the grid back until this answers, so a slow read costs a moment of
   // "Loading your schedule" rather than a wrong one.
-  const { blocks: scheduleBlocks } = useDebateSchedule();
+  const { blocks: scheduleBlocks, isError: scheduleError, refetch: refetchSchedule } = useDebateSchedule();
   const saveSchedule = useSaveDebateSchedule();
 
   // The navbar's own content is swapped inside one stable tree rather than being
@@ -191,6 +191,8 @@ export function NavbarActions() {
           open={isScheduleOpen}
           onOpenChange={setIsScheduleOpen}
           blocks={scheduleBlocks}
+          error={scheduleError}
+          onRetry={() => refetchSchedule()}
           onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
           openerRef={avatarTriggerRef}
         />
