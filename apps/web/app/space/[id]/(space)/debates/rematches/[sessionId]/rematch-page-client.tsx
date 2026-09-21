@@ -1965,13 +1965,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // scrollable. Anything wider than the viewport — the tab strip, on a phone — panned the whole
     // screen sideways instead of scrolling itself.
     <div data-rematch-scroll className="fixed inset-0 z-[150] overflow-x-hidden overflow-y-auto bg-white text-text">
-      <main className="mx-auto min-h-dvh w-full max-w-[720px] px-5 pt-8 pb-8 sm:px-8">
+      <main className="mx-auto min-h-dvh w-full max-w-[720px] px-5 pt-8 pb-8 mobile:px-8">
         {/* Pinned together, tabs included. The list pages forever, so both the tab strip and the
             controls under it were a full scroll away by the time the viewer wanted either — and
             pinning the filters alone would have left them floating over a tab strip scrolling
             past behind them. Bleeds to the layer's edges so the page passes under it rather than
             beside it, and `-mt-8` lets it sit flush at the top once stuck. */}
-        <div className="sticky top-0 z-20 -mx-5 -mt-8 bg-white px-5 pt-8 pb-3 sm:-mx-8 sm:px-8">
+        <div className="sticky top-0 z-20 -mx-5 -mt-8 bg-white px-5 pt-8 pb-3 mobile:-mx-8 mobile:px-8">
           <header className="mb-4 flex items-center justify-between gap-4">
             <h1 className="sr-only">Rematch {remoteName}</h1>
             {/* Scrolls on its own: `min-w-0` lets it be narrower than its tabs, `overflow-x-auto`
@@ -2702,7 +2702,10 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     <button
       type="button"
       onClick={onClick}
-      aria-selected={active}
+      // `aria-pressed`, not `aria-selected`: these are plain buttons with no `role="tab"` and no
+      // `tablist` around them, and `aria-selected` is not supported on a button — it was being
+      // dropped, so nothing announced which tab was active.
+      aria-pressed={active}
       className={cx(
         // `shrink-0` so a narrow screen scrolls the strip rather than squeezing three tabs into
         // the width of one; `whitespace-nowrap` so a two-word tab can't wrap into two lines.

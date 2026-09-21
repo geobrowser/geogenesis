@@ -48,12 +48,7 @@ export type MatchmakingSection = 'people' | 'claims' | 'matches';
  *   it without a deploy.
  */
 export type DebateGatewayPauseReason =
-  | 'disconnected'
-  | 'session'
-  | 'rate_limited'
-  | 'subscription_limit'
-  | 'unsupported'
-  | 'error';
+  'disconnected' | 'session' | 'rate_limited' | 'subscription_limit' | 'unsupported' | 'error';
 
 export type DebateGatewaySnapshot = {
   status: 'idle' | 'connecting' | 'ready' | 'degraded';
@@ -759,11 +754,7 @@ export class DebateGatewayClient {
     this.scheduleReconnect();
   }
 
-  private forceReconnect(
-    socket: WebSocketLike,
-    minimumDelayMs = 0,
-    reason: DebateGatewayPauseReason = 'disconnected'
-  ) {
+  private forceReconnect(socket: WebSocketLike, minimumDelayMs = 0, reason: DebateGatewayPauseReason = 'disconnected') {
     if (socket !== this.socket) return;
     this.socket = null;
     this.readyForDebates = false;
@@ -776,9 +767,7 @@ export class DebateGatewayClient {
   }
 
   private canRecoverFromError() {
-    return (
-      this.lastErrorReconnectAt === null || Date.now() - this.lastErrorReconnectAt >= ERROR_RECONNECT_COOLDOWN_MS
-    );
+    return this.lastErrorReconnectAt === null || Date.now() - this.lastErrorReconnectAt >= ERROR_RECONNECT_COOLDOWN_MS;
   }
 
   private scheduleReconnect(minimumDelayMs = 0) {

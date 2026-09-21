@@ -299,7 +299,7 @@ function ImageNodeChildren({
     try {
       await navigator.clipboard.writeText(entityId);
       setIsMenuOpen(false);
-    } catch (err) {
+    } catch {
       console.error('Failed to copy image block entity ID for: ', entityId);
     }
   };

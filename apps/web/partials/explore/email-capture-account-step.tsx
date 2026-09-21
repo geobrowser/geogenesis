@@ -156,7 +156,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
 
       {/* The subscribe row's layout after the restyle: a column, same spacing and width, so the
           card does not change shape when it swaps to this step. */}
-      <div className="mt-[19px] flex flex-col gap-[6px] sm:mx-auto sm:mt-5 sm:max-w-[394px]">
+      <div className="mt-[19px] flex flex-col gap-[6px] mobile:mx-auto mobile:mt-5 mobile:max-w-[394px]">
         <input
           // `text` with a numeric `inputMode`, not `type="number"`: a number input drops leading
           // zeros, accepts `e` and `-`, and puts a spinner on a field that is not a quantity.

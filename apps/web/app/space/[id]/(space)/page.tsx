@@ -135,11 +135,19 @@ export default async function SpacePage(props0: Props) {
         boundary. We don't want to show any referenced by loading states but do want to
         stream it in
       */}
-      <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-        <React.Suspense fallback={<div />}>
-          <BacklinksServerContainer entityId={props.id} />
-        </React.Suspense>
-      </TrackedErrorBoundary>
+      {/*
+        Skipped entirely when the space has no home entity, where `props.id` is `''`.
+        `getEntityBacklinks` now answers an invalid id without a request, so this is not
+        what stops the 400 — it stops a boundary, a Suspense and a render existing to
+        produce nothing.
+      */}
+      {props.id !== '' && (
+        <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+          <React.Suspense fallback={<div />}>
+            <BacklinksServerContainer entityId={props.id} />
+          </React.Suspense>
+        </TrackedErrorBoundary>
+      )}
     </EntityPageSidebarLayout>
   );
 }
@@ -299,7 +307,7 @@ const SubtopicGallerySkeleton = () => {
   return (
     <>
       <div className="h-10" />
-      <div className="grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-2" aria-hidden>
+      <div className="grid grid-cols-3 gap-x-4 gap-y-6 mobile:grid-cols-2" aria-hidden>
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="flex flex-col gap-3 rounded-[17px] p-1">
             <Skeleton className="aspect-2/1 w-full rounded-lg" />
@@ -318,6 +326,11 @@ const getSpaceFrontPage = async (space: Awaited<ReturnType<typeof cachedFetchSpa
   const entity = space?.entity;
 
   if (!entity) {
+    // A space with no home entity. `id` stays `''` rather than a generated one because
+    // consumers here render it, and inventing an id makes them render a page for an
+    // entity that does not exist — the layout's variant generates one only because it
+    // needs a stable key. Anything that treats this as a real id is the caller's bug to
+    // avoid; see the `props.id` guard where backlinks are rendered.
     return {
       id: '',
       name: null,

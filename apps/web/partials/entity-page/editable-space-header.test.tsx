@@ -57,9 +57,7 @@ vi.mock('~/design-system/prefetch-link', () => ({
 }));
 
 function renderHeading(actionsComponent?: React.ReactNode) {
-  return render(
-    <EditableSpaceHeading spaceId={SPACE_ID} entityId="entity-1" actionsComponent={actionsComponent} />
-  );
+  return render(<EditableSpaceHeading spaceId={SPACE_ID} entityId="entity-1" actionsComponent={actionsComponent} />);
 }
 
 beforeEach(() => {

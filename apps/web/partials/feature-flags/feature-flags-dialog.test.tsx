@@ -57,6 +57,7 @@ describe('FeatureFlagsDialog', () => {
     await waitFor(() => {
       // Values, not key order — see the note in `feature-flags.test.ts`.
       expect(JSON.parse(window.localStorage.getItem(featureFlagsStorageKey) ?? 'null')).toEqual({
+        playbackDiagnostics: false,
         debugDebatesPage: true,
         debateDebugging: true,
         debateFormatSelector: true,

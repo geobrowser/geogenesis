@@ -144,6 +144,7 @@ export function useCollapseAnswered<T>(
   // come from the caller, so a list would either churn on inline ones or go stale on memoized ones.
   // The guards below make the body idempotent — a row already holding, already folded, or already
   // recorded does nothing — so the cost is one pass over the rows and `setHolding` bails on identity.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
     if (!enabled) return;
 

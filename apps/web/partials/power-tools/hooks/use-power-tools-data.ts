@@ -11,17 +11,20 @@ import { filterStateToWhere, useDataBlock, useDataBlockInstance } from '~/core/b
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
-import { getSchemaFromTypeIds, readTypes } from '~/core/database/entities';
+import { getSchemaFromTypeIds} from '~/core/database/entities';
 import { useProperties } from '~/core/hooks/use-properties';
 import { useQueryEntities, useQueryEntitiesAsync } from '~/core/sync/use-store';
-import { Property, Relation } from '~/core/types';
+import { Relation } from '~/core/types';
 
 import { PowerToolsData, PowerToolsRow } from '../types';
+
+// A stable empty list: `options?.extraColumnIds ?? []` mints a new array every render, which
+// made the effect keyed on it re-run every render.
+const NO_EXTRA_COLUMN_IDS: string[] = [];
 
 const DEFAULT_PAGE_SIZE = 25;
 // Keep a bounded window in memory to avoid re-render costs after long scroll sessions.
 const MAX_PAGES_IN_MEMORY = 6;
-const MAX_FETCH_PAGES = 200;
 
 /**
  * SPACES/GEO: upper bound on how many entity ids `fetchAllIds` pulls over the network.
@@ -63,7 +66,7 @@ export function usePowerToolsData(options?: {
   fetchAllIds: () => Promise<string[]>;
 } {
   const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
-  const extraColumnIds = options?.extraColumnIds ?? [];
+  const extraColumnIds = options?.extraColumnIds ?? NO_EXTRA_COLUMN_IDS;
   const excludedColumnIdsSet = React.useMemo(
     () => new Set(options?.excludedColumnIds ?? []),
     [options?.excludedColumnIds]
@@ -102,7 +105,7 @@ export function usePowerToolsData(options?: {
       }>;
     }>
   >([]);
-  const [lastPageCount, setLastPageCount] = React.useState(0);
+  const [_lastPageCount, setLastPageCount] = React.useState(0);
   const [loadedCollectionRelationPages, setLoadedCollectionRelationPages] = React.useState<
     Array<{
       page: number;
@@ -302,6 +305,11 @@ export function usePowerToolsData(options?: {
     }
 
     return [];
+    // `sourceValue` is the narrowed `'value' in source ? source.value : null`, and together with
+    // `source.type` it covers everything about the source that matters here. Depending on `source`
+    // itself is the documented hazard: `getSource` returns a new object literal every render
+    // (`core/blocks/data/source.ts`), which loops effects that call setState.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadedEntities, loadedCollectionRelations, source.type, sourceValue, spaceId]);
 
   const loadMore = React.useCallback(() => {
@@ -475,6 +483,11 @@ export function usePowerToolsData(options?: {
     }
 
     return [];
+    // `sourceValue` is the narrowed `'value' in source ? source.value : null`, and together with
+    // `source.type` it covers everything about the source that matters here. Depending on `source`
+    // itself is the documented hazard: `getSource` returns a new object literal every render
+    // (`core/blocks/data/source.ts`), which loops effects that call setState.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source.type, sourceValue, blockEntity?.relations, where, pageSize, queryEntitiesAsync]);
 
   return {

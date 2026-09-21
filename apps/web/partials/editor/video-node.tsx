@@ -303,7 +303,7 @@ function VideoNodeChildren({
     try {
       await navigator.clipboard.writeText(entityId);
       setIsMenuOpen(false);
-    } catch (err) {
+    } catch {
       console.error('Failed to copy video block entity ID for: ', entityId);
     }
   };

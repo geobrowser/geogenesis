@@ -150,8 +150,10 @@ describe('pickBySpaceRank breaks rank ties deterministically', () => {
 
   it('does the same for names', () => {
     const named = (spaceId: string, text: string): Value =>
-      ({ ...described(spaceId, text), property: { id: SystemIds.NAME_PROPERTY, name: null, dataType: 'TEXT' } }) as
-        unknown as Value;
+      ({
+        ...described(spaceId, text),
+        property: { id: SystemIds.NAME_PROPERTY, name: null, dataType: 'TEXT' },
+      }) as unknown as Value;
 
     expect(name([named(UNRANKED_A, 'A'), named(UNRANKED_B, 'B')])).toBe(
       name([named(UNRANKED_B, 'B'), named(UNRANKED_A, 'A')])
