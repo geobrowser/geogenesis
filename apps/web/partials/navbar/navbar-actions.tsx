@@ -29,11 +29,13 @@ import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
+import { Toggle } from '~/design-system/toggle';
 
 import { AvailabilityModal } from '~/partials/availability/availability-modal';
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
 import { EditProfileDialog } from '~/partials/profile/edit-profile-dialog';
 
+import { useCreateEntityActions } from '../create-entity/use-create-entity-actions';
 import { avatarAtom } from '../onboarding/dialog';
 
 function useUser() {
@@ -43,6 +45,36 @@ function useUser() {
 
   return { isLoading: isLoadingSmartAccount || isLoadingProfile, address, profile };
 }
+
+const MOBILE_NAVBAR_QUERY = '(max-width: 639px)';
+
+function subscribeToMobileNavbar(onStoreChange: () => void) {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {};
+
+  const mediaQuery = window.matchMedia(MOBILE_NAVBAR_QUERY);
+  mediaQuery.addEventListener('change', onStoreChange);
+  return () => mediaQuery.removeEventListener('change', onStoreChange);
+}
+
+function getMobileNavbarSnapshot() {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia(MOBILE_NAVBAR_QUERY).matches
+  );
+}
+
+function getServerMobileNavbarSnapshot() {
+  return false;
+}
+
+function useIsMobileNavbar() {
+  return React.useSyncExternalStore(subscribeToMobileNavbar, getMobileNavbarSnapshot, getServerMobileNavbarSnapshot);
+}
+
+const PROFILE_MENU_ACTION_CLASS =
+  'flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none mobile:min-h-11';
+const PROFILE_MENU_DIVIDED_ACTION_CLASS = cx(PROFILE_MENU_ACTION_CLASS, 'border-t border-grey-02');
 
 export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
@@ -61,6 +93,9 @@ export function NavbarActions() {
   const { isPending, topicId } = usePendingPersonalSpace();
   const pendingAvatar = useAtomValue(avatarAtom);
   const { user } = usePrivy();
+  const isMobileNavbar = useIsMobileNavbar();
+  const spaceId = useSpaceId();
+  const { canCreateInSpace, createEntity, createProperty, createSpace } = useCreateEntityActions(spaceId);
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
   // only trigger the logout.
   const { logout } = useLogout();
@@ -99,8 +134,8 @@ export function NavbarActions() {
     if (isUserLoading && !held) {
       return (
         <div key="navbar-content" className="flex items-center gap-4">
-          <Skeleton className="h-7 w-[66px]" radius="rounded-full" />
-          <Skeleton className="h-7 w-7" radius="rounded-full" />
+          {!isMobileNavbar ? <Skeleton className="h-7 w-[66px]" radius="rounded-full" /> : null}
+          <Skeleton className="h-7 w-7 mobile:h-11 mobile:w-11" radius="rounded-full" />
         </div>
       );
     }
@@ -124,71 +159,126 @@ export function NavbarActions() {
 
     return (
       <div key="navbar-content" className="flex items-center gap-4">
-        <ModeToggle />
+        <ModeToggle isMobile={isMobileNavbar} isProfileMenuOpen={open} spaceId={spaceId}>
+          {({ navbar, menu }) => (
+            <>
+              {navbar}
 
-        <Menu
-          trigger={
-            <div className="relative h-7 w-7 overflow-hidden rounded-full">
-              {avatarValue ? (
-                <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
-              ) : (
-                <Avatar value={address} size={28} />
-              )}
-            </div>
-          }
-          open={open}
-          onOpenChange={onOpenChange}
-          triggerRef={avatarTriggerRef}
-          sideOffset={12}
-          className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] mobile:w-[322px]"
-        >
-          <IdentityHeader
-            address={address}
-            avatarValue={avatarValue}
-            displayName={displayName}
-            detail={identityDetail}
-            href={personalHref}
-            onNavigate={() => onOpenChange(false)}
-          />
-          {personalSpaceId && (
-            <button
-              type="button"
-              onClick={() => {
-                onOpenChange(false);
-                setHasOpenedEditProfile(true);
-                setIsEditProfileOpen(true);
-              }}
-              className="flex w-full items-center border-t border-grey-02 px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
-            >
-              Edit profile
-            </button>
+              <Menu
+                asChild
+                trigger={
+                  // The avatar stays 28px; the actual trigger grows to 44px on a phone. This menu is the
+                  // only way to a profile, personal space or sign out on mobile, which it had no way to
+                  // reach at all until this change. Not applied to the rest of the row: those controls
+                  // were already on phones and belong to GEO-2970's sweep.
+                  <button type="button" className="flex items-center justify-center p-0 mobile:h-11 mobile:w-11">
+                    {/* The trigger is an image and nothing else: `FallbackImage` has an empty alt and
+                        `Avatar` carries no label, so Radix's button announced as nothing at all. It is
+                        the only way to a profile, personal space or sign out on a phone. Named the way
+                        the debates button beside it is. */}
+                    <span className="sr-only">Open profile menu</span>
+                    <div className="relative h-7 w-7 overflow-hidden rounded-full">
+                      {avatarValue ? (
+                        <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
+                      ) : (
+                        <Avatar value={address} size={28} />
+                      )}
+                    </div>
+                  </button>
+                }
+                open={open}
+                onOpenChange={onOpenChange}
+                triggerRef={avatarTriggerRef}
+                sideOffset={12}
+                // No `mobile:w-[322px]`. A fixed 322 does not fit a 320px viewport once `Menu` takes its 8px
+                // collision padding on each side, and Radix repositions fixed-width content rather than
+                // shrinking it, so the menu was clipped. The base width is already viewport-calculated
+                // with 322 as a maximum, which is what phones want.
+                className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px]"
+              >
+                <IdentityHeader
+                  address={address}
+                  avatarValue={avatarValue}
+                  displayName={displayName}
+                  detail={identityDetail}
+                  href={personalHref}
+                  onNavigate={() => onOpenChange(false)}
+                />
+                {personalSpaceId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenChange(false);
+                      setHasOpenedEditProfile(true);
+                      setIsEditProfileOpen(true);
+                    }}
+                    className={PROFILE_MENU_DIVIDED_ACTION_CLASS}
+                  >
+                    Edit profile
+                  </button>
+                )}
+                {menu}
+                {isMobileNavbar && canCreateInSpace ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenChange(false);
+                      createEntity();
+                    }}
+                    className={PROFILE_MENU_DIVIDED_ACTION_CLASS}
+                  >
+                    Create new entity
+                  </button>
+                ) : null}
+                {isMobileNavbar && canCreateInSpace ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenChange(false);
+                      createProperty();
+                    }}
+                    className={PROFILE_MENU_DIVIDED_ACTION_CLASS}
+                  >
+                    Create new property
+                  </button>
+                ) : null}
+                {isMobileNavbar ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenChange(false);
+                      createSpace();
+                    }}
+                    className={PROFILE_MENU_DIVIDED_ACTION_CLASS}
+                  >
+                    Create new space
+                  </button>
+                ) : null}
+                {/* Not gated on `personalSpaceId` the way Edit profile is: that one publishes into the
+                    personal space, while a schedule is stored in geo-chat against the Privy account
+                    (`debateQueryKeys.schedule`), which everyone signed in has. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenChange(false);
+                    setHasOpenedSchedule(true);
+                    setIsScheduleOpen(true);
+                  }}
+                  className={PROFILE_MENU_DIVIDED_ACTION_CLASS}
+                >
+                  Set my schedule
+                </button>
+                {/* Sign out keeps its own group below the divider — the destructive action
+                  stays alone at the bottom where people expect it. */}
+                <div className="border-t border-grey-02">
+                  <button type="button" onClick={logout} className={PROFILE_MENU_ACTION_CLASS}>
+                    Sign out
+                  </button>
+                </div>
+              </Menu>
+            </>
           )}
-          {/* Not gated on `personalSpaceId` the way Edit profile is: that one publishes into the
-              personal space, while a schedule is stored in geo-chat against the Privy account
-              (`debateQueryKeys.schedule`), which everyone signed in has. */}
-          <button
-            type="button"
-            onClick={() => {
-              onOpenChange(false);
-              setHasOpenedSchedule(true);
-              setIsScheduleOpen(true);
-            }}
-            className="flex w-full items-center border-t border-grey-02 px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
-          >
-            Set my schedule
-          </button>
-          {/* Sign out keeps its own group below the divider — the destructive action
-            stays alone at the bottom where people expect it. */}
-          <div className="border-t border-grey-02">
-            <button
-              type="button"
-              onClick={logout}
-              className="flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
-            >
-              Sign out
-            </button>
-          </div>
-        </Menu>
+        </ModeToggle>
       </div>
     );
   })();
@@ -321,11 +411,25 @@ const variants = {
 
 const MotionPopoverContent = motion.create(Popover.Content);
 
-function ModeToggle() {
+type ModeToggleSlots = {
+  navbar: React.ReactNode;
+  menu: React.ReactNode;
+};
+
+function ModeToggle({
+  isMobile,
+  isProfileMenuOpen,
+  spaceId,
+  children,
+}: {
+  isMobile: boolean;
+  isProfileMenuOpen: boolean;
+  spaceId: string | null | undefined;
+  children: (slots: ModeToggleSlots) => React.ReactNode;
+}) {
   const controls = useAnimation();
   const { editable, setEditable } = useEditable();
 
-  const spaceId = useSpaceId();
   const { canEdit: canUserEdit, isLoading: isLoadingAccessControl } = useAccessControl(spaceId ?? '');
 
   React.useEffect(() => {
@@ -342,6 +446,16 @@ function ModeToggle() {
   const [showEditAccessTooltip, setShowEditAccessTooltip] = React.useState(false);
   const toggleRef = React.useRef<HTMLButtonElement>(null);
   const { open: editModeTipOpen, dismiss: dismissEditModeTip, isActive: editModeTipActive } = useEditModeToggleTip();
+
+  React.useEffect(() => {
+    if (!isMobile || isProfileMenuOpen) return;
+
+    // Attempts and feedback describe one interaction with the open profile menu.
+    // Carrying either across closes makes the next session start halfway through
+    // the two-attempt flow, or immediately restores a tooltip the user dismissed.
+    setAttemptCount(0);
+    setShowEditAccessTooltip(false);
+  }, [isMobile, isProfileMenuOpen]);
 
   const onToggle = React.useCallback(() => {
     if (!spaceId) {
@@ -360,6 +474,15 @@ function ModeToggle() {
         // Make sure they can always escape edit mode
         setEditable(false);
         browseModeToggled(modeToggleProperties(spaceId, 'no_edit_access'));
+        return;
+      }
+
+      // The shortcut stays global so editors can use it while the mobile menu is
+      // closed, but denied feedback belongs to the visible menu session. Hidden
+      // attempts must not prime a tooltip that appears the next time it opens.
+      if (isMobile && !isProfileMenuOpen) {
+        setAttemptCount(0);
+        setShowEditAccessTooltip(false);
         return;
       }
 
@@ -390,6 +513,8 @@ function ModeToggle() {
     spaceId,
     isLoadingAccessControl,
     editModeTipActive,
+    isMobile,
+    isProfileMenuOpen,
   ]);
 
   const memoizedShortcuts = React.useMemo(
@@ -407,76 +532,110 @@ function ModeToggle() {
 
   if (!spaceId) {
     // Only show toggle on pages that are editable
-    return null;
+    return children({ navbar: null, menu: null });
   }
 
+  const navbarLabel = editable ? 'Switch to browse mode' : 'Switch to edit mode';
+  const menuLabel = `Edit mode ${editable ? 'on' : 'off'}`;
+  const toggle = (
+    <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
+      <Popover.Anchor asChild>
+        <motion.button
+          type="button"
+          ref={toggleRef}
+          onClick={onToggle}
+          data-testid="edit-toggle"
+          data-mode-toggle-placement={isMobile ? 'profile-menu' : 'navbar'}
+          aria-label={isMobile ? menuLabel : navbarLabel}
+          role={isMobile ? 'switch' : undefined}
+          aria-checked={isMobile ? editable : undefined}
+          aria-pressed={isMobile ? undefined : editable}
+          animate={controls}
+          variants={variants}
+          className={
+            isMobile
+              ? cx(PROFILE_MENU_DIVIDED_ACTION_CLASS, 'justify-between')
+              : 'rounded-[47px] p-0 focus-visible:outline-none'
+          }
+        >
+          {isMobile ? (
+            <>
+              <span>{menuLabel}</span>
+              <Toggle checked={editable} data-testid="edit-mode-switch-visual" />
+            </>
+          ) : (
+            <ModeToggleTrack editable={editable} showEditAccessTooltip={showEditAccessTooltip} />
+          )}
+        </motion.button>
+      </Popover.Anchor>
+      <Popover.Portal>
+        <AnimatePresence mode="popLayout">
+          {showEditAccessTooltip && (
+            <MotionPopoverContent
+              className="z-1001 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-hidden"
+              side="bottom"
+              align="end"
+              alignOffset={-8}
+              sideOffset={16}
+              initial={{ opacity: 0, scale: 0.95, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -10 }}
+              transition={{
+                type: 'spring',
+                duration: 0.15,
+                bounce: 0,
+              }}
+            >
+              <h1 className="text-center text-breadcrumb">You don’t have edit access in this space</h1>
+              <Popover.Arrow />
+            </MotionPopoverContent>
+          )}
+        </AnimatePresence>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+
+  return children({
+    navbar: isMobile ? null : (
+      <>
+        {toggle}
+        <EditModeToggleTip open={editModeTipOpen} dismiss={dismissEditModeTip} anchorRef={toggleRef} />
+      </>
+    ),
+    menu: isMobile ? toggle : null,
+  });
+}
+
+function ModeToggleTrack({ editable, showEditAccessTooltip }: { editable: boolean; showEditAccessTooltip: boolean }) {
   return (
-    <>
-      <motion.button
-        ref={toggleRef}
-        onClick={onToggle}
-        data-testid="edit-toggle"
-        animate={controls}
-        variants={variants}
-        className="relative flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
-      >
-        <motion.div
-          aria-hidden
-          initial={false}
-          animate={{ x: editable ? 30 : 0 }}
-          transition={{
-            duration: 0.5,
-            type: 'spring',
-            bounce: 0,
-          }}
-          className="pointer-events-none absolute top-1 left-1 z-0 h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
-        />
-        <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
-          <div className={cx('transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}>
-            <EyeSmall />
-          </div>
-        </div>
-        <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
-          <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
-            <Popover.Anchor asChild>
-              <div
-                className={cx(
-                  'transition-colors duration-300',
-                  showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
-                )}
-              >
-                <BulkEdit />
-              </div>
-            </Popover.Anchor>
-            <Popover.Portal>
-              <AnimatePresence mode="popLayout">
-                {showEditAccessTooltip && (
-                  <MotionPopoverContent
-                    className="z-10 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-hidden"
-                    side="bottom"
-                    align="end"
-                    alignOffset={-8}
-                    sideOffset={16}
-                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                    transition={{
-                      type: 'spring',
-                      duration: 0.15,
-                      bounce: 0,
-                    }}
-                  >
-                    <h1 className="text-center text-breadcrumb">You don’t have edit access in this space</h1>
-                    <Popover.Arrow />
-                  </MotionPopoverContent>
-                )}
-              </AnimatePresence>
-            </Popover.Portal>
-          </Popover.Root>
-        </div>
-      </motion.button>
-      <EditModeToggleTip open={editModeTipOpen} dismiss={dismissEditModeTip} anchorRef={toggleRef} />
-    </>
+    <span className="relative flex h-7 w-[66px] shrink-0 items-center justify-between rounded-[47px] bg-divider p-1">
+      <motion.span
+        aria-hidden
+        initial={false}
+        animate={{ x: editable ? 30 : 0 }}
+        transition={{
+          duration: 0.5,
+          type: 'spring',
+          bounce: 0,
+        }}
+        className="pointer-events-none absolute top-1 left-1 z-0 h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
+      />
+      <span className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
+        <span className={cx('transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}>
+          <EyeSmall />
+        </span>
+      </span>
+      <span className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
+        <span
+          className={cx(
+            'transition-colors duration-300',
+            showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
+          )}
+        >
+          <BulkEdit />
+        </span>
+      </span>
+    </span>
   );
 }
 

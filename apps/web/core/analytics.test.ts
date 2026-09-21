@@ -222,6 +222,7 @@ describe('analytics', () => {
 
     const {
       browseModeToggled: browse,
+      commentCreated,
       editModeToggled: edit,
       personalSpaceViewed,
       publishedEdit,
@@ -237,6 +238,7 @@ describe('analytics', () => {
     personalSpaceViewed('personal-space-1');
     reviewChangesOpened({ space_id: 'space-1' });
     publishedEdit({ space_id: 'space-1' });
+    commentCreated('comment-1', 'claim-1', { space_id: 'space-1' });
 
     expect(upvoted).toHaveBeenCalledWith({ entity_id: 'entity-1' });
     expect(voteCast).toHaveBeenCalledWith('none', { entity_id: 'entity-1' });
@@ -256,6 +258,14 @@ describe('analytics', () => {
     expect(capture).toHaveBeenCalledWith('published_edit', {
       app: 'genesis',
       source: 'publishing',
+      space_id: 'space-1',
+    });
+    expect(capture).toHaveBeenCalledWith('comment_created', {
+      app: 'genesis',
+      source: 'commenting',
+      comment_id: 'comment-1',
+      target_type: 'entity',
+      target_id: 'claim-1',
       space_id: 'space-1',
     });
   });

@@ -34,7 +34,12 @@ const mocks = vi.hoisted(() => ({
   summaryKindCalls: [] as string[],
   positive: 0,
   negative: 0,
+  commentCount: 0,
   notifyClaimResponseIndexed: vi.fn(),
+}));
+
+vi.mock('~/core/hooks/use-comment-count', () => ({
+  useCommentCount: () => mocks.commentCount,
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -137,17 +142,34 @@ vi.mock('~/core/claims/browse/claim-position-comment', () => ({
     disabled,
     responseKind,
     titleFor,
+    positionRowEndSlot,
   }: {
     disabled?: boolean;
     responseKind: string;
     titleFor?: (position: boolean) => string;
+    positionRowEndSlot?: React.ReactNode;
   }) => (
     <div
       data-testid="pills"
       data-disabled={String(Boolean(disabled))}
       data-response-kind={responseKind}
       data-title={titleFor?.(true)}
-    />
+    >
+      {positionRowEndSlot}
+    </div>
+  ),
+}));
+
+vi.mock('~/partials/comments/entity-comments-button', () => ({
+  EntityCommentsButton: ({ count, className }: { count: number; className?: string }) => (
+    <button
+      type="button"
+      aria-label={`Comments (${mocks.commentCount})`}
+      className={className}
+      data-server-count={count}
+    >
+      {mocks.commentCount}
+    </button>
   ),
 }));
 
@@ -228,6 +250,7 @@ beforeEach(() => {
   mocks.summaryKindCalls = [];
   mocks.positive = 0;
   mocks.negative = 0;
+  mocks.commentCount = 0;
   mocks.notifyClaimResponseIndexed.mockClear();
 
   class MockIntersectionObserver implements IntersectionObserver {
@@ -284,6 +307,22 @@ describe('ClaimExploreFeedCard', () => {
     expect(title.getAttribute('href')).toContain(CLAIM_ID);
     // No thumbnail well: a claim has no image, so the sentence takes the column.
     expect(screen.queryByTestId('image')).toBeNull();
+  });
+
+  it('does not add a comment action or third position-row column for an empty thread', () => {
+    render(<ClaimExploreFeedCard item={item} />);
+
+    expect(screen.queryByRole('button', { name: /^Comments/ })).toBeNull();
+  });
+
+  it('puts the live comment count button beside the position buttons once the thread has a comment', () => {
+    mocks.commentCount = 2;
+    render(<ClaimExploreFeedCard item={item} />);
+
+    const comments = screen.getByRole('button', { name: 'Comments (2)' });
+    expect(screen.getByTestId('pills')).toContainElement(comments);
+    expect(comments).toHaveAttribute('data-server-count', '0');
+    expect(comments).toHaveClass('h-7', 'shrink-0', 'gap-2', 'rounded-full', 'border', 'border-grey-02');
   });
 
   it('asks for nothing about a claim the reader has not scrolled near', () => {

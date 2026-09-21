@@ -14,12 +14,15 @@ import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-rea
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Text } from '~/design-system/text';
+
+import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 
 import { ExploreCardEntityLink } from './explore-card-entity-link';
 import { ExploreMetaRow } from './explore-meta-row';
@@ -40,11 +43,12 @@ import { ExploreMetaRow } from './explore-meta-row';
  * zones are already separated by the stack, and a full-bleed rule across a narrow card reads as the
  * end of the card rather than as a divider inside it.
  *
- * No actions row. It briefly carried debate and related-claim counts, which the coverage numbers
- * did not support — 33 debates against 311,047 claims — and then comments and Share, which is what
- * the generic card has. Even that earned less than it cost here: a strip of small grey glyphs under
- * a card whose whole lower half is already the response controls and the verdict. The claim's title
- * is the way through to all of it.
+ * No separate actions row. It briefly carried debate and related-claim counts, which the coverage
+ * numbers did not support — 33 debates against 311,047 claims — and then comments and Share, which
+ * is what the generic card has. Even that strip earned less than it cost under a card whose whole
+ * lower half is already controls and verdict. Existing comments instead sit directly after the two
+ * position pills, as the claim-list design groups them; an empty thread adds no action, and the
+ * claim title remains the way through to the page.
  *
  * Where that title goes is the host's call, through `titleOpensSidePanel`: the side panel on
  * Explore, the entity page everywhere else this card is used. Either way it stays a real anchor
@@ -149,6 +153,12 @@ export function ClaimExploreFeedCard({
   // saw their own face on the repaired ones and not the rest (GEO-2821). The card cannot be the one
   // surface that draws a held position without standing the viewer up on it.
   useBackfillReadinessForHeldPosition({ readiness: row, entityId: item.entityId, spaceId: item.spaceId });
+
+  // Read the same live cache as `EntityCommentsButton` before deciding whether the row has a third
+  // action at all. Checking only the server seed would keep the button hidden after this card's
+  // optional composer publishes the first comment; rendering a button that returns null would leave
+  // PositionRow in its three-column layout with an empty final column.
+  const liveCommentCount = useCommentCount(item.entityId, item.commentCount);
 
   // Withheld while the counts are still out, so the column does not appear a beat after the card.
   // `hasCounts` as well as a non-zero total. The two are equivalent as the hook computes them —
@@ -304,6 +314,16 @@ export function ClaimExploreFeedCard({
             titleFor={control.actionTitle}
             noteFor={responseNote ? noteFor : undefined}
             positionRowClassName="max-w-[360px]"
+            positionRowEndSlot={
+              liveCommentCount > 0 ? (
+                <EntityCommentsButton
+                  entityId={item.entityId}
+                  spaceId={item.spaceId}
+                  count={item.commentCount}
+                  className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-grey-02 px-2.5 text-[14px] leading-[13px] font-normal text-text tabular-nums transition-colors hover:border-text"
+                />
+              ) : undefined
+            }
           />
           {control.responseError ? (
             <div role="alert" className="mt-2">

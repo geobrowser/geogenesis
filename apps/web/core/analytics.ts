@@ -284,6 +284,16 @@ export function publishedEdit(properties: AnalyticsProperties = {}) {
   });
 }
 
+export function commentCreated(commentId: string, targetEntityId: string, properties: AnalyticsProperties = {}) {
+  capture('comment_created', {
+    source: 'commenting',
+    comment_id: commentId,
+    target_type: 'entity',
+    target_id: targetEntityId,
+    ...properties,
+  });
+}
+
 export function signedUp(user: AnalyticsIdentity, properties: AnalyticsProperties = {}) {
   callOrQueue({
     method: 'signedUp',
