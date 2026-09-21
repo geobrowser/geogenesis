@@ -18,8 +18,12 @@ export function NavbarSpaceMetadata() {
 
   const { space } = useSpace(spaceId);
 
+  // `min-w-0` so the chain from the navbar down to the breadcrumb's `truncate` can actually shrink.
+  // A flex item defaults to `min-width: auto`, so without it every link in this chain refuses to go
+  // below its content and the innermost `truncate` never gets a constrained width to truncate
+  // against — the text paints out of its box and under the controls instead.
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 items-center gap-2">
       {spaceId && <NavbarBreadcrumb spaceId={spaceId} entityId={entityId ?? space?.entity?.id ?? ''} />}
     </div>
   );
