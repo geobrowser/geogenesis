@@ -140,17 +140,15 @@ export function PeerAvailabilityView({
 }
 
 /**
- * Seven columns on a desktop; one day per row on a phone.
+ * Seven columns on a desktop; one day per row at `mobile` (<=639px).
  *
- * The availability *editor* solves narrow screens with a horizontal scroller, because its blocks
- * are drag targets and a drag needs the columns side by side to make sense. Nothing here is
- * dragged — these are chips you read and eventually tap — so a vertical day list is the better
- * trade: no off-screen days to discover, no travelling headers, and the day a slot belongs to is
- * beside it rather than above a scroll position.
+ * Breakpoints here are max-width (see `--breakpoint-*: initial` in `styles/styles.css`), so the
+ * desktop layout is the unprefixed one. A vertical day list rather than the editor's horizontal
+ * scroller: nothing here is a drag target, so there are no off-screen days to discover.
  */
 function WeekGrid({ days }: { days: PeerDay[] }) {
   return (
-    <div className="sm:grid-cols-7 sm:gap-3 grid min-h-0 flex-1 gap-2 overflow-y-auto overscroll-contain">
+    <div className="grid min-h-0 flex-1 grid-cols-7 gap-3 overflow-y-auto overscroll-contain mobile:grid-cols-1 mobile:gap-2">
       {days.map((day, index) => (
         <DayColumn key={day.date} day={day} isToday={index === 0} />
       ))}
@@ -169,12 +167,12 @@ function DayColumn({ day, isToday }: { day: PeerDay; isToday: boolean }) {
       data-testid={`peer-day-${day.date}`}
       data-empty={empty || undefined}
       className={cx(
-        'sm:gap-2 flex flex-col gap-1.5 rounded-lg border border-grey-02 p-2',
+        'flex flex-col gap-2 rounded-lg border border-grey-02 p-2 mobile:gap-1.5',
         // Dimmed rather than hidden: a day with nothing in it is information about their week.
         empty && 'opacity-40'
       )}
     >
-      <div className="sm:flex-col sm:gap-0 flex items-baseline gap-1.5">
+      <div className="flex flex-col gap-0 mobile:flex-row mobile:items-baseline mobile:gap-1.5">
         <Text as="span" variant="metadataMedium">
           {isToday ? 'Today' : day.weekdayLabel}
         </Text>
@@ -188,7 +186,7 @@ function DayColumn({ day, isToday }: { day: PeerDay; isToday: boolean }) {
           Nothing free
         </Text>
       ) : (
-        <div className="sm:flex-col flex flex-wrap gap-1">
+        <div className="flex flex-col gap-1 mobile:flex-row mobile:flex-wrap">
           {shown.map(slot => (
             <SlotChip key={slot.start} slot={slot} />
           ))}

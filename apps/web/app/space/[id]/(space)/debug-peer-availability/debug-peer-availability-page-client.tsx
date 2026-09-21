@@ -78,7 +78,8 @@ export function DebugPeerAvailabilityPageClient() {
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* Breakpoints are max-width here, so the side-by-side pair is the unprefixed default. */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-1">
         <Panel title="The view" note={fixture ? 'fixture' : userId ? 'live' : 'nothing loaded'}>
           <div className="p-3">
             {shown ? (
