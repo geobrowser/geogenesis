@@ -16,6 +16,7 @@ import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { ID } from '~/core/id';
@@ -76,8 +77,13 @@ type DebateExploreFeedCardProps = {
 
 /**
  * The explore-feed rendition of a published Debate: the same two synchronized debater videos as
- * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting), framed
- * in the explore card chrome — meta row, claim title, and the standard entity actions.
+ * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting) over the
+ * same interaction bar, under the same "Join a debate", framed in the explore card chrome — meta
+ * row, claim title, and media sized to the viewport.
+ *
+ * Both renditions render `DebateFeedPlayer`, `DebateInteractionBar` and `JoinDebateButton`, so
+ * everything inside the debate itself is one component in both places rather than two that look
+ * alike (GEO-2912).
  */
 export function DebateExploreFeedCard({
   item,
@@ -153,6 +159,17 @@ export function DebateExploreFeedCard({
 
   const readyDebate = debate != null && watchable && processed ? debate : null;
 
+  /**
+   * Whether this card is carrying a debate's resources at all.
+   *
+   * The same window that governs the player (GEO-2963), because the controls needing a debate are
+   * part of what that window releases: leaving it drops the two video elements, and it drops the
+   * transcript-claims subscription behind the Claims count with them. A row deep in the feed keeps
+   * its votes and its comment count — neither asks geo-chat anything — and gets the rest back on
+   * the way past.
+   */
+  const mediaMounted = readyDebate != null && nearViewport;
+
   // The interaction state lives on the card rather than inside the bar: the bar is shared with the
   // full-screen feed and stays presentational, so what a control opens — the claims overlay, the
   // share dialog, the app's comments panel — is the card's to own and to render once. Same
@@ -160,9 +177,18 @@ export function DebateExploreFeedCard({
   const [claimsOpen, setClaimsOpen] = React.useState(false);
   const share = useDebateShareAction();
   const { commentsTarget, openComments } = useEntityCommentsPanel();
-  // Null until the debate resolves, which the hook reads as "not enabled". Shares a cache entry
-  // with the Claims panel, so opening the panel doesn't refetch what this count already loaded.
-  const { claims } = useDebateTranscriptClaims(readyDebate?.id ?? null, readyDebate?.claim.space_id ?? null);
+  // Nulls read as "not enabled", which is how the count stands down with the media above. Shares a
+  // cache entry with the Claims panel, so opening the panel doesn't refetch what this loaded.
+  const { claims } = useDebateTranscriptClaims(
+    mediaMounted ? readyDebate.id : null,
+    mediaMounted ? readyDebate.claim.space_id : null
+  );
+  // The feed's count is server-rendered and frozen: posting from the panel this pill opens writes
+  // the new row into the comments cache and nothing re-runs that count, so the number sat one
+  // behind the list it describes until a reload. This follows the cache instead, and costs no
+  // request — it subscribes without enabling a query. Reached through `EntityCommentsButton`
+  // before the shared bar replaced it, which is how it went missing.
+  const commentCount = useCommentCount(item.entityId, item.commentCount);
 
   // Runs after every hook so the early return never skips one.
   if (notWatchable) {
@@ -176,21 +202,21 @@ export function DebateExploreFeedCard({
    * they lead, never in how they look:
    *  - Comments open the app's global panel, as they do from every other explore card, instead of
    *    the feed's own side rail.
-   *  - The comment count is the one the explore feed already resolved for the card, so a page of
-   *    debates doesn't fetch a thread apiece to render a number.
-   *  - Claims and Share stand down until the debate resolves — votes and comments need no debate,
-   *    those two do — so the footer is present from the first paint and doesn't shift the card
-   *    under the reader when the geo-chat lookups land.
+   *  - The comment count starts from the one the explore feed server-rendered for the card and
+   *    then follows the comments cache, rather than reading a thread of its own per card.
+   *  - Claims and Share stand down until the debate is both resolved and in the media window —
+   *    votes and comments need no debate, those two do — so the footer is present from the first
+   *    paint and doesn't shift the card under the reader when the geo-chat lookups land.
    */
   const interactionProps = {
     entityId: item.entityId,
     spaceId: item.spaceId,
-    commentCount: item.commentCount,
+    commentCount,
     commentsPanelOpen: commentsTarget?.entityId === item.entityId,
     onComment: () => openComments(item.entityId, item.spaceId),
     claimsCount: claims.totalCount,
-    onClaims: readyDebate ? () => setClaimsOpen(true) : undefined,
-    onShare: readyDebate ? share.onOpen : undefined,
+    onClaims: mediaMounted ? () => setClaimsOpen(true) : undefined,
+    onShare: mediaMounted ? share.onOpen : undefined,
     shareOpen: share.open,
   };
 
@@ -243,9 +269,9 @@ export function DebateExploreFeedCard({
             height budget is calculated against — a third line is 23px the viewport was not
             promised. Only the debate card asks for it, because only the debate card has fixed
             aspect-ratio media whose height follows from the space the title leaves it. */}
-        <ExploreCardTitle item={item} opensSidePanel={titleOpensSidePanel} className="line-clamp-2" />
+        <ExploreCardTitle item={item} opensSidePanel={titleOpensSidePanel} clamped />
 
-        {readyDebate && nearViewport ? (
+        {mediaMounted ? (
           // The recordings resolve while the card is still approaching. Crossing back out of
           // that same window unmounts this subtree instead of retaining two paused videos forever.
           <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} />
@@ -264,6 +290,14 @@ export function DebateExploreFeedCard({
         </div>
       </div>
 
+      {/* On `readyDebate`, not on `mediaMounted` like the controls that open these. What the media
+          window governs is what a card holds while nobody is looking at it; something already open
+          is being looked at. Both of these are fixed overlays over a feed that still scrolls, so
+          gating them on the window meant scrolling past the card they came from tore the panel
+          away mid-read — and, because the open flags live on the card now rather than in a subtree
+          that unmounted with them, left them set, so scrolling back reopened it unasked. The
+          claims panel loads its own claims, so it does not go empty when the card's count stands
+          down beside it. */}
       {readyDebate ? (
         <>
           <DebateShareDialog

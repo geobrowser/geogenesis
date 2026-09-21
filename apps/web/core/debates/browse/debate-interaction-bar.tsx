@@ -62,6 +62,13 @@ export function DebateInteractionBar({
   // orientations below can't disagree about what the prop means.
   const opensGlobalCommentsPanel = commentsPanelOpen !== undefined;
 
+  // The counts are said, not just shown. `aria-label` replaces a control's visible text for a
+  // screen reader, and the visible text on these two is the number — so labelling them "Comments"
+  // and "Claims" is the one reading that drops the thing they are there to report. Counted the way
+  // `EntityCommentsButton` counts, which is the control the explore card used before this one.
+  const commentsLabel = `Comments (${commentCount})`;
+  const claimsLabel = `Claims (${claimsCount ?? 0})`;
+
   if (orientation === 'vertical') {
     return (
       <div className={cx('flex w-9 flex-col items-center gap-3', className)}>
@@ -75,12 +82,17 @@ export function DebateInteractionBar({
           label={String(commentCount)}
           onClick={onComment}
           icon={<Comment />}
-          ariaLabel="Comments"
+          ariaLabel={commentsLabel}
           expanded={commentsPanelOpen}
           commentsPanelOpener={opensGlobalCommentsPanel}
         />
         {onClaims && (
-          <CircleAction label={String(claimsCount ?? 0)} onClick={onClaims} icon={<Warning />} ariaLabel="Claims" />
+          <CircleAction
+            label={String(claimsCount ?? 0)}
+            onClick={onClaims}
+            icon={<Warning />}
+            ariaLabel={claimsLabel}
+          />
         )}
         {onShare && (
           <CircleAction
@@ -107,12 +119,12 @@ export function DebateInteractionBar({
         onClick={onComment}
         icon={<Comment />}
         label={String(commentCount)}
-        ariaLabel="Comments"
+        ariaLabel={commentsLabel}
         expanded={commentsPanelOpen}
         commentsPanelOpener={opensGlobalCommentsPanel}
       />
       {onClaims && (
-        <PillAction onClick={onClaims} icon={<Warning />} label={String(claimsCount ?? 0)} ariaLabel="Claims" />
+        <PillAction onClick={onClaims} icon={<Warning />} label={String(claimsCount ?? 0)} ariaLabel={claimsLabel} />
       )}
       {onShare && (
         <PillAction onClick={onShare} icon={<Share />} label="Share" ariaLabel="Share debate" expanded={shareOpen} />

@@ -331,16 +331,46 @@ describe('DebateExploreFeedCard', () => {
 
     intersectAll(0.7);
     expect(screen.getByTestId('player')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Claims' })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Claims/ })).toBeDefined();
 
     // A row stays in the infinite feed, but its media/query subtree does not.
     intersectAll(0);
     expect(screen.queryByTestId('player')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Claims' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Claims/ })).toBeNull();
 
     // Re-entering the look-ahead band restores a warm, inactive player before it is visible.
     intersectAll(0.1);
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
+  });
+
+  /**
+   * The open flags live on the card now, not in a subtree that unmounts with the player, so the
+   * panel they control must not be gated on the media window the way the controls are. Scrolling
+   * the feed on past the card an open panel came from used to tear it away mid-read and leave the
+   * flag set, so scrolling back reopened it unasked.
+   */
+  it('keeps an open claims panel when the card leaves the media window', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+    intersectAll(0.7);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Claims/ }));
+    expect(screen.getByTestId('claims-panel')).toBeDefined();
+
+    // The player and the control that opened it both stand down; what is open stays open.
+    intersectAll(0);
+    expect(screen.queryByTestId('player')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Claims/ })).toBeNull();
+    expect(screen.getByTestId('claims-panel')).toBeDefined();
+
+    // And its own close control is still the way out, rather than a scroll back and forth.
+    fireEvent.click(screen.getByText('Close'));
+    expect(screen.queryByTestId('claims-panel')).toBeNull();
+
+    // Which is to say it does not come back on its own.
+    intersectAll(0.7);
+    expect(screen.queryByTestId('claims-panel')).toBeNull();
   });
 
   /**
@@ -386,7 +416,7 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByRole('button', { name: 'Share debate' })).toBeDefined();
 
     expect(screen.queryByTestId('claims-panel')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Claims/ }));
     expect(screen.getByTestId('claims-panel')).toBeDefined();
 
     fireEvent.click(screen.getByText('Close'));
@@ -405,9 +435,9 @@ describe('DebateExploreFeedCard', () => {
 
     // Counts come from what the card already has: the feed's comment count and the shared
     // transcript-claims query, rather than a thread fetch per card.
-    const comments = screen.getByRole('button', { name: 'Comments' });
+    const comments = screen.getByRole('button', { name: /^Comments/ });
     expect(comments.textContent).toBe('3');
-    expect(screen.getByRole('button', { name: 'Claims' }).textContent).toBe('18');
+    expect(screen.getByRole('button', { name: /^Claims/ }).textContent).toBe('18');
 
     // Marked as an opener so pressing it while the global comments panel is open switches the
     // panel to this debate instead of reading as an outside click that dismisses it.
@@ -417,7 +447,7 @@ describe('DebateExploreFeedCard', () => {
   it('keeps votes and comments while the debate is still loading', () => {
     renderCard();
     expect(screen.getByTestId('vote-buttons')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Comments' })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Comments/ })).toBeDefined();
   });
 
   /**
@@ -473,7 +503,7 @@ describe('DebateExploreFeedCard', () => {
 
   it('hides Claims and Share while the debate is still loading', () => {
     renderCard();
-    expect(screen.queryByRole('button', { name: 'Claims' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Claims/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /share/i })).toBeNull();
   });
 

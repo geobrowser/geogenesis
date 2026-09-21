@@ -56,26 +56,31 @@ export function exploreCardHeading(item: ExploreFeedItem): {
 export function ExploreCardTitle({
   item,
   opensSidePanel,
-  className,
+  clamped = false,
 }: {
   item: ExploreFeedItem;
   opensSidePanel: boolean;
   /**
-   * Extra classes for the heading itself. The debate card clamps it to two lines, because that
-   * card sizes its fixed-aspect media from the height the title leaves over and a third line is
-   * height it did not budget for. Every other card lets the name run.
+   * Hold the heading to two lines, and hand the whole text back on hover for the times that cuts
+   * it. One flag rather than a `className`, because the clamp and the tooltip are one decision:
+   * a heading that can be cut needs a way to read the rest, and a heading that cannot must not
+   * grow a tooltip that says what is already on screen.
+   *
+   * Only the debate card asks for it. That card sizes fixed aspect-ratio media from the height its
+   * title leaves over, so a third line is height it did not budget for; every other card lets the
+   * name run.
    */
-  className?: string;
+  clamped?: boolean;
 }) {
   const { text, target } = exploreCardHeading(item);
 
   return (
     <ExploreCardEntityLink item={target} opensSidePanel={opensSidePanel}>
       <h2
-        title={text}
+        title={clamped ? text : undefined}
         className={cx(
           'mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline',
-          className
+          clamped && 'line-clamp-2'
         )}
       >
         {text}
