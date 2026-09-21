@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import type { ReactNode } from 'react';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ClaimPositionCommentControl } from './claim-position-comment';
@@ -37,11 +39,13 @@ describe('ClaimPositionCommentControl', () => {
     promptForComment = true,
     onRespond = vi.fn(),
     responseKind = 'stance',
+    positionRowEndSlot,
   }: {
     viewerPosition?: boolean | null;
     promptForComment?: boolean;
     onRespond?: (position: boolean) => void;
     responseKind?: 'stance' | 'veracity';
+    positionRowEndSlot?: ReactNode;
   } = {}) {
     render(
       <ClaimPositionCommentControl
@@ -52,6 +56,7 @@ describe('ClaimPositionCommentControl', () => {
         viewerPosition={viewerPosition}
         onRespond={onRespond}
         promptForComment={promptForComment}
+        positionRowEndSlot={positionRowEndSlot}
       />
     );
     return { onRespond };
@@ -73,6 +78,27 @@ describe('ClaimPositionCommentControl', () => {
     expect(composer).toHaveClass('flex', 'items-center');
     expect(composer).not.toHaveClass('flex-col');
     expect(composer.parentElement).toHaveClass('overflow-hidden');
+  });
+
+  it('keeps an optional row action after both positions at mobile and desktop widths', () => {
+    renderControl({
+      positionRowEndSlot: (
+        <button type="button" aria-label="Comments (2)">
+          2
+        </button>
+      ),
+    });
+
+    const buttons = screen.getAllByRole('button');
+    expect(buttons.map(button => button.getAttribute('aria-label') ?? button.textContent)).toEqual([
+      'Agree',
+      'Disagree',
+      'Comments (2)',
+    ]);
+
+    const endSlot = screen.getByRole('button', { name: 'Comments (2)' }).parentElement;
+    expect(endSlot).toHaveClass('h-7', 'shrink-0');
+    expect(endSlot?.parentElement).toHaveClass('grid', 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]');
   });
 
   it('keeps the actions inline when the hint fits in the available text width', () => {
