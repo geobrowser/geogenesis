@@ -535,9 +535,10 @@ function useGalleryDebatePlayback(rows: ExploreFeedRow[]) {
 /**
  * One card in the row.
  *
- * Claims stay `420px` on a wide screen. A debate is `260px`: at the profile's
- * 750px content width that leaves almost three in view, while scaling its
- * original player down without changing either video's aspect ratio.
+ * Every Activity card is `260px`: at the profile's 750px content width that
+ * leaves almost three in view. Debate videos scale without changing aspect
+ * ratio, while the Claim card's own container query moves its response pills
+ * into the narrow arrangement.
  *
  * Narrow enough that the next card is visibly cut off, which is what says the
  * row scrolls without a control saying so.
@@ -574,11 +575,10 @@ function GalleryCard({
         // be three times wider, so `84vw` there is not 84% of anything the reader
         // can see. The wrapper around the scroller establishes the container this
         // measures — see `ActivityGallery`.
-        'shrink-0 snap-start',
-        // Claims need enough room for the two response pills. Debate cards instead target almost
-        // three across the profile's 750px content column: 260 + 16px gaps shows 2.7 cards, a clear
-        // browsing rail rather than one oversized player and an ambiguous sliver of the next.
-        isClaim ? 'w-[min(420px,84cqw)]' : 'w-[min(260px,84cqw)]',
+        // 260 + 16px gaps shows 2.7 cards in the profile's content column: a clear browsing rail
+        // rather than one oversized card and an ambiguous sliver of the next. `84cqw` remains the
+        // phone ceiling, though 260px wins on every ordinary handset.
+        'w-[min(260px,84cqw)] shrink-0 snap-start',
         // The lobby card brings its own outline; the feed's card does not, and
         // draws a rule underneath itself to separate it from the next card
         // *down* — which in a row is a line under nothing.

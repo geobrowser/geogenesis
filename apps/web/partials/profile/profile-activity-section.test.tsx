@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 
 import { ProfileActivitySection } from './profile-activity-section';
@@ -49,6 +50,8 @@ vi.mock('~/design-system/prefetch-link', () => ({
 // `types` is read to tell a claim from a debate, so a row without it is not a
 // row this component can draw.
 const row = (entityId: string) => ({ entityId, spaceId: 'space', types: [] }) as unknown as ExploreFeedRow;
+const claimRow = (entityId: string) =>
+  ({ entityId, spaceId: 'space', types: [{ id: CLAIM_TYPE_ID }] }) as unknown as ExploreFeedRow;
 
 const kind = (over: Partial<React.ComponentProps<typeof ProfileActivitySection>['kinds'][number]> = {}) => ({
   key: 'debates',
@@ -242,6 +245,18 @@ describe('ProfileActivitySection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'd2' }));
     expect(gate).toHaveAttribute('data-allowed-id', 'd2');
+  });
+
+  it('shows almost three narrow Claim cards in the Activity rail', () => {
+    render(
+      <ProfileActivitySection
+        kinds={[kind({ key: 'claims', label: 'Claims', rows: [claimRow('c1'), claimRow('c2'), claimRow('c3')] })]}
+      />
+    );
+
+    const cards = screen.getAllByTestId('card');
+    expect(cards).toHaveLength(3);
+    expect(cards.every(card => card.parentElement?.className.includes('w-[min(260px,84cqw)]'))).toBe(true);
   });
 
   it('hands autoplay to the next visible debate when the current one scrolls out', async () => {
