@@ -46,6 +46,7 @@ const mocks = vi.hoisted(() => ({
   /** Whether each render of the card's summary read was enabled, in order. */
   summaryEnabled: [] as boolean[],
   nearViewport: true,
+  useEntityResponse: vi.fn(),
 }));
 
 vi.mock('../hooks', () => ({
@@ -122,14 +123,17 @@ vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
-  useEntityResponse: () => ({
-    submitResponse: mocks.submitResponse,
-    optimisticResponse: undefined,
-    isProcessingResponse: false,
-    isResponseIndexingDelayed: false,
-    isConnected: true,
-    personalSpaceId: mocks.viewerSpaceId,
-  }),
+  useEntityResponse: (input: Record<string, unknown>) => {
+    mocks.useEntityResponse(input);
+    return {
+      submitResponse: mocks.submitResponse,
+      optimisticResponse: undefined,
+      isProcessingResponse: false,
+      isResponseIndexingDelayed: false,
+      isConnected: true,
+      personalSpaceId: mocks.viewerSpaceId,
+    };
+  },
   useEntityResponseIndexingSnapshot: () => mocks.indexing,
   useResetEntityResponseIndexingSnapshot: () => mocks.resetIndexing,
 }));
@@ -254,6 +258,7 @@ beforeEach(() => {
   mocks.viewerSpaceId = 'personal-space';
   mocks.summaryEnabled = [];
   mocks.nearViewport = true;
+  mocks.useEntityResponse.mockReset();
 });
 
 afterEach(cleanup);
@@ -878,6 +883,17 @@ describe('faces borrowed from the match', () => {
 });
 
 describe('MatchmakingClaimCard', () => {
+  it('attributes response events to the claim text as well as its id', () => {
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+    expect(mocks.useEntityResponse).toHaveBeenCalledWith({
+      entityId: CLAIM_ENTITY_ID,
+      entityName: CLAIM_TEXT,
+      spaceId: SPACE_ID,
+      responseKind: 'stance',
+    });
+  });
+
   /**
    * Reported on a freshly created account: the hub panel's pills are dead for the minute geo-chat
    * spends indexing it, while the same claims in the main feed take positions normally.

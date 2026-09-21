@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { commentCreated } from '~/core/analytics';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 
 import type { CreateCommentParams } from '~/partials/comments/types';
@@ -26,6 +27,21 @@ export function usePublishComment(targetEntityId: string, targetSpaceId: string)
 
   const publishComment = React.useCallback(
     async ({ text, ancestorComments, onOptimistic }: PublishCommentInput) => {
+      const recordIfPublished = (result: Awaited<ReturnType<typeof createComment>>) => {
+        if (!result?.published) return false;
+
+        try {
+          commentCreated(result.id, targetEntityId, {
+            space_id: targetSpaceId,
+            parent_comment_id: ancestorComments?.[0]?.id,
+          });
+        } catch {
+          /* Analytics must never turn a successful publish into a failed comment. */
+        }
+
+        return true;
+      };
+
       const result = await createComment({
         text,
         targetSpaceId,
@@ -33,7 +49,8 @@ export function usePublishComment(targetEntityId: string, targetSpaceId: string)
         onOptimistic,
       });
 
-      if (!result || result.published) return result;
+      if (!result) return result;
+      if (recordIfPublished(result)) return result;
 
       enqueuePendingAction({
         id: `comment:${targetEntityId}:${result.id}`,
@@ -46,7 +63,7 @@ export function usePublishComment(targetEntityId: string, targetSpaceId: string)
             ancestorComments,
             commentId: result.id,
           }).then(published => {
-            if (!published?.published) throw new Error('Comment could not be published');
+            if (!recordIfPublished(published)) throw new Error('Comment could not be published');
           }),
       });
 

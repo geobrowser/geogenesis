@@ -170,6 +170,7 @@ export function ClaimPositionCommentControl({
             >
               <textarea
                 ref={textareaRef}
+                data-geo-analytics-label="Claim position explanation"
                 value={comment}
                 onChange={event => {
                   setComment(event.target.value);

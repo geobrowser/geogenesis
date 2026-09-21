@@ -421,6 +421,7 @@ export function useClaimPositionControl({
 }) {
   const target = {
     entityId: claim.claim_entity_id,
+    entityName: claim.claim,
     spaceId: claim.space_id,
     responseKind: readiness.response_kind,
   };

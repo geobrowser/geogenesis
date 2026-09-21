@@ -5,10 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePublishComment } from './use-publish-comment';
 
 const mocks = vi.hoisted(() => ({
+  commentCreated: vi.fn(),
   createComment: vi.fn(),
   editComment: vi.fn(),
   enqueuePendingAction: vi.fn(),
 }));
+
+vi.mock('~/core/analytics', () => ({ commentCreated: mocks.commentCreated }));
 
 vi.mock('./use-create-comment', () => ({
   useCreateComment: () => ({
@@ -25,6 +28,7 @@ vi.mock('~/core/state/pending-actions', () => ({
 
 describe('usePublishComment', () => {
   beforeEach(() => {
+    mocks.commentCreated.mockReset();
     mocks.createComment.mockReset();
     mocks.editComment.mockReset();
     mocks.enqueuePendingAction.mockReset();
@@ -43,6 +47,10 @@ describe('usePublishComment', () => {
       onOptimistic: undefined,
     });
     expect(mocks.enqueuePendingAction).not.toHaveBeenCalled();
+    expect(mocks.commentCreated).toHaveBeenCalledWith('comment-1', 'claim-1', {
+      space_id: 'space-1',
+      parent_comment_id: undefined,
+    });
   });
 
   it('retries the same optimistic comment after the personal space becomes ready', async () => {
@@ -52,6 +60,8 @@ describe('usePublishComment', () => {
     const { result } = renderHook(() => usePublishComment('claim-1', 'space-1'));
 
     await act(() => result.current.publishComment({ text: 'A reason' }));
+
+    expect(mocks.commentCreated).not.toHaveBeenCalled();
 
     expect(mocks.enqueuePendingAction).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -70,5 +80,29 @@ describe('usePublishComment', () => {
       ancestorComments: undefined,
       commentId: 'comment-1',
     });
+    expect(mocks.commentCreated).toHaveBeenCalledTimes(1);
+    expect(mocks.commentCreated).toHaveBeenCalledWith(
+      'comment-1',
+      'claim-1',
+      expect.objectContaining({ space_id: 'space-1' })
+    );
+  });
+
+  it('attributes replies to both the entity and their parent comment', async () => {
+    mocks.createComment.mockResolvedValue({ id: 'comment-2', published: true });
+    const { result } = renderHook(() => usePublishComment('claim-1', 'space-1'));
+
+    await act(() =>
+      result.current.publishComment({
+        text: 'A reply',
+        ancestorComments: [{ id: 'comment-1', spaceId: 'author-space' }],
+      })
+    );
+
+    expect(mocks.commentCreated).toHaveBeenCalledWith(
+      'comment-2',
+      'claim-1',
+      expect.objectContaining({ parent_comment_id: 'comment-1' })
+    );
   });
 });
