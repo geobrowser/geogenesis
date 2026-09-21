@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   summary: {
     viewerDirection: null as 'positive' | 'negative' | null,
     viewerSpaceId: null as string | null,
+    isViewerResponseLoading: false,
   },
   summaryArgs: null as unknown[] | null,
 }));
@@ -53,7 +54,7 @@ describe('claim comment position badges', () => {
     client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     mocks.getEntityResponders.mockReset();
     mocks.entity = null;
-    mocks.summary = { viewerDirection: null, viewerSpaceId: null };
+    mocks.summary = { viewerDirection: null, viewerSpaceId: null, isViewerResponseLoading: false };
     mocks.summaryArgs = null;
   });
 
@@ -76,6 +77,7 @@ describe('claim comment position badges', () => {
           responseKind="stance"
           viewerDirection={null}
           viewerSpaceId={null}
+          isViewerResponseLoading={false}
         >
           <ClaimCommentPositionBadge authorSpaceId="author-space" />
         </ClaimCommentPositionProvider>
@@ -99,6 +101,7 @@ describe('claim comment position badges', () => {
           responseKind="veracity"
           viewerDirection="positive"
           viewerSpaceId="viewer-space"
+          isViewerResponseLoading
         >
           <ClaimCommentPositionBadge authorSpaceId="viewer-space" />
         </ClaimCommentPositionProvider>
@@ -107,6 +110,56 @@ describe('claim comment position badges', () => {
 
     expect(await screen.findByText('Verify')).toBeInTheDocument();
     expect(screen.queryByText('Dispute')).not.toBeInTheDocument();
+  });
+
+  it('preserves the indexed viewer position while their own response query is unresolved', async () => {
+    mocks.getEntityResponders.mockReturnValue(
+      Effect.succeed([{ userId: 'viewer-space', direction: 'negative' as const }])
+    );
+
+    render(
+      wrapper(
+        client,
+        <ClaimCommentPositionProvider
+          entityId="claim-1"
+          spaceId="space-1"
+          responseKind="stance"
+          viewerDirection={null}
+          viewerSpaceId="viewer-space"
+          isViewerResponseLoading
+        >
+          <ClaimCommentPositionBadge authorSpaceId="viewer-space" />
+        </ClaimCommentPositionProvider>
+      )
+    );
+
+    expect(await screen.findByText('Disagree')).toBeInTheDocument();
+  });
+
+  it('removes the indexed viewer position after their response resolves as cleared', async () => {
+    mocks.getEntityResponders.mockReturnValue(
+      Effect.succeed([{ userId: 'viewer-space', direction: 'negative' as const }])
+    );
+
+    render(
+      wrapper(
+        client,
+        <ClaimCommentPositionProvider
+          entityId="claim-1"
+          spaceId="space-1"
+          responseKind="stance"
+          viewerDirection={null}
+          viewerSpaceId="viewer-space"
+          isViewerResponseLoading={false}
+        >
+          <span data-testid="claim-comment-position-empty">
+            <ClaimCommentPositionBadge authorSpaceId="viewer-space" />
+          </span>
+        </ClaimCommentPositionProvider>
+      )
+    );
+
+    expect(await screen.findByTestId('claim-comment-position-empty')).toBeEmptyDOMElement();
   });
 
   it('supplies claim position context to a generic comments surface', async () => {
@@ -127,7 +180,11 @@ describe('claim comment position badges', () => {
         },
       ],
     };
-    mocks.summary = { viewerDirection: 'positive', viewerSpaceId: 'viewer-space' };
+    mocks.summary = {
+      viewerDirection: 'positive',
+      viewerSpaceId: 'viewer-space',
+      isViewerResponseLoading: true,
+    };
     mocks.getEntityResponders.mockReturnValue(
       Effect.succeed([{ userId: 'author-space', direction: 'negative' as const }])
     );

@@ -67,6 +67,7 @@ vi.mock('./use-claim-response-state', () => ({
       isControversial: false,
       viewerDirection: 'positive',
       viewerSpaceId: 'viewer-space',
+      isViewerResponseLoading: true,
     },
     claim: null,
     positions: [],
@@ -166,6 +167,7 @@ describe('ClaimPageView comments', () => {
       responseKind: 'stance',
       viewerDirection: 'positive',
       viewerSpaceId: 'viewer-space',
+      isViewerResponseLoading: true,
     });
   });
 });

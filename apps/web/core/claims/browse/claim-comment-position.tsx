@@ -54,6 +54,7 @@ export function ClaimCommentPositionBoundary({
       responseKind={responseKind}
       viewerDirection={summary.viewerDirection}
       viewerSpaceId={summary.viewerSpaceId}
+      isViewerResponseLoading={summary.isViewerResponseLoading}
     >
       {children}
     </ClaimCommentPositionProvider>
@@ -73,6 +74,7 @@ export function ClaimCommentPositionProvider({
   responseKind,
   viewerDirection,
   viewerSpaceId,
+  isViewerResponseLoading,
   children,
 }: {
   entityId: string;
@@ -80,15 +82,23 @@ export function ClaimCommentPositionProvider({
   responseKind: DebateResponseKind;
   viewerDirection: ActiveResponseDirection | null;
   viewerSpaceId: string | null;
+  /** True until the viewer read succeeds; failures stay unresolved rather than becoming a clear. */
+  isViewerResponseLoading: boolean;
   children: React.ReactNode;
 }) {
+  // A non-null direction can be an in-flight optimistic response and remains authoritative while
+  // the indexed viewer query is unresolved. Null needs the extra state: after a successful read it
+  // means an explicit clear, but while loading (or after failure) it means "unknown" and must not
+  // remove the viewer from the independently indexed responder list.
+  const viewerResponseOverlay =
+    viewerDirection ?? (isViewerResponseLoading ? undefined : null);
   const { responders } = useEntityResponders({
     entityId,
     spaceId,
     objectType: CLAIM_RESPONSE_OBJECT_TYPE,
     responseKind,
     viewerSpaceId,
-    optimisticViewerResponse: viewerDirection,
+    optimisticViewerResponse: viewerResponseOverlay,
   });
 
   const directions = React.useMemo(() => {

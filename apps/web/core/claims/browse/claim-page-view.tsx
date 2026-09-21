@@ -156,6 +156,7 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
           responseKind={responseKind}
           viewerDirection={summary.viewerDirection}
           viewerSpaceId={summary.viewerSpaceId}
+          isViewerResponseLoading={summary.isViewerResponseLoading}
         >
           <CommentSection entityId={entityId} spaceId={spaceId} />
         </ClaimCommentPositionProvider>
