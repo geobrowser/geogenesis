@@ -347,10 +347,10 @@ export function EntityPageBody(props: EntityPageBodyProps) {
    * shows, and this is the only tab bar the panel has — the space route carries
    * them in its own header instead, which is why the profile body there does not.
    */
-  const personProfile =
-    customView === 'person' ? (
-      <PersonProfileView key={entityId} entityId={entityId} spaceId={spaceId} authoredTabs={tabsSection} />
-    ) : null;
+  const isPersonProfile = customView === 'person';
+  const personProfile = isPersonProfile ? (
+    <PersonProfileView key={entityId} entityId={entityId} spaceId={spaceId} authoredTabs={tabsSection} />
+  ) : null;
 
   // The space read is still out on an entity that might be a profile. Its header
   // is already drawn above; what follows it is the part that depends on the
@@ -367,7 +367,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
         {/* A profile brings its avatar: it is the person's face, and the panel
             opened on a cover with nobody in it. Everything else keeps the
             cover-only header — see `EditableCoverAvatarHeader`. */}
-        <EntityPageCover avatarUrl={avatarUrl} coverUrl={props.coverUrl} compact withAvatar={customView === 'person'} />
+        <EntityPageCover avatarUrl={avatarUrl} coverUrl={props.coverUrl} compact withAvatar={isPersonProfile} />
         <EntityPageContentContainer>
           <div>
             <div className="space-y-2">
@@ -380,7 +380,9 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                 />
               )}
               <div className="flex items-center gap-4 text-text">
-                {!isRelationPage && <EntityPageMetadataHeader spaceId={spaceId} />}
+                {/* Match the personal-space profile header: its Person/Space
+                    types live in About rather than beside the profile actions. */}
+                {!isRelationPage && !isPersonProfile && <EntityPageMetadataHeader spaceId={spaceId} />}
                 <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable={!isRelationPage} />
               </div>
             </div>
