@@ -265,14 +265,14 @@ function EmailCapturePopup() {
       // took the click. Deliberately no higher — the slide-up, status bar and toast layers start at
       // 10000 and a dismissible prompt has no business outranking them.
       //
-      // Below `sm` (max-width 639px here) it is the mobile frame (76376:22868) instead: a full-width
+      // At `mobile` (max-width 639px) it is the mobile frame (76376:22868) instead: a full-width
       // sheet on the bottom edge, top corners rounded, no shadow, with its own wider artwork.
       //
       // Rises 5px into place as it fades in, each time it mounts — including when it comes back after
       // an overlay closes. With reduced motion it only fades.
       className={cx(
         'fixed right-4 bottom-4 z-1101 w-[308px] animate-rise-in overflow-clip rounded-xl border border-grey-02 bg-white shadow-lg motion-reduce:animate-fade-in',
-        'sm:inset-x-0 sm:bottom-0 sm:w-auto sm:rounded-none sm:rounded-t-xl sm:shadow-none'
+        'mobile:inset-x-0 mobile:bottom-0 mobile:w-auto mobile:rounded-none mobile:rounded-t-xl mobile:shadow-none'
       )}
     >
       <DesktopArtwork />
@@ -302,7 +302,7 @@ function EmailCapturePopup() {
         // Culture card slides under the glyph — measured 2.06-2.93:1 against `grey-04` at 480px.
         // `text` (#202020) is 5.34:1 or better across that range, and hover cannot make up the
         // difference on touch, where there is no hover.
-        className="absolute top-[7px] right-[7px] z-20 p-1 text-grey-04 transition-colors duration-200 ease-in-out hover:text-text sm:top-[-5px] sm:right-[-5px] sm:p-4 sm:text-text"
+        className="absolute top-[7px] right-[7px] z-20 p-1 text-grey-04 transition-colors duration-200 ease-in-out hover:text-text mobile:top-[-5px] mobile:right-[-5px] mobile:p-4 mobile:text-text"
       >
         <CloseSmall />
       </button>
@@ -316,7 +316,7 @@ function EmailCapturePopup() {
           ending 49 above the sheet's bottom. The 20px gutters are not in the frame, which is drawn
           at 639 wide; they keep the form off the screen edge on a real phone, where it would
           otherwise run the full width once the viewport is narrower than 434px. */}
-      <div className="px-5 pb-[27px] text-center sm:pb-[max(49px,env(safe-area-inset-bottom))]">
+      <div className="px-5 pb-[27px] text-center mobile:pb-[max(49px,env(safe-area-inset-bottom))]">
         {status === 'done' ? (
           // `role="status"` because submitting removes the button that had focus, so a reader who
           // is not watching this corner would otherwise get silence where the confirmation is. The
@@ -347,7 +347,7 @@ function EmailCapturePopup() {
 
                     Laid out as the subscribe row is after the restyle: a column with the same
                     spacing and width, so the card keeps one shape whichever state it is in. */}
-                <div className="mt-[19px] flex flex-col gap-[6px] sm:mx-auto sm:mt-5 sm:max-w-[394px]">
+                <div className="mt-[19px] flex flex-col gap-[6px] mobile:mx-auto mobile:mt-5 mobile:max-w-[394px]">
                   <button
                     type="button"
                     onClick={startAccount}
@@ -377,7 +377,7 @@ function EmailCapturePopup() {
             <p className={HEADING_CLASS}>Geo network launching soon!</p>
             <p className={SUBTEXT_CLASS}>Get updates on features, points, and path to mainnet.</p>
 
-            <div className="mt-[19px] flex flex-col gap-[6px] sm:mx-auto sm:mt-5 sm:max-w-[394px]">
+            <div className="mt-[19px] flex flex-col gap-[6px] mobile:mx-auto mobile:mt-5 mobile:max-w-[394px]">
               <input
                 type="text"
                 inputMode="email"
@@ -394,7 +394,7 @@ function EmailCapturePopup() {
                 aria-invalid={status === 'invalid-email'}
                 disabled={status === 'submitting'}
                 className={cx(
-                  `${CONTROL_HEIGHT_CLASS} w-full min-w-0 rounded-full border bg-white px-3 text-left text-[17px] leading-[19px] text-text outline-hidden transition-colors placeholder:text-grey-03 disabled:text-grey-03 sm:text-center`,
+                  `${CONTROL_HEIGHT_CLASS} w-full min-w-0 rounded-full border bg-white px-3 text-left text-[17px] leading-[19px] text-text outline-hidden transition-colors placeholder:text-grey-03 disabled:text-grey-03 mobile:text-center`,
                   status === 'invalid-email' ? 'border-red-01' : 'border-grey-02 focus:border-text'
                 )}
               />
@@ -437,11 +437,11 @@ const ASSET = '/explore-email-capture';
  * the card's `overflow-clip` trims whatever the design lets bleed off the edges.
  *
  * Desktop and mobile are separate compositions in Figma, not one scaled, so each is drawn as its
- * own tree and CSS shows one. `sm` is max-width here, so `sm:hidden` is the desktop one.
+ * own tree and CSS shows one. The desktop composition is hidden on mobile.
  */
 function DesktopArtwork() {
   return (
-    <div aria-hidden className="pointer-events-none relative h-[152px] select-none sm:hidden">
+    <div aria-hidden className="pointer-events-none relative h-[152px] select-none mobile:hidden">
       <EntityCard
         box={[-33, -16, 54.698, 38.327]}
         rotate={7.92}
@@ -490,7 +490,7 @@ function DesktopArtwork() {
  */
 function MobileArtwork() {
   return (
-    <div aria-hidden className="pointer-events-none relative hidden h-[155px] overflow-clip select-none sm:block">
+    <div aria-hidden className="pointer-events-none relative hidden h-[155px] overflow-clip select-none mobile:block">
       <div className="absolute top-0 left-1/2 h-[155px] w-[637px] -translate-x-1/2">
         <EntityCard
           box={[80, -14, 54.698, 38.327]}

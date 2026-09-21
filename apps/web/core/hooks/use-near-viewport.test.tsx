@@ -1,12 +1,14 @@
 import { act, cleanup, renderHook } from '@testing-library/react';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useNearViewport } from './use-near-viewport';
 
 type ObserverRecord = {
   callback: IntersectionObserverCallback;
-  disconnect: ReturnType<typeof vi.fn>;
+  // `ReturnType<typeof vi.fn>` is `Mock<Procedure | Constructable>` under vitest 4, which is not
+  // callable without a `new`. Naming the signature keeps it callable and says what it is.
+  disconnect: Mock<() => void>;
   element: Element | null;
   options?: IntersectionObserverInit;
   observer: IntersectionObserver;

@@ -55,12 +55,15 @@ function ScheduleFormEditor({ parsed, onUpdate }: { parsed: ParsedSchedule; onUp
     <div className="flex flex-col gap-3" data-testid="schedule-form">
       {/* Start date */}
       <div className="flex flex-col gap-1">
-        <label className={labelClass}>Start date</label>
+        <label className={labelClass} htmlFor="schedule-start-date">
+          Start date
+        </label>
         <input
           type="date"
           className={fieldClass}
           value={parsed.startDate}
           onChange={e => onUpdate({ ...parsed, startDate: e.target.value })}
+          id="schedule-start-date"
           data-testid="schedule-start-date"
         />
       </div>
@@ -68,23 +71,29 @@ function ScheduleFormEditor({ parsed, onUpdate }: { parsed: ParsedSchedule; onUp
       {/* Time range */}
       <div className="flex items-end gap-2">
         <div className="flex flex-1 flex-col gap-1">
-          <label className={labelClass}>Start time (UTC)</label>
+          <label className={labelClass} htmlFor="schedule-start-time">
+            Start time (UTC)
+          </label>
           <input
             type="time"
             className={fieldClass}
             value={parsed.startTime}
             onChange={e => onUpdate({ ...parsed, startTime: e.target.value })}
+            id="schedule-start-time"
             data-testid="schedule-start-time"
           />
         </div>
         <span className="py-1 text-grey-02">–</span>
         <div className="flex flex-1 flex-col gap-1">
-          <label className={labelClass}>End time (UTC)</label>
+          <label className={labelClass} htmlFor="schedule-end-time">
+            End time (UTC)
+          </label>
           <input
             type="time"
             className={fieldClass}
             value={parsed.endTime}
             onChange={e => onUpdate({ ...parsed, endTime: e.target.value })}
+            id="schedule-end-time"
             data-testid="schedule-end-time"
           />
         </div>
@@ -92,11 +101,14 @@ function ScheduleFormEditor({ parsed, onUpdate }: { parsed: ParsedSchedule; onUp
 
       {/* Frequency */}
       <div className="flex flex-col gap-1">
-        <label className={labelClass}>Repeat</label>
+        <label className={labelClass} htmlFor="schedule-freq">
+          Repeat
+        </label>
         <select
           className={fieldClass}
           value={parsed.freq}
           onChange={e => onUpdate({ ...parsed, freq: e.target.value })}
+          id="schedule-freq"
           data-testid="schedule-freq"
         >
           {FREQ_OPTIONS.map(opt => (
@@ -110,8 +122,12 @@ function ScheduleFormEditor({ parsed, onUpdate }: { parsed: ParsedSchedule; onUp
       {/* Days of week (visible when freq is WEEKLY) */}
       {parsed.freq === 'WEEKLY' && (
         <div className="flex flex-col gap-1">
-          <label className={labelClass}>On days</label>
-          <div className="flex gap-1" data-testid="schedule-days">
+          {/* A group of day toggles rather than one control, so it is labelled as a group — a
+              `label`/`htmlFor` pair can only point at a single form element. */}
+          <span className={labelClass} id="schedule-days-label">
+            On days
+          </span>
+          <div className="flex gap-1" role="group" aria-labelledby="schedule-days-label" data-testid="schedule-days">
             {DAY_OPTIONS.map(day => (
               <SmallButton
                 key={day.key}
@@ -129,7 +145,9 @@ function ScheduleFormEditor({ parsed, onUpdate }: { parsed: ParsedSchedule; onUp
       {/* Interval (visible when a frequency is selected) */}
       {parsed.freq && (
         <div className="flex flex-col gap-1">
-          <label className={labelClass}>Every N intervals</label>
+          <label className={labelClass} htmlFor="schedule-interval">
+            Every N intervals
+          </label>
           <input
             type="number"
             min={1}
@@ -141,6 +159,7 @@ function ScheduleFormEditor({ parsed, onUpdate }: { parsed: ParsedSchedule; onUp
                 onUpdate({ ...parsed, interval: n });
               }
             }}
+            id="schedule-interval"
             data-testid="schedule-interval"
           />
         </div>

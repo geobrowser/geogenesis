@@ -17,8 +17,7 @@ import { EntityId, ProposalStatus } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
 import { SubstreamVote } from '../io/substream-schema';
-import { Entity, Profile, Relation, Row } from '../types';
-import { Entities } from './entity';
+import { Profile, Relation, Row } from '../types';
 
 export const NavUtils = {
   toRoot: () => '/root',
@@ -213,7 +212,7 @@ export class GeoPoint {
         latitude: GeoPoint.clampLatForMap(latitude),
         longitude: GeoPoint.clampLngForMap(longitude),
       };
-    } catch (e) {
+    } catch {
       console.error(`Unable to parse coordinates: "${value}"`);
       return null;
     }
@@ -476,7 +475,7 @@ export class GeoDate {
       const testDate = new Date();
       formatInTimeZone(testDate, 'UTC', format);
       return format;
-    } catch (e) {
+    } catch {
       console.warn(`Invalid date format: "${format}". Using default format instead.`);
       return this.defaultFormat;
     }

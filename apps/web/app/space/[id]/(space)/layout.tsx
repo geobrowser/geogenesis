@@ -294,7 +294,6 @@ const getSpaceFrontPage = async (spaceId: string) => {
     const syntheticPage = await cachedFetchEntityPage(spaceId, spaceId);
     const syntheticEntity = syntheticPage?.entity ?? null;
 
-    // eslint-disable-next-line no-console
     console.log('[local-dev synthetic-home] spaceId=%s synthetic=%o', spaceId, {
       gotPage: !!syntheticPage,
       entityId: syntheticEntity?.id,

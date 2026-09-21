@@ -814,7 +814,7 @@ export function ClaimsTab({
       const kept = current.filter(spaceShowsClaims);
       return kept.length === current.length ? current : kept;
     });
-  }, [spaceShowsClaims, spacesPending]);
+  }, [setSpaceIds, spaceShowsClaims, spacesPending]);
 
   // Changing space with a topic held would otherwise leave the viewer filtered by a chip that is
   // no longer in the menu to unpick.
@@ -826,7 +826,7 @@ export function ClaimsTab({
   // draining the whole selection in a single tick, rather than one pick per server response.
   React.useEffect(() => {
     setTopicIds(current => keepSelectableTopics(current, facetTopics, facetsComplete && !topicsSettling));
-  }, [facetTopics, facetsComplete, topicsSettling]);
+  }, [facetTopics, facetsComplete, setTopicIds, topicsSettling]);
 
   // Featured is not counted: it chooses which list is on screen rather than narrowing one, so an
   // empty Featured tab should say nothing is featured — not that filters are hiding things — and

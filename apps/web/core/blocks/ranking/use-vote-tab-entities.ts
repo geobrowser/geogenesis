@@ -135,6 +135,10 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
     if (entitiesError) return;
     if (!isFetched || isPlaceholderData) return;
     commit(pageEntries);
+    // `pageEntriesSignature` stands in for `pageEntries` deliberately — same reason as
+    // `use-ranking-accumulated-rows`: the array identity changes on every render of the query, the
+    // signature only when its contents do.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     enabled,
     entitiesError,

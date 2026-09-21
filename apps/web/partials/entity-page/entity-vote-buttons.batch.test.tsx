@@ -150,10 +150,7 @@ describe('EntityVoteButtons claims-page batching', () => {
       positive: 8,
       negative: 1,
     });
-    queryClient.setQueryData(
-      userEntityResponseQueryKey('profile-1', 'debate-1', 'space-1', 0, 'curation'),
-      'positive'
-    );
+    queryClient.setQueryData(userEntityResponseQueryKey('profile-1', 'debate-1', 'space-1', 0, 'curation'), 'positive');
 
     const view = render(
       <ClaimResponseBatchBoundary ready>

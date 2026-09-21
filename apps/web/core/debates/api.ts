@@ -1,5 +1,6 @@
 'use client';
 
+import type { AvailabilityPayload } from '~/core/availability/blocks';
 import { capSearchQuery } from '~/core/io/search-query';
 
 export type ParticipantSlot = 1 | 2;
@@ -777,6 +778,42 @@ export async function getDebateActivity(
     getPrivyIdentityToken,
     accountKey,
     signal,
+  });
+}
+
+/** What `/me/debate-schedule` answers. `is_set` is false for somebody who never saved one. */
+export type DebateScheduleResponse = {
+  is_set: boolean;
+  schedule: AvailabilityPayload;
+};
+
+/**
+ * The viewer's saved debate schedule (GEO-2932).
+ *
+ * Distinct from `/me/debate-availability` below, which is the "available to debate right now"
+ * toggle. This is the calendar: when someone is generally free. The paths differ by one word and
+ * mean unrelated things, which is why they are documented together.
+ */
+export async function getDebateSchedule(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string | null) {
+  return geoChatRequest<DebateScheduleResponse>('/me/debate-schedule', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Replaces the whole schedule; the modal holds all of it and saves all of it. */
+export async function replaceDebateSchedule(
+  schedule: AvailabilityPayload,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateScheduleResponse>('/me/debate-schedule', {
+    method: 'PUT',
+    body: schedule,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
   });
 }
 

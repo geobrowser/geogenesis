@@ -25,11 +25,13 @@ vi.mock('./claim-explore-feed-card', () => ({
   ClaimExploreFeedCard: ({
     item,
     titleOpensSidePanel,
+    variant,
   }: {
     item: { title: string };
     titleOpensSidePanel?: boolean;
+    variant?: string;
   }) => (
-    <div data-testid="claim-card" data-opens-side-panel={String(titleOpensSidePanel)}>
+    <div data-testid="claim-card" data-opens-side-panel={String(titleOpensSidePanel)} data-variant={variant}>
       {item.title}
     </div>
   ),
@@ -161,6 +163,16 @@ describe('ExploreFeedCard', () => {
     render(<ExploreFeedCard item={claimItem} />);
 
     expect(screen.getByTestId('claim-card').textContent).toBe(claimItem.title);
+  });
+
+  it('forwards the mobile debates-panel variant only to Claim cards', () => {
+    const claimItem: ExploreFeedItem = {
+      ...item,
+      types: [{ id: '96f859ef-a1ca-4b22-9372-c86ad58b694b', name: 'Claim' }],
+    };
+    render(<ExploreFeedCard item={claimItem} claimCardVariant="debate-panel-mobile" />);
+
+    expect(screen.getByTestId('claim-card')).toHaveAttribute('data-variant', 'debate-panel-mobile');
   });
 
   it('leaves every other type on the generic card', () => {

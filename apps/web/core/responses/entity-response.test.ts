@@ -25,6 +25,9 @@ import {
 const SPACE_ID = '1234567890abcdef1234567890abcdef';
 const OTHER_SPACE_ID = 'abcdef1234567890abcdef1234567890';
 
+// `resolveEntityResponseKind` reads only `isDeleted`, `type.id`, `toEntity.id`, `spaceId`,
+// `property.id` and `value`, so the fixtures below carry only those. That is less than a full
+// `Value`/`Relation`, which is why the assertions go through `unknown`.
 type ResolveEntity = NonNullable<Parameters<typeof resolveEntityResponseKind>[0]>;
 
 function plainEntity(): ResolveEntity {
@@ -51,7 +54,7 @@ function claimEntity(factualValue?: string): ResolveEntity {
               isDeleted: false,
             },
           ],
-  } as ResolveEntity;
+  } as unknown as ResolveEntity;
 }
 
 describe('entity response semantics', () => {
@@ -108,7 +111,7 @@ describe('entity response semantics', () => {
           isDeleted: false,
         },
       ],
-    } as ResolveEntity;
+    } as unknown as ResolveEntity;
 
     expect(resolveEntityResponseKind(entity, SPACE_ID)).toBe('stance');
   });
