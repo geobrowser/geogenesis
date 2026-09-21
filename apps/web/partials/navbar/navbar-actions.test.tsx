@@ -424,6 +424,27 @@ describe('NavbarActions profile menu', () => {
       expect(feedback).not.toHaveClass('z-10');
     });
 
+    it('resets denied edit feedback when the mobile profile menu closes', async () => {
+      mocks.spaceId = 'space-1';
+      mocks.isMobileNavbar = true;
+      const user = userEvent.setup();
+      render(<NavbarActions />);
+
+      const profileMenuTrigger = screen.getByRole('button', { name: 'Open profile menu' });
+      await user.click(profileMenuTrigger);
+      const toggle = screen.getByRole('switch', { name: 'Edit mode off' });
+      await user.click(toggle);
+      await user.click(toggle);
+      expect(screen.getByText('You don’t have edit access in this space')).toBeInTheDocument();
+
+      await user.click(profileMenuTrigger);
+      expect(screen.queryByText('You don’t have edit access in this space')).not.toBeInTheDocument();
+
+      await user.click(profileMenuTrigger);
+      await user.click(screen.getByRole('switch', { name: 'Edit mode off' }));
+      expect(screen.queryByText('You don’t have edit access in this space')).not.toBeInTheDocument();
+    });
+
     it('orders the mobile menu actions and creates an entity in the current space', async () => {
       mocks.spaceId = 'space-1';
       mocks.isMobileNavbar = true;

@@ -132,7 +132,7 @@ export function NavbarActions() {
 
     return (
       <div key="navbar-content" className="flex items-center gap-4">
-        <ModeToggle isMobile={isMobileNavbar} spaceId={spaceId}>
+        <ModeToggle isMobile={isMobileNavbar} isProfileMenuOpen={open} spaceId={spaceId}>
           {({ navbar, menu }) => (
             <>
               {navbar}
@@ -362,10 +362,12 @@ type ModeToggleSlots = {
 
 function ModeToggle({
   isMobile,
+  isProfileMenuOpen,
   spaceId,
   children,
 }: {
   isMobile: boolean;
+  isProfileMenuOpen: boolean;
   spaceId: string | null | undefined;
   children: (slots: ModeToggleSlots) => React.ReactNode;
 }) {
@@ -388,6 +390,16 @@ function ModeToggle({
   const [showEditAccessTooltip, setShowEditAccessTooltip] = React.useState(false);
   const toggleRef = React.useRef<HTMLButtonElement>(null);
   const { open: editModeTipOpen, dismiss: dismissEditModeTip, isActive: editModeTipActive } = useEditModeToggleTip();
+
+  React.useEffect(() => {
+    if (!isMobile || isProfileMenuOpen) return;
+
+    // Attempts and feedback describe one interaction with the open profile menu.
+    // Carrying either across closes makes the next session start halfway through
+    // the two-attempt flow, or immediately restores a tooltip the user dismissed.
+    setAttemptCount(0);
+    setShowEditAccessTooltip(false);
+  }, [isMobile, isProfileMenuOpen]);
 
   const onToggle = React.useCallback(() => {
     if (!spaceId) {
