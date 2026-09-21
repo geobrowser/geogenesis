@@ -28,6 +28,11 @@ interface Props {
    * opened menu and dismisses it — pass `e => e.preventDefault()` to opt out.
    */
   onCloseAutoFocus?: (event: Event) => void;
+  /**
+   * The trigger element, for callers that open a dialog from inside the menu. The item they
+   * clicked unmounts with the menu, so the trigger is the only node left to return focus to.
+   */
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
 /** Outer shell: opaque + clips corners so overscroll never reveals “holes” behind the panel. */
@@ -62,8 +67,10 @@ export function Menu({
   viewportClassName,
   modal = false,
   onCloseAutoFocus,
+  triggerRef: externalTriggerRef,
 }: Props) {
-  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const internalTriggerRef = React.useRef<HTMLButtonElement>(null);
+  const triggerRef = externalTriggerRef ?? internalTriggerRef;
   const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align: adaptiveAlign, side: adaptiveSide } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: open,
