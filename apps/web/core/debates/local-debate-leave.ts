@@ -9,6 +9,14 @@ export function markLocalRematchLeave(sessionId: string) {
   leftRematchIds.add(sessionId);
 }
 
+export function unmarkLocalDebateLeave(debateId: string) {
+  leftDebateIds.delete(debateId);
+}
+
+export function unmarkLocalRematchLeave(sessionId: string) {
+  leftRematchIds.delete(sessionId);
+}
+
 export function didLocallyLeaveDebate(debateId: string) {
   return leftDebateIds.has(debateId);
 }

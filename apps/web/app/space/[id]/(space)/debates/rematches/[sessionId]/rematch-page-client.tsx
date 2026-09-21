@@ -1924,8 +1924,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       // offline 90 seconds, which is what waiting for someone looks like.
       if (!inDebateRoom) {
         // Stay on an `ended` the viewer didn't cause so the opponent-left dialog can show; return
-        // only on the viewer's own Leave or a lapsed (`expired`) lifetime.
-        if (localLeaveStarted || session.status === 'expired') returnFromSession(session);
+        // only on the viewer's own Leave (same-mount or after a remount) or a lapsed (`expired`) lifetime.
+        if (localLeaveStarted || didLocallyLeaveRematch(session.id) || session.status === 'expired')
+          returnFromSession(session);
       }
       // geo-chat replaces a finished room session on the next join, which someone who never left
       // would not otherwise send. Once per session, so a refusal cannot loop.
@@ -1973,7 +1974,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     exiting: () => exitStartedRef.current || leaveRequestedRef.current,
   });
 
-  // `didLocallyLeaveRematch` covers remounts after this tab's own Leave (gateway `ended` is shared).
+  // `didLocallyLeaveRematch` covers remounts after this tab's own Leave.
   const showOpponentLeftDialog = Boolean(
     session &&
     session.status === 'ended' &&
