@@ -21,7 +21,7 @@ import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Fullscreen } from '~/design-system/icons/full-screen';
+import { FullscreenLink } from '~/design-system/fullscreen-link';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ExploreCardTitle } from './explore-card-title';
@@ -271,18 +271,14 @@ export function DebateExploreFeedCard({
            * debate on top. So this is the entity link the title used to be, moved to a control
            * that says "bigger" rather than competing with the claim for the heading.
            *
-           * An anchor, so cmd-click still opens it in a new tab (GEO-2701), and `Fullscreen` with
-           * the side panel's own "open this full page" chrome — that control answers the same
-           * question about an entity, and this is not the place to invent a second answer. */}
-          <Link
+           * `FullscreenLink` so it reads as the same offer a data block's header makes, which is
+           * where this control's styling comes from. */}
+          <FullscreenLink
             href={NavUtils.toEntity(item.spaceId, item.entityId)}
             entityId={item.entityId}
             spaceId={item.spaceId}
-            aria-label="Watch this debate full screen"
-            className="grid size-7 shrink-0 place-items-center rounded-full border border-grey-02 bg-white text-text shadow-light transition-colors hover:border-text"
-          >
-            <Fullscreen />
-          </Link>
+            ariaLabel="Watch this debate full screen"
+          />
         </div>
 
         {/* Two lines, as the full-screen header clamps the same claim to, and what this card's
