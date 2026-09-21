@@ -26,8 +26,8 @@ type DebateFeedPlayerProps = {
   debate: Debate;
   active: boolean;
   /**
-   * Put both speakers beside each other instead of stacking them. The profile Activity gallery
-   * uses this denser treatment; the full-screen and explore feeds keep the stacked player.
+   * Crop each stacked speaker tile to a shallower frame. The profile Activity gallery uses this
+   * denser treatment; the full-screen and explore feeds keep the original aspect ratio.
    */
   compact?: boolean;
   /**
@@ -321,7 +321,7 @@ export function DebateFeedPlayer({ debate, active, compact = false, preload = fa
       data-debate-autoplay-blocked={autoplayBlocked ? 'true' : 'false'}
       // No gap and one radius on the outside: the two tiles are a single surface in the Figma
       // frame, which is what lets the subtitle straddle the seam rather than sit inside one tile.
-      className={cx('group relative overflow-hidden rounded-xl', compact ? 'grid grid-cols-2' : 'flex flex-col')}
+      className="group relative flex flex-col overflow-hidden rounded-xl"
     >
       <DebaterVideo
         participant={slot1Participant}
@@ -333,6 +333,7 @@ export function DebateFeedPlayer({ debate, active, compact = false, preload = fa
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
         onToggle={toggleFromVideo}
+        compact={compact}
         claims={claimsFor(1)}
         claimsOpen={claimsOpenFor(1)}
         onClaimsHoverChange={onTileHover(1)}
@@ -385,6 +386,7 @@ export function DebateFeedPlayer({ debate, active, compact = false, preload = fa
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
         onToggle={toggleFromVideo}
+        compact={compact}
         claims={claimsFor(2)}
         claimsOpen={claimsOpenFor(2)}
         onClaimsHoverChange={onTileHover(2)}
@@ -512,6 +514,7 @@ function DebaterVideo({
   isResuming,
   onPlaybackTick,
   onToggle,
+  compact = false,
   claims,
   claimsOpen = false,
   onClaimsHoverChange,
@@ -529,6 +532,8 @@ function DebaterVideo({
   isResuming: boolean;
   onPlaybackTick: () => void;
   onToggle: () => void;
+  /** Preserve the stacked layout while using a shallower, cropped speaker frame. */
+  compact?: boolean;
   /** This debater's claim corner, if they have anything to show right now. */
   claims?: React.ReactNode;
   /** Whether the corner is showing the scrollable backlog rather than the live card. */
@@ -592,7 +597,7 @@ function DebaterVideo({
       onPointerEnter={event => onClaimsHoverChange?.(event, true)}
       onPointerMove={event => onClaimsHoverChange?.(event, true)}
       onPointerLeave={event => onClaimsHoverChange?.(event, false)}
-      className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
+      className={cx('relative w-full overflow-hidden bg-grey-01', compact ? 'aspect-[12/5]' : 'aspect-480/289')}
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button type="button" aria-label="Pause or play" onClick={onToggle} className="absolute inset-0 z-0">

@@ -151,6 +151,23 @@ beforeEach(() => {
 
 afterEach(() => vi.restoreAllMocks());
 
+describe('compact profile layout', () => {
+  it('keeps the speakers stacked while making each video shallower', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container } = render(<DebateFeedPlayer debate={debate} active compact votes={votes} />);
+
+    const player = container.querySelector('[data-debate-ready]');
+    expect(player?.className).toContain('flex-col');
+    expect(player?.className).not.toContain('grid-cols-2');
+
+    const tiles = Array.from(container.querySelectorAll('[aria-label="Pause or play"]')).map(
+      control => control.parentElement
+    );
+    expect(tiles).toHaveLength(2);
+    expect(tiles.every(tile => tile?.className.includes('aspect-[12/5]'))).toBe(true);
+  });
+});
+
 /**
  * Per-turn audio is the `muted` flag: only the debater whose turn it is is audible, and the
  * viewer's own mute wins over both. Unchanged from master — an attempt to move this gate onto

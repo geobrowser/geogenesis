@@ -39,7 +39,7 @@ type ExploreFeedCardProps = {
   claimCardVariant?: ClaimCardVariant;
   /** See `ClaimExploreFeedCard`. Only a claim can carry one. */
   responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
-  /** Profile Activity's denser, side-by-side debate-player treatment. Ignored by other row types. */
+  /** Profile Activity's shorter stacked debate-player treatment. Ignored by other row types. */
   compactDebatePlayer?: boolean;
   /** Transfer playback ownership when this debate's player is clicked. Ignored by other row types. */
   onDebatePlaybackRequest?: (debateId: string) => void;

@@ -289,7 +289,7 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
   });
 
-  it('uses the compact player and requests playback before a player interaction', () => {
+  it('uses the shorter player and requests playback before a player interaction', () => {
     mocks.debateQuery = { data: watchableDebate(), isError: false };
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
     const onPlaybackRequest = vi.fn();

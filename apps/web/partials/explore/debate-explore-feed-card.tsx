@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
@@ -76,7 +78,7 @@ type DebateExploreFeedCardProps = {
   hideJoinButton?: boolean;
   /** Whether the claim title opens the side panel rather than navigating (same semantics as ExploreFeedCard). */
   titleOpensSidePanel?: boolean;
-  /** Use the shorter, side-by-side player intended for the profile Activity gallery. */
+  /** Use the shorter stacked player intended for the profile Activity gallery. */
   compactPlayer?: boolean;
   /** Transfer playback ownership when this debate's player is clicked. */
   onPlaybackRequest?: (debateId: string) => void;
@@ -376,9 +378,9 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
 
 function DebateVideoSkeleton({ compact }: { compact: boolean }) {
   return (
-    <div className={compact ? 'grid grid-cols-2' : 'flex flex-col gap-2'} aria-hidden="true">
-      <div className="aspect-480/289 w-full animate-pulse rounded-lg bg-grey-01" />
-      <div className="aspect-480/289 w-full animate-pulse rounded-lg bg-grey-01" />
+    <div className="flex flex-col gap-2" aria-hidden="true">
+      <div className={cx('w-full animate-pulse rounded-lg bg-grey-01', compact ? 'aspect-[12/5]' : 'aspect-480/289')} />
+      <div className={cx('w-full animate-pulse rounded-lg bg-grey-01', compact ? 'aspect-[12/5]' : 'aspect-480/289')} />
     </div>
   );
 }
