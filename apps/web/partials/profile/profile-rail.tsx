@@ -4,6 +4,7 @@ import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -12,6 +13,7 @@ import { useEditProfile } from '~/core/hooks/use-edit-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useProfileFacts } from '~/core/hooks/use-profile-facts';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
+import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { ID } from '~/core/id';
 import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-facts';
@@ -22,8 +24,13 @@ import { heldPositionsCount, usePersonResponses } from '~/core/profile/use-perso
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils } from '~/core/utils/utils';
 
-import { SmallButton, SquareButton } from '~/design-system/button';
-import { LinkableChip } from '~/design-system/chip';
+import {
+  Button,
+  PILL_BUTTON_SECONDARY_CLASS_NAME,
+  SmallButton,
+  SquareButton,
+  buttonClassNames,
+} from '~/design-system/button';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
@@ -55,7 +62,7 @@ export type ProfileRailProps = ProfileRailFacts & {
  */
 export function ProfileRail(props: ProfileRailProps) {
   return (
-    <StickySideRail>
+    <StickySideRail flushTop divider>
       <ProfileRailSections {...props} />
     </StickySideRail>
   );
@@ -86,7 +93,10 @@ export function ProfileRailSections({
   const positionsCount = isLoading && responses.total === null ? null : heldPositionsCount(responses, facts.positions);
 
   return (
-    <div className="flex flex-col gap-4">
+    // A rule between sections, 24px either side — the same divider the Explore
+    // and space rails draw (`SideRailSections`). Spacing lives on the sections
+    // rather than the rules, because any of them can be absent.
+    <div className="flex flex-col divide-y divide-divider [&>*]:py-6 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
       {facts.spaces.length > 0 && <SpacesSection spaces={facts.spaces} />}
       {personEntityId ? (
         <LinksSection links={links} spaceId={spaceId} personEntityId={personEntityId} />
@@ -111,15 +121,8 @@ export function ProfileRailSections({
 }
 
 /**
- * One card in the rail.
- *
- * Bordered cards rather than rule-separated sections: this rail holds three
- * kinds of thing that have nothing to do with each other — a list of spaces, a
- * set of handles, and a table of facts — and a rule between them says they are
- * one document with three parts.
- *
- * `overflow-hidden` is what lets the system-data strip sit flush inside the
- * bottom corners of the About card.
+ * One section in the rail: a titled header over its body, with no border and
+ * no inset — the title and content sit flush with the rail's edges.
  */
 function RailCard({
   title,
@@ -135,12 +138,12 @@ function RailCard({
   footer?: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-grey-02 bg-white">
-      <header className="flex items-center justify-between gap-2.5 border-b border-divider px-4 py-3">
-        <h3 className="text-metadataMedium text-text">{title}</h3>
+    <section className="bg-white">
+      <header className="flex items-center justify-between gap-2.5">
+        <h3 className="text-mediumTitle text-text">{title}</h3>
         {action}
       </header>
-      <div className="px-4 py-3">{children}</div>
+      <div className="pt-3">{children}</div>
       {footer}
     </section>
   );
@@ -150,38 +153,57 @@ function SpacesSection({ spaces }: { spaces: ReturnType<typeof useProfileFacts>[
   const [showAll, setShowAll] = React.useState(false);
   const shown = showAll ? spaces : spaces.slice(0, 6);
 
+  // Only the rows on screen, so the collapsed list asks for six images rather than all of them.
+  const { spacesById } = useSpacesByIds(shown.map(space => space.id));
+  const activeSpaceId = useSpaceId();
+
   return (
-    <RailCard
-      title="Spaces"
-      action={
-        spaces.length > 6 ? (
-          <button
-            type="button"
-            onClick={() => setShowAll(value => !value)}
-            className="text-smallButton text-ctaPrimary hover:underline"
-          >
-            {showAll ? 'Show fewer' : `See all ${spaces.length}`}
-          </button>
-        ) : null
-      }
-    >
-      <ul className="flex flex-col gap-1">
-        {shown.map(space => (
-          <li key={space.id}>
-            <Link
-              href={NavUtils.toSpace(space.id)}
-              className="flex items-center gap-2 rounded py-1 transition-colors hover:bg-grey-01"
-            >
-              {/* Nine of the reference account's 33 have no name. A blank row in
-                  a list of 33 reads as a loading failure. */}
-              <span className="min-w-0 flex-1 truncate text-metadata text-text">{space.name ?? 'Untitled space'}</span>
-              {space.isEditor && (
-                <span className="shrink-0 rounded-full border border-grey-02 px-2 text-tag text-grey-04">Editor</span>
-              )}
-            </Link>
-          </li>
-        ))}
+    <RailCard title="Spaces">
+      {/* Rows styled as the browse sidebar draws its spaces (`SpaceRowLink`), so
+          a space looks and responds the same wherever it is listed. */}
+      <ul className="space-y-0.5">
+        {shown.map(space => {
+          // Nine of the reference account's 33 have no name. A blank row in a
+          // list of 33 reads as a loading failure.
+          const name = space.name ?? 'Untitled space';
+          const image = spacesById.get(space.id)?.entity.image;
+
+          return (
+            <li key={space.id}>
+              <Link
+                href={NavUtils.toSpace(space.id)}
+                className={cx(
+                  'flex items-center gap-3 rounded-lg p-2.5 text-browseMenu font-normal not-italic',
+                  activeSpaceId === space.id ? 'bg-divider text-text' : 'text-text hover:bg-grey-01'
+                )}
+              >
+                {image && image !== PLACEHOLDER_SPACE_IMAGE ? (
+                  <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-[4px] bg-grey-01">
+                    <FallbackImage value={image} sizes="32px" className="object-cover" />
+                  </span>
+                ) : (
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-grey-01 text-[8px] font-medium text-grey-04 ring-1 ring-grey-02/40 ring-inset">
+                    {name.trim().slice(0, 1).toUpperCase() || '?'}
+                  </span>
+                )}
+                <span className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden">
+                  <p className="-my-0.5 truncate leading-5">{name}</p>
+                </span>
+                {space.isEditor && <span className="shrink-0 leading-5 text-grey-03">Editor</span>}
+              </Link>
+            </li>
+          );
+        })}
       </ul>
+      {spaces.length > 6 && (
+        <Button
+          variant="secondary"
+          onClick={() => setShowAll(value => !value)}
+          className={`mt-2 ${PILL_BUTTON_SECONDARY_CLASS_NAME}`}
+        >
+          {showAll ? 'Show fewer' : `See all ${spaces.length}`}
+        </Button>
+      )}
     </RailCard>
   );
 }
@@ -413,15 +435,17 @@ function AboutSection({
 
         {types.length > 0 && (
           <Row label="Types">
-            {/* `LinkableChip` is the relation pill every other surface draws —
-                bordered, text-coloured, border-text on hover. The bespoke blue
-                pill this replaced read as a link, which is the one thing a
-                relation chip is not. */}
+            {/* The secondary pill, as the Spaces "See all" button draws it —
+                white, grey outline, dark on hover. */}
             <span className="flex flex-wrap justify-end gap-1">
               {types.map(type => (
-                <LinkableChip key={type.id} href={NavUtils.toEntity(spaceId, type.id)}>
+                <Link
+                  key={type.id}
+                  href={NavUtils.toEntity(spaceId, type.id)}
+                  className={buttonClassNames(PILL_BUTTON_SECONDARY_CLASS_NAME)({ variant: 'secondary' })}
+                >
                   {type.name ?? 'Untitled'}
-                </LinkableChip>
+                </Link>
               ))}
             </span>
           </Row>
@@ -468,7 +492,7 @@ function AboutSection({
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-divider py-2 last:border-b-0">
+    <div className="flex items-baseline justify-between gap-3 py-2">
       <dt className="shrink-0 text-metadata text-grey-04">{label}</dt>
       <dd className="min-w-0 text-right">{children}</dd>
     </div>

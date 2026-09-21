@@ -48,12 +48,12 @@ const kind = (over: Partial<React.ComponentProps<typeof ProfileActivitySection>[
 });
 
 /**
- * What the Activity card says when half of it did not arrive (GEO-2859).
+ * What Activity says when half of it did not arrive (GEO-2859).
  *
  * The two kinds are separate requests. Filtering on `rows.length > 0` alone made
  * a failed one indistinguishable from an empty one — so a failed Claims query
- * left the card showing Debates and no toggle at all, implying this person holds
- * no positions, while the rail beside it counted 208.
+ * left only Debates on the page, implying this person holds no positions, while
+ * the rail beside it counted 208.
  */
 describe('ProfileActivitySection', () => {
   afterEach(cleanup);
@@ -71,7 +71,8 @@ describe('ProfileActivitySection', () => {
   it('leaves out a kind that is empty but fine', () => {
     render(<ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [] })]} />);
 
-    expect(screen.queryByRole('button', { name: /Claims/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Debates' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Claims' })).not.toBeInTheDocument();
   });
 
   it('keeps a kind that failed, so half the record cannot vanish quietly', () => {
@@ -79,7 +80,8 @@ describe('ProfileActivitySection', () => {
       <ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [], isError: true })]} />
     );
 
-    expect(screen.getByRole('button', { name: /Claims/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Claims' })).toBeInTheDocument();
+    expect(screen.getByText('Couldn’t load claims.')).toBeInTheDocument();
   });
 
   it('says so when the selected kind failed', () => {
@@ -95,11 +97,12 @@ describe('ProfileActivitySection', () => {
     expect(screen.getAllByTestId('card')).toHaveLength(1);
   });
 
-  it('draws a dash rather than a zero when the count could not be read', () => {
-    render(
-      <ProfileActivitySection kinds={[kind({ isCountUnavailable: true }), kind({ key: 'claims', label: 'Claims' })]} />
-    );
+  it('gives each kind a section of its own, titled without a count', () => {
+    render(<ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', total: 192 })]} />);
 
-    expect(screen.getByRole('button', { name: /Debates/ })).toHaveTextContent('—');
+    expect(screen.getByRole('heading', { name: 'Debates' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Claims' })).toBeInTheDocument();
+    expect(screen.queryByText('192')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('card')).toHaveLength(2);
   });
 });

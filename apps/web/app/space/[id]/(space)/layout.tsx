@@ -23,7 +23,7 @@ import { Spacer } from '~/design-system/spacer';
 import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-header';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
-import { ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH } from '~/partials/entity-page/entity-page-layout';
+import { ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH, PROFILE_COVER_SIZE } from '~/partials/entity-page/entity-page-layout';
 import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-profile-bio-starter-merge';
 import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
 import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
@@ -131,6 +131,7 @@ export default async function Layout(props0: LayoutProps) {
             avatarUrl={props.avatarUrl}
             coverUrl={props.coverUrl}
             contentMaxWidth={isProfile ? ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH : undefined}
+            coverSize={isProfile ? PROFILE_COVER_SIZE : undefined}
           />
           <SpaceHeaderContentGate
             serverHasSidebar={hasSidebar}
@@ -163,7 +164,7 @@ export default async function Layout(props0: LayoutProps) {
                 }
               />
               {isProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={props.id} />}
-              <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
+              <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} hideWhenReading={isProfile} />
               {/*
                * A profile renders none of this row. Types move to the rail's
                * About section, the vote pair into the action row beside Edit
@@ -189,7 +190,9 @@ export default async function Layout(props0: LayoutProps) {
               />
             </div>
 
-            <div className="mt-6 flex flex-col gap-6">
+            {/* 40px above the tab bar on a profile, 24px elsewhere. The description's
+                own 20px bottom margin collapses into this one, so this is the gap. */}
+            <div className={isProfile ? 'mt-10 flex flex-col gap-6' : 'mt-6 flex flex-col gap-6'}>
               <AddDataPanel spaceId={spaceId} />
 
               {typeIds.includes(SystemIds.PERSON_TYPE) ? (

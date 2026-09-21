@@ -1,6 +1,8 @@
 import type * as React from 'react';
 
 export const ENTITY_PAGE_COVER_MAX_WIDTH = 1192;
+/** A personal space profile's cover: 1200 × 300, a 4:1 banner. */
+export const PROFILE_COVER_SIZE = { maxWidth: 1200, height: 300 };
 export const ENTITY_PAGE_CONTENT_MAX_WIDTH = 900;
 export const ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH = 1142;
 

@@ -18,6 +18,8 @@ type EntityPageCoverProps = {
   withAvatar?: boolean;
   /** Width of the text column below, so the avatar lines up with the name. */
   contentMaxWidth?: number;
+  /** How wide the cover can grow and how tall it is — see `EditableCoverAvatarHeader`. */
+  coverSize?: { maxWidth: number; height: number };
 };
 
 /**
@@ -73,6 +75,7 @@ export const EntityPageCover = ({
   fitImage = false,
   withAvatar = false,
   contentMaxWidth,
+  coverSize,
 }: EntityPageCoverProps) => {
   const { id, spaceId } = useEntityStoreInstance();
 
@@ -86,6 +89,7 @@ export const EntityPageCover = ({
       fitImage={fitImage}
       withAvatar={withAvatar}
       contentMaxWidth={contentMaxWidth}
+      coverSize={coverSize}
     />
   );
 };

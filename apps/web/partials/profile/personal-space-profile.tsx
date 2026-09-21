@@ -15,6 +15,7 @@ import { heldPositionsCount, usePersonPositions, usePersonResponses } from '~/co
 
 import { EditRecordDialog } from './edit-record-dialog';
 import { type ActivityKind, ProfileActivitySection } from './profile-activity-section';
+import { ProfileBioSection } from './profile-bio-section';
 import { ProfileHeadline } from './profile-headline';
 import { ProfileRecordSection, ProfileSkillsSection } from './profile-record-sections';
 
@@ -65,6 +66,8 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
        * stale. It is one card tall either way, so leading with it costs the
        * history nothing.
        */}
+      <ProfileBioSection spaceId={spaceId} personEntityId={personEntityId} />
+
       <ProfileActivity spaceId={spaceId} personEntityId={personEntityId} />
 
       {/* A failed history read is not an empty account. Keep its own sections
@@ -115,7 +118,7 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
   const debates = usePersonDebates(spaceId, true);
 
   /*
-   * Ranked the way the Debates tab opens, so "See all debates" leads to the same
+   * Ranked the way the Debates tab opens, so "View all" on Debates leads to the same
    * six in the same order — one constant, not two literals that happen to match.
    *
    * Claims need no equivalent: `usePersonPositions` defaults to the sort its own
@@ -144,6 +147,22 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
   const personName = spaceLabel(labelsById, spaceId)?.name ?? null;
 
   const kinds: ActivityKind[] = [
+    // Claims first: what this person holds, then where they argued it.
+    {
+      key: 'claims',
+      label: 'Claims',
+      rows: positions.rows,
+      responseByClaimId: positions.responseByClaimId,
+      personName,
+      total: positionsCount ?? 0,
+      isLoading: positions.isLoading || isLoadingFacts || positionsCount === null,
+      // Both sources have to fail before the count is gone: the vote table can
+      // answer it on its own, and does.
+      isCountUnavailable: isFactsError && responses.isError,
+      isError: positions.isError,
+      href: `/space/${spaceId}/positions`,
+      seeAllLabel: 'View all',
+    },
     {
       key: 'debates',
       label: 'Debates',
@@ -161,22 +180,7 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       isCountUnavailable: isFactsError,
       isError: debates.isError,
       href: `/space/${spaceId}/debates`,
-      seeAllLabel: 'See all debates',
-    },
-    {
-      key: 'claims',
-      label: 'Claims',
-      rows: positions.rows,
-      responseByClaimId: positions.responseByClaimId,
-      personName,
-      total: positionsCount ?? 0,
-      isLoading: positions.isLoading || isLoadingFacts || positionsCount === null,
-      // Both sources have to fail before the count is gone: the vote table can
-      // answer it on its own, and does.
-      isCountUnavailable: isFactsError && responses.isError,
-      isError: positions.isError,
-      href: `/space/${spaceId}/positions`,
-      seeAllLabel: 'See all claims',
+      seeAllLabel: 'View all',
     },
   ];
 

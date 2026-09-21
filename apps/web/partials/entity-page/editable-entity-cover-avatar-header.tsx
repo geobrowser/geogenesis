@@ -34,18 +34,17 @@ const COVER_PLACEHOLDER_HEIGHT = 120;
 const AVATAR_OVERFLOW = 40;
 const TRANSITION = { duration: 0.15, ease: 'easeInOut' as const };
 
-// maxWidth is always ENTITY_PAGE_COVER_MAX_WIDTH so the wrapper never animates horizontally.
-// When there's no cover the extra width is invisible (height is 0 or 40).
-function computeLayout(hasCover: boolean, hasCoverImage: boolean, hasAvatar: boolean) {
+type CoverSize = { maxWidth: number; height: number };
+
+const DEFAULT_COVER_SIZE: CoverSize = { maxWidth: ENTITY_PAGE_COVER_MAX_WIDTH, height: COVER_IMAGE_HEIGHT };
+
+// maxWidth is fixed for a page (ENTITY_PAGE_COVER_MAX_WIDTH unless the caller passes its own) so
+// the wrapper never animates horizontally. When there's no cover the extra width is invisible
+// (height is 0 or 40).
+function computeLayout(hasCover: boolean, hasCoverImage: boolean, hasAvatar: boolean, coverSize: CoverSize) {
   return {
-    height: hasCover
-      ? hasCoverImage
-        ? COVER_IMAGE_HEIGHT
-        : COVER_PLACEHOLDER_HEIGHT
-      : hasAvatar
-        ? AVATAR_OVERFLOW
-        : 0,
-    maxWidth: ENTITY_PAGE_COVER_MAX_WIDTH,
+    height: hasCover ? (hasCoverImage ? coverSize.height : COVER_PLACEHOLDER_HEIGHT) : hasAvatar ? AVATAR_OVERFLOW : 0,
+    maxWidth: coverSize.maxWidth,
     marginBottom: hasCover ? (hasAvatar ? 80 : 32) : hasAvatar ? 64 : 0,
     marginTop: hasCover ? -24 : 0,
   };
@@ -54,6 +53,7 @@ function computeLayout(hasCover: boolean, hasCoverImage: boolean, hasAvatar: boo
 export const EditableCoverAvatarHeader = ({
   avatarUrl,
   contentMaxWidth = ENTITY_PAGE_CONTENT_MAX_WIDTH,
+  coverSize = DEFAULT_COVER_SIZE,
   coverUrl,
   fitImage = false,
   withAvatar = false,
@@ -65,6 +65,8 @@ export const EditableCoverAvatarHeader = ({
    * — a profile — passes the wider with-sidebar width instead.
    */
   contentMaxWidth?: number;
+  /** How wide the cover can grow and how tall its image is. A profile passes its own. */
+  coverSize?: CoverSize;
   coverUrl: string | null;
   fitImage?: boolean;
   /** Whether the fitted header shows the avatar too — see the `fitImage` branch. */
@@ -138,8 +140,8 @@ export const EditableCoverAvatarHeader = ({
     );
   }
 
-  const layout = computeLayout(hasCover, hasCoverImage, hasAvatar);
-  const coverHeight = hasCoverImage ? COVER_IMAGE_HEIGHT : COVER_PLACEHOLDER_HEIGHT;
+  const layout = computeLayout(hasCover, hasCoverImage, hasAvatar, coverSize);
+  const coverHeight = hasCoverImage ? coverSize.height : COVER_PLACEHOLDER_HEIGHT;
   const mobileCoverHeightClass = hasCoverImage ? MOBILE_COVER_IMAGE_HEIGHT_CLASS : '';
   const mobileCoverAvatarMarginClass = hasCoverImage && hasAvatar ? MOBILE_COVER_AVATAR_MARGIN_CLASS : '';
 

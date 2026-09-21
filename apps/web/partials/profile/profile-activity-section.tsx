@@ -11,7 +11,7 @@ import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-sp
 import type { ClaimResponse } from '~/core/profile/use-person-positions';
 import { normId } from '~/core/utils/norm-id';
 
-import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
+import { PILL_BUTTON_CLASS_NAME, buttonClassNames } from '~/design-system/button';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
@@ -64,10 +64,8 @@ export type ActivityKind = {
 /**
  * What this person has been doing lately, on Overview (GEO-2859).
  *
- * One card with a toggle rather than a section per kind. Debates and claims are
- * the same question asked twice — what have they argued about — and two stacked
- * galleries said they were different kinds of thing while burying the history
- * above them.
+ * One section per kind, in the order given, each titled the way Experience
+ * and Education are, with its own gallery and its own way to the full tab.
  *
  * The rows are the feed's own `ExploreFeedCard`, narrowed and laid sideways,
  * rather than a bespoke tile. That is what makes a debate here actually
@@ -78,80 +76,48 @@ export type ActivityKind = {
  * video inside an `<img>` and showed a grey box.
  */
 export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
-  // A failed kind is available: it has something to say, even if the something
-  // is that it could not be read.
+  // A failed kind is shown: it has something to say, even if the something is
+  // that it could not be read. An empty one that loaded fine is left out.
   const available = React.useMemo(() => kinds.filter(kind => kind.rows.length > 0 || kind.isError), [kinds]);
-  const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
 
-  // Whichever the reader picked, or the first with anything in it. Held as a key
-  // rather than an index so a kind arriving late — the two load separately —
-  // cannot shift the selection out from under them.
-  const selected = available.find(kind => kind.key === selectedKey) ?? available[0];
-
-  // Nothing at all rather than an empty card. A heading over a blank space reads
+  // Nothing at all rather than empty sections. A heading over a blank space reads
   // as a page that failed to load, and most accounts have never been in a debate.
-  if (kinds.some(kind => kind.isLoading) || available.length === 0 || !selected) return null;
+  if (kinds.some(kind => kind.isLoading) || available.length === 0) return null;
 
   return (
-    <section className="flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white">
-      {/* The toggles sit to the right of the heading, and wrap below it rather
-          than squeezing into it on a narrow screen. */}
-      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-divider px-4 py-3">
-        <h3 className="text-metadataMedium text-text">Activity</h3>
+    <div className="flex flex-col gap-6">
+      {available.map(kind => (
+        <ActivityKindSection key={kind.key} kind={kind} />
+      ))}
+    </div>
+  );
+}
 
-        {/* Only when there is a choice to make. One pill on its own is a label
-            dressed up as a control. */}
-        {available.length > 1 && (
-          <div className="flex flex-wrap items-center gap-2">
-            {available.map(kind => {
-              const isSelected = kind.key === selected.key;
-
-              return (
-                <button
-                  key={kind.key}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => setSelectedKey(kind.key)}
-                  className={cx(
-                    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-smallButton transition-colors',
-                    isSelected
-                      ? 'border-text bg-text text-white'
-                      : 'border-grey-02 text-grey-04 hover:border-text hover:text-text'
-                  )}
-                >
-                  {kind.label}
-                  <span className={cx('tabular-nums', isSelected ? 'text-white/70' : 'text-grey-03')}>
-                    {kind.isCountUnavailable ? '—' : kind.total.toLocaleString()}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+function ActivityKindSection({ kind }: { kind: ActivityKind }) {
+  return (
+    <section className="flex flex-col bg-white">
+      <header className="flex items-center justify-between gap-2 pb-2">
+        <h3 className="text-mediumTitle text-text">{kind.label}</h3>
+        <Link
+          href={kind.href}
+          // Both sections' buttons read "View all"; the label says which.
+          aria-label={`${kind.seeAllLabel} ${kind.label.toLowerCase()}`}
+          className={buttonClassNames(PILL_BUTTON_CLASS_NAME)({ variant: 'primary' })}
+        >
+          {kind.seeAllLabel}
+        </Link>
       </header>
 
-      {selected.isError && selected.rows.length === 0 ? (
+      {kind.isError && kind.rows.length === 0 ? (
         /*
-         * No retry here on purpose. This card is a summary; the tab its count
-         * links to holds the authoritative list and offers the retry, so a
-         * second control here would be a second thing to keep in step.
+         * No retry here on purpose. This section is a summary; the tab it links
+         * to holds the authoritative list and offers the retry, so a second
+         * control here would be a second thing to keep in step.
          */
-        <p className="px-4 py-6 text-metadata text-grey-04">Couldn’t load {selected.label.toLowerCase()}.</p>
+        <p className="py-6 text-metadata text-grey-04">Couldn’t load {kind.label.toLowerCase()}.</p>
       ) : (
-        <ActivityGallery
-          rows={selected.rows}
-          responseByClaimId={selected.responseByClaimId}
-          personName={selected.personName}
-        />
+        <ActivityGallery rows={kind.rows} responseByClaimId={kind.responseByClaimId} personName={kind.personName} />
       )}
-
-      <Link
-        href={selected.href}
-        className="flex items-center justify-center gap-2 border-t border-divider py-3 text-metadataMedium text-grey-04 transition-colors hover:text-text"
-      >
-        {selected.seeAllLabel}
-        <RightArrowLongSmall />
-      </Link>
     </section>
   );
 }
@@ -183,11 +149,8 @@ function ActivityGallery({
       {/*
        * `snap-x` so a flick lands on a card rather than between two.
        *
-       * The gap at either end is a spacer element rather than padding on the
-       * scroller: a scroll container's trailing padding is dropped by every
-       * browser that matters, so `p-4` gave 16px on the left and nothing on the
-       * right. Spacers are honoured on both sides, and `scroll-px` keeps a
-       * snapped card off the edge it lands against.
+       * No inset at either end: the first and last cards sit flush with the
+       * column's edges, in line with the heading above them.
        */}
       {/* `@container` on a wrapper rather than on the scroller itself: the
           container types imply `contain: inline-size`, and containing the
@@ -197,9 +160,8 @@ function ActivityGallery({
       <div className="@container">
         <div
           ref={scrollerRef}
-          className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 items-stretch gap-4 overflow-x-auto py-2"
+          className="no-scrollbar flex snap-x snap-mandatory items-stretch gap-6 overflow-x-auto py-2"
         >
-          <span aria-hidden className="w-0 shrink-0 pl-4" />
           {shown.map(row => (
             <GalleryCard
               key={`${row.entityId}-${row.spaceId}`}
@@ -209,7 +171,6 @@ function ActivityGallery({
               personName={personName}
             />
           ))}
-          <span aria-hidden className="w-0 shrink-0 pr-4" />
         </div>
       </div>
     </DebatePlaybackGate>
@@ -322,11 +283,15 @@ function GalleryCard({
         // be three times wider, so `80vw` there is not 80% of anything the reader
         // can see. The scroller establishes the container this measures — see
         // `ActivityGallery`.
-        'w-[min(420px,80cqw)] shrink-0 snap-start',
-        // The lobby card brings its own outline; the feed's card does not, and
-        // draws a rule underneath itself to separate it from the next card
-        // *down* — which in a row is a line under nothing.
-        !isClaim && 'rounded-lg border border-grey-02 bg-white px-3 [&>*]:border-b-0'
+        'shrink-0 snap-start',
+        // Two cards side by side, both whole: half the row less half the 24px
+        // gap. Below 640px half would be too narrow to read or watch, so a card
+        // takes most of the row and the next one peeks in.
+        'w-[80cqw] @[640px]:w-[calc((100cqw-1.5rem)/2)]',
+        // No outline around a debate. The feed's card also draws a rule under
+        // itself to separate it from the next card *down* — which in a row is a
+        // line under nothing — so that goes too.
+        !isClaim && 'bg-white [&>*]:border-b-0 [&>*]:py-0'
       )}
     >
       {isClaim ? (
