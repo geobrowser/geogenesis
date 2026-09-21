@@ -832,6 +832,65 @@ export async function replaceDebateSchedule(
   });
 }
 
+/** One window of availability, as absolute UTC instants — the only form two zones can compare. */
+export type ScheduleOverlapSlot = {
+  start: string;
+  end: string;
+  /**
+   * Whether the viewer is also free then.
+   *
+   * Not sent today: `slots` is already the intersection, so every entry is mutual. Read here
+   * because the surface that draws these (GEO-2938) shows *their* whole week and styles the
+   * non-mutual slots differently, which needs either this flag or an unfiltered mode. Optional
+   * until that is agreed, so landing it later is additive rather than a breaking parse.
+   */
+  viewer_is_free?: boolean;
+};
+
+/**
+ * What `/matchmaking/schedule-overlaps` answers.
+ *
+ * `both_have_schedules` is the conjunction — it does not say which side is missing one — and
+ * `slots` comes back empty whenever it is false. `core/availability/peer-schedule` is where that
+ * is turned into something a view can act on.
+ */
+export type ScheduleOverlapResponse = {
+  /** The other person's user id, echoed back. */
+  with: string;
+  both_have_schedules: boolean;
+  /** IANA zones, as each side saved them. */
+  viewer_timezone: string;
+  with_timezone: string;
+  slots: ScheduleOverlapSlot[];
+  /** The server capped the list; there is more than this. */
+  truncated: boolean;
+};
+
+/**
+ * When the viewer and one other person are both free (GEO-2938).
+ *
+ * `days` counts forward from the server's clock, so the far edge of the range is its call rather
+ * than ours — the adapter buckets by date and drops anything landing outside the drawn week.
+ */
+export async function getScheduleOverlaps(
+  withUserId: string,
+  { days, limit }: { days?: number; limit?: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ with: withUserId });
+  if (days !== undefined) params.set('days', String(days));
+  if (limit !== undefined) params.set('limit', String(limit));
+
+  return geoChatRequest<ScheduleOverlapResponse>(`/matchmaking/schedule-overlaps?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
 export async function updateDebateAvailability(
   availableToDebate: boolean,
   getPrivyIdentityToken: GetPrivyIdentityToken,

@@ -16,6 +16,7 @@ import * as React from 'react';
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 import type { AvailabilityBlock } from '~/core/availability/blocks';
 import { fromPayload, localTimezone, toPayload } from '~/core/availability/blocks';
+import { PEER_SCHEDULE_DAYS, type PeerSchedule, toPeerSchedule } from '~/core/availability/peer-schedule';
 
 import {
   type Debate,
@@ -55,6 +56,7 @@ import {
   getLiveKitToken,
   getRecordingUrl,
   getRematchLiveKitToken,
+  getScheduleOverlaps,
   handleDebateSharePrompt,
   isAccountWarmingUp,
   leaveDebateRematch,
@@ -123,6 +125,9 @@ export const debateQueryKeys = {
   transcript: (debateId: string, format: TranscriptFormat) => ['debates', 'transcript', debateId, format] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
   schedule: (accountKey: string | null) => ['debates', 'account', accountKey, 'schedule'] as const,
+  /** Keyed on the viewer as well as the peer: the answer is the pair, not the person. */
+  peerSchedule: (accountKey: string | null, peerUserId: string, days: number) =>
+    ['debates', 'account', accountKey, 'peer-schedule', peerUserId, days] as const,
   rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,
@@ -618,6 +623,57 @@ export function useSaveDebateSchedule() {
     // normalised on the way in is then what the calendar draws.
     onSuccess: saved => queryClient.setQueryData(scheduleKey, saved),
   });
+}
+
+/**
+ * Another person's availability, ready to draw (GEO-2938).
+ *
+ * The only data access behind that view. It returns a {@link PeerSchedule} rather than the wire
+ * shape, so the surface never learns that `slots` is currently an intersection — see
+ * `core/availability/peer-schedule` for what changes when the endpoint can express the rest.
+ *
+ * Reads the viewer's own schedule alongside it, because `both_have_schedules` is the conjunction
+ * and is uninterpretable without knowing which side of it the viewer is.
+ */
+export function usePeerSchedule(peerUserId: string | null) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const viewerSchedule = useDebateSchedule();
+  // The endpoint is viewer-scoped and authenticated, so there is nothing to ask signed out.
+  const enabled = authenticated && peerUserId !== null;
+
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.peerSchedule(accountKey, peerUserId ?? '', PEER_SCHEDULE_DAYS),
+    queryFn: ({ signal }) =>
+      getScheduleOverlaps(
+        peerUserId as string,
+        { days: PEER_SCHEDULE_DAYS },
+        getPrivyIdentityToken,
+        accountKey,
+        signal
+      ),
+    enabled,
+  });
+
+  // Held back until the viewer's own schedule has answered. `isSet` is false while that query is
+  // in flight, and a false there is indistinguishable from a real one — so publishing early would
+  // put up the "you haven't set your availability" hint, and the empty state that goes with it,
+  // in front of someone who has.
+  const viewerSettled = !enabled || !viewerSchedule.isPending;
+
+  const schedule: PeerSchedule | undefined =
+    query.data && viewerSettled ? toPeerSchedule(query.data, { viewerHasSchedule: viewerSchedule.isSet }) : undefined;
+
+  return {
+    ...query,
+    schedule,
+    /**
+     * Whether this is a question that can be asked at all. A disabled query sits at `pending`
+     * forever, which a caller would otherwise draw as a spinner that never resolves.
+     */
+    enabled,
+    isPending: enabled && (query.isPending || !viewerSettled),
+  };
 }
 
 export function useUpdateDebateAvailability() {
