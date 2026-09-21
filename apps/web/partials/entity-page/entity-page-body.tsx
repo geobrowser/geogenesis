@@ -34,6 +34,7 @@ import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
 import { PersonProfileView } from '~/partials/profile/person-profile-view';
+import { PersonalSpaceHeadline } from '~/partials/profile/personal-space-profile';
 
 type SharedProps = {
   entityId: string;
@@ -390,6 +391,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
               ) : (
                 heading
               )}
+              {isPersonProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={entityId} />}
               {!isRelationPage && (
                 <EntityPageInlineDescription
                   entityId={entityId}
@@ -404,7 +406,9 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                 </div>
               )}
             </div>
-            <Spacer height={40} />
+            {/* The mobile profile has one 24px step from its description into
+                the tabs. Generic entity content keeps the roomier 40px gap. */}
+            <Spacer height={isPersonProfile ? 24 : 40} />
             {personProfile ??
               (isPersonPending ? null : (
                 <>

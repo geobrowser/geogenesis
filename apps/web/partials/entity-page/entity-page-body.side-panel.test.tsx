@@ -53,6 +53,9 @@ vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
 vi.mock('~/partials/profile/person-profile-view', () => ({
   PersonProfileView: () => <div data-testid="person-profile" />,
 }));
+vi.mock('~/partials/profile/personal-space-profile', () => ({
+  PersonalSpaceHeadline: () => <div data-testid="profile-headline" />,
+}));
 
 // Everything below the header row. Each reaches for the sync engine, the editor or geo-chat, and
 // none of it is what this file asserts.
@@ -144,6 +147,10 @@ describe('EntityPageBody relation side panel', () => {
     expect(screen.getByTestId('person-profile')).toBeInTheDocument();
     expect(screen.queryByTestId('metadata')).toBeNull();
     expect(screen.getByTestId('title').parentElement?.parentElement).toContainElement(screen.getByTestId('actions'));
+    expect(screen.getByTestId('profile-headline').compareDocumentPosition(screen.getByTestId('description')) & 4).toBe(
+      4
+    );
+    expect(screen.getByTestId('person-profile').previousElementSibling).toHaveStyle({ height: '24px' });
     expect(mocks.actions).toMatchObject({ isVoteable: true, votesFirst: true });
   });
 
