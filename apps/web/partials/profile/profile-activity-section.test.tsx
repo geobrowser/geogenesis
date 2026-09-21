@@ -29,7 +29,7 @@ vi.mock('~/core/debates/debate-playback-gate', () => ({
 }));
 
 vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, href }: React.ComponentPropsWithoutRef<'a'>) => <a href={href}>{children}</a>,
+  PrefetchLink: ({ children, ...props }: React.ComponentPropsWithoutRef<'a'>) => <a {...props}>{children}</a>,
 }));
 
 // `types` is read to tell a claim from a debate, so a row without it is not a
@@ -43,7 +43,7 @@ const kind = (over: Partial<React.ComponentProps<typeof ProfileActivitySection>[
   total: 10,
   isLoading: false,
   href: '/space/s/debates',
-  seeAllLabel: 'See all debates',
+  seeAllLabel: 'View all',
   ...over,
 });
 
@@ -56,7 +56,10 @@ const kind = (over: Partial<React.ComponentProps<typeof ProfileActivitySection>[
  * the rail beside it counted 208.
  */
 describe('ProfileActivitySection', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
 
   it('renders nothing when both kinds are genuinely empty', () => {
     // Most accounts have never been in a debate; a heading over blank space
@@ -104,5 +107,23 @@ describe('ProfileActivitySection', () => {
     expect(screen.getByRole('heading', { name: 'Claims' })).toBeInTheDocument();
     expect(screen.queryByText('192')).not.toBeInTheDocument();
     expect(screen.getAllByTestId('card')).toHaveLength(2);
+  });
+
+  it('sends View all to the tab bar rather than the top of the page', () => {
+    render(
+      <ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', href: '/space/s/positions' })]} />
+    );
+
+    // Without the fragment the reader lands at the top of the profile — a screenful of cover,
+    // avatar, name, roles and bio — rather than on the list they clicked for. Both sections read
+    // "View all"; the accessible name says which.
+    expect(screen.getByRole('link', { name: 'View all debates' })).toHaveAttribute(
+      'href',
+      '/space/s/debates#space-tabs'
+    );
+    expect(screen.getByRole('link', { name: 'View all claims' })).toHaveAttribute(
+      'href',
+      '/space/s/positions#space-tabs'
+    );
   });
 });

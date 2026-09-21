@@ -15,6 +15,7 @@ import { PILL_BUTTON_CLASS_NAME, buttonClassNames } from '~/design-system/button
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
+import { withSpaceTabsAnchor } from '~/partials/space-page/space-tabs-anchor';
 
 import { GalleryClaimCard } from './gallery-claim-card';
 
@@ -98,8 +99,13 @@ function ActivityKindSection({ kind }: { kind: ActivityKind }) {
     <section className="flex flex-col bg-white">
       <header className="flex items-center justify-between gap-2 pb-2">
         <h3 className="text-mediumTitle text-text">{kind.label}</h3>
+        {/*
+         * Lands on the tab bar, not the page top: the fragment puts the tab row
+         * under the navbar, so the list opens at the top of the screen with the
+         * underlined tab above it saying where the reader has been sent.
+         */}
         <Link
-          href={kind.href}
+          href={withSpaceTabsAnchor(kind.href)}
           // Both sections' buttons read "View all"; the label says which.
           aria-label={`${kind.seeAllLabel} ${kind.label.toLowerCase()}`}
           className={buttonClassNames(PILL_BUTTON_CLASS_NAME)({ variant: 'primary' })}
@@ -152,15 +158,21 @@ function ActivityGallery({
        * No inset at either end: the first and last cards sit flush with the
        * column's edges, in line with the heading above them.
        */}
-      {/* `@container` on a wrapper rather than on the scroller itself: the
-          container types imply `contain: inline-size`, and containing the
-          element whose overflow is the whole point is a bad trade for one class.
-          The wrapper is the width the reader actually sees, which is what the
-          cards want to measure — see `GalleryCard`. */}
-      <div className="@container">
+      {/*
+       * `@container` on a wrapper rather than on the scroller itself: the container types imply
+       * `contain: inline-size`, and containing the element whose overflow is the whole point is a
+       * bad trade for one class. The wrapper is the width the reader actually sees, which is what
+       * the cards want to measure — see `GalleryCard`.
+       *
+       * The bleed takes it out through the app shell's own gutter on a phone, so the card behind
+       * is cut off by the screen edge rather than by the column. `2ch` is the shell's figure
+       * (`2xl:px-[2ch]` in `app/entry.tsx`) and the two have to stay equal, or the gallery hangs off
+       * the side of the document and every profile scrolls sideways.
+       */}
+      <div className="@container md:-mr-[2ch]">
         <div
           ref={scrollerRef}
-          className="no-scrollbar flex snap-x snap-mandatory items-stretch gap-6 overflow-x-auto py-2"
+          className="no-scrollbar flex snap-x snap-mandatory items-start gap-6 overflow-x-auto py-2"
         >
           {shown.map(row => (
             <GalleryCard
@@ -181,9 +193,9 @@ function ActivityGallery({
  * Which card is nearest the middle of the row.
  *
  * Measured rather than derived from the scroll offset over a card width: the
- * cards are `min(420px, 80vw)` and the spacers at either end are not cards at
- * all, so arithmetic on a nominal width would drift. Read on scroll through a
- * rAF, which is what keeps a flick from measuring on every frame it fires.
+ * cards' width follows the row's (half of it, or 84% on a phone), so arithmetic
+ * on a nominal width would drift. Read on scroll through a rAF, which is what
+ * keeps a flick from measuring on every frame it fires.
  */
 function useCentredCard(rows: ExploreFeedRow[]) {
   const scrollerRef = React.useRef<HTMLDivElement | null>(null);
@@ -280,14 +292,15 @@ function GalleryCard({
       className={cx(
         // `cqw`, not `vw`. The viewport is the wrong ruler for a card in a side
         // panel: the panel is a column of its own width inside a window that may
-        // be three times wider, so `80vw` there is not 80% of anything the reader
-        // can see. The scroller establishes the container this measures — see
-        // `ActivityGallery`.
+        // be three times wider, so `84vw` there is not 84% of anything the reader
+        // can see. The wrapper around the scroller establishes the container this
+        // measures — see `ActivityGallery`.
         'shrink-0 snap-start',
         // Two cards side by side, both whole: half the row less half the 24px
         // gap. Below 640px half would be too narrow to read or watch, so a card
-        // takes most of the row and the next one peeks in.
-        'w-[80cqw] @[640px]:w-[calc((100cqw-1.5rem)/2)]',
+        // takes 84% of the row — enough for the 272px `claim-pills-wide` needs to
+        // put Agree and Disagree side by side — and the next one peeks in.
+        'w-[84cqw] @[640px]:w-[calc((100cqw-1.5rem)/2)]',
         // No outline around a debate. The feed's card also draws a rule under
         // itself to separate it from the next card *down* — which in a row is a
         // line under nothing — so that goes too.
