@@ -68,6 +68,41 @@ describe('ProfileActivitySection', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('reserves the Activity section with a skeleton while both kinds are loading', () => {
+    render(
+      <ProfileActivitySection
+        kinds={[
+          kind({ rows: [], isLoading: true }),
+          kind({ key: 'claims', label: 'Claims', rows: [], isLoading: true }),
+        ]}
+      />
+    );
+
+    expect(screen.getByRole('region', { name: 'Loading activity' })).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('heading', { name: 'Activity' })).toBeInTheDocument();
+  });
+
+  it('shows a completed kind without waiting for the other kind', () => {
+    render(
+      <ProfileActivitySection
+        kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [], isLoading: true })]}
+      />
+    );
+
+    expect(screen.getByTestId('card')).toHaveTextContent('d1');
+    expect(screen.queryByRole('region', { name: 'Loading activity' })).not.toBeInTheDocument();
+  });
+
+  it('renders only the shared gallery card limit', () => {
+    render(
+      <ProfileActivitySection
+        kinds={[kind({ rows: Array.from({ length: 8 }, (_, index) => row(`d${index + 1}`)) })]}
+      />
+    );
+
+    expect(screen.getAllByTestId('card')).toHaveLength(6);
+  });
+
   it('leaves out a kind that is empty but fine', () => {
     render(<ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [] })]} />);
 

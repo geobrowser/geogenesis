@@ -12,9 +12,10 @@ import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TAG_ID, DEBATE_TYPE_ID, SOURCES_PROPE
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 import type { EntityFilter } from '~/core/gql/graphql';
 import { graphql } from '~/core/io/graphql-client';
+import { ACTIVITY_GALLERY_CARD_LIMIT } from '~/core/profile/activity-gallery';
 import { normId } from '~/core/utils/norm-id';
 
-import { CLAIM_RECORD_PAGE_SIZE, useClaimExploreRows } from './use-claim-explore-rows';
+import { useClaimExploreRows } from './use-claim-explore-rows';
 
 /**
  * Exact record totals and one globally Best-ranked page for the Overview.
@@ -205,7 +206,7 @@ export function useClaimRecordSummary({
           decoder: decodeClaimRecordSummary,
           variables: {
             ...filters,
-            first: CLAIM_RECORD_PAGE_SIZE,
+            first: ACTIVITY_GALLERY_CARD_LIMIT,
           },
           signal,
         })

@@ -8,18 +8,18 @@ import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import { type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { ACTIVITY_GALLERY_CARD_LIMIT } from '~/core/profile/activity-gallery';
 import type { ClaimResponse } from '~/core/profile/use-person-positions';
 import { normId } from '~/core/utils/norm-id';
 
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Skeleton } from '~/design-system/skeleton';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
 import { GalleryClaimCard } from './gallery-claim-card';
 
-/** How many cards a gallery holds before the reader is sent to the tab. */
-const SHOWN = 6;
 const SEE_ALL_CLASS =
   'flex items-center justify-center gap-2 border-t border-divider py-3 text-metadataMedium text-grey-04 transition-colors hover:text-text';
 
@@ -92,9 +92,15 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   // cannot shift the selection out from under them.
   const selected = available.find(kind => kind.key === selectedKey) ?? available[0];
 
-  // Nothing at all rather than an empty card. A heading over a blank space reads
-  // as a page that failed to load, and most accounts have never been in a debate.
-  if (kinds.some(kind => kind.isLoading) || available.length === 0 || !selected) return null;
+  const isLoading = kinds.some(kind => kind.isLoading);
+
+  // Reserve the section while its first usable record is on the way. Once either kind resolves,
+  // draw it immediately rather than holding the whole card behind the slower request.
+  if (available.length === 0 && isLoading) return <ProfileActivitySkeleton />;
+
+  // Nothing at all once both kinds have settled empty. Most accounts have never been in a debate,
+  // and a permanent heading over blank space would imply that content failed to render.
+  if (available.length === 0 || !selected) return null;
 
   return (
     <section className="flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white">
@@ -154,6 +160,27 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   );
 }
 
+function ProfileActivitySkeleton() {
+  return (
+    <section
+      aria-label="Loading activity"
+      aria-busy="true"
+      className="flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white"
+    >
+      <header className="flex items-center justify-between gap-4 border-b border-divider px-4 py-3">
+        <h3 className="text-metadataMedium text-text">Activity</h3>
+        <Skeleton className="h-7 w-24 rounded-full" />
+      </header>
+      <div className="p-4">
+        <Skeleton className="h-44 w-full rounded-lg" />
+      </div>
+      <div className="flex justify-center border-t border-divider py-4">
+        <Skeleton className="h-4 w-28 rounded" />
+      </div>
+    </section>
+  );
+}
+
 function ActivitySeeAll({ kind }: { kind: ActivityKind }) {
   const content = (
     <>
@@ -186,7 +213,7 @@ function ActivityGallery({
   responseByClaimId?: Record<string, ClaimResponse>;
   personName?: string | null;
 }) {
-  const shown = React.useMemo(() => rows.slice(0, SHOWN), [rows]);
+  const shown = React.useMemo(() => rows.slice(0, ACTIVITY_GALLERY_CARD_LIMIT), [rows]);
 
   // Looked up once for the gallery. These are routinely spaces the viewer has
   // never opened, which the browse sidebar cannot name.
