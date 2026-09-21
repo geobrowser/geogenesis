@@ -20,10 +20,13 @@ import { META_CHIP_CLASS, RelationChipSection } from '~/partials/entity-page/rel
 
 import { UNNAMED_SUBTOPIC_PROPERTY_ID } from '../ontology';
 import { TopicClaims } from './topic-claims';
-import { TopicComposition } from './topic-composition';
 import { TopicCoverage } from './topic-coverage';
 import { TopicDebates } from './topic-debates';
 import { useTopicAncestors } from './use-topic-ancestors';
+
+/** Shared with the cover/avatar header so its left edge stays aligned with the topic column. */
+export const TOPIC_PAGE_CONTENT_MAX_WIDTH = 720;
+export const TOPIC_PAGE_CONTENT_INSET_CLASS = 'px-4 @[560px]:px-5';
 
 /**
  * The browse-mode read view for a Topic.
@@ -92,7 +95,10 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
 
   return (
     <div className="@container">
-      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 py-6 @[560px]:gap-8 @[560px]:px-5 @[560px]:py-8">
+      <div
+        className="mx-auto flex w-full flex-col gap-6 px-4 py-6 @[560px]:gap-8 @[560px]:px-5 @[560px]:py-8"
+        style={{ maxWidth: TOPIC_PAGE_CONTENT_MAX_WIDTH }}
+      >
         <header className="flex flex-col gap-3">
           {ancestors.length > 0 && (
             <nav aria-label="Topic path" className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
@@ -153,8 +159,6 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
             {isCurated && <span className={`${META_CHIP_CLASS} text-grey-04`}>Curated</span>}
           </div>
         </header>
-
-        <TopicComposition topicId={entityId} spaceId={spaceId} />
 
         <RelationChipSection label="Subtopics" relations={subtopics} spaceId={spaceId} />
 

@@ -57,7 +57,7 @@ vi.mock('~/core/sync/use-store', () => ({
 // The page's modules each reach for the sync engine or geo-chat. None is what this file asserts,
 // and the header renders above all of them.
 vi.mock('./use-topic-ancestors', () => ({ useTopicAncestors: () => [] }));
-vi.mock('./topic-composition', () => ({ TopicComposition: () => null }));
+vi.mock('./topic-composition', () => ({ TopicComposition: () => <div data-testid="topic-composition" /> }));
 vi.mock('./topic-debates', () => ({ TopicDebates: () => null }));
 vi.mock('./topic-claims', () => ({ TopicClaims: () => null }));
 vi.mock('./topic-coverage', () => ({ TopicCoverage: () => null }));
@@ -148,5 +148,13 @@ describe('TopicPageView subtopics', () => {
     expect(screen.getByTestId('chip-section')).toHaveAttribute('data-label', 'Subtopics');
     expect(mocks.chipSection?.relations).toEqual([subtopicRelation]);
     expect(mocks.chipSection?.spaceId).toBe('space-1');
+  });
+});
+
+describe('TopicPageView composition', () => {
+  it('does not render the entity distribution bar', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.queryByTestId('topic-composition')).toBeNull();
   });
 });

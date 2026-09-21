@@ -105,6 +105,8 @@ vi.mock('~/core/claims/browse/claim-page-view', () => ({
   },
 }));
 vi.mock('~/core/topics/browse/topic-page-view', () => ({
+  TOPIC_PAGE_CONTENT_INSET_CLASS: 'topic-content-inset',
+  TOPIC_PAGE_CONTENT_MAX_WIDTH: 720,
   TopicPageView: () => <div data-testid="topic-page" />,
 }));
 
@@ -326,5 +328,31 @@ describe('EntityPageBody claim side panel', () => {
     render(<EntityPageBody variant="sidePanel" {...SHARED} />);
 
     expect(screen.queryByTestId('automatic-mode-toggle')).not.toBeInTheDocument();
+  });
+});
+
+describe('EntityPageBody topic side panel', () => {
+  it('shows both configured topic images above the custom view', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: TOPIC_TYPE_ID }] };
+
+    render(
+      <EntityPageBody
+        variant="sidePanel"
+        {...SHARED}
+        avatarUrl="ipfs://topic-avatar"
+        coverUrl="ipfs://topic-cover"
+      />
+    );
+
+    expect(screen.getByTestId('cover')).toBeInTheDocument();
+    expect(screen.getByTestId('topic-page')).toBeInTheDocument();
+    expect(mocks.cover).toMatchObject({
+      avatarUrl: 'ipfs://topic-avatar',
+      coverUrl: 'ipfs://topic-cover',
+      compact: true,
+      withAvatar: true,
+      contentMaxWidth: 720,
+      contentInsetClassName: 'topic-content-inset',
+    });
   });
 });
