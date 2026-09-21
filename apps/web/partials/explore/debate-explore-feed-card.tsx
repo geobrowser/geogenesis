@@ -76,6 +76,10 @@ type DebateExploreFeedCardProps = {
   hideJoinButton?: boolean;
   /** Whether the claim title opens the side panel rather than navigating (same semantics as ExploreFeedCard). */
   titleOpensSidePanel?: boolean;
+  /** Use the shorter, side-by-side player intended for the profile Activity gallery. */
+  compactPlayer?: boolean;
+  /** Transfer playback ownership when this debate's player is clicked. */
+  onPlaybackRequest?: (debateId: string) => void;
   /**
    * Rendered instead of the debate card when the debate can't be shown as a video — feature flag
    * off, the geo-chat record is missing or unwatchable, or its final video isn't processed yet.
@@ -100,6 +104,8 @@ export function DebateExploreFeedCard({
   hideSpaceLink = false,
   hideJoinButton = false,
   titleOpensSidePanel = false,
+  compactPlayer = false,
+  onPlaybackRequest,
   fallback,
 }: DebateExploreFeedCardProps) {
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
@@ -299,13 +305,15 @@ export function DebateExploreFeedCard({
             aspect-ratio media whose height follows from the space the title leaves it. */}
         <ExploreCardTitle item={item} opensSidePanel={titleOpensSidePanel} clamped />
 
-        {mediaMounted ? (
-          // The recordings resolve while the card is still approaching. Crossing back out of
-          // that same window unmounts this subtree instead of retaining two paused videos forever.
-          <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} />
-        ) : (
-          <DebateVideoSkeleton />
-        )}
+        <div onClickCapture={() => onPlaybackRequest?.(debateId)}>
+          {mediaMounted ? (
+            // The recordings resolve while the card is still approaching. Crossing back out of
+            // that same window unmounts this subtree instead of retaining two paused videos forever.
+            <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} compact={compactPlayer} />
+          ) : (
+            <DebateVideoSkeleton compact={compactPlayer} />
+          )}
+        </div>
 
         {/* Beneath the videos, the same width as them. Full screen carries this bar in a rail down
             the media's right at desktop widths and moves it here at narrow ones; a card is short
@@ -354,13 +362,21 @@ export function DebateExploreFeedCard({
 // is a boolean, so on a change that is only about the panel this skips the player and its playback
 // hooks entirely. (A re-render never interrupted playback — the <video> keeps its identity — but
 // there is no reason to re-run the whole subtree for a flag it does not read.)
-const DebateCardVideos = React.memo(function DebateCardVideos({ debate, active }: { debate: Debate; active: boolean }) {
-  return <DebateFeedPlayer debate={debate} active={active} preload />;
+const DebateCardVideos = React.memo(function DebateCardVideos({
+  debate,
+  active,
+  compact,
+}: {
+  debate: Debate;
+  active: boolean;
+  compact: boolean;
+}) {
+  return <DebateFeedPlayer debate={debate} active={active} compact={compact} preload />;
 });
 
-function DebateVideoSkeleton() {
+function DebateVideoSkeleton({ compact }: { compact: boolean }) {
   return (
-    <div className="flex flex-col gap-2" aria-hidden="true">
+    <div className={compact ? 'grid grid-cols-2' : 'flex flex-col gap-2'} aria-hidden="true">
       <div className="aspect-480/289 w-full animate-pulse rounded-lg bg-grey-01" />
       <div className="aspect-480/289 w-full animate-pulse rounded-lg bg-grey-01" />
     </div>

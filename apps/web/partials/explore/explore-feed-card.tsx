@@ -39,6 +39,10 @@ type ExploreFeedCardProps = {
   claimCardVariant?: ClaimCardVariant;
   /** See `ClaimExploreFeedCard`. Only a claim can carry one. */
   responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
+  /** Profile Activity's denser, side-by-side debate-player treatment. Ignored by other row types. */
+  compactDebatePlayer?: boolean;
+  /** Transfer playback ownership when this debate's player is clicked. Ignored by other row types. */
+  onDebatePlaybackRequest?: (debateId: string) => void;
 };
 
 function ExploreFeedCommentLink({ href, count }: { href: string; count: number }) {
@@ -131,6 +135,8 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
         hideSpaceLink={props.hideSpaceLink}
         hideJoinButton={props.hideJoinButton}
         titleOpensSidePanel={props.titleOpensSidePanel}
+        compactPlayer={props.compactDebatePlayer}
+        onPlaybackRequest={props.onDebatePlaybackRequest}
         fallback={<BaseExploreFeedCard {...props} />}
       />
     );

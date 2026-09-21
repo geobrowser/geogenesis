@@ -26,6 +26,11 @@ type DebateFeedPlayerProps = {
   debate: Debate;
   active: boolean;
   /**
+   * Put both speakers beside each other instead of stacking them. The profile Activity gallery
+   * uses this denser treatment; the full-screen and explore feeds keep the stacked player.
+   */
+  compact?: boolean;
+  /**
    * Load this debate's recordings without playing them — for the card the viewer is about to
    * reach. Resolving the two signed URLs is a round trip each, and until they land
    * `DebateFeedPlayer` renders the "Loading…" placeholder instead of a <video>, which is what
@@ -34,7 +39,7 @@ type DebateFeedPlayerProps = {
   preload?: boolean;
 };
 
-export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeedPlayerProps) {
+export function DebateFeedPlayer({ debate, active, compact = false, preload = false }: DebateFeedPlayerProps) {
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
@@ -316,7 +321,7 @@ export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeed
       data-debate-autoplay-blocked={autoplayBlocked ? 'true' : 'false'}
       // No gap and one radius on the outside: the two tiles are a single surface in the Figma
       // frame, which is what lets the subtitle straddle the seam rather than sit inside one tile.
-      className="group relative flex flex-col overflow-hidden rounded-xl"
+      className={cx('group relative overflow-hidden rounded-xl', compact ? 'grid grid-cols-2' : 'flex flex-col')}
     >
       <DebaterVideo
         participant={slot1Participant}

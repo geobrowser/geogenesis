@@ -8,6 +8,7 @@ import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import { type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { ID } from '~/core/id';
 import type { ClaimResponse } from '~/core/profile/use-person-positions';
 import { normId } from '~/core/utils/norm-id';
 
@@ -400,14 +401,23 @@ function ActivityGallery({
   const rowSpaceIds = React.useMemo(() => [...new Set(shown.map(row => row.spaceId))], [shown]);
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
-  const { scrollerRef, centredId } = useCentredCard(shown);
+  const scrollerRef = React.useRef<HTMLDivElement | null>(null);
+  const firstDebateId = shown.find(row => !isClaimRow(row))?.entityId ?? null;
+  const [requestedDebateId, setRequestedDebateId] = React.useState<string | null>(null);
+
+  // New query results may replace the gallery in place. Keep the reader's explicit choice while
+  // it remains in the visible set; otherwise hand autoplay to the new first debate. Deriving the
+  // fallback here avoids a render where a removed debate still owns the gate.
+  const allowedDebateId =
+    requestedDebateId && shown.some(row => !isClaimRow(row) && ID.equals(row.entityId, requestedDebateId))
+      ? requestedDebateId
+      : firstDebateId;
 
   return (
-    // One at a time. A debate card decides for itself whether to play from how
-    // much of it is on screen, which is right in a stacked feed and wrong in a
-    // row — here several are fully visible at once and every one of them would
-    // start. The gate names the one nearest the middle.
-    <DebatePlaybackGate allowedId={centredId}>
+    // One at a time. Compact cards can leave several debates fully visible, so intersection alone
+    // cannot choose. The first debate receives autoplay; clicking another player transfers the
+    // gate before that click starts it, which also pauses the previous owner.
+    <DebatePlaybackGate allowedId={allowedDebateId}>
       {/*
        * The wrapper, not the scroller, carries both of these.
        *
@@ -444,6 +454,7 @@ function ActivityGallery({
               label={spaceLabel(labelsById, row.spaceId)}
               response={responseByClaimId?.[normId(row.entityId)]}
               personName={personName}
+              onDebatePlaybackRequest={setRequestedDebateId}
             />
           ))}
           <span aria-hidden className="w-0 shrink-0 pr-4" />
@@ -451,72 +462,6 @@ function ActivityGallery({
       </div>
     </DebatePlaybackGate>
   );
-}
-
-/**
- * Which card is nearest the middle of the row.
- *
- * Measured rather than derived from the scroll offset over a card width: the
- * cards are `min(420px, 84cqw)` and the spacers at either end are not cards at
- * all, so arithmetic on a nominal width would drift. Read on scroll through a
- * rAF, which is what keeps a flick from measuring on every frame it fires.
- */
-function useCentredCard(rows: ExploreFeedRow[]) {
-  const scrollerRef = React.useRef<HTMLDivElement | null>(null);
-  const [centredIndex, setCentredIndex] = React.useState(0);
-
-  React.useEffect(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-
-    let frame = 0;
-
-    const measure = () => {
-      frame = 0;
-      const cards = scroller.querySelectorAll('[data-activity-card]');
-      if (cards.length === 0) return;
-
-      // Both sides read from `getBoundingClientRect`, so both are in the
-      // viewport's coordinates. `offsetLeft` against `scrollLeft` mixed two:
-      // offsets are measured to the nearest *positioned* ancestor, which this
-      // scroller is not, so every card's value carried a constant the scroll
-      // position knew nothing about — the comparison came out the same however
-      // far the row was scrolled, and the answer never moved off the first card.
-      const scrollerBox = scroller.getBoundingClientRect();
-      const middle = scrollerBox.left + scrollerBox.width / 2;
-
-      let bestIndex = 0;
-      let bestDistance = Infinity;
-
-      cards.forEach((card, index) => {
-        const box = card.getBoundingClientRect();
-        const distance = Math.abs(box.left + box.width / 2 - middle);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestIndex = index;
-        }
-      });
-
-      setCentredIndex(bestIndex);
-    };
-
-    const onScroll = () => {
-      if (frame) return;
-      frame = requestAnimationFrame(measure);
-    };
-
-    measure();
-    scroller.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-
-    return () => {
-      if (frame) cancelAnimationFrame(frame);
-      scroller.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-    };
-  }, [rows]);
-
-  return { scrollerRef, centredId: rows[centredIndex]?.entityId ?? null };
 }
 
 /**
@@ -535,11 +480,13 @@ function GalleryCard({
   label,
   response,
   personName,
+  onDebatePlaybackRequest,
 }: {
   row: ExploreFeedRow;
   label: SpaceLabel | undefined;
   response: ClaimResponse | undefined;
   personName?: string | null;
+  onDebatePlaybackRequest: (debateId: string) => void;
 }) {
   // A claim gets the debates panel's own card, and everything else the feed's.
   //
@@ -575,7 +522,13 @@ function GalleryCard({
       ) : (
         // The Join button is hidden: this is a record being read, not a place to
         // be recruited into.
-        <ExploreFeedCard item={toExploreFeedItem(row, label)} hideJoinButton titleOpensSidePanel />
+        <ExploreFeedCard
+          item={toExploreFeedItem(row, label)}
+          hideJoinButton
+          titleOpensSidePanel
+          compactDebatePlayer
+          onDebatePlaybackRequest={onDebatePlaybackRequest}
+        />
       )}
     </div>
   );

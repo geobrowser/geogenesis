@@ -12,7 +12,17 @@ import { ProfileActivitySection } from './profile-activity-section';
 // The gallery is local to the file under test, so its dependencies are mocked
 // rather than the gallery itself.
 vi.mock('~/partials/explore/explore-feed-card', () => ({
-  ExploreFeedCard: ({ item }: { item: { entityId: string } }) => <div data-testid="card">{item.entityId}</div>,
+  ExploreFeedCard: ({
+    item,
+    onDebatePlaybackRequest,
+  }: {
+    item: { entityId: string };
+    onDebatePlaybackRequest?: (debateId: string) => void;
+  }) => (
+    <button type="button" data-testid="card" onClick={() => onDebatePlaybackRequest?.(item.entityId)}>
+      {item.entityId}
+    </button>
+  ),
 }));
 
 vi.mock('./gallery-claim-card', () => ({
@@ -25,7 +35,11 @@ vi.mock('~/core/hooks/use-space-labels', () => ({
 }));
 
 vi.mock('~/core/debates/debate-playback-gate', () => ({
-  DebatePlaybackGate: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  DebatePlaybackGate: ({ allowedId, children }: { allowedId: string | null; children: React.ReactNode }) => (
+    <div data-testid="playback-gate" data-allowed-id={allowedId}>
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock('~/design-system/prefetch-link', () => ({
@@ -214,6 +228,16 @@ describe('ProfileActivitySection', () => {
     render(<ProfileActivitySection kinds={[kind({ isError: true })]} />);
 
     expect(screen.getAllByTestId('card')).toHaveLength(1);
+  });
+
+  it('autoplays only the first debate and transfers playback when another is clicked', () => {
+    render(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2')] })]} />);
+
+    const gate = screen.getByTestId('playback-gate');
+    expect(gate).toHaveAttribute('data-allowed-id', 'd1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'd2' }));
+    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
   });
 
   it('draws a dash rather than a zero when the count could not be read', () => {
