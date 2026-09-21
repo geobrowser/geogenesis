@@ -676,6 +676,27 @@ describe('DebateClaimTickerStack', () => {
   });
 
   /**
+   * The premise behind the player clearing this itself: a stack that is removed reports nothing.
+   *
+   * Browsers fire no `blur` or `focusout` for a focused element taken out of the document, and this
+   * handler is the only thing that ever says focus left. So the stack going away with a keyboard
+   * inside it — the debate ending, or the tile scrolling out of the preload window — leaves the
+   * player's `focusedSlot` latched on a stack that no longer exists. Asserting the *absence* here
+   * is what makes the cleanup in `debate-feed-player.tsx` necessary rather than belt-and-braces.
+   */
+  it('reports nothing when it is removed with focus still inside it', async () => {
+    const onFocusChange = vi.fn();
+    const { unmount } = renderStack({ onFocusChange });
+
+    await userEvent.tab();
+    expect(onFocusChange).toHaveBeenLastCalledWith(true);
+
+    unmount();
+
+    expect(onFocusChange).not.toHaveBeenCalledWith(false);
+  });
+
+  /**
    * A click inside a live card is not a request for the backlog.
    *
    * The player opens the backlog on focus, and draws it narrower than a live card. Any focus

@@ -249,6 +249,8 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
   const rowsByClaimId = new Map<string, TranscriptClaim>();
   /** `${authorKey}:${claimKey}`; the empty author key stands for unattributed. */
   const seenPairs = new Set<string>();
+  /** Turns already listed, so a relation the graph repeats does not become a second turn. */
+  const seenBlockIds = new Set<string>();
 
   for (const transcript of presentRelations(data.entity?.transcripts)) {
     for (const block of presentRelations(transcript.toEntity.blocks)) {
@@ -258,11 +260,19 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
       // one turn's claims land in one group rather than being counted under each speaker.
       const authorSpaceId = presentRelations(blockEntity.authors)[0]?.toEntity.id;
 
-      blocks.push({
-        id: blockEntity.id,
-        authorSpaceId: authorSpaceId ?? null,
-        text: blockTextInSpace(blockEntity.markdown, spaceId),
-      });
+      // Deduped on the same grounds the claims below are: the graph can return one relation twice.
+      // Every reader in the app keys these into a `Map` and so never saw it, but the matching
+      // scripts walk this list — `export-claims-for-matching.ts` filters claims by `blockId`, so a
+      // repeated block emits one turn twice with the same claims in each, and the plan builder then
+      // reads that as a claim filed under two turns and drops every claim in it.
+      if (!seenBlockIds.has(blockEntity.id)) {
+        seenBlockIds.add(blockEntity.id);
+        blocks.push({
+          id: blockEntity.id,
+          authorSpaceId: authorSpaceId ?? null,
+          text: blockTextInSpace(blockEntity.markdown, spaceId),
+        });
+      }
 
       for (const claim of presentRelations(blockEntity.claims)) {
         const claimEntity = claim.toEntity;

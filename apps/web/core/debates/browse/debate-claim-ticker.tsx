@@ -530,8 +530,9 @@ export function DebateClaimTickerStack({
       // against them. It is there to say "more above"; at the top there is not.
       const ramp =
         !open || atTop || untouched ? '' : `linear-gradient(to bottom, transparent ${clear}px, #000 ${opaque}px)`;
-      // Through a custom property rather than `mask-image` itself, so the card's own stylesheet can
-      // refuse it — see the `no-hover` override there.
+      // Through a custom property rather than `mask-image` itself: the card declares the standard
+      // and `-webkit-` masks together in its own className, so one variable drives both and the
+      // declarations stay with the rest of the card's styling.
       card.style.setProperty('--claim-ramp', ramp || 'none');
     }
   }, [open]);
@@ -900,8 +901,6 @@ function ClaimIconButton({
   title: string;
   onClick?: () => void;
 }) {
-  const Icon = responseKind === 'veracity' ? (position ? ChevronUp : ChevronDown) : position ? ThumbUp : ThumbDown;
-
   return (
     <button
       type="button"
@@ -934,7 +933,23 @@ function ClaimIconButton({
           : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
       )}
     >
-      <Icon filled={selected} />
+      {/*
+       * Written out rather than picked into one `Icon`, so each glyph is called with the props it
+       * actually has. A chevron takes `color` alone — it is a stroke with no interior — and the
+       * shared `Icon` const quietly dropped the `filled` it was handed, which read as veracity
+       * having a fill that never arrived. Its selected state is the background and colour above.
+       */}
+      {responseKind === 'veracity' ? (
+        position ? (
+          <ChevronUp />
+        ) : (
+          <ChevronDown />
+        )
+      ) : position ? (
+        <ThumbUp filled={selected} />
+      ) : (
+        <ThumbDown filled={selected} />
+      )}
     </button>
   );
 }

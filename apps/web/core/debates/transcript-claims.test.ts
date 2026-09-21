@@ -535,4 +535,28 @@ describe('published timecodes', () => {
       { id: 'block-2', authorSpaceId: ARTURAS, text: 'The reply.' },
     ]);
   });
+
+  /**
+   * The same rule the claim loop already follows, on the turn list beside it.
+   *
+   * The graph can return one relation twice — duplicate publishes happen, which is why claims are
+   * deduped at all. The app never noticed, because every consumer keys blocks into a `Map`. The
+   * matching scripts do not: `export-claims-for-matching.ts` walks this list and filters claims by
+   * `blockId`, so a repeated block emits one turn twice with the same claims in each — and
+   * `build-plan-from-matches.ts` then reads that as a claim filed under two turns and rejects every
+   * claim in it. A silent loss of placements, from a duplicate this layer is meant to absorb.
+   */
+  it('lists a turn once when the graph returns its relation twice', () => {
+    const { all, blocks } = group(
+      response([
+        { id: 'block-1', markdown: 'The first turn, as spoken.', claims: [{ id: 'c1' }] },
+        { id: 'block-1', markdown: 'The first turn, as spoken.', position: 'a1', claims: [{ id: 'c1' }] },
+      ])
+    );
+
+    expect(blocks).toEqual([{ id: 'block-1', authorSpaceId: PRESTON, text: 'The first turn, as spoken.' }]);
+    // And the repeat is still not a second turn for the claim — see `restated`.
+    expect(all).toHaveLength(1);
+    expect(all[0].restated).toBe(false);
+  });
 });

@@ -216,10 +216,48 @@ export function DebateFeedPlayer({ debate, active, preload = false, votes }: Deb
     });
   };
 
+  /**
+   * Whether slot's corner has a stack at all. `claimsFor` draws nothing when this is false.
+   *
+   * Lifted out of it so the effect below can watch the same condition: both latches that open the
+   * backlog are held up here, and a stack that has gone cannot release either one.
+   */
+  const stackShownFor = (slot: number) => {
+    if (playbackEnded) return false;
+    return (ticker.cardsBySlot.get(slot)?.length ?? 0) > 0 || (ticker.historyBySlot.get(slot)?.length ?? 0) > 0;
+  };
+
+  const slot1StackShown = stackShownFor(1);
+  const slot2StackShown = stackShownFor(2);
+
+  /**
+   * Let go of a corner whose stack has been taken away.
+   *
+   * `focusedSlot` is cleared only by the stack's own `onBlur`, and a focused element removed from
+   * the document fires no `blur` — the ticker's suite asserts that absence directly. So a viewer
+   * who tabs into the backlog and then reaches the end of the debate, or scrolls the tile out of
+   * the preload window, left the slot latched: on replay the corner opened straight into backlog
+   * mode with nothing in it, and nothing short of tabbing back in and out closed it again.
+   *
+   * `pinnedSlot` has the same hole on a touch screen, where the only other release is a
+   * `pointerleave` that early-returns on anything but a mouse — so both are cleared here.
+   */
+  React.useEffect(() => {
+    const releaseIfGone = (shown: boolean, slot: number) => {
+      if (shown) return;
+      const clear = (current: number | null) => (current === slot ? null : current);
+      setFocusedSlot(clear);
+      setPinnedSlot(clear);
+    };
+
+    releaseIfGone(slot1StackShown, 1);
+    releaseIfGone(slot2StackShown, 2);
+  }, [slot1StackShown, slot2StackShown]);
+
   const claimsFor = (slot: number) => {
     const cards = ticker.cardsBySlot.get(slot) ?? [];
     const history = ticker.historyBySlot.get(slot) ?? [];
-    if (playbackEnded || (cards.length === 0 && history.length === 0)) return null;
+    if (!stackShownFor(slot)) return null;
 
     const pinned = pinnedSlot === slot;
     const clearSlot = (current: number | null) => (current === slot ? null : current);
