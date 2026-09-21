@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
@@ -7,10 +7,85 @@ import {
   CLAIM_RECORD_PAGE_SIZE,
   bestRecordRows,
   claimsExtractedFromDebatesWhere,
+  isRecordPageExpansionFetching,
   rankedRecordPage,
   recordHydrationIds,
+  refetchFailedRecordQueries,
   relatedClaimIds,
+  retryFailedRecordStage,
 } from './use-claim-record';
+
+describe('record retry', () => {
+  it('retries every failed discovery dependency without replaying successful ones', async () => {
+    const successfulRefetch = vi.fn(async () => undefined);
+    const failedTopicRefetch = vi.fn(async () => undefined);
+    const failedDebateRefetch = vi.fn(async () => undefined);
+
+    await refetchFailedRecordQueries([
+      { error: null, refetch: successfulRefetch },
+      { error: new Error('topic lookup failed'), refetch: failedTopicRefetch },
+      { error: new Error('debate lookup failed'), refetch: failedDebateRefetch },
+    ]);
+
+    expect(successfulRefetch).not.toHaveBeenCalled();
+    expect(failedTopicRefetch).toHaveBeenCalledTimes(1);
+    expect(failedDebateRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries the earliest failed stage instead of advancing pagination', () => {
+    const refetchIds = vi.fn();
+    const refetchScores = vi.fn();
+    const refetchRows = vi.fn();
+
+    expect(
+      retryFailedRecordStage({
+        idsError: true,
+        scoresError: true,
+        rowsError: true,
+        refetchIds,
+        refetchScores,
+        refetchRows,
+      })
+    ).toBe(true);
+    expect(refetchIds).toHaveBeenCalledTimes(1);
+    expect(refetchScores).not.toHaveBeenCalled();
+    expect(refetchRows).not.toHaveBeenCalled();
+
+    refetchIds.mockClear();
+    expect(
+      retryFailedRecordStage({
+        idsError: false,
+        scoresError: true,
+        rowsError: true,
+        refetchIds,
+        refetchScores,
+        refetchRows,
+      })
+    ).toBe(true);
+    expect(refetchIds).not.toHaveBeenCalled();
+    expect(refetchScores).toHaveBeenCalledTimes(1);
+    expect(refetchRows).not.toHaveBeenCalled();
+
+    refetchScores.mockClear();
+    expect(
+      retryFailedRecordStage({
+        idsError: false,
+        scoresError: false,
+        rowsError: true,
+        refetchIds,
+        refetchScores,
+        refetchRows,
+      })
+    ).toBe(true);
+    expect(refetchRows).toHaveBeenCalledTimes(1);
+  });
+
+  it('distinguishes page expansion from background and retry fetching', () => {
+    expect(isRecordPageExpansionFetching(true, true)).toBe(true);
+    expect(isRecordPageExpansionFetching(false, true)).toBe(false);
+    expect(isRecordPageExpansionFetching(true, false)).toBe(false);
+  });
+});
 
 describe('bestRecordRows', () => {
   const claimA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';

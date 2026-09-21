@@ -208,6 +208,18 @@ describe('ClaimPageView record', () => {
     ]);
   });
 
+  it('exposes the shared tabs anchor on routes but not inside side panels', () => {
+    const route = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(document.getElementById('space-tabs')).toContainElement(screen.getByTestId('tabs'));
+
+    route.unmount();
+    mocks.sidePanel = { activeTabId: null, activeSystemTab: null, setActiveSystemTab: vi.fn() };
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(document.getElementById('space-tabs')).not.toBeInTheDocument();
+  });
+
   it('hides empty system tabs and shows them once they have content', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 

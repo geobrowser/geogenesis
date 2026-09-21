@@ -35,6 +35,7 @@ import { META_CHIP_CLASS, RelationChipSection } from '~/partials/entity-page/rel
 import { SectionTitle } from '~/partials/entity-page/section-title';
 import { PersonRecordFeed } from '~/partials/profile/person-record-feed';
 import { type ActivityKind, ProfileActivitySection } from '~/partials/profile/profile-activity-section';
+import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
 import { ClaimEndSlot } from './claim-end-slot';
 import { getClaimSources } from './claim-sources';
@@ -236,15 +237,17 @@ export function ClaimPageView({
           </div>
         </header>
 
-        <EntityTabs
-          entityId={entityId}
-          spaceId={spaceId}
-          initialTabRelations={initialTabRelations}
-          tabEntities={tabEntities}
-          systemTabsBefore={systemTabs}
-          reservedSystemLabels={systemTabs.map(tab => tab.label)}
-          divideBeforeAuthored
-        />
+        <div id={sidePanelTab ? undefined : SPACE_TABS_ANCHOR}>
+          <EntityTabs
+            entityId={entityId}
+            spaceId={spaceId}
+            initialTabRelations={initialTabRelations}
+            tabEntities={tabEntities}
+            systemTabsBefore={systemTabs}
+            reservedSystemLabels={systemTabs.map(tab => tab.label)}
+            divideBeforeAuthored
+          />
+        </div>
 
         <ClaimTabPanel
           activeTab={requestedTab}

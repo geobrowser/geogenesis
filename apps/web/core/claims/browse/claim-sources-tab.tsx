@@ -36,7 +36,9 @@ export function ClaimSourcesTab({
         rows={sources.data ?? []}
         isLoading={sources.isLoading}
         isError={sources.isError}
-        isFetchingNextPage={sources.isFetching && sources.data.length > 0}
+        // These ids are loaded as one bounded record, not paginated. A refetch is an error retry
+        // or background refresh and must not draw the feed's next-page skeletons.
+        isFetchingNextPage={false}
         fetchNextPage={sources.refetch}
         loadingLabel="Loading sources…"
         emptyLabel="No linked sources could be displayed."

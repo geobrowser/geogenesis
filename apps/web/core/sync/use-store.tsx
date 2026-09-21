@@ -16,7 +16,7 @@ import { Entity, Property, Relation, Value } from '../types';
 import { Properties } from '../utils/property';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
-import { collectCursorPages } from './collect-cursor-pages';
+import { collectCursorPages, createCursorPageCheckpoint } from './collect-cursor-pages';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { hydrateEntityBatched } from './hydrate-entity-batcher';
 import { E, mergeRelations } from './orm';
@@ -497,6 +497,8 @@ type QueryAllEntitiesOptions = {
   pageSize?: number;
   enabled?: boolean;
   orderBy?: EntitiesOrderBy[];
+  /** Skip the query layer's default non-empty-name filter when unnamed entities are meaningful. */
+  includeEmptyNames?: boolean;
 };
 
 /**
@@ -506,16 +508,38 @@ type QueryAllEntitiesOptions = {
  * Summary/list screens should use a server count plus a bounded page, or `useQueryEntities` with
  * pagination; exhausting a broad relation filter during initial render scales with the graph.
  */
-export function useQueryAllEntities({ where, pageSize = 100, enabled = true, orderBy }: QueryAllEntitiesOptions) {
+export function useQueryAllEntities({
+  where,
+  pageSize = 100,
+  enabled = true,
+  orderBy,
+  includeEmptyNames = false,
+}: QueryAllEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
+  const querySignature = `${stableStringify(where)}:${pageSize}:${stableStringify(orderBy ?? null)}:${includeEmptyNames}`;
+  const progressRef = React.useRef({ signature: querySignature, checkpoint: createCursorPageCheckpoint<string>() });
 
   const { data, isFetched, isLoading, isFetching, error, refetch } = useQuery({
     enabled,
-    queryKey: ['store', 'all-entities', stableStringify(where), pageSize, orderBy ?? null],
-    queryFn: async () => {
+    queryKey: ['store', 'all-entities', stableStringify(where), pageSize, orderBy ?? null, includeEmptyNames],
+    queryFn: async ({ signal }) => {
+      if (progressRef.current.signature !== querySignature) {
+        progressRef.current = { signature: querySignature, checkpoint: createCursorPageCheckpoint<string>() };
+      }
+
+      const checkpoint = progressRef.current.checkpoint;
       const ids = await collectCursorPages(async after => {
-        const page = await E.syncMany({ store, cache, where, first: pageSize, after, orderBy });
+        const page = await E.syncMany({
+          store,
+          cache,
+          where,
+          first: pageSize,
+          after,
+          orderBy,
+          includeEmptyNames,
+          signal,
+        });
         stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: page.merged, remoteEntities: page.remote });
 
         return {
@@ -523,7 +547,11 @@ export function useQueryAllEntities({ where, pageSize = 100, enabled = true, ord
           endCursor: page.endCursor,
           hasNextPage: page.hasNextPage,
         };
-      });
+      }, checkpoint);
+
+      // A completed query should refresh from page one next time. A failed query deliberately
+      // retains this checkpoint so React Query's retry resumes at the failed cursor.
+      progressRef.current = { signature: querySignature, checkpoint: createCursorPageCheckpoint<string>() };
 
       return { ids: [...new Set(ids)] };
     },

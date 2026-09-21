@@ -66,11 +66,11 @@ describe('ClaimSourcesTab', () => {
     expect(mocks.refetch).toHaveBeenCalledTimes(1);
   });
 
-  it('reports an in-flight retry when some source rows are already visible', () => {
+  it('does not report a background retry as next-page loading', () => {
     mocks.isFetching = true;
 
     render(<ClaimSourcesTab claimId="claim-1" claimRelations={[sourceRelation]} spaceId="space-1" />);
 
-    expect(mocks.feed).toMatchObject({ isFetchingNextPage: true });
+    expect(mocks.feed).toMatchObject({ isFetchingNextPage: false });
   });
 });

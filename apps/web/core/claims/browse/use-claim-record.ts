@@ -21,6 +21,7 @@ export { CLAIM_RECORD_PAGE_SIZE } from './use-claim-explore-rows';
 
 /** Stable empty rows keep the query result from changing identity while it is disabled. */
 const NO_ROWS: ExploreFeedRow[] = [];
+const CLAIM_RECORD_QUERY_OPTIONS = { includeEmptyNames: true } as const;
 
 /**
  * Drawable neighbours from one or more relation paths.
@@ -99,22 +100,77 @@ export function recordHydrationIds(
   return rankingsReady ? [...rankedIds] : [];
 }
 
+type RefetchableRecordQuery = {
+  error: unknown;
+  refetch: () => Promise<unknown>;
+};
+
+/** Retry only failed discovery branches so one failure does not replay successful cursor walks. */
+export async function refetchFailedRecordQueries(queries: RefetchableRecordQuery[]): Promise<void> {
+  await Promise.all(queries.filter(query => query.error).map(query => query.refetch()));
+}
+
+/** Retry the earliest failed prerequisite; pagination is only valid after all three stages succeed. */
+export function retryFailedRecordStage({
+  idsError,
+  scoresError,
+  rowsError,
+  refetchIds,
+  refetchScores,
+  refetchRows,
+}: {
+  idsError: boolean;
+  scoresError: boolean;
+  rowsError: boolean;
+  refetchIds: () => unknown;
+  refetchScores: () => unknown;
+  refetchRows: () => unknown;
+}): boolean {
+  if (idsError) {
+    void refetchIds();
+    return true;
+  }
+
+  if (scoresError) {
+    void refetchScores();
+    return true;
+  }
+
+  if (rowsError) {
+    void refetchRows();
+    return true;
+  }
+
+  return false;
+}
+
+export function isRecordPageExpansionFetching(expansionPending: boolean, rowsFetching: boolean): boolean {
+  return expansionPending && rowsFetching;
+}
+
 function useRankedRecordPage({
   ids,
   spaceId,
   idsReady,
   idsError,
+  refetchIds,
   recordKey,
 }: {
   ids: string[];
   spaceId: string;
   idsReady: boolean;
   idsError: boolean;
+  refetchIds: () => Promise<void>;
   recordKey: string;
 }) {
   const scores = useEntityScores({ ids, enabled: idsReady && !idsError });
-  const [page, setPage] = React.useState({ key: recordKey, visibleCount: CLAIM_RECORD_PAGE_SIZE });
+  const [page, setPage] = React.useState({
+    key: recordKey,
+    visibleCount: CLAIM_RECORD_PAGE_SIZE,
+    expansionPending: false,
+  });
   const visibleCount = page.key === recordKey ? page.visibleCount : CLAIM_RECORD_PAGE_SIZE;
+  const expansionPending = page.key === recordKey && page.expansionPending;
   const visible = React.useMemo(
     () => rankedRecordPage(ids, scores.rankings, scores.isError, visibleCount),
     [ids, scores.isError, scores.rankings, visibleCount]
@@ -133,18 +189,31 @@ function useRankedRecordPage({
     [rankingsReady, rowsQuery.data, scores.rankings]
   );
 
+  React.useEffect(() => {
+    if (!expansionPending || rowsQuery.isFetching) return;
+    setPage(current => (current.key === recordKey ? { ...current, expansionPending: false } : current));
+  }, [expansionPending, recordKey, rowsQuery.isFetching]);
+
   const fetchNextPage = React.useCallback(() => {
-    if (rowsError) {
-      void refetchRows();
+    if (
+      retryFailedRecordStage({
+        idsError,
+        scoresError: scores.isError,
+        rowsError,
+        refetchIds,
+        refetchScores: scores.refetch,
+        refetchRows,
+      })
+    )
       return;
-    }
 
     setPage(current => ({
       key: recordKey,
       visibleCount:
         (current.key === recordKey ? current.visibleCount : CLAIM_RECORD_PAGE_SIZE) + CLAIM_RECORD_PAGE_SIZE,
+      expansionPending: true,
     }));
-  }, [recordKey, refetchRows, rowsError]);
+  }, [idsError, recordKey, refetchIds, refetchRows, rowsError, scores.isError, scores.refetch]);
 
   return {
     rows: canHydrate && visible.ids.length > 0 ? rows : NO_ROWS,
@@ -152,7 +221,8 @@ function useRankedRecordPage({
       !idsReady ||
       (!idsError && (scores.isLoading || (rowsQuery.isLoading && rowsQuery.data.length === 0 && !rowsQuery.isError))),
     isError: scores.isError || rowsError,
-    isFetchingNextPage: canHydrate && rowsQuery.isFetching && rowsQuery.data.length > 0,
+    isFetchingNextPage:
+      canHydrate && rowsQuery.data.length > 0 && isRecordPageExpansionFetching(expansionPending, rowsQuery.isFetching),
     hasNextPage: visible.hasNextPage,
     fetchNextPage,
   };
@@ -183,6 +253,7 @@ export function useClaimRecord({
     where: relatedClaimsWhere({ spaceId, topicIds, requireTagId: DEBATE_TAG_ID }),
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
     enabled: topicIds.length > 0,
+    ...CLAIM_RECORD_QUERY_OPTIONS,
   });
 
   const topicRelatedIds = React.useMemo(() => relatedClaimIds(claimId, related.entities), [claimId, related.entities]);
@@ -201,6 +272,7 @@ export function useClaimRecord({
     },
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
     enabled: true,
+    ...CLAIM_RECORD_QUERY_OPTIONS,
   });
 
   const claimDebateIds = React.useMemo(() => entityIds(claimDebates.entities), [claimDebates.entities]);
@@ -208,6 +280,7 @@ export function useClaimRecord({
     where: claimsExtractedFromDebatesWhere(spaceId, claimDebateIds),
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
     enabled: claimDebateIds.length > 0,
+    ...CLAIM_RECORD_QUERY_OPTIONS,
   });
 
   const relatedIds = React.useMemo(
@@ -229,6 +302,7 @@ export function useClaimRecord({
     },
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
     enabled: topicRelatedIds.length > 0,
+    ...CLAIM_RECORD_QUERY_OPTIONS,
   });
 
   const debateIds = React.useMemo(
@@ -240,6 +314,38 @@ export function useClaimRecord({
   const recordKey = `${normId(spaceId)}:${normId(claimId)}`;
   const claimsCountUnavailable = Boolean(related.error ?? claimDebates.error ?? extractedClaims.error);
   const debatesCountUnavailable = Boolean(related.error ?? claimDebates.error ?? relatedDebates.error);
+  const refetchClaimsDiscovery = React.useCallback(
+    () =>
+      refetchFailedRecordQueries([
+        { error: related.error, refetch: related.refetch },
+        { error: claimDebates.error, refetch: claimDebates.refetch },
+        { error: extractedClaims.error, refetch: extractedClaims.refetch },
+      ]),
+    [
+      claimDebates.error,
+      claimDebates.refetch,
+      extractedClaims.error,
+      extractedClaims.refetch,
+      related.error,
+      related.refetch,
+    ]
+  );
+  const refetchDebatesDiscovery = React.useCallback(
+    () =>
+      refetchFailedRecordQueries([
+        { error: related.error, refetch: related.refetch },
+        { error: claimDebates.error, refetch: claimDebates.refetch },
+        { error: relatedDebates.error, refetch: relatedDebates.refetch },
+      ]),
+    [
+      claimDebates.error,
+      claimDebates.refetch,
+      related.error,
+      related.refetch,
+      relatedDebates.error,
+      relatedDebates.refetch,
+    ]
+  );
   // Candidate ids and scores remain complete so totals and Best order are exact. Only expensive
   // Explore-card hydration and DOM rendering are paged, which bounds work without changing rank.
   const claimsPage = useRankedRecordPage({
@@ -247,6 +353,7 @@ export function useClaimRecord({
     spaceId,
     idsReady: claimsReady,
     idsError: claimsCountUnavailable,
+    refetchIds: refetchClaimsDiscovery,
     recordKey,
   });
   const debatesPage = useRankedRecordPage({
@@ -254,6 +361,7 @@ export function useClaimRecord({
     spaceId,
     idsReady: debatesReady,
     idsError: debatesCountUnavailable,
+    refetchIds: refetchDebatesDiscovery,
     recordKey,
   });
 
