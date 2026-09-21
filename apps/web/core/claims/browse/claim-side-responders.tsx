@@ -8,15 +8,9 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import pluralize from 'pluralize';
 
-import { ID } from '~/core/id';
-import { getEntityResponders } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import {
-  type ActiveResponseDirection,
-  type ResponseKind,
-  entityRespondersQueryKey,
-} from '~/core/responses/entity-response';
-import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
+import { type ActiveResponseDirection, type ResponseKind } from '~/core/responses/entity-response';
+import { useEntityResponders } from '~/core/responses/use-entity-responders';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
@@ -68,37 +62,18 @@ export function ClaimSideResponders({
   // opening anything at all.
   const elevatedPopoverPortal = useElevatedPopoverPortal();
 
-  // Stands down under a batch, the same as the other two callers of this key.
-  //
-  // `ClaimResponseBatchBoundary` primes exactly this key for every claim on the page, so asking
-  // here would be a per-row request for something already in the cache — and before the batch lands
-  // there is nothing to answer from anyway. Unreachable under a batch as things stand, since
-  // `ClaimSides` is only mounted by the claim page and the explore card; it was the odd one out of
-  // three otherwise-identical call sites, which is how the deferral got lost the last time.
-  const responseBatch = useClaimResponseBatchState();
-  const { data: responders } = useQuery({
-    queryKey: entityRespondersQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
-    queryFn: () => Effect.runPromise(getEntityResponders(entityId, spaceId, responseKind, CLAIM_RESPONSE_OBJECT_TYPE)),
-    enabled: !responseBatch.managed,
-    staleTime: 30_000,
+  const { responders } = useEntityResponders({
+    entityId,
+    spaceId,
+    objectType: CLAIM_RESPONSE_OBJECT_TYPE,
+    responseKind,
+    viewerSpaceId,
+    optimisticViewerResponse: viewerDirection,
   });
 
-  // The viewer is placed from their own response rather than from the indexed rows, which trail it
-  // by a publish and an index. The counts above are adjusted the same way, so without this the
-  // number on a side moves while the face stays on the old one — or disappears from both.
-  //
-  // Removed from wherever the index still has them and added to the side they now hold, so
-  // switching sides and clearing both land correctly. Same overlay `ClaimResponderAvatars` does.
   const sideSpaceIds = React.useMemo(() => {
-    const indexed = (responders ?? [])
-      .filter(responder => responder.direction === direction)
-      .map(responder => responder.userId);
-
-    if (!viewerSpaceId) return indexed;
-
-    const withoutViewer = indexed.filter(id => !ID.equals(id, viewerSpaceId));
-    return viewerDirection === direction ? [viewerSpaceId, ...withoutViewer] : withoutViewer;
-  }, [direction, responders, viewerDirection, viewerSpaceId]);
+    return responders.filter(responder => responder.direction === direction).map(responder => responder.userId);
+  }, [direction, responders]);
 
   if (sideSpaceIds.length === 0) return null;
 

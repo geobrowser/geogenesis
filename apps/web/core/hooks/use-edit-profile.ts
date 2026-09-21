@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import equal from 'fast-deep-equal';
 import { useSetAtom } from 'jotai';
 
 import { useEntity } from '~/core/database/entities';
@@ -256,7 +257,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
           relation.isDeleted ? storage.relations.delete(relation) : storage.relations.set(relation)
         );
     },
-    [spaceId, storage]
+    [storage]
   );
 
   /**
@@ -775,6 +776,8 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
     },
     [
       canEdit,
+      current.avatarUrl,
+      current.bannerUrl,
       current.description,
       current.name,
       dispatch,
@@ -785,6 +788,8 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       settleSuccess,
       spaceId,
       stage,
+      storage.relations,
+      storage.values,
       takeDisplaced,
     ]
   );
@@ -803,21 +808,15 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   };
 }
 
-/**
- * Whether two sets of extra rows are the same edit, by row identity.
- *
- * Ids are enough: a value's id is derived from entity, property and space, so a
- * changed value keeps its id — but the staged rows are re-read from the store on
- * retry, so what matters here is only whether the *set* changed. A row added,
- * removed or retargeted changes it.
- */
+/** Whether two sets of extra rows carry the same edit. */
 function isSameExtra(a: ExtraRows | undefined, b: ExtraRows) {
   if (!a) return b.values.length === 0 && b.relations.length === 0;
 
-  const same = (left: { id: string }[], right: { id: string }[]) =>
-    left.length === right.length && left.every((row, index) => row.id === right[index].id);
-
-  return same(a.values, b.values) && same(a.relations, b.relations);
+  // Row identity is not enough here. Value ids are derived from entity,
+  // property and space, so editing a link or a date keeps the same id. The
+  // staged payload below is a snapshot rather than a live store read; treating
+  // that changed row as the same retry would therefore re-send its old value.
+  return equal(a, b);
 }
 
 function isSameDraft(a: ProfileDraft, b: ProfileDraft) {

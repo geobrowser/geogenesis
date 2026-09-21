@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@geogenesis/auth', () => ({
+  // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
+  usePrivy: () => ({ authenticated: false }),
   useGeoLogin: ({
     onComplete,
     onError,
@@ -43,6 +45,9 @@ vi.mock('~/partials/onboarding/dialog', async () => {
     avatarAtom: atom(''),
     spaceIdAtom: atom(''),
     stepAtom: atom('enter-profile'),
+    // Persisted onboarding state like the rest, and the one every hand-written reset forgot —
+    // `PendingPersonalSpaceRunner` turns it into membership proposals for the new personal space.
+    selectedTopicIdsAtom: atom<string[]>([]),
   };
 });
 
@@ -100,8 +105,11 @@ describe('usePrivySignIn', () => {
   // completion no longer knows where the viewer came from. Reading the attribution then would
   // lose it in exactly the case it exists for.
   it('keeps the attribution from the press, not from whatever the page says later', () => {
-    const { result, rerender } = renderHook(
-      (props: { analytics?: Record<string, unknown> }) => usePrivySignIn(undefined, props),
+    // Typed, because inference reads `initialProps` as `{ link_source: string }` and the rerender
+    // below deliberately clears it.
+    type Props = { analytics?: Record<string, unknown> };
+    const { result, rerender } = renderHook<ReturnType<typeof usePrivySignIn>, Props>(
+      props => usePrivySignIn(undefined, props),
       { initialProps: { analytics: { link_source: 'marketing' } } }
     );
 

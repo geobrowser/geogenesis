@@ -5,13 +5,14 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
+import { ClaimPositionCommentControl } from '~/core/claims/browse/claim-position-comment';
 import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSides, ClaimSplitBar, ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
-import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -52,11 +53,15 @@ import { ExploreMetaRow } from './explore-meta-row';
  *
  * Scoped to Claim entities by the caller. Every other type keeps the generic card untouched.
  */
+export type ClaimCardVariant = 'feed' | 'debate-panel-mobile';
+
 export function ClaimExploreFeedCard({
   item,
   hideSpaceLink = false,
   hideJoinButton = false,
   titleOpensSidePanel = false,
+  variant = 'feed',
+  responseNote,
 }: {
   item: ExploreFeedItem;
   hideSpaceLink?: boolean;
@@ -70,6 +75,19 @@ export function ClaimExploreFeedCard({
    * existing.
    */
   titleOpensSidePanel?: boolean;
+  /** The main Explore page opts into the debates side-panel chrome at phone widths. */
+  variant?: ClaimCardVariant;
+  /**
+   * A note about how somebody *else* answered this claim, for a surface that is
+   * a record of one person (GEO-2859).
+   *
+   * Built by the caller from the response kind this card resolves, because the
+   * vocabulary depends on it — a factual claim is verified or disputed, not
+   * agreed with — and the kind is a property of the claim in *this* space, which
+   * only this card knows. Absent everywhere else, which is every surface where
+   * the only answer worth reporting is the reader's own.
+   */
+  responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
 }) {
   // The feed pre-mounts cards thousands of pixels below the fold, so the counts and the geo-chat
   // row are gated on proximity rather than on mount — otherwise every claim in every loaded page
@@ -137,7 +155,34 @@ export function ClaimExploreFeedCard({
   // without a baseline it reports no counts and zeroes the split — but this column states the rule
   // it depends on rather than inheriting it, the same as the claim page's verdict and the shared
   // summary. A verdict drawn from a failed read is the one thing all three must never draw.
+  const extraSegments = React.useMemo(
+    () => (summary.isControversial ? [<ControversialTag key="controversial" />] : undefined),
+    [summary.isControversial]
+  );
+
+  /*
+   * Under the button it agrees with, rather than in the meta row.
+   *
+   * It went beside the type and the age first, on the reasoning that it is
+   * another fact about the claim in a row that already holds facts about it. On
+   * a real record that row is rarely as empty as it looks in isolation: the
+   * space chip, the type, the age, Controversial and the debate offer are
+   * already competing for it, and a sixth segment wrapped the line.
+   *
+   * Under the matching pill it needs no words to say which side it means —
+   * "Susan agrees" beneath Agree. The pills hold the card's own grid row, so
+   * nothing else moves.
+   *
+   * Held back until the response kind is known, or a factual claim reads
+   * "agrees" for a beat and then corrects itself to "verifies".
+   */
+  const noteFor = React.useCallback(
+    (position: boolean) => (isResponseKindResolved ? responseNote?.(responseKind, position) : null),
+    [isResponseKindResolved, responseKind, responseNote]
+  );
+
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
+  const matchesDebatePanelOnMobile = variant === 'debate-panel-mobile';
 
   return (
     // The `<article>` is the root and stays the root. Two things depend on that and neither is
@@ -146,13 +191,16 @@ export function ClaimExploreFeedCard({
     // element that is actually a sibling of the other cards — inside a wrapper every card is an
     // only child, so `:last-child` matches all of them.
     //
-    // That rules out giving the phone a boxed card here: box, spacing and border are all rules that
-    // would have to sit on this element, and a container query never matches the element declaring
-    // the container. The phone still gets the panel's *contents* — pills above, the grey summary
-    // band below — through descendants, which is where the width question can actually be asked.
+    // The mobile Explore shell is selected by a viewport query rather than this article's container
+    // query. That lets the root itself take the debates panel's border, radius and padding while the
+    // card's internal wide/narrow decision remains local to the space it actually has.
     <article
       ref={setContainer}
-      className={cx('@container flex flex-col gap-4', 'border-b border-divider py-4 last:border-b-0')}
+      className={cx(
+        '@container flex flex-col gap-4',
+        'border-b border-divider py-4 last:border-b-0',
+        matchesDebatePanelOnMobile && 'md:my-2 md:claim-card-panel-surface md:last:border-b'
+      )}
     >
       {/*
         Two zones, divided by a rule that runs the whole height: everything you can *do* to the claim
@@ -183,6 +231,10 @@ export function ClaimExploreFeedCard({
       <div
         className={cx(
           'grid claim-card-narrow:grid-cols-1 claim-card-narrow:gap-y-4',
+          // The container-query variant is emitted after viewport variants, so this is important:
+          // at phone width both match, and the panel rhythm (explicit margins on header/title/
+          // footer) must win over the feed card's generic 16px row gap.
+          matchesDebatePanelOnMobile && 'md:gap-y-0!',
           // No verdict, no column, no rule. A claim nobody has answered has nothing to report, and
           // an empty 220px cell behind a vertical line reads as something having failed to load —
           // where the claim simply taking the full width reads as a claim nobody has answered.
@@ -197,7 +249,8 @@ export function ClaimExploreFeedCard({
           item={item}
           hideSpaceLink={hideSpaceLink}
           hideJoinButton={hideJoinButton}
-          extraSegments={summary.isControversial ? [<ControversialTag key="controversial" />] : undefined}
+          extraSegments={extraSegments}
+          compactOnMobile={matchesDebatePanelOnMobile}
           endSlot={
             <ClaimEndSlot
               claimId={item.entityId}
@@ -220,27 +273,37 @@ export function ClaimExploreFeedCard({
           opensSidePanel={titleOpensSidePanel}
           className="group/title col-start-1 row-start-2 min-w-0"
         >
-          <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-pretty text-text group-hover/title:underline">
+          <h2
+            className={cx(
+              'mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-pretty text-text group-hover/title:underline',
+              matchesDebatePanelOnMobile && 'md:claim-card-panel-title!'
+            )}
+          >
             {item.title}
           </h2>
         </ExploreCardEntityLink>
 
         <div
           className={cx(
-            'col-start-1 row-start-3 mt-4 max-w-[360px] claim-card-narrow:mt-0'
+            'col-start-1 row-start-3 mt-4 claim-card-narrow:mt-0'
             // Nothing to add on a phone: the pills hold row 3 either way, and the verdict below
             // them takes row 4. That is the debates panel's order — what you can *do* to the claim
             // before what everyone else did with it — and on a wide card the verdict is a column
             // beside this, so the question does not arise.
           )}
         >
-          <PositionRow
+          <ClaimPositionCommentControl
+            entityId={item.entityId}
+            spaceId={item.spaceId}
             positions={control.optimisticPositions}
             responseKind={responseKind}
             viewerPosition={control.viewerPosition}
             onRespond={control.respond}
+            promptForComment={control.isConnected}
             disabled={!control.canRespond}
             titleFor={control.actionTitle}
+            noteFor={responseNote ? noteFor : undefined}
+            positionRowClassName="max-w-[360px]"
           />
           {control.responseError ? (
             <div role="alert" className="mt-2">
@@ -261,6 +324,7 @@ export function ClaimExploreFeedCard({
               spaceId={item.spaceId}
               responseKind={responseKind}
               summary={summary}
+              matchDebatePanelOnMobile={matchesDebatePanelOnMobile}
             />
           </div>
         ) : null}
@@ -294,11 +358,13 @@ function ClaimVerdictColumn({
   spaceId,
   responseKind,
   summary,
+  matchDebatePanelOnMobile,
 }: {
   entityId: string;
   spaceId: string;
   responseKind: 'stance' | 'veracity';
   summary: ClaimResponseSummary;
+  matchDebatePanelOnMobile: boolean;
 }) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
 
@@ -340,8 +406,8 @@ function ClaimVerdictColumn({
       </div>
 
       {/* Narrow: the debates panel's footer band — share, split and faces on one line, on grey.
-          Full width of the row rather than bled past it: the feed row carries no horizontal
-          padding, so a negative margin here would hang 16px outside the card. */}
+          The ordinary feed row keeps it within the row; the boxed mobile Explore variant bleeds it
+          through its new padding to the border, exactly as the panel card does. */}
       <div className="hidden claim-card-narrow:block">
         <ClaimSummary
           entityId={entityId}
@@ -349,7 +415,10 @@ function ClaimVerdictColumn({
           responseKind={responseKind}
           summary={summary}
           layout="inline"
-          className="border-t border-divider bg-grey-01 px-3 py-2"
+          className={cx(
+            'claim-card-summary-band',
+            matchDebatePanelOnMobile && 'md:-mx-3 md:mt-3 md:-mb-3 md:rounded-b-lg'
+          )}
         />
       </div>
     </>

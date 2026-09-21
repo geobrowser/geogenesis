@@ -24,12 +24,13 @@ import {
   EXPLORE_DIVERSITY_WINDOW_SIZE,
   applyDiversityCap,
   applyPerSpaceQuota,
+  applyTargetMix,
   exploreItemSpaceKey,
   exploreItemTypeKey,
+  targetMixAppliesTo,
 } from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
-import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 import { entityMatchesExploreTypeIds } from './explore-type-filter';
 import { decodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
 
@@ -527,9 +528,18 @@ export async function fetchExploreFeed(args: {
     // Two different crowding problems, two passes (GEO-2690 for type, GEO-2841 for space).
     // The space quota runs last so its guarantee is the one that holds outright; see
     // `applyPerSpaceQuota` for why that trade is the right way round.
-    return args.sort === 'best'
-      ? applyPerSpaceQuota(applyDiversityCap(rows, exploreItemTypeKey), exploreItemSpaceKey)
-      : rows;
+    if (args.sort !== 'best') return rows;
+
+    // Aim for an explicit composition when every selected type has a target share (GEO-2950),
+    // and fall back to the run cap otherwise — a single type, or a selection including types the
+    // mix says nothing about, has no ratio to hit. The two are alternatives, not a pipeline:
+    // running the cap after the mix would re-promote scarce types and undo the ratio, which is
+    // the exact mechanism that took claims from 4.1 to 1.8 per 10.
+    const mixed = targetMixAppliesTo(args.typeIds)
+      ? applyTargetMix(rows, exploreItemTypeKey)
+      : applyDiversityCap(rows, exploreItemTypeKey);
+
+    return applyPerSpaceQuota(mixed, exploreItemSpaceKey);
   };
 
   // A window that survives none of the above is not the end of the feed, and returning it as an

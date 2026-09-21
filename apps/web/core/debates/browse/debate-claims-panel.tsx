@@ -3,16 +3,21 @@
 import * as React from 'react';
 
 import { ClaimSummary } from '~/core/claims/browse/claim-summary';
-import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate, DebateClaim } from '~/core/debates/api';
-import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
+import {
+  type ClaimTiming,
+  formatTimecode,
+  isAssertableMoment,
+  sortClaimsBySpokenOrder,
+} from '~/core/debates/claim-timing';
+import { compareByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
-import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { type TranscriptClaim, claimsForParticipant, unmatchedClaims } from '~/core/debates/transcript-claims';
+import { useClaimTimings } from '~/core/debates/use-claim-timings';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
@@ -22,6 +27,7 @@ import { Close } from '~/design-system/icons/close';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
+import { useDebateClaimResponse } from './use-debate-claim-response';
 import { WinnerVoteButton } from './winner-vote-button';
 
 /** How many of a debater's claims show before "Show more". */
@@ -41,6 +47,10 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
   const votes = useDebateVotes(debate);
   // Same query key as the feed's count badge, so opening the panel doesn't refetch.
   const { claims, isLoading, error } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
+  // When each claim was said. Published timecodes where they exist, matched against the transcript
+  // otherwise. This drives the order as well as the timecode, so the panel waits on it — see
+  // `isOrdering`.
+  const { timings, isReady: timingsReady } = useClaimTimings(debate.id, claims);
 
   // Every claim a debate publishes lands in the debate's own space, so one lookup covers the panel.
   const claimsSpaceId = React.useMemo(
@@ -94,23 +104,36 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
     return map;
   }, [rowsQuery.claims]);
 
-  // Held back the way the debate feed holds its rows back while the same ranking loads: painting
-  // transcript order first and reordering a moment later moves claims under someone already
-  // reading, and can carry one across the "Show more" fold after they have looked at it.
-  const isOrdering = isLoading || !rankingReady;
+  // Held back until both inputs have landed: painting one order and reordering a moment later
+  // moves claims under someone already reading, and can carry one across the "Show more" fold
+  // after they have looked at it. The timings matter more than the ranking now — without them
+  // every claim ties, so the whole list would paint in ranking order and then rearrange itself.
+  const isOrdering = isLoading || !rankingReady || !timingsReady;
+
+  /**
+   * In the order the debate said them, ranking breaking the ties.
+   *
+   * These rows were ordered by ranking score, which is the right answer for a feed of unrelated
+   * claims and the wrong one inside a transcript: a debate is an argument, and reading its claims
+   * out of sequence loses the thread. Ties are every claim of a single turn — a turn is one moment
+   * as far as the resolver is concerned — and the ranking still decides those.
+   */
+  const inSpokenOrder = React.useCallback(
+    (subset: TranscriptClaim[]) => sortClaimsBySpokenOrder(subset, timings, compareByBest(rankByClaimId)),
+    [timings, rankByClaimId]
+  );
 
   const orphaned = React.useMemo(
     () =>
       isOrdering
         ? []
-        : sortClaimsByBest(
+        : inSpokenOrder(
             unmatchedClaims(
               claims,
               participants.map(participant => participant.profile_space_id)
-            ),
-            rankByClaimId
+            )
           ),
-    [claims, participants, rankByClaimId, isOrdering]
+    [claims, participants, inSpokenOrder, isOrdering]
   );
 
   React.useEffect(() => {
@@ -153,12 +176,11 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
             </div>
             <ClaimList
               claims={
-                isOrdering
-                  ? []
-                  : sortClaimsByBest(claimsForParticipant(claims, participant.profile_space_id), rankByClaimId)
+                isOrdering ? [] : inSpokenOrder(claimsForParticipant(claims, participant.profile_space_id))
               }
               rowsByClaimId={rowsByClaimId}
               entitiesByClaimId={entitiesByClaimId}
+              timings={timings}
               isLoading={isOrdering}
               error={error}
             />
@@ -175,6 +197,7 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
               claims={orphaned}
               rowsByClaimId={rowsByClaimId}
               entitiesByClaimId={entitiesByClaimId}
+              timings={timings}
               isLoading={false}
               error={null}
             />
@@ -189,12 +212,14 @@ function ClaimList({
   claims,
   rowsByClaimId,
   entitiesByClaimId,
+  timings,
   isLoading,
   error,
 }: {
   claims: TranscriptClaim[];
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
+  timings: Map<string, ClaimTiming>;
   isLoading: boolean;
   error: Error | null;
 }) {
@@ -228,6 +253,7 @@ function ClaimList({
               claim={claim}
               row={rowsByClaimId.get(claim.id) ?? null}
               entity={entitiesByClaimId.get(claim.id) ?? null}
+              timing={timings.get(claim.id) ?? null}
             />
           </li>
         ))}
@@ -259,7 +285,17 @@ function ClaimList({
  * controls are space-scoped, so there is nothing correct to point either one at — better a dead row
  * than one that navigates somewhere wrong or publishes a response into the wrong space.
  */
-function ClaimRow({ claim, row, entity }: { claim: TranscriptClaim; row: DebateClaim | null; entity: Entity | null }) {
+function ClaimRow({
+  claim,
+  row,
+  entity,
+  timing,
+}: {
+  claim: TranscriptClaim;
+  row: DebateClaim | null;
+  entity: Entity | null;
+  timing: ClaimTiming | null;
+}) {
   if (claim.spaceId === null) {
     return (
       <Text as="p" variant="metadata" color="text">
@@ -275,8 +311,30 @@ function ClaimRow({ claim, row, entity }: { claim: TranscriptClaim; row: DebateC
           {claim.text}
         </Text>
       </Link>
+      <ClaimTimecode timing={timing} />
       <PanelClaimControls claimId={claim.id} spaceId={claim.spaceId} row={row} entity={entity} />
     </>
+  );
+}
+
+/**
+ * When this claim was said.
+ *
+ * Nothing is drawn for a claim whose moment is only known to the turn (`source: 'block'`, a ~30s
+ * window) or not at all. A timecode reads as "here it is", and pointing at a half-minute of video
+ * is a worse answer than staying quiet — the reader still has the claim text and the panel.
+ */
+function ClaimTimecode({ timing }: { timing: ClaimTiming | null }) {
+  // The same bar the card over the video clears. This used to admit any matched claim, so a loose
+  // match the live layer would not draw still printed a time to the second — and nothing about
+  // "Said at 2:29" tells the reader it was inferred. A claim below the bar is still *ordered* by
+  // its match; it just does not get to name a second.
+  if (!isAssertableMoment(timing)) return null;
+
+  return (
+    <Text as="span" variant="footnote" color="grey-04" className="mt-1 block tabular-nums">
+      Said at {formatTimecode(timing.startMs)}
+    </Text>
   );
 }
 
@@ -303,36 +361,11 @@ function PanelClaimControls({
   entity: Entity | null;
 }) {
   // The claim's row title is drawn by `ClaimRow` above, so nothing is passed for it here.
-  const {
-    responseKind,
-    isResponseKindResolved,
-    isViewerResponseResolved,
-    responseBlockedReason,
-    summary,
-    claim,
-    positions,
-    readiness,
-  } = useClaimResponseState({
+  const { responseKind, summary, control } = useDebateClaimResponse({
     claimId,
     spaceId,
     row,
     entity,
-  });
-
-  const promptSignIn = usePrivySignIn();
-  const control = useClaimPositionControl({
-    claim,
-    positions,
-    readiness,
-    answersReady: isResponseKindResolved && isViewerResponseResolved,
-    responseBlockedReason,
-    onRequireSignIn: promptSignIn,
-    // No offer here, so no faces borrowed from one. The panel deliberately has no end slot — the
-    // reader is already watching the debate this claim is being argued in — and the merge exists to
-    // stop a card offering a debate on a side showing nobody to debate. With nothing offered, all it
-    // could do is put an unrelated stranger from an account-level match inside a pill on a row about
-    // this debate's own participants.
-    offersDebate: false,
   });
 
   return (

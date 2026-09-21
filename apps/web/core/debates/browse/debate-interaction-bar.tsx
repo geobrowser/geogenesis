@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { InfoSmall } from '~/design-system/icons/info-small';
+import { Warning } from '~/design-system/icons/warning';
 import { Text } from '~/design-system/text';
 
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
@@ -80,7 +80,7 @@ export function DebateInteractionBar({
           commentsPanelOpener={opensGlobalCommentsPanel}
         />
         {onClaims && (
-          <CircleAction label={String(claimsCount ?? 0)} onClick={onClaims} icon={<InfoSmall />} ariaLabel="Claims" />
+          <CircleAction label={String(claimsCount ?? 0)} onClick={onClaims} icon={<Warning />} ariaLabel="Claims" />
         )}
         {onShare && (
           <CircleAction
@@ -112,7 +112,7 @@ export function DebateInteractionBar({
         commentsPanelOpener={opensGlobalCommentsPanel}
       />
       {onClaims && (
-        <PillAction onClick={onClaims} icon={<InfoSmall />} label={String(claimsCount ?? 0)} ariaLabel="Claims" />
+        <PillAction onClick={onClaims} icon={<Warning />} label={String(claimsCount ?? 0)} ariaLabel="Claims" />
       )}
       {onShare && (
         <PillAction onClick={onShare} icon={<Share />} label="Share" ariaLabel="Share debate" expanded={shareOpen} />

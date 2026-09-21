@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import {
   EPISODE_TYPE_ID,
@@ -14,11 +15,16 @@ import {
   EXPLORE_DIVERSITY_WINDOW_SIZE,
   applyDiversityCap,
   applyPerSpaceQuota,
+  applyTargetMix,
   exploreItemTypeKey,
   largestWindowShare,
   longestTypeRun,
+  targetMixAppliesTo,
 } from './explore-diversity';
 import { decodeExploreWindowCursor, encodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
+
+/** Type keys are compared hyphenless, the same normalisation exploreItemTypeKey applies. */
+const normIdForTest = (id: string) => id.replace(/-/g, '').toLowerCase();
 
 type Item = { id: string; types: { id: string }[] };
 
@@ -386,5 +392,105 @@ describe('the per-space quota', () => {
     const typed = applyDiversityCap(rows, exploreItemTypeKey);
     expect(typed).toHaveLength(rows.length);
     expect(applyPerSpaceQuota(typed, spaceOf, 4, 20)).toHaveLength(rows.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyTargetMix — GEO-2950
+//
+// The run cap and the target mix bound different things, and the measurement that
+// prompted this is the proof: the same window rendered 4.1 claims per 10 before the
+// cap and 1.8 after it. These assert the property the cap cannot give — a share.
+// ---------------------------------------------------------------------------
+describe('applyTargetMix', () => {
+  const CLAIM = normIdForTest(CLAIM_TYPE_ID);
+  const DEBATE = normIdForTest(DEBATE_TYPE_ID);
+  const NEWS = normIdForTest(NEWS_STORY_TYPE_ID);
+  const keyOf = (item: { key: string }) => item.key;
+  const build = (counts: Record<string, number>) =>
+    Object.entries(counts).flatMap(([key, n]) => Array.from({ length: n }, (_, i) => ({ key, id: `${key}-${i}` })));
+  const per10 = (items: { key: string }[], key: string, take: number) =>
+    Math.round((items.slice(0, take).filter(i => i.key === key).length * 10 * 10) / take) / 10;
+
+  /**
+   * A real rank-ordered window, captured from production on 2026-09-17 (featured spaces, the
+   * default three types) — C=Claim, D=Debate, N=News story.
+   *
+   * Recorded rather than invented because a block fixture (27 C, then 13 D, then 26 N) is the run
+   * cap's BEST case and made an earlier version of these tests assert the opposite of reality.
+   * What matters here is the interleaving, and that it opens with eight consecutive debates: the
+   * highest-ranked items are debates, which is why the rendered page skews to them.
+   *
+   * Not byte-identical to what production serves — this window was fetched without the
+   * server-side debate-tag gate on claims, so it holds claims Explore would drop. Same ordering
+   * mechanics, slightly richer in claims.
+   */
+  const PRODUCTION_WINDOW = 'DDDDDDDDCNDCCNNCNNNCNCDCCNNCDCNCCCCCNCCNNCNNDNNCNNCDCCCCCNNNNNNNCC';
+  const fromSequence = (seq: string) =>
+    [...seq].map((c, i) => ({ key: c === 'C' ? CLAIM : c === 'D' ? DEBATE : NEWS, id: `${c}-${i}` }));
+
+  it('hits 6:3:1 on a page when supply allows', () => {
+    const out = applyTargetMix(fromSequence(PRODUCTION_WINDOW), keyOf);
+    expect(per10(out, CLAIM, 22)).toBeCloseTo(6, 0);
+    expect(per10(out, DEBATE, 22)).toBeCloseTo(3, 0);
+    expect(per10(out, NEWS, 22)).toBeCloseTo(1, 0);
+  });
+
+  it('beats the run cap on the metric that was reported', () => {
+    // Same input, both strategies. The cap is not wrong — it optimises a different thing —
+    // but on claim share it is the regression Preston saw.
+    const window = fromSequence(PRODUCTION_WINDOW);
+    const capped = applyDiversityCap(window, keyOf);
+    const mixed = applyTargetMix(window, keyOf);
+    // On this window the cap serves 2.7 claims per 10 and the mix serves 5.9.
+    expect(per10(mixed, CLAIM, 22)).toBeGreaterThan(per10(capped, CLAIM, 22));
+    expect(per10(capped, CLAIM, 22)).toBeLessThan(4);
+  });
+
+  it('interleaves rather than emitting blocks', () => {
+    const out = applyTargetMix(fromSequence(PRODUCTION_WINDOW), keyOf);
+    // A naive 6:3:1 cycle would open with six consecutive claims.
+    expect(longestTypeRun(out.slice(0, 22), keyOf)).toBeLessThanOrEqual(3);
+  });
+
+  it('renormalises when a type is unticked', () => {
+    // No News story selected: 6:3 over the two present, not 6:3 with a hole where News was.
+    const out = applyTargetMix(build({ [CLAIM]: 30, [DEBATE]: 20 }), keyOf);
+    expect(per10(out, CLAIM, 20)).toBeCloseTo(6.7, 0);
+    expect(per10(out, DEBATE, 20)).toBeCloseTo(3.3, 0);
+  });
+
+  it('degrades to rank order when a type runs dry, without dropping or shortening', () => {
+    // Debates are the scarce input — ~82 exist in the entire feed.
+    const window = build({ [CLAIM]: 40, [DEBATE]: 2, [NEWS]: 10 });
+    const out = applyTargetMix(window, keyOf);
+    expect(out).toHaveLength(window.length);
+    expect(new Set(out.map(i => i.id)).size).toBe(window.length);
+  });
+
+  it('preserves rank order within a type', () => {
+    const out = applyTargetMix(build({ [CLAIM]: 10, [DEBATE]: 5, [NEWS]: 2 }), keyOf);
+    const claims = out.filter(i => i.key === CLAIM).map(i => i.id);
+    expect(claims).toEqual([...claims].sort((a, b) => Number(a.split('-')[1]) - Number(b.split('-')[1])));
+  });
+
+  it('is a pure function of the input, so the window cursor stays valid', () => {
+    const window = fromSequence(PRODUCTION_WINDOW);
+    expect(applyTargetMix(window, keyOf)).toEqual(applyTargetMix(window, keyOf));
+  });
+});
+
+describe('targetMixAppliesTo', () => {
+  it('applies to the default selection', () => {
+    expect(targetMixAppliesTo([NEWS_STORY_TYPE_ID, DEBATE_TYPE_ID, CLAIM_TYPE_ID])).toBe(true);
+  });
+  it('does not apply to a single type — there is no ratio to hit', () => {
+    expect(targetMixAppliesTo([CLAIM_TYPE_ID])).toBe(false);
+  });
+  it('does not apply when a selected type has no target share', () => {
+    expect(targetMixAppliesTo([CLAIM_TYPE_ID, DEBATE_TYPE_ID, '972d201ad78045689e01543f67b26bee'])).toBe(false);
+  });
+  it('does not apply with no type filter at all (the activity feed)', () => {
+    expect(targetMixAppliesTo(undefined)).toBe(false);
   });
 });

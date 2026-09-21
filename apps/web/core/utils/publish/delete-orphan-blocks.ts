@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 import { getBatchEntities, getEntityBacklinks } from '~/core/io/queries';
 import type { Relation } from '~/core/types';
 
-async function buildDeleteOpsForEntity(entityId: string, spaceId: string): Promise<Op[]> {
+async function buildDeleteOpsForEntity(entityId: string, _spaceId: string): Promise<Op[]> {
   // Fetch the full entity (all spaces) so we can remove all outgoing relations.
   const entities = await Effect.runPromise(getBatchEntities([entityId]));
   const entity = entities[0];

@@ -137,6 +137,10 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const entityId = row.original.entityId;
     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
 
+    // TanStack renders `cell` through `flexRender`, which `createElement`s a function definition —
+    // so this really is a component body and the hook is legal. The rule only sees a lowercase
+    // property named `cell` and cannot tell.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const name = useSpaceAwareValue({ entityId, propertyId: SystemIds.NAME_PROPERTY, spaceId })?.value ?? null;
     const href = NavUtils.toEntity(nameCell.space ?? space, entityId, false);
     const verified = nameCell?.verified;

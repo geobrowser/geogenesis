@@ -17,6 +17,59 @@ export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
 export const entitySidePanelHostElementAtom = atom<HTMLElement | null>(null);
 
 /**
+ * The comments panel's own element, for the same reason the side panel registers one: a slide-up
+ * locks scrolling everywhere but its own subtree, and a panel portalled to the body is outside it.
+ */
+export const commentsPanelHostElementAtom = atom<HTMLElement | null>(null);
+
+/**
+ * A body-level container an open slide-up offers to popovers that portal out of it.
+ *
+ * Raising such a popover above the sheet is only half of what it needs: the sheet locks scrolling
+ * everywhere outside its own subtree, and a popover on the body is outside it — so a list taller than
+ * its own max-height could be seen and not scrolled. Living in a container the sheet registers as a
+ * scroll shard fixes that without moving the popover out of the body, which is where its positioning
+ * already works.
+ *
+ * Reads the topmost sheet's container, since that is the sheet a popover is being opened over.
+ */
+export const slideUpPopoverContainerAtom = atom(get => get(slideUpPopoverContainersAtom).at(-1)?.container ?? null);
+
+/**
+ * The slide-ups that are open, in the order they opened — so the last is the one on top.
+ *
+ * A list rather than a count, for the reason the count replaced a flag and then did not go far enough:
+ * several sheets can be open, and the things that ask about them need to know *which* is on top, not
+ * only that one is. Escape belongs to the topmost sheet alone, and a popover opened over the sheet
+ * underneath still needs that sheet's own container. Each entry is an opaque token owned by one sheet.
+ */
+export const openSlideUpsAtom = atom<symbol[]>([]);
+
+/**
+ * How many slide-ups are open. Derived, so there is one account of it — read by overlays deciding
+ * whether they have to clear a sheet. Writable by a count for tests and stories, which mint that many
+ * stand-in tokens.
+ */
+export const slideUpOpenCountAtom = atom(
+  get => get(openSlideUpsAtom).length,
+  (_get, set, count: number) => {
+    set(
+      openSlideUpsAtom,
+      Array.from({ length: Math.max(0, count) }, () => Symbol('slide-up'))
+    );
+  }
+);
+
+/**
+ * The body-level popover container belonging to the sheet on top, or `null` when none is open.
+ *
+ * Keyed by sheet so that a sheet closing gives back its own and uncovers whatever was underneath —
+ * storing a single container meant two overlapping sheets left *no* container once the upper one
+ * closed, and popovers over the lower one went back to being unscrollable.
+ */
+export const slideUpPopoverContainersAtom = atom<{ token: symbol; container: HTMLElement }[]>([]);
+
+/**
  * Whether a space rail is currently rendering content. The header lives in the
  * layout (separate DOM from the page body), so it can't use `has-[aside]`.
  */
@@ -106,7 +159,17 @@ export const debatesHubPositionsTopicIdsAtom = atom<string[]>([]);
 export const debatesHubPositionsSearchAtom = atom('');
 
 /**
- * Whether each browse surface's membership default has been applied or forfeited this session.
+ * The People tab's spaces filter (GEO-2944).
+ *
+ * Its own selection rather than any other tab's, for the reason Lobby and Positions have theirs:
+ * this one narrows *people* by spaces where they have debate activity, while the others narrow
+ * claims by the space the claim is in. Carrying a selection across would re-filter a list the
+ * viewer never narrowed, and the two lists do not even offer the same spaces.
+ */
+export const debatesHubPeopleSpaceIdsAtom = atom<string[]>([]);
+
+/**
+ * Whether each claim-browse surface's membership default has been applied or forfeited this session.
  *
  * `useMemberSpaceDefault` spends its seed once per *mount*, which was the right lifetime while the
  * selection died with the mount too. Now that the selection outlives the panel, the seed has to as
@@ -167,6 +230,7 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubPositionsTopicIdsAtom, []);
   set(debatesHubPositionsSearchAtom, '');
   set(debatesHubPositionsSpaceSeedSpentAtom, false);
+  set(debatesHubPeopleSpaceIdsAtom, []);
   // A different viewer has not been shown anything yet, so the courtesy is theirs to receive.
   set(debatesHubLeftLobbyForExploreAtom, false);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than

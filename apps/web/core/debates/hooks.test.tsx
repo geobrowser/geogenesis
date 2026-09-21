@@ -17,7 +17,7 @@ import {
 } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
-import { useDebateGatewayScope, useDebateGatewaySpaceScopes } from './debate-gateway';
+import { useDebateGatewayScope} from './debate-gateway';
 import {
   debateQueryKeys,
   useAcceptDebateRematchRequest,
@@ -73,6 +73,12 @@ vi.mock('@geogenesis/auth', () => ({
   getIdentityToken: mocks.getIdentityToken,
   useIdentityToken: () => ({ identityToken: mocks.identityToken() }),
   usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, user: { id: 'user-a' } }),
+}));
+
+// The coordinator mounts the claim response notifier, which reads the personal space; nothing here
+// is about it.
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: null }),
 }));
 
 // geo-chat only indexes DAO spaces, and the debate hooks hold until they know the space is one.

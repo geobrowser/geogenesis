@@ -1,10 +1,28 @@
-import type { Debate, DebateMediaResponse, DebateParticipant, ParticipantSlot } from './api';
+import { errorName } from '~/core/utils/error-name';
+
+import type { Debate, DebateMediaResponse, DebateMediaTurnSegment, DebateParticipant, ParticipantSlot } from './api';
 
 export type TurnState = {
   slot: ParticipantSlot;
   progress: number;
   seconds: number;
 } | null;
+
+/**
+ * How close to the timeline's end counts as the end.
+ *
+ * Shared by `playbackEnded`, the background-playhead recovery and the scrubber markers, so the
+ * three cannot disagree about whether a debate has finished. It moved here from the playback hook
+ * once a third caller needed it: `claim-ticker.ts` is a pure module a Node script imports, and
+ * pulling a `'use client'` React hook in for one number was not an option.
+ *
+ * Getting that sharing wrong is what the markers did. A marker clamped its seek to `timelineMs - 1`
+ * on the reasoning that anything short of the duration is still playing — but a millisecond short
+ * is well inside this window, so the player called it ended and took the whole claim corner down,
+ * which is the blank the clamp was added to prevent.
+ */
+export const PLAYBACK_END_EPSILON_MS = 50;
+export const PLAYBACK_END_EPSILON_SECONDS = PLAYBACK_END_EPSILON_MS / 1000;
 
 /**
  * Has both per-slot recordings. A debate whose media job failed still passes this, so the feed
@@ -58,6 +76,60 @@ function turnSlot(firstSlot: ParticipantSlot, index: number): ParticipantSlot {
   return index % 2 === 0 ? firstSlot : firstSlot === 1 ? 2 : 1;
 }
 
+/**
+ * The turn boundaries the render actually used, when the media response has them (GEO-2949).
+ *
+ * `turnStateForTime` walks `turn_durations_ms`, which is the format's *allowance*. Debaters end
+ * turns early, so the allowance is not what got cut: on the debate this was measured against, the
+ * page switched 4.0-10.8s late on every turn and 11.95s of speech played with the wrong panel
+ * unmuted — the audio dropping out mid-sentence and cutting back in. `turn_segments` carries the
+ * boundaries the video was built from, so it is what the audible panel and the subtitles have to
+ * follow.
+ *
+ * Sorted defensively: the caller receives the array straight off the wire, and a binary search
+ * over an unsorted list would silently pick the wrong speaker.
+ */
+export function sortTurnSegments(segments: DebateMediaTurnSegment[]): DebateMediaTurnSegment[] {
+  return [...segments]
+    .filter(segment => Number.isFinite(segment.output_start_ms) && segment.output_end_ms > segment.output_start_ms)
+    .sort((a, b) => a.output_start_ms - b.output_start_ms);
+}
+
+export function timelineSecondsForSegments(segments: DebateMediaTurnSegment[]): number {
+  return segments.reduce((longest, segment) => Math.max(longest, segment.output_end_ms / 1_000), 0);
+}
+
+/**
+ * `turnStateForTime`'s answer, derived from the rendered segments instead of the allowance.
+ *
+ * `progress` runs off `countdown_start_ms` rather than the segment start, so a 60s turn still
+ * renders a 60s ring even though its retained video is 65s long — before the clock starts, the
+ * ring sits at 0 while the speaker is already talking. That is what the debaters saw.
+ */
+export function turnStateFromSegments(segments: DebateMediaTurnSegment[], seconds: number): TurnState {
+  if (segments.length === 0) return null;
+
+  const ms = seconds * 1_000;
+  const active =
+    segments.find(segment => ms >= segment.output_start_ms && ms < segment.output_end_ms) ??
+    // Past the end, hold the final turn rather than blanking the speaker — the playhead sits on
+    // `output_end_ms` for the whole paused tail after playback finishes.
+    (ms >= segments[segments.length - 1].output_end_ms ? segments[segments.length - 1] : null);
+  if (!active) return null;
+
+  const countdownStartMs = Math.min(
+    Math.max(active.countdown_start_ms ?? active.output_start_ms, active.output_start_ms),
+    active.output_end_ms
+  );
+  const clockMs = Math.max(1, active.output_end_ms - countdownStartMs);
+
+  return {
+    slot: active.participant_slot,
+    progress: Math.max(0, Math.min(1, (ms - countdownStartMs) / clockMs)),
+    seconds: Math.max(0, (active.output_end_ms - ms) / 1_000),
+  };
+}
+
 export function clampSeconds(value: number, duration: number) {
   const safeDuration = Number.isFinite(duration) ? Math.max(0, duration) : 0;
   if (!Number.isFinite(value)) return 0;
@@ -93,6 +165,84 @@ function offsetSeconds(startedAtMs: number | null, windowStartMs: number): numbe
   return (startedAtMs - windowStartMs) / 1_000;
 }
 
+/** What `pairPlayhead` needs off an element, so tests need not build a whole video. */
+export type ClockVideo = Pick<HTMLVideoElement, 'paused' | 'currentTime'>;
+
+export type PairPlayhead = {
+  /** Debate-timeline seconds. */
+  seconds: number;
+  /** Read off an element that is actually running, rather than reconstructed from a paused one. */
+  live: boolean;
+};
+
+/**
+ * Where the debate is, in debate-timeline seconds, given the two recordings' own clocks.
+ *
+ * Slot 1 is the clock, always, in the foreground. The pair is kept in lockstep, so its position
+ * plus its recording offset is the debate's position, and every seek is expressed that way. Slot 2
+ * is *not* interchangeable with it: it is deliberately allowed to run ahead — the drift nudge puts
+ * it there on purpose, and a stalled slot 1 can leave it far ahead (GEO-2828) — so treating its
+ * clock as the debate's would skip whatever it had got through but the viewer had not heard.
+ *
+ * `trustSecondary` is what turns that off, and it means one specific thing: the pair was stopped
+ * by the browser rather than by us, which happens when the tab is off screen (GEO-2947). There,
+ * slot 1's clock is not canonical at all — it is frozen at whatever instant the browser stopped
+ * the element it considered silent, while slot 2 carried the debate on — so the position has to
+ * be recovered from whatever evidence there is:
+ *
+ *  - whichever element is still running, slot 1 first;
+ *  - then the furthest frozen clock, since a browser does not stop both at the same instant;
+ *  - and `lastRunningSeconds`, the caller's own record, which covers the case where an element
+ *    stopped between the throttled `timeupdate` ticks of a background tab.
+ *
+ * Slot 2's frozen clock counts only once its `currentTime` shows the recording has played: one
+ * that starts after the debate window has a positive offset, so an untouched slot 2 would
+ * otherwise report being that far into the debate before a frame of it had been shown.
+ *
+ * The caller must reset its record on a deliberate seek and when the recordings change, or a
+ * scrub backwards would be dragged forward by it — `useDebatePlayback` does both.
+ *
+ * `live` says whether the answer came off a running element, so a caller can keep its record
+ * current without re-deriving "is either element running" for itself.
+ */
+export function pairPlayhead(
+  primary: ClockVideo | null,
+  secondary: ClockVideo | null,
+  offsets: { slot1: number; slot2: number },
+  lastRunningSeconds: number | null = null,
+  trustSecondary = false
+): PairPlayhead {
+  const primarySeconds = (primary?.currentTime ?? 0) + offsets.slot1;
+  const primaryRunning = Boolean(primary && !primary.paused);
+
+  if (!trustSecondary) {
+    // Slot 1 is the clock and a running slot 1 is the whole answer: the record is only there to
+    // raise a *frozen* one. Anything else would drag a scrub backwards forward again.
+    if (primaryRunning) return { seconds: primarySeconds, live: true };
+    return {
+      seconds: lastRunningSeconds === null ? primarySeconds : Math.max(primarySeconds, lastRunningSeconds),
+      live: false,
+    };
+  }
+
+  // Off screen no clock is authoritative, *including a running one*. A browser that stopped slot 1
+  // at debate-time 100 while slot 2 ran on to 130 can hand slot 1 back un-paused at its frozen 100
+  // — un-suspended, or un-paused-but-stalled, which `paused === false` cannot tell apart and which
+  // is slot 1's documented failure mode (GEO-2828). Returning that 100 as "live" would walk the
+  // recovered position backwards over half a minute the viewer had already heard, and drag slot 2
+  // back with it on the resume. So every piece of evidence is weighed and the furthest wins.
+  const candidates = [primarySeconds];
+  // Slot 2 counts once its clock shows the recording has played: one that starts after the debate
+  // window has a positive offset, so an untouched slot 2 would otherwise report being that far in.
+  if (secondary && secondary.currentTime > 0) candidates.push(secondary.currentTime + offsets.slot2);
+  if (lastRunningSeconds !== null) candidates.push(lastRunningSeconds);
+
+  return {
+    seconds: Math.max(...candidates),
+    live: primaryRunning || Boolean(secondary && !secondary.paused),
+  };
+}
+
 export function participantForSlot(debate: Debate, slot: ParticipantSlot) {
   return debate.participants.find(participant => participant.participant_slot === slot) ?? null;
 }
@@ -108,7 +258,33 @@ export function speakerLabel(participant: Pick<DebateParticipant, 'display_name'
 /** The two elements this helper needs, so tests do not have to build a whole `HTMLVideoElement`. */
 export type PlayableVideo = Pick<HTMLVideoElement, 'muted' | 'paused'> & { play: () => Promise<void> };
 
-export type PlayBothOutcome = 'playing' | 'playing-muted' | 'blocked';
+/**
+ * `'refused'` and `'blocked'` are both "it did not start", and the difference between them is
+ * whether trying again could ever work.
+ *
+ * `'refused'` is the browser's answer — `NotAllowedError`, autoplay policy, iOS in Low Power Mode
+ * — and it will be the same answer to the same question, so the only way forward is a control the
+ * viewer taps. `'blocked'` is everything else that failed to confirm: a stalled buffer, a missing
+ * recording, a decode failure. Those are worth retrying and worth saying out loud, so folding them
+ * into `'refused'` would leave a card sitting silently behind a play button that does nothing.
+ */
+export type PlayBothOutcome = 'playing' | 'playing-muted' | 'refused' | 'blocked' | 'cancelled';
+
+export type PlayBothOptions = {
+  /** Injectable so tests do not wait on real timers. */
+  wait?: (ms: number) => Promise<void>;
+  /**
+   * Has something else taken ownership of these elements since the attempt began?
+   *
+   * This function confirms a start by polling, so it is *asleep* for most of its runtime, and a
+   * pause or a scroll-away lands there routinely. A caller that only checks ownership once this
+   * returns is too late: the retry below would have called `play()` on both elements in the
+   * meantime, leaving a pair the viewer had paused running in the DOM under a UI showing paused
+   * (GEO-2947). Checked before the retry, which is the only point where this function restarts
+   * something it did not start.
+   */
+  isCancelled?: () => boolean;
+};
 
 /**
  * Start both recordings, falling back to muted when the browser blocks unmuted autoplay
@@ -129,8 +305,22 @@ export type PlayBothOutcome = 'playing' | 'playing-muted' | 'blocked';
  * whether `play()` resolved. `play()` can resolve while the element is still transitioning out of
  * `paused`, so checking `paused` on the very next microtask reports a block on a video that plays
  * a moment later — which is why the feed showed "Could not play both videos" on essentially every
- * scroll while the recordings played fine. A rejected `play()` needs no special case: a rejection
- * leaves the element paused, so it fails the same check.
+ * scroll while the recordings played fine.
+ *
+ * **But a rejected `play()` does need a special case, and assuming otherwise is GEO-2978.** This
+ * comment used to end "a rejection leaves the element paused, so it fails the same check". It does
+ * not, or not in time: `play()` sets `paused` to false *synchronously* and only then rejects, and
+ * the user agent pauses it again afterwards. So the first confirm poll can see both elements
+ * un-paused and report success for a play the browser was in the middle of refusing.
+ *
+ * Measured on an iPhone in Low Power Mode, which refuses every autoplay: the card reported
+ * `playing=true` with both elements `PAUSED` at `t=0.0` and `calls=[play REJECTED:NotAllowedError]`.
+ * From there nothing recovers — the autoplay effect will not retry a card it believes is playing,
+ * no refusal is recorded, and the paused glyph never renders. The viewer's first tap only pauses
+ * what the app imagined was running, which is why it took two taps to start a video.
+ *
+ * So a refusal now invalidates the reading: whatever `paused` said mid-flight, the browser has
+ * told us plainly that it did not start.
  *
  * The grace window is deliberately short. It only has to outlast the paused -> playing transition,
  * and every millisecond of it delays the muted retry on a genuine block.
@@ -152,23 +342,115 @@ async function bothRunning(
   return !primary.paused && !secondary.paused;
 }
 
+/**
+ * Whether a rejected `play()` was the browser declining, rather than us interrupting.
+ *
+ * On the name only. `play()` rejects with a `DOMException` and the spec names it: `NotAllowedError`
+ * for a policy refusal, `AbortError` for an interruption — which, here, is almost always our own
+ * `pause()`. Matching the *message* instead conflates them, because the engines do not agree on
+ * wording and their phrases overlap: WebKit refuses with "not allowed by the user agent", while
+ * Chrome interrupts with "the play() request was interrupted", and a substring broad enough to
+ * catch the first catches interruptions that mention the user agent too. Calling one of those a
+ * refusal latches the tap control and stops autoplay after an ordinary scroll.
+ *
+ * `errorName` rather than `instanceof Error`, for the reason documented there.
+ */
+function isRefusal(reason: unknown): boolean {
+  return errorName(reason) === 'NotAllowedError';
+}
+
 export async function playBothWithMutedFallback(
   primary: PlayableVideo,
   secondary: PlayableVideo,
-  /** Injectable so tests do not wait on real timers. */
-  wait: (ms: number) => Promise<void> = defaultWait
+  { wait = defaultWait, isCancelled }: PlayBothOptions = {}
 ): Promise<PlayBothOutcome> {
-  const attempt = async () => {
-    await Promise.allSettled([primary.play(), secondary.play()]);
-    return bothRunning(primary, secondary, wait);
+  /**
+   * Whether the browser said no, as opposed to simply not having started yet.
+   *
+   * `play()` rejects for two quite different reasons and they need telling
+   * apart: `NotAllowedError` is a policy answer — no gesture, or iOS in Low
+   * Power Mode — while an `AbortError` is our own `pause()` interrupting the
+   * attempt. Only the first is a fact about the device.
+   */
+  const attempt = async (): Promise<{ running: boolean; refused: boolean }> => {
+    const settled = await Promise.allSettled([primary.play(), secondary.play()]);
+    const refused = settled.some(result => result.status === 'rejected' && isRefusal(result.reason));
+
+    return { running: await bothRunning(primary, secondary, wait), refused };
   };
 
-  if (await attempt()) return 'playing';
+  const first = await attempt();
+
+  if (first.running && !first.refused) return 'playing';
+
+  /*
+   * A refusal outranks the cancellation check below — on the autoplay path, which is the one
+   * GEO-2978 is about.
+   *
+   * `resumeBoth` bumps its generation on entry and its caller re-enters while `playing` is false,
+   * so by the time this returns `isCancelled` is routinely true simply because the *next* attempt
+   * has started. Reporting 'cancelled' there threw away the browser's answer, the next attempt
+   * threw away its own, and the card never learned it had been refused: no play control, no error,
+   * just a still frame. Measured against the preview with `play()` forced to reject — zero play
+   * controls on six cards.
+   *
+   * **The mute condition is what scopes this to autoplay, and it is deliberate.** A card the feed
+   * is starting is stopped, and `DebateFeedPlayer` derives `muted` as `!audible || mutedByUser`
+   * with `audible` requiring `playing` — so both elements are muted and this check is the one that
+   * fires. A resume of a pair that was already *playing* — `endScrub`, or the return from a
+   * backgrounded tab — has the speaking element unmuted, and there a refusal means only "not
+   * unmuted", which is the ordinary case GEO-2783 exists for. 'refused' is a statement about the
+   * device, and latching it on a card that would play perfectly well muted would take the retry
+   * away from a card that deserves one, so it is not reported until the muted retry has answered.
+   *
+   * The consequence, named because it is a real cost rather than an oversight: an unmuted refusal
+   * that is also cancelled returns 'cancelled' and the browser's answer is lost for that attempt.
+   * It survives because the last attempt in an overlap chain is by definition not cancelled, and
+   * that attempt starts from a stopped card with both elements muted — so it takes this branch.
+   * One attempt's delay, not a lost answer. Pinned by a test, since it rests on reasoning about a
+   * caller rather than on anything visible here.
+   */
+  if (first.refused && primary.muted && secondary.muted) return 'refused';
+
+  // Someone paused these, or scrolled them off screen, while the confirm above was polling. The
+  // retry would start them again — and the caller checking ownership after this returns cannot
+  // undo a `play()` that has already happened.
+  if (isCancelled?.()) return 'cancelled';
 
   // Nothing to retry if audio was already off — the block is not the autoplay policy.
   if (primary.muted && secondary.muted) return 'blocked';
 
+  // Both outcomes below leave the elements muted, and deliberately so: this function does not
+  // know what the caller renders `muted` from, and it has been awaiting for up to ~300ms, so any
+  // value it captured on the way in may already be out of date — the viewer can mute from the
+  // control that stays visible during playback, or from another card sharing the preference.
+  // Writing a stale snapshot back is worse than leaving the mute: React only writes a DOM
+  // property when its own previous value differs, so a write it disagrees with is one it will
+  // never repair, and the pair would play audibly under a UI showing muted (GEO-2947).
+  //
+  // 'playing-muted' is paired by the caller with the state change that makes the mute the
+  // rendered truth. 'blocked' is repaired by whoever renders `muted`, once the attempt is over —
+  // `DebateFeedPlayer` re-asserts it when `isResuming` falls.
   primary.muted = true;
   secondary.muted = true;
-  return (await attempt()) ? 'playing-muted' : 'blocked';
+
+  const retry = await attempt();
+
+  if (retry.running && !retry.refused) return 'playing-muted';
+
+  /*
+   * The muted retry has the only verdict that describes it.
+   *
+   * A refused *unmuted* request is the ordinary case — it is why the muted retry exists at all —
+   * and carrying `first.refused` down here reported a refusal for whatever the retry did next. A
+   * muted attempt that stalls, on a recording that 404s or will not decode, is not the browser
+   * declining: the caller would latch the tap control and drop both the retry and the message a
+   * stall is owed, and the tap would achieve nothing.
+   *
+   * Refusal still outranks cancellation, for the reason given above the first check.
+   */
+  if (retry.refused) return 'refused';
+  if (isCancelled?.()) return 'cancelled';
+
+  return 'blocked';
 }

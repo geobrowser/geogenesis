@@ -31,7 +31,7 @@ import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 import { JoinDebateButton } from './join-debate-button';
-import { exceedsLineClamp } from './line-clamp-overflow';
+import { useLineClampOverflow } from './line-clamp-overflow';
 import { DebateShareDialog } from './share-dialog';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
@@ -245,7 +245,12 @@ export function DebatesBrowseFeed({
     return () => setDebateFullscreenActive(false);
   }, [rendersFeed, setDebateFullscreenActive]);
 
-  const visibleDebates = anchorPending ? [] : debates.slice(0, visibleCount);
+  // Memoised because both branches build a new array: the effect below is keyed on this, and an
+  // unmemoised ternary re-ran it on every render.
+  const visibleDebates = React.useMemo(
+    () => (anchorPending ? [] : debates.slice(0, visibleCount)),
+    [anchorPending, debates, visibleCount]
+  );
 
   // Gated on what's actually on screen rather than on `debates`: that inherits the anchor
   // hold above, and holds the nudge back while the media lookups land one at a time and
@@ -514,35 +519,16 @@ function DebateTitleHeader({
   onPressJoin: () => void;
   onBeforeJoinOpens: () => void;
 }) {
-  const claimRef = React.useRef<HTMLHeadingElement | null>(null);
+  const [claimElement, setClaimElement] = React.useState<HTMLHeadingElement | null>(null);
   const [isClaimExpanded, setIsClaimExpanded] = React.useState(false);
-  const [isClaimOverflowing, setIsClaimOverflowing] = React.useState(false);
 
   React.useEffect(() => setIsClaimExpanded(false), [claim]);
 
-  React.useLayoutEffect(() => {
-    const element = claimRef.current;
-    if (!element || isClaimExpanded) return;
-
-    const measureOverflow = () =>
-      setIsClaimOverflowing(
-        exceedsLineClamp({
-          contentHeight: element.scrollHeight,
-          clampedHeight: element.clientHeight,
-          // Read on every measure rather than once: the breakpoint swaps the whole type scale, so a
-          // rotation or a resize past 767px changes the line height this is counting in.
-          lineHeight: parseFloat(getComputedStyle(element).lineHeight),
-          maxLines: CLAIM_CLAMP_LINES,
-        })
-      );
-    measureOverflow();
-
-    if (typeof ResizeObserver === 'undefined') return;
-
-    const observer = new ResizeObserver(measureOverflow);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [claim, isClaimExpanded]);
+  const isClaimOverflowing = useLineClampOverflow(claimElement, {
+    maxLines: CLAIM_CLAMP_LINES,
+    enabled: !isClaimExpanded,
+    contentKey: claim,
+  });
 
   return (
     <div className="flex flex-col gap-1">
@@ -582,7 +568,7 @@ function DebateTitleHeader({
         />
       </div>
       <h2
-        ref={claimRef}
+        ref={setClaimElement}
         title={isClaimOverflowing ? claim : undefined}
         className={`text-cardEntityTitle !text-[22.4px] !leading-[21px] !tracking-[-0.672px] text-text md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
           isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'

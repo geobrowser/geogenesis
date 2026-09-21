@@ -1,7 +1,8 @@
 import { Effect } from 'effect';
 
 import type { Space } from '~/core/io/dto/spaces';
-import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
+import { getIsEditorOfSpace, getIsMemberOfSpace, getSpaceRolesForParticipants } from '~/core/io/queries';
+import { validateSpaceId } from '~/core/io/rest/validation';
 
 export type SpaceAccess = {
   isEditor: boolean;
@@ -95,28 +96,73 @@ export function getSpaceAccessById(spaceId: string, personalSpaceId: string, sig
   });
 }
 
-export function getEditorSpaceIdsForSpace(
+/**
+ * Chunk size for the role lookup. The query caps returned rows by the number of ids asked about, so
+ * the two have to move together; this keeps both the URL and the response bounded.
+ */
+const ROLE_LOOKUP_CHUNK = 100;
+
+export type SpaceRoles = {
+  editorSpaceIds: Set<string>;
+  memberSpaceIds: Set<string>;
+};
+
+const EMPTY_SPACE_ROLES: SpaceRoles = { editorSpaceIds: new Set(), memberSpaceIds: new Set() };
+
+function isSpaceId(id: string | null): id is string {
+  return id !== null;
+}
+
+/**
+ * Both roles, for the people asked about, in one request per chunk of 100.
+ *
+ * Server-filtered by the set rather than read out of the space's participant lists, because those
+ * lists are capped: a space with more participants than the cap would report everyone past it as
+ * holding no role, which is indistinguishable from a correct answer. Filtering by the people we
+ * actually care about has no such ceiling, and costs one request rather than one per person per role.
+ */
+export function getSpaceRoles(
   spaceId: string,
-  memberSpaceIds: string[],
+  participantSpaceIds: string[],
   signal?: AbortController['signal']
-) {
-  const normalizedSpaceId = normalizeSpaceId(spaceId);
-  const normalizedIds = [...new Set(memberSpaceIds.map(normalizeSpaceId))];
+): Effect.Effect<SpaceRoles, unknown> {
+  // Only ids the API can actually accept reach the query. A comment that has not published yet stands
+  // in with `pending:<wallet>` for its author's space (see `useCreateComment`), and one of those in
+  // the batch fails coercion against a `[UUID!]` variable — which takes down the whole request, and
+  // with it every badge on the page rather than only that author's. Batching for one request is
+  // exactly what makes a single bad id everyone's problem, so this boundary has to be strict.
+  const normalizedSpaceId = validateSpaceId(spaceId);
+  const normalizedIds = [...new Set(participantSpaceIds.map(validateSpaceId).filter(isSpaceId))];
+
+  if (!normalizedSpaceId) return Effect.succeed(EMPTY_SPACE_ROLES);
 
   return Effect.gen(function* () {
-    const editorChecks = yield* Effect.forEach(
-      normalizedIds,
-      memberSpaceId =>
-        Effect.gen(function* () {
-          const isEditor =
-            memberSpaceId === normalizedSpaceId
-              ? true
-              : yield* getIsEditorOfSpace(normalizedSpaceId, memberSpaceId, signal);
-          return { memberSpaceId, isEditor };
-        }),
-      { concurrency: 10 }
+    const editorSpaceIds = new Set<string>();
+    const memberSpaceIds = new Set<string>();
+
+    // A personal space holds every role in itself, and the participant lists do not say so.
+    if (normalizedIds.includes(normalizedSpaceId)) {
+      editorSpaceIds.add(normalizedSpaceId);
+      memberSpaceIds.add(normalizedSpaceId);
+    }
+
+    const toAsk = normalizedIds.filter(id => id !== normalizedSpaceId);
+    const chunks: string[][] = [];
+    for (let index = 0; index < toAsk.length; index += ROLE_LOOKUP_CHUNK) {
+      chunks.push(toAsk.slice(index, index + ROLE_LOOKUP_CHUNK));
+    }
+
+    const pages = yield* Effect.forEach(
+      chunks,
+      chunk => getSpaceRolesForParticipants(normalizedSpaceId, chunk, signal),
+      { concurrency: 4 }
     );
 
-    return new Set(editorChecks.filter(check => check.isEditor).map(check => check.memberSpaceId));
+    for (const page of pages) {
+      for (const id of page.editorSpaceIds) editorSpaceIds.add(normalizeSpaceId(id));
+      for (const id of page.memberSpaceIds) memberSpaceIds.add(normalizeSpaceId(id));
+    }
+
+    return { editorSpaceIds, memberSpaceIds };
   });
 }

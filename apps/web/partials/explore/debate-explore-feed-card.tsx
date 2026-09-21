@@ -9,6 +9,7 @@ import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-b
 import { JoinDebateButton } from '~/core/debates/browse/join-debate-button';
 import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
+import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
@@ -16,12 +17,13 @@ import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
+import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { ExploreCardEntityLink } from './explore-card-entity-link';
+import { ExploreCardTitle } from './explore-card-title';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
 import { SpaceThumb } from './space-thumb';
 
@@ -74,13 +76,8 @@ type DebateExploreFeedCardProps = {
 
 /**
  * The explore-feed rendition of a published Debate: the same two synchronized debater videos as
- * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting) over the
- * same interaction bar, framed in the explore card chrome — meta row, title, and the media capped
- * to the card's width.
- *
- * Both renditions render `DebateFeedPlayer` and `DebateInteractionBar`, in the same arrangement —
- * the claim over the videos, the bar as a rail down their right — so everything inside the debate
- * itself is one component in both places rather than two that look alike (GEO-2912).
+ * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting), framed
+ * in the explore card chrome — meta row, claim title, and the standard entity actions.
  */
 export function DebateExploreFeedCard({
   item,
@@ -92,23 +89,12 @@ export function DebateExploreFeedCard({
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
   const debateId = ID.hexToUuid(item.entityId);
 
-  const [container, setContainer] = React.useState<HTMLElement | null>(null);
-
-  // The feed mounts items far below the fold (its pagination sentinel uses a huge rootMargin), so
-  // gate the geo-chat lookups on proximity to the viewport instead of on mount — otherwise every
-  // debate in every loaded page fires its requests at once. Sticky: once fetched, stay fetched.
-  const [nearViewport, setNearViewport] = React.useState(false);
-  React.useEffect(() => {
-    if (!container || nearViewport) return;
-    const observer = new IntersectionObserver(
-      entries => {
-        if (entries.some(entry => entry.isIntersecting)) setNearViewport(true);
-      },
-      { rootMargin: '800px' }
-    );
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, [container, nearViewport]);
+  // The feed retains every fetched row, so proximity has to govern the lifetime of the expensive
+  // subtree, not just its first request. Once this card leaves the window, unmounting the player
+  // releases both video elements and unsubscribes its playback/vote/transcript consumers. Query
+  // data remains in TanStack's cache, so reverse scrolling can rebuild without turning every old
+  // card into a permanently live media player (GEO-2963).
+  const { element: container, ref: setContainer, nearViewport } = useNearViewport({ sticky: false });
 
   // Autoplay while mostly in view, pause when scrolled past — same activation ratio as the
   // full-screen feed. Playback is muted by default so multiple visible cards can't clash.
@@ -143,6 +129,12 @@ export function DebateExploreFeedCard({
     observer.observe(container);
     return () => observer.disconnect();
   }, [container]);
+
+  // A veto, not a replacement: where a surface holds playback to one debate —
+  // a row of cards, all of them fully on screen at once — this says whether it
+  // is this one's turn. A card that is allowed but scrolled away still stops,
+  // because its own judgement above is unchanged.
+  const playbackAllowed = useDebatePlaybackAllowed(debateId);
 
   const debateQuery = useDebate(debateId, nearViewport);
   const debate = debateQuery.data;
@@ -247,12 +239,16 @@ export function DebateExploreFeedCard({
           <JoinDebateButton className="!text-[14px]" />
         </div>
 
-        <DebateCardTitle item={item} debate={readyDebate} opensSidePanel={titleOpensSidePanel} />
+        {/* Two lines, as the full-screen header clamps the same claim to, and what this card's
+            height budget is calculated against — a third line is 23px the viewport was not
+            promised. Only the debate card asks for it, because only the debate card has fixed
+            aspect-ratio media whose height follows from the space the title leaves it. */}
+        <ExploreCardTitle item={item} opensSidePanel={titleOpensSidePanel} className="line-clamp-2" />
 
-        {readyDebate ? (
-          // `nearViewport` is the same 800px-margin gate the geo-chat lookups already use, so
-          // the recordings resolve while the card is still approaching rather than on arrival.
-          <DebateCardVideos debate={readyDebate} active={active} preload={nearViewport} />
+        {readyDebate && nearViewport ? (
+          // The recordings resolve while the card is still approaching. Crossing back out of
+          // that same window unmounts this subtree instead of retaining two paused videos forever.
+          <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} />
         ) : (
           <DebateVideoSkeleton />
         )}
@@ -290,94 +286,18 @@ export function DebateExploreFeedCard({
   );
 }
 
-/**
- * The card's title: the claim being debated, linked to the claim entity (GEO-2879).
- *
- * The Debate entity's own name is `"<A> vs. <B> on <claim>"` — the claim with a preamble — so a
- * card titled with it said the same thing as full screen, at twice the length and in a different
- * voice. Until the geo-chat lookup lands there is no claim to show, and the entity name stands in
- * rather than the title arriving a beat after the card.
- *
- * Reuses `ExploreCardEntityLink` rather than hand-rolling a second anchor: it carries the
- * modifier-click rules that keep cmd-click opening a new tab (GEO-2701) and the
- * `data-entity-side-panel-opener` marking that stops a panel switch from reading as an outside
- * click. Its props are a structural identity — entity, space, types — so handing it the claim's is
- * exactly what it asks for. Empty `types` on purpose: that component refuses the panel to debates,
- * because a full-screen video experience is a poor fit for one (GEO-2794), and this is the claim,
- * which a panel serves well. That is the whole reason GEO-2879 can have what GEO-2794 refused.
- */
-function DebateCardTitle({
-  item,
-  debate,
-  opensSidePanel,
-}: {
-  item: ExploreFeedItem;
-  debate: Debate | null;
-  opensSidePanel: boolean;
-}) {
-  const text = debate ? debate.claim.claim : item.title;
-  const heading = (
-    // Two lines, as the full-screen header clamps the same claim to. Also what the card's height
-    // budget is calculated against (see `DEBATE_CARD_COLUMN_STYLE`): a third line is 23px the
-    // viewport was not promised. `title` so the whole claim is still readable when it is cut.
-    <h2
-      title={text}
-      className="mt-0! line-clamp-2 text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline"
-    >
-      {text}
-    </h2>
-  );
-
-  if (!debate) {
-    return (
-      <ExploreCardEntityLink item={item} opensSidePanel={opensSidePanel}>
-        {heading}
-      </ExploreCardEntityLink>
-    );
-  }
-
-  // The claim's own space, not the card's. They are the same space today — a debate is published
-  // to the space its claim lives in, which is why the transcript-claims lookup above scopes by
-  // this same field — but the claim is what the link resolves, so it answers for its own home.
-  //
-  // Normalized because these ids cross a boundary, not because geo-chat gets them wrong: it
-  // returns plain hex today (it accepts either spelling on the way in and answers in hex), and
-  // `uuidToHex` is a no-op on that. What it guards is the hex-keyed side — routes, the sync store
-  // `PrefetchLink` prefetches from, and the side-panel target — which a dashed id would miss
-  // silently. Same guard, same reason, as `useDebateTranscriptClaims`.
-  const claimIdentity = {
-    entityId: ID.uuidToHex(debate.claim.claim_entity_id),
-    spaceId: ID.uuidToHex(debate.claim.space_id),
-    types: [],
-  };
-
-  return (
-    <ExploreCardEntityLink item={claimIdentity} opensSidePanel={opensSidePanel}>
-      {heading}
-    </ExploreCardEntityLink>
-  );
-}
-
 // Separate component so useDebateVotes (which queries as soon as it mounts) only runs once the
 // debate is loaded and known to be watchable.
 //
 // Memoized because the card above it subscribes to the global comments-panel atom — it has to, to
 // tell the bar whether the panel is open on this debate — so opening comments anywhere re-renders
-// every debate card in the feed. `debate` is a stable react-query object and the two flags are
-// booleans, so on a change that is only about the panel this skips the player and its playback
+// every debate card in the feed. `debate` is a stable react-query object and `active` is a
+// boolean, so on a change that is only about the panel this skips the player and its playback
 // hooks entirely. (A re-render never interrupted playback — the <video> keeps its identity — but
 // there is no reason to re-run the whole subtree for a flag it does not read.)
-const DebateCardVideos = React.memo(function DebateCardVideos({
-  debate,
-  active,
-  preload,
-}: {
-  debate: Debate;
-  active: boolean;
-  preload: boolean;
-}) {
+const DebateCardVideos = React.memo(function DebateCardVideos({ debate, active }: { debate: Debate; active: boolean }) {
   const votes = useDebateVotes(debate);
-  return <DebateFeedPlayer debate={debate} active={active} preload={preload} votes={votes} />;
+  return <DebateFeedPlayer debate={debate} active={active} preload votes={votes} />;
 });
 
 function DebateVideoSkeleton() {

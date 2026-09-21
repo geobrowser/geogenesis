@@ -2,7 +2,11 @@
 
 import * as React from 'react';
 
+import { useAtom } from 'jotai';
+
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { normId } from '~/core/utils/norm-id';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -10,23 +14,41 @@ import { Input } from '~/design-system/input';
 import { OnlineDot } from '~/design-system/online-dot';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { activeDebate } from '../activity-state';
 import type { DebatePerson } from '../api';
 import { useCreateDebateChallenge, useDebateActivity, useGeoChatAuth } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { DebateChallengeCard } from './challenge-card';
-import { HubStickyControls } from './claims-tab';
+import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebatePeople, useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
+import { isPersonId } from './person-records-document';
+import { PersonSpaceIcons } from './person-space-icons';
 import { usePersonRecords } from './use-person-records';
 import { useUnexpiredRequests } from './use-request-countdown';
-import type { DebatesHubTab } from '~/atoms';
+import { useSpaceFilterMenu } from './use-space-filter-selection';
+import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
+
+/**
+ * Whether the records batch has answered for everybody queryable on the current roster.
+ *
+ * `usePersonRecords` keeps the previous roster's map while a new one lands. Checking the current ids
+ * rather than `records.size` keeps that placeholder from reconciling a selection against people who
+ * have already left, or clearing it before a newly arrived person's activity has loaded.
+ */
+const EMPTY_SPACE_IDS: string[] = [];
+
+function recordsPending(personIds: string[], records: Map<string, PersonRecord>): boolean {
+  return personIds.some(personId => isPersonId(personId) && !records.has(personId));
+}
 
 /**
  * Everyone online and available right now. The Debate button sends the same claimless challenge as
@@ -44,26 +66,142 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
   const currentUserId = useCurrentGeoChatUserId();
+  // One elevated portal for every row's space list. A portal per person would append a matching
+  // number of containers to the body, while a plain Radix portal sits behind this z-200 panel.
+  const spacesPopoverPortal = useElevatedPopoverPortal();
   const allPeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
 
-  // Filtered here rather than through the query: this endpoint has no search parameter and returns
-  // whoever is available right now in one unpaginated list, so there is nothing to page back for.
-  // Matching the same label the row renders keeps "search for what you can see" true.
+  // Held outside this component so they survive it, exactly as the claim tabs' filters are: the hub
+  // closes on any outside pointer-down, so dismissing a dropdown by clicking away unmounts this tab
+  // and `useState` would take the viewer's selection with it (GEO-2850).
+  const [spaceIds, setSpaceIds] = useAtom(debatesHubPeopleSpaceIdsAtom);
+
+  // Keyed on everyone available rather than on the filtered list, so narrowing re-slices a batch
+  // that is already cached instead of firing a request per keystroke.
+  const personIds = React.useMemo(() => allPeople.map(person => person.profile_space_id), [allPeople]);
+  const records = usePersonRecords(personIds);
+  const personRecordsPending = recordsPending(personIds, records);
+
+  const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces();
+  const publishableSpacesPending = publishableSpaceIds === null && publishableSpacesLoading;
+  // `allPeople` deliberately falls back to an empty list for rendering, but that fallback is not a
+  // roster answer. On a cold load or terminal error, treating it as settled would reconcile a
+  // remembered selection against no people and erase it before there is evidence it became invalid.
+  const rosterUnavailable = peopleQuery.data === undefined;
+  const spaceActivityUnavailable = rosterUnavailable || publishableSpacesPending || personRecordsPending;
+
+  // "Active in" means evidence of activity, not membership: at least one distinct claim answered
+  // or one recorded debate in that space. The same map drives both the row and the filter so a
+  // membership-only space cannot appear in one surface but not the other. The publishable-space
+  // gate is still the claim picker's authoritative acceptor-editor set. A settled lookup with no
+  // answer deliberately fails open, matching `isSpaceDebatePublishable` elsewhere; an in-flight
+  // lookup is different, because drawing its unverified spaces would briefly make them selectable.
+  // The roster and person records get the same treatment: an absent roster or partial batch must
+  // not erase a remembered selection or filter out people whose row has not landed yet.
+  const debateSpacesByPerson = React.useMemo(() => {
+    const byPerson = new Map<string, string[]>();
+    if (spaceActivityUnavailable) return byPerson;
+
+    for (const [personId, record] of records) {
+      const activeIds = new Set<string>();
+      for (const spaceId of record.activeSpaceIds) {
+        if (isSpaceDebatePublishable(spaceId, publishableSpaceIds)) {
+          activeIds.add(normId(spaceId));
+        }
+      }
+      byPerson.set(personId, [...activeIds]);
+    }
+    return byPerson;
+  }, [publishableSpaceIds, records, spaceActivityUnavailable]);
+
+  const activeSpaceIds = React.useMemo(() => {
+    return new Set(allPeople.flatMap(person => debateSpacesByPerson.get(person.profile_space_id) ?? []));
+  }, [allPeople, debateSpacesByPerson]);
+
+  // Keep the remembered atom untouched until both activity inputs settle, but never let a stale or
+  // not-yet-verified value affect the current render. Filtering it synchronously also closes the
+  // render between a gate settling and the reconciliation effect below committing its cleanup.
+  const effectiveSpaceIds = React.useMemo(
+    () =>
+      spaceActivityUnavailable ? EMPTY_SPACE_IDS : spaceIds.filter(spaceId => activeSpaceIds.has(normId(spaceId))),
+    [activeSpaceIds, spaceActivityUnavailable, spaceIds]
+  );
+
+  // A remembered selection can outlive the panel, the activity set, or the publishable set.
+  // Reconcile against the exact options this tab is allowed to offer so `keepSelectedVisible`
+  // cannot put a disabled, membership-only, or zero-activity space back into the dropdown.
+  React.useEffect(() => {
+    if (spaceActivityUnavailable) return;
+    setSpaceIds(current => {
+      const kept = current.filter(spaceId => activeSpaceIds.has(normId(spaceId)));
+      return kept.length === current.length ? current : kept;
+    });
+  }, [activeSpaceIds, setSpaceIds, spaceActivityUnavailable]);
+
+  // Filtered here rather than through the query: this endpoint takes no parameters at all and
+  // returns whoever is available right now in one unpaginated list, so there is nothing to page
+  // back for and every filter below is a slice of what is already in hand.
   const [search, setSearch] = React.useState('');
-  const people = React.useMemo(() => {
+
+  // Matching the same label the row renders keeps "search for what you can see" true.
+  const searchedPeople = React.useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return allPeople;
     return allPeople.filter(person => speakerLabel(person).toLowerCase().includes(term));
   }, [allPeople, search]);
 
-  // Whether the viewer's own search is what emptied the list, as opposed to nobody being online.
-  // The two empty states, the debate-hours line and the "Clear search" action all hang off it, so
-  // they cannot disagree about which of the two this is.
-  const searchExcludedEveryone = Boolean(search.trim()) && allPeople.length > 0;
+  const people = React.useMemo(() => {
+    if (effectiveSpaceIds.length === 0) return searchedPeople;
+    const wanted = new Set(effectiveSpaceIds.map(normId));
+    return searchedPeople.filter(person =>
+      (debateSpacesByPerson.get(person.profile_space_id) ?? []).some(spaceId => wanted.has(spaceId))
+    );
+  }, [debateSpacesByPerson, effectiveSpaceIds, searchedPeople]);
 
-  // Keyed on everyone available rather than on the filtered list, so typing in the search box
-  // re-slices a batch that is already cached instead of firing a request per keystroke.
-  const records = usePersonRecords(React.useMemo(() => allPeople.map(person => person.profile_space_id), [allPeople]));
+  // Counted over everything the *other* filters leave, which is what a facet count means here as it
+  // does on the claim tabs: the number beside a space is what picking it would give you, so it
+  // cannot be counted against a space selection that picking it would replace.
+  const offeredSpaces = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const person of searchedPeople) {
+      for (const spaceId of debateSpacesByPerson.get(person.profile_space_id) ?? []) {
+        counts.set(spaceId, (counts.get(spaceId) ?? 0) + 1);
+      }
+    }
+    return [...counts].map(([id, count]) => ({ id, name: null, count }));
+  }, [debateSpacesByPerson, searchedPeople]);
+
+  // The same menu the claim tabs draw, but People deliberately defaults to "Any space". Passing a
+  // spent membership seed prevents the shared menu wiring from auto-selecting the viewer's spaces;
+  // an empty selection therefore leaves the full Geo Chat roster visible, including people with no
+  // qualifying activity. Explicit selections still persist with the atom above.
+  const { facetSpaces, onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
+    offeredSpaces,
+    spaceIds: effectiveSpaceIds,
+    setSpaceIds,
+    memberSpaceIds: null,
+    pending: peopleQuery.isLoading || spaceActivityUnavailable,
+    seedSpent: true,
+  });
+
+  // Names and thumbnails for the menu and the row icons in one lookup, so the same space is drawn
+  // the same way in both. The viewer's selection is included: a space can be picked and then
+  // counted out of the facets, and it still has to be nameable in the trigger.
+  const { labelsById } = useSpaceLabels(
+    React.useMemo(
+      () => [...new Set([...facetSpaces.map(space => space.id), ...effectiveSpaceIds])],
+      [effectiveSpaceIds, facetSpaces]
+    )
+  );
+
+  // Whether the viewer's own filters are what emptied the list, as opposed to nobody being online.
+  // The two empty states, the debate-hours line and the undo action all hang off it, so they cannot
+  // disagree about which of the two this is.
+  const filtersExcludedEveryone = people.length === 0 && allPeople.length > 0;
+  // Which undo to offer. Search alone keeps the wording it had, because a viewer who typed
+  // something knows what to take back; once a space filter is involved "Clear search" would name
+  // one of the two things holding the list down.
+  const searchIsTheOnlyFilter = Boolean(search.trim()) && effectiveSpaceIds.length === 0;
 
   const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
   // A challenge stays `pending` in the activity payload until the server says otherwise, so its own
@@ -113,6 +251,16 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
           placeholder="Search people"
           aria-label="Search people"
         />
+        {/* The claim tabs' own filter bar, not a second one built to look like it (GEO-2944).
+            Topic props are omitted because people carry no topics to facet on, the same way the
+            requests bar omits them. */}
+        <SpaceTopicFilters
+          spaceIds={effectiveSpaceIds}
+          onSpaceToggle={onSpaceToggle}
+          onSpacesClear={onSpacesClear}
+          facetSpaces={facetSpaces}
+          countsPending={peopleQuery.isLoading || publishableSpacesPending || personRecordsPending}
+        />
       </HubStickyControls>
 
       {/* Matches the other tabs' inset so content doesn't shift when switching between them. */}
@@ -131,8 +279,10 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
           // what emptied the list — saying it was would blame a filter for the room being empty,
           // and "Clear search" would be an action that changes nothing.
           emptyMessage={
-            searchExcludedEveryone
-              ? 'Nobody available matches that search.'
+            filtersExcludedEveryone
+              ? searchIsTheOnlyFilter
+                ? 'Nobody available matches that search.'
+                : 'Nobody available matches those filters.'
               : 'Nobody is available to debate right now.'
           }
           // GEO-2840 scopes this to the nobody-online case, which is exactly the other side of that
@@ -142,13 +292,21 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
           // (GEO-2725), but `useMatchmakingScope` gates the gateway on a session, so their list is
           // static and no amount of waiting will fill it. They cannot be matched either. `live` is
           // what keeps the copy from promising both.
-          emptyNote={searchExcludedEveryone ? undefined : <DebateHoursNote live={authenticated} />}
+          emptyNote={filtersExcludedEveryone ? undefined : <DebateHoursNote live={authenticated} />}
           // Exactly one action, and which one follows the same question the message and the note do.
           // A search the viewer can undo gets the undo; a room that is genuinely empty gets somewhere
           // to go, because there is nothing to undo and waiting is the only other option (GEO-2840).
           emptyAction={
-            searchExcludedEveryone
-              ? { label: 'Clear search', onClick: () => setSearch('') }
+            filtersExcludedEveryone
+              ? searchIsTheOnlyFilter
+                ? { label: 'Clear search', onClick: () => setSearch('') }
+                : {
+                    label: 'Clear filters',
+                    onClick: () => {
+                      setSearch('');
+                      onSpacesClear();
+                    },
+                  }
               : { label: 'Explore claims', onClick: () => onTabChange('explore') }
           }
           signInAction={
@@ -169,6 +327,9 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                   key={person.user_id}
                   person={person}
                   record={records.get(person.profile_space_id) ?? null}
+                  spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
+                  labelsById={labelsById}
+                  popoverPortal={spacesPopoverPortal}
                   disabled={buttonsDisabled}
                   disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
                   onRequireSignIn={onRequireSignIn}
@@ -185,6 +346,9 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
 function PersonRow({
   person,
   record,
+  spaceIds,
+  labelsById,
+  popoverPortal,
   disabled,
   disabledReason,
   onRequireSignIn,
@@ -192,6 +356,12 @@ function PersonRow({
   person: DebatePerson;
   /** Fetched once for the whole list, so a row never asks for its own. Null until that lands. */
   record: PersonRecord | null;
+  /** Debate-enabled spaces where this person has at least one claim position or recorded debate. */
+  spaceIds: string[];
+  /** Resolved once for the tab, so the menu and these icons draw the same space the same way. */
+  labelsById: Map<string, SpaceLabel>;
+  /** Shared across the list so every row's popup clears the debates panel without one portal each. */
+  popoverPortal: HTMLElement | null;
   disabled: boolean;
   /** Only surfaced on hover, so it explains the greyed-out button without repeating the card. */
   disabledReason: string;
@@ -203,6 +373,16 @@ function PersonRow({
 }) {
   const createChallenge = useCreateDebateChallenge();
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
+  const activeSpaces =
+    spaceIds.length > 0 ? (
+      <PersonSpaceIcons
+        spaceIds={spaceIds}
+        labelsById={labelsById}
+        claimsBySpace={record?.claimsBySpace}
+        debatesBySpace={record?.debatesBySpace}
+        popoverPortal={popoverPortal}
+      />
+    ) : null;
 
   return (
     // Three columns rather than a flex run, so the button sits in its own track instead of sharing a
@@ -242,7 +422,14 @@ function PersonRow({
             {speakerLabel(person)}
           </Text>
         )}
-        {record && <PersonRecordLine record={record} />}
+        {/* Deliberately three lines: stats, active spaces, then the join date. Keeping "Active in"
+            immediately above "On Geo since" makes both read as profile context, while the popup
+            gives the compact avatar stack somewhere to reveal its full answer. */}
+        {record || spaceIds.length > 0 ? (
+          <div className="flex min-w-0 flex-col gap-0.5">
+            {record ? <PersonRecordLine record={record} activeSpaces={activeSpaces} /> : activeSpaces}
+          </div>
+        ) : null}
       </div>
       <HubPillButton
         onClick={() =>

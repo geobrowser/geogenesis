@@ -1,5 +1,6 @@
 'use client';
 
+import type { AvailabilityPayload } from '~/core/availability/blocks';
 import { capSearchQuery } from '~/core/io/search-query';
 
 export type ParticipantSlot = 1 | 2;
@@ -124,10 +125,27 @@ export type DebateMediaArtifact = {
   created_at: string;
 };
 
+/**
+ * One turn as the render actually cut it, rather than as the format allowed for.
+ *
+ * `output_*` is the debate timeline the per-slot recordings play on. `countdown_start_ms` sits
+ * later than `output_start_ms` by the handoff grace window — seconds the incoming speaker is
+ * already talking through but their clock has not started (GEO-2754). Older API replicas omit it.
+ */
+export type DebateMediaTurnSegment = {
+  turn_index: number;
+  participant_slot: ParticipantSlot;
+  output_start_ms: number;
+  output_end_ms: number;
+  duration_ms: number;
+  countdown_start_ms?: number;
+};
+
 export type DebateMediaResponse = {
   job: DebateMediaJobSummary | null;
   artifacts: DebateMediaArtifact[];
   transcript_segment_count: number;
+  turn_segments?: DebateMediaTurnSegment[];
   layout: DebateMediaRenderLayout;
   whisper_model_id: string;
 };
@@ -760,6 +778,42 @@ export async function getDebateActivity(
     getPrivyIdentityToken,
     accountKey,
     signal,
+  });
+}
+
+/** What `/me/debate-schedule` answers. `is_set` is false for somebody who never saved one. */
+export type DebateScheduleResponse = {
+  is_set: boolean;
+  schedule: AvailabilityPayload;
+};
+
+/**
+ * The viewer's saved debate schedule (GEO-2932).
+ *
+ * Distinct from `/me/debate-availability` below, which is the "available to debate right now"
+ * toggle. This is the calendar: when someone is generally free. The paths differ by one word and
+ * mean unrelated things, which is why they are documented together.
+ */
+export async function getDebateSchedule(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string | null) {
+  return geoChatRequest<DebateScheduleResponse>('/me/debate-schedule', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Replaces the whole schedule; the modal holds all of it and saves all of it. */
+export async function replaceDebateSchedule(
+  schedule: AvailabilityPayload,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateScheduleResponse>('/me/debate-schedule', {
+    method: 'PUT',
+    body: schedule,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
   });
 }
 
@@ -1630,12 +1684,15 @@ async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Pr
 export class GeoChatRequestError extends Error {
   code: string | null;
   status: number;
+  /** From `Retry-After`, where geo-chat sent one. */
+  retryAfterMs: number | null;
 
-  constructor(message: string, code: string | null, status: number) {
+  constructor(message: string, code: string | null, status: number, retryAfterMs: number | null = null) {
     super(message);
     this.name = 'GeoChatRequestError';
     this.code = code;
     this.status = status;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
@@ -1658,7 +1715,7 @@ export class GeoChatRequestError extends Error {
  */
 export class GeoChatSessionError extends GeoChatRequestError {
   constructor(error: GeoChatRequestError) {
-    super(error.message, error.code, error.status);
+    super(error.message, error.code, error.status, error.retryAfterMs);
     this.name = 'GeoChatSessionError';
   }
 }
@@ -1717,9 +1774,10 @@ const debatePhaseBoundaryRetryCodes = new Set([
   'recording_not_ready',
 ]);
 
+// A 429 is not retried here: its window is a minute, and the notifier waits out `Retry-After`.
 function isTransientResponseNotificationError(error: unknown) {
   if (error instanceof GeoChatRequestError) {
-    return error.status === 429 || error.status >= 500;
+    return error.status >= 500;
   }
   return !(error instanceof DOMException && error.name === 'AbortError');
 }
@@ -1771,7 +1829,16 @@ async function requestError(response: Response) {
   } catch {
     // fall back to the status line built above
   }
-  return new GeoChatRequestError(message, code, response.status);
+  return new GeoChatRequestError(message, code, response.status, retryAfterMs(response.headers?.get('retry-after')));
+}
+
+/** `Retry-After` in milliseconds, given as delay-seconds or an HTTP date. */
+function retryAfterMs(header: string | null | undefined): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const date = Date.parse(header);
+  return Number.isNaN(date) ? null : Math.max(0, date - Date.now());
 }
 
 async function accessTokenForRequest(options: RequestOptions) {

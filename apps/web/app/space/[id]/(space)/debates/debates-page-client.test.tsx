@@ -59,6 +59,9 @@ vi.mock('~/core/debates/hooks', () => ({
   useDebateMedia: () => ({ data: undefined, isLoading: false, isError: false }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
   useDebateClaims: () => ({ data: { claims: [] } }),
+  // Reached through the player's claim ticker, which asks per space for the rows behind each
+  // claim. This suite's debates carry no claims, so it answers with none.
+  useDebateClaimsBySpaces: () => ({ claims: [], isLoading: false, isError: false }),
   // The feed resolves an anchor by id when the space listing does not contain it (GEO-2764).
   // These tests never anchor, so it stays idle.
   useDebate: () => ({ data: null, isLoading: false, error: null }),
@@ -99,13 +102,18 @@ vi.mock('~/core/hooks/use-comments', () => ({
 // The feed's Claims badge reads the debate's transcript claims through react-query, and this
 // suite renders the feed without a QueryClientProvider. Stub it the way the other debate suites do;
 // the grouping and ordering have their own unit tests.
-vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
-  useDebateTranscriptClaims: () => ({
-    claims: { all: [], byAuthorSpaceId: new Map(), unattributed: [], totalCount: 0 },
-    isLoading: false,
-    error: null,
-  }),
-}));
+vi.mock('~/core/debates/use-debate-transcript-claims', async () => {
+  // The real empty value rather than a hand-rolled copy of it. A literal here has to be updated
+  // every time the shape grows a field, and when it isn't, it fails as a runtime TypeError in a
+  // suite that has nothing to do with claims.
+  const { EMPTY_TRANSCRIPT_CLAIMS } = await vi.importActual<typeof import('~/core/debates/transcript-claims')>(
+    '~/core/debates/transcript-claims'
+  );
+
+  return {
+    useDebateTranscriptClaims: () => ({ claims: EMPTY_TRANSCRIPT_CLAIMS, isLoading: false, error: null }),
+  };
+});
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
   useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel, closeSidePanel: vi.fn(), sidePanelTarget: null }),
@@ -139,7 +147,11 @@ describe('DebatesPageClient browse feed', () => {
     expect(screen.getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
     expect(screen.getAllByText('Fashion').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Join a debate' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Winner?').length).toBeGreaterThan(0);
+    // Both debaters name themselves on their own tile. The "Winner?" pill used to sit here too;
+    // it moved off the tile entirely when the name row took the bottom-right corner, and winner
+    // voting now happens on the end-of-debate scorecard and in the claims panel.
+    expect(screen.getAllByText('Alex').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Sam').length).toBeGreaterThan(0);
     expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(2);
 
     await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));

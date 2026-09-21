@@ -67,12 +67,62 @@ const optimizePackageImports = ['effect', 'viem', 'wagmi', 'date-fns'];
  */
 const sentryRelease = process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.SENTRY_RELEASE;
 
+/**
+ * Response headers. Production currently sends none of these — only Vercel's own HSTS
+ * (`strict-transport-security: max-age=63072000`), confirmed against www.geobrowser.io.
+ *
+ * `Permissions-Policy` is the one worth reading carefully, because getting it wrong breaks
+ * debates. The app genuinely needs camera and microphone (LiveKit, `getUserMedia` in six places)
+ * and display-capture (community-call screen share, `Track.Source.ScreenShare`), so those are
+ * allowed for self rather than omitted — the default is already self, but naming them documents
+ * that they are deliberate. Only features nothing in the app uses are denied, and the list stays
+ * short on purpose: an exhaustive deny list would eventually refuse something a dependency needs
+ * — Privy's embedded wallet and WebAuthn being the obvious hazard — with a failure that looks
+ * like a bug in their SDK rather than a line in this file.
+ *
+ * `frame-ancestors 'none'` is sent twice by design: as `X-Frame-Options` for older agents and as
+ * CSP for current ones, which ignore XFO when a CSP frame-ancestors is present. This is a CSP
+ * carrying *only* that directive, so it restricts nothing else — a real script/style policy for
+ * this app means accounting for Next's inline bootstrap, Sentry, PostHog, Privy, LiveKit, Mapbox
+ * and IPFS image hosts, and belongs in its own change with Report-Only first.
+ *
+ * Clickjacking matters more here than on an ordinary site: a framed page whose user signs wallet
+ * transactions is the case the header exists for. Nothing in the app renders an iframe of itself
+ * and no embed surface was found. The one thing to know is that this also covers the marketing
+ * paths rewritten to `marketingOrigin` below, so if that site is ever embedded somewhere, carve
+ * those sources out rather than dropping the header.
+ */
+const securityHeaders = [
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+  {
+    key: 'Permissions-Policy',
+    value: [
+      'camera=(self)',
+      'microphone=(self)',
+      'display-capture=(self)',
+      'fullscreen=(self)',
+      'geolocation=()',
+      'payment=()',
+      'usb=()',
+      'serial=()',
+      'bluetooth=()',
+      'midi=()',
+    ].join(', '),
+  },
+];
+
 const nextConfig: NextConfig = {
   // Exposed so the browser SDK reports the same release the source maps are uploaded under.
   // Next inlines this at build time; a bare `VERCEL_GIT_COMMIT_SHA` would not reach the client.
   env: {
     ...(sentryRelease ? { NEXT_PUBLIC_SENTRY_RELEASE: sentryRelease } : {}),
   },
+  // Drops `x-powered-by: Next.js`, which production sends today. Free, and there is no reason to
+  // name the framework and its presence in a response.
+  poweredByHeader: false,
   // reactStrictMode: true,
   reactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
   agentRules: false,
@@ -98,6 +148,9 @@ const nextConfig: NextConfig = {
         hostname: '**',
       },
     ],
+  },
+  async headers() {
+    return [{ source: '/:path*', headers: securityHeaders }];
   },
   async redirects() {
     return [

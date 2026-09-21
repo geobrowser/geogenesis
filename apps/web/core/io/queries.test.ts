@@ -5,6 +5,7 @@ import {
   ENTITY_ID_BATCH_SIZE,
   buildSearchPath,
   getBatchEntities,
+  getEntityBacklinks,
   groupRestResults,
   hasDefaultSearchExcludedType,
   shouldIncludeRestSearchResult,
@@ -383,6 +384,48 @@ describe('getBatchEntities', () => {
     graphqlMock.mockImplementation(() => Effect.succeed([]));
 
     await Effect.runPromise(getBatchEntities(idsFor(ENTITY_ID_BATCH_SIZE)));
+
+    expect(graphqlMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * The `id` argument is `UUID!`. An id the server cannot parse comes back as a 400, not as
+ * an empty list, so asking about one is never a way to find out that nothing links there.
+ *
+ * A space with no home entity reaches this with `''` (see `getSpaceFrontPage`), which is
+ * what produced a standing `Variable "$id" got invalid value ""` on /space/[id] in
+ * production. The point of these tests is the *absence of a request*: returning `[]` while
+ * still making the call would leave the 400s exactly where they were.
+ */
+describe('getEntityBacklinks', () => {
+  afterEach(() => graphqlMock.mockReset());
+
+  const VALID = 'c9f267dcb0d270718c2a3c45a64afd32';
+
+  it.each([
+    ['an empty id', ''],
+    ['a pre-migration base58 id', 'BDuZwkjCg3nPWMDshoYtpS'],
+    ['an 0x address', '0xc46618C200f02EF1EEA28923FC3828301e63C4Bd'],
+    ['a truncated hex id', 'c9f267dcb0d270718c2a3c45a64afd3'],
+  ])('answers %s with no backlinks and no request', async (_label, entityId) => {
+    await expect(Effect.runPromise(getEntityBacklinks(entityId))).resolves.toEqual([]);
+    expect(graphqlMock).not.toHaveBeenCalled();
+  });
+
+  it('still queries for a valid id', async () => {
+    graphqlMock.mockReturnValue(Effect.succeed([]));
+
+    await Effect.runPromise(getEntityBacklinks(VALID));
+
+    expect(graphqlMock).toHaveBeenCalledTimes(1);
+    expect(graphqlMock.mock.calls[0][0]).toMatchObject({ variables: { id: VALID } });
+  });
+
+  it('accepts a dashed uuid, which the id format also allows', async () => {
+    graphqlMock.mockReturnValue(Effect.succeed([]));
+
+    await Effect.runPromise(getEntityBacklinks('12a21058-4706-4d9c-b8c8-813732ef63b2'));
 
     expect(graphqlMock).toHaveBeenCalledTimes(1);
   });

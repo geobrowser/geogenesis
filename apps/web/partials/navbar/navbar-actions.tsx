@@ -10,6 +10,7 @@ import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 
 import { browseModeToggled, editModeToggled } from '~/core/analytics';
+import { useDebateSchedule, useSaveDebateSchedule } from '~/core/debates/hooks';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -29,6 +30,7 @@ import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
+import { AvailabilityModal } from '~/partials/availability/availability-modal';
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
 import { EditProfileDialog } from '~/partials/profile/edit-profile-dialog';
 
@@ -49,8 +51,12 @@ export function NavbarActions() {
   // the person entity, and a publish outlives the close, so unmounting it midway
   // would drop the success write-back to the navbar avatar.
   const [hasOpenedEditProfile, setHasOpenedEditProfile] = React.useState(false);
+  const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
+  // Deferred like the dialog above: the week grid is only built once somebody asks for it.
+  const [hasOpenedSchedule, setHasOpenedSchedule] = React.useState(false);
+  const avatarTriggerRef = React.useRef<HTMLButtonElement>(null);
 
-  const { isLoading: isUserLoading, profile, address } = useUser();
+  const { isLoading: isUserLoading, profile: resolvedProfile, address: resolvedAddress } = useUser();
   const { personalSpaceId } = usePersonalSpaceId();
   const { isPending, topicId } = usePendingPersonalSpace();
   const pendingAvatar = useAtomValue(avatarAtom);
@@ -58,6 +64,23 @@ export function NavbarActions() {
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
   // only trigger the logout.
   const { logout } = useLogout();
+  // Read here rather than inside the modal so the week is usually cached by the time the menu is
+  // opened. The modal holds the grid back until this answers, so a slow read costs a moment of
+  // "Loading your schedule" rather than a wrong one.
+  const { blocks: scheduleBlocks, isError: scheduleError, refetch: refetchSchedule } = useDebateSchedule();
+
+  // A re-resolve mid-session (see below) would swap the avatar for the skeleton, unmounting the node
+  // the dialogs below return focus to. The last resolved identity stands in for that window, and is
+  // null on a cold start, so the skeleton still covers first load.
+  const lastIdentity = React.useRef<{
+    address: NonNullable<typeof resolvedAddress>;
+    profile: typeof resolvedProfile;
+  } | null>(null);
+  React.useEffect(() => {
+    if (!isUserLoading && resolvedAddress)
+      lastIdentity.current = { address: resolvedAddress, profile: resolvedProfile };
+  }, [isUserLoading, resolvedAddress, resolvedProfile]);
+  const saveSchedule = useSaveDebateSchedule();
 
   // The navbar's own content is swapped inside one stable tree rather than being
   // returned from competing branches. Returning a `<div>` from one branch and a
@@ -69,7 +92,11 @@ export function NavbarActions() {
   // reopen on failure, nothing to roll back, and the rows stranded in the space.
   // The keys hold each slot's identity as the content beside it changes.
   const navbarContent = (() => {
-    if (isUserLoading) {
+    const held = isUserLoading ? lastIdentity.current : null;
+    const address = resolvedAddress ?? held?.address;
+    const profile = resolvedProfile ?? held?.profile;
+
+    if (isUserLoading && !held) {
       return (
         <div key="navbar-content" className="flex items-center gap-4">
           <Skeleton className="h-7 w-[66px]" radius="rounded-full" />
@@ -111,8 +138,9 @@ export function NavbarActions() {
           }
           open={open}
           onOpenChange={onOpenChange}
+          triggerRef={avatarTriggerRef}
           sideOffset={12}
-          className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] sm:w-[322px]"
+          className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] mobile:w-[322px]"
         >
           <IdentityHeader
             address={address}
@@ -135,6 +163,20 @@ export function NavbarActions() {
               Edit profile
             </button>
           )}
+          {/* Not gated on `personalSpaceId` the way Edit profile is: that one publishes into the
+              personal space, while a schedule is stored in geo-chat against the Privy account
+              (`debateQueryKeys.schedule`), which everyone signed in has. */}
+          <button
+            type="button"
+            onClick={() => {
+              onOpenChange(false);
+              setHasOpenedSchedule(true);
+              setIsScheduleOpen(true);
+            }}
+            className="flex w-full items-center border-t border-grey-02 px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+          >
+            Set my schedule
+          </button>
           {/* Sign out keeps its own group below the divider — the destructive action
             stays alone at the bottom where people expect it. */}
           <div className="border-t border-grey-02">
@@ -156,6 +198,20 @@ export function NavbarActions() {
       {navbarContent}
       {hasOpenedEditProfile ? (
         <EditProfileDialog key="edit-profile-dialog" open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen} />
+      ) : null}
+      {/* `openerRef` is the avatar, not the item that was clicked: that item unmounts with the
+          popover on the same click, leaving no live node for the dialog to return focus to. */}
+      {hasOpenedSchedule ? (
+        <AvailabilityModal
+          key="availability-modal"
+          open={isScheduleOpen}
+          onOpenChange={setIsScheduleOpen}
+          blocks={scheduleBlocks}
+          error={scheduleError}
+          onRetry={() => refetchSchedule()}
+          onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
+          openerRef={avatarTriggerRef}
+        />
       ) : null}
     </>
   );

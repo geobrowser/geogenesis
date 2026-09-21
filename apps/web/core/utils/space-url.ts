@@ -30,8 +30,7 @@
  * for the edge and should not pull the SDK in. `space-url.test.ts` asserts this
  * stays equivalent to `IdUtils.isValid`, so the two cannot drift silently.
  */
-const ID_PATTERN =
-  /^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/;
+const ID_PATTERN = /^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/;
 
 export function isValidId(segment: string): boolean {
   return ID_PATTERN.test(segment);
@@ -50,16 +49,48 @@ export const SPACE_ROOT_SEGMENTS = ['pending'] as const;
  * Also filesystem-checked by the test.
  */
 export const SPACE_TAB_SEGMENTS = [
+  'about',
   'activity',
   'bounties',
   'claims',
   'community',
   'debates',
+  'debug-availability',
   'debug-debates',
   'governance',
   'import',
+  'positions',
+  'proposals',
   'questions',
 ] as const;
+
+/**
+ * Next metadata-image routes that exist as *files* beside a segment's `page`,
+ * rather than as directories — `app/space/[id]/opengraph-image.tsx` serves
+ * `/space/<id>/opengraph-image`.
+ *
+ * These need naming because they land in the tab position, where the only other
+ * possibility is an entity id. The entity-level case (`/space/<id>/<entity>/
+ * opengraph-image`) was already fine: there the image is the third segment and
+ * the second is a real id, which this function never looks past.
+ *
+ * Missing this 404'd the OG image of every space, while the page kept happily
+ * advertising it in `og:image` — so every space link shared anywhere unfurled
+ * without a picture, and nothing in the app was broken enough to notice.
+ *
+ * Like the lists above, `space-url.test.ts` checks this against the filesystem.
+ */
+export const SPACE_METADATA_SEGMENTS = ['opengraph-image'] as const;
+
+/**
+ * Next appends a cache-busting hash to metadata routes in some builds
+ * (`opengraph-image-7wh9xe`), so these match by prefix rather than equality.
+ */
+function isMetadataSegment(segment: string): boolean {
+  return (SPACE_METADATA_SEGMENTS as readonly string[]).some(
+    name => segment === name || segment.startsWith(`${name}-`)
+  );
+}
 
 /**
  * Whether a `/space/...` pathname is structurally capable of existing.
@@ -86,7 +117,8 @@ export function isPossibleSpacePath(pathname: string): boolean {
   if (!isValidId(first)) return false;
 
   if (second === undefined) return true;
-  // Either a space tab, or an entity id. Deeper segments are tabs beneath a
-  // valid entity (…/activity, …/opengraph-image-*) and are left alone.
-  return (SPACE_TAB_SEGMENTS as readonly string[]).includes(second) || isValidId(second);
+  // A space tab, the space's own metadata image, or an entity id. Deeper
+  // segments are tabs beneath a valid entity (…/activity, …/opengraph-image-*)
+  // and are left alone.
+  return (SPACE_TAB_SEGMENTS as readonly string[]).includes(second) || isMetadataSegment(second) || isValidId(second);
 }

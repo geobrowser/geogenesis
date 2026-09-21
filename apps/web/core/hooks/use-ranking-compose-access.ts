@@ -5,7 +5,6 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { useCallback, useRef } from 'react';
 
-import { useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { ensureSpaceMembership } from '~/core/access/request-space-membership';
@@ -13,11 +12,10 @@ import { normalizeSpaceId } from '~/core/access/space-access';
 import { trackPrivyAuth } from '~/core/analytics';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
-
-import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
 export type RankingComposeAccessStatus =
   'loading' | 'needs-login' | 'needs-onboarding' | 'needs-membership' | 'not-found' | 'ready';
@@ -30,11 +28,6 @@ export function useRankingComposeAccess(spaceId: string) {
   const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
   const { canEdit, isLoading: isLoadingAccess } = useAccessControl(spaceId);
   const tx = useSmartAccountTransaction();
-  const setName = useSetAtom(nameAtom);
-  const setTopicId = useSetAtom(topicIdAtom);
-  const setAvatar = useSetAtom(avatarAtom);
-  const setSpaceId = useSetAtom(spaceIdAtom);
-  const setStep = useSetAtom(stepAtom);
   const postLoginRedirectRef = useRef<string | null>(null);
 
   const { login } = useGeoLogin({
@@ -63,17 +56,17 @@ export function useRankingComposeAccess(spaceId: string) {
     return 'ready';
   })();
 
+  const prepareOnboarding = usePrepareOnboarding();
+
   const promptLogin = useCallback(
     (postLoginRedirect?: string) => {
       postLoginRedirectRef.current = postLoginRedirect ?? null;
-      setName('');
-      setTopicId('');
-      setAvatar('');
-      setSpaceId('');
-      setStep('start');
+      // `keepReturnTo` because this hook tracks its own destination in the ref above; writing the
+      // shared atom too would put two sources of truth in play.
+      prepareOnboarding({ keepReturnTo: true });
       login();
     },
-    [setName, setTopicId, setAvatar, setSpaceId, setStep, login]
+    [prepareOnboarding, login]
   );
 
   const ensureAccess = useCallback(async (): Promise<boolean> => {
