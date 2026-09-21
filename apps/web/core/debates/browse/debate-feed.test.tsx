@@ -69,16 +69,6 @@ vi.mock('./use-debates-best-order', async () => {
   };
 });
 
-vi.mock('~/core/debates/use-debate-votes', () => ({
-  useDebateVotes: () => ({
-    sharePercentFor: () => null,
-    isMyPick: () => false,
-    hasVoted: false,
-    isVoting: false,
-    castVote: vi.fn(),
-  }),
-}));
-
 vi.mock('~/core/hooks/use-space', () => ({
   useSpace: () => ({ space: { entity: { name: 'Fashion', image: null } }, isLoading: false }),
 }));

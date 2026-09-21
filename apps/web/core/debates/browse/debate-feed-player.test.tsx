@@ -3,7 +3,6 @@ import { fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
-import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
 
 import { DebateFeedPlayer } from './debate-feed-player';
 
@@ -70,14 +69,6 @@ const participant = (slot: 1 | 2): DebateParticipant =>
 /** Only what the player reads: its id, and the space the ticker looks for claims in. */
 const debate = { id: 'debate-1', claim: { space_id: 'space-1' } } as unknown as Debate;
 
-const votes: DebateVotesResult = {
-  sharePercentFor: () => null,
-  isMyPick: () => false,
-  hasVoted: false,
-  isVoting: false,
-  castVote: async () => {},
-};
-
 /**
  * A controller in the one state that matters here: playing, with a turn in progress, both
  * recordings loaded. `mutedByUser` and `turnState` are what the audio gating reads.
@@ -134,7 +125,7 @@ function renderPlayer(
   reactStrictMode = false
 ) {
   mocks.controller = controllerFixture(overrides);
-  const { container, rerender, unmount } = render(<DebateFeedPlayer debate={debate} active votes={votes} />, {
+  const { container, rerender, unmount } = render(<DebateFeedPlayer debate={debate} active />, {
     reactStrictMode,
   });
   const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
@@ -145,7 +136,7 @@ function renderPlayer(
     /** Re-render with a new controller state, as the hook's own state changes would. */
     update(next: { mutedByUser: boolean; turnSlot: 1 | 2; isResuming?: boolean }) {
       mocks.controller = controllerFixture(next);
-      rerender(<DebateFeedPlayer debate={debate} active votes={votes} />);
+      rerender(<DebateFeedPlayer debate={debate} active />);
     },
   };
 }
@@ -269,7 +260,7 @@ describe('a refused autoplay', () => {
         autoplayBlocked: true,
         playing: false,
       });
-      return render(<DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active votes={votes} />);
+      return render(<DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active />);
     })();
 
     expect(container.querySelector('[aria-label="Resume debate"]')).not.toBeNull();
@@ -277,16 +268,14 @@ describe('a refused autoplay', () => {
 
   it('shows nothing extra while playback is running normally', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
-    const { container } = render(
-      <DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active votes={votes} />
-    );
+    const { container } = render(<DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active />);
 
     expect(container.querySelector('[aria-label="Resume debate"]')).toBeNull();
   });
 });
 
 describe('ended playback', () => {
-  it('offers one replay button even after the viewer has voted', () => {
+  it('centers one replay button over the video', () => {
     const controller = controllerFixture({
       mutedByUser: true,
       turnSlot: 1,
@@ -294,16 +283,14 @@ describe('ended playback', () => {
       playbackEnded: true,
     });
     mocks.controller = controller;
-    const voted = { ...votes, hasVoted: true };
-    const { getAllByRole } = render(<DebateFeedPlayer debate={debate} active votes={voted} />);
+    const { getByRole } = render(<DebateFeedPlayer debate={debate} active />);
 
-    const replayButtons = getAllByRole('button', { name: 'Replay debate' });
-    expect(replayButtons).toHaveLength(1);
-    expect([...replayButtons[0].classList]).toEqual(
+    const replayButton = getByRole('button', { name: 'Replay debate' });
+    expect([...replayButton.classList]).toEqual(
       expect.arrayContaining(['top-1/2', 'left-1/2', '-translate-x-1/2', '-translate-y-1/2'])
     );
 
-    fireEvent.click(replayButtons[0]);
+    fireEvent.click(replayButton);
     expect(controller.playFromStart).toHaveBeenCalledTimes(1);
   });
 });
@@ -330,7 +317,7 @@ describe('a backlog latch outliving its stack', () => {
 
   const renderAt = (playbackEnded: boolean) => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playbackEnded });
-    return <DebateFeedPlayer debate={debate} active votes={votes} />;
+    return <DebateFeedPlayer debate={debate} active />;
   };
 
   const lastOpen = () => mocks.stackOpens[mocks.stackOpens.length - 1];

@@ -8,7 +8,6 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
-import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { releaseVideo } from '~/core/utils/video/release-video';
 
@@ -20,6 +19,9 @@ import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } fr
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
+const CENTERED_PLAYBACK_CONTROL_CLASS =
+  'absolute top-1/2 left-1/2 size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card';
+
 type DebateFeedPlayerProps = {
   debate: Debate;
   active: boolean;
@@ -30,7 +32,6 @@ type DebateFeedPlayerProps = {
    * makes arriving at a card feel glitchy (GEO-2895).
    */
   preload?: boolean;
-  votes: DebateVotesResult;
 };
 
 export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeedPlayerProps) {
@@ -457,26 +458,21 @@ export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeed
         </span>
       )}
 
-      {showReplay && (
+      {/* The replay and resume states are mutually exclusive, so they share one centered control.
+          Replay is shown at every width; the ordinary paused control stays mobile-only because
+          desktop retains its persistent corner play/pause control while playback is in progress. */}
+      {(showReplay || showPausedGlyph) && (
         <button
           type="button"
-          aria-label="Replay debate"
-          onClick={playFromStart}
-          className="absolute top-1/2 left-1/2 z-30 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card [&>svg]:scale-[2]"
+          aria-label={showReplay ? 'Replay debate' : 'Resume debate'}
+          onClick={showReplay ? playFromStart : togglePlayback}
+          className={cx(
+            CENTERED_PLAYBACK_CONTROL_CLASS,
+            'z-30',
+            showReplay ? 'grid [&>svg]:scale-[2]' : 'hidden md:grid'
+          )}
         >
-          <RetrySmall />
-        </button>
-      )}
-
-      {/* Mobile only — desktop has the persistent play/pause beside the mute control. */}
-      {showPausedGlyph && (
-        <button
-          type="button"
-          aria-label="Resume debate"
-          onClick={togglePlayback}
-          className="absolute top-1/2 left-1/2 z-20 hidden size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card md:grid"
-        >
-          <Play />
+          {showReplay ? <RetrySmall /> : <Play />}
         </button>
       )}
 
@@ -484,7 +480,8 @@ export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeed
       <div
         aria-hidden
         className={cx(
-          'pointer-events-none absolute top-1/2 left-1/2 z-20 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card transition-[opacity,scale] duration-300 md:hidden',
+          CENTERED_PLAYBACK_CONTROL_CLASS,
+          'pointer-events-none z-20 grid transition-[opacity,scale] duration-300 md:hidden',
           flash.visible ? 'scale-100 opacity-100' : 'scale-110 opacity-0'
         )}
       >

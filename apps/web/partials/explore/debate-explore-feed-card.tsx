@@ -12,7 +12,6 @@ import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
-import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
@@ -349,18 +348,14 @@ export function DebateExploreFeedCard({
   );
 }
 
-// Separate component so useDebateVotes (which queries as soon as it mounts) only runs once the
-// debate is loaded and known to be watchable.
-//
-// Memoized because the card above it subscribes to the global comments-panel atom — it has to, to
-// tell the bar whether the panel is open on this debate — so opening comments anywhere re-renders
-// every debate card in the feed. `debate` is a stable react-query object and `active` is a
-// boolean, so on a change that is only about the panel this skips the player and its playback
+// Separated and memoized because the card above it subscribes to the global comments-panel atom —
+// it has to tell the bar whether the panel is open on this debate — so opening comments anywhere
+// re-renders every debate card in the feed. `debate` is a stable react-query object and `active`
+// is a boolean, so on a change that is only about the panel this skips the player and its playback
 // hooks entirely. (A re-render never interrupted playback — the <video> keeps its identity — but
 // there is no reason to re-run the whole subtree for a flag it does not read.)
 const DebateCardVideos = React.memo(function DebateCardVideos({ debate, active }: { debate: Debate; active: boolean }) {
-  const votes = useDebateVotes(debate);
-  return <DebateFeedPlayer debate={debate} active={active} preload votes={votes} />;
+  return <DebateFeedPlayer debate={debate} active={active} preload />;
 });
 
 function DebateVideoSkeleton() {

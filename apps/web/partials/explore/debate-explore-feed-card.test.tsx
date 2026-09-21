@@ -66,16 +66,6 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
   ),
 }));
 
-vi.mock('~/core/debates/use-debate-votes', () => ({
-  useDebateVotes: () => ({
-    sharePercentFor: () => null,
-    isMyPick: () => false,
-    hasVoted: false,
-    isVoting: false,
-    castVote: vi.fn(),
-  }),
-}));
-
 vi.mock('~/core/debates/browse/debate-feed-player', () => ({
   DebateFeedPlayer: ({ debate, active }: { debate: Debate; active: boolean }) => (
     <div data-testid="player" data-debate={debate.id} data-active={active} />
