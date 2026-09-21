@@ -11,16 +11,18 @@ import { SetScheduleBanner } from './set-schedule-banner';
 // The banner now reads and writes the saved calendar (GEO-2932). These tests are about the
 // callout and the modal opening, not the round trip, so the hooks are stubbed -- the payload
 // conversion has its own tests in core/availability.
-const mocks = vi.hoisted(() => ({ isSet: false }));
+const mocks = vi.hoisted(() => ({ isSet: false, authenticated: true }));
 
 vi.mock('~/core/debates/hooks', () => ({
   useDebateSchedule: () => ({ blocks: [], isSet: mocks.isSet, isError: false, refetch: vi.fn() }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
+  useGeoChatAuth: () => ({ authenticated: mocks.authenticated, ready: true, accountKey: 'did:privy:1' }),
 }));
 
 afterEach(() => {
   cleanup();
   mocks.isSet = false;
+  mocks.authenticated = true;
   // The dismissal is stored per notice id in localStorage, so a dismissal in one case would
   // otherwise hide the banner in every case after it.
   window.localStorage.clear();
@@ -74,6 +76,16 @@ describe('SetScheduleBanner', () => {
     expect(
       within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save schedule' })
     ).toBeInTheDocument();
+  });
+
+  // Signed out the read is disabled, so the modal it opens would sit on "Loading your schedule"
+  // with nothing coming.
+  it('does not render signed out', () => {
+    mocks.authenticated = false;
+    setup();
+
+    expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Set my schedule' })).not.toBeInTheDocument();
   });
 
   it('stays dismissed once closed', async () => {

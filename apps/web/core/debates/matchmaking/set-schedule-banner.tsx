@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useDebateSchedule, useSaveDebateSchedule } from '~/core/debates/hooks';
+import { useDebateSchedule, useGeoChatAuth, useSaveDebateSchedule } from '~/core/debates/hooks';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 
 import { ClientOnly } from '~/design-system/client-only';
@@ -35,6 +35,7 @@ export function SetScheduleBanner() {
 }
 
 function Banner() {
+  const { authenticated } = useGeoChatAuth();
   const { dismissed, remember: handleDismiss } = useDismissedNotice(SET_SCHEDULE_BANNER_ID);
   const [modalOpen, setModalOpen] = React.useState(false);
   // Saved server-side now that the backend half of GEO-2936 exists (GEO-2932). `blocks` is
@@ -44,7 +45,9 @@ function Banner() {
   const saveSchedule = useSaveDebateSchedule();
   const openerRef = React.useRef<HTMLButtonElement | null>(null);
 
-  if (dismissed) return null;
+  // A schedule is stored against the Privy account, so signed out there is nothing to read or
+  // save: the read stays disabled and the modal would wait on it forever.
+  if (!authenticated || dismissed) return null;
 
   return (
     <div className="mx-4 mb-3 rounded-lg bg-[#EFE2FF] p-4">
