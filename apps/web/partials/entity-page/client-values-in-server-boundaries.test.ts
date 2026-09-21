@@ -34,9 +34,10 @@ import { describe, expect, it } from 'vitest';
  * bracket.
  *
  * Every one of those is a question about syntax, and the compiler answers questions about syntax.
- * Parsing 1,600 files costs ~600ms, which is less than the patterns cost in review rounds.
+ * Parsing 1,600 files costs ~600ms and walking every node of them another 86ms, which is less than
+ * the patterns cost in review rounds. Nothing here is read from the source text any more.
  *
- * Two things it still cannot see, which is what keeps the allowlist a list of things checked by
+ * Three things it still cannot see, which is what keeps the allowlist a list of things checked by
  * hand rather than a list of things that are fine:
  *
  *  1. Whether the value is ever *read* while rendering on the server. A client hook sitting next to
@@ -44,6 +45,8 @@ import { describe, expect, it } from 'vitest';
  *  2. What a dynamically imported module's bindings are. The edge is followed, so everything beyond
  *     it stays guarded, but `const { x } = await import('./client')` is not destructured. No
  *     server-graph module does that today.
+ *  3. Whether a capitalised function returning a non-literal value is a component. It is assumed to
+ *     be one — see `classifyFunction` for why that default is the safe one here.
  */
 
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -61,17 +64,41 @@ const ROOT = path.resolve(__dirname, '..', '..');
  */
 const SOURCE_DIRS = ['app', 'atoms', 'core', 'design-system', 'partials'];
 
-/** The files Next renders on the server by definition. Everything they reach is the server graph. */
-const SERVER_ENTRY = /\/(layout|page|template|default|loading|error|not-found|route|opengraph-image)\.tsx?$/;
+/**
+ * The files Next runs on the server by definition. Everything they reach is the server graph.
+ *
+ * The metadata routes belong here as much as the pages do — they are modules Next executes — and
+ * `app/robots.ts` is already in this tree, so a client value reachable only through it was outside
+ * the walk entirely.
+ */
+const SERVER_ENTRY =
+  /\/(layout|page|template|default|loading|error|not-found|route|opengraph-image|robots|sitemap|manifest|icon|apple-icon|twitter-image)\.tsx?$/;
 
 /**
- * `import('…')` with a literal specifier — the one thing still read from the text.
+ * The specifiers of `import('…')` calls, found in the tree rather than in the text.
  *
- * Finding these in the tree means walking every node of every file rather than its top-level
- * statements, and a dynamic import with a computed specifier resolves to no file anyway.
- * Declarations, where every mistake has been, are parsed.
+ * Reading these off the source matched them inside comments, strings and template literals, and
+ * matched `type T = import('./types').T` — an `ImportTypeNode`, which TypeScript erases — as a
+ * runtime edge. It also missed any spelling with a comment in the middle. A `CallExpression` whose
+ * callee is the `import` keyword is none of those things by construction.
+ *
+ * Walking every node of all 1,633 files costs 86ms, which was the only argument for the regex.
  */
-const DYNAMIC_IMPORT = /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g;
+function dynamicImportSpecifiers(sourceFile: ts.SourceFile): string[] {
+  const found: string[] = [];
+
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      const [specifier] = node.arguments;
+      // A computed specifier resolves to no file, so there is nothing to follow.
+      if (specifier && ts.isStringLiteral(specifier)) found.push(specifier.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(sourceFile, visit);
+
+  return found;
+}
 
 /**
  * What the tree holds today, each one read before being listed rather than swept up by the walk.
@@ -140,7 +167,10 @@ function parse(file: string, contents: string): ts.SourceFile {
  */
 function isClientModule(sourceFile: ts.SourceFile): boolean {
   for (const statement of sourceFile.statements) {
-    if (!ts.isExpressionStatement(statement) || !ts.isStringLiteralLike(statement.expression)) return false;
+    // `ts.isStringLiteral`, not `isStringLiteralLike`: that also accepts a no-substitution template
+    // literal, and `` `use client` `` is not a directive — treating it as one would move a server
+    // module into `clientFiles` and stop the walk at it.
+    if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) return false;
     if (statement.expression.text === 'use client') return true;
   }
   return false;
@@ -156,6 +186,16 @@ const isDefault = (node: ts.Node) => hasModifier(node, ts.SyntaxKind.DefaultKeyw
 /** What a client module's export turns out to be, once its declaration is read. */
 type ExportKind = 'component' | 'erased' | 'value' | 'unknown';
 
+/**
+ * A tagged template is a value here.
+ *
+ * `gql`, `css` and `sql` produce data, and `styled.div\`…\`` — the one tag that would produce a
+ * component — is not used anywhere in this repo (its only mention was this comment). Classifying
+ * every tagged template as a component to accommodate a library nobody imports is a hole in
+ * exchange for nothing. If styled-components ever arrives, the guard fires and someone adds the
+ * tag, which is a visible failure rather than a silent one.
+ */
+
 /** `memo(X)` and `forwardRef(X)`, plain or `React.`-qualified, produce components. Nothing else does. */
 const COMPONENT_WRAPPERS = new Set(['memo', 'forwardRef']);
 
@@ -163,6 +203,53 @@ function isComponentWrapper(expression: ts.Expression): boolean {
   if (ts.isIdentifier(expression)) return COMPONENT_WRAPPERS.has(expression.text);
   if (ts.isPropertyAccessExpression(expression)) return COMPONENT_WRAPPERS.has(expression.name.text);
   return false;
+}
+
+/**
+ * A capitalised function is a component unless it is caught returning something else.
+ *
+ * Review asked for the opposite default — evidence that a function is renderable, or `unknown` when
+ * there is none — and measuring says that would fail the build on `master` today. Of the 520
+ * capitalised functions client modules export, 505 contain JSX and 15 do not, and all 15 are real
+ * components that render nothing and only run effects: `DeepLinkHandler`, `SentryUserIdentifier`,
+ * `PendingActionsRunner` and so on. Six of those 15 are imported by the server graph right now, so
+ * demanding JSX would accuse `SpaceRedirect`, `PersonalProfileSuggestedTaskSync` and
+ * `PersonalProfileBioStarterMerge` of being values. A guard that accuses real components is one
+ * somebody deletes.
+ *
+ * So the evidence runs the other way: a function whose every `return` hands back an object, array,
+ * string or number is a value — which is `function BuildOptions() { return {}; }`, the case review
+ * named — and anything else is left as a component. That leaves a residue, a function returning a
+ * value through a variable rather than a literal, and it is the right residue to have: silent where
+ * it is unsure, loud only where it is certain.
+ */
+function classifyFunction(node: ts.SignatureDeclaration): ExportKind {
+  const returned: ts.Node[] = [];
+  let rendersJsx = false;
+
+  const visit = (child: ts.Node) => {
+    // A nested function's returns are its own, not this one's.
+    if (
+      child !== node &&
+      (ts.isFunctionDeclaration(child) || ts.isArrowFunction(child) || ts.isFunctionExpression(child))
+    ) {
+      return;
+    }
+    if (ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child) || ts.isJsxFragment(child)) rendersJsx = true;
+    if (ts.isReturnStatement(child) && child.expression) returned.push(child.expression);
+    ts.forEachChild(child, visit);
+  };
+  ts.forEachChild(node, visit);
+
+  if (rendersJsx || returned.length === 0) return 'component';
+
+  const isValueLiteral = (expression: ts.Node) =>
+    ts.isObjectLiteralExpression(expression) ||
+    ts.isArrayLiteralExpression(expression) ||
+    ts.isStringLiteralLike(expression) ||
+    ts.isNumericLiteral(expression);
+
+  return returned.every(isValueLiteral) ? 'value' : 'component';
 }
 
 /**
@@ -222,11 +309,10 @@ describe('server components take only components from client modules', () => {
       seen.add(node);
 
       if (ts.isFunctionDeclaration(node) || ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
-        return 'component';
+        return classifyFunction(node);
       }
       if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return classifyClass(node);
-      // `styled.div\`…\`` and friends.
-      if (ts.isTaggedTemplateExpression(node)) return 'component';
+      if (ts.isTaggedTemplateExpression(node)) return 'value';
       if (ts.isCallExpression(node)) return isComponentWrapper(node.expression) ? 'component' : 'value';
       if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) {
         return classify(node.expression, seen);
@@ -348,7 +434,7 @@ describe('server components take only components from client modules', () => {
     const found: Reference[] = [];
 
     for (const statement of sourceFile.statements) {
-      if (ts.isImportDeclaration(statement) && ts.isStringLiteralLike(statement.moduleSpecifier)) {
+      if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
         const specifier = statement.moduleSpecifier.text;
         const clause = statement.importClause;
 
@@ -379,7 +465,7 @@ describe('server components take only components from client modules', () => {
       if (
         ts.isExportDeclaration(statement) &&
         statement.moduleSpecifier &&
-        ts.isStringLiteralLike(statement.moduleSpecifier)
+        ts.isStringLiteral(statement.moduleSpecifier)
       ) {
         if (statement.isTypeOnly) continue;
         const specifier = statement.moduleSpecifier.text;
@@ -407,9 +493,7 @@ describe('server components take only components from client modules', () => {
       }
     }
 
-    for (const [, specifier] of (contentsByFile.get(file) ?? '').matchAll(DYNAMIC_IMPORT)) {
-      found.push({ specifier, local: '' });
-    }
+    for (const specifier of dynamicImportSpecifiers(sourceFile)) found.push({ specifier, local: '' });
 
     referencesByFile.set(file, found);
     return found;
