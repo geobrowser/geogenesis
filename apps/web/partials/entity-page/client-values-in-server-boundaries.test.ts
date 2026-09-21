@@ -254,7 +254,14 @@ function classifyFunction(node: ts.SignatureDeclaration): ExportKind {
   return returned.every(returnsAValue) ? 'value' : 'component';
 }
 
-/** A literal, through whatever is wrapped around it. */
+/**
+ * A definite value, through whatever is wrapped around it.
+ *
+ * `return -1` is a `PrefixUnaryExpression` around a numeric literal rather than a literal, and
+ * `return new Date()` is a `NewExpression` — both of which the variable-initialiser classifier
+ * already treated as values while this one let them make a utility look like a component. The two
+ * halves agree now.
+ */
 function returnsAValue(expression: ts.Expression): boolean {
   if (
     ts.isParenthesizedExpression(expression) ||
@@ -265,11 +272,24 @@ function returnsAValue(expression: ts.Expression): boolean {
     return returnsAValue(expression.expression);
   }
 
+  // `-1`, `+1`, and `!0` — a sign or a negation around a literal is still a literal.
+  if (ts.isPrefixUnaryExpression(expression)) {
+    const signs: ts.PrefixUnaryOperator[] = [
+      ts.SyntaxKind.MinusToken,
+      ts.SyntaxKind.PlusToken,
+      ts.SyntaxKind.ExclamationToken,
+    ];
+    return signs.includes(expression.operator) && returnsAValue(expression.operand);
+  }
+
   return (
     ts.isObjectLiteralExpression(expression) ||
     ts.isArrayLiteralExpression(expression) ||
     ts.isStringLiteralLike(expression) ||
-    ts.isNumericLiteral(expression)
+    ts.isNumericLiteral(expression) ||
+    ts.isNewExpression(expression) ||
+    expression.kind === ts.SyntaxKind.TrueKeyword ||
+    expression.kind === ts.SyntaxKind.FalseKeyword
   );
 }
 
@@ -288,6 +308,143 @@ function classifyClass(node: ts.ClassLikeDeclaration): ExportKind {
   return extended.some(name => /(^|\.)(Pure)?Component$/.test(name)) ? 'component' : 'value';
 }
 
+/**
+ * What each of a module's exports is, by exported name, with `default` keyed as `default`.
+ *
+ * Top-level rather than closed over the file map so it can be handed a source string and checked
+ * directly — see the fixtures at the bottom of this file. Review's point was that counting the
+ * current tree exercises only the *accepting* half of this function: every binding on the allowlist
+ * is lowercase or all-uppercase, so it never reaches here, and a regression that started calling an
+ * `Error` subclass a component would leave every count unchanged.
+ *
+ * `resolveOrigin` answers what a re-export's target exports, or null where there is nothing to
+ * follow.
+ *
+ * An initialiser is followed where following it answers the question: through parentheses, `as` and
+ * `satisfies`, and through a local identifier — which is how `export default SuggestedFormats`
+ * reaches the arrow function declared above it instead of giving up and reporting a real component.
+ */
+function exportKindsOf(
+  sourceFile: ts.SourceFile,
+  resolveOrigin: (specifier: string) => Map<string, ExportKind> | null
+): Map<string, ExportKind> {
+  const kinds = new Map<string, ExportKind>();
+  /** Local declarations, so an export by identifier has something to resolve against. */
+  const locals = new Map<string, ts.Node>();
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.initializer) {
+          locals.set(declaration.name.text, declaration.initializer);
+        }
+      }
+    } else if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name) {
+      locals.set(statement.name.text, statement);
+    }
+  }
+
+  const classify = (node: ts.Node, seen = new Set<ts.Node>()): ExportKind => {
+    if (seen.has(node)) return 'unknown';
+    seen.add(node);
+
+    if (ts.isFunctionDeclaration(node) || ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+      return classifyFunction(node);
+    }
+    if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return classifyClass(node);
+    if (ts.isTaggedTemplateExpression(node)) return 'value';
+    if (ts.isCallExpression(node)) return isComponentWrapper(node.expression) ? 'component' : 'value';
+    if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) {
+      return classify(node.expression, seen);
+    }
+    if (ts.isIdentifier(node)) {
+      const local = locals.get(node.text);
+      return local ? classify(local, seen) : 'unknown';
+    }
+    if (
+      ts.isObjectLiteralExpression(node) ||
+      ts.isArrayLiteralExpression(node) ||
+      ts.isStringLiteralLike(node) ||
+      ts.isNumericLiteral(node) ||
+      ts.isNewExpression(node) ||
+      node.kind === ts.SyntaxKind.TrueKeyword ||
+      node.kind === ts.SyntaxKind.FalseKeyword
+    ) {
+      return 'value';
+    }
+    return 'unknown';
+  };
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) {
+      if (isExported(statement)) kinds.set(statement.name.text, 'erased');
+      continue;
+    }
+
+    // An enum is an object at runtime, whatever it looks like in the types.
+    if (ts.isEnumDeclaration(statement) && isExported(statement)) {
+      kinds.set(statement.name.text, 'value');
+      continue;
+    }
+
+    if (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) {
+      if (!isExported(statement)) continue;
+      kinds.set(isDefault(statement) ? 'default' : (statement.name?.text ?? 'default'), classify(statement));
+      continue;
+    }
+
+    if (ts.isVariableStatement(statement) && isExported(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name)) continue;
+        kinds.set(declaration.name.text, declaration.initializer ? classify(declaration.initializer) : 'unknown');
+      }
+      continue;
+    }
+
+    // `export default <expression>`, a bare identifier included.
+    if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+      kinds.set('default', classify(statement.expression));
+      continue;
+    }
+
+    if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+      /*
+       * `export { a }` is declared here. `export { a } from './b'` is declared in `./b`, and a
+       * client barrel doing exactly that is a real shape in this tree — `table-block.tsx`
+       * re-exports `TableBlockLoadingPlaceholder`, `community-filter-pill.tsx` re-exports
+       * `FilterPillTrigger`. Calling those unclassifiable accuses real components, so the chain
+       * is followed to wherever the thing is actually declared.
+       *
+       * `visiting` is the cycle guard: barrels re-export each other, and a loop here would be an
+       * infinite one rather than a wrong answer.
+       */
+      const origin =
+        statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
+          ? resolveOrigin(statement.moduleSpecifier.text)
+          : null;
+
+      for (const element of statement.exportClause.elements) {
+        if (statement.isTypeOnly || element.isTypeOnly) {
+          kinds.set(element.name.text, 'erased');
+          continue;
+        }
+
+        const sourceName = (element.propertyName ?? element.name).text;
+
+        if (!origin) {
+          const local = locals.get(sourceName);
+          kinds.set(element.name.text, local ? classify(local) : 'unknown');
+          continue;
+        }
+
+        kinds.set(element.name.text, origin.get(sourceName) ?? 'unknown');
+      }
+    }
+  }
+
+  return kinds;
+}
+
 describe('server components take only components from client modules', () => {
   const files = sourceFiles();
   const contentsByFile = new Map(files.map(file => [file, readFileSync(path.join(ROOT, file), 'utf8')]));
@@ -297,139 +454,22 @@ describe('server components take only components from client modules', () => {
   const exportKinds = new Map<string, Map<string, ExportKind>>();
 
   /**
-   * What each of a module's exports is, by exported name, with `default` keyed as `default`.
+   * {@link exportKindsOf} for a file in the tree, memoised, following re-exports across modules.
    *
-   * An initialiser is followed where following it answers the question: through parentheses, `as`
-   * and `satisfies`, and through a local identifier — which is how `export default SuggestedFormats`
-   * reaches the arrow function declared above it instead of giving up and reporting a real
-   * component.
+   * `visiting` is the cycle guard: barrels re-export each other, and a loop there would be an
+   * infinite one rather than a wrong answer. Only a complete answer is cached, so a run that gave
+   * up on a cycle cannot become the answer every later caller gets.
    */
   function kindsFor(file: string, visiting: Set<string> = new Set()): Map<string, ExportKind> {
     const cached = exportKinds.get(file);
     if (cached) return cached;
 
-    const sourceFile = astByFile.get(file)!;
-    const kinds = new Map<string, ExportKind>();
-    /** Local declarations, so an export by identifier has something to resolve against. */
-    const locals = new Map<string, ts.Node>();
+    const kinds = exportKindsOf(astByFile.get(file)!, specifier => {
+      const origin = resolveImport(specifier, file);
+      if (!origin || visiting.has(origin)) return null;
+      return kindsFor(origin, new Set([...visiting, file]));
+    });
 
-    for (const statement of sourceFile.statements) {
-      if (ts.isVariableStatement(statement)) {
-        for (const declaration of statement.declarationList.declarations) {
-          if (ts.isIdentifier(declaration.name) && declaration.initializer) {
-            locals.set(declaration.name.text, declaration.initializer);
-          }
-        }
-      } else if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name) {
-        locals.set(statement.name.text, statement);
-      }
-    }
-
-    const classify = (node: ts.Node, seen = new Set<ts.Node>()): ExportKind => {
-      if (seen.has(node)) return 'unknown';
-      seen.add(node);
-
-      if (ts.isFunctionDeclaration(node) || ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
-        return classifyFunction(node);
-      }
-      if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return classifyClass(node);
-      if (ts.isTaggedTemplateExpression(node)) return 'value';
-      if (ts.isCallExpression(node)) return isComponentWrapper(node.expression) ? 'component' : 'value';
-      if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) {
-        return classify(node.expression, seen);
-      }
-      if (ts.isIdentifier(node)) {
-        const local = locals.get(node.text);
-        return local ? classify(local, seen) : 'unknown';
-      }
-      if (
-        ts.isObjectLiteralExpression(node) ||
-        ts.isArrayLiteralExpression(node) ||
-        ts.isStringLiteralLike(node) ||
-        ts.isNumericLiteral(node) ||
-        ts.isNewExpression(node) ||
-        node.kind === ts.SyntaxKind.TrueKeyword ||
-        node.kind === ts.SyntaxKind.FalseKeyword
-      ) {
-        return 'value';
-      }
-      return 'unknown';
-    };
-
-    for (const statement of sourceFile.statements) {
-      if (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) {
-        if (isExported(statement)) kinds.set(statement.name.text, 'erased');
-        continue;
-      }
-
-      // An enum is an object at runtime, whatever it looks like in the types.
-      if (ts.isEnumDeclaration(statement) && isExported(statement)) {
-        kinds.set(statement.name.text, 'value');
-        continue;
-      }
-
-      if (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) {
-        if (!isExported(statement)) continue;
-        kinds.set(isDefault(statement) ? 'default' : (statement.name?.text ?? 'default'), classify(statement));
-        continue;
-      }
-
-      if (ts.isVariableStatement(statement) && isExported(statement)) {
-        for (const declaration of statement.declarationList.declarations) {
-          if (!ts.isIdentifier(declaration.name)) continue;
-          kinds.set(declaration.name.text, declaration.initializer ? classify(declaration.initializer) : 'unknown');
-        }
-        continue;
-      }
-
-      // `export default <expression>`, a bare identifier included.
-      if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
-        kinds.set('default', classify(statement.expression));
-        continue;
-      }
-
-      if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
-        /*
-         * `export { a }` is declared here. `export { a } from './b'` is declared in `./b`, and a
-         * client barrel doing exactly that is a real shape in this tree — `table-block.tsx`
-         * re-exports `TableBlockLoadingPlaceholder`, `community-filter-pill.tsx` re-exports
-         * `FilterPillTrigger`. Calling those unclassifiable accuses real components, so the chain
-         * is followed to wherever the thing is actually declared.
-         *
-         * `visiting` is the cycle guard: barrels re-export each other, and a loop here would be an
-         * infinite one rather than a wrong answer.
-         */
-        const origin =
-          statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
-            ? resolveImport(statement.moduleSpecifier.text, file)
-            : null;
-
-        for (const element of statement.exportClause.elements) {
-          if (statement.isTypeOnly || element.isTypeOnly) {
-            kinds.set(element.name.text, 'erased');
-            continue;
-          }
-
-          const sourceName = (element.propertyName ?? element.name).text;
-
-          if (!origin) {
-            const local = locals.get(sourceName);
-            kinds.set(element.name.text, local ? classify(local) : 'unknown');
-            continue;
-          }
-
-          if (visiting.has(origin)) {
-            kinds.set(element.name.text, 'unknown');
-            continue;
-          }
-
-          kinds.set(element.name.text, kindsFor(origin, new Set([...visiting, file])).get(sourceName) ?? 'unknown');
-        }
-      }
-    }
-
-    // Cached only for a complete answer. A run that gave up on a cycle would otherwise be the
-    // answer every later caller got.
     if (visiting.size === 0) exportKinds.set(file, kinds);
     return kinds;
   }
@@ -462,7 +502,10 @@ describe('server components take only components from client modules', () => {
     specifier: string;
     exported?: string;
     local: string;
+    /** `import * as X` / `export * as X`: an object whose every property is a client reference. */
     namespace?: boolean;
+    /** `export * from`: the target's named bindings, each classified on its own. */
+    starReexport?: boolean;
     reexported?: boolean;
   };
 
@@ -521,7 +564,10 @@ describe('server components take only components from client modules', () => {
         const specifier = statement.moduleSpecifier.text;
 
         if (!statement.exportClause) {
-          found.push({ specifier, local: 're-exports *', namespace: true, reexported: true });
+          // Not a namespace value: this hands on the target's named bindings one by one, so a
+          // barrel star-re-exporting nothing but components is not an offence. `export * as Ns` is
+          // a namespace object and stays one, below.
+          found.push({ specifier, local: 're-exports *', starReexport: true, reexported: true });
         } else if (ts.isNamespaceExport(statement.exportClause)) {
           found.push({
             specifier,
@@ -607,6 +653,25 @@ describe('server components take only components from client modules', () => {
           yield { offence: `${from} -> ${reference.local} (from ${source})`, kind: 'value', capitalised: false };
           continue;
         }
+
+        // `export * from` is every named binding the target has, so each is judged on its own.
+        if (reference.starReexport) {
+          for (const [exported, kind] of kindsFor(target)) {
+            if (kind === 'component' || kind === 'erased') continue;
+            if (isCapitalised(exported)) {
+              const label = kind === 'unknown' ? 'unclassifiable ' : '';
+              yield { offence: `${from} -> re-exports ${exported} (${label}from ${source})`, kind, capitalised: true };
+            } else {
+              yield {
+                offence: `${from} -> re-exports ${exported} (from ${source})`,
+                kind: 'value',
+                capitalised: false,
+              };
+            }
+          }
+          continue;
+        }
+
         if (!reference.exported) continue;
 
         /*
@@ -684,5 +749,88 @@ describe('server components take only components from client modules', () => {
     // values would move this off zero before the offence list above grew past its allowlist.
     expect(kinds.value).toBe(0);
     expect(kinds.unknown).toBe(0);
+  });
+});
+
+/**
+ * The classifier against written-down cases, not only against the tree.
+ *
+ * Review's objection to the corpus count was exact: every binding on the allowlist is lowercase or
+ * all-uppercase, so it never reaches `exportKindsOf`, and the count therefore exercised only the
+ * accepting half. A regression that started calling an `Error` subclass or an object-returning
+ * function a component would have left all four of those assertions unmoved.
+ *
+ * Each case below is one this guard got wrong at some point, which is why the list reads like a
+ * changelog. They were verified by hand at the time, by planting them in the tree and watching the
+ * previous version disagree; written down here, they stay verified.
+ */
+describe('exportKindsOf', () => {
+  const kindOf = (source: string, exported = 'Subject') =>
+    exportKindsOf(parse('fixture.tsx', source), () => null).get(exported);
+
+  it.each([
+    ['a function declaration', 'export function Subject() { return <div />; }'],
+    ['a function that renders nothing but runs effects', 'export function Subject() { return null; }'],
+    ['a function with no return at all', 'export function Subject() { useThing(); }'],
+    ['an arrow', 'export const Subject = () => <div />;'],
+    ['memo', 'export const Subject = memo(() => <div />);'],
+    ['React.forwardRef', 'export const Subject = React.forwardRef(() => <div />);'],
+    ['a class extending Component', 'export class Subject extends React.Component {}'],
+    ['an identifier default', 'const Inner = () => <div />;\nexport default Inner;'],
+    ['a parenthesised arrow', 'export const Subject = ((props) => <div />);'],
+    ['an arrow returning a component call', 'export const Subject = () => renderThing();'],
+  ])('accepts %s', (_label, source) => {
+    expect(kindOf(source, source.includes('export default') ? 'default' : 'Subject')).toBe('component');
+  });
+
+  it.each([
+    ['an object', 'export const Subject = { a: 1 };'],
+    ['a parenthesised object', 'export const Subject = ({ a: 1 });'],
+    ['an array', 'export const Subject = [1, 2];'],
+    ['a string', "export const Subject = 'x';"],
+    ['a call that is not memo or forwardRef', "export const Subject = cva('x');"],
+    ['a tagged template', 'export const Subject = gql`query { x }`;'],
+    ['a class extending Error', 'export class Subject extends Error {}'],
+    ['an enum', 'export enum Subject { A }'],
+    ['a function returning an object', 'export function Subject() { return {}; }'],
+    ['a concise arrow returning an object', 'export const Subject = () => ({});'],
+    ['a concise arrow returning an asserted object', 'export const Subject = () => ({}) as Thing;'],
+    ['a function returning a negative number', 'export function Subject() { return -1; }'],
+    ['a function returning a constructed object', 'export function Subject() { return new Date(); }'],
+    ['a default object', 'export default { a: 1 };'],
+  ])('rejects %s', (_label, source) => {
+    expect(kindOf(source, source.includes('export default') ? 'default' : 'Subject')).toBe('value');
+  });
+
+  it('treats a type as erased, however it is written', () => {
+    expect(kindOf('export type Subject = { a: 1 };')).toBe('erased');
+    expect(kindOf('export interface Subject { a: 1 }')).toBe('erased');
+    expect(kindOf("export type { Subject } from './x';")).toBe('erased');
+  });
+
+  it('follows a re-export to whatever the origin says it is', () => {
+    const origin = new Map<string, ExportKind>([
+      ['Button', 'component'],
+      ['BUTTON_CLASS', 'value'],
+    ]);
+    const kinds = exportKindsOf(parse('barrel.tsx', "export { Button, BUTTON_CLASS } from './button';"), () => origin);
+
+    expect(kinds.get('Button')).toBe('component');
+    expect(kinds.get('BUTTON_CLASS')).toBe('value');
+  });
+
+  it('gives up rather than guessing when the origin cannot be read', () => {
+    // What a cycle guard hands back, and what an unresolvable specifier does. Reported, not waved
+    // through: `unknown` is an offence, so the failure is visible.
+    expect(kindOf("export { Subject } from './somewhere-unreadable';")).toBe('unknown');
+  });
+
+  it("does not attribute a nested scope's return to the component containing it", () => {
+    // A method on a nested class is a scope of its own; its `return {}` is not the component's.
+    expect(
+      kindOf(
+        'export function Subject() {\n  class Helper {\n    build() {\n      return {};\n    }\n  }\n  void new Helper();\n}'
+      )
+    ).toBe('component');
   });
 });
