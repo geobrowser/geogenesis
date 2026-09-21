@@ -266,6 +266,21 @@ describe('ProfileActivitySection', () => {
     Object.defineProperty(scroller, 'scrollWidth', { configurable: true, value: 900 });
     Object.defineProperty(scroller, 'clientWidth', { configurable: true, value: 300 });
     Object.defineProperty(scroller, 'scrollBy', { configurable: true, value: vi.fn() });
+    const horizontalRect = (left: number, width: number): DOMRect => ({
+      ...rect(width, 400),
+      x: left,
+      left,
+      right: left + width,
+      bottom: 400,
+    });
+    vi.spyOn(scroller, 'getBoundingClientRect').mockImplementation(() => horizontalRect(0, 300));
+    const cards = screen.getAllByTestId('card').map(card => card.parentElement as HTMLElement);
+    const starts = [0, 276, 552];
+    cards.forEach((card, index) => {
+      vi.spyOn(card, 'getBoundingClientRect').mockImplementation(() =>
+        horizontalRect(starts[index]! - scroller.scrollLeft, 260)
+      );
+    });
     fireEvent.scroll(scroller);
 
     expect(screen.queryByRole('button', { name: 'Scroll activity left' })).toBeNull();
@@ -277,7 +292,9 @@ describe('ProfileActivitySection', () => {
     fireEvent.scroll(scroller);
     expect(screen.getByRole('button', { name: 'Scroll activity left' })).toBeInTheDocument();
 
-    scroller.scrollLeft = 600;
+    // The final card is fully visible here even though the trailing spacer means the rail itself
+    // still has a few scrollable pixels left. Those pixels should not keep the arrow around.
+    scroller.scrollLeft = 512;
     fireEvent.scroll(scroller);
     expect(screen.queryByRole('button', { name: 'Scroll activity right' })).toBeNull();
   });

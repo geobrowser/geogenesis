@@ -546,10 +546,18 @@ function useGalleryNavigation(scrollerRef: React.RefObject<HTMLDivElement | null
     if (!scroller) return;
 
     const update = () => {
-      const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+      const cards = scroller.querySelectorAll<HTMLElement>('[data-activity-card]');
+      const firstCard = cards.item(0);
+      const lastCard = cards.item(cards.length - 1);
+      const scrollerBox = scroller.getBoundingClientRect();
+      const firstBox = firstCard?.getBoundingClientRect();
+      const lastBox = lastCard?.getBoundingClientRect();
       const next = {
-        left: scroller.scrollLeft > 1,
-        right: scroller.scrollLeft < maxScrollLeft - 1,
+        // Card bounds, rather than raw scroll offsets, keep the controls tied to useful content.
+        // The rail has spacer elements at both ends, and scrolling through those alone should not
+        // leave an arrow visible after the first or last card is already fully in view.
+        left: Boolean(firstBox && firstBox.left < scrollerBox.left - 1),
+        right: Boolean(lastBox && lastBox.right > scrollerBox.right + 1),
       };
       setAvailability(current => (current.left === next.left && current.right === next.right ? current : next));
     };
