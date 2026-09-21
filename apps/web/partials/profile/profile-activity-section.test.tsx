@@ -244,6 +244,41 @@ describe('ProfileActivitySection', () => {
     expect(gate).toHaveAttribute('data-allowed-id', 'd2');
   });
 
+  it('hands autoplay to the next visible debate when the current one scrolls out', async () => {
+    render(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2'), row('d3')] })]} />);
+
+    const scroller = document.querySelector<HTMLElement>('.overflow-x-auto');
+    const cards = screen.getAllByTestId('card').map(card => card.parentElement as HTMLElement);
+    const gate = screen.getByTestId('playback-gate');
+    expect(scroller).not.toBeNull();
+
+    const horizontalRect = (left: number, width: number): DOMRect => ({
+      ...rect(width, 400),
+      x: left,
+      left,
+      right: left + width,
+      bottom: 400,
+    });
+    vi.spyOn(scroller as HTMLElement, 'getBoundingClientRect').mockImplementation(() => horizontalRect(0, 750));
+
+    const starts = [0, 276, 552];
+    cards.forEach((card, index) => {
+      vi.spyOn(card, 'getBoundingClientRect').mockImplementation(() =>
+        horizontalRect(starts[index]! - (scroller as HTMLElement).scrollLeft, 260)
+      );
+    });
+
+    (scroller as HTMLElement).scrollLeft = 170;
+    fireEvent.scroll(scroller as HTMLElement);
+    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
+
+    (scroller as HTMLElement).scrollLeft = 446;
+    fireEvent.scroll(scroller as HTMLElement);
+    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    expect(gate).toHaveAttribute('data-allowed-id', 'd3');
+  });
+
   it('draws a dash rather than a zero when the count could not be read', () => {
     render(
       <ProfileActivitySection kinds={[kind({ isCountUnavailable: true }), kind({ key: 'claims', label: 'Claims' })]} />

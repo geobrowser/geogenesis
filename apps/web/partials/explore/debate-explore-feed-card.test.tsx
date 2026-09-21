@@ -261,6 +261,14 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.queryByTestId('fallback')).toBeNull();
   });
 
+  it('keeps compact Activity chrome to one metadata row and two title lines', () => {
+    renderCard({ compactChrome: true });
+
+    expect(screen.queryByText('Debate')).toBeNull();
+    expect(screen.getByRole('heading', { name: CLAIM_NAME })).toHaveClass('line-clamp-2');
+    expect(screen.getByText('Fashion').closest('div')).toHaveClass('flex-nowrap', 'overflow-hidden');
+  });
+
   it('renders the fallback when the debate is not watchable', () => {
     mocks.debateQuery = { data: { ...watchableDebate(), status: 'cancelled' } as Debate, isError: false };
     renderCard();

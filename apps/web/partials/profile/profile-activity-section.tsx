@@ -22,6 +22,8 @@ import { GalleryClaimCard } from './gallery-claim-card';
 
 /** How many cards a gallery holds before the reader is sent to the tab. */
 const SHOWN = 6;
+const GALLERY_ACTIVATE_RATIO = 0.6;
+const GALLERY_DEACTIVATE_RATIO = 0.4;
 
 export type ActivityKind = {
   key: string;
@@ -401,17 +403,7 @@ function ActivityGallery({
   const rowSpaceIds = React.useMemo(() => [...new Set(shown.map(row => row.spaceId))], [shown]);
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
-  const scrollerRef = React.useRef<HTMLDivElement | null>(null);
-  const firstDebateId = shown.find(row => !isClaimRow(row))?.entityId ?? null;
-  const [requestedDebateId, setRequestedDebateId] = React.useState<string | null>(null);
-
-  // New query results may replace the gallery in place. Keep the reader's explicit choice while
-  // it remains in the visible set; otherwise hand autoplay to the new first debate. Deriving the
-  // fallback here avoids a render where a removed debate still owns the gate.
-  const allowedDebateId =
-    requestedDebateId && shown.some(row => !isClaimRow(row) && ID.equals(row.entityId, requestedDebateId))
-      ? requestedDebateId
-      : firstDebateId;
+  const { scrollerRef, allowedDebateId, requestPlayback } = useGalleryDebatePlayback(shown);
 
   return (
     // One at a time. Compact cards can leave several debates fully visible, so intersection alone
@@ -454,7 +446,7 @@ function ActivityGallery({
               label={spaceLabel(labelsById, row.spaceId)}
               response={responseByClaimId?.[normId(row.entityId)]}
               personName={personName}
-              onDebatePlaybackRequest={setRequestedDebateId}
+              onDebatePlaybackRequest={requestPlayback}
             />
           ))}
           <span aria-hidden className="w-0 shrink-0 pr-4" />
@@ -462,6 +454,82 @@ function ActivityGallery({
       </div>
     </DebatePlaybackGate>
   );
+}
+
+/**
+ * Own autoplay for a row where several debates can be visible at once.
+ *
+ * The first debate starts. A click transfers ownership immediately. Scrolling keeps that owner
+ * until less than 40% remains in the rail, then advances in the scroll direction to a card that is
+ * at least 60% visible. Those are the same hysteresis edges used by the player itself, so the gate
+ * hands off at the moment the outgoing player pauses rather than leaving a silent visible row.
+ */
+function useGalleryDebatePlayback(rows: ExploreFeedRow[]) {
+  const scrollerRef = React.useRef<HTMLDivElement | null>(null);
+  const firstDebateId = rows.find(row => !isClaimRow(row))?.entityId ?? null;
+  const [requestedDebateId, setRequestedDebateId] = React.useState<string | null>(null);
+  const allowedDebateId =
+    requestedDebateId && rows.some(row => !isClaimRow(row) && ID.equals(row.entityId, requestedDebateId))
+      ? requestedDebateId
+      : firstDebateId;
+  const allowedRef = React.useRef(allowedDebateId);
+  allowedRef.current = allowedDebateId;
+
+  React.useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    let frame = 0;
+    let previousScrollLeft = scroller.scrollLeft;
+
+    const measure = () => {
+      frame = 0;
+      const scrollDirection = Math.sign(scroller.scrollLeft - previousScrollLeft);
+      previousScrollLeft = scroller.scrollLeft;
+      if (scrollDirection === 0) return;
+
+      const scrollerBox = scroller.getBoundingClientRect();
+      const cards = Array.from(scroller.querySelectorAll<HTMLElement>('[data-activity-debate-id]'));
+      const visible = cards.map((card, index) => {
+        const box = card.getBoundingClientRect();
+        const visibleWidth = Math.max(0, Math.min(box.right, scrollerBox.right) - Math.max(box.left, scrollerBox.left));
+        return {
+          id: card.dataset.activityDebateId ?? '',
+          index,
+          ratio: box.width > 0 ? visibleWidth / box.width : 0,
+        };
+      });
+
+      const currentId = allowedRef.current;
+      const current = visible.find(card => currentId && ID.equals(card.id, currentId));
+      if (current && current.ratio > GALLERY_DEACTIVATE_RATIO) return;
+
+      const candidates = visible.filter(card => card.id && card.ratio >= GALLERY_ACTIVATE_RATIO);
+      const directional =
+        scrollDirection > 0
+          ? candidates.find(card => current == null || card.index > current.index)
+          : [...candidates].reverse().find(card => current == null || card.index < current.index);
+      const next = directional ?? candidates.sort((a, b) => b.ratio - a.ratio)[0];
+
+      if (next && (!currentId || !ID.equals(next.id, currentId))) setRequestedDebateId(next.id);
+    };
+
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      scroller.removeEventListener('scroll', onScroll);
+    };
+  }, [rows]);
+
+  return {
+    scrollerRef,
+    allowedDebateId,
+    requestPlayback: React.useCallback((debateId: string) => setRequestedDebateId(debateId), []),
+  };
 }
 
 /**
@@ -499,6 +567,7 @@ function GalleryCard({
   return (
     <div
       data-activity-card
+      data-activity-debate-id={isClaim ? undefined : row.entityId}
       className={cx(
         // `cqw`, not `vw`. The viewport is the wrong ruler for a card in a side
         // panel: the panel is a column of its own width inside a window that may
@@ -525,6 +594,7 @@ function GalleryCard({
           item={toExploreFeedItem(row, label)}
           hideJoinButton
           titleOpensSidePanel
+          compactDebateChrome
           onDebatePlaybackRequest={onDebatePlaybackRequest}
         />
       )}

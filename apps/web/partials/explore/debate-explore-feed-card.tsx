@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
@@ -76,6 +78,8 @@ type DebateExploreFeedCardProps = {
   hideJoinButton?: boolean;
   /** Whether the claim title opens the side panel rather than navigating (same semantics as ExploreFeedCard). */
   titleOpensSidePanel?: boolean;
+  /** Compact title and metadata treatment used by the narrow profile Activity rail. */
+  compactChrome?: boolean;
   /**
    * Called before a pointer or keyboard click reaches this card's player. A surface with several
    * visible debates uses it to transfer playback ownership before the clicked player starts.
@@ -105,6 +109,7 @@ export function DebateExploreFeedCard({
   hideSpaceLink = false,
   hideJoinButton = false,
   titleOpensSidePanel = false,
+  compactChrome = false,
   onPlaybackRequest,
   fallback,
 }: DebateExploreFeedCardProps) {
@@ -252,7 +257,12 @@ export function DebateExploreFeedCard({
         style={DEBATE_CARD_COLUMN_STYLE}
       >
         <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <div
+            className={cx(
+              'flex min-w-0 items-center gap-x-2',
+              compactChrome ? 'flex-nowrap overflow-hidden' : 'flex-wrap gap-y-1'
+            )}
+          >
             {!hideSpaceLink ? (
               <Link
                 href={NavUtils.toSpace(item.spaceId)}
@@ -272,10 +282,14 @@ export function DebateExploreFeedCard({
                 label="Join"
               />
             ) : null}
-            <span className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
-              Debate
+            {!compactChrome ? (
+              <span className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
+                Debate
+              </span>
+            ) : null}
+            <span className="shrink-0 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
+              {timeAgo}
             </span>
-            <span className="text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">{timeAgo}</span>
           </div>
           {/* The way out of the card and into the debate at full size.
            *
