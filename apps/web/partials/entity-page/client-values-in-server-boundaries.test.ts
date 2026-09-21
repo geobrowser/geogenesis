@@ -228,13 +228,10 @@ function classifyFunction(node: ts.SignatureDeclaration): ExportKind {
   let rendersJsx = false;
 
   const visit = (child: ts.Node) => {
-    // A nested function's returns are its own, not this one's.
-    if (
-      child !== node &&
-      (ts.isFunctionDeclaration(child) || ts.isArrowFunction(child) || ts.isFunctionExpression(child))
-    ) {
-      return;
-    }
+    // Anything with its own body owns its own returns. `isFunctionLike` rather than the three
+    // function kinds by hand: a method or an accessor on a nested class is a scope too, and
+    // listing kinds is how the earlier version of this file kept being wrong.
+    if (child !== node && ts.isFunctionLike(child)) return;
     if (ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child) || ts.isJsxFragment(child)) rendersJsx = true;
     if (ts.isReturnStatement(child) && child.expression) returned.push(child.expression);
     ts.forEachChild(child, visit);
