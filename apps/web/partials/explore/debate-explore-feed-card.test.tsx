@@ -27,17 +27,6 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 const mocks = vi.hoisted(() => ({
   debateQuery: { data: undefined as Debate | undefined, isError: false },
   mediaQuery: { data: undefined as { artifacts: { kind: string }[] } | undefined, isError: false },
-  hubOpen: vi.fn(),
-  hubClose: vi.fn(),
-  /** Whether the debates hub is already showing. */
-  hubIsOpen: false,
-  openPrivySignIn: vi.fn(),
-  /** What the button asked to happen once Privy finishes. */
-  privyOnComplete: undefined as undefined | (() => void),
-  /** Privy's answer, which is the authority on whether anyone is signed in. */
-  authenticated: true,
-  /** False while Privy is still restoring the session. */
-  authReady: true,
 }));
 
 type ObserverRecord = {
@@ -53,28 +42,6 @@ vi.mock('~/core/state/feature-flags', () => ({}));
 vi.mock('~/core/debates/hooks', () => ({
   useDebate: () => mocks.debateQuery,
   useDebateMedia: () => mocks.mediaQuery,
-  useGeoChatAuth: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated, accountKey: 'user-a' }),
-}));
-
-// What "Join a debate" reaches for. Stood up the same way the full-screen feed's suite stands them
-// up, so both surfaces' copies of these assertions are asking the same questions of the same seams.
-vi.mock('~/core/debates/matchmaking/use-debates-hub', () => ({
-  useDebatesHub: () => ({
-    isOpen: mocks.hubIsOpen,
-    activeTab: 'lobby' as const,
-    open: mocks.hubOpen,
-    close: mocks.hubClose,
-    toggle: vi.fn(),
-    setTab: vi.fn(),
-  }),
-}));
-
-// Reaches for next-navigation and Privy context these tests do not stand up.
-vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: (onComplete?: () => void) => {
-    mocks.privyOnComplete = onComplete;
-    return mocks.openPrivySignIn;
-  },
 }));
 
 // The card renders the real `DebateInteractionBar` — sharing it with the full-screen feed is the
@@ -203,11 +170,6 @@ beforeEach(() => {
   observers = [];
   mocks.debateQuery = { data: undefined, isError: false };
   mocks.mediaQuery = { data: undefined, isError: false };
-  // Not mock fns, so `clearAllMocks` does not restore them.
-  mocks.hubIsOpen = false;
-  mocks.authenticated = true;
-  mocks.authReady = true;
-  mocks.privyOnComplete = undefined;
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -291,7 +253,7 @@ describe('DebateExploreFeedCard', () => {
   it('shows the card chrome with video placeholders while the debate loads', () => {
     renderCard();
     expect(screen.getByText(CLAIM_NAME)).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Join a debate' })).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Watch this debate full screen' })).toBeDefined();
     expect(screen.queryByTestId('player')).toBeNull();
     expect(screen.queryByTestId('fallback')).toBeNull();
   });
@@ -451,53 +413,28 @@ describe('DebateExploreFeedCard', () => {
   });
 
   /**
-   * The card carries the full-screen header's own "Join a debate", which replaced a "View all"
-   * link into the space's debates. It is the shared `JoinDebateButton`, so these check the card is
-   * wired to it rather than re-deciding anything - the decisions themselves are the same code the
-   * full-screen feed's suite covers.
+   * GEO-2879 headed the card with the claim, which left nothing on the card pointing at the debate
+   * itself — the open question in that ticket's notes. This control is the answer, and it has to
+   * stay a real link: the Debate entity's page *is* the full-screen feed anchored to that debate.
    */
-  describe('Join a debate', () => {
-    it('opens the debates hub on Lobby', () => {
+  describe('full-screen control', () => {
+    it('links to the Debate entity, which is the anchored full-screen feed', () => {
       renderCard();
-      fireEvent.click(screen.getByRole('button', { name: 'Join a debate' }));
-      expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
+
+      const expand = screen.getByRole('link', { name: 'Watch this debate full screen' });
+      expect(expand.getAttribute('href')).toBe('/space/space-1/fd51f9352063461780397b672b23364c');
     });
 
-    it('sends a signed-out viewer to sign in, then opens the hub without a second press', () => {
-      mocks.authenticated = false;
+    it('is offered before the debate resolves, and is not the claim heading', () => {
       renderCard();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Join a debate' }));
-      expect(mocks.openPrivySignIn).toHaveBeenCalledOnce();
-      expect(mocks.hubOpen).not.toHaveBeenCalled();
-
-      act(() => mocks.privyOnComplete?.());
-      expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
-    });
-
-    it('does nothing until Privy has restored the session', () => {
-      mocks.authReady = false;
-      mocks.authenticated = false;
-      renderCard();
-
-      fireEvent.click(screen.getByRole('button', { name: 'Join a debate' }));
-      expect(mocks.openPrivySignIn).not.toHaveBeenCalled();
-      expect(mocks.hubOpen).not.toHaveBeenCalled();
-    });
-
-    it('closes the hub when pressed a second time', () => {
-      mocks.hubIsOpen = true;
-      renderCard();
-
-      fireEvent.click(screen.getByRole('button', { name: 'Join a debate' }));
-      expect(mocks.hubClose).toHaveBeenCalledOnce();
-      expect(mocks.hubOpen).not.toHaveBeenCalled();
-    });
-
-    // The hub dismisses itself on outside pointerdown and exempts anything marked as an opener.
-    it('marks the button as a hub opener so the panel does not dismiss on pointerdown', () => {
-      renderCard();
-      expect(screen.getByRole('button', { name: 'Join a debate' }).hasAttribute('data-debates-hub-opener')).toBe(true);
+      // Present from the first paint: the route resolves the debate itself, so it needs none of
+      // the geo-chat lookups the rest of the card is waiting on.
+      expect(screen.getByRole('link', { name: 'Watch this debate full screen' })).toBeDefined();
+      // And it is a second, separate target — the heading still goes to the claim.
+      expect(screen.getByRole('link', { name: CLAIM_NAME }).getAttribute('href')).not.toBe(
+        '/space/space-1/fd51f9352063461780397b672b23364c'
+      );
     });
   });
 

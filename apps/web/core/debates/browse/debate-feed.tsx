@@ -11,16 +11,20 @@ import { capture } from '~/core/analytics';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
 import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
+import { useGeoChatAuth } from '~/core/debates/hooks';
+import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { useComments } from '~/core/hooks/use-comments';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { Button } from '~/design-system/button';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
@@ -30,7 +34,6 @@ import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
-import { JoinDebateButton } from './join-debate-button';
 import { useLineClampOverflow } from './line-clamp-overflow';
 import { DebateShareDialog } from './share-dialog';
 import { useDebateShareAction } from './use-debate-share-action';
@@ -176,6 +179,20 @@ export function DebatesBrowseFeed({
   // comments panels describe the debate you're watching, so they follow the feed
   // as you scroll rather than staying pinned to the one whose button you pressed.
   const [openPanel, setOpenPanel] = React.useState<'claims' | 'comments' | null>(null);
+  // "Join a debate" opens the shared hub rather than a panel of this space's claims: the hub is
+  // cross-space and carries the search, filters, counts and ranking the feed's own panel never had.
+  const debatesHub = useDebatesHub();
+  // Carry the intent across the login: signing in is a detour the viewer did not ask for, so
+  // finish what they pressed rather than returning them to the feed to press it again.
+  const openPrivySignIn = usePrivySignIn(() => {
+    setOpenPanel(null);
+    debatesHub.open('lobby');
+  });
+  // Privy, not the smart account: `useSmartAccount` reports null while the account is restoring
+  // and after an initialization failure as well as when nobody is signed in, and sending a
+  // signed-in viewer back through login would wipe their half-finished onboarding.
+  const { ready: authReady, authenticated } = useGeoChatAuth();
+
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
   // flashes "no debates" and strands a valid anchor.
   // Waiting on the ranking too, so the feed doesn't paint in recency order and then resequence
@@ -317,11 +334,29 @@ export function DebatesBrowseFeed({
           // waiting for the scroll observer: its bar is reachable from 0%
           // visibility but activation needs 60%, so mid-scroll the panel would
           // otherwise open on the debate being scrolled away from.
-          onPressJoin={() => setActiveId(debate.id)}
-          // The hub is its own portal, so the feed's panel state stays out of it. Closing the
-          // in-flow panel first keeps the two from stacking over the same feed. Runs on the far
-          // side of a sign-in detour too, which is where `JoinDebateButton` calls it from.
-          onBeforeJoinOpens={() => setOpenPanel(null)}
+          onOpenJoin={() => {
+            setActiveId(debate.id);
+            // Decide nothing until Privy has restored the session: a press in that window is a
+            // no-op rather than a wrong answer in either direction.
+            if (!authReady) return;
+            // Everything the hub offers — taking a position, standing ready, requesting a debate —
+            // needs an account, so a signed-out viewer gets the same login voting gives them
+            // rather than a panel whose every control refuses them.
+            if (!authenticated) {
+              openPrivySignIn();
+              return;
+            }
+            // A second press closes it, the way the navbar's debate button behaves. Without this
+            // the button is a one-way door and the only way out is the panel's own close control.
+            if (debatesHub.isOpen) {
+              debatesHub.close();
+              return;
+            }
+            // The hub is its own portal, so the feed's panel state stays out of it. Closing the
+            // in-flow panel first keeps the two from stacking over the same feed.
+            setOpenPanel(null);
+            debatesHub.open('lobby');
+          }}
           onOpenClaims={() => {
             setActiveId(debate.id);
             setOpenPanel('claims');
@@ -371,8 +406,7 @@ function DebateFeedItem({
   root,
   scrollHint,
   onActivate,
-  onPressJoin,
-  onBeforeJoinOpens,
+  onOpenJoin,
   onOpenClaims,
   onOpenComments,
 }: {
@@ -386,8 +420,7 @@ function DebateFeedItem({
   root: HTMLElement | null;
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
-  onPressJoin: () => void;
-  onBeforeJoinOpens: () => void;
+  onOpenJoin: () => void;
   onOpenClaims: () => void;
   onOpenComments: () => void;
 }) {
@@ -457,8 +490,7 @@ function DebateFeedItem({
               spaceName={spaceName}
               spaceImage={spaceImage}
               topics={topics}
-              onPressJoin={onPressJoin}
-              onBeforeJoinOpens={onBeforeJoinOpens}
+              onOpenJoin={onOpenJoin}
             />
           </div>
           <div className="mt-6 md:mt-7">
@@ -507,8 +539,7 @@ function DebateTitleHeader({
   spaceName,
   spaceImage,
   topics,
-  onPressJoin,
-  onBeforeJoinOpens,
+  onOpenJoin,
 }: {
   claim: string;
   claimEntityId: string;
@@ -516,8 +547,7 @@ function DebateTitleHeader({
   spaceName: string;
   spaceImage?: string | null;
   topics: string[];
-  onPressJoin: () => void;
-  onBeforeJoinOpens: () => void;
+  onOpenJoin: () => void;
 }) {
   const [claimElement, setClaimElement] = React.useState<HTMLHeadingElement | null>(null);
   const [isClaimExpanded, setIsClaimExpanded] = React.useState(false);
@@ -561,11 +591,19 @@ function DebateTitleHeader({
             </React.Fragment>
           ))}
         </div>
-        <JoinDebateButton
-          onPress={onPressJoin}
-          onBeforeOpen={onBeforeJoinOpens}
-          className="!text-[16px] md:!px-3 md:!text-[18px] md:!leading-[22px] md:!tracking-[-0.36px]"
-        />
+        <Button
+          type="button"
+          // Exempts this button from the hub's outside-pointerdown dismissal, the same way the
+          // navbar's opener is exempt. Without it the pointerdown closed the hub and the click
+          // that followed reopened it, which read as a flicker.
+          data-debates-hub-opener
+          variant="secondary"
+          small
+          onClick={onOpenJoin}
+          className="!h-7 shrink-0 !rounded-full !px-[11px] !py-0 !text-[16px] !leading-[13px] !font-normal !tracking-[-0.35px] !shadow-none md:!px-3 md:!text-[18px] md:!leading-[22px] md:!tracking-[-0.36px]"
+        >
+          Join a debate
+        </Button>
       </div>
       <h2
         ref={setClaimElement}

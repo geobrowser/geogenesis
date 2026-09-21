@@ -6,7 +6,6 @@ import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
-import { JoinDebateButton } from '~/core/debates/browse/join-debate-button';
 import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
@@ -22,6 +21,7 @@ import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
+import { Fullscreen } from '~/design-system/icons/full-screen';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ExploreCardTitle } from './explore-card-title';
@@ -78,12 +78,13 @@ type DebateExploreFeedCardProps = {
 /**
  * The explore-feed rendition of a published Debate: the same two synchronized debater videos as
  * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting) over the
- * same interaction bar, under the same "Join a debate", framed in the explore card chrome — meta
- * row, claim title, and media sized to the viewport.
+ * same interaction bar, framed in the explore card chrome — meta row, claim title, media sized to
+ * the viewport, and a control that opens this debate at full size.
  *
- * Both renditions render `DebateFeedPlayer`, `DebateInteractionBar` and `JoinDebateButton`, so
- * everything inside the debate itself is one component in both places rather than two that look
- * alike (GEO-2912).
+ * Both renditions render `DebateFeedPlayer` and `DebateInteractionBar`, so everything inside the
+ * debate itself — the videos, the debater identities and position chips, the winner share, the
+ * vote pill and the counts — is one component in both places rather than two that look alike
+ * (GEO-2912).
  */
 export function DebateExploreFeedCard({
   item,
@@ -258,11 +259,30 @@ export function DebateExploreFeedCard({
             </span>
             <span className="text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">{timeAgo}</span>
           </div>
-          {/* The same control the full-screen header carries, at the card's own type scale. It
-              replaced a "View all" link into this space's debates: the card is already a debate
-              you can watch, so the CTA worth the corner is the one that puts you in one rather
-              than one that lists more. */}
-          <JoinDebateButton className="!text-[14px]" />
+          {/* The way out of the card and into the debate at full size.
+           *
+           * This corner used to hold "View all", a link to the space's whole debates list. Since
+           * GEO-2879 headed the card with the claim, nothing on the card pointed at the debate
+           * itself any more — the open question in that ticket's notes, which asked where the path
+           * to the full-screen debate would go once the title stopped being it. Here.
+           *
+           * The Debate entity's own page is that path: `DebateEntityView` renders it as the
+           * `/debates` feed anchored to this debate, which is the full-screen experience with this
+           * debate on top. So this is the entity link the title used to be, moved to a control
+           * that says "bigger" rather than competing with the claim for the heading.
+           *
+           * An anchor, so cmd-click still opens it in a new tab (GEO-2701), and `Fullscreen` with
+           * the side panel's own "open this full page" chrome — that control answers the same
+           * question about an entity, and this is not the place to invent a second answer. */}
+          <Link
+            href={NavUtils.toEntity(item.spaceId, item.entityId)}
+            entityId={item.entityId}
+            spaceId={item.spaceId}
+            aria-label="Watch this debate full screen"
+            className="grid size-7 shrink-0 place-items-center rounded-full border border-grey-02 bg-white text-text shadow-light transition-colors hover:border-text"
+          >
+            <Fullscreen />
+          </Link>
         </div>
 
         {/* Two lines, as the full-screen header clamps the same claim to, and what this card's
