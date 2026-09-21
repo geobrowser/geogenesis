@@ -32,6 +32,7 @@ import {
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
+import { isDebateRoomPath } from './rooms/room-routes';
 import {
   getPreparedSocialVideoHandoffMethod,
   handoffPreparedSocialVideo,
@@ -162,7 +163,10 @@ export function DebateCoordinator() {
   //
   // Nothing app-wide belongs over that page: it owns its own routing, and whatever it is about to
   // do is more current than activity is.
-  const atRematchPage = pathname.includes('/debates/rematches/');
+  //
+  // A room (GEO-2941) is the same surface under a different route, and open for as long as the pair
+  // are in it, so nothing app-wide may sit over it either.
+  const atDebateFlowPage = pathname.includes('/debates/rematches/') || isDebateRoomPath(pathname);
   const activeFlow = Boolean(debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
   const queriedSharePrompt =
@@ -226,7 +230,7 @@ export function DebateCoordinator() {
   // offering a way to destroy it.
   const describable = (debate?.participants?.length ?? 0) >= 2;
   const promptedDebate =
-    debate && debate.status === 'ready' && describable && !atDebate && !atRematchPage ? debate : null;
+    debate && debate.status === 'ready' && describable && !atDebate && !atDebateFlowPage ? debate : null;
 
   // Held until a navigation commits, then released. Arriving at the room is the expected end, and
   // `atDebate` carries on from the pathname there. Going anywhere else abandons the walk — holding
@@ -282,6 +286,10 @@ export function DebateCoordinator() {
     // stay put, and because attention is a subscription this re-runs when one is focused, so
     // whichever tab they turn to still routes in rather than stranding them.
     if (!hasAttention) return;
+    // A room is entered by an offer and never a redirect (GEO-2941). This also asks where the
+    // viewer already is, which nothing here did: a stale `activity.rematch` yanks them out of the
+    // room and the page replaces them, which is the bounce diagnosed on the debate room.
+    if (isDebateRoomPath(pathname)) return;
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
       const path = debateRematchPath(rematch);
       if (pathname !== path) {
@@ -313,7 +321,7 @@ export function DebateCoordinator() {
       {promptedDebate && currentUserId && !activity?.rematch && (
         <DebateReadyPrompt key={promptedDebate.id} debate={promptedDebate} currentUserId={currentUserId} />
       )}
-      {debate && !atDebate && !atRematchPage && !promptedDebate && !activity?.rematch && (
+      {debate && !atDebate && !atDebateFlowPage && !promptedDebate && !activity?.rematch && (
         <DebateRejoinBar debate={debate} />
       )}
       {/* Recipient only: they have a decision to make. The sender's copy waits under Sent in the

@@ -563,6 +563,38 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
   });
 
+  // GEO-2941. A source-debate-less rematch is the branch this coordinator pushes a focused tab
+  // into — see the two tests above. From inside a room it must not: a room is entered by an offer
+  // and never a redirect, and a stale `activity.rematch` otherwise yanks the viewer out.
+  it.each([['browsing'], ['request_pending']] as const)(
+    'does not route a %s rematch over a debate room',
+    async status => {
+      mocks.currentUserId = 'user-requester';
+      mocks.pathname = '/debate/room-1';
+      const activity = activityWithRematch('browsing');
+      mocks.activity = {
+        ...activity,
+        rematch: { ...activity.rematch!, source_debate_id: null, status },
+        challenge: null,
+      };
+
+      render(<DebateCoordinator />);
+
+      await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    }
+  );
+
+  // Nor may anything app-wide sit over a room, which is open for as long as the pair are in it.
+  it('does not offer a rejoin bar over a debate room', async () => {
+    mocks.pathname = '/debate/room-1';
+    const activity = activityWithDebate();
+    mocks.activity = { ...activity, debate: { ...activity.debate!, participants: bothParticipants() } };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument());
+  });
+
   // GEO-2604. The window this closes: the rematch session has converted, so activity reports the
   // new `ready` debate and no longer reports a rematch, but the page's own session query has not
   // caught up and so has not navigated yet. That is exactly the shape the ready prompt exists for —

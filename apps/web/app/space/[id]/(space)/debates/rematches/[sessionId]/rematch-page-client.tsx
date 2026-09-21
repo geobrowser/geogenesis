@@ -72,6 +72,7 @@ import {
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { RequestDebateControl } from '~/core/debates/request-debate-control';
 import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
+import { useRoomOpponentPresent } from '~/core/debates/rooms/room-context';
 import {
   type TaggedClaimFilters,
   tagDisplaySpaceId,
@@ -2349,6 +2350,8 @@ function RematchClaimCard({
   /** The last request error for this claim. */
   requestError?: string | null;
 }) {
+  // `true` off a room, so this route's gate is unchanged. See `useRoomOpponentPresent`.
+  const roomOpponentPresent = useRoomOpponentPresent();
   const remotePosition = claim.participants.find(side => side.user_id !== currentUserId)?.position ?? null;
 
   // A claim whose stored kind didn't parse still has to render; 'stance' is the fallback
@@ -2435,6 +2438,9 @@ function RematchClaimCard({
     chatPosition,
     localPosition,
     opponentReady: opposing,
+    // `true` off this route, where there is no join event to wait on. Inside a room (GEO-2941) the
+    // request waits for the opponent to arrive.
+    opponentPresent: roomOpponentPresent,
     indexingDelayed: responseIndexing.status === 'delayed',
   });
   const canRequest = requestGate.canRequest;

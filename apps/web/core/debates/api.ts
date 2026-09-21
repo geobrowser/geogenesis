@@ -1448,6 +1448,91 @@ export async function rejectDebateChallenge(
 }
 
 /* -------------------------------------------------------------------------------------------------
+ * Debate rooms: an access list of two, a window, explicit join/leave events (GEO-2941).
+ * SHAPE NOT YET AGREED — geo-chat has no rooms endpoint. Settle it with Patrick on GEO-2946.
+ * -----------------------------------------------------------------------------------------------*/
+
+/** Why the viewer is still waiting, when the server knows something the join events do not. */
+export type DebateRoomWaitingReason = 'in_another_debate';
+
+export type DebateRoomParticipant = DebateParticipantSummary & {
+  /** First arrival. Survives a leave and a rejoin, so it reads "ever came", not "is here". */
+  joined_at: string | null;
+  /** Most recent explicit leave. A dropped connection is not one — see `present`. */
+  left_at: string | null;
+  /** In the room right now, off the explicit events rather than the 1-minute ambient window. */
+  present: boolean;
+};
+
+export type DebateRoom = {
+  id: string;
+  /** The debate-again session the room renders. `null` before one is minted. */
+  rematch_session_id: string | null;
+  source_space_id: string;
+  /** The access list: exactly two. Anyone else gets a 403 rather than a degraded room. */
+  participants: DebateRoomParticipant[];
+  opens_at: string;
+  /**
+   * When the room stops accepting arrivals. Governs joining, never leaving — nothing in the client
+   * may read this to eject anyone.
+   */
+  closes_at: string;
+  /** When an absent participant becomes a no-show. Server-defined so the client invents no timeout. */
+  no_show_at: string | null;
+  waiting_reason: DebateRoomWaitingReason | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function getDebateRoom(
+  roomId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateRoom>(`/debate-rooms/${roomId}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/**
+ * Drives the other side's indicator, and is what tells a no-show apart from someone who came and
+ * went. So arrival is an event rather than a side effect of the page mounting.
+ */
+export async function joinDebateRoom(
+  roomId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateRoom>(`/debate-rooms/${roomId}/join`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Per person, unlike `leaveDebateRematch`, which ends the session for both. Leaving a room inside
+ * its window leaves the room open and the rejoin available.
+ */
+export async function leaveDebateRoom(
+  roomId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateRoom>(`/debate-rooms/${roomId}/leave`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/* -------------------------------------------------------------------------------------------------
  * Matchmaking hub (GEO-2514)
  * -----------------------------------------------------------------------------------------------*/
 
