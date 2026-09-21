@@ -139,6 +139,32 @@ describe('MobileBrowseDrawer', () => {
     await waitFor(() => expect(screen.getByRole('navigation', { name: 'Fallback navigation' })).toHaveFocus());
   });
 
+  it('closes immediately when opened after the viewport is already above the mobile breakpoint', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    );
+    const onOpenChange = vi.fn();
+    const triggerRef = React.createRef<HTMLButtonElement>();
+    const fallbackFocusRef = React.createRef<HTMLElement>();
+
+    render(
+      <MobileBrowseDrawer
+        open
+        fallbackFocusRef={fallbackFocusRef}
+        fullscreenFocusTarget={null}
+        onOpenChange={onOpenChange}
+        triggerRef={triggerRef}
+      />
+    );
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
   it('focuses the stable fallback when fullscreen unmounts the Browse trigger', async () => {
     const onOpenChange = vi.fn();
 

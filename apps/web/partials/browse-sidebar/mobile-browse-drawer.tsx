@@ -29,6 +29,11 @@ export function MobileBrowseDrawer({ open, fallbackFocusRef, fullscreenFocusTarg
     if (!open || typeof window.matchMedia !== 'function') return;
 
     const breakpoint = window.matchMedia(MOBILE_BREAKPOINT_QUERY);
+    if (!breakpoint.matches) {
+      onOpenChange(false);
+      return;
+    }
+
     const closeAboveMobile = (event: MediaQueryListEvent) => {
       if (!event.matches) onOpenChange(false);
     };
