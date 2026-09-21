@@ -18,10 +18,9 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /**
-   * The schedule as it stands. The modal edits a copy and reports it only on save.
-   *
-   * `undefined` means the read has not answered yet, which is not the same as an empty week: the
-   * grid seeds itself once and never reseeds, so opening it on a guess would save that guess.
+   * The schedule as it stands; the modal edits a copy and reports it only on save. `undefined`
+   * until the read answers, which is not an empty week: the grid seeds from this once and never
+   * reseeds, so an assumed empty week would be saved as one.
    */
   blocks?: AvailabilityBlock[];
   onSave: (blocks: AvailabilityBlock[]) => void;
@@ -94,10 +93,7 @@ export function AvailabilityModal({ open, onOpenChange, blocks, onSave, openerRe
             {/* Remounted per opening so a discarded draft cannot survive into the next one. The
                 footer buttons ride in the calendar's own action row, beside its Clear all.
 
-                Held back until the read answers. `AvailabilityCalendar` seeds its state from
-                `initialBlocks` at mount and never reseeds, so mounting it on an assumed empty week
-                stayed empty after the real schedule arrived -- and Save then wrote that empty week
-                over it. */}
+                Mounted only once `blocks` is known, because the grid seeds from it once. */}
             {open && blocks === undefined ? (
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
                 <Text as="p" variant="metadata" className="text-grey-04">

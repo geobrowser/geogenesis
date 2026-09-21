@@ -184,8 +184,7 @@ export function NavbarActions() {
         <EditProfileDialog key="edit-profile-dialog" open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen} />
       ) : null}
       {/* `openerRef` is the avatar, not the item that was clicked: that item unmounts with the
-          popover on the same click, and without a live node to return to, closing the dialog left
-          focus on the body. */}
+          popover on the same click, leaving no live node for the dialog to return focus to. */}
       {hasOpenedSchedule ? (
         <AvailabilityModal
           key="availability-modal"
