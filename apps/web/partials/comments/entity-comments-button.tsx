@@ -49,7 +49,7 @@ export function EntityCommentsButton({
       }}
       className={className ?? 'inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text'}
     >
-      <ExploreCommentsIcon className="text-grey-04" />
+      <ExploreCommentsIcon />
       <span className="text-[14px] font-normal tabular-nums">{liveCount}</span>
     </button>
   );
