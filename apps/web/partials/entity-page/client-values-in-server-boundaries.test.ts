@@ -19,62 +19,76 @@ import { describe, expect, it } from 'vitest';
  * The sibling of this test guards the other direction — async components rendered from client
  * files. Same failure mode: correct-looking UI, wrong boundary.
  *
- * What this cannot see: whether the value is ever *read* while rendering on the server. A client
- * hook imported next to a server-safe constant and only ever called from a client component is
- * inert. So the allowlist below is not a list of things that are fine — it is a list of things
- * checked by hand, each with what was found.
+ * Two things it deliberately cannot see, both of which make the allowlist a list of things checked
+ * by hand rather than a list of things that are fine:
  *
- * Nor does it follow `import()` or a bare `import './x'`. Neither reaches a source module from the
- * server graph today — checked, not assumed: the 85 files calling `import()` are client modules
- * reaching for `next/dynamic`, and every bare import in the graph resolves to CSS or a package.
- * Worth adding the day either stops being true.
- *
- * And it decides what counts as a component by reading the source, not by resolving types — see
- * `isComponentHere`. It is right about the 163 capitalised imports in the tree today, and the two
- * places it could still be wrong are worth knowing: a component this file imports and neither
- * renders nor passes on would be reported, and a capitalised value *re-exported* from a barrel is
- * let through, because a re-export has no use site to read. Both are conservative in the direction
- * of the failure being visible rather than silent, which is the only direction that works for a
- * test nobody runs deliberately.
+ *  1. Whether the value is ever *read* while rendering on the server. A client hook sitting next to
+ *     a server-safe constant and only ever called from a client component is inert.
+ *  2. What a dynamically imported module's bindings are. The edge is followed, so everything beyond
+ *     it is still guarded, but `const { x } = await import('./client')` is not destructured here.
+ *     No server-graph module does that today.
  */
 
 const ROOT = path.resolve(__dirname, '..', '..');
-const SOURCE_DIRS = ['app', 'core', 'partials', 'design-system'];
+
+/**
+ * Every top-level directory holding application source.
+ *
+ * `atoms` was missing — six jotai modules — and a missing root fails twice over: the walk never
+ * loads the files, and `resolveImport` answers null for every `~/atoms/…` specifier, so an import
+ * from there was invisible rather than merely unchecked.
+ *
+ * Two are left out on purpose, both checked rather than assumed: `scripts` is build tooling that
+ * nothing under `app/` imports, and `styles` holds one test file and its CSS. The per-root
+ * assertion below is what caught `styles` being added here by mistake.
+ */
+const SOURCE_DIRS = ['app', 'atoms', 'core', 'design-system', 'partials'];
 
 /** The files Next renders on the server by definition. Everything they reach is the server graph. */
 const SERVER_ENTRY = /\/(layout|page|template|default|loading|error|not-found|route|opengraph-image)\.tsx?$/;
 
 /**
- * Every way one module reaches another *at runtime*, because a traversal that follows only one of
- * them walks a smaller graph than the server actually renders and quietly stops guarding the rest
- * of it. The tree uses all of these: ~9800 named imports, ~340 default, ~870 namespace, 53
- * re-exports.
+ * One matcher per declaration shape, rather than one loose pattern for all of them.
  *
- * `import type` is excluded, and it matters: the only route into `core/blocks/data/filters.ts` is a
- * type import from `core/chat/edit-types.ts`, so counting it walks into the sync store and reports
- * three modules that TypeScript erases before anything runs.
- */
-const MODULE_EDGE = /^(?:import|export)\s+(?!type\s)[\s\S]*?from\s+['"]([^'"]+)['"]/gm;
-
-/** `import { a, b as c } from '…'`, with or without a default binding in front. */
-const NAMED_IMPORT_BLOCK = /^import\s+(?!type\s)(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s+from\s+['"]([^'"]+)['"]/gm;
-
-/** `import Local from '…'`, ignoring the `import type` and `import * as` forms. */
-const DEFAULT_IMPORT = /^import\s+(?!type\s)([A-Za-z_$][\w$]*)\s*(?:,\s*\{[^}]*\})?\s+from\s+['"]([^'"]+)['"]/gm;
-
-/** `import * as Local from '…'`, where every property read is a client reference. */
-const NAMESPACE_IMPORT = /^import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+['"]([^'"]+)['"]/gm;
-
-/** `export { a } from '…'` and `export * from '…'`, which hand a client reference straight on. */
-const NAMED_REEXPORT = /^export\s+(?!type\s)\{([^}]*)\}\s+from\s+['"]([^'"]+)['"]/gm;
-
-/**
- * `export * from '…'` and `export * as Name from '…'`.
+ * The loose version was `^(?:import|export)\s+(?!type\s)[\s\S]*?from\s+['"](…)['"]`, and `[\s\S]*?`
+ * does not stop at the end of a declaration. In `app/layout.tsx` it started on a bare
+ * `import 'katex/dist/katex.min.css';`, walked past two more statements and captured the specifier
+ * of a later one — so edges were attributed to declarations that do not have them, and any
+ * statement in between was skipped because the match had already consumed it. It would equally
+ * start on an `export const` and run until it found a `from` dozens of lines away.
  *
- * The named form is the common one here — 11 files against 4 — so a matcher that only knew the
- * bare `export *` was blind to most of the barrels in the tree.
+ * Each of these is bounded to its own shape: a `{…}` block cannot contain a `}`, and nothing else
+ * crosses a declaration boundary. Between them they cover what the tree actually uses — ~9800 named
+ * imports, ~340 default, ~870 namespace, 53 re-exports, 136 bare, 85 dynamic.
+ *
+ * `import type` and `export type` are excluded, and that exclusion is load-bearing: the only route
+ * into `core/blocks/data/filters.ts` is a type import from `core/chat/edit-types.ts`, and counting
+ * it walks on into the sync store and reports three modules TypeScript erases before anything runs.
  */
-const STAR_REEXPORT = /^export\s+\*\s+(?:as\s+([A-Za-z_$][\w$]*)\s+)?from\s+['"]([^'"]+)['"]/gm;
+const IMPORT_NAMED = /^import\s+(?!type\s)(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s+from\s+['"]([^'"]+)['"]/gm;
+const IMPORT_DEFAULT =
+  /^import\s+(?!type\s)([A-Za-z_$][\w$]*)\s*(?:,\s*(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*))?\s+from\s+['"]([^'"]+)['"]/gm;
+const IMPORT_NAMESPACE =
+  /^import\s+(?!type\s)(?:[A-Za-z_$][\w$]*\s*,\s*)?\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+['"]([^'"]+)['"]/gm;
+const REEXPORT_NAMED = /^export\s+(?!type\s)\{([^}]*)\}\s+from\s+['"]([^'"]+)['"]/gm;
+const REEXPORT_STAR = /^export\s+\*\s+(?:as\s+([A-Za-z_$][\w$]*)\s+)?from\s+['"]([^'"]+)['"]/gm;
+const IMPORT_BARE = /^import\s+['"]([^'"]+)['"]/gm;
+const IMPORT_DYNAMIC = /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g;
+
+/** Every specifier a module pulls in at runtime, whatever shape the declaration took. */
+function runtimeSpecifiers(contents: string): string[] {
+  const found: string[] = [];
+
+  for (const [, , specifier] of contents.matchAll(IMPORT_NAMED)) found.push(specifier);
+  for (const [, , specifier] of contents.matchAll(IMPORT_DEFAULT)) found.push(specifier);
+  for (const [, , specifier] of contents.matchAll(IMPORT_NAMESPACE)) found.push(specifier);
+  for (const [, , specifier] of contents.matchAll(REEXPORT_NAMED)) found.push(specifier);
+  for (const [, , specifier] of contents.matchAll(REEXPORT_STAR)) found.push(specifier);
+  for (const [, specifier] of contents.matchAll(IMPORT_BARE)) found.push(specifier);
+  for (const [, specifier] of contents.matchAll(IMPORT_DYNAMIC)) found.push(specifier);
+
+  return found;
+}
 
 /**
  * What the tree holds today, each one read before being listed rather than swept up by the walk.
@@ -82,6 +96,10 @@ const STAR_REEXPORT = /^export\s+\*\s+(?:as\s+([A-Za-z_$][\w$]*)\s+)?from\s+['"]
  * This list is not "these are fine". It is the debt this guard found on the day it was written,
  * ordered by how much it matters, and the fix for every one of them is the same shape: move the
  * value into a module with no `'use client'` on it and import it from both sides.
+ *
+ * The client module is part of the key, not decoration. Keyed on importer and name alone, an
+ * existing entry would go on authorising the same name after someone repointed the import at a
+ * *different* client module — debt quietly licensing a new fault.
  *
  * - `bounty-board-skeleton` is the live one. `app/bounties/loading.tsx` is server-rendered and puts
  *   `BOARD_GRID_CLASS` straight into a `className`, so the grid has no grid during the loading
@@ -97,11 +115,11 @@ const STAR_REEXPORT = /^export\s+\*\s+(?:as\s+([A-Za-z_$][\w$]*)\s+)?from\s+['"]
  *   Untangling it moves a hook out of `config.ts` and repoints nine files, for no behaviour change.
  */
 const KNOWN = new Set([
-  'partials/bounties/bounty-board-skeleton.tsx -> BOARD_CARD_HEIGHT_PX',
-  'partials/bounties/bounty-board-skeleton.tsx -> BOARD_GRID_CLASS',
-  'core/blocks/data/read-block-media-dimensions.ts -> NO_BLOCK_MEDIA_DIMENSIONS',
-  'core/responses/entity-response.ts -> getChecked',
-  'core/bounties/config.ts -> useFeatureFlag',
+  'partials/bounties/bounty-board-skeleton.tsx -> BOARD_CARD_HEIGHT_PX (from partials/bounties/board-bounty-card.tsx)',
+  'partials/bounties/bounty-board-skeleton.tsx -> BOARD_GRID_CLASS (from partials/bounties/board-bounty-card.tsx)',
+  'core/blocks/data/read-block-media-dimensions.ts -> NO_BLOCK_MEDIA_DIMENSIONS (from core/hooks/use-block-media-dimensions.ts)',
+  'core/responses/entity-response.ts -> getChecked (from design-system/checkbox.tsx)',
+  'core/bounties/config.ts -> useFeatureFlag (from core/state/feature-flags.ts)',
 ]);
 
 function sourceFiles(): string[] {
@@ -149,11 +167,11 @@ function resolveImport(specifier: string, importingFile: string): string | null 
 }
 
 /**
- * `A` or `A as B` inside a named import block, skipping inline `type` specifiers.
+ * `A` or `A as B` inside a named block, skipping inline `type` specifiers.
  *
  * Both names are kept because they answer different questions. The export is known by its exported
- * name, which is what the source module declares; it is used under its local one, which is what
- * appears in JSX here.
+ * name, which is what the source module declares; it is referred to here by its local one, which is
+ * what a reader of this file sees and what belongs in a failure message.
  */
 function parseNamedBindings(block: string): { exported: string; local: string }[] {
   return block
@@ -167,39 +185,59 @@ function parseNamedBindings(block: string): { exported: string; local: string }[
     .filter(({ exported, local }) => Boolean(exported) && Boolean(local));
 }
 
-/**
- * Components are the one export a Server Component may take from a client module — that is what the
- * boundary is for. So the question for every binding is whether it is one, and capitalisation alone
- * cannot answer it: `BOARD_GRID_CLASS` fails a naive capital-letter test while being a string, and
- * a client module exporting `const DefaultConfig = {...}` passes one while being an object.
- *
- * Three questions instead, cheapest first.
- */
+/** Only a capitalised name can be a component. `useFeatureFlag` is a function and still a value. */
 function isCapitalised(name: string): boolean {
   return /^[A-Z]/.test(name) && name !== name.toUpperCase();
 }
 
 /**
- * Whether the importing file treats it as a component: rendered as `<Name>`, or handed to something
- * else to render as `render={Name}`. The sibling test matches render sites the same way.
+ * What the client module declares this export to be, read from the source rather than guessed from
+ * how it is used.
  *
- * The prop form is here for a case the tree does not hold yet — a server module importing a client
- * component and passing it on without rendering it — because the failure would otherwise be a
- * false accusation, and a guard that cries wolf gets deleted.
+ * The first version of this asked the use site — rendered as `<Name>`, or handed on as
+ * `render={Name}`. That let `config={DefaultConfig}` through, since any prop looked like proof, and
+ * it had nothing to say about a re-export, which has no use site at all. The declaration answers
+ * both and is the same evidence a reader would use.
+ *
+ * Measured against the tree before being trusted: of 163 capitalised imports from client modules in
+ * the server graph, 144 are `export function`, 17 are an arrow or `memo`/`forwardRef`, and 2 are
+ * `export type` imported without the `type` keyword — `Tabs` from `editor-provider` and `Feature`
+ * from `use-place-search`. Nothing is unclassifiable, so `unknown` is a real signal rather than the
+ * common case, and it is reported rather than waved through.
  */
-function usedAsComponent(local: string, contents: string): boolean {
-  return new RegExp(`<${local}[\\s/>]|=\\{\\s*${local}\\s*\\}`).test(contents);
-}
+type ExportKind = 'component' | 'erased' | 'value' | 'unknown';
 
-/**
- * Whether the source module declares it as a type, which the compiler erases before anything runs.
- *
- * Two of these exist today and both would otherwise be reported: `Tabs` from `editor-provider` and
- * `Feature` from `use-place-search` are `export type`, imported without the `type` keyword and used
- * only in annotations.
- */
-function declaredAsType(exported: string, sourceContents: string): boolean {
-  return new RegExp(`^export\\s+(?:type|interface)\\s+${exported}\\b`, 'm').test(sourceContents);
+function classifyExport(exported: string, source: string): ExportKind {
+  const name = exported.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  if (new RegExp(`^export\\s+(?:type|interface)\\s+${name}\\b`, 'm').test(source)) return 'erased';
+
+  if (exported === 'default') {
+    if (/^export\s+default\s+(?:async\s+)?(?:function|class)\b/m.test(source)) return 'component';
+    if (/^export\s+default\s+(?:\{|\[|['"`]|\d)/m.test(source)) return 'value';
+    return 'unknown';
+  }
+
+  if (new RegExp(`^export\\s+(?:async\\s+)?function\\s+${name}\\b`, 'm').test(source)) return 'component';
+  if (new RegExp(`^export\\s+class\\s+${name}\\b`, 'm').test(source)) return 'component';
+
+  const declaration = new RegExp(`^export\\s+const\\s+${name}\\s*(?::[^=]+)?=\\s*(.{0,40})`, 'm').exec(source);
+  if (declaration) {
+    const initialiser = declaration[1].trimStart();
+    // A component, however it is wrapped.
+    if (
+      /^(?:\(|async\s*\(|[A-Za-z_$][\w$]*\s*=>|React\.(?:memo|forwardRef)|memo\(|forwardRef\(|styled\.|cva\()/.test(
+        initialiser
+      )
+    ) {
+      return 'component';
+    }
+    // An object, array, string, number or boolean is a value whatever its name suggests.
+    if (/^(?:\{|\[|['"`]|\d|true\b|false\b|new\s)/.test(initialiser)) return 'value';
+    return 'unknown';
+  }
+
+  return 'unknown';
 }
 
 describe('server components take only components from client modules', () => {
@@ -211,6 +249,10 @@ describe('server components take only components from client modules', () => {
     // Guards against a silently empty run if the layout moves.
     expect(files.length).toBeGreaterThan(50);
     expect(clientFiles.size).toBeGreaterThan(50);
+    // Every declared root must hold something, or a typo in the list reads as a clean run.
+    for (const dir of SOURCE_DIRS) {
+      expect(files.filter(file => file.startsWith(`${dir}${path.sep}`)).length).toBeGreaterThan(0);
+    }
   });
 
   /** Every non-client module reachable from a server entry point, which is where this can bite. */
@@ -225,8 +267,8 @@ describe('server components take only components from client modules', () => {
     if (serverGraph.has(file) || clientFiles.has(file)) continue;
     serverGraph.add(file);
 
-    for (const match of (contentsByFile.get(file) ?? '').matchAll(MODULE_EDGE)) {
-      const target = resolveImport(match[1], file);
+    for (const specifier of runtimeSpecifiers(contentsByFile.get(file) ?? '')) {
+      const target = resolveImport(specifier, file);
       if (target && !clientFiles.has(target) && !serverGraph.has(target)) queue.push(target);
     }
   }
@@ -236,92 +278,86 @@ describe('server components take only components from client modules', () => {
   });
 
   /**
-   * Whether this binding is a component as far as this file is concerned — the one thing a server
-   * module may take across the boundary. Capitalised *and* either used as one here or erased by the
-   * compiler; capitalised and neither is the `const DefaultConfig = {...}` case, which is a value
-   * wearing a component's name.
-   */
-  function isComponentHere({
-    exported,
-    local,
-    contents,
-    target,
-  }: {
-    exported: string;
-    local: string;
-    contents: string;
-    target: string;
-  }): boolean {
-    if (!isCapitalised(exported === 'default' ? local : exported)) return false;
-
-    return usedAsComponent(local, contents) || declaredAsType(exported, contentsByFile.get(target) ?? '');
-  }
-
-  /**
    * Every value a server-graph module takes from a client module, in any of the shapes it can
-   * arrive in, as `[offence, source]` pairs. A namespace binding is reported whole, since every
-   * property read off it is a client reference.
+   * arrive in. A namespace binding is reported whole, since every property read off it is a client
+   * reference and there is no one export to classify.
    */
-  function* clientValuesInServerGraph(): Generator<[string, string]> {
+  function* clientValuesInServerGraph(): Generator<string> {
     for (const file of serverGraph) {
       const contents = contentsByFile.get(file)!;
       const from = file.split(path.sep).join('/');
 
-      const fromClientModule = (specifier: string) => {
+      const clientSource = (specifier: string) => {
         const target = resolveImport(specifier, file);
-        return target && clientFiles.has(target) ? target.split(path.sep).join('/') : null;
+        if (!target || !clientFiles.has(target)) return null;
+        return { path: target.split(path.sep).join('/'), contents: contentsByFile.get(target) ?? '' };
       };
 
-      for (const [, block, specifier] of contents.matchAll(NAMED_IMPORT_BLOCK)) {
-        const target = fromClientModule(specifier);
-        if (!target) continue;
+      /** The offence, or nothing if this binding is a component or erased before it runs. */
+      const offence = (exported: string, local: string, source: { path: string; contents: string }) => {
+        if (!isCapitalised(exported === 'default' ? local : exported)) {
+          return `${from} -> ${local} (from ${source.path})`;
+        }
+
+        const kind = classifyExport(exported, source.contents);
+        if (kind === 'component' || kind === 'erased') return null;
+
+        const label = kind === 'unknown' ? `${local} (unclassifiable` : `${local} (`;
+        return `${from} -> ${label}from ${source.path})`;
+      };
+
+      for (const [, block, specifier] of contents.matchAll(IMPORT_NAMED)) {
+        const source = clientSource(specifier);
+        if (!source) continue;
         for (const { exported, local } of parseNamedBindings(block)) {
-          if (isComponentHere({ exported, local, contents, target })) continue;
-          yield [`${from} -> ${exported === 'default' ? `default as ${local}` : exported}`, target];
+          const found = offence(exported, local, source);
+          if (found) yield found;
         }
       }
 
-      for (const [, local, specifier] of contents.matchAll(DEFAULT_IMPORT)) {
-        const target = fromClientModule(specifier);
-        if (!target) continue;
-        if (isComponentHere({ exported: 'default', local, contents, target })) continue;
-        yield [`${from} -> default as ${local}`, target];
+      for (const [, local, specifier] of contents.matchAll(IMPORT_DEFAULT)) {
+        const source = clientSource(specifier);
+        if (!source) continue;
+        const found = offence('default', local, source);
+        if (found) yield found;
       }
 
-      for (const [, local, specifier] of contents.matchAll(NAMESPACE_IMPORT)) {
-        const target = fromClientModule(specifier);
-        if (target) yield [`${from} -> * as ${local}`, target];
+      for (const [, local, specifier] of contents.matchAll(IMPORT_NAMESPACE)) {
+        const source = clientSource(specifier);
+        if (source) yield `${from} -> * as ${local} (from ${source.path})`;
       }
 
-      for (const [, block, specifier] of contents.matchAll(NAMED_REEXPORT)) {
-        const target = fromClientModule(specifier);
-        if (!target) continue;
-        for (const { exported } of parseNamedBindings(block)) {
-          // No JSX to look at in a re-export, so capitalisation and the type check are all there is.
-          if (isCapitalised(exported) || declaredAsType(exported, contentsByFile.get(target) ?? '')) continue;
-          yield [`${from} -> re-exports ${exported}`, target];
+      for (const [, block, specifier] of contents.matchAll(REEXPORT_NAMED)) {
+        const source = clientSource(specifier);
+        if (!source) continue;
+        for (const { exported, local } of parseNamedBindings(block)) {
+          const found = offence(exported, local, source);
+          if (found) yield `${found} re-exported`;
         }
       }
 
-      for (const [, namespace, specifier] of contents.matchAll(STAR_REEXPORT)) {
-        const target = fromClientModule(specifier);
-        if (target) yield [`${from} -> re-exports ${namespace ? `* as ${namespace}` : '*'}`, target];
+      for (const [, namespace, specifier] of contents.matchAll(REEXPORT_STAR)) {
+        const source = clientSource(specifier);
+        if (source) yield `${from} -> re-exports ${namespace ? `* as ${namespace}` : '*'} (from ${source.path})`;
       }
     }
   }
 
   it('finds no non-component value taken from a "use client" module', () => {
-    const offences = [...clientValuesInServerGraph()]
-      .filter(([offence]) => !KNOWN.has(offence))
-      .map(([offence, target]) => `${offence}  (from ${target})`);
+    const offences = [...clientValuesInServerGraph()].filter(offence => !KNOWN.has(offence));
 
-    expect(offences).toEqual([]);
+    expect(
+      offences,
+      'A server component is reading a value out of a client module, which is a client reference ' +
+        'on the server rather than the value. Move the value into a module with no `use client` ' +
+        'and import it from both sides — see the doc block in this file.'
+    ).toEqual([]);
   });
 
   it('keeps the known list honest', () => {
     // An entry that no longer matches anything has been fixed, and leaving it here would quietly
     // re-permit the same import later.
-    const live = new Set([...clientValuesInServerGraph()].map(([offence]) => offence));
+    const live = new Set(clientValuesInServerGraph());
 
     expect([...KNOWN].filter(entry => !live.has(entry))).toEqual([]);
   });
