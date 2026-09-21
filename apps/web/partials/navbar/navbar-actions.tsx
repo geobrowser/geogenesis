@@ -13,7 +13,6 @@ import { browseModeToggled, editModeToggled } from '~/core/analytics';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
-import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
@@ -46,6 +45,31 @@ function useUser() {
 }
 
 const MOBILE_NAVBAR_QUERY = '(max-width: 639px)';
+
+function subscribeToMobileNavbar(onStoreChange: () => void) {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {};
+
+  const mediaQuery = window.matchMedia(MOBILE_NAVBAR_QUERY);
+  mediaQuery.addEventListener('change', onStoreChange);
+  return () => mediaQuery.removeEventListener('change', onStoreChange);
+}
+
+function getMobileNavbarSnapshot() {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia(MOBILE_NAVBAR_QUERY).matches
+  );
+}
+
+function getServerMobileNavbarSnapshot() {
+  return false;
+}
+
+function useIsMobileNavbar() {
+  return React.useSyncExternalStore(subscribeToMobileNavbar, getMobileNavbarSnapshot, getServerMobileNavbarSnapshot);
+}
+
 const PROFILE_MENU_ACTION_CLASS =
   'flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none';
 const PROFILE_MENU_DIVIDED_ACTION_CLASS = cx(PROFILE_MENU_ACTION_CLASS, 'border-t border-grey-02');
@@ -63,7 +87,7 @@ export function NavbarActions() {
   const { isPending, topicId } = usePendingPersonalSpace();
   const pendingAvatar = useAtomValue(avatarAtom);
   const { user } = usePrivy();
-  const isMobileNavbar = useMediaQuery(MOBILE_NAVBAR_QUERY);
+  const isMobileNavbar = useIsMobileNavbar();
   const spaceId = useSpaceId();
   const { canCreateInSpace, createEntity, createProperty, createSpace } = useCreateEntityActions(spaceId);
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we

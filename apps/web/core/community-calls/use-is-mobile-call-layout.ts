@@ -1,6 +1,6 @@
 'use client';
 
-import { useMediaQuery } from '~/core/hooks/use-media-query';
+import * as React from 'react';
 
 /**
  * Call-room-specific breakpoint (matches curator's `useIsMobile`), separate from
@@ -11,7 +11,21 @@ export const MOBILE_CALL_LAYOUT_MAX_WIDTH_PX = 767;
 
 const QUERY = `(max-width: ${MOBILE_CALL_LAYOUT_MAX_WIDTH_PX}px)`;
 
+function subscribe(onStoreChange: () => void) {
+  const mq = window.matchMedia(QUERY);
+  mq.addEventListener('change', onStoreChange);
+  return () => mq.removeEventListener('change', onStoreChange);
+}
+
+function getSnapshot() {
+  return window.matchMedia(QUERY).matches;
+}
+
+function getServerSnapshot() {
+  return false;
+}
+
 /** True when viewport is at most 767px wide (the live call room's mobile breakpoint). */
 export function useIsMobileCallLayout() {
-  return useMediaQuery(QUERY);
+  return React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
