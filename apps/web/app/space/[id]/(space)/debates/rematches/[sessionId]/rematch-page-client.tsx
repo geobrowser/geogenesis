@@ -2360,7 +2360,6 @@ function RematchClaimCard({
   // instead of both waiting on a refetch.
   const { optimisticResponse } = useEntityResponse({
     entityId: claim.claim.claim_entity_id,
-    entityName: claim.claim.claim,
     spaceId: claim.claim.space_id,
     responseKind,
   });
