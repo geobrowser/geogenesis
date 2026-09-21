@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   } as { name: string | null; avatarUrl: string | null } | null,
   personalSpaceId: 'personal-space' as string | null,
   isSmartAccountLoading: false,
+  hasSmartAccount: true,
   dialogMounts: 0,
   pendingPersonalSpace: { isPending: false, topicId: null as string | null },
   privyUser: {
@@ -45,7 +46,7 @@ vi.mock('~/core/debates/hooks', () => ({
 
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({
-    smartAccount: { account: { address } },
+    smartAccount: mocks.hasSmartAccount ? { account: { address } } : undefined,
     isLoading: mocks.isSmartAccountLoading,
   }),
 }));
@@ -136,6 +137,7 @@ describe('NavbarActions profile menu', () => {
     mocks.profile = { name: 'Max', avatarUrl: 'ipfs://avatar' };
     mocks.personalSpaceId = 'personal-space';
     mocks.isSmartAccountLoading = false;
+    mocks.hasSmartAccount = true;
     mocks.dialogMounts = 0;
     mocks.pendingPersonalSpace = { isPending: false, topicId: null };
     mocks.privyUser = {
@@ -320,6 +322,20 @@ describe('NavbarActions profile menu', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
     expect(document.activeElement).toBe(avatar);
+  });
+
+  // The held identity is only for the loading window. Signing out is not one, so it must not keep
+  // the avatar on screen.
+  it('falls through to the connect button once the account goes away', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<NavbarActions />);
+    await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+
+    mocks.hasSmartAccount = false;
+    rerender(<NavbarActions />);
+
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open profile menu' })).not.toBeInTheDocument();
   });
 
   it('saves the schedule edited from the menu', async () => {
