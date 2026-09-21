@@ -54,6 +54,7 @@ export function NavbarActions() {
   const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
   // Deferred like the dialog above: the week grid is only built once somebody asks for it.
   const [hasOpenedSchedule, setHasOpenedSchedule] = React.useState(false);
+  const avatarTriggerRef = React.useRef<HTMLButtonElement>(null);
 
   const { isLoading: isUserLoading, profile, address } = useUser();
   const { personalSpaceId } = usePersonalSpaceId();
@@ -63,9 +64,9 @@ export function NavbarActions() {
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
   // only trigger the logout.
   const { logout } = useLogout();
-  // Read here rather than inside the modal: the modal seeds its grid from `blocks` as it opens and
-  // does not reseed when a later read answers, so a query that only started on the click would draw
-  // an empty calendar over a saved schedule.
+  // Read here rather than inside the modal so the week is usually cached by the time the menu is
+  // opened. The modal holds the grid back until this answers, so a slow read costs a moment of
+  // "Loading your schedule" rather than a wrong one.
   const { blocks: scheduleBlocks } = useDebateSchedule();
   const saveSchedule = useSaveDebateSchedule();
 
@@ -121,6 +122,7 @@ export function NavbarActions() {
           }
           open={open}
           onOpenChange={onOpenChange}
+          triggerRef={avatarTriggerRef}
           sideOffset={12}
           className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] mobile:w-[322px]"
         >
@@ -181,16 +183,17 @@ export function NavbarActions() {
       {hasOpenedEditProfile ? (
         <EditProfileDialog key="edit-profile-dialog" open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen} />
       ) : null}
-      {/* No `openerRef`, unlike the banner's copy: the menu item that opens this unmounts with the
-          popover on the same click, leaving no node to focus. The popover returns focus to the
-          avatar trigger, and the dialog restores to that on close. */}
+      {/* `openerRef` is the avatar, not the item that was clicked: that item unmounts with the
+          popover on the same click, and without a live node to return to, closing the dialog left
+          focus on the body. */}
       {hasOpenedSchedule ? (
         <AvailabilityModal
           key="availability-modal"
           open={isScheduleOpen}
           onOpenChange={setIsScheduleOpen}
-          blocks={scheduleBlocks ?? []}
+          blocks={scheduleBlocks}
           onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
+          openerRef={avatarTriggerRef}
         />
       ) : null}
     </>

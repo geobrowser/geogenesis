@@ -105,15 +105,17 @@ vi.mock('~/design-system/menu', () => ({
     open,
     onOpenChange,
     className,
+    triggerRef,
   }: {
     trigger: React.ReactNode;
     children: React.ReactNode;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     className?: string;
+    triggerRef?: React.RefObject<HTMLButtonElement | null>;
   }) => (
     <div>
-      <button aria-label="Open profile menu" onClick={() => onOpenChange(!open)}>
+      <button ref={triggerRef} aria-label="Open profile menu" onClick={() => onOpenChange(!open)}>
         {trigger}
       </button>
       {open && (
@@ -280,6 +282,22 @@ describe('NavbarActions profile menu', () => {
     expect(within(dialog).getByRole('group', { name: 'New block mode' })).toBeInTheDocument();
     // Opening it closes the menu it was launched from.
     expect(screen.queryByTestId('profile-menu')).not.toBeInTheDocument();
+  });
+
+  it('returns focus to the avatar once the calendar closes', async () => {
+    const user = userEvent.setup();
+    render(<NavbarActions />);
+    const avatar = screen.getByRole('button', { name: 'Open profile menu' });
+    await user.click(avatar);
+    await user.click(screen.getByRole('button', { name: 'Set my schedule' }));
+
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    // Not the menu item that opened it -- that unmounted with the menu, and without a live node to
+    // return to, focus was dropped on the body.
+    expect(document.activeElement).toBe(avatar);
   });
 
   it('saves the schedule edited from the menu', async () => {

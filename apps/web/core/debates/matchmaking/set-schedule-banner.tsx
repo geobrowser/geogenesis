@@ -38,8 +38,8 @@ function Banner() {
   const { dismissed, remember: handleDismiss } = useDismissedNotice(SET_SCHEDULE_BANNER_ID);
   const [modalOpen, setModalOpen] = React.useState(false);
   // Saved server-side now that the backend half of GEO-2936 exists (GEO-2932). `blocks` is
-  // undefined until the first read answers, which the modal treats as an empty calendar — the
-  // same thing it showed before, so opening it early is no worse than it was.
+  // undefined until the first read answers; it is passed straight through, because the modal has
+  // to tell "not read yet" from "an empty week" to avoid saving the latter over the former.
   const { blocks, isSet } = useDebateSchedule();
   const saveSchedule = useSaveDebateSchedule();
   const openerRef = React.useRef<HTMLButtonElement | null>(null);
@@ -81,7 +81,7 @@ function Banner() {
       <AvailabilityModal
         open={modalOpen}
         onOpenChange={setModalOpen}
-        blocks={blocks ?? []}
+        blocks={blocks}
         onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
         openerRef={openerRef}
       />

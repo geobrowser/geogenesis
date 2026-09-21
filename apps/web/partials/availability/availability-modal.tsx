@@ -17,7 +17,12 @@ import { AvailabilityCalendar } from './availability-calendar';
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** The schedule as it stands. The modal edits a copy and reports it only on save. */
+  /**
+   * The schedule as it stands. The modal edits a copy and reports it only on save.
+   *
+   * `undefined` means the read has not answered yet, which is not the same as an empty week: the
+   * grid seeds itself once and never reseeds, so opening it on a guess would save that guess.
+   */
   blocks?: AvailabilityBlock[];
   onSave: (blocks: AvailabilityBlock[]) => void;
   /** Focus goes back here on close, since the opener is off in the panel behind the overlay. */
@@ -34,8 +39,8 @@ type Props = {
  * Edits are held until Save. Closing by any other route (Cancel, ×, Escape, the overlay) discards
  * them, because a schedule half-dragged is not one a person meant to publish.
  */
-export function AvailabilityModal({ open, onOpenChange, blocks = [], onSave, openerRef }: Props) {
-  const [draft, setDraft] = React.useState(blocks);
+export function AvailabilityModal({ open, onOpenChange, blocks, onSave, openerRef }: Props) {
+  const [draft, setDraft] = React.useState<AvailabilityBlock[]>(blocks ?? []);
 
   return (
     <Root open={open} onOpenChange={onOpenChange}>
@@ -87,8 +92,27 @@ export function AvailabilityModal({ open, onOpenChange, blocks = [], onSave, ope
             </div>
 
             {/* Remounted per opening so a discarded draft cannot survive into the next one. The
-                footer buttons ride in the calendar's own action row, beside its Clear all. */}
-            {open && (
+                footer buttons ride in the calendar's own action row, beside its Clear all.
+
+                Held back until the read answers. `AvailabilityCalendar` seeds its state from
+                `initialBlocks` at mount and never reseeds, so mounting it on an assumed empty week
+                stayed empty after the real schedule arrived -- and Save then wrote that empty week
+                over it. */}
+            {open && blocks === undefined ? (
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
+                <Text as="p" variant="metadata" className="text-grey-04">
+                  Loading your schedule…
+                </Text>
+                <button
+                  type="button"
+                  onClick={() => onOpenChange(false)}
+                  className="rounded-full px-3 py-1 text-metadata text-grey-04 transition-colors hover:text-text"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : null}
+            {open && blocks !== undefined && (
               <AvailabilityCalendar
                 className="min-h-0 flex-1"
                 initialBlocks={blocks}
