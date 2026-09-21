@@ -259,6 +259,29 @@ describe('ProfileActivitySection', () => {
     expect(cards.every(card => card.parentElement?.className.includes('w-[min(260px,84cqw)]'))).toBe(true);
   });
 
+  it('offers left and right buttons to scroll one Activity card at a time', () => {
+    render(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2'), row('d3')] })]} />);
+
+    const scroller = document.querySelector<HTMLElement>('.overflow-x-auto') as HTMLElement;
+    Object.defineProperty(scroller, 'scrollWidth', { configurable: true, value: 900 });
+    Object.defineProperty(scroller, 'clientWidth', { configurable: true, value: 300 });
+    Object.defineProperty(scroller, 'scrollBy', { configurable: true, value: vi.fn() });
+    fireEvent.scroll(scroller);
+
+    expect(screen.queryByRole('button', { name: 'Scroll activity left' })).toBeNull();
+    const next = screen.getByRole('button', { name: 'Scroll activity right' });
+    fireEvent.click(next);
+    expect(scroller.scrollBy).toHaveBeenCalledWith({ left: 276, behavior: 'smooth' });
+
+    scroller.scrollLeft = 300;
+    fireEvent.scroll(scroller);
+    expect(screen.getByRole('button', { name: 'Scroll activity left' })).toBeInTheDocument();
+
+    scroller.scrollLeft = 600;
+    fireEvent.scroll(scroller);
+    expect(screen.queryByRole('button', { name: 'Scroll activity right' })).toBeNull();
+  });
+
   it('hands autoplay to the next visible debate when the current one scrolls out', async () => {
     render(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2'), row('d3')] })]} />);
 

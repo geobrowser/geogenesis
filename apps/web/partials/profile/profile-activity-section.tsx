@@ -12,6 +12,7 @@ import { ID } from '~/core/id';
 import type { ClaimResponse } from '~/core/profile/use-person-positions';
 import { normId } from '~/core/utils/norm-id';
 
+import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -404,6 +405,7 @@ function ActivityGallery({
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
   const { scrollerRef, allowedDebateId, requestPlayback } = useGalleryDebatePlayback(shown);
+  const { canScrollLeft, canScrollRight, scrollByCard } = useGalleryNavigation(scrollerRef, shown.length);
 
   return (
     // One at a time. Compact cards can leave several debates fully visible, so intersection alone
@@ -425,7 +427,7 @@ function ActivityGallery({
        * the gallery hangs off the side of the document and every profile scrolls sideways. `md` is
        * inside `2xl` in a desktop-first scale, so the gutter is always there to cancel.
        */}
-      <div className="@container md:-mr-[2ch]">
+      <div className="@container relative md:-mr-[2ch]">
         {/*
          * `snap-x` so a flick lands on a card rather than between two.
          *
@@ -451,6 +453,9 @@ function ActivityGallery({
           ))}
           <span aria-hidden className="w-0 shrink-0 pr-4" />
         </div>
+
+        {canScrollLeft ? <GalleryNavigationButton direction="left" onClick={() => scrollByCard(-1)} /> : null}
+        {canScrollRight ? <GalleryNavigationButton direction="right" onClick={() => scrollByCard(1)} /> : null}
       </div>
     </DebatePlaybackGate>
   );
@@ -530,6 +535,73 @@ function useGalleryDebatePlayback(rows: ExploreFeedRow[]) {
     allowedDebateId,
     requestPlayback: React.useCallback((debateId: string) => setRequestedDebateId(debateId), []),
   };
+}
+
+/** Mouse-accessible controls for a rail that otherwise depends on horizontal wheel or swipe input. */
+function useGalleryNavigation(scrollerRef: React.RefObject<HTMLDivElement | null>, cardCount: number) {
+  const [availability, setAvailability] = React.useState({ left: false, right: false });
+
+  React.useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    const update = () => {
+      const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+      const next = {
+        left: scroller.scrollLeft > 1,
+        right: scroller.scrollLeft < maxScrollLeft - 1,
+      };
+      setAvailability(current => (current.left === next.left && current.right === next.right ? current : next));
+    };
+
+    update();
+    scroller.addEventListener('scroll', update, { passive: true });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    observer?.observe(scroller);
+    window.addEventListener('resize', update);
+
+    return () => {
+      scroller.removeEventListener('scroll', update);
+      observer?.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [cardCount, scrollerRef]);
+
+  const scrollByCard = React.useCallback(
+    (direction: -1 | 1) => {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      const firstCard = scroller.querySelector<HTMLElement>('[data-activity-card]');
+      const cardWidth = firstCard?.getBoundingClientRect().width || 260;
+      // `gap-4` is 16px. Move one complete card plus that gap so the next snap point lands flush.
+      scroller.scrollBy({ left: direction * (cardWidth + 16), behavior: 'smooth' });
+    },
+    [scrollerRef]
+  );
+
+  return {
+    canScrollLeft: availability.left,
+    canScrollRight: availability.right,
+    scrollByCard,
+  };
+}
+
+function GalleryNavigationButton({ direction, onClick }: { direction: 'left' | 'right'; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={`Scroll activity ${direction}`}
+      onClick={onClick}
+      className={cx(
+        'absolute top-1/2 z-30 grid size-9 -translate-y-1/2 place-items-center rounded-full border border-grey-02 bg-white text-text shadow-card transition-colors hover:bg-grey-01 focus-visible:border-text focus-visible:outline-none',
+        direction === 'left' ? 'left-2' : 'right-2'
+      )}
+    >
+      <span className={direction === 'left' ? 'rotate-180' : undefined} aria-hidden>
+        <ChevronRight />
+      </span>
+    </button>
+  );
 }
 
 /**
