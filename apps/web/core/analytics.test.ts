@@ -223,10 +223,14 @@ describe('analytics', () => {
     const {
       browseModeToggled: browse,
       commentCreated,
+      commentEdited,
       editModeToggled: edit,
+      personProfileOpened,
       personalSpaceViewed,
+      profileUpdated,
       publishedEdit,
       reviewChangesOpened,
+      signupCompleted,
       upvoted: up,
       voteCast: vote,
     } = await import('./analytics');
@@ -236,9 +240,13 @@ describe('analytics', () => {
     edit({ space_id: 'space-1' });
     browse({ space_id: 'space-1' });
     personalSpaceViewed('personal-space-1');
+    personProfileOpened('profile-space-1', 'person-1', { interaction_surface: 'claim_vote_list' });
     reviewChangesOpened({ space_id: 'space-1' });
     publishedEdit({ space_id: 'space-1' });
+    profileUpdated('person-1', 'profile-space-1');
     commentCreated('comment-1', 'claim-1', { space_id: 'space-1' });
+    commentEdited('comment-1', 'claim-1', { space_id: 'space-1' });
+    signupCompleted('newsletter', { signup_surface: 'explore_email_capture' });
 
     expect(upvoted).toHaveBeenCalledWith({ entity_id: 'entity-1' });
     expect(voteCast).toHaveBeenCalledWith('none', { entity_id: 'entity-1' });
@@ -260,6 +268,21 @@ describe('analytics', () => {
       source: 'publishing',
       space_id: 'space-1',
     });
+    expect(capture).toHaveBeenCalledWith('graph_relationship_followed', {
+      app: 'genesis',
+      source: 'person_profile',
+      entity_id: 'person-1',
+      graph_entity_type: 'person',
+      profile_space_id: 'profile-space-1',
+      interaction_surface: 'claim_vote_list',
+    });
+    expect(capture).toHaveBeenCalledWith('published_edit', {
+      app: 'genesis',
+      source: 'profile_editor',
+      content_id: 'person-1',
+      content_type: 'profile',
+      space_id: 'profile-space-1',
+    });
     expect(capture).toHaveBeenCalledWith('comment_created', {
       app: 'genesis',
       source: 'commenting',
@@ -267,6 +290,21 @@ describe('analytics', () => {
       target_type: 'entity',
       target_id: 'claim-1',
       space_id: 'space-1',
+    });
+    expect(capture).toHaveBeenCalledWith('content_edited', {
+      app: 'genesis',
+      source: 'commenting',
+      content_id: 'comment-1',
+      content_type: 'comment',
+      target_type: 'entity',
+      target_id: 'claim-1',
+      space_id: 'space-1',
+    });
+    expect(capture).toHaveBeenCalledWith('signup_completed', {
+      app: 'genesis',
+      source: 'signup_form',
+      form_type: 'newsletter',
+      signup_surface: 'explore_email_capture',
     });
   });
 });

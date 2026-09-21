@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { useAtom } from 'jotai';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
+import { personProfileOpened } from '~/core/analytics';
 import { ClaimCommentPositionBadge } from '~/core/claims/browse/claim-comment-position';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Crown } from '~/core/debates/browse/icons';
@@ -224,6 +225,8 @@ export type CommentSectionVariant = 'page' | 'panel' | 'tab';
 interface CommentSectionProps {
   entityId: string;
   spaceId: string;
+  /** Logical graph type used to segment successful comment events without inspecting comment text. */
+  targetEntityType?: string;
   /**
    * 'page' (default) is the entity page treatment. 'panel' matches the side
    * panel design: no built-in heading (the host supplies one), compact rows,
@@ -234,9 +237,17 @@ interface CommentSectionProps {
   variant?: CommentSectionVariant;
 }
 
-export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentSectionProps) {
+export function CommentSection({
+  entityId,
+  spaceId,
+  targetEntityType = 'entity',
+  variant = 'page',
+}: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
-  const { publishComment, editComment } = usePublishComment(entityId, spaceId);
+  const { publishComment, editComment } = usePublishComment(entityId, spaceId, {
+    targetEntityType,
+    interactionSurface: variant === 'panel' ? 'comments_panel' : 'entity_page',
+  });
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const { open: openSignInPrompt } = useSignInPrompt();
@@ -1097,6 +1108,10 @@ function CommentItem({
   const expandedHeaderBlankCollapsesThread = !isEditing;
 
   const parentThreadLeave = branchPointerBlurProps(hi.clearFocus);
+  const recordAuthorOpen = React.useCallback(
+    () => personProfileOpened(comment.author.spaceId, null, { interaction_surface: 'comment_author' }),
+    [comment.author.spaceId]
+  );
 
   // Measure the distance from the avatar bottom to where the nested replies container starts
   React.useLayoutEffect(() => {
@@ -1123,6 +1138,7 @@ function CommentItem({
       >
         <a
           href={NavUtils.toSpace(comment.author.spaceId)}
+          onClick={recordAuthorOpen}
           className="relative shrink-0 overflow-hidden rounded-full"
           style={{ width: density.avatarPx, height: density.avatarPx }}
         >
@@ -1133,7 +1149,11 @@ function CommentItem({
           because the avatar is centred against it the body ends up stranded far
           below the name. A long name truncates instead. */}
       <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden">
-        <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
+        <a
+          href={NavUtils.toSpace(comment.author.spaceId)}
+          onClick={recordAuthorOpen}
+          className="min-w-0 truncate hover:underline"
+        >
           <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
         </a>
         <ClaimCommentPositionBadge authorSpaceId={comment.author.spaceId} />
@@ -1324,7 +1344,11 @@ function CommentItem({
             className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden"
             style={{ minHeight: density.headerMinHeightPx }}
           >
-            <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
+            <a
+              href={NavUtils.toSpace(comment.author.spaceId)}
+              onClick={recordAuthorOpen}
+              className="min-w-0 truncate hover:underline"
+            >
               <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
             </a>
             <ClaimCommentPositionBadge authorSpaceId={comment.author.spaceId} />

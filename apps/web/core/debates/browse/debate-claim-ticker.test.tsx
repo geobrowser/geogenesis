@@ -69,6 +69,8 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn()
 // The card's header names its speaker and links to them, which reaches for the side panel and for
 // the space behind the profile. Neither is what these tests are about.
 const openSidePanel = vi.fn();
+const analyticsMocks = vi.hoisted(() => ({ personProfileOpened: vi.fn() }));
+vi.mock('~/core/analytics', () => ({ personProfileOpened: analyticsMocks.personProfileOpened }));
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
   useEntitySidePanel: () => ({ openSidePanel, closeSidePanel: vi.fn(), sidePanelTarget: null }),
 }));
@@ -159,6 +161,7 @@ describe('DebateClaimTickerCard', () => {
   // The same link as the name in the corner of the tile, and the same person.
   it('opens the speaker from the card, the way the tile corner does', () => {
     openSidePanel.mockClear();
+    analyticsMocks.personProfileOpened.mockClear();
     renderCard();
 
     fireEvent.click(screen.getByRole('button', { name: 'Peter Feldip' }));
@@ -166,6 +169,14 @@ describe('DebateClaimTickerCard', () => {
     expect(openSidePanel).toHaveBeenCalledWith(`page-${SPEAKER.profile_space_id}`, SPEAKER.profile_space_id, false, {
       forceRequestedSpace: true,
     });
+    expect(analyticsMocks.personProfileOpened).toHaveBeenCalledWith(
+      SPEAKER.profile_space_id,
+      `page-${SPEAKER.profile_space_id}`,
+      {
+        interaction_surface: 'debate_media',
+        navigation_mode: 'entity_side_panel',
+      }
+    );
   });
 
   // The video behind is one big play/pause button.

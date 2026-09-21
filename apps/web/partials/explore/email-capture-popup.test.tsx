@@ -27,6 +27,13 @@ const mocks = vi.hoisted(() => ({
   useGeoLoginWithEmail: vi.fn(),
   usePrivySignIn: vi.fn(),
   useLoginWithEmailArgs: undefined as unknown,
+  signupCompleted: vi.fn(),
+  trackPrivyAuth: vi.fn(),
+}));
+
+vi.mock('~/core/analytics', () => ({
+  signupCompleted: mocks.signupCompleted,
+  trackPrivyAuth: mocks.trackPrivyAuth,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -89,6 +96,8 @@ beforeEach(() => {
   mocks.prepareOnboarding.mockReset();
   mocks.useGeoLoginWithEmail.mockReset();
   mocks.usePrivySignIn.mockReset();
+  mocks.signupCompleted.mockReset();
+  mocks.trackPrivyAuth.mockReset();
   mocks.useLoginWithEmailArgs = undefined;
   mocks.otpState = { status: 'initial' };
   mocks.fetch.mockReset();
@@ -121,6 +130,8 @@ describe('ExploreEmailCapturePopup', () => {
     scrollPastTrigger();
 
     expect(popup()?.querySelector('form')).toHaveAttribute('data-geo-analytics-label', 'Explore newsletter signup');
+    expect(popup()?.querySelector('form')).toHaveAttribute('data-geo-analytics-type', 'newsletter');
+    expect(popup()?.querySelector('form')).toHaveAttribute('data-geo-analytics-intent', 'signup');
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reader@example.com' } });
     await act(async () => {
@@ -129,6 +140,17 @@ describe('ExploreEmailCapturePopup', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
 
     expect(popup()?.querySelector('form')).toHaveAttribute('data-geo-analytics-label', 'Explore account verification');
+    expect(popup()?.querySelector('form')).toHaveAttribute('data-geo-analytics-type', 'account');
+    expect(popup()?.querySelector('form')).toHaveAttribute('data-geo-analytics-intent', 'signup');
+  });
+
+  it('records a completed newsletter signup only after the subscription succeeds', async () => {
+    await subscribeSuccessfully();
+
+    expect(mocks.signupCompleted).toHaveBeenCalledWith('newsletter', {
+      signup_surface: 'explore_email_capture',
+      newsletter_source: 'explore',
+    });
   });
 
   it('stays away until the reader has scrolled', () => {
@@ -856,6 +878,16 @@ describe('ExploreEmailCapturePopup', () => {
 
       const args = mocks.useLoginWithEmailArgs as { onComplete?: (a: unknown) => void } | undefined;
       expect(typeof args?.onComplete).toBe('function');
+
+      const completion = { user: { id: 'did:privy:new-user' }, isNewUser: true };
+      args?.onComplete?.(completion);
+
+      expect(mocks.trackPrivyAuth).toHaveBeenCalledWith(completion, {
+        auth_flow: 'manual_login',
+        link_source: 'explore_email_capture',
+        form_type: 'account',
+        signup_surface: 'explore_email_capture',
+      });
     });
 
     // Both resend controls used to stay live while a verification was in flight, so pressing one

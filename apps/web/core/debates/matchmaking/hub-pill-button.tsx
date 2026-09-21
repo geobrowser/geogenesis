@@ -29,6 +29,7 @@ export function HubPillButton({
   return (
     <button
       type="button"
+      data-geo-analytics-intent="debates_hub_action"
       disabled={disabled || pending}
       aria-busy={pending || undefined}
       className={cx(

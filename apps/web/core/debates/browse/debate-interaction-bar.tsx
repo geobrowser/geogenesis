@@ -202,6 +202,8 @@ function CircleAction({
     <div className="flex flex-col items-center gap-1">
       <button
         type="button"
+        data-geo-analytics-label={`Debate ${ariaLabel}`}
+        data-geo-analytics-intent="debate_action"
         aria-label={ariaLabel}
         aria-haspopup={expanded === undefined ? undefined : 'dialog'}
         aria-expanded={expanded ?? open}
@@ -248,6 +250,8 @@ function PillAction({
   return (
     <button
       type="button"
+      data-geo-analytics-label={`Debate ${ariaLabel}`}
+      data-geo-analytics-intent="debate_action"
       aria-label={ariaLabel}
       aria-haspopup={expanded === undefined ? undefined : 'dialog'}
       aria-expanded={expanded ?? open}

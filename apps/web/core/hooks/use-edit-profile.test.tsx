@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   reviewState: 'idle' as string,
   entityName: 'Preston' as string | null,
   hydrationStatus: 'success' as string | null,
+  profileUpdated: vi.fn(),
   coverUrl: 'ipfs://old-banner' as string | undefined,
   avatarUrl: 'ipfs://old-avatar' as string | undefined,
   entityDescription: 'Working on debates.' as string | null,
@@ -46,6 +47,8 @@ const mocks = vi.hoisted(() => ({
   storeValues: [] as Value[],
   storeRelations: [] as Relation[],
 }));
+
+vi.mock('~/core/analytics', () => ({ profileUpdated: mocks.profileUpdated }));
 
 vi.mock('jotai', () => ({ useSetAtom: () => mocks.setStoredAvatar }));
 vi.mock('~/partials/onboarding/dialog', () => ({ avatarAtom: {} }));
@@ -751,6 +754,7 @@ describe('useEditProfile', () => {
 
     expect(mocks.makeProposal).not.toHaveBeenCalled();
     expect(result.current.status).toBe('published');
+    expect(mocks.profileUpdated).not.toHaveBeenCalled();
   });
 
   // A removal can publish nothing but a tombstone left by another pending edit.
@@ -785,6 +789,7 @@ describe('useEditProfile', () => {
       await result.current.publish(draft({ name: 'Preston M' }));
     });
     await waitFor(() => expect(result.current.status).toBe('published'));
+    expect(mocks.profileUpdated).toHaveBeenCalledWith(ENTITY_ID, SPACE_ID);
 
     act(() => result.current.reset());
 

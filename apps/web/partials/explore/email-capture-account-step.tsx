@@ -41,7 +41,13 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
     loginWithCode,
     state: otpState,
   } = useLoginWithEmail({
-    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login', link_source: 'explore_email_capture' }),
+    onComplete: args =>
+      trackPrivyAuth(args, {
+        auth_flow: 'manual_login',
+        link_source: 'explore_email_capture',
+        form_type: 'account',
+        signup_surface: 'explore_email_capture',
+      }),
   });
   // Here for the same reason as the hook above, and it is the one that matters more: this registers
   // a second `useLogin` beside the navbar's own, and the navbar's is the login button people
@@ -146,7 +152,13 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   }, [busy]);
 
   return (
-    <form data-geo-analytics-label="Explore account verification" onSubmit={submitCode} noValidate>
+    <form
+      data-geo-analytics-label="Explore account verification"
+      data-geo-analytics-type="account"
+      data-geo-analytics-intent="signup"
+      onSubmit={submitCode}
+      noValidate
+    >
       {/* The card's own subtext style, shared from the popup so the two states are one design
           rather than two that drifted. */}
       <p className={SUBTEXT_CLASS}>

@@ -10,7 +10,7 @@ import cx from 'classnames';
 import { Effect } from 'effect';
 import { useStore } from 'jotai';
 
-import { trackPrivyAuth } from '~/core/analytics';
+import { personProfileOpened, trackPrivyAuth } from '~/core/analytics';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -591,7 +591,14 @@ function VoterRow({ profile }: { profile: Profile }) {
   );
 
   if (profile.profileLink) {
-    return <Link href={profile.profileLink}>{content}</Link>;
+    return (
+      <Link
+        href={profile.profileLink}
+        onClick={() => personProfileOpened(profile.spaceId, profile.id, { interaction_surface: 'claim_vote_list' })}
+      >
+        {content}
+      </Link>
+    );
   }
 
   return content;

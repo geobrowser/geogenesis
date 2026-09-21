@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
+import { personProfileOpened } from '~/core/analytics';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -559,7 +560,13 @@ function PersonRow({
             Unlinked when the id is not a space id. Rendering an anchor to `/space/undefined`
             would look identical until it was clicked. */}
         {profileHref ? (
-          <Link href={profileHref} className="min-w-0">
+          <Link
+            href={profileHref}
+            onClick={() =>
+              personProfileOpened(person.profile_space_id, null, { interaction_surface: 'debates_hub_people' })
+            }
+            className="min-w-0"
+          >
             <Text as="span" variant="metadataMedium" className="block truncate hover:underline">
               {speakerLabel(person)}
             </Text>

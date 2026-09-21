@@ -57,7 +57,10 @@ const mocks = vi.hoisted(() => ({
   spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */
   linkProps: [] as Record<string, unknown>[],
+  personProfileOpened: vi.fn(),
 }));
+
+vi.mock('~/core/analytics', () => ({ personProfileOpened: mocks.personProfileOpened }));
 
 // The real one reaches for the sync engine and the router; a plain anchor is what the assertions
 // below are about — a real href, and nothing intercepting the click.
@@ -302,6 +305,7 @@ beforeEach(() => {
   mocks.publishableSpacesLoading = false;
   mocks.spaceLabels = new Map();
   mocks.linkProps = [];
+  mocks.personProfileOpened.mockReset();
 });
 
 /**
@@ -995,20 +999,21 @@ describe('the person link', () => {
     );
   });
 
-  // The guarantee is that *we* add no handler of our own. `next/link` underneath does intercept a
-  // plain left click — that is how client-side routing works, and it already honours cmd-click and
-  // middle click. A second handler layered on top is what would break them, which is what GEO-2701
-  // restored, so the absence of one is the thing worth pinning.
-  //
-  // Asserted on the props rather than by dispatching a click: the mock here is a bare anchor, so a
-  // `defaultPrevented` check would only describe the mock and would pass whether or not the real
-  // component ever received a handler.
-  it('adds no click handler of its own to the name', () => {
+  // Analytics observes the click without replacing navigation, so Next still owns cmd-click,
+  // middle-click and the eventual route change.
+  it('attributes a profile click without intercepting navigation', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     const nameLink = mocks.linkProps.find(props => props.href === NavUtils.toSpace(PROFILE_SPACE_IDS['user-them']));
     expect(nameLink).toBeDefined();
-    expect(nameLink).not.toHaveProperty('onClick');
+    const onClick = nameLink?.onClick as (() => void) | undefined;
+    expect(onClick).toBeTypeOf('function');
+
+    onClick?.();
+
+    expect(mocks.personProfileOpened).toHaveBeenCalledWith(PROFILE_SPACE_IDS['user-them'], null, {
+      interaction_surface: 'debates_hub_people',
+    });
   });
 
   // An anchor to `/space/undefined` looks identical until it is clicked.

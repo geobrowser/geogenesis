@@ -270,6 +270,27 @@ export function personalSpaceViewed(personalSpaceId: string, properties: Analyti
   });
 }
 
+export function graphRelationshipFollowed(entityId: string, properties: AnalyticsProperties = {}) {
+  capture('graph_relationship_followed', {
+    source: 'graph',
+    entity_id: entityId,
+    ...properties,
+  });
+}
+
+export function personProfileOpened(
+  profileSpaceId: string,
+  personEntityId?: string | null,
+  properties: AnalyticsProperties = {}
+) {
+  graphRelationshipFollowed(personEntityId || profileSpaceId, {
+    source: 'person_profile',
+    graph_entity_type: personEntityId ? 'person' : 'personal_space',
+    profile_space_id: profileSpaceId,
+    ...properties,
+  });
+}
+
 export function reviewChangesOpened(properties: AnalyticsProperties = {}) {
   capture('review_changes_opened', {
     source: 'review_changes',
@@ -284,12 +305,41 @@ export function publishedEdit(properties: AnalyticsProperties = {}) {
   });
 }
 
+export function profileUpdated(profileEntityId: string, spaceId: string, properties: AnalyticsProperties = {}) {
+  publishedEdit({
+    source: 'profile_editor',
+    content_id: profileEntityId,
+    content_type: 'profile',
+    space_id: spaceId,
+    ...properties,
+  });
+}
+
 export function commentCreated(commentId: string, targetEntityId: string, properties: AnalyticsProperties = {}) {
   capture('comment_created', {
     source: 'commenting',
     comment_id: commentId,
     target_type: 'entity',
     target_id: targetEntityId,
+    ...properties,
+  });
+}
+
+export function commentEdited(commentId: string, targetEntityId: string, properties: AnalyticsProperties = {}) {
+  capture('content_edited', {
+    source: 'commenting',
+    content_id: commentId,
+    content_type: 'comment',
+    target_type: 'entity',
+    target_id: targetEntityId,
+    ...properties,
+  });
+}
+
+export function signupCompleted(formType: string, properties: AnalyticsProperties = {}) {
+  capture('signup_completed', {
+    source: 'signup_form',
+    form_type: formType,
     ...properties,
   });
 }

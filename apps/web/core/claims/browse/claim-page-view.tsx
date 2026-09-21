@@ -467,7 +467,7 @@ function ClaimTabPanel({
         viewerSpaceId={summary.viewerSpaceId}
         isViewerResponseLoading={summary.isViewerResponseLoading}
       >
-        <CommentSection entityId={entityId} spaceId={spaceId} />
+        <CommentSection entityId={entityId} spaceId={spaceId} targetEntityType="claim" />
       </ClaimCommentPositionProvider>
     </>
   );

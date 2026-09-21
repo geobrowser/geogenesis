@@ -277,6 +277,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           {onClose ? (
             <button
               type="button"
+              data-geo-analytics-label="Close debate hub"
+              data-geo-analytics-intent="close_debates_hub"
               aria-label="Close debates"
               onClick={onClose}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
@@ -304,6 +306,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
                 <button
                   key={tab.id}
                   type="button"
+                  data-geo-analytics-label={`Debate hub ${tab.label} tab`}
+                  data-geo-analytics-intent="navigate_debates_hub"
                   aria-current={activeTab === tab.id ? 'true' : undefined}
                   onClick={() => changeTab(tab.id)}
                   className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
@@ -394,6 +398,8 @@ function AvailabilityToggle() {
   return (
     <button
       type="button"
+      data-geo-analytics-label="Debate availability"
+      data-geo-analytics-intent="update_debate_availability"
       role="switch"
       // Without this the switch announces "Unavailable, off", which is ambiguous about which way
       // pressing it goes.
