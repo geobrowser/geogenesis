@@ -1,7 +1,8 @@
 // This walks the source tree with `fs` and never touches the DOM.
 // @vitest-environment node
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -19,14 +20,30 @@ import { describe, expect, it } from 'vitest';
  * The sibling of this test guards the other direction — async components rendered from client
  * files. Same failure mode: correct-looking UI, wrong boundary.
  *
- * Two things it deliberately cannot see, both of which make the allowlist a list of things checked
- * by hand rather than a list of things that are fine:
+ * ## Why this parses instead of matching
+ *
+ * It used to match patterns near declarations rather than read them, and review found ten ways that
+ * was wrong. An unbounded matcher began on a bare CSS import and captured a later statement's
+ * specifier. `import Default, * as Namespace` matched neither of two patterns. `'use client'` was
+ * recognised only as the very first token, so a licence header would hide an entire client module —
+ * and an unrecognised client module is worse than an unchecked one, because it joins the server
+ * graph and everything it exports stops being an offence anywhere. `export default
+ * SuggestedFormats`, a component declared above and exported by name, came out unclassifiable.
+ * `export class GeoChatRequestError extends Error` was accepted as a component for being
+ * capitalised. `export const DefaultConfig = ({ enabled: true })` was accepted for opening with a
+ * bracket.
+ *
+ * Every one of those is a question about syntax, and the compiler answers questions about syntax.
+ * Parsing 1,600 files costs ~600ms, which is less than the patterns cost in review rounds.
+ *
+ * Two things it still cannot see, which is what keeps the allowlist a list of things checked by
+ * hand rather than a list of things that are fine:
  *
  *  1. Whether the value is ever *read* while rendering on the server. A client hook sitting next to
  *     a server-safe constant and only ever called from a client component is inert.
  *  2. What a dynamically imported module's bindings are. The edge is followed, so everything beyond
- *     it is still guarded, but `const { x } = await import('./client')` is not destructured here.
- *     No server-graph module does that today.
+ *     it stays guarded, but `const { x } = await import('./client')` is not destructured. No
+ *     server-graph module does that today.
  */
 
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -48,47 +65,13 @@ const SOURCE_DIRS = ['app', 'atoms', 'core', 'design-system', 'partials'];
 const SERVER_ENTRY = /\/(layout|page|template|default|loading|error|not-found|route|opengraph-image)\.tsx?$/;
 
 /**
- * One matcher per declaration shape, rather than one loose pattern for all of them.
+ * `import('…')` with a literal specifier — the one thing still read from the text.
  *
- * The loose version was `^(?:import|export)\s+(?!type\s)[\s\S]*?from\s+['"](…)['"]`, and `[\s\S]*?`
- * does not stop at the end of a declaration. In `app/layout.tsx` it started on a bare
- * `import 'katex/dist/katex.min.css';`, walked past two more statements and captured the specifier
- * of a later one — so edges were attributed to declarations that do not have them, and any
- * statement in between was skipped because the match had already consumed it. It would equally
- * start on an `export const` and run until it found a `from` dozens of lines away.
- *
- * Each of these is bounded to its own shape: a `{…}` block cannot contain a `}`, and nothing else
- * crosses a declaration boundary. Between them they cover what the tree actually uses — ~9800 named
- * imports, ~340 default, ~870 namespace, 53 re-exports, 136 bare, 85 dynamic.
- *
- * `import type` and `export type` are excluded, and that exclusion is load-bearing: the only route
- * into `core/blocks/data/filters.ts` is a type import from `core/chat/edit-types.ts`, and counting
- * it walks on into the sync store and reports three modules TypeScript erases before anything runs.
+ * Finding these in the tree means walking every node of every file rather than its top-level
+ * statements, and a dynamic import with a computed specifier resolves to no file anyway.
+ * Declarations, where every mistake has been, are parsed.
  */
-const IMPORT_NAMED = /^import\s+(?!type\s)(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s+from\s+['"]([^'"]+)['"]/gm;
-const IMPORT_DEFAULT =
-  /^import\s+(?!type\s)([A-Za-z_$][\w$]*)\s*(?:,\s*(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*))?\s+from\s+['"]([^'"]+)['"]/gm;
-const IMPORT_NAMESPACE =
-  /^import\s+(?!type\s)(?:[A-Za-z_$][\w$]*\s*,\s*)?\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+['"]([^'"]+)['"]/gm;
-const REEXPORT_NAMED = /^export\s+(?!type\s)\{([^}]*)\}\s+from\s+['"]([^'"]+)['"]/gm;
-const REEXPORT_STAR = /^export\s+\*\s+(?:as\s+([A-Za-z_$][\w$]*)\s+)?from\s+['"]([^'"]+)['"]/gm;
-const IMPORT_BARE = /^import\s+['"]([^'"]+)['"]/gm;
-const IMPORT_DYNAMIC = /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g;
-
-/** Every specifier a module pulls in at runtime, whatever shape the declaration took. */
-function runtimeSpecifiers(contents: string): string[] {
-  const found: string[] = [];
-
-  for (const [, , specifier] of contents.matchAll(IMPORT_NAMED)) found.push(specifier);
-  for (const [, , specifier] of contents.matchAll(IMPORT_DEFAULT)) found.push(specifier);
-  for (const [, , specifier] of contents.matchAll(IMPORT_NAMESPACE)) found.push(specifier);
-  for (const [, , specifier] of contents.matchAll(REEXPORT_NAMED)) found.push(specifier);
-  for (const [, , specifier] of contents.matchAll(REEXPORT_STAR)) found.push(specifier);
-  for (const [, specifier] of contents.matchAll(IMPORT_BARE)) found.push(specifier);
-  for (const [, specifier] of contents.matchAll(IMPORT_DYNAMIC)) found.push(specifier);
-
-  return found;
-}
+const DYNAMIC_IMPORT = /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g;
 
 /**
  * What the tree holds today, each one read before being listed rather than swept up by the walk.
@@ -138,112 +121,299 @@ function sourceFiles(): string[] {
   return found;
 }
 
-function isClientFile(contents: string): boolean {
-  return /^\s*['"]use client['"]/.test(contents);
-}
-
-function resolveImport(specifier: string, importingFile: string): string | null {
-  let absolute: string;
-
-  if (specifier.startsWith('~/')) {
-    absolute = path.join(ROOT, specifier.slice(2));
-  } else if (specifier.startsWith('.')) {
-    absolute = path.resolve(ROOT, path.dirname(importingFile), specifier);
-  } else {
-    return null;
-  }
-
-  const relative = path.relative(ROOT, absolute);
-  for (const candidate of [
-    `${relative}.tsx`,
-    `${relative}.ts`,
-    path.join(relative, 'index.tsx'),
-    path.join(relative, 'index.ts'),
-  ]) {
-    if (!SOURCE_DIRS.some(dir => candidate.startsWith(`${dir}${path.sep}`))) continue;
-    if (existsSync(path.join(ROOT, candidate))) return candidate;
-  }
-  return null;
+function parse(file: string, contents: string): ts.SourceFile {
+  return ts.createSourceFile(
+    file,
+    contents,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+  );
 }
 
 /**
- * `A` or `A as B` inside a named block, skipping inline `type` specifiers.
+ * Whether the module opts into the client, read from its directive prologue.
  *
- * Both names are kept because they answer different questions. The export is known by its exported
- * name, which is what the source module declares; it is referred to here by its local one, which is
- * what a reader of this file sees and what belongs in a failure message.
+ * A directive is a leading statement whose expression is a plain string, and comments are trivia
+ * rather than statements — so a licence header or a `'use strict';` in front of `'use client'` no
+ * longer hides the module, which matching the first token of the file did.
  */
-function parseNamedBindings(block: string): { exported: string; local: string }[] {
-  return block
-    .split(',')
-    .map(entry => entry.trim())
-    .filter(entry => entry.length > 0 && !entry.startsWith('type '))
-    .map(entry => {
-      const [exported, local] = entry.split(/\s+as\s+/).map(part => part.trim());
-      return { exported, local: local ?? exported };
-    })
-    .filter(({ exported, local }) => Boolean(exported) && Boolean(local));
+function isClientModule(sourceFile: ts.SourceFile): boolean {
+  for (const statement of sourceFile.statements) {
+    if (!ts.isExpressionStatement(statement) || !ts.isStringLiteralLike(statement.expression)) return false;
+    if (statement.expression.text === 'use client') return true;
+  }
+  return false;
 }
 
-/** Only a capitalised name can be a component. `useFeatureFlag` is a function and still a value. */
-function isCapitalised(name: string): boolean {
-  return /^[A-Z]/.test(name) && name !== name.toUpperCase();
+function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
+  return (ts.canHaveModifiers(node) ? (ts.getModifiers(node) ?? []) : []).some(modifier => modifier.kind === kind);
 }
 
-/**
- * What the client module declares this export to be, read from the source rather than guessed from
- * how it is used.
- *
- * The first version of this asked the use site — rendered as `<Name>`, or handed on as
- * `render={Name}`. That let `config={DefaultConfig}` through, since any prop looked like proof, and
- * it had nothing to say about a re-export, which has no use site at all. The declaration answers
- * both and is the same evidence a reader would use.
- *
- * Measured against the tree before being trusted: of 163 capitalised imports from client modules in
- * the server graph, 144 are `export function`, 17 are an arrow or `memo`/`forwardRef`, and 2 are
- * `export type` imported without the `type` keyword — `Tabs` from `editor-provider` and `Feature`
- * from `use-place-search`. Nothing is unclassifiable, so `unknown` is a real signal rather than the
- * common case, and it is reported rather than waved through.
- */
+const isExported = (node: ts.Node) => hasModifier(node, ts.SyntaxKind.ExportKeyword);
+const isDefault = (node: ts.Node) => hasModifier(node, ts.SyntaxKind.DefaultKeyword);
+
+/** What a client module's export turns out to be, once its declaration is read. */
 type ExportKind = 'component' | 'erased' | 'value' | 'unknown';
 
-function classifyExport(exported: string, source: string): ExportKind {
-  const name = exported.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** `memo(X)` and `forwardRef(X)`, plain or `React.`-qualified, produce components. Nothing else does. */
+const COMPONENT_WRAPPERS = new Set(['memo', 'forwardRef']);
 
-  if (new RegExp(`^export\\s+(?:type|interface)\\s+${name}\\b`, 'm').test(source)) return 'erased';
+function isComponentWrapper(expression: ts.Expression): boolean {
+  if (ts.isIdentifier(expression)) return COMPONENT_WRAPPERS.has(expression.text);
+  if (ts.isPropertyAccessExpression(expression)) return COMPONENT_WRAPPERS.has(expression.name.text);
+  return false;
+}
 
-  if (exported === 'default') {
-    if (/^export\s+default\s+(?:async\s+)?(?:function|class)\b/m.test(source)) return 'component';
-    if (/^export\s+default\s+(?:\{|\[|['"`]|\d)/m.test(source)) return 'value';
-    return 'unknown';
-  }
+/**
+ * A class is a component only if it extends React's.
+ *
+ * `export class GeoChatRequestError extends Error` lives in a `'use client'` module and a capital
+ * letter alone let it through. An Error subclass read on the server is a client reference like any
+ * other value.
+ */
+function classifyClass(node: ts.ClassLikeDeclaration): ExportKind {
+  const extended = (node.heritageClauses ?? [])
+    .filter(clause => clause.token === ts.SyntaxKind.ExtendsKeyword)
+    .flatMap(clause => clause.types.map(type => type.expression.getText()));
 
-  if (new RegExp(`^export\\s+(?:async\\s+)?function\\s+${name}\\b`, 'm').test(source)) return 'component';
-  if (new RegExp(`^export\\s+class\\s+${name}\\b`, 'm').test(source)) return 'component';
-
-  const declaration = new RegExp(`^export\\s+const\\s+${name}\\s*(?::[^=]+)?=\\s*(.{0,40})`, 'm').exec(source);
-  if (declaration) {
-    const initialiser = declaration[1].trimStart();
-    // A component, however it is wrapped.
-    if (
-      /^(?:\(|async\s*\(|[A-Za-z_$][\w$]*\s*=>|React\.(?:memo|forwardRef)|memo\(|forwardRef\(|styled\.|cva\()/.test(
-        initialiser
-      )
-    ) {
-      return 'component';
-    }
-    // An object, array, string, number or boolean is a value whatever its name suggests.
-    if (/^(?:\{|\[|['"`]|\d|true\b|false\b|new\s)/.test(initialiser)) return 'value';
-    return 'unknown';
-  }
-
-  return 'unknown';
+  return extended.some(name => /(^|\.)(Pure)?Component$/.test(name)) ? 'component' : 'value';
 }
 
 describe('server components take only components from client modules', () => {
   const files = sourceFiles();
   const contentsByFile = new Map(files.map(file => [file, readFileSync(path.join(ROOT, file), 'utf8')]));
-  const clientFiles = new Set([...contentsByFile].filter(([, c]) => isClientFile(c)).map(([f]) => f));
+  const astByFile = new Map([...contentsByFile].map(([file, contents]) => [file, parse(file, contents)]));
+  const clientFiles = new Set([...astByFile].filter(([, ast]) => isClientModule(ast)).map(([file]) => file));
+
+  const exportKinds = new Map<string, Map<string, ExportKind>>();
+
+  /**
+   * What each of a module's exports is, by exported name, with `default` keyed as `default`.
+   *
+   * An initialiser is followed where following it answers the question: through parentheses, `as`
+   * and `satisfies`, and through a local identifier — which is how `export default SuggestedFormats`
+   * reaches the arrow function declared above it instead of giving up and reporting a real
+   * component.
+   */
+  function kindsFor(file: string): Map<string, ExportKind> {
+    const cached = exportKinds.get(file);
+    if (cached) return cached;
+
+    const sourceFile = astByFile.get(file)!;
+    const kinds = new Map<string, ExportKind>();
+    /** Local declarations, so an export by identifier has something to resolve against. */
+    const locals = new Map<string, ts.Node>();
+
+    for (const statement of sourceFile.statements) {
+      if (ts.isVariableStatement(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+          if (ts.isIdentifier(declaration.name) && declaration.initializer) {
+            locals.set(declaration.name.text, declaration.initializer);
+          }
+        }
+      } else if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name) {
+        locals.set(statement.name.text, statement);
+      }
+    }
+
+    const classify = (node: ts.Node, seen = new Set<ts.Node>()): ExportKind => {
+      if (seen.has(node)) return 'unknown';
+      seen.add(node);
+
+      if (ts.isFunctionDeclaration(node) || ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+        return 'component';
+      }
+      if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return classifyClass(node);
+      // `styled.div\`…\`` and friends.
+      if (ts.isTaggedTemplateExpression(node)) return 'component';
+      if (ts.isCallExpression(node)) return isComponentWrapper(node.expression) ? 'component' : 'value';
+      if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) {
+        return classify(node.expression, seen);
+      }
+      if (ts.isIdentifier(node)) {
+        const local = locals.get(node.text);
+        return local ? classify(local, seen) : 'unknown';
+      }
+      if (
+        ts.isObjectLiteralExpression(node) ||
+        ts.isArrayLiteralExpression(node) ||
+        ts.isStringLiteralLike(node) ||
+        ts.isNumericLiteral(node) ||
+        ts.isNewExpression(node) ||
+        node.kind === ts.SyntaxKind.TrueKeyword ||
+        node.kind === ts.SyntaxKind.FalseKeyword
+      ) {
+        return 'value';
+      }
+      return 'unknown';
+    };
+
+    for (const statement of sourceFile.statements) {
+      if (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) {
+        if (isExported(statement)) kinds.set(statement.name.text, 'erased');
+        continue;
+      }
+
+      // An enum is an object at runtime, whatever it looks like in the types.
+      if (ts.isEnumDeclaration(statement) && isExported(statement)) {
+        kinds.set(statement.name.text, 'value');
+        continue;
+      }
+
+      if (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) {
+        if (!isExported(statement)) continue;
+        kinds.set(isDefault(statement) ? 'default' : (statement.name?.text ?? 'default'), classify(statement));
+        continue;
+      }
+
+      if (ts.isVariableStatement(statement) && isExported(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+          if (!ts.isIdentifier(declaration.name)) continue;
+          kinds.set(declaration.name.text, declaration.initializer ? classify(declaration.initializer) : 'unknown');
+        }
+        continue;
+      }
+
+      // `export default <expression>`, a bare identifier included.
+      if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+        kinds.set('default', classify(statement.expression));
+        continue;
+      }
+
+      // `export { a }` and `export { a } from '…'`: resolvable only when declared here.
+      if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+        for (const element of statement.exportClause.elements) {
+          if (statement.isTypeOnly || element.isTypeOnly) {
+            kinds.set(element.name.text, 'erased');
+            continue;
+          }
+          const local = locals.get((element.propertyName ?? element.name).text);
+          kinds.set(element.name.text, local ? classify(local) : 'unknown');
+        }
+      }
+    }
+
+    exportKinds.set(file, kinds);
+    return kinds;
+  }
+
+  function resolveImport(specifier: string, importingFile: string): string | null {
+    let absolute: string;
+
+    if (specifier.startsWith('~/')) {
+      absolute = path.join(ROOT, specifier.slice(2));
+    } else if (specifier.startsWith('.')) {
+      absolute = path.resolve(ROOT, path.dirname(importingFile), specifier);
+    } else {
+      return null;
+    }
+
+    const relative = path.relative(ROOT, absolute);
+    for (const candidate of [
+      `${relative}.tsx`,
+      `${relative}.ts`,
+      path.join(relative, 'index.tsx'),
+      path.join(relative, 'index.ts'),
+    ]) {
+      if (contentsByFile.has(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  /** One binding taken from another module: a named export, a default, or a whole namespace. */
+  type Reference = {
+    specifier: string;
+    exported?: string;
+    local: string;
+    namespace?: boolean;
+    reexported?: boolean;
+  };
+
+  const referencesByFile = new Map<string, Reference[]>();
+
+  /**
+   * Every module a file pulls in at runtime, with the bindings it takes from each.
+   *
+   * Type-only imports and exports are skipped, whole-statement and per-element alike. That
+   * exclusion is load-bearing rather than tidy: the only route into `core/blocks/data/filters.ts`
+   * is a type import from `core/chat/edit-types.ts`, and following it walks on into the sync store
+   * and reports three modules TypeScript erases before anything runs.
+   */
+  function references(file: string): Reference[] {
+    const cached = referencesByFile.get(file);
+    if (cached) return cached;
+
+    const sourceFile = astByFile.get(file)!;
+    const found: Reference[] = [];
+
+    for (const statement of sourceFile.statements) {
+      if (ts.isImportDeclaration(statement) && ts.isStringLiteralLike(statement.moduleSpecifier)) {
+        const specifier = statement.moduleSpecifier.text;
+        const clause = statement.importClause;
+
+        // A bare `import './x'` takes no bindings but still loads the module.
+        if (!clause) {
+          found.push({ specifier, local: '' });
+          continue;
+        }
+        if (clause.isTypeOnly) continue;
+
+        if (clause.name) found.push({ specifier, exported: 'default', local: clause.name.text });
+
+        if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+          found.push({ specifier, local: `* as ${clause.namedBindings.name.text}`, namespace: true });
+        } else if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+          for (const element of clause.namedBindings.elements) {
+            if (element.isTypeOnly) continue;
+            found.push({
+              specifier,
+              exported: (element.propertyName ?? element.name).text,
+              local: element.name.text,
+            });
+          }
+        }
+        continue;
+      }
+
+      if (
+        ts.isExportDeclaration(statement) &&
+        statement.moduleSpecifier &&
+        ts.isStringLiteralLike(statement.moduleSpecifier)
+      ) {
+        if (statement.isTypeOnly) continue;
+        const specifier = statement.moduleSpecifier.text;
+
+        if (!statement.exportClause) {
+          found.push({ specifier, local: 're-exports *', namespace: true, reexported: true });
+        } else if (ts.isNamespaceExport(statement.exportClause)) {
+          found.push({
+            specifier,
+            local: `re-exports * as ${statement.exportClause.name.text}`,
+            namespace: true,
+            reexported: true,
+          });
+        } else {
+          for (const element of statement.exportClause.elements) {
+            if (element.isTypeOnly) continue;
+            found.push({
+              specifier,
+              exported: (element.propertyName ?? element.name).text,
+              local: element.name.text,
+              reexported: true,
+            });
+          }
+        }
+      }
+    }
+
+    for (const [, specifier] of (contentsByFile.get(file) ?? '').matchAll(DYNAMIC_IMPORT)) {
+      found.push({ specifier, local: '' });
+    }
+
+    referencesByFile.set(file, found);
+    return found;
+  }
 
   it('walks a source tree that actually has files in it', () => {
     // Guards against a silently empty run if the layout moves.
@@ -267,7 +437,7 @@ describe('server components take only components from client modules', () => {
     if (serverGraph.has(file) || clientFiles.has(file)) continue;
     serverGraph.add(file);
 
-    for (const specifier of runtimeSpecifiers(contentsByFile.get(file) ?? '')) {
+    for (const { specifier } of references(file)) {
       const target = resolveImport(specifier, file);
       if (target && !clientFiles.has(target) && !serverGraph.has(target)) queue.push(target);
     }
@@ -277,69 +447,55 @@ describe('server components take only components from client modules', () => {
     expect(serverGraph.size).toBeGreaterThan(100);
   });
 
+  /** Only a capitalised name can be a component. `useFeatureFlag` is a function and still a value. */
+  function isCapitalised(name: string): boolean {
+    return /^[A-Z]/.test(name) && name !== name.toUpperCase();
+  }
+
   /**
-   * Every value a server-graph module takes from a client module, in any of the shapes it can
-   * arrive in. A namespace binding is reported whole, since every property read off it is a client
-   * reference and there is no one export to classify.
+   * Every binding a server-graph module takes from a client module, with what the source says it
+   * is. A name that is not capitalised cannot be a component whatever its declaration says, so it
+   * is reported without asking.
    */
-  function* clientValuesInServerGraph(): Generator<string> {
+  function* clientBindings(): Generator<{ offence: string; kind: ExportKind; capitalised: boolean }> {
     for (const file of serverGraph) {
-      const contents = contentsByFile.get(file)!;
       const from = file.split(path.sep).join('/');
 
-      const clientSource = (specifier: string) => {
-        const target = resolveImport(specifier, file);
-        if (!target || !clientFiles.has(target)) return null;
-        return { path: target.split(path.sep).join('/'), contents: contentsByFile.get(target) ?? '' };
-      };
+      for (const reference of references(file)) {
+        const target = resolveImport(reference.specifier, file);
+        if (!target || !clientFiles.has(target)) continue;
 
-      /** The offence, or nothing if this binding is a component or erased before it runs. */
-      const offence = (exported: string, local: string, source: { path: string; contents: string }) => {
-        if (!isCapitalised(exported === 'default' ? local : exported)) {
-          return `${from} -> ${local} (from ${source.path})`;
+        const source = target.split(path.sep).join('/');
+        const suffix = reference.reexported && !reference.namespace ? ' re-exported' : '';
+
+        // A namespace has no one export to read, and every property taken off it is a reference.
+        if (reference.namespace) {
+          yield { offence: `${from} -> ${reference.local} (from ${source})`, kind: 'value', capitalised: false };
+          continue;
+        }
+        if (!reference.exported) continue;
+
+        const named = reference.exported === 'default' ? reference.local : reference.exported;
+        if (!isCapitalised(named)) {
+          yield {
+            offence: `${from} -> ${reference.local} (from ${source})${suffix}`,
+            kind: 'value',
+            capitalised: false,
+          };
+          continue;
         }
 
-        const kind = classifyExport(exported, source.contents);
-        if (kind === 'component' || kind === 'erased') return null;
-
-        const label = kind === 'unknown' ? `${local} (unclassifiable` : `${local} (`;
-        return `${from} -> ${label}from ${source.path})`;
-      };
-
-      for (const [, block, specifier] of contents.matchAll(IMPORT_NAMED)) {
-        const source = clientSource(specifier);
-        if (!source) continue;
-        for (const { exported, local } of parseNamedBindings(block)) {
-          const found = offence(exported, local, source);
-          if (found) yield found;
-        }
+        const kind = kindsFor(target).get(reference.exported) ?? 'unknown';
+        const label = kind === 'unknown' ? `${reference.local} (unclassifiable` : `${reference.local} (`;
+        yield { offence: `${from} -> ${label}from ${source})${suffix}`, kind, capitalised: true };
       }
+    }
+  }
 
-      for (const [, local, specifier] of contents.matchAll(IMPORT_DEFAULT)) {
-        const source = clientSource(specifier);
-        if (!source) continue;
-        const found = offence('default', local, source);
-        if (found) yield found;
-      }
-
-      for (const [, local, specifier] of contents.matchAll(IMPORT_NAMESPACE)) {
-        const source = clientSource(specifier);
-        if (source) yield `${from} -> * as ${local} (from ${source.path})`;
-      }
-
-      for (const [, block, specifier] of contents.matchAll(REEXPORT_NAMED)) {
-        const source = clientSource(specifier);
-        if (!source) continue;
-        for (const { exported, local } of parseNamedBindings(block)) {
-          const found = offence(exported, local, source);
-          if (found) yield `${found} re-exported`;
-        }
-      }
-
-      for (const [, namespace, specifier] of contents.matchAll(REEXPORT_STAR)) {
-        const source = clientSource(specifier);
-        if (source) yield `${from} -> re-exports ${namespace ? `* as ${namespace}` : '*'} (from ${source.path})`;
-      }
+  function* clientValuesInServerGraph(): Generator<string> {
+    for (const { offence, kind } of clientBindings()) {
+      if (kind === 'component' || kind === 'erased') continue;
+      yield offence;
     }
   }
 
@@ -360,5 +516,28 @@ describe('server components take only components from client modules', () => {
     const live = new Set(clientValuesInServerGraph());
 
     expect([...KNOWN].filter(entry => !live.has(entry))).toEqual([]);
+  });
+
+  /**
+   * The classifier, measured against the tree rather than against invented examples.
+   *
+   * The guard above is green, so every capitalised export it lets through has to be a component or
+   * erased — meaning a change to `classify` that started calling components values, or values
+   * components, would move these counts. Pinning the shape is what makes that visible rather than
+   * silent, and it is the assertion that would have caught `export class … extends Error` being
+   * waved through for its capital letter.
+   */
+  it('classifies every capitalised client export the server graph takes', () => {
+    const kinds: Record<ExportKind, number> = { component: 0, erased: 0, value: 0, unknown: 0 };
+    for (const { kind, capitalised } of clientBindings()) if (capitalised) kinds[kind] += 1;
+
+    // Components, and the two `export type`s imported without the `type` keyword — `Tabs` from
+    // `editor-provider` and `Feature` from `use-place-search`.
+    expect(kinds.component).toBeGreaterThan(100);
+    expect(kinds.erased).toBe(2);
+    // Nothing capitalised is a value or unreadable. A classifier that started calling components
+    // values would move this off zero before the offence list above grew past its allowlist.
+    expect(kinds.value).toBe(0);
+    expect(kinds.unknown).toBe(0);
   });
 });
