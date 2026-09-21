@@ -45,8 +45,8 @@ function Banner() {
   const saveSchedule = useSaveDebateSchedule();
   const openerRef = React.useRef<HTMLButtonElement | null>(null);
 
-  // A schedule is stored against the Privy account, so signed out there is nothing to read or
-  // save: the read stays disabled and the modal would wait on it forever.
+  // A schedule is keyed to the Privy account, so signed out the read stays disabled and the
+  // modal it opens has nothing to resolve to.
   if (!authenticated || dismissed) return null;
 
   return (
