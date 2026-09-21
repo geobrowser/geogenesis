@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtomValue, useSetAtom } from 'jotai';
 
+import { ClaimCommentPositionBoundary } from '~/core/claims/browse/claim-comment-position';
 import { useComments } from '~/core/hooks/use-comments';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
@@ -117,7 +118,9 @@ export function EntityCommentsPanel({
         </button>
       </header>
       <div className="no-scrollbar flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-5 pb-6">
-        <CommentSection entityId={entityId} spaceId={spaceId} variant="panel" />
+        <ClaimCommentPositionBoundary entityId={entityId} spaceId={spaceId}>
+          <CommentSection entityId={entityId} spaceId={spaceId} variant="panel" />
+        </ClaimCommentPositionBoundary>
       </div>
     </aside>
   );
