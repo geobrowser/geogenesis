@@ -103,8 +103,13 @@ export function PeerAvailabilityView({
           When {name} is free
         </Text>
         <Text as="p" variant="footnote" color="grey-04">
-          Times shown in your zone, {schedule.viewerTimezone}. {name} is in {schedule.peerTimezone}
-          {offsetMinutes === 0 ? ', the same time as you' : `, ${formatOffset(offsetMinutes)}`}.
+          {/* geo-chat sends an empty zone for a side with no saved schedule, so naming them is
+              conditional — "Ada is in ," otherwise. */}
+          {schedule.viewerTimezone && schedule.peerTimezone
+            ? `Times shown in your zone, ${schedule.viewerTimezone}. ${name} is in ${schedule.peerTimezone}${
+                offsetMinutes === 0 ? ', the same time as you' : `, ${formatOffset(offsetMinutes)}`
+              }.`
+            : 'Times shown in your local time.'}
         </Text>
       </header>
 

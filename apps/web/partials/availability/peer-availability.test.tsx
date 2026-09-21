@@ -49,6 +49,15 @@ describe('PeerAvailabilityView', () => {
     expect(screen.getByText(/Europe\/Berlin/)).toBeInTheDocument();
   });
 
+  // geo-chat leaves a zone empty when that side has no saved schedule, which is exactly the case
+  // this view has to draw -- naming it unconditionally rendered "Ada is in ,".
+  it('drops the zone line rather than naming an empty zone', () => {
+    setup({ peerTimezone: '', peerHasSchedule: false, slots: [] });
+
+    expect(screen.getByText('Times shown in your local time.')).toBeInTheDocument();
+    expect(screen.queryByText(/is in ,/)).not.toBeInTheDocument();
+  });
+
   it('falls back to a shortened id when nobody supplied a name', () => {
     setup({}, null);
     expect(screen.getByRole('heading', { name: /user-pee/ })).toBeInTheDocument();
