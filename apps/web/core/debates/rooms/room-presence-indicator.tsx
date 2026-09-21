@@ -4,20 +4,26 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
-import { speakerLabel } from '../playback-utils';
 import { roomPresenceLabel, roomPresenceNote } from './room-copy';
 import type { DebateRoomPresence, DebateRoomPresenceState } from './room-presence';
 
 /**
  * Who else is in the room (GEO-2941). Small, because a room is the debate-again page rather than a
  * screen of its own, and the states describe without ever navigating.
+ *
+ * No avatar: the room payload carries bare user ids, and nothing on the client resolves one to a
+ * profile. `opponentName` falls back to a generic label until geo-chat sends participant summaries.
  */
-export function DebateRoomPresenceIndicator({ presence }: { presence: DebateRoomPresence }) {
-  const name = speakerLabel(presence.opponent);
-  const note = roomPresenceNote(presence.state, name);
+export function DebateRoomPresenceIndicator({
+  presence,
+  opponentName = 'Your opponent',
+}: {
+  presence: DebateRoomPresence;
+  opponentName?: string;
+}) {
+  const note = roomPresenceNote(presence.state, opponentName);
 
   return (
     <div
@@ -28,18 +34,10 @@ export function DebateRoomPresenceIndicator({ presence }: { presence: DebateRoom
       className="pointer-events-none fixed top-3 left-1/2 z-[200] flex w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 flex-col items-center gap-2"
       data-room-presence={presence.state}
     >
-      <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-grey-02 bg-white py-1.5 pr-3 pl-1.5 shadow-card">
-        <div className="size-6 shrink-0 overflow-hidden rounded-full">
-          <Avatar
-            avatarUrl={presence.opponent.avatar_cid}
-            value={presence.opponent.profile_space_id}
-            alt=""
-            size={24}
-          />
-        </div>
+      <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-grey-02 bg-white py-1.5 pr-3 pl-3 shadow-card">
         <PresenceDot state={presence.state} />
         <Text as="span" variant="metadata" className="truncate">
-          {roomPresenceLabel(presence.state, name)}
+          {roomPresenceLabel(presence.state, opponentName)}
         </Text>
       </div>
 

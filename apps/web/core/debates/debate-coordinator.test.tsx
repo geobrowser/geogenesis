@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt } from './api';
+import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt, UpcomingDebateRoom } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 
@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
   abortMutateAsync: vi.fn(),
   clearDebateActivity: vi.fn(),
   rememberDebateReturnDestination: vi.fn(),
+  upcomingRooms: [] as UpcomingDebateRoom[],
 }));
 
 vi.mock('next/navigation', () => ({
@@ -70,6 +71,10 @@ vi.mock('./hooks', () => ({
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallengeMutate, isPending: false, error: null }),
   useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: false }),
   useClearDebateActivity: () => mocks.clearDebateActivity,
+}));
+
+vi.mock('./rooms/hooks', () => ({
+  useUpcomingDebateRooms: () => ({ data: { rooms: mocks.upcomingRooms } }),
 }));
 
 vi.mock('./debate-attention', () => ({
@@ -142,6 +147,7 @@ beforeEach(() => {
   mocks.dismissRequestMutate.mockReset();
   mocks.blockUserMutate.mockReset();
   mocks.pathname = '/space/space-1/debates';
+  mocks.upcomingRooms = [];
   mocks.hasAttention = true;
   mocks.prompts = [];
   mocks.promptsFetching = false;
@@ -561,6 +567,63 @@ describe('DebateCoordinator', () => {
 
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  // GEO-2941. The join prompt is an offer: nothing moves the viewer until they press Join, so a
+  // room never has to explain why someone is in it.
+  it('offers a joinable room without routing anyone into it', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom({ others_present: true })];
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Someone is waiting for you now')).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  // Urgency comes from the server's own `due` and `others_present`, so this and the Requests tab
+  // cannot disagree about what is happening.
+  it.each([
+    ['someone is already inside', { others_present: true, due: true }, 'Someone is waiting for you now'],
+    ['the start has passed', { others_present: false, due: true }, 'Your debate is starting now'],
+    ['it is merely open', { others_present: false, due: false }, /^Your debate starts at /],
+  ])('says the right thing when %s', async (_label, row, expected) => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom(row)];
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText(expected)).toBeInTheDocument();
+  });
+
+  // The door check is the server's. Offering a room it would refuse is an offer that fails.
+  it('does not offer a room whose door is shut', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom({ joinable: false })];
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText(/Your debate/)).not.toBeInTheDocument());
+  });
+
+  it('does not offer the room the viewer is already in', async () => {
+    mocks.pathname = '/debate/room-1';
+    mocks.upcomingRooms = [upcomingRoom()];
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText(/Your debate/)).not.toBeInTheDocument());
+  });
+
+  it('snoozes a room for the session on Not now', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom()];
+
+    render(<DebateCoordinator />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Not now' }));
+
+    await waitFor(() => expect(screen.queryByText(/Your debate/)).not.toBeInTheDocument());
   });
 
   // GEO-2941. A source-debate-less rematch is the branch this coordinator pushes a focused tab
@@ -1130,6 +1193,18 @@ function videoResponse() {
     status: 200,
     headers: { 'content-type': 'video/mp4', 'content-length': '4' },
   });
+}
+
+function upcomingRoom(overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDebateRoom {
+  return {
+    room_id: 'room-1',
+    starts_at: '2026-09-21T09:00:00.000Z',
+    opens_at: '2026-09-21T08:50:00.000Z',
+    joinable: true,
+    due: false,
+    others_present: false,
+    ...overrides,
+  };
 }
 
 function activityWithRematch(status: 'deciding' | 'browsing'): DebateActivity {

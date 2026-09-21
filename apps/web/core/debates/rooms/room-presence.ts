@@ -1,67 +1,76 @@
-import type { DebateRoom, DebateRoomParticipant } from '../api';
+import type { DebateRoomView } from '../api';
 
-/** Indicator states (GEO-2941). From explicit join/leave events, not GEO-2836's 1-minute heartbeat. */
+/**
+ * Indicator states (GEO-2941). Read off the server's `waiting` reason and `occupants`, so the
+ * grace periods stay one decision on the backend.
+ */
 export type DebateRoomPresenceState =
-  /** 1. The viewer is here before the window opens. */
+  /** 1. In the room before the scheduled start. */
   | 'arrived_early'
-  /** 2. The window is open, the viewer is here, the other participant has not arrived. */
+  /** 2. Past the start, no arrival, no information about why. */
   | 'waiting'
-  /** 2b. Still waiting, and the server knows why: they are mid-debate somewhere else. */
+  /** 2b. Past the start, and the server knows they are mid-debate elsewhere. */
   | 'waiting_elsewhere'
-  /** 3. They are in the room. The only state that changes behaviour — see `opponentPresent`. */
+  /** 3. They are in the room. The only state that changes behaviour. */
   | 'present'
-  /** 4. They were here and left, by an explicit leave rather than a dropped connection. */
+  /** 4. Seen in `occupants` this visit and no longer there. See `sawOpponent`. */
   | 'left'
-  /** 5. Past the server's deadline with no join event at all. */
+  /** 5. The grace period elapsed with no arrival. */
   | 'no_show';
 
 export type DebateRoomPresence = {
   state: DebateRoomPresenceState;
-  opponent: DebateRoomParticipant;
-  /** State 3 alone: opens the mic and enables Request debate. Every other state is indicator-only. */
+  /** The other participant's user id. The room payload carries no name to go with it. */
+  opponentUserId: string | null;
+  /** State 3 alone: opens the mic and enables Request debate. */
   opponentPresent: boolean;
 };
 
 export type DebateRoomPresenceInput = {
-  room: DebateRoom | null | undefined;
-  /** `null` until geo-chat resolves the viewer, which is not the same as being alone in the room. */
+  room: DebateRoomView | null | undefined;
+  /** `null` until geo-chat resolves the viewer, which is not the same as being alone. */
   currentUserId: string | null;
-  now: number;
+  /**
+   * Whether the opponent has been seen in `occupants` at any point this visit.
+   *
+   * The view reports who is in the room, never who has ever been in it, so "left" and "never came"
+   * are the same payload until the grace period expires. This is the client's own memory of that
+   * difference and does not survive a refresh; a backend `ever_joined` would.
+   */
+  sawOpponent: boolean;
 };
 
-/** `null` when unanswerable. `closes_at` is not read: the window governs joining, never leaving. */
-export function debateRoomPresence({ room, currentUserId, now }: DebateRoomPresenceInput): DebateRoomPresence | null {
-  if (!room || !currentUserId) return null;
+/**
+ * The room's presence, or `null` when there is nothing to say: no room, no viewer, or a viewer who
+ * is not admitted. Only an admitted viewer is given occupancy to read.
+ */
+export function debateRoomPresence({
+  room,
+  currentUserId,
+  sawOpponent,
+}: DebateRoomPresenceInput): DebateRoomPresence | null {
+  if (!room || !currentUserId || room.access.status !== 'admitted') return null;
 
-  const opponent = room.participants.find(participant => participant.user_id !== currentUserId) ?? null;
-  const viewerIsMember = room.participants.some(participant => participant.user_id === currentUserId);
-  if (!opponent || !viewerIsMember) return null;
+  const opponentUserId = room.participants.find(userId => userId !== currentUserId) ?? null;
+  const opponentPresent = opponentUserId !== null && room.occupants.includes(opponentUserId);
 
-  return { state: opponentState(room, opponent, now), opponent, opponentPresent: opponent.present };
+  return { state: presenceState(room, opponentPresent, sawOpponent), opponentUserId, opponentPresent };
 }
 
-function opponentState(room: DebateRoom, opponent: DebateRoomParticipant, now: number): DebateRoomPresenceState {
-  // Being here outranks the viewer's own early arrival: a room the pair are both sitting in is not
-  // a room anyone is early for.
-  if (opponent.present) return 'present';
+function presenceState(room: DebateRoomView, opponentPresent: boolean, sawOpponent: boolean): DebateRoomPresenceState {
+  if (opponentPresent) return 'present';
 
-  // Ahead of `arrived_early`, which would report an early leave as nobody having arrived.
-  if (opponent.left_at !== null) return 'left';
-
-  // Nobody is late before the window opens.
-  if (now < timestamp(room.opens_at)) return 'arrived_early';
-
-  // Before `waiting_reason`: GEO-2946 converts a wait into a no-show on a deadline whatever the
-  // reason for it, so 2b resolves into 5.
-  const noShowAt = room.no_show_at === null ? null : timestamp(room.no_show_at);
-  if (noShowAt !== null && now >= noShowAt) return 'no_show';
-
-  if (room.waiting_reason === 'in_another_debate') return 'waiting_elsewhere';
-
-  return 'waiting';
-}
-
-/** `NaN` loses every comparison above, so an unreadable timestamp falls through to `waiting`. */
-function timestamp(value: string) {
-  return Date.parse(value);
+  // `waiting` is null until the viewer has joined themselves, so there is no one-sided wait to
+  // describe yet and nothing has happened the indicator can report.
+  switch (room.waiting?.reason) {
+    case 'no_show':
+      return 'no_show';
+    case 'opponent_in_another_debate':
+      return 'waiting_elsewhere';
+    case 'not_yet_due':
+      // Someone who was here and stepped out has left, whatever the clock says.
+      return sawOpponent ? 'left' : 'arrived_early';
+    default:
+      return sawOpponent ? 'left' : 'waiting';
+  }
 }

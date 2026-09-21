@@ -1,145 +1,103 @@
 import { describe, expect, it } from 'vitest';
 
-import type { DebateRoom, DebateRoomParticipant } from '../api';
+import type { DebateRoomAccess, DebateRoomView, DebateRoomWaiting } from '../api';
 import { debateRoomPresence } from './room-presence';
 
 const VIEWER = 'user-viewer';
 const OPPONENT = 'user-opponent';
 
-const OPENS_AT = '2026-09-21T09:00:00.000Z';
-const BEFORE_OPEN = Date.parse('2026-09-21T08:45:00.000Z');
-const AFTER_OPEN = Date.parse('2026-09-21T09:05:00.000Z');
-
-function participant(userId: string, overrides: Partial<DebateRoomParticipant> = {}): DebateRoomParticipant {
+function room(overrides: Partial<DebateRoomView> = {}): DebateRoomView {
   return {
-    user_id: userId,
-    profile_space_id: `${userId}-space`,
-    display_name: userId,
-    avatar_cid: null,
-    joined_at: null,
-    left_at: null,
-    present: false,
+    room_id: 'room-1',
+    access: { status: 'admitted' } satisfies DebateRoomAccess,
+    starts_at: '2026-09-21T09:00:00.000Z',
+    opens_at: '2026-09-21T08:50:00.000Z',
+    scheduled_end_at: '2026-09-21T09:30:00.000Z',
+    participants: [VIEWER, OPPONENT],
+    occupants: [VIEWER],
+    waiting: { reason: 'opponent_late' } satisfies DebateRoomWaiting,
     ...overrides,
   };
 }
 
-function room(overrides: Partial<DebateRoom> = {}): DebateRoom {
-  return {
-    id: 'room-1',
-    rematch_session_id: 'session-1',
-    source_space_id: 'space-1',
-    participants: [participant(VIEWER, { joined_at: OPENS_AT, present: true }), participant(OPPONENT)],
-    opens_at: OPENS_AT,
-    closes_at: '2026-09-21T10:00:00.000Z',
-    no_show_at: null,
-    waiting_reason: null,
-    created_at: OPENS_AT,
-    updated_at: OPENS_AT,
-    ...overrides,
-  };
-}
-
-function stateAt(now: number, overrides: Partial<DebateRoom> = {}, currentUserId: string | null = VIEWER) {
-  return debateRoomPresence({ room: room(overrides), currentUserId, now })?.state ?? null;
+function stateOf(overrides: Partial<DebateRoomView> = {}, sawOpponent = false, currentUserId: string | null = VIEWER) {
+  return debateRoomPresence({ room: room(overrides), currentUserId, sawOpponent })?.state ?? null;
 }
 
 describe('debateRoomPresence', () => {
   it('says nothing without a room', () => {
-    expect(debateRoomPresence({ room: null, currentUserId: VIEWER, now: AFTER_OPEN })).toBeNull();
+    expect(debateRoomPresence({ room: null, currentUserId: VIEWER, sawOpponent: false })).toBeNull();
   });
 
   // Guessing at `waiting` would claim someone is late who was never expected.
   it('says nothing before the viewer is identified', () => {
-    expect(stateAt(AFTER_OPEN, {}, null)).toBeNull();
+    expect(stateOf({}, false, null)).toBeNull();
   });
 
-  it('says nothing to someone outside the access list', () => {
-    expect(stateAt(AFTER_OPEN, {}, 'user-stranger')).toBeNull();
+  // A stranger is refused in the body with empty lists, not by an HTTP status.
+  it.each([
+    ['a stranger', { status: 'not_a_participant' } as DebateRoomAccess],
+    ['a closed room', { status: 'closed', reason: 'completed' } as DebateRoomAccess],
+    ['a locked door', { status: 'not_yet_open', opens_at: '2026-09-21T08:50:00.000Z' } as DebateRoomAccess],
+  ])('says nothing to %s', (_label, access) => {
+    expect(stateOf({ access, participants: [], occupants: [] })).toBeNull();
   });
 
-  it('is state 1 when the viewer arrives before the window opens', () => {
-    expect(stateAt(BEFORE_OPEN)).toBe('arrived_early');
+  it('is state 1 before the scheduled start', () => {
+    expect(stateOf({ waiting: { reason: 'not_yet_due' } })).toBe('arrived_early');
   });
 
-  it('is state 2 once the window is open and they have not come', () => {
-    expect(stateAt(AFTER_OPEN)).toBe('waiting');
+  it('is state 2 once the start has passed', () => {
+    expect(stateOf({ waiting: { reason: 'opponent_late' } })).toBe('waiting');
   });
 
   it('is state 2b when the server says they are mid-debate elsewhere', () => {
-    expect(stateAt(AFTER_OPEN, { waiting_reason: 'in_another_debate' })).toBe('waiting_elsewhere');
+    expect(stateOf({ waiting: { reason: 'opponent_in_another_debate' } })).toBe('waiting_elsewhere');
   });
 
-  it('is state 3 on an explicit join', () => {
-    const participants = [
-      participant(VIEWER, { present: true }),
-      participant(OPPONENT, { joined_at: OPENS_AT, present: true }),
-    ];
-    expect(stateAt(AFTER_OPEN, { participants })).toBe('present');
+  it('is state 3 when they are in the occupant list', () => {
+    expect(stateOf({ occupants: [VIEWER, OPPONENT], waiting: null })).toBe('present');
   });
 
-  it('is state 4 on an explicit leave', () => {
-    const participants = [
-      participant(VIEWER, { present: true }),
-      participant(OPPONENT, { joined_at: OPENS_AT, left_at: '2026-09-21T09:02:00.000Z' }),
-    ];
-    expect(stateAt(AFTER_OPEN, { participants })).toBe('left');
+  it('is state 5 once the grace period has elapsed', () => {
+    expect(stateOf({ waiting: { reason: 'no_show' } })).toBe('no_show');
   });
 
-  it('is state 5 past the server-defined deadline with no join event', () => {
-    expect(stateAt(AFTER_OPEN, { no_show_at: '2026-09-21T09:04:00.000Z' })).toBe('no_show');
+  // The view reports who is in the room, never who has been, so this visit's memory is the only
+  // thing separating "they left" from "they never came".
+  it('is state 4 when someone seen earlier is no longer an occupant', () => {
+    expect(stateOf({ waiting: { reason: 'opponent_late' } }, true)).toBe('left');
   });
 
-  // A room the pair are both sitting in is not a room anyone is early for.
-  it('prefers state 3 over state 1 when they are already here', () => {
-    const participants = [
-      participant(VIEWER, { present: true }),
-      participant(OPPONENT, { joined_at: OPENS_AT, present: true }),
-    ];
-    expect(stateAt(BEFORE_OPEN, { participants })).toBe('present');
+  it('prefers left over arrived early for someone who came and went', () => {
+    expect(stateOf({ waiting: { reason: 'not_yet_due' } }, true)).toBe('left');
   });
 
-  // An early leave reported as state 1 would read as nobody having arrived at all.
-  it('prefers state 4 over state 1 when they came early and left', () => {
-    const participants = [
-      participant(VIEWER, { present: true }),
-      participant(OPPONENT, { joined_at: '2026-09-21T08:40:00.000Z', left_at: '2026-09-21T08:42:00.000Z' }),
-    ];
-    expect(stateAt(BEFORE_OPEN, { participants })).toBe('left');
+  // Being here outranks the memory of having been here.
+  it('prefers present over left when they come back', () => {
+    expect(stateOf({ occupants: [VIEWER, OPPONENT], waiting: null }, true)).toBe('present');
   });
 
-  // GEO-2946 converts a wait into a no-show on a deadline whatever the reason for it.
-  it('resolves state 2b into state 5 once the deadline passes', () => {
-    const state = stateAt(AFTER_OPEN, {
-      waiting_reason: 'in_another_debate',
-      no_show_at: '2026-09-21T09:04:00.000Z',
+  // A no-show is the server's verdict and outranks the client's own recollection.
+  it('prefers no show over left', () => {
+    expect(stateOf({ waiting: { reason: 'no_show' } }, true)).toBe('no_show');
+  });
+
+  // `waiting` is null until the viewer joins, so there is no one-sided wait to describe.
+  it('falls back to waiting with no reason reported', () => {
+    expect(stateOf({ waiting: null })).toBe('waiting');
+  });
+
+  it('opens the mic only when they are present', () => {
+    const alone = debateRoomPresence({ room: room(), currentUserId: VIEWER, sawOpponent: false });
+    expect(alone?.opponentPresent).toBe(false);
+
+    const together = debateRoomPresence({
+      room: room({ occupants: [VIEWER, OPPONENT], waiting: null }),
+      currentUserId: VIEWER,
+      sawOpponent: false,
     });
-    expect(state).toBe('no_show');
-  });
-
-  // The window governs joining, never leaving, so no state may turn on the clock running out.
-  it('does not change state when the window closes with both of them inside', () => {
-    const participants = [
-      participant(VIEWER, { present: true }),
-      participant(OPPONENT, { joined_at: OPENS_AT, present: true }),
-    ];
-    const pastClose = Date.parse('2026-09-21T11:30:00.000Z');
-    expect(stateAt(pastClose, { participants })).toBe('present');
-  });
-
-  it('opens the mic only in state 3', () => {
-    const waiting = debateRoomPresence({ room: room(), currentUserId: VIEWER, now: AFTER_OPEN });
-    expect(waiting?.opponentPresent).toBe(false);
-
-    const participants = [
-      participant(VIEWER, { present: true }),
-      participant(OPPONENT, { joined_at: OPENS_AT, present: true }),
-    ];
-    const together = debateRoomPresence({ room: room({ participants }), currentUserId: VIEWER, now: AFTER_OPEN });
     expect(together?.opponentPresent).toBe(true);
-  });
-
-  // An unreadable timestamp must not declare a no-show off a comparison against NaN.
-  it('falls back to waiting on an unparseable timestamp', () => {
-    expect(stateAt(AFTER_OPEN, { opens_at: 'not-a-date', no_show_at: 'not-a-date' })).toBe('waiting');
+    expect(together?.opponentUserId).toBe(OPPONENT);
   });
 });

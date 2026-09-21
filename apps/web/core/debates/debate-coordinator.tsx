@@ -32,6 +32,8 @@ import {
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
+import { useUpcomingDebateRooms } from './rooms/hooks';
+import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
 import { isDebateRoomPath } from './rooms/room-routes';
 import {
   getPreparedSocialVideoHandoffMethod,
@@ -208,6 +210,29 @@ export function DebateCoordinator() {
     if (snoozedChallengeId && challenge?.id !== snoozedChallengeId) setSnoozedChallengeId(null);
   }, [challenge, snoozedChallengeId]);
 
+  // GEO-2941. A room the viewer is expected in, offered rather than entered for them. `joinable`
+  // is the server's own door check, so this never offers a room that would refuse the join.
+  //
+  // Not gated on `activeFlow`: a scheduled debate coming due while the viewer browses is exactly
+  // when this is worth saying. It is suppressed inside a room, and prompt 2 — the in-debate case,
+  // which must never appear during recording — is GEO-2946 and not this.
+  const upcomingRoomsQuery = useUpcomingDebateRooms(!isDebateRoomPath(pathname));
+  const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
+  const joinableRooms = React.useMemo(
+    () => (upcomingRoomsQuery.data?.rooms ?? []).filter(room => room.joinable),
+    [upcomingRoomsQuery.data]
+  );
+  const promptedRoom =
+    joinableRooms.find(room => !snoozedRoomIds.includes(room.room_id) && !isDebateRoomPath(pathname)) ?? null;
+
+  React.useEffect(() => {
+    const liveIds = new Set(joinableRooms.map(room => room.room_id));
+    setSnoozedRoomIds(current => {
+      const next = current.filter(id => liveIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [joinableRooms]);
+
   // How the person who *sent* the request learns it was accepted (GEO-2514): the debate exists
   // already, and this is the only thing that tells them. `atDebate` keeps it off the accepting
   // tab's screen, which is walking into the room and does not need telling.
@@ -317,6 +342,13 @@ export function DebateCoordinator() {
         >
           {pausedBannerText(gateway.pauseReason)}
         </div>
+      )}
+      {promptedRoom && (
+        <DebateRoomJoinPrompt
+          key={promptedRoom.room_id}
+          room={promptedRoom}
+          onNotNow={() => setSnoozedRoomIds(current => [...current, promptedRoom.room_id])}
+        />
       )}
       {promptedDebate && currentUserId && !activity?.rematch && (
         <DebateReadyPrompt key={promptedDebate.id} debate={promptedDebate} currentUserId={currentUserId} />

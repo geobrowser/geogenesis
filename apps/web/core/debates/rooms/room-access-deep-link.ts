@@ -1,5 +1,7 @@
-/** `/explore?modal=room-access&modalTarget=denied|ended` (GEO-2941). Access is only knowable client-side. */
+/** `/explore?modal=room-access&modalTarget=denied|ended` (GEO-2941). */
 import { DEEP_LINK_MODALS, toModal } from '~/core/deep-links/modal-deep-link';
+
+import type { DebateRoomAccess } from '../api';
 
 export const ROOM_ACCESS_MODAL = DEEP_LINK_MODALS.roomAccess;
 
@@ -25,11 +27,26 @@ export function toRoomAccess(denial: RoomAccessDenial, via?: string): string {
 }
 
 /**
- * `403` is the access list, `404` a room that has gone. Anything else is not a refusal, and `null`
- * keeps the room retrying rather than quietly sending the viewer to Explore.
+ * Which refusals send the viewer away, and which the room handles in place.
+ *
+ * `not_yet_open` stays: the viewer is on the list and the door opens shortly, so the room says when
+ * rather than bouncing them to Explore. `admitted` obviously stays.
+ */
+export function roomAccessDenialFor(access: DebateRoomAccess): RoomAccessDenial | null {
+  switch (access.status) {
+    case 'not_a_participant':
+      return 'denied';
+    case 'closed':
+      return 'ended';
+    default:
+      return null;
+  }
+}
+
+/**
+ * A room that does not exist reads as ended rather than denied: the link came from somewhere, and a
+ * calendar invite a month old is the common case.
  */
 export function roomAccessDenialForStatus(status: number): RoomAccessDenial | null {
-  if (status === 403) return 'denied';
-  if (status === 404) return 'ended';
-  return null;
+  return status === 404 ? 'ended' : null;
 }

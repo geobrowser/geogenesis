@@ -1448,40 +1448,65 @@ export async function rejectDebateChallenge(
 }
 
 /* -------------------------------------------------------------------------------------------------
- * Debate rooms: an access list of two, a window, explicit join/leave events (GEO-2941).
- * SHAPE NOT YET AGREED — geo-chat has no rooms endpoint. Settle it with Patrick on GEO-2946.
+ * Debate rooms (GEO-2941, backend GEO-2946 — geo-chat #125/#126)
+ *
+ * A place two named people meet during a window. The window governs entering, never leaving:
+ * nothing here may evict an occupant, and `scheduled_end_at` is display only.
  * -----------------------------------------------------------------------------------------------*/
 
-/** Why the viewer is still waiting, when the server knows something the join events do not. */
-export type DebateRoomWaitingReason = 'in_another_debate';
+/** Why a room stopped accepting joins. A closed room is a tombstone, not a 404. */
+export type DebateRoomClosedReason = 'completed' | 'empty_idle' | 'no_show' | 'cancelled';
 
-export type DebateRoomParticipant = DebateParticipantSummary & {
-  /** First arrival. Survives a leave and a rejoin, so it reads "ever came", not "is here". */
-  joined_at: string | null;
-  /** Most recent explicit leave. A dropped connection is not one — see `present`. */
-  left_at: string | null;
-  /** In the room right now, off the explicit events rather than the 1-minute ambient window. */
-  present: boolean;
+/**
+ * May the viewer open this room right now. Carried in a 200 body rather than an HTTP status, so a
+ * refusal still describes itself — a stranger is `not_a_participant`, a stale link is `closed`.
+ */
+export type DebateRoomAccess =
+  | { status: 'admitted' }
+  | { status: 'not_yet_open'; opens_at: string }
+  | { status: 'closed'; reason: DebateRoomClosedReason }
+  | { status: 'not_a_participant' };
+
+/**
+ * Why the viewer is on their own. Server-computed, including the no-show deadline — the client
+ * never derives one, so the grace periods stay a backend product decision.
+ */
+export type DebateRoomWaiting =
+  | { reason: 'not_yet_due' }
+  | { reason: 'opponent_late' }
+  | { reason: 'opponent_in_another_debate' }
+  | { reason: 'no_show' };
+
+export type DebateRoomView = {
+  room_id: string;
+  access: DebateRoomAccess;
+  starts_at: string;
+  opens_at: string;
+  /** Display only. Never read to close a room or refuse a join. */
+  scheduled_end_at: string | null;
+  /** The access list, as user ids. Empty for a viewer who is not admitted. */
+  participants: string[];
+  /** Everyone currently inside, per connection rather than per user. Empty unless admitted. */
+  occupants: string[];
+  /** `null` once both sides are present, and for a viewer not in the room themselves. */
+  waiting: DebateRoomWaiting | null;
 };
 
-export type DebateRoom = {
-  id: string;
-  /** The debate-again session the room renders. `null` before one is minted. */
-  rematch_session_id: string | null;
-  source_space_id: string;
-  /** The access list: exactly two. Anyone else gets a 403 rather than a degraded room. */
-  participants: DebateRoomParticipant[];
+/** A row in "your upcoming debates". Feeds the join prompt and the Requests tab (GEO-2940). */
+export type UpcomingDebateRoom = {
+  room_id: string;
+  starts_at: string;
   opens_at: string;
-  /**
-   * When the room stops accepting arrivals. Governs joining, never leaving — nothing in the client
-   * may read this to eject anyone.
-   */
-  closes_at: string;
-  /** When an absent participant becomes a no-show. Server-defined so the client invents no timeout. */
-  no_show_at: string | null;
-  waiting_reason: DebateRoomWaitingReason | null;
-  created_at: string;
-  updated_at: string;
+  /** The door is open now. */
+  joinable: boolean;
+  /** The scheduled start has passed — "starting now" rather than "at 9:00". */
+  due: boolean;
+  /** Whether anyone else is already inside, so the prompt can say they are waiting. */
+  others_present: boolean;
+};
+
+export type UpcomingDebateRoomsResponse = {
+  rooms: UpcomingDebateRoom[];
 };
 
 export async function getDebateRoom(
@@ -1490,7 +1515,7 @@ export async function getDebateRoom(
   accountKey: string | null,
   signal?: AbortSignal
 ) {
-  return geoChatRequest<DebateRoom>(`/debate-rooms/${roomId}`, {
+  return geoChatRequest<DebateRoomView>(`/debate-rooms/${roomId}`, {
     auth: true,
     getPrivyIdentityToken,
     accountKey,
@@ -1499,36 +1524,35 @@ export async function getDebateRoom(
 }
 
 /**
- * Drives the other side's indicator, and is what tells a no-show apart from someone who came and
- * went. So arrival is an event rather than a side effect of the page mounting.
+ * One endpoint for both halves of presence, keyed by connection rather than by user: a person with
+ * the room open in two tabs who closes one has not left, and a leave keyed only by user would tell
+ * their opponent they had.
  */
-export async function joinDebateRoom(
+export async function setDebateRoomPresence(
   roomId: string,
+  body: { connection_id: string; joined: boolean },
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {
-  return geoChatRequest<DebateRoom>(`/debate-rooms/${roomId}/join`, {
+  return geoChatRequest<DebateRoomView>(`/debate-rooms/${roomId}/presence`, {
     method: 'POST',
+    body,
     auth: true,
     getPrivyIdentityToken,
     accountKey,
   });
 }
 
-/**
- * Per person, unlike `leaveDebateRematch`, which ends the session for both. Leaving a room inside
- * its window leaves the room open and the rejoin available.
- */
-export async function leaveDebateRoom(
-  roomId: string,
+export async function listUpcomingDebateRooms(
   getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
+  accountKey: string | null,
+  signal?: AbortSignal
 ) {
-  return geoChatRequest<DebateRoom>(`/debate-rooms/${roomId}/leave`, {
-    method: 'POST',
+  return geoChatRequest<UpcomingDebateRoomsResponse>('/me/debate-rooms', {
     auth: true,
     getPrivyIdentityToken,
     accountKey,
+    signal,
   });
 }
 

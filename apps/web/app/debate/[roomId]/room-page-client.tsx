@@ -5,28 +5,36 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 
 import { GeoChatRequestError } from '~/core/debates/api';
-import { useDebateRoom, useDebateRoomPresence, useJoinDebateRoom } from '~/core/debates/rooms/hooks';
-import { roomAccessDenialForStatus, toRoomAccess } from '~/core/debates/rooms/room-access-deep-link';
+import { useDebateRoom, useDebateRoomPresence, useRoomPresence } from '~/core/debates/rooms/hooks';
+import {
+  roomAccessDenialFor,
+  roomAccessDenialForStatus,
+  toRoomAccess,
+} from '~/core/debates/rooms/room-access-deep-link';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
+import { ROOM_NOT_YET_OPEN } from '~/core/debates/rooms/room-copy';
 import { DebateRoomPresenceIndicator } from '~/core/debates/rooms/room-presence-indicator';
 
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import { DebateRematchPageClient } from '../../space/[id]/(space)/debates/rematches/[sessionId]/rematch-page-client';
-
 /**
- * A debate room (GEO-2941): a wrapper that fetches the room, announces arrival, and puts the
- * indicator over the debate-again picker. Nothing here ejects anyone — `closes_at` is never read.
+ * A debate room (GEO-2941). The room is the debate-again picker with an indicator over it, so this
+ * is a wrapper rather than a screen.
+ *
+ * Nothing here ejects anyone: `scheduled_end_at` is never read, and a viewer the server refuses is
+ * redirected before the room renders rather than out of one they were in.
  */
 export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   const router = useRouter();
   const roomQuery = useDebateRoom(roomId);
   const room = roomQuery.data ?? null;
-  const presence = useDebateRoomPresence(room);
 
+  // Refusals arrive in the body, not the status: a stranger gets a 200 saying `not_a_participant`.
+  // Only a room that does not exist is an HTTP error.
   const denial =
-    roomQuery.error instanceof GeoChatRequestError ? roomAccessDenialForStatus(roomQuery.error.status) : null;
+    (room ? roomAccessDenialFor(room.access) : null) ??
+    (roomQuery.error instanceof GeoChatRequestError ? roomAccessDenialForStatus(roomQuery.error.status) : null);
 
   React.useEffect(() => {
     if (!denial) return;
@@ -34,7 +42,9 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
     router.replace(toRoomAccess(denial));
   }, [denial, router]);
 
-  useAnnounceArrival(roomId, room !== null);
+  const admitted = room?.access.status === 'admitted';
+  useRoomPresence(roomId, admitted);
+  const presence = useDebateRoomPresence(room);
 
   // Nothing renders for someone not in this room: not a degraded room, and not a 404 — the link is
   // valid, they are just not in this one.
@@ -48,33 +58,31 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
     );
   }
 
-  // A room with no session yet has nothing for the picker to draw, and resolves on the next poll.
-  if (!room.rematch_session_id) return <RoomNotice busy>Getting your claims ready…</RoomNotice>;
+  // On the list, door still locked. The server refuses the join until `opens_at`, so this says when
+  // rather than bouncing someone who is merely early.
+  if (room.access.status === 'not_yet_open') {
+    return (
+      <RoomNotice>
+        {ROOM_NOT_YET_OPEN.title} {ROOM_NOT_YET_OPEN.opensAt(formatTime(room.access.opens_at))}
+      </RoomNotice>
+    );
+  }
 
   return (
     <DebateRoomProvider presence={presence}>
-      <DebateRematchPageClient sessionId={room.rematch_session_id} />
+      {/* The picker belongs here. geo-chat does not yet link a room to a rematch session, so
+          there is nothing to render it from — see the note in `room-context`. */}
+      <RoomNotice busy>Waiting for your claims…</RoomNotice>
       {presence && <DebateRoomPresenceIndicator presence={presence} />}
     </DebateRoomProvider>
   );
 }
 
-/**
- * Announces arrival once per room per mount. Re-announcing on every refetch would rewrite
- * `joined_at` and turn a viewer who has been sitting here into one who just walked in.
- */
-function useAnnounceArrival(roomId: string, ready: boolean) {
-  const joinRoom = useJoinDebateRoom(roomId);
-  const announcedRef = React.useRef<string | null>(null);
-
-  // `mutate` is stable but the mutation object is not, so the effect keys on the room instead.
-  const join = joinRoom.mutate;
-
-  React.useEffect(() => {
-    if (!ready || announcedRef.current === roomId) return;
-    announcedRef.current = roomId;
-    join();
-  }, [join, ready, roomId]);
+function formatTime(iso: string) {
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime())
+    ? 'the scheduled time'
+    : at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
 function RoomNotice({ children, busy = false }: { children: React.ReactNode; busy?: boolean }) {

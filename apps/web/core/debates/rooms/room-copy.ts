@@ -41,12 +41,23 @@ export function roomPresenceNote(state: DebateRoomPresenceState, opponentName: s
   }
 }
 
-/** The join prompt's urgency turns on whether the other participant is already waiting. */
+/**
+ * The join prompt's urgency turns on `due` and `others_present`, both of which the server supplies
+ * on the upcoming-rooms row.
+ */
 export const ROOM_JOIN_PROMPT = {
-  waitingNow: (opponentName: string) => `${opponentName} is waiting for you now`,
+  title: 'Your scheduled debate',
+  waitingNow: 'Someone is waiting for you now',
+  startingNow: 'Your debate is starting now',
   scheduled: (startsAt: string) => `Your debate starts at ${startsAt}`,
   join: 'Join debate',
   notNow: 'Not now',
+} as const;
+
+/** Shown to someone who arrived before the door unlocked. */
+export const ROOM_NOT_YET_OPEN = {
+  title: 'The room isn’t open yet',
+  opensAt: (opensAt: string) => `You can join from ${opensAt}.`,
 } as const;
 
 /** The popup on Explore after a redirect. A stale calendar link produces the second reason. */
