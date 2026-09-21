@@ -406,29 +406,34 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                 </div>
               )}
             </div>
-            {/* The mobile profile has one 24px step from its description into
-                the tabs. Generic entity content keeps the roomier 40px gap. */}
-            <Spacer height={isPersonProfile ? 24 : 40} />
-            {personProfile ??
-              (isPersonPending ? null : (
-                <>
-                  {tabsSection}
-                  {notice ? (
-                    <>
-                      <Spacer height={24} />
-                      {notice}
-                    </>
-                  ) : null}
-                  <Spacer height={40} />
-                  <EditorFooter
-                    entityId={entityId}
-                    spaceId={spaceId}
-                    variant="sidePanel"
-                    belowBodySlot={belowBodySlot}
-                    hideProperties={hideProperties}
-                  />
-                </>
-              ))}
+            {personProfile ? (
+              // The full-screen profile uses this margin rather than a fixed
+              // spacer, allowing it to collapse with the description's mb-5.
+              <div className="mt-6">{personProfile}</div>
+            ) : (
+              <>
+                <Spacer height={40} />
+                {isPersonPending ? null : (
+                  <>
+                    {tabsSection}
+                    {notice ? (
+                      <>
+                        <Spacer height={24} />
+                        {notice}
+                      </>
+                    ) : null}
+                    <Spacer height={40} />
+                    <EditorFooter
+                      entityId={entityId}
+                      spaceId={spaceId}
+                      variant="sidePanel"
+                      belowBodySlot={belowBodySlot}
+                      hideProperties={hideProperties}
+                    />
+                  </>
+                )}
+              </>
+            )}
           </div>
         </EntityPageContentContainer>
       </div>

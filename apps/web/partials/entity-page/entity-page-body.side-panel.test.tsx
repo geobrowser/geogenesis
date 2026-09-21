@@ -150,7 +150,7 @@ describe('EntityPageBody relation side panel', () => {
     expect(screen.getByTestId('profile-headline').compareDocumentPosition(screen.getByTestId('description')) & 4).toBe(
       4
     );
-    expect(screen.getByTestId('person-profile').previousElementSibling).toHaveStyle({ height: '24px' });
+    expect(screen.getByTestId('person-profile').parentElement).toHaveClass('mt-6');
     expect(mocks.actions).toMatchObject({ isVoteable: true, votesFirst: true });
   });
 
