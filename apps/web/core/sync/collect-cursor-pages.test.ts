@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { collectCursorPages, createCursorPageCheckpoint } from './collect-cursor-pages';
+import { cloneCursorPageCheckpoint, collectCursorPages, createCursorPageCheckpoint } from './collect-cursor-pages';
 
 describe('collectCursorPages', () => {
   it('collects every page in cursor order', async () => {
@@ -49,5 +49,24 @@ describe('collectCursorPages', () => {
 
     await expect(collectCursorPages(fetchPage, checkpoint)).rejects.toThrow('no end cursor');
     await expect(collectCursorPages(fetchPage, checkpoint)).resolves.toEqual(['valid']);
+  });
+
+  it('clones mutable retry progress for one query execution', () => {
+    const retained = {
+      items: ['a'],
+      seenCursors: new Set(['cursor-a']),
+      after: 'cursor-a',
+    };
+    const execution = cloneCursorPageCheckpoint(retained);
+
+    execution.items.push('b');
+    execution.seenCursors.add('cursor-b');
+    execution.after = 'cursor-b';
+
+    expect(retained).toEqual({
+      items: ['a'],
+      seenCursors: new Set(['cursor-a']),
+      after: 'cursor-a',
+    });
   });
 });

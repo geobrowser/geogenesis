@@ -88,6 +88,10 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   const available = React.useMemo(() => kinds.filter(kind => kind.rows.length > 0 || kind.isError), [kinds]);
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
 
+  React.useEffect(() => {
+    if (selectedKey === null && available[0]) setSelectedKey(available[0].key);
+  }, [available, selectedKey]);
+
   // Whichever the reader picked, or the first with anything in it. Held as a key
   // rather than an index so a kind arriving late — the two load separately —
   // cannot shift the selection out from under them.

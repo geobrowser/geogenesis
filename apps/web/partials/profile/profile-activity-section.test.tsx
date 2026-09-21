@@ -212,6 +212,20 @@ describe('ProfileActivitySection', () => {
     expect(screen.queryByRole('region', { name: 'Loading activity' })).not.toBeInTheDocument();
   });
 
+  it('keeps the first available kind selected when an earlier kind finishes later', () => {
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    const { rerender } = render(
+      <ProfileActivitySection kinds={[kind({ rows: [], isLoading: true }), claims]} />
+    );
+
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+
+    rerender(<ProfileActivitySection kinds={[kind({ rows: [row('d1')] }), claims]} />);
+
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+    expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('renders only the shared gallery card limit', () => {
     render(
       <ProfileActivitySection kinds={[kind({ rows: Array.from({ length: 8 }, (_, index) => row(`d${index + 1}`)) })]} />

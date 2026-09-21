@@ -37,6 +37,11 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
+function automaticRetryWrapper({ children }: { children: ReactNode }) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: 1, retryDelay: 0 } } });
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
 describe('useQueryAllEntities', () => {
   beforeEach(() => {
     mocks.syncMany.mockReset();
@@ -99,5 +104,42 @@ describe('useQueryAllEntities', () => {
     await waitFor(() => expect(result.current.error).toEqual(new Error('refresh failed')));
     expect(result.current.entities).toEqual([entity]);
     expect(result.current.dataAvailable).toBe(true);
+  });
+
+  it('starts a manual retry from page one instead of reusing an old cursor', async () => {
+    mocks.syncMany
+      .mockResolvedValueOnce({ merged: [entity], remote: [entity], endCursor: 'cursor-a', hasNextPage: true })
+      .mockRejectedValueOnce(new Error('page two failed'))
+      .mockResolvedValueOnce({ merged: [entity], remote: [entity], endCursor: 'fresh-a', hasNextPage: true })
+      .mockResolvedValueOnce({ merged: [entity], remote: [entity], endCursor: null, hasNextPage: false });
+
+    const { result } = renderHook(() => useQueryAllEntities({ where: {} }), { wrapper });
+    await waitFor(() => expect(result.current.error).toEqual(new Error('page two failed')));
+
+    await act(async () => void (await result.current.refetch()));
+    await waitFor(() => expect(result.current.error).toBeNull());
+
+    expect(mocks.syncMany.mock.calls.map(([options]) => options.after)).toEqual([
+      undefined,
+      'cursor-a',
+      undefined,
+      'fresh-a',
+    ]);
+  });
+
+  it('resumes an automatic retry at the failed cursor within the same attempt', async () => {
+    mocks.syncMany
+      .mockResolvedValueOnce({ merged: [entity], remote: [entity], endCursor: 'cursor-a', hasNextPage: true })
+      .mockRejectedValueOnce(new Error('transient page failure'))
+      .mockResolvedValueOnce({ merged: [entity], remote: [entity], endCursor: null, hasNextPage: false });
+
+    const { result } = renderHook(() => useQueryAllEntities({ where: {} }), { wrapper: automaticRetryWrapper });
+    await waitFor(() => expect(result.current.isFetched).toBe(true));
+
+    expect(mocks.syncMany.mock.calls.map(([options]) => options.after)).toEqual([
+      undefined,
+      'cursor-a',
+      'cursor-a',
+    ]);
   });
 });

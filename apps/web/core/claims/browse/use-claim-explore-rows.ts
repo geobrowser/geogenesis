@@ -4,6 +4,7 @@ import { useQueries } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { fetchExploreRowsByIds } from '~/core/profile/explore-rows-by-ids';
 import { normId } from '~/core/utils/norm-id';
 
@@ -18,6 +19,24 @@ export function claimExploreRowPages(ids: readonly string[]): string[][] {
   return pages;
 }
 
+type ClaimExploreRowsQueryResult = {
+  data?: ExploreFeedRow[];
+  isLoading: boolean;
+  isError: boolean;
+  isFetching: boolean;
+  refetch: () => Promise<unknown>;
+};
+
+function combineClaimExploreRows(queries: ClaimExploreRowsQueryResult[]) {
+  return {
+    data: queries.flatMap(query => query.data ?? []),
+    isLoading: queries.some(query => query.isLoading),
+    isError: queries.some(query => query.isError),
+    isFetching: queries.some(query => query.isFetching),
+    refetch: async () => void (await Promise.all(queries.filter(query => query.isError).map(query => query.refetch()))),
+  };
+}
+
 /**
  * Hydrates a claim-scoped id list through the shared Explore card projection.
  *
@@ -29,7 +48,7 @@ export function useClaimExploreRows(ids: string[], spaceId: string, enabled = tr
   const normalizedSpaceId = normId(spaceId);
   const pages = React.useMemo(() => claimExploreRowPages(ids), [ids]);
 
-  const queries = useQueries({
+  return useQueries({
     queries: pages.map(page => {
       const normalizedIds = page.map(normId);
 
@@ -43,19 +62,6 @@ export function useClaimExploreRows(ids: string[], spaceId: string, enabled = tr
         staleTime: 30_000,
       };
     }),
+    combine: combineClaimExploreRows,
   });
-
-  const data = queries.flatMap(query => query.data ?? []);
-  const refetch = React.useCallback(
-    async () => void (await Promise.all(queries.filter(query => query.isError).map(query => query.refetch()))),
-    [queries]
-  );
-
-  return {
-    data,
-    isLoading: queries.some(query => query.isLoading),
-    isError: queries.some(query => query.isError),
-    isFetching: queries.some(query => query.isFetching),
-    refetch,
-  };
 }

@@ -128,41 +128,66 @@ function createEntityScoreCheckpoint(ids: readonly string[]): EntityScoreCheckpo
   return { ids: [...ids], nextStart: 0, scores: new Map(), rankings: new Map() };
 }
 
+function cloneEntityScoreCheckpoint(checkpoint: EntityScoreCheckpoint): EntityScoreCheckpoint {
+  return {
+    ids: [...checkpoint.ids],
+    nextStart: checkpoint.nextStart,
+    scores: new Map(checkpoint.scores),
+    rankings: new Map(checkpoint.rankings),
+  };
+}
+
 export function useEntityScores({ ids, enabled = true }: { ids: readonly string[]; enabled?: boolean }) {
   const queryKey = entityScoresQueryKey(ids);
   const signature = queryKey[1];
   const progressRef = React.useRef({ signature, checkpoint: createEntityScoreCheckpoint(ids) });
-  const { data, isLoading, isError, isFetching, refetch } = useQuery({
+  const resetProgress = React.useCallback(() => {
+    progressRef.current = { signature, checkpoint: createEntityScoreCheckpoint(ids) };
+  }, [ids, signature]);
+  const { data, isLoading, isError, isFetching, refetch: refetchQuery } = useQuery({
     queryKey,
     enabled: enabled && ids.length > 0,
     staleTime: 5 * 60_000,
     queryFn: async ({ signal }): Promise<EntityScores> => {
       if (progressRef.current.signature !== signature) {
-        progressRef.current = { signature, checkpoint: createEntityScoreCheckpoint(ids) };
+        resetProgress();
       }
 
-      const checkpoint = progressRef.current.checkpoint;
-      while (checkpoint.nextStart < checkpoint.ids.length) {
-        const chunk = checkpoint.ids.slice(checkpoint.nextStart, checkpoint.nextStart + ID_BATCH_SIZE);
-        const page = await Effect.runPromise(
-          graphql({
-            query: entityScoresDocument,
-            decoder: decodeScores,
-            variables: { ids: chunk, propertyId: SCORE_SYSTEM_PROPERTY },
-            signal,
-          })
-        );
+      const checkpoint = cloneEntityScoreCheckpoint(progressRef.current.checkpoint);
+      try {
+        while (checkpoint.nextStart < checkpoint.ids.length) {
+          const chunk = checkpoint.ids.slice(checkpoint.nextStart, checkpoint.nextStart + ID_BATCH_SIZE);
+          const page = await Effect.runPromise(
+            graphql({
+              query: entityScoresDocument,
+              decoder: decodeScores,
+              variables: { ids: chunk, propertyId: SCORE_SYSTEM_PROPERTY },
+              signal,
+            })
+          );
 
-        for (const [id, score] of page.scores) checkpoint.scores.set(id, score);
-        for (const [id, rank] of page.rankings) checkpoint.rankings.set(id, rank);
-        checkpoint.nextStart += chunk.length;
+          for (const [id, score] of page.scores) checkpoint.scores.set(id, score);
+          for (const [id, rank] of page.rankings) checkpoint.rankings.set(id, rank);
+          checkpoint.nextStart += chunk.length;
+        }
+      } catch (cause) {
+        if (!signal.aborted) progressRef.current = { signature, checkpoint };
+        throw cause;
       }
 
       const result = { scores: new Map(checkpoint.scores), rankings: new Map(checkpoint.rankings) };
-      progressRef.current = { signature, checkpoint: createEntityScoreCheckpoint(ids) };
+      if (!signal.aborted) resetProgress();
       return result;
     },
   });
+
+  React.useEffect(() => {
+    if (isError) resetProgress();
+  }, [isError, resetProgress]);
+  const refetch = React.useCallback(() => {
+    resetProgress();
+    return refetchQuery();
+  }, [refetchQuery, resetProgress]);
 
   // `isError` matters because the empty map is indistinguishable from the
   // loading one, and `sortRows` treats "no scores" as "keep the incoming order".

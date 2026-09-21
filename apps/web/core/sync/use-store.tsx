@@ -16,7 +16,7 @@ import { Entity, Property, Relation, Value } from '../types';
 import { Properties } from '../utils/property';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
-import { collectCursorPages, createCursorPageCheckpoint } from './collect-cursor-pages';
+import { cloneCursorPageCheckpoint, collectCursorPages, createCursorPageCheckpoint } from './collect-cursor-pages';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { hydrateEntityBatched } from './hydrate-entity-batcher';
 import { E, mergeRelations } from './orm';
@@ -519,43 +519,61 @@ export function useQueryAllEntities({
   const { store, stream } = useSyncEngine();
   const querySignature = `${stableStringify(where)}:${pageSize}:${stableStringify(orderBy ?? null)}:${includeEmptyNames}`;
   const progressRef = React.useRef({ signature: querySignature, checkpoint: createCursorPageCheckpoint<string>() });
+  const resetProgress = React.useCallback(() => {
+    progressRef.current = { signature: querySignature, checkpoint: createCursorPageCheckpoint<string>() };
+  }, [querySignature]);
 
-  const { data, isFetched, isLoading, isFetching, error, refetch } = useQuery({
+  const { data, isFetched, isLoading, isFetching, error, refetch: refetchQuery } = useQuery({
     enabled,
     queryKey: ['store', 'all-entities', stableStringify(where), pageSize, orderBy ?? null, includeEmptyNames],
     queryFn: async ({ signal }) => {
       if (progressRef.current.signature !== querySignature) {
-        progressRef.current = { signature: querySignature, checkpoint: createCursorPageCheckpoint<string>() };
+        resetProgress();
       }
 
-      const checkpoint = progressRef.current.checkpoint;
-      const ids = await collectCursorPages(async after => {
-        const page = await E.syncMany({
-          store,
-          cache,
-          where,
-          first: pageSize,
-          after,
-          orderBy,
-          includeEmptyNames,
-          signal,
-        });
-        stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: page.merged, remoteEntities: page.remote });
+      const checkpoint = cloneCursorPageCheckpoint(progressRef.current.checkpoint);
+      let ids: string[];
+      try {
+        ids = await collectCursorPages(async after => {
+          const page = await E.syncMany({
+            store,
+            cache,
+            where,
+            first: pageSize,
+            after,
+            orderBy,
+            includeEmptyNames,
+            signal,
+          });
+          stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: page.merged, remoteEntities: page.remote });
 
-        return {
-          items: page.merged.map(entity => entity.id),
-          endCursor: page.endCursor,
-          hasNextPage: page.hasNextPage,
-        };
-      }, checkpoint);
+          return {
+            items: page.merged.map(entity => entity.id),
+            endCursor: page.endCursor,
+            hasNextPage: page.hasNextPage,
+          };
+        }, checkpoint);
+      } catch (cause) {
+        // Automatic retries resume this attempt. An execution cancelled by a newer refetch cannot
+        // overwrite that newer execution's progress with its stale checkpoint.
+        if (!signal.aborted) progressRef.current = { signature: querySignature, checkpoint };
+        throw cause;
+      }
 
-      // A completed query should refresh from page one next time. A failed query deliberately
-      // retains this checkpoint so React Query's retry resumes at the failed cursor.
-      progressRef.current = { signature: querySignature, checkpoint: createCursorPageCheckpoint<string>() };
+      if (!signal.aborted) resetProgress();
 
       return { ids: [...new Set(ids)] };
     },
   });
+
+  // A user retry or a later background refetch is a new snapshot, not another automatic attempt.
+  React.useEffect(() => {
+    if (error) resetProgress();
+  }, [error, resetProgress]);
+  const refetch = React.useCallback(() => {
+    resetProgress();
+    return refetchQuery();
+  }, [refetchQuery, resetProgress]);
 
   const entities = useSelector(
     reactive,

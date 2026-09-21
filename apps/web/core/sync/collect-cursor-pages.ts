@@ -15,6 +15,15 @@ export function createCursorPageCheckpoint<T>(): CursorPageCheckpoint<T> {
   return { items: [], seenCursors: new Set(), after: undefined };
 }
 
+/** Give each query execution private mutable progress while retaining the last safe retry point. */
+export function cloneCursorPageCheckpoint<T>(checkpoint: CursorPageCheckpoint<T>): CursorPageCheckpoint<T> {
+  return {
+    items: [...checkpoint.items],
+    seenCursors: new Set(checkpoint.seenCursors),
+    after: checkpoint.after,
+  };
+}
+
 /**
  * Exhaust a forward-only cursor connection without silently accepting a broken cursor chain.
  *

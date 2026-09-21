@@ -17,6 +17,11 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
+function automaticRetryWrapper({ children }: { children: ReactNode }) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: 1, retryDelay: 0 } } });
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
 describe('useEntityScores chunk retries', () => {
   beforeEach(() => {
     mocks.graphql.mockReset();
@@ -30,7 +35,7 @@ describe('useEntityScores chunk retries', () => {
     });
   });
 
-  it('retries only failed score chunks', async () => {
+  it('starts a manual retry from the first score chunk', async () => {
     const ids = Array.from({ length: 101 }, (_, index) => `id-${index}`);
     const { result } = renderHook(() => useEntityScores({ ids }), { wrapper });
 
@@ -47,7 +52,7 @@ describe('useEntityScores chunk retries', () => {
     const lastChunkCalls = mocks.graphql.mock.calls.filter(([options]) =>
       (options as { variables: { ids: string[] } }).variables.ids.includes('id-100')
     );
-    expect(firstChunkCalls).toHaveLength(1);
+    expect(firstChunkCalls).toHaveLength(2);
     expect(lastChunkCalls).toHaveLength(2);
   });
 
@@ -65,5 +70,28 @@ describe('useEntityScores chunk retries', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.rankings.get('id-1')).toBe(42);
     expect(result.current.dataAvailable).toBe(true);
+  });
+
+  it('resumes an automatic retry at the failed score chunk', async () => {
+    const ids = Array.from({ length: 101 }, (_, index) => `id-${index}`);
+    let lastChunkAttempts = 0;
+    mocks.graphql.mockImplementation(({ variables }: { variables: { ids: string[] } }) => {
+      if (variables.ids.includes('id-100') && lastChunkAttempts++ === 0) {
+        return Effect.fail(new Error('transient score failure'));
+      }
+      return Effect.succeed({ scores: new Map(), rankings: new Map() });
+    });
+
+    const { result } = renderHook(() => useEntityScores({ ids }), { wrapper: automaticRetryWrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const firstChunkCalls = mocks.graphql.mock.calls.filter(
+      ([options]) => !(options as { variables: { ids: string[] } }).variables.ids.includes('id-100')
+    );
+    const lastChunkCalls = mocks.graphql.mock.calls.filter(([options]) =>
+      (options as { variables: { ids: string[] } }).variables.ids.includes('id-100')
+    );
+    expect(firstChunkCalls).toHaveLength(1);
+    expect(lastChunkCalls).toHaveLength(2);
   });
 });
