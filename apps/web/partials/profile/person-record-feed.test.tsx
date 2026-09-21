@@ -106,6 +106,17 @@ describe('PersonRecordFeed', () => {
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
   });
 
+  it('uses the record error label when bounded hydration partially fails', () => {
+    const onRetry = vi.fn();
+    renderFeed({ rows: [row('source-1')], isError: true, onRetry });
+
+    expect(screen.getByText('Couldn’t load positions.')).toBeInTheDocument();
+    expect(screen.queryByText('Couldn’t load more positions.')).not.toBeInTheDocument();
+
+    screen.getByRole('button', { name: 'Try again' }).click();
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
   it('says nothing about a later page while one is still in flight', () => {
     renderFeed({ rows: [row('claim-1')], isError: true, isFetchingNextPage: true, fetchNextPage: () => {} });
 

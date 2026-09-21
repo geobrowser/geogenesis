@@ -59,10 +59,11 @@ describe('ClaimSourcesTab', () => {
       rows: mocks.rows,
       isError: true,
       isFetchingNextPage: false,
-      fetchNextPage: mocks.refetch,
+      onRetry: mocks.refetch,
     });
+    expect(mocks.feed?.fetchNextPage).toBeUndefined();
 
-    (mocks.feed?.fetchNextPage as () => void)();
+    (mocks.feed?.onRetry as () => void)();
     expect(mocks.refetch).toHaveBeenCalledTimes(1);
   });
 
