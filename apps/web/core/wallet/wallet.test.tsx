@@ -33,9 +33,9 @@ vi.mock('./geo-chain', () => ({ GEOGENESIS: {} }));
 afterEach(cleanup);
 
 describe('GeoConnectButton', () => {
-  it('matches the Debate button height on mobile', () => {
+  it('matches the Debate button height', () => {
     render(<GeoConnectButton />);
 
-    expect(screen.getByRole('button', { name: 'Log in' })).toHaveClass('mobile:h-7', 'mobile:py-0');
+    expect(screen.getByRole('button', { name: 'Log in' })).toHaveClass('h-7', '!py-0');
   });
 });
