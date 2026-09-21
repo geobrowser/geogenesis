@@ -81,6 +81,7 @@ function controllerFixture(overrides: {
   autoplayBlocked?: boolean;
   playing?: boolean;
   playbackEnded?: boolean;
+  subtitle?: string | null;
 }) {
   return {
     slot1VideoRef: { current: null },
@@ -102,7 +103,7 @@ function controllerFixture(overrides: {
     timelineSeconds: 60,
     turnState: { slot: overrides.turnSlot, seconds: 10, progress: 0.5 },
     activeSlot: overrides.turnSlot,
-    subtitle: null,
+    subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
     togglePlayback: vi.fn(),
     playFromStart: vi.fn(),
@@ -164,6 +165,43 @@ describe('player layout', () => {
     );
     expect(tiles).toHaveLength(2);
     expect(tiles.every(tile => tile?.className.includes('aspect-480/289'))).toBe(true);
+  });
+});
+
+describe('reduced overlays', () => {
+  it('removes inline claim cards while leaving claim details to the card action', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.ticker = {
+      ...emptyTicker(),
+      cardsBySlot: new Map([[1, [{}]]]),
+    };
+
+    const { queryByTestId } = render(<DebateFeedPlayer debate={debate} active reducedOverlays votes={votes} />);
+
+    expect(queryByTestId('claim-stack')).toBeNull();
+  });
+
+  it('shows subtitles only for an active, playing, muted compact debate', () => {
+    const subtitle = 'A complete subtitle';
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, subtitle });
+    const { queryByText, rerender } = render(<DebateFeedPlayer debate={debate} active reducedOverlays votes={votes} />);
+    expect(queryByText(subtitle)).not.toBeNull();
+
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, subtitle });
+    rerender(<DebateFeedPlayer debate={debate} active reducedOverlays votes={votes} />);
+    expect(queryByText(subtitle)).toBeNull();
+
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, subtitle });
+    rerender(<DebateFeedPlayer debate={debate} active reducedOverlays votes={votes} />);
+    expect(queryByText(subtitle)).toBeNull();
+
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, subtitle });
+    rerender(<DebateFeedPlayer debate={debate} active={false} reducedOverlays votes={votes} />);
+    expect(queryByText(subtitle)).toBeNull();
+
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, subtitle });
+    rerender(<DebateFeedPlayer debate={debate} active votes={votes} />);
+    expect(queryByText(subtitle)).not.toBeNull();
   });
 });
 

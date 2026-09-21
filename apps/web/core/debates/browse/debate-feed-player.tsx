@@ -25,6 +25,8 @@ const CENTERED_PLAYBACK_CONTROL_CLASS =
 type DebateFeedPlayerProps = {
   debate: Debate;
   active: boolean;
+  /** Remove claim overlays and suppress audible subtitles in constrained card layouts. */
+  reducedOverlays?: boolean;
   /**
    * Load this debate's recordings without playing them — for the card the viewer is about to
    * reach. Resolving the two signed URLs is a round trip each, and until they land
@@ -34,7 +36,12 @@ type DebateFeedPlayerProps = {
   preload?: boolean;
 };
 
-export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeedPlayerProps) {
+export function DebateFeedPlayer({
+  debate,
+  active,
+  preload = false,
+  reducedOverlays = false,
+}: DebateFeedPlayerProps) {
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
@@ -110,7 +117,7 @@ export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeed
   const ticker = useDebateClaimTicker(debate, {
     playheadMs: playheadSeconds * 1000,
     timelineMs: timelineSeconds * 1000,
-    enabled: active || preload,
+    enabled: (active || preload) && !reducedOverlays,
   });
 
   const showReplay = ready && playbackEnded;
@@ -223,6 +230,7 @@ export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeed
    * backlog are held up here, and a stack that has gone cannot release either one.
    */
   const stackShownFor = (slot: number) => {
+    if (reducedOverlays) return false;
     if (playbackEnded) return false;
     return (ticker.cardsBySlot.get(slot)?.length ?? 0) > 0 || (ticker.historyBySlot.get(slot)?.length ?? 0) > 0;
   };
@@ -255,6 +263,7 @@ export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeed
   }, [slot1StackShown, slot2StackShown]);
 
   const claimsFor = (slot: number) => {
+    if (reducedOverlays) return null;
     const cards = ticker.cardsBySlot.get(slot) ?? [];
     const history = ticker.historyBySlot.get(slot) ?? [];
     if (!stackShownFor(slot)) return null;
@@ -419,7 +428,7 @@ export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeed
               <FeedScrubber
                 currentTime={playheadSeconds}
                 duration={timelineSeconds}
-                markers={ticker.markers}
+                markers={reducedOverlays ? [] : ticker.markers}
                 onSeek={seekBoth}
                 onScrubStart={beginScrub}
                 onScrubEnd={endScrub}
@@ -452,7 +461,7 @@ export function DebateFeedPlayer({ debate, active, preload = false }: DebateFeed
           would only loosen the pill around the same one line. A ~355px phone tile leaves 236px,
           which is where a segment starts folding onto a second line and taking the caption off the
           seam. */}
-      {subtitle && (
+      {subtitle && active && playing && (!reducedOverlays || mutedByUser) && (
         <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
           {subtitle}
         </span>

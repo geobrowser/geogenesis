@@ -317,13 +317,22 @@ export function DebateExploreFeedCard({
             height budget is calculated against — a third line is 23px the viewport was not
             promised. Only the debate card asks for it, because only the debate card has fixed
             aspect-ratio media whose height follows from the space the title leaves it. */}
-        <ExploreCardTitle item={item} opensSidePanel={titleOpensSidePanel} clamped />
+        <ExploreCardTitle
+          item={item}
+          opensSidePanel={titleOpensSidePanel}
+          clamped
+          showFullTextOnHover={compactChrome}
+        />
 
         <div onClickCapture={() => onPlaybackRequest?.(debateId)}>
           {mediaMounted ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
             // that same window unmounts this subtree instead of retaining two paused videos forever.
-            <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} />
+            <DebateCardVideos
+              debate={readyDebate}
+              active={active && playbackAllowed}
+              reducedOverlays={compactChrome}
+            />
           ) : (
             <DebateVideoSkeleton />
           )}
@@ -376,8 +385,16 @@ export function DebateExploreFeedCard({
 // is a boolean, so on a change that is only about the panel this skips the player and its playback
 // hooks entirely. (A re-render never interrupted playback — the <video> keeps its identity — but
 // there is no reason to re-run the whole subtree for a flag it does not read.)
-const DebateCardVideos = React.memo(function DebateCardVideos({ debate, active }: { debate: Debate; active: boolean }) {
-  return <DebateFeedPlayer debate={debate} active={active} preload />;
+const DebateCardVideos = React.memo(function DebateCardVideos({
+  debate,
+  active,
+  reducedOverlays,
+}: {
+  debate: Debate;
+  active: boolean;
+  reducedOverlays: boolean;
+}) {
+  return <DebateFeedPlayer debate={debate} active={active} preload reducedOverlays={reducedOverlays} />;
 });
 
 function DebateVideoSkeleton() {

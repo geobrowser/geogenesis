@@ -266,6 +266,7 @@ describe('DebateExploreFeedCard', () => {
 
     expect(screen.queryByText('Debate')).toBeNull();
     expect(screen.getByRole('heading', { name: CLAIM_NAME })).toHaveClass('line-clamp-2');
+    expect(screen.getByRole('heading', { name: CLAIM_NAME })).toHaveAttribute('title', CLAIM_NAME);
     expect(screen.getByText('Fashion').closest('div')).toHaveClass('flex-nowrap', 'overflow-hidden');
   });
 
