@@ -96,6 +96,10 @@ export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'positions' | 'pe
 /** `null` while the debates matchmaking hub is closed. */
 export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
 
+export type OpponentLeftNotice = { recordingDiscarded: boolean };
+
+export const opponentLeftNoticeAtom = atom<OpponentLeftNotice | null>(null);
+
 /**
  * The hub's filter selections, held outside the tabs that draw them (GEO-2850).
  *
