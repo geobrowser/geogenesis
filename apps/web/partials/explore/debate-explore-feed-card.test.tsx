@@ -339,6 +339,17 @@ describe('DebateExploreFeedCard', () => {
     expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
   });
 
+  it('does not request playback from a loading skeleton that may resolve to the fallback', () => {
+    const onPlaybackRequest = vi.fn();
+    const { container } = renderCard({ onPlaybackRequest });
+
+    const skeleton = container.querySelector<HTMLElement>('[aria-hidden="true"] .animate-pulse')?.parentElement;
+    expect(skeleton).not.toBeNull();
+    fireEvent.click(skeleton as HTMLElement);
+
+    expect(onPlaybackRequest).not.toHaveBeenCalled();
+  });
+
   it('evicts the player outside the media window and remounts it on reverse scroll', () => {
     mocks.debateQuery = { data: watchableDebate(), isError: false };
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };

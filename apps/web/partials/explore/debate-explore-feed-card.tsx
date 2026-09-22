@@ -324,7 +324,7 @@ export function DebateExploreFeedCard({
           showFullTextOnHover={compactChrome}
         />
 
-        <div onClickCapture={() => onPlaybackRequest?.(debateId)}>
+        <div onClickCapture={mediaMounted ? () => onPlaybackRequest?.(debateId) : undefined}>
           {mediaMounted ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
             // that same window unmounts this subtree instead of retaining two paused videos forever.
