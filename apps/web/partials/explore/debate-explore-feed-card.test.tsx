@@ -27,6 +27,7 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 const mocks = vi.hoisted(() => ({
   debateQuery: { data: undefined as Debate | undefined, isError: false },
   mediaQuery: { data: undefined as { artifacts: { kind: string }[] } | undefined, isError: false },
+  playerToggle: vi.fn(),
 }));
 
 type ObserverRecord = {
@@ -76,11 +77,13 @@ vi.mock('~/core/debates/browse/debate-feed-player', () => ({
     active: boolean;
     reducedOverlays?: boolean;
   }) => (
-    <div
+    <button
+      type="button"
       data-testid="player"
       data-debate={debate.id}
       data-active={active}
       data-reduced-overlays={reducedOverlays ? 'true' : 'false'}
+      onClick={mocks.playerToggle}
     />
   ),
 }));
@@ -337,6 +340,7 @@ describe('DebateExploreFeedCard', () => {
     const player = screen.getByTestId('player');
     fireEvent.click(player);
     expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
+    expect(mocks.playerToggle).toHaveBeenCalledOnce();
   });
 
   it('brings an inactive player into view before requesting playback', () => {
@@ -355,6 +359,7 @@ describe('DebateExploreFeedCard', () => {
 
     fireEvent.click(screen.getByTestId('player'));
     expect(onPlaybackRequest).not.toHaveBeenCalled();
+    expect(mocks.playerToggle).not.toHaveBeenCalled();
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest', inline: 'center' });
 
     // Ownership transfers only after the observer confirms that the clicked player can run.

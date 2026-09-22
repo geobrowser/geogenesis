@@ -214,13 +214,18 @@ export function DebateExploreFeedCard({
     onPlaybackRequest(debateId);
   }, [active, debateId, mediaMounted, onPlaybackRequest]);
 
-  const requestPlayback = () => {
+  const requestPlayback = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!onPlaybackRequest) return;
     if (active) {
       pendingPlaybackRequestRef.current = false;
       onPlaybackRequest(debateId);
       return;
     }
+
+    // This first click activates the card; it must not also reach the player's full-tile toggle
+    // (or another media control) while the player is still inactive and denied by the gate.
+    event.preventDefault();
+    event.stopPropagation();
 
     if (!container) return;
     pendingPlaybackRequestRef.current = true;
