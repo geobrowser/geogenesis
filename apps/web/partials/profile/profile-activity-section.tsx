@@ -533,19 +533,6 @@ function ActivityGallery({
           <span aria-hidden className="w-0 shrink-0 md:pr-4" />
         </div>
 
-        {/*
-         * A 40px white fade over the right edge while there is more to scroll: enough to say the
-         * row goes on, narrow enough to leave the cut-off card readable. It sits on the wrapper,
-         * not the scroller, so it stays put while the cards move under it, and it never takes a
-         * click meant for the card beneath.
-         */}
-        {canScrollRight ? (
-          <div
-            aria-hidden
-            data-activity-scroll-fade
-            className="pointer-events-none absolute inset-y-0 right-0 z-20 w-10 bg-linear-to-l from-white to-white/0"
-          />
-        ) : null}
       </div>
     </DebatePlaybackGate>
   );

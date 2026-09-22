@@ -26,13 +26,7 @@ import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity
 import { useValue } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
-import {
-  Button,
-  PILL_BUTTON_SECONDARY_CLASS_NAME,
-  SmallButton,
-  SquareButton,
-  buttonClassNames,
-} from '~/design-system/button';
+import { Button, PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton, SquareButton } from '~/design-system/button';
 import { ClampedText } from '~/design-system/clamped-text';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -56,9 +50,8 @@ export type ProfileRailProps = ProfileRailFacts & {
 /**
  * The facts a profile states about an account (GEO-2859).
  *
- * Three sections, in the order a reader wants them: where this person works in
- * the graph, how to reach them, then the facts — ending in the space's own
- * record, folded away.
+ * Three sections: who this person is — ending in the space's own record,
+ * folded away — then how to reach them, then where they work in the graph.
  *
  * Rule-separated sections rather than bordered cards, which is how every other
  * rail in the app composes.
@@ -82,7 +75,6 @@ export function ProfileRail(props: ProfileRailProps) {
 export function ProfileRailSections({
   spaceId,
   personEntityId,
-  types,
   links,
   systemEntityId,
   address,
@@ -100,7 +92,17 @@ export function ProfileRailSections({
     // and space rails draw (`SideRailSections`). Spacing lives on the sections
     // rather than the rules, because any of them can be absent.
     <div className="flex flex-col divide-y divide-divider [&>*]:py-6 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
-      {facts.spaces.length > 0 && <SpacesSection spaces={facts.spaces} />}
+      <AboutSection
+        facts={facts}
+        isLoading={isLoading}
+        isError={isError}
+        positionsCount={positionsCount}
+        spaceId={spaceId}
+        personEntityId={personEntityId}
+        systemEntityId={systemEntityId}
+        address={address}
+        spaceType={spaceType}
+      />
       {personEntityId ? (
         <LinksSection links={links} spaceId={spaceId} personEntityId={personEntityId} />
       ) : (
@@ -108,18 +110,7 @@ export function ProfileRailSections({
         // nowhere to put a link even for its owner.
         links.length > 0 && <LinksSection links={links} spaceId={spaceId} personEntityId={''} />
       )}
-      <AboutSection
-        facts={facts}
-        isLoading={isLoading}
-        isError={isError}
-        positionsCount={positionsCount}
-        types={types}
-        spaceId={spaceId}
-        personEntityId={personEntityId}
-        systemEntityId={systemEntityId}
-        address={address}
-        spaceType={spaceType}
-      />
+      {facts.spaces.length > 0 && <SpacesSection spaces={facts.spaces} />}
     </div>
   );
 }
@@ -400,7 +391,6 @@ function AboutSection({
   isLoading,
   isError,
   positionsCount,
-  types,
   spaceId,
   personEntityId,
   systemEntityId,
@@ -413,7 +403,6 @@ function AboutSection({
   isError: boolean;
   /** Positions actually held, or null while the vote table is still out. */
   positionsCount: number | null;
-  types: ProfileRailProps['types'];
   spaceId: string;
   personEntityId: string | null;
   systemEntityId: string;
@@ -460,24 +449,6 @@ function AboutSection({
         {joined && <Fact label="Joined" value={elapsed ? `${joined} · ${elapsed}` : joined} />}
 
         <Fact label="Space type" value={spaceType === 'PERSONAL' ? 'Personal' : 'DAO'} />
-
-        {types.length > 0 && (
-          <Row label="Types">
-            {/* The secondary pill, as the Spaces "See all" button draws it —
-                white, grey outline, dark on hover. */}
-            <span className="flex flex-wrap justify-end gap-1">
-              {types.map(type => (
-                <Link
-                  key={type.id}
-                  href={NavUtils.toEntity(spaceId, type.id)}
-                  className={buttonClassNames(PILL_BUTTON_SECONDARY_CLASS_NAME)({ variant: 'secondary' })}
-                >
-                  {type.name ?? 'Untitled'}
-                </Link>
-              ))}
-            </span>
-          </Row>
-        )}
 
         {facts.verifiedBy.length > 0 && (
           <Row label="Verified by">

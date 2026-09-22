@@ -466,8 +466,6 @@ describe('ProfileActivitySection', () => {
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
     const next = screen.getByRole('button', { name: 'Next page' });
     expect(next).toBeEnabled();
-    // More to the right, so the edge fades.
-    expect(document.querySelector('[data-activity-scroll-fade]')).not.toBeNull();
     fireEvent.click(next);
     expect(scroller.scrollBy).toHaveBeenCalledWith({ left: 276, behavior: 'smooth' });
 
@@ -482,8 +480,6 @@ describe('ProfileActivitySection', () => {
     fireEvent.scroll(scroller);
     await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
     expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
-    // Nothing further right: no fade over the last card.
-    expect(document.querySelector('[data-activity-scroll-fade]')).toBeNull();
   });
 
   it('hands autoplay to the next visible debate when the current one scrolls out', async () => {
