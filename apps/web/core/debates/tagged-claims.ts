@@ -258,7 +258,17 @@ function decodeTaggedClaimsPage(data: TaggedClaimsQuery) {
  * counted over the topic selection — and each picked topic comes back with its current result
  * count, which is what lets it be un-picked.
  */
-function taggedEntityFilter(
+/**
+ * The clause that says "tagged with this, in these spaces, carrying these topics, matching this
+ * search" — as an `EntityFilter`.
+ *
+ * Exported because a space's claims feed orders the same corpus by its own `orderBy` rather than
+ * going through {@link useTaggedClaims}, and counts its topic menu through
+ * {@link useTaggedTopicFacet}, which applies this. A second hand-written copy of the clause would
+ * be a list and a menu that disagree about what is in it — which is exactly the bug the space
+ * scoping below was added to fix, one layer down.
+ */
+export function taggedEntityFilter(
   tagId: string,
   filters: TaggedClaimFilters,
   /**

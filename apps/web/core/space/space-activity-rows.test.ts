@@ -3,14 +3,17 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { print } from 'graphql';
 import { describe, expect, it, vi } from 'vitest';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { TAG_PROPERTY_ID } from '~/core/constants';
+import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { SCORE_SYSTEM_PROPERTY, TAG_PROPERTY_ID } from '~/core/constants';
 import { DEBATE_TAG_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { EXPLORE_ENTITY_NAME_PROPERTY_ID } from '~/core/explore/explore-constants';
 
 import {
+  SPACE_ACTIVITY_SORTS,
   decodeSpaceActivityRows,
+  spaceActivityRowsByScoreDocument,
   spaceActivityRowsDocument,
+  spaceActivityRowsDocumentFor,
   spaceActivityRowsFilter,
   spaceActivityRowsVariables,
 } from './space-activity-rows';
@@ -55,18 +58,24 @@ function entity(id: string, spaces: string[]) {
 
 describe('spaceActivityRowsDocument', () => {
   /**
-   * The whole point of this module. Ordering by the ranking score directly is what reaches every
-   * row rather than only the ones the ranked-feed connection has already scored — measured against
-   * one space, 611 claims against 262.
+   * The whole point of this module. Asking `entitiesConnection` for the ordering directly reaches
+   * every row, where the ranked-feed connection returns only the ones it has already scored —
+   * measured against one space, 611 claims against 262. The order itself is a variable, so the
+   * sorts below are what pin which one each option sends.
    */
-  it('orders by ranking score descending', () => {
-    expect(print(spaceActivityRowsDocument)).toContain('RANKING_SCORE_DESC');
-  });
-
-  it('pages by cursor off entitiesConnection', () => {
+  it('takes its ordering as a variable, on entitiesConnection', () => {
     const printed = print(spaceActivityRowsDocument);
 
     expect(printed).toContain('entitiesConnection');
+    expect(printed).toContain('$orderBy: [EntitiesOrderBy!]');
+  });
+
+  it.each([
+    ['ranked', spaceActivityRowsDocument],
+    ['scored', spaceActivityRowsByScoreDocument],
+  ])('pages the %s connection by cursor', (_label, document) => {
+    const printed = print(document);
+
     expect(printed).toContain('$after: Cursor');
     expect(printed).toContain('hasNextPage');
     expect(printed).toContain('endCursor');
@@ -75,7 +84,13 @@ describe('spaceActivityRowsDocument', () => {
 
 describe('spaceActivityRowsVariables', () => {
   it('scopes the connection to this space and this one type', () => {
-    const debates = spaceActivityRowsVariables({ spaceId: SPACE, kind: 'debates', first: 50, after: null });
+    const debates = spaceActivityRowsVariables({
+      spaceId: SPACE,
+      kind: 'debates',
+      sort: 'best',
+      first: 50,
+      after: null,
+    });
 
     expect(debates).toMatchObject({
       first: 50,
@@ -87,15 +102,95 @@ describe('spaceActivityRowsVariables', () => {
   });
 
   it('selects Claim for the claims kind', () => {
-    const claims = spaceActivityRowsVariables({ spaceId: SPACE, kind: 'claims', first: 50, after: null });
+    const claims = spaceActivityRowsVariables({ spaceId: SPACE, kind: 'claims', sort: 'best', first: 50, after: null });
 
     expect(claims).toMatchObject({ typeIds: { in: [CLAIM_TYPE_ID] } });
   });
 
   it('carries the cursor through', () => {
-    const next = spaceActivityRowsVariables({ spaceId: SPACE, kind: 'claims', first: 50, after: 'cursor-2' });
+    const next = spaceActivityRowsVariables({
+      spaceId: SPACE,
+      kind: 'claims',
+      sort: 'best',
+      first: 50,
+      after: 'cursor-2',
+    });
 
     expect(next).toMatchObject({ after: 'cursor-2' });
+  });
+});
+
+describe('sorts', () => {
+  /**
+   * Best and New are two orderings of one connection; Top ranks by the integer `Score` property,
+   * which `entitiesConnection` cannot order on, so it is a different connection. All three are
+   * Explore's own, so a reader arriving from that dropdown finds the one they know.
+   */
+  it('offers Explore’s three', () => {
+    expect([...SPACE_ACTIVITY_SORTS]).toEqual(['best', 'new', 'top']);
+  });
+
+  it('orders Best by ranking score and New by recency, on the same connection', () => {
+    expect(
+      spaceActivityRowsVariables({ spaceId: SPACE, kind: 'claims', sort: 'best', first: 50, after: null })
+    ).toMatchObject({
+      orderBy: ['RANKING_SCORE_DESC'],
+    });
+    expect(
+      spaceActivityRowsVariables({ spaceId: SPACE, kind: 'claims', sort: 'new', first: 50, after: null })
+    ).toMatchObject({
+      orderBy: ['CREATED_AT_DESC'],
+    });
+    expect(spaceActivityRowsDocumentFor('best')).toBe(spaceActivityRowsDocument);
+    expect(spaceActivityRowsDocumentFor('new')).toBe(spaceActivityRowsDocument);
+  });
+
+  it('sends Top to the by-property connection, scored descending', () => {
+    const top = spaceActivityRowsVariables({ spaceId: SPACE, kind: 'claims', sort: 'top', first: 50, after: null });
+
+    expect(spaceActivityRowsDocumentFor('top')).toBe(spaceActivityRowsByScoreDocument);
+    expect(print(spaceActivityRowsByScoreDocument)).toContain('entitiesOrderedByPropertyConnection');
+    expect(top).toMatchObject({
+      propertyId: SCORE_SYSTEM_PROPERTY,
+      dataType: 'integer',
+      sortDirection: 'DESC',
+      // Unscored claims are unioned in rather than dropped, so Top ranks the whole set — the same
+      // argument Explore's Top sends, and the same reason Best keeps its unscored rows.
+      includeWithoutValue: true,
+    });
+    expect(top).not.toHaveProperty('orderBy');
+  });
+
+  // The two connections take space and type in different shapes; sending one's to the other
+  // silently drops the scoping and serves the whole graph.
+  it('scopes both connections to this space and type, each in its own shape', () => {
+    expect(
+      spaceActivityRowsVariables({ spaceId: SPACE, kind: 'claims', sort: 'best', first: 50, after: null })
+    ).toMatchObject({
+      spaceIds: { in: [SPACE] },
+      typeIds: { in: [CLAIM_TYPE_ID] },
+    });
+    expect(
+      spaceActivityRowsVariables({ spaceId: SPACE, kind: 'claims', sort: 'top', first: 50, after: null })
+    ).toMatchObject({
+      spaceIds: [SPACE],
+      typeIds: [CLAIM_TYPE_ID],
+    });
+  });
+
+  it('carries the same filter whichever sort is asked for', () => {
+    const filters = { topicIds: ['t1'], searchClaimIds: null };
+    for (const sort of SPACE_ACTIVITY_SORTS) {
+      const vars = spaceActivityRowsVariables({
+        spaceId: SPACE,
+        kind: 'claims',
+        sort,
+        first: 50,
+        after: null,
+        filters,
+      });
+      expect(vars.filter).toEqual(spaceActivityRowsFilter(SPACE, 'claims', filters));
+    }
   });
 });
 
@@ -122,7 +217,9 @@ describe('spaceActivityRowsFilter', () => {
    * corpora.
    */
   it('requires the debate tag on claims, applied in this space', () => {
-    expect(spaceActivityRowsFilter(SPACE, 'claims')).toMatchObject({
+    const clauses = (spaceActivityRowsFilter(SPACE, 'claims') as { and: Record<string, any>[] }).and;
+
+    expect(clauses).toContainEqual({
       relations: {
         some: {
           typeId: { is: TAG_PROPERTY_ID },
@@ -135,7 +232,37 @@ describe('spaceActivityRowsFilter', () => {
 
   // A debate is published into the space by the acceptor and is not tagged by anyone.
   it('asks for no tag on debates', () => {
-    expect(spaceActivityRowsFilter(SPACE, 'debates')).not.toHaveProperty('relations');
+    expect(spaceActivityRowsFilter(SPACE, 'debates')).not.toHaveProperty('and');
+  });
+
+  // AND, not OR (GEO-2696): a claim has to carry every picked topic, which is what makes the
+  // co-occurrence menu beside the list honest about what ticking another one will do.
+  it('requires every picked topic, one clause each', () => {
+    const filter = spaceActivityRowsFilter(SPACE, 'claims', { topicIds: ['t1', 't2'], searchClaimIds: null });
+    const clauses = (filter as { and: Record<string, any>[] }).and;
+
+    const topicTargets = clauses
+      .map(clause => clause.relations?.some)
+      .filter(some => some?.typeId?.is === TOPICS_PROPERTY_ID)
+      .map(some => some.toEntityId.is);
+
+    expect(topicTargets).toEqual(['t1', 't2']);
+  });
+
+  /**
+   * `null` and `[]` are opposite answers and only one of them narrows: nothing asked leaves the
+   * list alone, nothing matched empties it. Collapsing the two shows the whole corpus for a search
+   * that found nothing.
+   */
+  it('narrows by the ids a search matched, and not at all when none was asked', () => {
+    const searched = spaceActivityRowsFilter(SPACE, 'claims', { topicIds: [], searchClaimIds: ['c1', 'c2'] });
+    expect((searched as { and: Record<string, any>[] }).and).toContainEqual({ id: { in: ['c1', 'c2'] } });
+
+    const empty = spaceActivityRowsFilter(SPACE, 'claims', { topicIds: [], searchClaimIds: [] });
+    expect((empty as { and: Record<string, any>[] }).and).toContainEqual({ id: { in: [] } });
+
+    const unsearched = spaceActivityRowsFilter(SPACE, 'claims', { topicIds: [], searchClaimIds: null });
+    expect((unsearched as { and: Record<string, any>[] }).and.some(clause => 'id' in clause)).toBe(false);
   });
 });
 

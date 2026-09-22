@@ -7,7 +7,12 @@ import cx from 'classnames';
 import { buildClaimDraft } from '~/core/claims/claim-draft';
 import { TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { useInfiniteSentinel } from '~/core/profile/use-infinite-sentinel';
-import { useSpaceActivityRowsInfinite } from '~/core/space/use-space-debate-activity';
+import { type SpaceActivitySort } from '~/core/space/space-activity-rows';
+import {
+  useSpaceActivityRowsInfinite,
+  useSpaceClaimSearch,
+  useSpaceClaimTopicFacet,
+} from '~/core/space/use-space-debate-activity';
 import { useDiff } from '~/core/state/diff-store';
 import { useMutate } from '~/core/sync/use-mutate';
 
@@ -18,6 +23,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
+import { SpaceClaimsFilters } from '~/partials/space-page/space-claims-filters';
 
 type ClaimsPageClientProps = {
   spaceId: string;
@@ -42,25 +48,22 @@ const relatedFields: RelatedField[] = [
 ];
 
 /**
- * A space's claims, ranked, as their own full-bleed browse surface.
+ * A space's claims, ranked, searchable and filterable, as their own full-bleed browse surface.
  *
  * This was a fixed list of up to fifty claims in whatever order the entity store happened to hold
  * them, framed inside the space's tab bar. It is now the destination of "See all claims", so it has
- * to answer the question that link asks — what is worth reading here — which means ranked order,
- * no floor on how far you can scroll, and a surface of its own rather than a tab of the space page.
+ * to answer the question that link asks — what is worth reading here — which means an order the
+ * reader picks, a way to narrow it, no floor on how far you can scroll, and a surface of its own
+ * rather than a tab of the space page.
  *
  * Edge-to-edge like the debates feed on the sibling route: `Main` drops its max-width and padding
  * here and `SpaceChromeGate` strips the space header and tabs, so the column and the top padding
  * below are this page's to supply. The app navbar stays, which is the way back.
  *
- * The rows come from `entitiesConnection` ordered by ranking score, which is the same ordering the
- * Activity card above it draws its six from. Deliberately not the explore feed: that path reaches
- * only the claims the ranked-feed connection has scored — 262 of this space's 611, measured — where
- * this returns all of them, unscored ones last. It is also what the count on the pill is measured
- * through, so the number and the list it leads to are the same corpus.
- *
- * Like Explore, the list is the claims a curator has tagged `Debate` (GEO-2835) rather than every
- * claim in the space: these surfaces are about debate activity.
+ * Search, topics and the tag gate all run server-side through the same `taggedEntityFilter` clause
+ * the topic menu is counted through, so the menu and the list cannot disagree about what is in the
+ * corpus. Like Explore, the list is the claims a curator has tagged `Debate` (GEO-2835) rather than
+ * every claim in the space: this surface is about debate activity.
  *
  * The staging form stays. It is unrelated to how the list is ordered, and it is the only place in
  * the app that opens a claim proposal from a space. What it no longer does is show the staged claim
@@ -69,10 +72,17 @@ const relatedFields: RelatedField[] = [
  */
 export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
   const [formOpen, setFormOpen] = React.useState(false);
-  const { rows, isLoading, isError, hasNextPage, isFetchingNextPage, fetchNextPage } = useSpaceActivityRowsInfinite(
-    spaceId,
-    'claims'
-  );
+  const [sort, setSort] = React.useState<SpaceActivitySort>('best');
+  const [search, setSearch] = React.useState('');
+  const [topicIds, setTopicIds] = React.useState<string[]>([]);
+
+  const { claimIds, isPending: isSearchPending } = useSpaceClaimSearch(search, true);
+  const filters = React.useMemo(() => ({ topicIds, searchClaimIds: claimIds }), [claimIds, topicIds]);
+
+  const { rows, isLoading, isError, isPending, hasNextPage, isFetchingNextPage, fetchNextPage } =
+    useSpaceActivityRowsInfinite(spaceId, 'claims', sort, filters);
+  const facet = useSpaceClaimTopicFacet(spaceId, filters, true);
+
   const sentinelRef = useInfiniteSentinel({
     hasNextPage,
     isFetchingNextPage,
@@ -80,8 +90,17 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
     isError,
   });
 
+  // The rows on screen describe the previous question while the next answer is out. Dimming says
+  // so without taking them away, which is what an empty list between two filters would imply.
+  const isStale = isPending || isSearchPending;
+  const hasNarrowed = search.trim().length > 0 || topicIds.length > 0;
+
+  const toggleTopic = React.useCallback((topicId: string) => {
+    setTopicIds(current => (current.includes(topicId) ? current.filter(id => id !== topicId) : [...current, topicId]));
+  }, []);
+
   return (
-    <div className="mx-auto w-full max-w-[880px] px-4 pt-8 pb-16 md:px-4">
+    <div className="mx-auto w-full max-w-[880px] px-4 pt-8 pb-16">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <Text as="h2" variant="smallTitle" color="text">
           Claims
@@ -93,15 +112,31 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
         )}
       </div>
 
-      {formOpen && <AddClaimForm spaceId={spaceId} onCancel={() => setFormOpen(false)} />}
+      {formOpen && (
+        <div className="mb-6">
+          <AddClaimForm spaceId={spaceId} onCancel={() => setFormOpen(false)} />
+        </div>
+      )}
 
-      <div className={cx('mt-5', formOpen && 'mt-6')}>
+      <SpaceClaimsFilters
+        search={search}
+        onSearchChange={setSearch}
+        sort={sort}
+        onSortChange={setSort}
+        topicIds={topicIds}
+        onTopicToggle={toggleTopic}
+        onTopicsClear={() => setTopicIds([])}
+        topics={facet.topics}
+        countsPending={!facet.settled}
+      />
+
+      <div className={cx('mt-5 transition-opacity', isStale && 'opacity-60')}>
         {isError && rows.length === 0 ? (
           <Text color="grey-04">Could not load claims.</Text>
         ) : isLoading ? (
           <ClaimsSkeleton />
         ) : rows.length === 0 ? (
-          <Text color="grey-04">No claims here yet.</Text>
+          <Text color="grey-04">{hasNarrowed ? 'No claims match these filters.' : 'No claims here yet.'}</Text>
         ) : (
           rows.map(row => (
             <ExploreFeedCard

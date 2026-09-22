@@ -16,7 +16,10 @@ const mocks = vi.hoisted(() => ({
   bumpReviewVersion: vi.fn(),
   setIsReviewOpen: vi.fn(),
   fetchNextPage: vi.fn(),
-  hookCalls: [] as { spaceId: string; kind: string }[],
+  hookCalls: [] as { spaceId: string; kind: string; sort: string; filters: any }[],
+  searchCalls: [] as string[],
+  topics: [] as { id: string; name: string | null; count: number }[],
+  searchClaimIds: null as string[] | null,
   rows: [] as { entityId: string; spaceId: string }[],
   listState: { isLoading: false, isError: false, hasNextPage: false, isFetchingNextPage: false },
 }));
@@ -27,16 +30,22 @@ const mocks = vi.hoisted(() => ({
  * its arguments recorded.
  */
 vi.mock('~/core/space/use-space-debate-activity', () => ({
-  useSpaceActivityRowsInfinite: (spaceId: string, kind: string) => {
-    mocks.hookCalls.push({ spaceId, kind });
+  useSpaceActivityRowsInfinite: (spaceId: string, kind: string, sort: string, filters: unknown) => {
+    mocks.hookCalls.push({ spaceId, kind, sort, filters });
     return {
       rows: mocks.rows,
       isLoading: mocks.listState.isLoading,
       isError: mocks.listState.isError,
+      isPending: false,
       hasNextPage: mocks.listState.hasNextPage,
       isFetchingNextPage: mocks.listState.isFetchingNextPage,
       fetchNextPage: mocks.fetchNextPage,
     };
+  },
+  useSpaceClaimTopicFacet: () => ({ topics: mocks.topics, isLoading: false, settled: true }),
+  useSpaceClaimSearch: (search: string) => {
+    mocks.searchCalls.push(search);
+    return { claimIds: mocks.searchClaimIds, isPending: false };
   },
 }));
 
@@ -74,10 +83,27 @@ vi.mock('~/design-system/select-entity-compact', () => ({
   ),
 }));
 
+/**
+ * The topic menu's dropdown measures itself to decide where to open. `setupTests.ts` stubs this
+ * globally but is not the file vitest loads — see `vite.config.js`, which points at
+ * `vitest.setup.ts` — so the menu's own tests stub it per file and so does this one.
+ */
+window.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
+
 const asked = () => mocks.hookCalls.at(-1)!;
 
 beforeEach(() => {
   mocks.hookCalls.length = 0;
+  mocks.searchCalls.length = 0;
+  mocks.topics = [
+    { id: 't1', name: 'Governance', count: 12 },
+    { id: 't2', name: 'Safety', count: 5 },
+  ];
+  mocks.searchClaimIds = null;
   mocks.rows = [
     { entityId: 'c1', spaceId: 'space-1' },
     { entityId: 'c2', spaceId: 'space-1' },
@@ -100,14 +126,14 @@ describe('ClaimsPageClient', () => {
   it('asks for this space’s claims', () => {
     render(<ClaimsPageClient spaceId="space-1" />);
 
-    expect(asked()).toEqual({ spaceId: 'space-1', kind: 'claims' });
+    expect(asked()).toMatchObject({ spaceId: 'space-1', kind: 'claims' });
   });
 
   it('follows the space it is given', () => {
     const view = render(<ClaimsPageClient spaceId="space-1" />);
     view.rerender(<ClaimsPageClient spaceId="space-2" />);
 
-    expect(asked()).toEqual({ spaceId: 'space-2', kind: 'claims' });
+    expect(asked()).toMatchObject({ spaceId: 'space-2', kind: 'claims' });
   });
 
   // Every row is this space by construction, so a space chip and a Join button would say the same
@@ -144,6 +170,95 @@ describe('ClaimsPageClient', () => {
     render(<ClaimsPageClient spaceId="space-1" />);
 
     expect(screen.getByText('No claims here yet.')).toBeInTheDocument();
+  });
+
+  // Best is the order the Overview card ranks its six by, so "See all claims" continues that list
+  // rather than opening a different one.
+  it('opens on Best', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(asked()).toMatchObject({ sort: 'best' });
+    expect(screen.getByLabelText('Sort: Best')).toBeInTheDocument();
+  });
+
+  it('re-asks in the picked order', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByLabelText('Sort: Best'));
+    fireEvent.click(screen.getByText('New'));
+
+    expect(asked()).toMatchObject({ sort: 'new' });
+  });
+
+  it('offers Explore’s three sorts', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByLabelText('Sort: Best'));
+
+    // `Best` twice — once in the trigger, once as the ticked option — and the other two once each.
+    expect(screen.getAllByText('Best')).toHaveLength(2);
+    expect(screen.getByText('New')).toBeInTheDocument();
+    expect(screen.getByText('Top')).toBeInTheDocument();
+  });
+
+  it('narrows by a picked topic', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Governance/ }));
+
+    expect(asked().filters).toMatchObject({ topicIds: ['t1'] });
+  });
+
+  // AND, not OR: a claim has to carry every picked topic.
+  it('accumulates picked topics rather than replacing them', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Governance/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Safety/ }));
+
+    expect(asked().filters).toMatchObject({ topicIds: ['t1', 't2'] });
+  });
+
+  it('clears the topic selection', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Governance/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Any topic' }));
+
+    expect(asked().filters).toMatchObject({ topicIds: [] });
+  });
+
+  it('sends what the viewer typed to the search resolver', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'tariffs' } });
+
+    expect(mocks.searchCalls.at(-1)).toBe('tariffs');
+  });
+
+  /**
+   * Search reaches the list as ids, not text (GEO-2898) — resolved against the tagged corpus where
+   * it can be stemmed and ranked. `null` narrows nothing; `[]` means nothing matched.
+   */
+  it('narrows the list by the ids a search matched', () => {
+    mocks.searchClaimIds = ['c9'];
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(asked().filters).toMatchObject({ searchClaimIds: ['c9'] });
+  });
+
+  // An empty list under a filter and an empty space mean different things and need different words.
+  it('distinguishes a filtered-empty list from an empty space', () => {
+    mocks.rows = [];
+    const view = render(<ClaimsPageClient spaceId="space-1" />);
+    expect(screen.getByText('No claims here yet.')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nothing matches' } });
+    expect(screen.getByText('No claims match these filters.')).toBeInTheDocument();
+    view.unmount();
   });
 
   // The staging form is unrelated to how the list is ordered, and it is the only place in the app
