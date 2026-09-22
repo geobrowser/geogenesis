@@ -490,18 +490,15 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
   const scheduleMeasureRef = React.useRef<(() => void) | null>(null);
   const availableRef = React.useRef(availableDebateIds);
   availableRef.current = availableDebateIds;
-  const firstDebateId =
-    rows.find(row => !isClaimRow(row) && availableDebateIds.has(normId(row.entityId)))?.entityId ?? null;
-  const [requestedPlayback, setRequestedPlayback] = React.useState<{ collectionKey: string; debateId: string } | null>(
-    null
-  );
-  const requestedDebateId = requestedPlayback?.collectionKey === collectionKey ? requestedPlayback.debateId : null;
+  // Ownership is state, not a derivation from row order. Once a player starts, a different row
+  // finishing its lookup must not interrupt it; only click, visibility, or unavailability moves it.
+  const [selectedPlaybackId, setSelectedPlaybackId] = React.useState<string | null>(null);
   const allowedDebateId =
-    requestedDebateId &&
-    availableDebateIds.has(normId(requestedDebateId)) &&
-    rows.some(row => !isClaimRow(row) && ID.equals(row.entityId, requestedDebateId))
-      ? requestedDebateId
-      : firstDebateId;
+    selectedPlaybackId &&
+    availableDebateIds.has(normId(selectedPlaybackId)) &&
+    rows.some(row => !isClaimRow(row) && ID.equals(row.entityId, selectedPlaybackId))
+      ? selectedPlaybackId
+      : null;
   const allowedRef = React.useRef(allowedDebateId);
   allowedRef.current = allowedDebateId;
   const [navigation, setNavigation] = React.useState({ left: false, right: false });
@@ -571,7 +568,7 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
       const next = directional ?? candidates.sort((a, b) => b.ratio - a.ratio)[0];
 
       if (next && (!currentId || !ID.equals(next.id, currentId))) {
-        setRequestedPlayback({ collectionKey, debateId: next.id });
+        setSelectedPlaybackId(next.id);
       }
     };
 
@@ -618,17 +615,18 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
 
   const requestPlayback = React.useCallback(
     (debateId: string) => {
-      if (availableRef.current.has(normId(debateId))) setRequestedPlayback({ collectionKey, debateId });
+      if (availableRef.current.has(normId(debateId))) setSelectedPlaybackId(debateId);
     },
-    [collectionKey]
+    []
   );
 
   const setPlaybackAvailable = React.useCallback((debateId: string, available: boolean) => {
     const id = normId(debateId);
-    if (!available) {
-      // An unavailable requested player must not reclaim the gate merely by remounting later.
-      setRequestedPlayback(current => (current && ID.equals(current.debateId, debateId) ? null : current));
-    }
+    setSelectedPlaybackId(current => {
+      if (available) return current ?? debateId;
+      // An unavailable owner must not reclaim the gate merely by remounting later.
+      return current && ID.equals(current, debateId) ? null : current;
+    });
     setAvailableDebateIds(current => {
       if (current.has(id) === available) return current;
 

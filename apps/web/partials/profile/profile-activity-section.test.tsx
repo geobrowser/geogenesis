@@ -283,6 +283,19 @@ describe('ProfileActivitySection', () => {
     expect(screen.getByTestId('playback-gate')).toHaveAttribute('data-allowed-id', 'd2');
   });
 
+  it('keeps the current owner when an earlier debate becomes playable later', () => {
+    activityMocks.unavailableDebateIds.add('d1');
+    const props = { kinds: [kind({ rows: [row('d1'), row('d2')] })] };
+    const view = render(<ProfileActivitySection {...props} />);
+    const gate = screen.getByTestId('playback-gate');
+    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
+
+    activityMocks.unavailableDebateIds.delete('d1');
+    view.rerender(<ProfileActivitySection {...props} />);
+
+    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
+  });
+
   it('reselects a visible debate when the requested player becomes unavailable', async () => {
     const props = { kinds: [kind({ rows: [row('d1'), row('d2'), row('d3')] })] };
     const view = render(<ProfileActivitySection {...props} />);
