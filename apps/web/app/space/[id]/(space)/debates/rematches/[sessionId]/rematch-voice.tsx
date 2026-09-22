@@ -185,13 +185,22 @@ function useMutedNudge(muted: boolean, opponentAudible: boolean, spentRef: React
  * or the session has left a voice-capable status. A denied microphone keeps the room in
  * listen-only mode rather than tearing it down.
  */
-export function RematchVoicePill({
-  session,
-  currentUserId,
-}: {
+type RematchVoicePillProps = {
   session: DebateRematchSession;
   currentUserId: string;
-}) {
+};
+
+export function RematchVoicePill(props: RematchVoicePillProps) {
+  // Next preserves a dynamic route's client component when only `sessionId` changes. Scope all
+  // connection and microphone intent state to the session so a profile challenge cannot inherit
+  // an open microphone from a recorded debate (or leave that recorded-debate rematch muted).
+  return <SessionRematchVoicePill key={props.session.id} {...props} />;
+}
+
+function SessionRematchVoicePill({
+  session,
+  currentUserId,
+}: RematchVoicePillProps) {
   const voiceActive = voiceCapable(session.status);
   const opponent = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
   const local = session.participants.find(participant => participant.user_id === currentUserId) ?? null;

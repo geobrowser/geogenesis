@@ -35,6 +35,7 @@ import {
   debateRoomTabPriority,
 } from '~/core/debates/debate-room-ownership';
 import { DebateVideoTile } from '~/core/debates/debate-video-tile';
+import { debateRematchPath } from '~/core/debates/debate-routes';
 import { debateTurnRole } from '~/core/debates/formats';
 import {
   useAbortDebate,
@@ -292,6 +293,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const connectStartingGenerationRef = React.useRef(0);
   const [rematchConsentRequested, setRematchConsentRequested] = React.useState(false);
   const autoRematchConsentAttemptRef = React.useRef<{ debateId: string; remainingSeconds: number } | null>(null);
+  const rematchLeaveRequestedRef = React.useRef(false);
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
   const [audioMuted, setAudioMuted] = React.useState(false);
   const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
@@ -472,7 +474,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   React.useEffect(() => {
     const session = rematchQuery.data;
     if (!session || !['deciding', 'browsing', 'request_pending'].includes(session.status)) return;
-    router.prefetch(`/space/${session.source_space_id}/debates/rematches/${session.id}`);
+    router.prefetch(debateRematchPath(session));
   }, [rematchQuery.data, router]);
 
   // Publish opt-out in the global upload banner is only offered while the user is on this
@@ -1797,6 +1799,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (debate?.status !== 'thanking' || countdown.effectiveStatus !== 'thanking') return;
     if (countdown.remainingSeconds <= 0 || countdown.remainingSeconds > rematchAutoConsentLeadSeconds) return;
     if (rematchQuery.data?.status !== 'deciding') return;
+    if (rematchLeaveRequestedRef.current) return;
     if (localRematchParticipant?.consented_at || rematchConsentRequested || consentToRematch.isPending) return;
     const attempted = autoRematchConsentAttemptRef.current;
     if (attempted?.debateId === debate.id && attempted.remainingSeconds === countdown.remainingSeconds) return;
@@ -1880,6 +1883,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         await finishLiveDebate();
         return;
       } else if (debate.status === 'thanking' && debate.rematch_session_id) {
+        // Leaving is an explicit opt-out. Record it before persistence, which may take long enough
+        // to cross the automatic-consent boundary while the viewer is still on this screen.
+        rematchLeaveRequestedRef.current = true;
         // A cancelled recording was discarded the moment the cancellation landed, so there is
         // nothing to persist. Insisting anyway fails every time and traps someone who cancelled
         // and then decided against the rematch — the one exit they have left.
@@ -1908,6 +1914,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
       returnFromDebate();
     } catch (error) {
+      rematchLeaveRequestedRef.current = false;
       setRoomError(error instanceof Error ? error.message : 'Could not leave the debate.');
     }
   }, [
@@ -2734,6 +2741,7 @@ function DebateRecordingModal({
               remoteConsented={remoteConsented}
               busy={rematchBusy}
               onConsent={onRequestRematch}
+              countdownLabel={countdown.label}
               remainingSeconds={countdown.remainingSeconds}
               publishing={publishing}
               publishBusy={publishOptOutOffer.busy}
@@ -3070,6 +3078,7 @@ function DebateAgainCard({
   remoteConsented,
   busy,
   onConsent,
+  countdownLabel,
   remainingSeconds,
   publishing,
   publishBusy,
@@ -3080,6 +3089,7 @@ function DebateAgainCard({
   remoteConsented: boolean;
   busy: boolean;
   onConsent: () => void;
+  countdownLabel: string;
   remainingSeconds: number;
   /** Null when there is no recording to opt out of, which is when the row is left off. */
   publishing: boolean | null;
@@ -3126,24 +3136,20 @@ function DebateAgainCard({
           onClick={onConsent}
           disabled={busy || localConsented}
           aria-label={consentLabel}
-          aria-describedby={!busy && !localConsented ? countdownDescriptionId : undefined}
+          aria-describedby={countdownDescriptionId}
           className={cx(
             cardPill,
-            'text-white transition-colors disabled:cursor-default',
-            localConsented ? 'bg-text' : 'bg-text hover:bg-text/90'
+            'bg-text text-white transition-colors disabled:cursor-default',
+            !busy && !localConsented && 'hover:bg-text/90'
           )}
         >
           <span>{consentLabel}</span>
-          {!busy && !localConsented && (
-            <>
-              <span aria-hidden="true" className="text-white/70 tabular-nums">
-                {formatRematchCountdown(remainingSeconds)}
-              </span>
-              <span id={countdownDescriptionId} className="sr-only">
-                {remainingSeconds} seconds remaining
-              </span>
-            </>
-          )}
+          <span aria-hidden="true" className="text-white/70 tabular-nums">
+            {countdownLabel}
+          </span>
+          <span id={countdownDescriptionId} className="sr-only">
+            {remainingSeconds} seconds remaining
+          </span>
         </button>
       </CardRow>
       <CardDivider />
@@ -3161,7 +3167,7 @@ function DebateAgainCard({
   );
 }
 
-function formatRematchCountdown(remainingSeconds: number) {
+function formatCountdownClock(remainingSeconds: number) {
   const seconds = Math.max(0, remainingSeconds);
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
@@ -3469,7 +3475,7 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
 
   if (!countdownWindow || countdownWindow.targetMs === null) {
     return {
-      label: '00:00',
+      label: formatCountdownClock(0),
       remainingSeconds: 0,
       progress: 0,
       activeSlot: countdownWindow?.activeSlot ?? null,
@@ -3492,7 +3498,7 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
   const elapsedMs = startMs !== null ? Math.min(totalMs, Math.max(0, now - startMs)) : 0;
 
   return {
-    label: `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`,
+    label: formatCountdownClock(seconds),
     remainingSeconds: seconds,
     progress: totalMs === 0 ? 0 : elapsedMs / totalMs,
     activeSlot: countdownWindow.activeSlot,
@@ -3787,7 +3793,7 @@ function rematchDestination(session: DebateRematchSession | null | undefined) {
     return `/space/${session.source_space_id}/debates/${session.converted_debate_id}`;
   }
   if (['browsing', 'request_pending'].includes(session.status)) {
-    return `/space/${session.source_space_id}/debates/rematches/${session.id}`;
+    return debateRematchPath(session);
   }
   return null;
 }
