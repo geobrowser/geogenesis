@@ -188,6 +188,10 @@ export function HubMultiFilterMenu<T extends string>({
       open={open}
       onOpenChange={setOpen}
       asChild
+      // The debates hub is docked to the viewport's right, but its filters start at the panel's
+      // left. Viewport-based alignment chooses the trigger's end there and hangs this wide menu
+      // over the page behind the panel; anchoring its start keeps it inside the hub.
+      align="start"
       className="max-w-[280px]"
       trigger={
         <SmallButton icon={<ChevronDownSmall />} className="max-w-[160px]">

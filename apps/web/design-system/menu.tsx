@@ -16,6 +16,8 @@ interface Props {
   trigger: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Pin the content to a trigger edge instead of choosing from the trigger's viewport position. */
+  align?: 'end' | 'center' | 'start';
   sideOffset?: number;
   className?: string;
   /** Override the inner scroll viewport classes (e.g., to set a different max height). */
@@ -61,6 +63,7 @@ export function Menu({
   trigger,
   open,
   onOpenChange,
+  align,
   sideOffset = 8,
   asChild = false,
   className = '',
@@ -78,6 +81,7 @@ export function Menu({
     gap: 8,
     contentElement,
   });
+  const resolvedAlign = align === 'center' ? 'center' : (align ?? adaptiveAlign);
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -93,12 +97,12 @@ export function Menu({
       </Trigger>
       <PopoverContent
         ref={setContentElement}
-        align={adaptiveAlign}
+        align={resolvedAlign}
         side={adaptiveSide}
         sideOffset={sideOffset}
         avoidCollisions={true}
         collisionPadding={8}
-        className={cx(shellStyles({ align: adaptiveAlign }), className)}
+        className={cx(shellStyles({ align: resolvedAlign }), className)}
         onWheel={onMenuWheel}
         onCloseAutoFocus={onCloseAutoFocus}
       >
