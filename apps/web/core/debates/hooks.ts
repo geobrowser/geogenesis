@@ -16,7 +16,7 @@ import * as React from 'react';
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 import type { AvailabilityBlock } from '~/core/availability/blocks';
 import { fromPayload, localTimezone, toPayload } from '~/core/availability/blocks';
-import { PEER_SCHEDULE_DAYS, type PeerSchedule, toPeerSchedule } from '~/core/availability/peer-schedule';
+import { PEER_SCHEDULE_DAYS, toPeerSchedule } from '~/core/availability/peer-schedule';
 
 import {
   type Debate,

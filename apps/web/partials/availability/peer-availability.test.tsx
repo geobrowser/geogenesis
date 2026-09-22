@@ -26,6 +26,7 @@ const schedule = (overrides: Partial<PeerSchedule> = {}): PeerSchedule => ({
   peerTimezone: 'UTC',
   viewerHasSchedule: true,
   peerHasSchedule: true,
+  theirWeekKnown: true,
   slots: [slot(13)],
   ...overrides,
 });
@@ -62,18 +63,9 @@ describe('PeerAvailabilityView', () => {
     expect(screen.getByRole('heading', { name: /user-pee/ })).toBeInTheDocument();
   });
 
-  // The first column is the server's window start, which west of UTC can be the viewer's tomorrow.
-  it('does not head a shifted first column with Today', () => {
-    render(
-      <PeerAvailabilityView
-        schedule={schedule({ viewerTimezone: 'America/Los_Angeles', slots: [slot(13, true, 22)] })}
-        peerName="Ada"
-        now={new Date('2026-09-22T01:00:00Z')}
-      />
-    );
-
-    expect(screen.queryByText('Today')).not.toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Tue Sep 22' })).toBeInTheDocument();
+  it('shows the unknown-week state on a deployment that cannot send it', () => {
+    setup({ theirWeekKnown: false, slots: [] });
+    expect(screen.getByText(/Can’t show Ada’s week from this server yet/)).toBeInTheDocument();
   });
 
   it('draws seven days', () => {
@@ -188,6 +180,21 @@ describe('PeerAvailabilityView', () => {
     it('stays out of the way when they have', () => {
       setup({ viewerHasSchedule: true });
       expect(screen.queryByText(/haven’t set your own availability/)).not.toBeInTheDocument();
+    });
+
+    // The likeliest first-run state: nobody has set a schedule yet.
+    it('stays out of the way when there is no week to annotate', () => {
+      setup({ viewerHasSchedule: false, peerHasSchedule: false, slots: [] });
+
+      expect(screen.getByText('Ada hasn’t set any availability yet.')).toBeInTheDocument();
+      expect(screen.queryByText(/You can still see Ada’s/)).not.toBeInTheDocument();
+    });
+
+    it('stays out of the way when they have a schedule but nothing free', () => {
+      setup({ viewerHasSchedule: false, peerHasSchedule: true, slots: [] });
+
+      expect(screen.getByText('Ada has no times free in the next 7 days.')).toBeInTheDocument();
+      expect(screen.queryByText(/You can still see Ada’s/)).not.toBeInTheDocument();
     });
 
     it('never blocks the week', () => {

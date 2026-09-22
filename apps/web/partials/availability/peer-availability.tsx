@@ -107,21 +107,25 @@ export function PeerAvailabilityView({
         </Text>
       </header>
 
-      {/* Informational, never a gate: a first-time recipient of a shared link has no schedule,
-          and blocking them was the failure mode GEO-2938 exists to remove. */}
-      {!schedule.viewerHasSchedule && (
-        <Hint>
-          You haven&rsquo;t set your own availability. You can still see {name}&rsquo;s; setting yours just marks the
-          times you both have free.
-        </Hint>
-      )}
-
-      {!schedule.peerHasSchedule ? (
+      {!schedule.theirWeekKnown ? (
+        // An older geo-chat cannot send their week at all, and its intersection says nothing
+        // about them. Better to say so than to report an empty week as theirs.
+        <Empty>Can&rsquo;t show {name}&rsquo;s week from this server yet.</Empty>
+      ) : !schedule.peerHasSchedule ? (
         <Empty>{name} hasn&rsquo;t set any availability yet.</Empty>
       ) : !hasAnySlot ? (
         <Empty>{name} has no times free in the next 7 days.</Empty>
       ) : (
-        <WeekGrid days={days} peerName={name} />
+        <>
+          {/* Informational, never a gate. Only beside a week, since it offers to annotate one. */}
+          {!schedule.viewerHasSchedule && (
+            <Hint>
+              You haven&rsquo;t set your own availability. You can still see {name}&rsquo;s; setting yours just marks
+              the times you both have free.
+            </Hint>
+          )}
+          <WeekGrid days={days} peerName={name} />
+        </>
       )}
     </div>
   );

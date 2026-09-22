@@ -37,6 +37,8 @@ export type PeerSchedule = {
   peerTimezone: string;
   viewerHasSchedule: boolean;
   peerHasSchedule: boolean;
+  /** False on a deployment predating geo-chat#134, which cannot send their week at all. */
+  theirWeekKnown: boolean;
   slots: PeerSlot[];
 };
 
@@ -62,10 +64,7 @@ export type PeerDay = {
   weekdayLabel: string;
   /** `Sep 21`. */
   dayLabel: string;
-  /**
-   * The viewer's own date. Not the first column: that one starts at the server's window, which
-   * west of UTC can already be tomorrow.
-   */
+  /** The viewer's own date, which is not drawn at all when the server's window cannot reach it. */
   isToday: boolean;
   slots: PeerDaySlot[];
 };
@@ -81,17 +80,13 @@ export function toPeerSchedule(response: ScheduleOverlapResponse): PeerSchedule 
     // Their zone is empty exactly when they have no saved schedule, which is the one signal
     // separating "set nothing" from "nothing free this window".
     peerHasSchedule: Boolean(response.with_timezone),
-    slots: theirWeek(response),
+    theirWeekKnown: response.their_slots !== undefined,
+    slots: (response.their_slots ?? []).map(slot => ({
+      start: slot.start,
+      end: slot.end,
+      viewerIsFree: slot.viewer_free,
+    })),
   };
-}
-
-/** Their week, or the intersection on a deployment too old to send one: a missing `their_slots`
- * read as an empty week would claim they are free at no time. */
-function theirWeek(response: ScheduleOverlapResponse): PeerSlot[] {
-  if (response.their_slots) {
-    return response.their_slots.map(slot => ({ start: slot.start, end: slot.end, viewerIsFree: slot.viewer_free }));
-  }
-  return (response.slots ?? []).map(slot => ({ start: slot.start, end: slot.end, viewerIsFree: true }));
 }
 
 /**
@@ -108,7 +103,7 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
   const peerZone = usableZone(schedule.peerTimezone);
 
   const today = zonedParts(now, viewerZone).date;
-  const days = dayColumns(now, viewerZone).map((date): PeerDay => ({
+  const days = dayColumns(now, viewerZone, peerZone).map((date): PeerDay => ({
     date,
     ...dayLabels(date),
     isToday: date === today,
@@ -164,15 +159,32 @@ function chipStarts(slot: PeerSlot): Date[] {
   return starts;
 }
 
-/** Seven columns from the earliest date the server covers: its `from` is the UTC date, so an
- * evening viewer west of UTC would otherwise get a "Today" the response never fills. */
-function dayColumns(now: Date, zone: string | undefined): string[] {
-  const local = zonedParts(now, zone).date;
-  const serverWindowStart = zonedParts(now, 'UTC').date;
-  const [year, month, day] = (local > serverWindowStart ? local : serverWindowStart).split('-').map(Number);
+/** Seven columns from the viewer's today, or the first day the server reaches: their slots resolve
+ * in *their* zone from the UTC date, so the earliest instant is their midnight on it. */
+function dayColumns(now: Date, viewerZone: string | undefined, peerZone: string | undefined): string[] {
+  const today = zonedParts(now, viewerZone).date;
+  const reachable = zonedParts(windowStart(now, peerZone), viewerZone).date;
+  const [year, month, day] = (today > reachable ? today : reachable).split('-').map(Number);
   // Midday, so this first date cannot sit on an hour a DST jump skipped.
   const first = new Date(year, month - 1, day, 12);
   return Array.from({ length: PEER_SCHEDULE_DAYS }, (_, offset) => isoDate(addDays(first, offset)));
+}
+
+/** Midnight in `zone` on the UTC date, where the server's walk begins. A DST jump over midnight
+ * leaves neither candidate on it, and the day then opens at the end of the gap. */
+function windowStart(now: Date, zone: string | undefined): Date {
+  const [year, month, day] = zonedParts(now, 'UTC').date.split('-').map(Number);
+  const midnightUtc = Date.UTC(year, month - 1, day);
+  const first = midnightUtc - zoneOffsetMinutes(new Date(midnightUtc), zone) * 60_000;
+  const second = midnightUtc - zoneOffsetMinutes(new Date(first), zone) * 60_000;
+
+  const isMidnight = (instant: number) => wallMinutes(zonedParts(new Date(instant), zone)) === midnightUtc / 60_000;
+  const real = [first, second].filter(isMidnight);
+  return new Date(real.length > 0 ? Math.min(...real) : Math.max(first, second));
+}
+
+function zoneOffsetMinutes(instant: Date, zone: string | undefined): number {
+  return wallMinutes(zonedParts(instant, zone)) - wallMinutes(zonedParts(instant, 'UTC'));
 }
 
 function dayLabels(date: string) {

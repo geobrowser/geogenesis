@@ -19,9 +19,8 @@ import { PeerAvailabilityModal } from '~/partials/availability/peer-availability
  * timezone behaviour needs somewhere inspectable long before then.
  *
  * Two halves. A real user id fetches live and shows the raw response beside the view, which is
- * the only way to see the wire and the render disagree. The fixtures below draw the states the
- * endpoint cannot produce yet — a dashed week, a peer with nothing, a truncated list — so the
- * half of this feature that is waiting on Patrick is still exercisable by hand.
+ * the only way to see the wire and the render disagree. The fixtures below reach every state
+ * without needing two accounts with two calendars in two zones.
  */
 export function DebugPeerAvailabilityPageClient({ spaceId }: { spaceId: string }) {
   const enabled = usePeerAvailabilityEnabled();
@@ -125,6 +124,8 @@ const FIXTURES = {
   'theirs only': fixture({ viewerHasSchedule: false, slots: week(false) }),
   mixed: fixture({ slots: [...week(true).slice(0, 6), ...week(false).slice(6)] }),
   'they have none': fixture({ peerHasSchedule: false, peerTimezone: '', slots: [] }),
+  neither: fixture({ viewerHasSchedule: false, peerHasSchedule: false, peerTimezone: '', slots: [] }),
+  'old server': fixture({ theirWeekKnown: false, slots: [] }),
   'far apart': fixture({ viewerTimezone: 'America/Los_Angeles', peerTimezone: 'Asia/Tokyo' }),
 } satisfies Record<string, ReturnType<typeof fixture>>;
 

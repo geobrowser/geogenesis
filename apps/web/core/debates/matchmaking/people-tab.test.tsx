@@ -216,6 +216,7 @@ beforeEach(() => {
       peerTimezone: 'UTC',
       viewerHasSchedule: true,
       peerHasSchedule: true,
+      theirWeekKnown: true,
       slots: [],
     },
   });

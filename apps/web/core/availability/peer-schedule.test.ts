@@ -82,15 +82,19 @@ describe('toPeerSchedule', () => {
 
   // testnet can sit on an image older than geo-chat#134 for days, and did when this was written.
   describe('a deployment that does not send their_slots', () => {
-    it('falls back to the intersection rather than claiming they are free at no time', () => {
+    // Its `slots` is empty whenever either side is unset, so it says nothing about the peer.
+    it('reports their week as unknown rather than as empty', () => {
       const legacy = response({ slots: [{ start: '2026-09-21T13:00:00Z', end: '2026-09-21T13:30:00Z' }] });
       delete legacy.their_slots;
 
       const schedule = toPeerSchedule(legacy);
 
-      expect(schedule.slots).toEqual([
-        { start: '2026-09-21T13:00:00Z', end: '2026-09-21T13:30:00Z', viewerIsFree: true },
-      ]);
+      expect(schedule.theirWeekKnown).toBe(false);
+      expect(schedule.slots).toEqual([]);
+    });
+
+    it('knows the week whenever the field is present, including when it is empty', () => {
+      expect(toPeerSchedule(response({ their_slots: [] })).theirWeekKnown).toBe(true);
     });
 
     it('reads viewerHasSchedule off both_have_schedules, which still meant the conjunction', () => {
@@ -133,38 +137,60 @@ describe('peerScheduleDays', () => {
     expect(result.slice(1).every(day => !day.isToday)).toBe(true);
   });
 
-  // The server's window starts at the UTC date and is then read as local dates, so a viewer west
-  // of UTC in their own evening has a local "today" the response can never cover.
-  describe('the near edge of the server window', () => {
-    it('does not draw a today column the server could not have filled', () => {
-      // 01:00Z on the 22nd is Mon 18:00 in Los Angeles: local date 09-21, server `from` 09-22.
-      const evening = new Date('2026-09-22T01:00:00Z');
+  // Their slots resolve in *their* zone, so a peer east of the viewer has slots on the viewer's
+  // today even after the server's UTC-dated window has rolled over.
+  describe('the viewer own today', () => {
+    it('leads the grid when the server can reach it', () => {
+      const evening = new Date('2026-09-22T03:00:00Z');
       const result = days({ viewer_timezone: 'America/Los_Angeles' }, evening);
 
-      expect(result[0].date).toBe('2026-09-22');
-      expect(result.map(day => day.date)).not.toContain('2026-09-21');
+      expect(result[0].date).toBe('2026-09-21');
+      expect(result[0].isToday).toBe(true);
     });
 
-    it('does not call the shifted first column Today, because it is tomorrow for them', () => {
-      const evening = new Date('2026-09-22T01:00:00Z');
-      const result = days({ viewer_timezone: 'America/Los_Angeles' }, evening);
+    // Their window opens at their midnight on the UTC date, which for a peer in the viewer's own
+    // zone or west of it is after the viewer's evening: nothing could fill that column.
+    it('is not drawn when the server window cannot reach it', () => {
+      const evening = new Date('2026-09-22T03:00:00Z');
+      const result = days({ viewer_timezone: 'America/Los_Angeles', with_timezone: 'America/Los_Angeles' }, evening);
 
       expect(result[0].date).toBe('2026-09-22');
-      expect(result[0].isToday).toBe(false);
       expect(result.some(day => day.isToday)).toBe(false);
     });
 
-    it('still starts at the viewer own today when that is the later of the two', () => {
-      // 20:00Z on the 21st is Tue 05:00 in Tokyo: local date 09-22, server `from` 09-21.
-      const morning = new Date('2026-09-21T20:00:00Z');
-      const result = days({ viewer_timezone: 'Asia/Tokyo' }, morning);
+    it('is not drawn for a peer further west either', () => {
+      const evening = new Date('2026-09-22T03:00:00Z');
+      const result = days({ viewer_timezone: 'America/New_York', with_timezone: 'America/Los_Angeles' }, evening);
 
       expect(result[0].date).toBe('2026-09-22');
     });
 
-    it('is a no-op for a viewer already on the UTC date', () => {
-      const result = days({ viewer_timezone: 'Europe/London' }, new Date('2026-09-21T15:00:00Z'));
+    // Santiago springs 2026-09-06 00:00 straight to 01:00, so their window opens at 01:00 local
+    // and there is no instant whose wall clock is midnight to solve for.
+    it('handles a peer zone where local midnight does not exist', () => {
+      const result = days(
+        { viewer_timezone: 'America/New_York', with_timezone: 'America/Santiago' },
+        new Date('2026-09-06T00:07:00Z')
+      );
+
+      expect(result[0].date).toBe('2026-09-06');
+      expect(result[result.length - 1].date).toBe('2026-09-12');
+    });
+
+    it('keeps a peer slot that lands on it', () => {
+      // Tue 12:00 Tokyo is Mon 20:00 in Los Angeles: tonight, and four hours away.
+      const evening = new Date('2026-09-22T03:00:00Z');
+      const result = days(
+        {
+          viewer_timezone: 'America/Los_Angeles',
+          with_timezone: 'Asia/Tokyo',
+          their_slots: their(['2026-09-22T03:00:00Z', '2026-09-22T03:30:00Z']),
+        },
+        evening
+      );
+
       expect(result[0].date).toBe('2026-09-21');
+      expect(result[0].slots.map(slot => slot.label)).toEqual(['8pm']);
     });
   });
 

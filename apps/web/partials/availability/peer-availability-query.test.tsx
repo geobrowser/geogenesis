@@ -18,6 +18,7 @@ const schedule: PeerSchedule = {
   peerTimezone: 'Europe/Berlin',
   viewerHasSchedule: true,
   peerHasSchedule: true,
+  theirWeekKnown: true,
   slots: [],
 };
 

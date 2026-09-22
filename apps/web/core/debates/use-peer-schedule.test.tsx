@@ -52,17 +52,6 @@ const overlap = (overrides: Partial<ScheduleOverlapResponse> = {}): ScheduleOver
   ...overrides,
 });
 
-/** Resolved by hand, so the two reads can be interleaved. */
-function deferred<T>() {
-  let settle!: (value: T) => void;
-  let fail!: (error: Error) => void;
-  const promise = new Promise<T>((resolve, reject) => {
-    settle = resolve;
-    fail = reject;
-  });
-  return { promise, settle, fail };
-}
-
 /** A fresh client per test, so one case's cache cannot answer the next one's query. */
 function harness() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
