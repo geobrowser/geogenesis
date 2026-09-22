@@ -36,12 +36,7 @@ type DebateFeedPlayerProps = {
   preload?: boolean;
 };
 
-export function DebateFeedPlayer({
-  debate,
-  active,
-  preload = false,
-  reducedOverlays = false,
-}: DebateFeedPlayerProps) {
+export function DebateFeedPlayer({ debate, active, preload = false, reducedOverlays = false }: DebateFeedPlayerProps) {
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
@@ -324,7 +319,8 @@ export function DebateFeedPlayer({
       data-debate-autoplay-blocked={autoplayBlocked ? 'true' : 'false'}
       // No gap and one radius on the outside: the two tiles are a single surface in the Figma
       // frame, which is what lets the subtitle straddle the seam rather than sit inside one tile.
-      className="group relative flex flex-col overflow-hidden rounded-xl"
+      // 12px in the compact gallery (a profile's or claim's Activity), 16px in the feeds.
+      className={cx('group relative flex flex-col overflow-hidden', reducedOverlays ? 'rounded-lg' : 'rounded-xl')}
     >
       <DebaterVideo
         participant={slot1Participant}

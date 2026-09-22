@@ -13,18 +13,16 @@ import { ACTIVITY_GALLERY_CARD_LIMIT } from '~/core/profile/activity-gallery';
 import type { ClaimResponse } from '~/core/profile/use-person-positions';
 import { normId } from '~/core/utils/norm-id';
 
-import { ChevronRight } from '~/design-system/icons/chevron-right';
-import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
+import { PILL_BUTTON_CLASS_NAME, PILL_BUTTON_SECONDARY_CLASS_NAME, buttonClassNames } from '~/design-system/button';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
+import { NextButton, PreviousButton } from '~/design-system/table/table-pagination';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 import { withSpaceTabsAnchor } from '~/partials/space-page/space-tabs-anchor';
 
 import { GalleryClaimCard } from './gallery-claim-card';
 
-const SEE_ALL_CLASS =
-  'flex items-center justify-center gap-2 border-t border-divider py-3 text-metadataMedium text-grey-04 transition-colors hover:text-text';
 const GALLERY_ACTIVATE_RATIO = 0.6;
 const GALLERY_DEACTIVATE_RATIO = 0.4;
 
@@ -102,6 +100,9 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   const selected = available.find(kind => kind.key === selectedKey) ?? available[0];
 
   const { sectionRef, reserveRef, prepareSwitch } = useMobileActivityHeightReserve(selected?.key);
+  // The gallery measures whether its row can scroll; the arrows live in the header, so it reports
+  // up. Null while no gallery is mounted — a kind that failed to load has no row to step through.
+  const [navigation, setNavigation] = React.useState<GalleryNavigation | null>(null);
   const isLoading = kinds.some(kind => kind.isLoading);
 
   // Reserve the section while its first usable record is on the way. Once either kind resolves,
@@ -118,57 +119,73 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
         ref={sectionRef}
         data-activity-section
         className={cx(
-          'flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white',
-          // Not a card on a phone. A bordered panel holding bordered cards spends two gutters and two
-          // rules on saying "these belong together", which the heading already says — and on a 390px
-          // screen that is most of what a claim's buttons needed. The heading and the rule under it
-          // stay; the box around them goes, and the gallery below can reach the screen edge.
-          'md:overflow-visible md:rounded-none md:border-0 md:bg-transparent'
+          // Not a card. A bordered panel holding bordered cards spends two gutters and two rules on
+          // saying "these belong together", which the heading already says. No box and no rule: the
+          // content sits flush with the column — on a phone the gallery can reach the screen edge.
+          'flex flex-col'
         )}
       >
-        {/* The toggles sit to the right of the heading, and wrap below it rather
-          than squeezing into it on a narrow screen. */}
-        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-divider px-4 py-3 md:px-0">
-          <h3 className="text-metadataMedium text-text">Activity</h3>
+        {/*
+         * The title, then Debates and Claims as pills beneath it, with the row's
+         * own controls to their right. A kind with nothing in it is left out, so a
+         * person with only debates sees one pill.
+         */}
+        <header className="flex flex-col gap-3 pb-3">
+          <h3 className="text-mediumTitle text-text">Activity</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            {available.map(kind => {
+              const isSelected = kind.key === selected.key;
 
-          {/* Only when there is a choice to make. One pill on its own is a label
-            dressed up as a control. */}
-          {available.length > 1 && (
-            <div className="flex flex-wrap items-center gap-2">
-              {available.map(kind => {
-                const isSelected = kind.key === selected.key;
+              return (
+                <button
+                  key={kind.key}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => {
+                    if (isSelected) return;
 
-                return (
-                  <button
-                    key={kind.key}
-                    type="button"
-                    aria-pressed={isSelected}
-                    onClick={() => {
-                      if (isSelected) return;
-
-                      // Put the reserve in the document before React replaces
-                      // the tall view. Waiting for the next layout effect would
-                      // let the shorter DOM clamp `scrollY` while it is being
-                      // measured, before the reserve could help.
-                      prepareSwitch();
-                      setSelectedKey(kind.key);
-                    }}
-                    className={cx(
-                      'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-smallButton transition-colors',
-                      isSelected
-                        ? 'border-text bg-text text-white'
-                        : 'border-grey-02 text-grey-04 hover:border-text hover:text-text'
-                    )}
-                  >
+                    // Put the reserve in the document before React replaces
+                    // the tall view. Waiting for the next layout effect would
+                    // let the shorter DOM clamp `scrollY` while it is being
+                    // measured, before the reserve could help.
+                    prepareSwitch();
+                    setSelectedKey(kind.key);
+                  }}
+                  // The same pill as View all beside it — 28px, 16px type, the same padding — black
+                  // when selected (the Log in pill) and the secondary outline otherwise.
+                  className={
+                    isSelected
+                      ? buttonClassNames(PILL_BUTTON_CLASS_NAME)({ variant: 'primary' })
+                      : buttonClassNames(PILL_BUTTON_SECONDARY_CLASS_NAME)({ variant: 'secondary' })
+                  }
+                >
+                  {/* Up 1px: at the pill's 13px leading, Calibre's glyphs sit a pixel low in the box. */}
+                  <span className="relative -top-px">
                     {kind.label}
-                    <span className={cx('tabular-nums', isSelected ? 'text-white/70' : 'text-grey-03')}>
+                    <span className={cx('ml-1.5 tabular-nums', isSelected ? 'text-white/70' : 'text-grey-03')}>
                       {kind.isCountUnavailable ? '—' : kind.total.toLocaleString()}
                     </span>
-                  </button>
-                );
-              })}
+                  </span>
+                </button>
+              );
+            })}
+
+            {/*
+             * The row's own controls, right of the tabs: step through the cards, then leave for the
+             * full tab. Both belong to the selected kind — see `navigation`.
+             */}
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {selected.rows.length > 0 ? (
+                // The data block galleries' own arrows (`table-pagination`), 12px apart as they are
+                // there: dark when there is somewhere to go, grey at the row's end.
+                <span className="mr-1 flex items-center gap-3">
+                  <PreviousButton isDisabled={!navigation?.left} onClick={() => navigation?.scrollByCard(-1)} />
+                  <NextButton isDisabled={!navigation?.right} onClick={() => navigation?.scrollByCard(1)} />
+                </span>
+              ) : null}
+              <ActivitySeeAll kind={selected} />
             </div>
-          )}
+          </div>
         </header>
 
         {selected.isError && selected.rows.length === 0 ? (
@@ -177,7 +194,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
            * links to holds the authoritative list and offers the retry, so a
            * second control here would be a second thing to keep in step.
            */
-          <p className="px-4 py-6 text-metadata text-grey-04">Couldn’t load {selected.label.toLowerCase()}.</p>
+          <p className="py-6 text-metadata text-grey-04">Couldn’t load {selected.label.toLowerCase()}.</p>
         ) : (
           <ActivityGallery
             // Each tab is a distinct playback collection. Remounting clears an explicit card
@@ -186,9 +203,9 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
             rows={selected.rows}
             responseByClaimId={selected.responseByClaimId}
             personName={selected.personName}
+            onNavigationChange={setNavigation}
           />
         )}
-        <ActivitySeeAll kind={selected} />
       </section>
 
       {/*
@@ -210,19 +227,15 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
 
 function ProfileActivitySkeleton() {
   return (
-    <section
-      aria-label="Loading activity"
-      aria-busy="true"
-      className={cx(
-        'flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white',
-        'md:overflow-visible md:rounded-none md:border-0 md:bg-transparent'
-      )}
-    >
-      <header className="flex items-center justify-between gap-4 border-b border-divider px-4 py-3 md:px-0">
-        <h3 className="text-metadataMedium text-text">Activity</h3>
-        <Skeleton className="h-7 w-24 rounded-full" />
+    <section aria-label="Loading activity" aria-busy="true" className={cx('flex flex-col')}>
+      <header className="flex flex-col gap-3 pb-3">
+        <h3 className="text-mediumTitle text-text">Activity</h3>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-7 w-24 rounded-full" />
+          <Skeleton className="h-7 w-20 rounded-full" />
+        </div>
       </header>
-      <div className="p-4 md:px-0">
+      <div className="py-4">
         <Skeleton className="h-44 w-full rounded-lg" />
       </div>
       <div className="flex justify-center border-t border-divider py-4">
@@ -233,17 +246,12 @@ function ProfileActivitySkeleton() {
 }
 
 function ActivitySeeAll({ kind }: { kind: ActivityKind }) {
-  const content = (
-    <>
-      {kind.seeAllLabel}
-      <RightArrowLongSmall />
-    </>
-  );
+  const className = buttonClassNames(PILL_BUTTON_SECONDARY_CLASS_NAME)({ variant: 'secondary' });
 
   if (kind.onSeeAll) {
     return (
-      <button type="button" onClick={kind.onSeeAll} className={SEE_ALL_CLASS}>
-        {content}
+      <button type="button" onClick={kind.onSeeAll} className={className}>
+        {kind.seeAllLabel}
       </button>
     );
   }
@@ -252,8 +260,8 @@ function ActivitySeeAll({ kind }: { kind: ActivityKind }) {
   // chrome. The fragment puts the tab row under the navbar instead. Side panels use `onSeeAll`
   // above because their tabs are selected in place and have no route fragment to follow.
   return (
-    <Link href={withSpaceTabsAnchor(kind.href)} className={SEE_ALL_CLASS}>
-      {content}
+    <Link href={withSpaceTabsAnchor(kind.href)} className={className}>
+      {kind.seeAllLabel}
     </Link>
   );
 }
@@ -440,14 +448,19 @@ function useMobileActivityHeightReserve(selectedKey: string | undefined) {
   return { sectionRef, reserveRef, prepareSwitch };
 }
 
+type GalleryNavigation = { left: boolean; right: boolean; scrollByCard: (direction: -1 | 1) => void };
+
 function ActivityGallery({
   rows,
   responseByClaimId,
   personName,
+  onNavigationChange,
 }: {
   rows: ExploreFeedRow[];
   responseByClaimId?: Record<string, ClaimResponse>;
   personName?: string | null;
+  /** Where the header's arrows learn whether this row can move, and how to move it. */
+  onNavigationChange?: (navigation: GalleryNavigation | null) => void;
 }) {
   const shown = React.useMemo(() => rows.slice(0, ACTIVITY_GALLERY_CARD_LIMIT), [rows]);
 
@@ -465,6 +478,14 @@ function ActivityGallery({
     canScrollRight,
     scrollByCard,
   } = useActivityGallery(shown);
+
+  React.useEffect(() => {
+    onNavigationChange?.({ left: canScrollLeft, right: canScrollRight, scrollByCard });
+  }, [canScrollLeft, canScrollRight, scrollByCard, onNavigationChange]);
+
+  // Unmounted on a tab switch (it is keyed by kind) and when a kind fails: its row is gone, so the
+  // header should not offer to scroll it.
+  React.useEffect(() => () => onNavigationChange?.(null), [onNavigationChange]);
 
   return (
     // One at a time. Compact cards can leave several debates fully visible, so intersection alone
@@ -490,16 +511,14 @@ function ActivityGallery({
         {/*
          * `snap-x` so a flick lands on a card rather than between two.
          *
-         * The gap at either end is a spacer element rather than padding on the scroller: a scroll
-         * container's trailing padding is dropped by every browser that matters, so `p-4` gave 16px
-         * on the left and nothing on the right. Spacers are honoured on both sides, and `scroll-px`
-         * keeps a snapped card off the edge it lands against.
+         * No inset at the start: the first card sits flush with the column, under the heading. On a
+         * phone the row bleeds to the screen edge, so a trailing spacer — not padding, which a
+         * scroll container drops at its far end — keeps the last card off it.
          */}
         <div
           ref={scrollerRef}
-          className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 items-start gap-4 overflow-x-auto py-2 md:scroll-px-0"
+          className="no-scrollbar flex snap-x snap-mandatory items-start gap-4 overflow-x-auto py-2"
         >
-          <span aria-hidden className="w-0 shrink-0 pl-4 md:pl-0" />
           {shown.map(row => (
             <GalleryCard
               key={`${row.entityId}-${row.spaceId}`}
@@ -511,11 +530,8 @@ function ActivityGallery({
               onDebatePlaybackAvailabilityChange={setPlaybackAvailable}
             />
           ))}
-          <span aria-hidden className="w-0 shrink-0 pr-4" />
+          <span aria-hidden className="w-0 shrink-0 md:pr-4" />
         </div>
-
-        {canScrollLeft ? <GalleryNavigationButton direction="left" onClick={() => scrollByCard(-1)} /> : null}
-        {canScrollRight ? <GalleryNavigationButton direction="right" onClick={() => scrollByCard(1)} /> : null}
       </div>
     </DebatePlaybackGate>
   );
@@ -662,12 +678,9 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
     [scrollerRef]
   );
 
-  const requestPlayback = React.useCallback(
-    (debateId: string) => {
-      if (availableRef.current.has(normId(debateId))) setSelectedPlaybackId(debateId);
-    },
-    []
-  );
+  const requestPlayback = React.useCallback((debateId: string) => {
+    if (availableRef.current.has(normId(debateId))) setSelectedPlaybackId(debateId);
+  }, []);
 
   const setPlaybackAvailable = React.useCallback((debateId: string, available: boolean) => {
     const id = normId(debateId);
@@ -695,24 +708,6 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
     canScrollRight: navigation.right,
     scrollByCard,
   };
-}
-
-function GalleryNavigationButton({ direction, onClick }: { direction: 'left' | 'right'; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-label={`Scroll activity ${direction}`}
-      onClick={onClick}
-      className={cx(
-        'absolute top-1/2 z-30 grid size-9 -translate-y-1/2 place-items-center rounded-full border border-grey-02 bg-white text-text shadow-card transition-colors hover:bg-grey-01 focus-visible:border-text focus-visible:outline-none',
-        direction === 'left' ? 'left-2' : 'right-2'
-      )}
-    >
-      <span className={direction === 'left' ? 'rotate-180' : undefined} aria-hidden>
-        <ChevronRight />
-      </span>
-    </button>
-  );
 }
 
 /**

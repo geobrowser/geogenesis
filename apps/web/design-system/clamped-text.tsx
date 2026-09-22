@@ -40,6 +40,12 @@ type ClampedTextProps = {
    * description and its skills.
    */
   label?: string;
+  /**
+   * Where More and Less sit. `inline` (the default) puts More over the end of the last line, which
+   * costs every line a gutter; `below` gives the text its full width and puts the toggle on a line
+   * of its own under it.
+   */
+  togglePlacement?: 'inline' | 'below';
 };
 
 // No type of its own: the toggle takes the variant of the text it belongs to, so
@@ -115,6 +121,7 @@ export function ClampedText({
   variant = 'body',
   textClassName = '',
   label,
+  togglePlacement = 'inline',
 }: ClampedTextProps) {
   assertSupportedMaxLines(maxLines);
 
@@ -148,8 +155,33 @@ export function ClampedText({
 
   const showToggle = isOverflowing;
   const clamp = !expanded;
-  const reserveToggle = showToggle && clamp;
+  const isBelow = togglePlacement === 'below';
+  const reserveToggle = showToggle && clamp && !isBelow;
   const typeClassName = textStyles[variant];
+
+  if (isBelow) {
+    return (
+      <div ref={wrapperRef} className="box-border w-full min-w-0">
+        <Tag
+          ref={textRef as React.Ref<never>}
+          className={cx(typeClassName, textClassName, clamp && LINE_CLAMP_CLASS[maxLines])}
+        >
+          {text}
+        </Tag>
+        {showToggle && (
+          <button
+            type="button"
+            onClick={() => setExpanded(value => !value)}
+            aria-expanded={expanded}
+            aria-label={label ? `Show ${expanded ? 'less' : 'more'} ${label}` : undefined}
+            className={cx(typeClassName, TOGGLE_CLASS, 'mt-1 block')}
+          >
+            {expanded ? 'Less' : 'More'}
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div ref={wrapperRef} className={cx('relative box-border w-full min-w-0', reserveToggle && TOGGLE_GUTTER_CLASS)}>
