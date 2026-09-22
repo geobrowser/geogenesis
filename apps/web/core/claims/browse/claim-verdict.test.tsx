@@ -78,4 +78,45 @@ describe('ClaimVerdict', () => {
     expect(screen.queryByText('No responses yet')).toBeNull();
     expect(container.querySelector('.animate-pulse')).not.toBeNull();
   });
+
+  // The claim page's Agree/Disagree renders in this card. Taking a side doesn't wait on a count, so
+  // the controls stay reachable in every state the numbers can be in.
+  describe('with children', () => {
+    function renderWithControls(value: ClaimResponseSummary) {
+      return render(
+        <ClaimVerdict entityId={ENTITY} spaceId={SPACE} responseKind="veracity" summary={value}>
+          <div data-testid="controls" />
+        </ClaimVerdict>
+      );
+    }
+
+    it('renders them in the same card as the split', () => {
+      renderWithControls(summary({ ...summarizeClaimResponses(17, 3) }));
+
+      const card = screen.getByRole('region', { name: 'Response summary' });
+      expect(card).toContainElement(screen.getByTestId('claim-split-bar'));
+      expect(card).toContainElement(screen.getByTestId('controls'));
+    });
+
+    it('renders them under the invitation on an unanswered claim', () => {
+      renderWithControls(summary());
+
+      expect(screen.getByText('No responses yet')).toBeInTheDocument();
+      expect(screen.getByTestId('controls')).toBeInTheDocument();
+    });
+
+    it('still renders them when the counts never answered', () => {
+      renderWithControls(summary({ hasCounts: false }));
+
+      expect(screen.queryByText('No responses yet')).toBeNull();
+      expect(screen.getByTestId('controls')).toBeInTheDocument();
+    });
+
+    it('still renders them while the counts load', () => {
+      const { container } = renderWithControls(summary({ isLoading: true, hasCounts: false }));
+
+      expect(container.querySelector('.animate-pulse')).not.toBeNull();
+      expect(screen.getByTestId('controls')).toBeInTheDocument();
+    });
+  });
 });

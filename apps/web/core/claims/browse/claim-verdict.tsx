@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { ENTITY_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -23,20 +25,28 @@ import { ClaimSides, ClaimSplitBar } from './claim-summary';
  * the sample: 93% of answered claims are unanimous and the median has two responses, so a "100%"
  * here is usually standing on very little — and what keeps that honest is the responder counts
  * directly beneath it, not withholding the number.
+ *
+ * `children` render in the same block, under the split: the claim page puts the reader's own
+ * Agree/Disagree there, so the result and the way to add to it read as one block. They render
+ * whatever the counts are doing, since taking a side doesn't wait on a count.
  */
 export function ClaimVerdict({
   entityId,
   spaceId,
   responseKind,
   summary,
+  children,
+  className,
 }: {
   entityId: string;
   spaceId: string;
   responseKind: ResponseKind;
   summary: ClaimResponseSummary;
+  children?: React.ReactNode;
+  className?: string;
 }) {
-  if (summary.isLoading) {
-    return <Skeleton className="h-[132px] w-full rounded-lg" />;
+  if (summary.isLoading && !children) {
+    return <Skeleton className={cx('h-[132px] w-full rounded-lg', className)} />;
   }
 
   // Nothing, where the counts never answered.
@@ -50,8 +60,35 @@ export function ClaimVerdict({
   //
   // Rendering nothing is what this did before it learned to invite, and it is the honest answer to
   // a question that was never put.
-  if (!summary.hasCounts) return null;
+  const stats = summary.isLoading ? (
+    <Skeleton className="h-[88px] w-full rounded" />
+  ) : summary.hasCounts ? (
+    <ClaimVerdictStats entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
+  ) : null;
 
+  if (!stats && !children) return null;
+
+  return (
+    // No border or padding of its own: the claim page draws it in the hero, as part of the block
+    // the claim's title heads.
+    <section aria-label="Response summary" className={className}>
+      {stats}
+      {children ? <div className={stats ? 'mt-4' : undefined}>{children}</div> : null}
+    </section>
+  );
+}
+
+function ClaimVerdictStats({
+  entityId,
+  spaceId,
+  responseKind,
+  summary,
+}: {
+  entityId: string;
+  spaceId: string;
+  responseKind: ResponseKind;
+  summary: ClaimResponseSummary;
+}) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const tier = claimSummaryTier(summary.total);
 
@@ -59,28 +96,28 @@ export function ClaimVerdict({
   // of claims render, so this is the state most readers meet.
   if (tier === 'invite') {
     return (
-      <section aria-label="Response summary" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
+      <>
         <Text as="p" variant="metadataMedium" color="text">
           No responses yet
         </Text>
         <Text as="p" variant="metadata" color="grey-04" className="mt-1">
           {copy.firstResponsePrompt}
         </Text>
-      </section>
+      </>
     );
   }
 
   const percent = summary.percent ?? 0;
 
   return (
-    <section aria-label="Response summary" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
+    <>
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
         {/* The share and what it is a share *of*, on one baseline. They were stacked, which gave the
             verb a line of its own for one small word and pushed everything under it down. Sharing a
             line reads as one statement — "68% agree" — which is what it is, and it matches the
             explore card exactly. */}
         <span className="flex items-baseline gap-1.5">
-          <span className="text-[2.5rem] leading-none font-semibold tracking-[-1px] tabular-nums">{percent}%</span>
+          <span className="text-mainPage leading-none text-text tabular-nums">{percent}%</span>
           <Text as="span" variant="metadata" color="grey-04">
             {/* "Agreements" → "agree", "Verifications" → "verify" reads wrong; use the action verb. */}
             {copy.positiveAction.toLowerCase()}
@@ -93,16 +130,17 @@ export function ClaimVerdict({
         </Text>
       </div>
 
-      <ClaimSplitBar percent={percent} responseKind={responseKind} className="mt-4 h-2" />
+      <ClaimSplitBar percent={percent} responseKind={responseKind} className="mt-3 h-2" />
 
       <ClaimSides
         entityId={entityId}
         spaceId={spaceId}
         responseKind={responseKind}
         summary={summary}
-        className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2"
+        className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2"
         alignSecondEnd
+        hideSwatches
       />
-    </section>
+    </>
   );
 }

@@ -141,7 +141,9 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => () => {
 vi.mock('~/core/debates/backfill-readiness-for-held-position', () => ({
   useBackfillReadinessForHeldPosition: () => {},
 }));
-vi.mock('./claim-verdict', () => ({ ClaimVerdict: () => <div data-testid="verdict" /> }));
+vi.mock('./claim-verdict', () => ({
+  ClaimVerdict: ({ children }: { children?: React.ReactNode }) => <div data-testid="verdict">{children}</div>,
+}));
 vi.mock('./claim-sources-tab', () => ({ ClaimSourcesTab: () => <div data-testid="sources" /> }));
 vi.mock('./claim-end-slot', () => ({ ClaimEndSlot: () => null }));
 vi.mock('./claim-record-tab', () => ({
@@ -261,16 +263,27 @@ describe('ClaimPageView record', () => {
     ]);
   });
 
-  it('orders Overview as response summary, position, activity, then comments', () => {
+  it('heads the page with the claim, its verdict and the position controls, above the tabs', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
+    const heading = screen.getByRole('heading', { level: 1 });
     const position = screen.getByTestId('position');
     const verdict = screen.getByTestId('verdict');
+    const tabs = screen.getByTestId('tabs');
+
+    expect(verdict).toContainElement(position);
+    expect(heading.compareDocumentPosition(verdict) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(verdict.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('orders Overview as activity, then comments', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const tabs = screen.getByTestId('tabs');
     const activity = screen.getByTestId('activity');
     const comments = screen.getByTestId('comments');
 
-    expect(verdict.compareDocumentPosition(position) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(position.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tabs.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(activity.compareDocumentPosition(comments) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 

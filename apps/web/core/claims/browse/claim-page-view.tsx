@@ -22,6 +22,7 @@ import type { Relation, TabEntity } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ClampedText } from '~/design-system/clamped-text';
+import { Fire } from '~/design-system/icons/fire';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
@@ -34,7 +35,6 @@ import {
 } from '~/partials/entity-page/entity-page-inline-description';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS, RelationChipSection } from '~/partials/entity-page/relation-chip-section';
-import { SectionTitle } from '~/partials/entity-page/section-title';
 import { type ActivityKind, ProfileActivitySection } from '~/partials/profile/profile-activity-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
@@ -42,7 +42,6 @@ import { ClaimEndSlot } from './claim-end-slot';
 import { ClaimRecordTab } from './claim-record-tab';
 import { getClaimSources } from './claim-sources';
 import { ClaimSourcesTab } from './claim-sources-tab';
-import { ControversialTag } from './claim-summary';
 import { ClaimVerdict } from './claim-verdict';
 import { useClaimRecord } from './use-claim-record';
 import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
@@ -155,9 +154,7 @@ export function ClaimPageView({
   };
   // Matches profile record tabs: unknown/error stays reachable, while a settled zero disappears.
   const hasDebates = hasRecordToShow(
-    record.debatesLoading || record.debatesError || record.debatesCountUnavailable
-      ? undefined
-      : record.debatesTotal
+    record.debatesLoading || record.debatesError || record.debatesCountUnavailable ? undefined : record.debatesTotal
   );
   const hasClaims = hasRecordToShow(
     record.claimsLoading || record.claimsError || record.claimsCountUnavailable ? undefined : record.claimsTotal
@@ -188,21 +185,22 @@ export function ClaimPageView({
         className={`mx-auto flex w-full flex-col gap-6 py-6 @[560px]:gap-8 @[560px]:py-8 ${CLAIM_PAGE_CONTENT_INSET_CLASS}`}
         style={{ maxWidth: CLAIM_PAGE_CONTENT_MAX_WIDTH }}
       >
-        {/* Hero */}
-        <header className="flex flex-col gap-3">
-          {/* `text-pretty`, not `text-balance`. Balancing evens every line to the same length,
+        {/* The hero and the tabs share a fixed 48px gap rather than the page's, which is 24px below
+            560px and 32px above: 48px is the space above the verdict too, so the block sits evenly. */}
+        <div className="flex flex-col gap-12">
+          {/* Hero */}
+          <header className="flex flex-col gap-3">
+            {/* `text-pretty`, not `text-balance`. Balancing evens every line to the same length,
               which on a claim — a full sentence running to three or four lines — leaves each one
               breaking well short of the measure and reads as wrapping early. Pretty only avoids a
               stranded last word, so the lines fill. */}
-          {isEditing ? (
-            <EditableHeading entityId={entityId} spaceId={spaceId} fallbackName={entity.name ?? entity.id} />
-          ) : (
-            <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
-              {entity.name ?? entity.id}
-            </h1>
-          )}
+            {isEditing ? (
+              <EditableHeading entityId={entityId} spaceId={spaceId} fallbackName={entity.name ?? entity.id} />
+            ) : (
+              <h1 className="text-entityTitle text-pretty wrap-break-word text-text">{entity.name ?? entity.id}</h1>
+            )}
 
-          {/* Clamped, like entity pages and the side panel (GEO-2772). What is shared is the line
+            {/* Clamped, like entity pages and the side panel (GEO-2772). What is shared is the line
               budget, not the cut: wrapping differs with width, so the route, the side panel and a
               phone — three widths of one layout, per the note above — break at different words.
               They give up the same three lines of vertical space, which a character count could
@@ -212,49 +210,70 @@ export function ClaimPageView({
               `ClampedText` measures an unclamped clone, so the toggle appears only when something
               is genuinely hidden, and it is unaffected by the naive-overflow bug GEO-2756 fixed in
               the feed's own title. */}
-          {isEditing ? (
-            <EntityPageInlineDescription
-              entityId={entityId}
-              spaceId={spaceId}
-              fallbackDescription={entity.description}
-            />
-          ) : (
-            entity.description && (
-              <ClampedText
-                text={entity.description}
-                maxLines={ENTITY_DESCRIPTION_MAX_LINES}
-                variant="body"
-                textClassName="wrap-break-word text-grey-04"
+            {isEditing ? (
+              <EntityPageInlineDescription
+                entityId={entityId}
+                spaceId={spaceId}
+                fallbackDescription={entity.description}
               />
-            )
-          )}
+            ) : (
+              entity.description && (
+                <ClampedText
+                  text={entity.description}
+                  maxLines={ENTITY_DESCRIPTION_MAX_LINES}
+                  variant="body"
+                  textClassName="wrap-break-word text-grey-04"
+                />
+              )
+            )}
 
-          {/* What this is. Topics — what it is *about* — used to sit opposite these, pushed to the
+            {/* What this is. Topics — what it is *about* — used to sit opposite these, pushed to the
               right of the same row; they are their own section below now (GEO-2781), so this row
               has one job and no longer has to survive being squeezed from both ends in the side
               panel. */}
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            {typeName && <MetaChip>{typeName}</MetaChip>}
-            {tags.map(tag => (
-              <MetaChip key={tag.id}>{tag.toEntity.name ?? tag.toEntity.id}</MetaChip>
-            ))}
-            {/* Among the chips that say what this is, which is what "contested" is — and the same
-                component the cards use, so all three surfaces move together. Not a chip itself:
-                the flame and red are what make it findable among neutral ones. */}
-            {summary.isControversial ? <ControversialTag /> : null}
-          </div>
-        </header>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              {typeName && <MetaChip>{typeName}</MetaChip>}
+              {tags.map(tag => (
+                <MetaChip key={tag.id}>{tag.toEntity.name ?? tag.toEntity.id}</MetaChip>
+              ))}
+              {/* Among the chips that say what this is, which is what "contested" is. The chips' own shape
+                  and type — `META_CHIP_CLASS`, spelled out because its border and fill are the parts that
+                  change — in the tag's red, so it reads as one of the row's labels and still stands out from them. */}
+              {summary.isControversial ? (
+                <span className="flex h-6 max-w-full items-center gap-1 rounded border border-red-03 bg-red-02 px-1.5 text-metadata whitespace-nowrap text-red-01">
+                  <Fire />
+                  Controversial
+                </span>
+              ) : null}
+            </div>
 
-        <div id={sidePanelTab ? undefined : SPACE_TABS_ANCHOR}>
-          <EntityTabs
-            entityId={entityId}
-            spaceId={spaceId}
-            initialTabRelations={initialTabRelations}
-            tabEntities={tabEntities}
-            systemTabsBefore={systemTabs}
-            reservedSystemLabels={systemTabs.map(tab => tab.label)}
-            divideBeforeAuthored
-          />
+            {/* The verdict and the reader's own side, in the hero with the claim they answer rather
+              than under the tabs: they are the page's point, so they don't move when the tab does.
+              The position controls sit under the split, so a reader sees where opinion stands and
+              adds to it in the same place. */}
+            <ClaimVerdict
+              entityId={entityId}
+              spaceId={spaceId}
+              responseKind={responseKind}
+              summary={summary}
+              // With the header's 12px gap, 48px above the verdict: the same as below it.
+              className="mt-9"
+            >
+              <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
+            </ClaimVerdict>
+          </header>
+
+          <div id={sidePanelTab ? undefined : SPACE_TABS_ANCHOR}>
+            <EntityTabs
+              entityId={entityId}
+              spaceId={spaceId}
+              initialTabRelations={initialTabRelations}
+              tabEntities={tabEntities}
+              systemTabsBefore={systemTabs}
+              reservedSystemLabels={systemTabs.map(tab => tab.label)}
+              divideBeforeAuthored
+            />
+          </div>
         </div>
 
         <ClaimTabPanel
@@ -264,8 +283,6 @@ export function ClaimPageView({
           entityRelations={entity.relations}
           responseKind={responseKind}
           summary={summary}
-          state={state}
-          row={row}
           record={record}
           topics={topics}
           availableSpaceIds={entity.spaces}
@@ -285,8 +302,6 @@ function ClaimTabPanel({
   entityRelations,
   responseKind,
   summary,
-  state,
-  row,
   record,
   topics,
   availableSpaceIds,
@@ -299,8 +314,6 @@ function ClaimTabPanel({
   entityRelations: Relation[];
   responseKind: ClaimResponseState['responseKind'];
   summary: ClaimResponseState['summary'];
-  state: ClaimResponseState;
-  row: DebateClaim | null;
   record: ReturnType<typeof useClaimRecord>;
   topics: Relation[];
   availableSpaceIds: string[];
@@ -347,7 +360,7 @@ function ClaimTabPanel({
       isError: record.debatesError,
       isCountUnavailable: record.debatesCountUnavailable,
       href: hrefs.debates,
-      seeAllLabel: 'See all debates',
+      seeAllLabel: 'View all debates',
       onSeeAll: onSelectSystemTab ? () => onSelectSystemTab('debates') : undefined,
     },
     {
@@ -359,19 +372,13 @@ function ClaimTabPanel({
       isError: record.claimsError,
       isCountUnavailable: record.claimsCountUnavailable,
       href: hrefs.claims,
-      seeAllLabel: 'See all claims',
+      seeAllLabel: 'View all claims',
       onSeeAll: onSelectSystemTab ? () => onSelectSystemTab('claims') : undefined,
     },
   ];
 
   return (
     <>
-      <ClaimVerdict entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
-      {/* The response control follows the aggregate result, so a reader understands the current
-          split before being asked to add their own position. */}
-      <section aria-label="Position response options" className="flex flex-col gap-3">
-        <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
-      </section>
       <ProfileActivitySection kinds={kinds} />
       {/* The topic view's Subtopics, drawing a claim's Topics (GEO-2781) — same question for the
           reader, so the same shared section rather than two implementations. On a claim, Topics
@@ -395,7 +402,7 @@ function ClaimTabPanel({
 /**
  * Taking a side, and standing ready to argue it.
  *
- * Both live in one card, with the readiness switch in the header's top right and the side pills
+ * Both live together, inside the verdict in the hero, with the readiness switch in the header's top right and the side pills
  * beneath — the same arrangement the hub's claim card uses, so the switch is where anyone who has
  * used the panel already looks for it. They belong together because they are a sequence: readiness
  * can only be turned *on* for a claim you have already responded to.
@@ -440,10 +447,8 @@ function ClaimPositionSection({
   useBackfillReadinessForHeldPosition({ readiness: row, entityId, spaceId });
 
   return (
-    <section aria-label="Your position" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
-      {/* No readiness switch — the Debate toggle is gone from the product. Master left the header
-          row that used to hold it; with nothing on its right there is no row, just a label. */}
-      <SectionTitle>Your position</SectionTitle>
+    // No card of its own: it renders inside the verdict, under the split.
+    <section aria-label="Your position">
       <ClaimPositionCommentControl
         entityId={entityId}
         spaceId={spaceId}

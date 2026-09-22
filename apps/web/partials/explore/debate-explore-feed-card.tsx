@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
@@ -76,6 +78,12 @@ type DebateExploreFeedCardProps = {
   /** Compact title and metadata treatment used by the narrow profile Activity rail. */
   compactChrome?: boolean;
   /**
+   * Drop the viewport-fitted column cap and fill the container. For a surface whose column is
+   * already the reading width, where the capped card sat narrower than everything around it — the
+   * claim page's Debates tab.
+   */
+  fullWidth?: boolean;
+  /**
    * Called when a coordinated surface's player is clicked. An allowed active player transfers
    * before the click reaches it. A visible non-owner consumes that first click while ownership
    * commits, and an inactive player is centered before requesting ownership when it becomes active.
@@ -108,6 +116,7 @@ export function DebateExploreFeedCard({
   hideJoinButton = false,
   titleOpensSidePanel = false,
   compactChrome = false,
+  fullWidth = false,
   onPlaybackRequest,
   onPlaybackAvailabilityChange,
   fallback,
@@ -301,8 +310,8 @@ export function DebateExploreFeedCard({
           alone is what lines "Join a debate" up with the videos' right edge instead of the card's,
           and what keeps the bar beneath the videos the same width as them. */}
       <div
-        className="flex w-full max-w-[var(--debate-card-column-width)] min-w-0 flex-col gap-2"
-        style={DEBATE_CARD_COLUMN_STYLE}
+        className={cx('flex w-full min-w-0 flex-col gap-2', !fullWidth && 'max-w-[var(--debate-card-column-width)]')}
+        style={fullWidth ? undefined : DEBATE_CARD_COLUMN_STYLE}
       >
         {/* The way out of the card and into the debate at full size. This corner used to hold
             "View all", a link to the space's whole debates list. Since GEO-2879 headed the card
