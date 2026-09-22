@@ -187,7 +187,6 @@ export function ClaimSides({
   summary,
   className,
   alignSecondEnd = false,
-  hideSwatches = false,
 }: {
   entityId: string;
   spaceId: string;
@@ -196,11 +195,6 @@ export function ClaimSides({
   className?: string;
   /** True where the two sit on one row with room between them, so the second reads as its end. */
   alignSecondEnd?: boolean;
-  /**
-   * Drop the green and red dots. For a surface that draws the split bar directly above, whose two
-   * colours already say which side is which.
-   */
-  hideSwatches?: boolean;
 }) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const shared = {
@@ -215,14 +209,14 @@ export function ClaimSides({
     <div className={className}>
       <ClaimSideSummary
         {...shared}
-        swatchClassName={hideSwatches ? undefined : 'bg-green'}
+        swatchClassName="bg-green"
         label={copy.positiveAction}
         count={summary.positive}
         direction="positive"
       />
       <ClaimSideSummary
         {...shared}
-        swatchClassName={hideSwatches ? undefined : 'bg-red-01'}
+        swatchClassName="bg-red-01"
         label={copy.negativeAction}
         count={summary.negative}
         direction="negative"
@@ -292,8 +286,7 @@ export function ClaimSideSummary({
   viewerSpaceId,
   alignEnd = false,
 }: {
-  /** The side's colour, drawn as a dot before the count. Omit for no dot. */
-  swatchClassName?: string;
+  swatchClassName: string;
   label: string;
   count: number;
   direction: ActiveResponseDirection;
@@ -306,7 +299,7 @@ export function ClaimSideSummary({
 }) {
   return (
     <div className={cx('flex min-w-0 items-center gap-2', alignEnd && 'justify-end')}>
-      {swatchClassName ? <span className={cx('size-2 shrink-0 rounded-xs', swatchClassName)} aria-hidden /> : null}
+      <span className={cx('size-2 shrink-0 rounded-xs', swatchClassName)} aria-hidden />
       {/* Count first, and the verb lowercase: "12 agree" is a sentence, where "Agree 12" is a label
           with a number stuck to it. It also matches the share directly above — "68% agree" — so the
           three lines of the verdict read in one voice instead of two. */}
