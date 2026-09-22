@@ -8,6 +8,7 @@ import { Provider, useAtomValue } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
+import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -27,6 +28,7 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 const mocks = vi.hoisted(() => ({
   debateQuery: { data: undefined as Debate | undefined, isError: false },
   mediaQuery: { data: undefined as { artifacts: { kind: string }[] } | undefined, isError: false },
+  playerToggle: vi.fn(),
 }));
 
 type ObserverRecord = {
@@ -67,8 +69,23 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
 }));
 
 vi.mock('~/core/debates/browse/debate-feed-player', () => ({
-  DebateFeedPlayer: ({ debate, active }: { debate: Debate; active: boolean }) => (
-    <div data-testid="player" data-debate={debate.id} data-active={active} />
+  DebateFeedPlayer: ({
+    debate,
+    active,
+    reducedOverlays,
+  }: {
+    debate: Debate;
+    active: boolean;
+    reducedOverlays?: boolean;
+  }) => (
+    <button
+      type="button"
+      data-testid="player"
+      data-debate={debate.id}
+      data-active={active}
+      data-reduced-overlays={reducedOverlays ? 'true' : 'false'}
+      onClick={mocks.playerToggle}
+    />
   ),
 }));
 
@@ -208,6 +225,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -233,15 +251,34 @@ function PanelProbe() {
 // so the harness has to provide one too, or the double is laxer than the real tree.
 let client: QueryClient;
 
-function renderCard(props: Partial<React.ComponentProps<typeof DebateExploreFeedCard>> = {}) {
-  return render(
+function CardHarness({
+  props,
+  allowedId,
+}: {
+  props: Partial<React.ComponentProps<typeof DebateExploreFeedCard>>;
+  allowedId?: string | null;
+}) {
+  const card = <DebateExploreFeedCard item={item} fallback={<div data-testid="fallback" />} {...props} />;
+
+  return (
     <QueryClientProvider client={client}>
       <Provider>
-        <DebateExploreFeedCard item={item} fallback={<div data-testid="fallback" />} {...props} />
+        {allowedId === undefined ? card : <DebatePlaybackGate allowedId={allowedId}>{card}</DebatePlaybackGate>}
         <PanelProbe />
       </Provider>
     </QueryClientProvider>
   );
+}
+
+function renderCard(
+  props: Partial<React.ComponentProps<typeof DebateExploreFeedCard>> = {},
+  allowedId?: string | null
+) {
+  const result = render(<CardHarness props={props} allowedId={allowedId} />);
+  return {
+    ...result,
+    rerenderCard: () => result.rerender(<CardHarness props={props} allowedId={allowedId} />),
+  };
 }
 
 /** Dispatches a click the way a browser would, so `defaultPrevented` is observable. */
@@ -259,6 +296,30 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByRole('link', { name: 'Watch this debate full screen' })).toBeDefined();
     expect(screen.queryByTestId('player')).toBeNull();
     expect(screen.queryByTestId('fallback')).toBeNull();
+  });
+
+  it('keeps compact Activity chrome to one metadata row and two title lines', async () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard({ compactChrome: true });
+    intersectAll(0.1);
+
+    expect(screen.queryByText('Debate')).toBeNull();
+    const heading = screen.getByRole('heading', { name: CLAIM_NAME });
+    expect(heading).toHaveClass('line-clamp-2');
+    expect(heading).not.toHaveAttribute('title');
+
+    Object.defineProperty(heading, 'scrollHeight', { configurable: true, value: 69 });
+    Object.defineProperty(heading, 'clientHeight', { configurable: true, value: 46 });
+    heading.style.lineHeight = '23px';
+    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    expect(heading).toHaveAttribute('title', CLAIM_NAME);
+
+    expect(screen.getByText('Fashion').closest('div')).toHaveClass('flex-nowrap', 'overflow-hidden');
+    expect(screen.getByTestId('player')).toHaveAttribute('data-reduced-overlays', 'true');
+    expect(screen.getByRole('button', { name: /^Comments/ })).toHaveClass('gap-1', 'px-1.5');
+    expect(screen.getByRole('button', { name: 'Share debate' })).toHaveClass('size-7', 'px-0');
+    expect(screen.getByRole('button', { name: 'Share debate' }).textContent).toBe('');
   });
 
   it('renders the fallback when the debate is not watchable', () => {
@@ -287,6 +348,110 @@ describe('DebateExploreFeedCard', () => {
 
     intersectAll(0.4);
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
+  });
+
+  it('requests playback before a player interaction', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    const onPlaybackRequest = vi.fn();
+    renderCard({ onPlaybackRequest });
+    intersectAll(0.7);
+
+    const player = screen.getByTestId('player');
+    fireEvent.click(player);
+    expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
+    expect(mocks.playerToggle).toHaveBeenCalledOnce();
+  });
+
+  it('consumes an active non-owner click while transferring playback ownership', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    const onPlaybackRequest = vi.fn();
+    renderCard({ onPlaybackRequest }, 'another-debate');
+    intersectAll(0.7);
+
+    expect(screen.getByTestId('player')).toHaveAttribute('data-active', 'false');
+    fireEvent.click(screen.getByTestId('player'));
+
+    expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
+    expect(mocks.playerToggle).not.toHaveBeenCalled();
+  });
+
+  it('brings an inactive player into view before requesting playback', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    const onPlaybackRequest = vi.fn();
+    const { container } = renderCard({ onPlaybackRequest });
+
+    // The media look-ahead mounts the player before the card is active. Clicking that visible
+    // edge must not transfer the gate to a player which will immediately pause itself.
+    intersectAll(0.1);
+    const card = container.querySelector('article');
+    expect(card).not.toBeNull();
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(card, 'scrollIntoView', { configurable: true, value: scrollIntoView });
+
+    fireEvent.click(screen.getByTestId('player'));
+    expect(onPlaybackRequest).not.toHaveBeenCalled();
+    expect(mocks.playerToggle).not.toHaveBeenCalled();
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+
+    // Ownership transfers only after the observer confirms that the clicked player can run.
+    intersectAll(0.6);
+    expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
+  });
+
+  it('registers playback availability only while a playable player is mounted', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    const onPlaybackAvailabilityChange = vi.fn();
+    renderCard({ onPlaybackAvailabilityChange });
+    expect(onPlaybackAvailabilityChange).not.toHaveBeenCalled();
+
+    intersectAll(0.1);
+    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
+      'fd51f935-2063-4617-8039-7b672b23364c',
+      true
+    );
+
+    intersectAll(0);
+    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
+      'fd51f935-2063-4617-8039-7b672b23364c',
+      false
+    );
+  });
+
+  it('unregisters stale playable data when a refetch replaces the player with fallback', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    const onPlaybackAvailabilityChange = vi.fn();
+    const view = renderCard({ onPlaybackAvailabilityChange });
+    intersectAll(0.7);
+    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
+      'fd51f935-2063-4617-8039-7b672b23364c',
+      true
+    );
+
+    // TanStack Query retains the previous data when a background refetch fails.
+    mocks.debateQuery = { data: watchableDebate(), isError: true };
+    view.rerenderCard();
+
+    expect(screen.getByTestId('fallback')).toBeInTheDocument();
+    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
+      'fd51f935-2063-4617-8039-7b672b23364c',
+      false
+    );
+  });
+
+  it('does not request playback from a loading skeleton that may resolve to the fallback', () => {
+    const onPlaybackRequest = vi.fn();
+    const { container } = renderCard({ onPlaybackRequest });
+
+    const skeleton = container.querySelector<HTMLElement>('[aria-hidden="true"] .animate-pulse')?.parentElement;
+    expect(skeleton).not.toBeNull();
+    fireEvent.click(skeleton as HTMLElement);
+
+    expect(onPlaybackRequest).not.toHaveBeenCalled();
   });
 
   it('evicts the player outside the media window and remounts it on reverse scroll', () => {

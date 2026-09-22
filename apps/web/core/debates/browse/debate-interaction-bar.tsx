@@ -15,6 +15,8 @@ import { Comment, Share } from './icons';
 
 type InteractionBarProps = {
   orientation: 'vertical' | 'horizontal';
+  /** Tighten horizontal pills for constrained card surfaces without changing their actions. */
+  compact?: boolean;
   entityId: string;
   spaceId: string;
   commentCount: number;
@@ -63,6 +65,7 @@ type InteractionBarProps = {
  */
 export function DebateInteractionBar({
   orientation,
+  compact = false,
   entityId,
   spaceId,
   commentCount,
@@ -128,7 +131,7 @@ export function DebateInteractionBar({
   }
 
   return (
-    <div className={cx('flex w-full items-center gap-2', className)}>
+    <div className={cx('flex w-full items-center', compact ? 'justify-between gap-1' : 'gap-2', className)}>
       <EntityVoteButtons
         entityId={entityId}
         spaceId={spaceId}
@@ -142,12 +145,27 @@ export function DebateInteractionBar({
         ariaLabel={commentsLabel}
         open={commentsPanelOpen}
         commentsPanelOpener={opensGlobalCommentsPanel}
+        compact={compact}
       />
       {onClaims && (
-        <PillAction onClick={onClaims} icon={<Warning />} label={String(claimsCount ?? 0)} ariaLabel={claimsLabel} />
+        <PillAction
+          onClick={onClaims}
+          icon={<Warning />}
+          label={String(claimsCount ?? 0)}
+          ariaLabel={claimsLabel}
+          compact={compact}
+        />
       )}
       {onShare && (
-        <PillAction onClick={onShare} icon={<Share />} label="Share" ariaLabel="Share debate" expanded={shareOpen} />
+        <PillAction
+          onClick={onShare}
+          icon={<Share />}
+          label="Share"
+          ariaLabel="Share debate"
+          expanded={shareOpen}
+          compact={compact}
+          hideLabel={compact}
+        />
       )}
     </div>
   );
@@ -208,6 +226,8 @@ function PillAction({
   expanded,
   open,
   commentsPanelOpener,
+  compact = false,
+  hideLabel = false,
   className,
 }: {
   label: string;
@@ -220,6 +240,9 @@ function PillAction({
   open?: boolean;
   // See {@link CircleAction}.
   commentsPanelOpener?: boolean;
+  compact?: boolean;
+  /** Keep an icon-only action when its accessible label already communicates the action. */
+  hideLabel?: boolean;
   className?: string;
 }) {
   return (
@@ -231,14 +254,17 @@ function PillAction({
       data-entity-comments-opener={commentsPanelOpener ? '' : undefined}
       onClick={onClick}
       className={cx(
-        'flex h-7 items-center gap-1.5 rounded-full border border-grey-02 bg-white px-2.5 text-grey-04 shadow-light transition-colors hover:text-text',
+        'flex h-7 items-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-light transition-colors hover:text-text',
+        compact ? (hideLabel ? 'size-7 justify-center px-0' : 'gap-1 px-1.5') : 'gap-1.5 px-2.5',
         className
       )}
     >
       <span className="text-text">{icon}</span>
-      <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
-        {label}
-      </Text>
+      {!hideLabel ? (
+        <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
+          {label}
+        </Text>
+      ) : null}
     </button>
   );
 }

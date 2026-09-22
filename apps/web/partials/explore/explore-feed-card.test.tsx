@@ -148,6 +148,20 @@ describe('ExploreFeedCard', () => {
     expect(screen.queryByText(debateItem.title)).toBeNull();
   });
 
+  it('applies compact debate chrome to the unwatchable fallback', () => {
+    const debateItem: ExploreFeedItem = {
+      ...item,
+      types: [{ id: 'fd51f935-2063-4617-be39-7b672b23364c', name: 'Debate' }],
+      title: 'Ada vs. Blaise on Fast fashion should be discouraged',
+      debateClaim: { entityId: 'claim-1', name: 'Fast fashion should be discouraged' },
+    };
+    render(<ExploreFeedCard item={debateItem} compactDebateChrome />);
+
+    expect(screen.queryByText('Debate')).toBeNull();
+    expect(screen.getByText('Space').closest('div')).toHaveClass('flex-nowrap', 'overflow-hidden');
+    expect(screen.getByRole('heading', { name: 'Fast fashion should be discouraged' })).toHaveClass('line-clamp-2');
+  });
+
   it('does not route non-debate items to the debate card', () => {
     render(<ExploreFeedCard item={item} />);
     expect(screen.queryByTestId('debate-card')).toBeNull();
