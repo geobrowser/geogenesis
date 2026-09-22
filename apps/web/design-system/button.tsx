@@ -21,7 +21,7 @@ const PILL_BUTTON_SHAPE =
   'h-7 shrink-0 !gap-0 !rounded-full !px-2.5 !py-0 !text-[16px] !leading-[13px] font-normal tracking-[-0.35px] whitespace-nowrap !shadow-none';
 
 /**
- * The black pill: the navbar's Log in button, and the "View all" links on a profile.
+ * The black pill: the navbar's Log in button.
  * Layered over the `primary` variant, whose colours it overrides.
  */
 export const PILL_BUTTON_CLASS_NAME = `${PILL_BUTTON_SHAPE} !border-transparent !bg-[#151515] !text-white hover:!bg-[#151515] focus-visible:!border-text focus-visible:!shadow-inner-text`;
